@@ -68,10 +68,10 @@ function traceRow({ id = 'trace-test', entity = 'scorecard', entityId = 'scoreca
 }
 
 test('schema v48 migrates additively without guessing successful history and normalizes a bounded content-free trace', () => {
-  assert.equal(SCHEMA_VERSION, 91);
+  assert.equal(SCHEMA_VERSION, 93);
   const previousLedger = [traceRow({ id: 'untrusted-v47-history' })];
   const migrated = migrate({ schemaVersion: 47, propagationLineage: previousLedger, scorecards: [] });
-  assert.deepEqual(migrated.applied, ['47 → 48', '48 → 49', '49 → 50', '50 → 51', '51 → 52', '52 → 53', '53 → 54', '54 → 55', '55 → 56', '56 → 57', '57 → 58', '58 → 59', '59 → 60', '60 → 61', '61 → 62', '62 → 63', '63 → 64', '64 → 65', '65 → 66', '66 → 67', '67 → 68', '68 → 69', '69 → 70', '70 → 71', '71 → 72', '72 → 73', '73 → 74', '74 → 75', '75 → 76', '76 → 77', '77 → 78', '78 → 79', '79 → 80', '80 → 81', '81 → 82', '82 → 83', '83 → 84', '84 → 85', '85 → 86', '86 → 87', '87 → 88', '88 → 89', '89 → 90', '90 → 91']);
+  assert.deepEqual(migrated.applied, ['47 → 48', '48 → 49', '49 → 50', '50 → 51', '51 → 52', '52 → 53', '53 → 54', '54 → 55', '55 → 56', '56 → 57', '57 → 58', '58 → 59', '59 → 60', '60 → 61', '61 → 62', '62 → 63', '63 → 64', '64 → 65', '65 → 66', '66 → 67', '67 → 68', '68 → 69', '69 → 70', '70 → 71', '71 → 72', '72 → 73', '73 → 74', '74 → 75', '75 → 76', '76 → 77', '77 → 78', '78 → 79', '79 → 80', '80 → 81', '81 → 82', '82 → 83', '83 → 84', '84 → 85', '85 → 86', '86 → 87', '87 → 88', '88 → 89', '89 → 90', '90 → 91', '91 → 92', '92 → 93']);
   assert.deepEqual(migrated.raw.propagationLineage, [], 'the migration never infers or imports a pre-v48 success ledger');
 
   const rawTrace = traceRow();
@@ -89,7 +89,7 @@ test('schema v48 migrates additively without guessing successful history and nor
     propagationLineage: [rawTrace],
   }, { now: NOW });
   const [stored] = normalized.state.propagationLineage;
-  assert.equal(normalized.state.schemaVersion, 91);
+  assert.equal(normalized.state.schemaVersion, 93);
   assert.equal(normalized.state.propagationLineage.length, 1);
   assert.deepEqual(stored.steps[0].changedCollections, ['decisions', 'links']);
   assert.equal(stored.steps[0].links.length, 1, 'confidential typed edges are rejected');
@@ -538,20 +538,81 @@ test('every registered link type survives schema normalization/reload and resolv
     correct: null, overrideCorrect: null,
   }];
 
-  raw.expectationRounds = [{ id: 'concordance-link-fixture', leaderId: 'mgr1', memberId: 'mgr2', status: 'open', createdAt: NOW_ISO }];
+  // Schema v89: a closed expectation round. Two sealed sides, no person text:
+  // the graph edge may address the round and never one person's answers.
+  raw.expectationRounds = [{
+    id: 'exp-round-link-fixture', leaderId: 'mgr1', memberId: 'ic1', status: 'open',
+    cycle: '2026-Q4', openedAt: NOW_ISO, updatedAt: NOW_ISO, openedBy: 'mgr1',
+    dimensions: [], sides: {}, fingerprint: 'd4e5f60718293a4b',
+  }];
 
-  // Schema v89: pact and bilateral-round graph nodes survive normalization.
+  // Schema v91: a board memo. Its claims are aggregate by construction, so the
+  // node carries no person and needs no redaction.
+  raw.boardMemos = [{
+    id: 'board-memo-link-fixture', title: 'Q4 disclosure', cycle: '2026-Q4', status: 'draft', revision: 1,
+    createdAt: NOW_ISO, updatedAt: NOW_ISO, claims: [], looks: [], fingerprint: 'e5f60718293a4b5c',
+  }];
+
+  // Schema v92: a bounded disclosure release. The node names the pair, the class
+  // and the window; it never carries record content.
+  raw.disclosureGrants = [{
+    id: 'disclosure-grant-link-fixture', route: 'cases', moduleLabel: 'Cases',
+    collection: 'cases', classKey: 'individual', requesterId: 'mgr1', requesterSeatId: 'mgr1',
+    spanId: 'dir1', spanLabel: 'Directorate', status: 'requested',
+    requestedOn: NOW_ISO, requestedAt: NOW_ISO, createdAt: NOW_ISO,
+    purpose: 'Fixture release contract for a bounded audit', days: 14, history: [],
+  }];
+
+  // Schema v93: the Operating Cadence Clock's two graph nodes. A forum carries a
+  // title and no person; a frozen reading carries counts and conventions.
+  raw.cadenceForums = [{
+    id: 'cadence-forum-link-fixture', title: 'Weekly operating review', kind: 'operating-review',
+    cadence: 'weekly', status: 'active', chairSeatId: 'mgr1', attending: ['mgr1'],
+    decisionCapacity: 4, serviceDays: 3, intervalDays: 7, horizonDays: 30,
+    createdAt: NOW_ISO, updatedAt: NOW_ISO,
+  }];
+  raw.cadenceReadings = [{
+    id: 'cadence-reading-link-fixture', frozenOn: NOW_ISO, createdAt: NOW_ISO,
+    engineVersion: 'cadence-2026.11-v1', forums: [], conventions: {}, subject: 'workspace',
+  }];
+
+  // Schema v90: pact and bilateral-round graph nodes survive normalization.
   raw.catchballPacts = [{ id: 'catchball-pact-link-fixture', title: 'Fixture pact', toSeatId: raw.people[0].id, status: 'proposed', createdAt: NOW_ISO }];
   raw.catchballRounds = [{ id: 'catchball-round-link-fixture', pactId: 'catchball-pact-link-fixture', ownerId: raw.people[0].id, kind: 'propose', createdAt: NOW_ISO }];
 
-  // Schema v91: identity-reduced prospective cycle node for exhaustive links.
-  raw.strategyCycles = [{
-    id: 'strategy-cycle-link-fixture', scopeSeatId: 'leader', altitudeKey: 'chief', rank: 5,
-    status: 'frozen', frozenOn: '2026-10-29', reviewOn: '2026-11-28', periodStart: '2026-10-29',
-    windowDays: 30, sourceRevision: 1, previousId: null, cohortPactIds: ['catchball-pact-link-fixture'],
-    metrics: { active: 0, carryover: 0, overdue: 0, suppressed: true },
-    forecast: { basis: 'all-altitudes', settledN: 0, deliveredN: 0, deliveryRatePct: null, lowerPct: null, upperPct: null, brier: null, refusal: 'no-settled-history' },
-    byAltitude: [], byBet: [], grade: null, createdAt: NOW_ISO,
+  // Schema v91–v93 (ADR-0085/0086/0087/0088): a board memo, a disclosure release
+  // and a sealed packet are graph nodes too.
+  raw.boardMemos = [{
+    id: 'board-memo-link-fixture', status: 'draft', title: 'Fixture memo', cycle: 'H2 2026',
+    openedOn: '2026-11-01', createdAt: NOW_ISO,
+  }];
+  raw.disclosureGrants = [{
+    id: 'disclosure-grant-link-fixture', route: 'envoy', status: 'requested',
+    requesterId: 'mgr2', spanId: 'mgr1',
+    purpose: 'Fixture release so the grant survives a reload as a navigable record.',
+    requestedOn: '2026-11-01', requestedAt: NOW_ISO, createdAt: NOW_ISO,
+  }];
+  raw.exchangePackets = [{
+    id: 'exchange-packet-link-fixture', packetId: 'a'.repeat(64), direction: 'inbound', status: 'ingested',
+    recipientAltitudeKey: 'manager', recipientClass: 'names', originLabel: 'Fixture workspace',
+    originWorkspaceId: 'b'.repeat(64), merkleRoot: 'c'.repeat(64), items: [],
+    attestation: { items: 0, openCritical: 0, oldestOpenDays: null, valueAtStake: [] },
+    withheldCount: 0, signature: { algo: 'sha256', keyed: false, value: 'd'.repeat(64) },
+    createdAt: NOW_ISO, receivedAt: NOW_ISO,
+  }];
+  // Cadence (ADR-0087) nodes, so the exhaustive sweep covers main's newest module.
+  raw.cadenceForums = [{
+    id: 'cadence-forum-link-fixture', title: 'Fixture forum', status: 'active', cadence: 'weekly',
+    kind: 'operating-review', decisionCapacity: 6, altitudeKey: 'manager', chairSeatId: raw.people[0].id,
+    createdAt: NOW_ISO,
+  }];
+  raw.cadenceReadings = [{
+    id: 'cadence-reading-link-fixture', status: 'frozen', frozenOn: '2026-11-01', createdAt: NOW_ISO,
+  }];
+  // Carryover (main's ADR-0085 on the merged tree) node.
+  raw.carryoverRecords = [{
+    id: 'carryover-link-fixture', status: 'pending-settlement', pactId: 'p1',
+    resource: { effortDays: 3, currency: 'DKK', committedAmount: 1000 }, createdAt: NOW_ISO,
   }];
 
   const targetIdFor = (type) => {
@@ -700,10 +761,27 @@ test('every registered link type survives schema normalization/reload and resolv
       // Schema v88: a routing plan is addressed by query on the Altitude
       // Router's ledger panel; no note text travels in the URL.
       routingplan: ['plan', resolved.id],
+      // Schema v89: a round is addressed by query on the concordance terminal's
+      // rounds panel — the edge names the round, never either person's answers.
       concordance: ['round', resolved.id],
+      // Schema v90: a memo is addressed by query on the Board Room's memo panel.
+      boardmemo: ['memo', resolved.id],
       catchballpact: ['pact', resolved.id],
       catchballround: ['round', resolved.id],
-      strategycycle: ['cycle', resolved.id],
+      // Schema v91–v93 nodes address their own panels by query.
+      boardmemo: ['memo', resolved.id],
+      disclosuregrant: ['grant', resolved.id],
+      exchangepacket: ['packet', resolved.id],
+      cadenceforum: ['forum', resolved.id],
+      cadencereading: ['reading', resolved.id],
+      carryover: ['settlement', resolved.id],
+      // Schema v93: a forum is addressed by query on the cadence terminal's
+      // workbench panel; a frozen reading by query on its constraint panel.
+      cadenceforum: ['forum', resolved.id],
+      cadencereading: ['reading', resolved.id],
+      // Schema v92: a bounded release is addressed by query on the Disclosure
+      // Console's releases panel — the edge names the contract, not its content.
+      disclosuregrant: ['grant', resolved.id],
     }[link.targetType];
     if (focusParam) {
       assert.equal(query.get(focusParam[0]), focusParam[1], `${link.targetType} route carries an encoded, exact focus ID`);

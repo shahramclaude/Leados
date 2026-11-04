@@ -337,6 +337,32 @@ export const LINK_ENTITY_TYPES = [
   // from them. The subject is a PAIR and a DIMENSION; a person's answers are the
   // instrument's readings, never a rating.
   'concordance',
+  // ADR-0086: a disclosure release is a first-class node: the decision that
+  // governs it, the consent task it waits on and the span it discloses from are
+  // all navigable from the release record itself.
+  'disclosuregrant',
+  // ADR-0085: one board disclosure memo. A first-class node so the governed
+  // decisions it opened, the obligations it delegated to a span and every span
+  // whose records produced its figures are navigable from the memo — and the
+  // memo from them. It carries counts, verdicts and conventions; no person's
+  // private record is ever an endpoint.
+  'boardmemo',
+  // ADR-0087: the Operating Cadence Clock. A forum and a frozen queue reading are
+  // first-class nodes; nothing person-level is ever a cadence node.
+  'cadenceforum',
+  'cadencereading',
+
+  // ADR-0085: a sealed inter-workspace packet. A first-class node so the spans
+  // it was carried to, the reconciliation decision a divergence forced and the
+  // review an attested exposure opened are navigable from the packet — and the
+  // packet from them. The attested COPIES a packet imports are deliberately not
+  // graph nodes: a foreign record is not this workspace's record.
+  'exchangepacket',
+  // ADR-0085: the carryover settlement record is a first-class graph node, so
+  // the encumbered pact, the bet it settles, the leadership span it rolls up
+  // to and the released budget line it frees are all navigable from the
+  // record and back from them.
+  'carryover',
 ];
 
 /**
@@ -458,10 +484,21 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   // ADR-0084: Hoshin Kanri & Catchball Cascade collections.
   catchballpact: 'catchballPacts',
   catchballround: 'catchballRounds',
-  // Schema v91: frozen, identity-reduced strategy renewal readings.
-  strategycycle: 'strategyCycles',
+  carryover: 'carryoverRecords',
+  // ADR-0085: the packet ledger owns the packet node's IDs.
+  exchangepacket: 'exchangePackets',
   // ADR-0083: keep the registry exhaustive with LINK_ENTITY_TYPES.
   concordance: 'expectationRounds',
+  // ADR-0086: keep the registry exhaustive with LINK_ENTITY_TYPES.
+  disclosuregrant: 'disclosureGrants',
+  // ADR-0084: keep the registry exhaustive with LINK_ENTITY_TYPES.
+  boardmemo: 'boardMemos',
+  // ADR-0087: the Operating Cadence Clock. A forum is a first-class graph node
+  // every queued item, escalated constraint and agenda-fit gap is navigable FROM
+  // the forum that is supposed to close it; a frozen reading is a node so the
+  // queue it predicted can be read back against what actually closed.
+  cadenceforum: 'cadenceForums',
+  cadencereading: 'cadenceReadings',
 });
 
 export const FORBIDDEN_LINK_TYPES = ['conflict', 'pulse'];
@@ -554,15 +591,32 @@ export const SYSTEM_GENERATED_LINK_RELATIONS = Object.freeze([
   'binds-receiver',
   'recovers-authority',
   'summarizes-span',
+  // ADR-0085: written only by RULE-ENV-01/02. `carries` records that an
+  // ingested packet reached this leadership span in the disclosure form that
+  // span may hold; `reconciles` records that a divergence between two
+  // workspaces opened one governed decision. Neither edits a record.
+  'carries',
+  'reconciles',
   // ADR-0084: emitted by the Catchball spine, not manually asserted.
   'deploys-strategy', 'cascades-to', 'counters-upward', 'trades-off',
-  // Schema v91: the frozen cycle audits the bet-to-Catchball cascade and
-  // informs a human renewal choice; attached pacts reconcile through consent.
-  'audits-cascade', 'reconciles',
+  // ADR-0086: a bounded release names the altitude it discloses to and the span
+  // that consented to it. Both are structure, never record content.
+  'discloses-to',
+  'consented-by',
+  // ADR-0087: written only by RULE-CAD-01/02/03. `queued-for` says which forum is
+  // competent to close an item; `fit-gap` says which owning seat a forum's
+  // membership is missing. Neither is ever asserted by hand.
+  'queued-for', 'fit-gap',
+  // ADR-0085: emitted by the Carryover spine, not manually asserted.
+  // `carries-over` — the invalidated pact flows into the settlement terminal;
+  // `settles` — the record (or its decision) judges the bet's stop rule;
+  // `releases-resource` — the settled record returned encumbered authority.
+  'carries-over', 'settles', 'releases-resource',
 ]);
 
 export const LINK_RELATIONS = [
   'authorizes', 'binds-receiver', 'recovers-authority', 'summarizes-span',
+  'discloses-to', 'consented-by',
   'mitigates',
   'decides',
   'impacts-goal',
@@ -794,9 +848,28 @@ export const LINK_RELATIONS = [
   // PAIR and an EXPECTATION, never a person's performance.
   're-contracts',
   're-tests',
+  // ADR-0085: an item is queued for the ONE forum competent to close it, and an
+  // agenda-fit gap names a seat a forum's membership is missing.
+  'queued-for',
+  'fit-gap',
+
+  // ADR-0088 (the Federated Envoy). `carries` — an ingested packet is carried to
+  // this leadership span, in the disclosure form that span may hold; `reconciles`
+  // — this governed decision was opened because the two workspaces disagree about
+  // one origin record. Neither edge edits a record or asserts that a claim is
+  // true; both are written only by RULE-ENV-01/02.
+  'carries',
+  'reconciles',
+  // ADR-0085: Hoshin Carryover Terminal provenance edges (see
+  // SYSTEM_GENERATED_LINK_RELATIONS).
+  'carries-over',
+  'settles',
+  'releases-resource',
 ];
 
 export const LINK_RELATION_LABELS = {
+  carries: 'Carried to this leadership span as a sealed packet',
+  reconciles: 'Governed reconciliation opened by a packet divergence',
   're-contracts': 'Re-contracting decision opened from this expectation',
   're-tests': 'Re-tests the standard this decision set',
   'calibrates-coupling': 'Audited against realised joint resolution timing',
@@ -900,8 +973,9 @@ export const LINK_RELATION_LABELS = {
   'cascades-to': 'Cascades vertically into downstream pact or goal',
   'counters-upward': 'Bilateral Catchball counter-offer upward',
   'trades-off': 'Explicitly de-scopes commitment to free span capacity',
-  'audits-cascade': 'Audits the typed strategy-to-Catchball cascade',
-  reconciles: 'Requires a human Catchball reconciliation',
+  'carries-over': 'Invalidated pact flows into the settlement terminal',
+  'settles': 'Judges the bet against its stop rule',
+  'releases-resource': 'Settled record returned encumbered budget authority',
 };
 
 const Z_80_INTERVAL = 1.2815515655446004; // Standard normal 90th percentile (P10 / P90)
@@ -2163,9 +2237,36 @@ export function resolveLinkedEntity(state, entityType, entityId) {
       // The two sides' answers are deliberately NOT projected into the shared
       // graph: an edge may point at a round, never at what one person selected.
       return {
-        type: 'concordance', id: rec.id, title: `Expectation round · ${rec.cycle}`,
+        type: 'concordance',
+        id: rec.id,
+        title: `Expectation round · ${rec.cycle || String(rec.openedAt || rec.createdAt || '').slice(0, 10) || 'undated'}`,
         status: rec.status === 'closed' ? 'Closed · both sides in' : rec.status === 'withdrawn' ? 'Withdrawn' : 'Open · sealed',
         route: `#/concordance?panel=rounds&round=${encodeURIComponent(rec.id)}`, raw: rec,
+      };
+    }
+    case 'disclosuregrant': {
+      const rec = (state.disclosureGrants || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      // The purpose is a one-line reason written to be read by the span leader,
+      // so it may sit on the edge; nothing else from the release is projected.
+      return {
+        type: 'disclosuregrant', id: rec.id,
+        title: `Disclosure release · ${rec.moduleLabel || rec.route}`,
+        status: rec.status === 'granted' ? `Live until ${rec.expiresOn}` : rec.status === 'requested' ? 'Awaiting the span leader' : String(rec.status),
+        route: `#/disclosure?panel=releases&grant=${encodeURIComponent(rec.id)}`,
+        raw: rec,
+      };
+    }
+    case 'boardmemo': {
+      const rec = (state.boardMemos || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      // Claims, thresholds and verdicts are the node's public content; the memo
+      // carries no person record by construction, so nothing needs redacting.
+      return {
+        type: 'boardmemo', id: rec.id,
+        title: `Board memo · ${rec.cycle || 'unlabelled'} r${rec.revision}`,
+        status: rec.status,
+        route: `#/board?panel=memo&memo=${encodeURIComponent(rec.id)}`, raw: rec,
       };
     }
     case 'routingplan': {
@@ -2187,6 +2288,64 @@ export function resolveLinkedEntity(state, entityType, entityId) {
         title: rec.title || `Catchball pact · ${rec.altitudeKey}`,
         status: `${rec.status} · ${rec.altitudeKey} (${rec.horizonDays}d)`,
         route: `#/catchball?panel=workbench&pact=${encodeURIComponent(rec.id)}`,
+        raw: rec,
+      };
+    }
+    case 'cadenceforum': {
+      const rec = (state.cadenceForums || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      // A forum is a governance server; its attendance list is deliberately NOT
+      // projected into the shared graph, because an edge is world-readable above
+      // the span and attendance is a working fact, not a governance claim.
+      return {
+        type: 'cadenceforum',
+        id: rec.id,
+        title: rec.title,
+        status: `${rec.status} · ${rec.cadence} · capacity ${rec.decisionCapacity}`,
+        route: `#/cadence?panel=workbench&forum=${encodeURIComponent(rec.id)}`,
+        raw: rec,
+      };
+    }
+    case 'cadencereading': {
+      const rec = (state.cadenceReadings || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      return {
+        type: 'cadencereading',
+        id: rec.id,
+        title: `Cadence reading · ${rec.frozenOn}`,
+        status: rec.grade
+          ? (rec.grade.outcome === 'held' ? 'Prediction held' : 'Prediction did not hold')
+          : `Frozen ${rec.frozenOn}`,
+        route: `#/cadence?panel=constraint&reading=${encodeURIComponent(rec.id)}`,
+        raw: rec,
+      };
+    }
+    case 'carryover': {
+      const rec = (state.carryoverRecords || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      // The frozen resource bundle is summarised, never itemised into the graph:
+      // an edge names the settlement, not the money of a span.
+      return {
+        type: 'carryover',
+        id: rec.id,
+        title: `Carryover settlement · ${rec.settlementReason ? String(rec.settlementReason).slice(0, 60) : rec.pactId}`,
+        status: `${rec.status} · ${rec.resource ? rec.resource.effortDays : 0} person-day(s)`,
+        route: `#/carryover?panel=settlements&settlement=${encodeURIComponent(rec.id)}`,
+        raw: rec,
+      };
+    }
+    case 'exchangepacket': {
+      const rec = (state.exchangePackets || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      // The packet's item payloads are deliberately NOT projected into the
+      // shared graph: an edge may point at a packet, never at a foreign record's
+      // fields. The title names the altitude and the count, nothing else.
+      return {
+        type: 'exchangepacket',
+        id: rec.id,
+        title: `Sealed packet · ${rec.direction} · ${rec.recipientAltitudeKey}`,
+        status: `${rec.status} · ${rec.itemCount} item(s) · ${rec.signatureKeyed ? 'keyed' : 'plain'}`,
+        route: `#/envoy?panel=packets&packet=${encodeURIComponent(rec.id)}`,
         raw: rec,
       };
     }

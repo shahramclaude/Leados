@@ -37,10 +37,18 @@ import { calibrateAuthority } from './domain/authorityCalibration.js';
 // ADR-0081: aggregate-only routing calibration rows (no note text or ids).
 import { routingCsvRows } from './domain/altitudeRouter.js';
 import { catchballCsvRows } from './domain/catchball.js';
-// Schema v91: seat-scoped, small-cell-suppressed strategy renewal rows.
-import { buildStrategyCycleReport, strategyCycleCsvRows as buildStrategyCycleCsvRows } from './domain/strategyCycle.js';
+import { buildCadenceReport, cadenceCsvRows } from './domain/cadence.js';
+import { carryoverCsvRows } from './domain/carryover.js';
 // ADR-0083: the Concordance Terminal's aggregate-only rows.
 import { concordanceCsvRows } from './domain/concordance.js';
+// ADR-0086: the Disclosure Compiler's aggregate-only posture rows.
+import { disclosureReport, disclosureCsvRows } from './domain/disclosure.js';
+import { buildSeats, activeSeat } from './domain/seat.js';
+// ADR-0085: the Board Room's aggregate-only claim ledger.
+import { boardCsvRows } from './domain/board.js';
+// ADR-0088: the Federated Envoy's aggregate-only ledger rows (no titles, no
+// origin ids, no purpose text, no recipient names).
+import { envoyCsvRows } from './domain/envoy.js';
 import { LEADER_ID } from './domain/chain.js';
 import { deprivationExposure, successionReport } from './domain/succession.js';
 import { observeFidelity } from './domain/fidelity.js';
@@ -920,7 +928,29 @@ export const CSV_EXPORTS = [
   // individual rating — an exported file can never reconstruct one person's answers.
   { key: 'expectation-concordance', label: 'Expectation concordance (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'expectation-concordance', description: 'One workspace row, one row per leadership altitude and one row per instrument dimension: closed rounds, assessed and refused pairs, pairs at or above the agreed floor, the Wilson 95% interval, mean weighted κ, diverged-pair counts, the declared floors and a verdict. NO person id, NO pair, NO round id, NO name, NO note and NO individual rating. Every refused figure is BLANK rather than zero.' },
   { key: 'catchball-cascade', label: 'Catchball cascade (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'catchball-cascade', description: 'Altitude and workspace aggregate counts, delivery calibration and intervals; no names, IDs, pact titles or negotiation notes.' },
-  { key: 'strategy-renewal', label: 'Strategy renewal (active-seat scoped)', group: 'analytics', sensitive: false, filenameSlug: 'strategy-renewal', description: 'A dedicated report for the active operating seat: small-cell-suppressed altitude counts, historical delivery references and director-only effort scenarios. No person, pact, bet, cycle or seat IDs; no item titles, negotiation notes, budget amounts or private decisions. This is not a full-workspace export.' },
+  // CSV scope #80 (Schema v91, ADR-0085). Aggregate-only board claim ledger: one
+  // workspace row and one row per declared claim. No memo id, no operator, no
+  // note, no span name and no person. A refused figure is BLANK, never zero.
+  { key: 'board-claims', label: 'Board claims (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'board-claims', description: 'One workspace row and one row per declared board claim: verdict, point estimate, interval bounds, declared threshold and direction, observation count, materiality, post-hoc flag, disclosure tag, memo counts, attestation state and the memo fingerprint. NO memo id, NO operator, NO free text, NO span or person name. Every refused or withheld figure is BLANK rather than zero.' },
+  // CSV scope #81 (Schema v92, ADR-0086). One row per declared module at the
+  // exporting seat: the posture it holds and the boundary that set it. Aggregate
+  // cells only — a count, a rate or a currency total. No record id, name, note,
+  // rating or sentence can cross this export, and a withheld cell is BLANK.
+  { key: 'disclosure-posture', label: 'Disclosure posture (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'disclosure-posture', description: 'One row per declared module at the exporting seat: posture (detail / aggregate / withheld), record class, floor and ceiling ranks, aggregate counts, withheld cell count and the currency-separated money total, plus the reason the boundary gave. NO record id, NO name, NO note, NO rating and NO free text from any record.' },
+  // CSV scope #82 (Schema v93, ADR-0087). Aggregate-only operating-cadence
+  // telemetry: one row per declared standing forum and one workspace row. No id,
+  // no name, no forum free text, no attendance list and no item title.
+  { key: 'operating-cadence', label: 'Operating cadence (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'operating-cadence', description: 'One row per declared standing forum plus one workspace row: items, demand-days, capacity-days, utilisation ρ, flow time, verdict and Conway topology. Small cells are blanked below the declared floor; no names, IDs, forum free text, attendance lists or item titles.' },
+
+  // CSV scope #82 (Schema v92, ADR-0088, no bump of its own). The Federated
+  // Envoy's aggregate-only ledger: one row per sealed packet and one workspace
+  // summary. No titles, origin record ids, purpose text, workspace or person
+  // names, and a refused figure is BLANK, never zero.
+  { key: 'federated-exchange', label: 'Federated exchange (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'federated-exchange', description: 'One aggregate row per sealed packet plus a workspace summary: direction, receiving altitude and disclosure class, item and withheld counts, keyed/verified flags and failure codes. No titles, origin record ids, purpose text, workspace names or person records.' },
+  // CSV scope #80 (Schema v91, ADR-0085). Aggregate-only carryover telemetry:
+  // counts, next-cycle released capacity and calibration cells. No pact id,
+  // bet id, record id, title, name or budget name survives the boundary.
+  { key: 'carryover-settlement', label: 'Carryover settlement (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'carryover-settlement', description: 'Counts of invalidated pacts, pending settlements, releases and next-cycle released person-days, plus altitude calibration cells (n, hold rate, Wilson 95% bounds). NO pact id, NO bet id, NO record id, NO title, NO name, NO budget name. Refused rates are BLANK, never zero.' },
 ];
 
 function personLookup(state) {
@@ -5767,6 +5797,31 @@ function buildScopeTable(state, scope, now) {
       visit(rollupMandates(state, LEADER_ID, { now }));
       return { columns, rows };
     }
+    case 'board-claims': {
+      // CSV scope #80 (Schema v91, ADR-0085). Aggregate-only.
+      const rows = boardCsvRows(state, { now, settings: state.settings || {} });
+      const columns = [
+        { key: 'scope', header: 'scope' },
+        { key: 'claim', header: 'claim' },
+        { key: 'verdict', header: 'verdict' },
+        { key: 'value_pct', header: 'value_pct' },
+        { key: 'interval_lo_pct', header: 'interval_lo_pct' },
+        { key: 'interval_hi_pct', header: 'interval_hi_pct' },
+        { key: 'threshold_pct', header: 'threshold_pct' },
+        { key: 'comparator', header: 'comparator' },
+        { key: 'observations', header: 'observations' },
+        { key: 'material', header: 'material' },
+        { key: 'post_hoc', header: 'post_hoc' },
+        { key: 'tag', header: 'tag' },
+        { key: 'memos_total', header: 'memos_total' },
+        { key: 'memos_draft', header: 'memos_draft' },
+        { key: 'memos_committed', header: 'memos_committed' },
+        { key: 'memos_frozen', header: 'memos_frozen' },
+        { key: 'attestation', header: 'attestation' },
+        { key: 'fingerprint', header: 'fingerprint' },
+      ];
+      return { columns, rows };
+    }
     case 'expectation-concordance': {
       // CSV scope #78 (Schema v89, ADR-0083). Aggregate-only. A refused figure
       // is BLANK, never 0. No id, pair, name, note or individual rating can enter.
@@ -5788,6 +5843,55 @@ function buildScopeTable(state, scope, now) {
         { key: 'cell_floor', header: 'cell_floor' },
         { key: 'verdict', header: 'verdict' },
       ];
+      return { columns, rows };
+    }
+    case 'operating-cadence': {
+      // CSV scope #80 (Schema v92, ADR-0086). Aggregate-only. A figure refused by
+      // the engine is BLANK, never 0, and a small cell is blanked with its reason
+      // printed in the `suppressed` column. No name, id, attendance list or item
+      // title can enter: the row is a forum and a set of derived numbers.
+      const report = buildCadenceReport(state, { now, settings: state.settings || {} });
+      const rows = cadenceCsvRows(report, { floor: report.conventions.cadenceCellFloor });
+      const columns = [
+        'row_kind', 'altitude', 'horizon_days', 'cadence', 'forum_kind', 'items',
+        'demand_days', 'capacity_days', 'rho', 'flow_days', 'verdict', 'topology',
+        'closures_per_sitting', 'suppressed',
+      ].map((key) => ({ key, header: key }));
+      return { columns, rows };
+    }
+    case 'catchball-cascade': {
+      const rows = catchballCsvRows(state, { now, settings: state.settings || {} });
+      const columns = ['row_kind', 'altitude', 'rank', 'horizon_days', 'active_pacts', 'watermelon_n', 'thesis_suspect_n', 'settled_n', 'delivered_n', 'thesis_invalidated_n', 'hold_rate_pct', 'wilson_lo_pct', 'wilson_hi_pct', 'brier', 'brier_skill', 'negotiation_lift_pp', 'verdict'].map((key) => ({ key, header: key }));
+      return { columns, rows };
+    }
+
+    case 'carryover-settlement': {
+      // CSV scope #80 (Schema v91, ADR-0085). Aggregate-only: counts, the
+      // next-cycle released-capacity totals and altitude calibration cells.
+      // A refused rate is BLANK, never 0.
+      const rows = carryoverCsvRows(state, now);
+      const columns = ['row_kind', 'item', 'value'].map((key) => ({ key, header: key }));
+      return { columns, rows };
+    }
+    case 'disclosure-posture': {
+      // CSV scope #81 (Schema v92, ADR-0086). Compiled at the exporting seat, so
+      // the file says what THAT altitude may see — not what the operator can.
+      const seatSettings = state.settings || {};
+      const built = buildSeats(state, { now, settings: seatSettings });
+      const report = disclosureReport(state, { now, settings: seatSettings, seat: activeSeat(built), built });
+      const rows = disclosureCsvRows(report);
+      const columns = ['route', 'module', 'posture', 'record_class', 'floor_rank', 'detail_ceiling', 'open_n', 'overdue_n', 'total_n', 'withheld_cells', 'money_by_currency', 'reason'].map((key) => ({ key, header: key }));
+      return { columns, rows };
+    }
+    case 'federated-exchange': {
+      // CSV scope #83 (Schema v93, ADR-0088). Aggregate-only and refusal-honest: a packet
+      // with fewer than 3 items prints its attested counts as BLANK, never 0.
+      const rows = envoyCsvRows(state, { now, settings: state.settings || {} });
+      const columns = [
+        'row_kind', 'direction', 'recipient_altitude', 'recipient_class', 'status',
+        'items', 'withheld', 'omitted', 'keyed', 'verified', 'failures',
+        'attested_open_critical', 'attested_oldest_open_days', 'received_on', 'created_on',
+      ].map((key) => ({ key, header: key }));
       return { columns, rows };
     }
     case 'catchball-cascade': {

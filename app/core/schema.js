@@ -14,6 +14,10 @@ import { normalizeConflicts } from './conflict-schema.js';
 // ADR-0083: the Concordance Terminal. Rounds resolve BEFORE links so
 // `rolls-up-to`, `re-contracts` and `re-tests` edges validate on reload.
 import { normalizeConcordanceRounds, normalizeConcordanceMarkers, normalizeConcordanceSettings } from './domain/concordanceSchema.js';
+import { normalizeDisclosureGrants, normalizeDisclosureMarkers, normalizeDisclosureSettings } from './domain/disclosureSchema.js';
+// ADR-0085: the Board Room. Memos resolve BEFORE links so `summarizes-span`
+// and `escalates-from` provenance edges validate on reload.
+import { normalizeBoardMemos, normalizeBoardMarkers, normalizeBoardSettings } from './domain/boardSchema.js';
 import { normalizePropagationLineage } from './domain/automationLineage.js';
 import { normalizeImpactExecutionSnapshot } from './domain/impactExecution.js';
 import { normalizeStrategyBets, normalizeStrategyTags } from './domain/strategy.js';
@@ -141,11 +145,37 @@ import {
   normalizeCatchballMarkers,
   normalizeCatchballSettings,
 } from './domain/catchballSchema.js';
+// ADR-0085: the Operating Cadence Clock's fail-closed normalizers and clamped
+// conventions. A forum, a sitting or a frozen reading that cannot be validated is
+// dropped with a warning rather than repaired into something a leader might act on.
 import {
-  normalizeStrategyCycleReadings,
-  normalizeStrategyCycleMarkers,
-  normalizeStrategyCycleSettings,
-} from './domain/strategyCycleSchema.js';
+  normalizeCadenceForums,
+  normalizeCadenceSessions,
+  normalizeCadenceReadings,
+  normalizeCadenceMarkers,
+  normalizeCadenceSettings,
+} from './domain/cadenceSchema.js';
+
+// ADR-0088: the Federated Envoy. Three additive collections (the packet
+// ledger, the attested artefact ledger and the rule-idempotency markers) and
+// five clamped conventions. Like ADR-0076 and ADR-0082 this needs **no schema
+// version bump**: an older blob simply has none of these keys, and every one of
+// them normalises to "never exchanged a packet", which is the truth rather than
+// a fabricated empty exchange.
+import {
+  normalizeExchangeArtefacts,
+  normalizeExchangeMarkers,
+  normalizeExchangePackets,
+  normalizeEnvoySettings,
+} from './domain/envoySchema.js';
+// ADR-0085: Hoshin Carryover Terminal records, idempotency markers, once-only
+// grading rows, and clamped conventions.
+import {
+  normalizeCarryoverRecords,
+  normalizeCarryoverMarkers,
+  normalizeCarryoverGradings,
+  normalizeCarryoverSettings,
+} from './domain/carryoverSchema.js';
 import { addDays } from './time.js';
 import { validateWatchResponse } from './domain/watchResponse.js';
 import {
@@ -301,11 +331,30 @@ export {
   DRILL_OUTCOMES,
 };
 
-// ADR-0076 (the Operating Seat) was additive WITHOUT a version bump by design:
-// it introduced no new stored entity. Schema v91 adds immutable strategy
-// renewal readings and idempotency markers; older workspaces migrate with empty
-// ledgers rather than invented history.
-export const SCHEMA_VERSION = 91;
+// v82 remains the schema version. ADR-0076 (the Operating Seat) is additive
+// WITHOUT a version bump by design: it introduces no new stored entity. The
+// acting seat is a settings declaration, the handover and every access refusal
+// are entries in the existing append-only event log, typed provenance reuses
+// the existing `rolls-up-to` relation and existing graph entity types, and the
+// roll-up is derived live from `person.managerId` and the dated records. An
+// older blob simply opens on the undeclared operator view. A version bump here
+// would have forced 78 test files to be rewritten for zero user benefit; the
+// honest choice is to add nothing to migrate.
+export const SCHEMA_VERSION = 93;
+
+// v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
+// thresholds are declared before the first look.
+// v92 adds the Disclosure Compiler (ADR-0086, main): each screen declares its
+// posture, and detail is released only by a consented, expiring contract.
+// v93 adds the Operating Cadence Clock (`cadenceForums`, `cadenceSessions`,
+// `cadenceReadings`, `cadenceMarkers`, ADR-0087): the standing-forum calendar as a
+// finite decision machine — declared per-forum decision capacity and service
+// time, append-only sittings, and frozen readings of the queue that are graded
+// once afterwards. Purely additive: every utilisation, flow time, breach
+// probability and constraint is derived on read from the roster and the dated
+// records other modules already keep, so an upgraded workspace opens with an
+// EMPTY forum register that says no cadence has ever been declared, rather than
+// a fabricated meeting calendar. A forum is only ever created by a human.
 
 // v83 adds the Succession Terminal (`successionReadings`, `successionMarkers`): a
 // frozen bench claim per workspace or per span — the probability that at least one
@@ -1365,10 +1414,21 @@ export const DEFAULT_SETTINGS = Object.freeze({
   catchballCellFloor: 3,
   catchballMaxFanout: 4,
   catchballAutoPropagate: true,
-  // Schema v91: Strategy Renewal Bridge evidence, suppression and propagation conventions.
-  strategyCycleEvidenceFloor: 5,
-  strategyCycleCellFloor: 3,
-  strategyCycleAutoPropagate: true,
+  // ADR-0085: the Operating Cadence Clock — declared conventions, clamped on read.
+  // `cadenceUtilisationTargetPct` is the ρ the calendar is planned against; the
+  // planning factor and flow target are named conventions, never fitted.
+  cadenceFloorN: 5,
+  cadenceCellFloor: 3,
+  cadenceUtilisationTargetPct: 85,
+  cadencePlanningFactorPct: 130,
+  cadenceFlowTargetDays: 14,
+  cadenceAutoPropagate: true,
+  // ADR-0088: the Federated Envoy — declared conventions, all clamped.
+  envoyMaxItems: 60,
+  envoyRequireKeyedSignature: true,
+  envoyDivergenceReviewDays: 14,
+  envoyAttestationRiskFloorPct: 25,
+  envoyAutoPropagate: true,
   // ADR-0083: The Concordance Terminal — declared conventions, all clamped.
   concordanceAgreementFloorPct: 60,
   concordanceCellFloor: 5,
@@ -1376,6 +1436,20 @@ export const DEFAULT_SETTINGS = Object.freeze({
   concordanceRetestDays: 21,
   concordanceReviewDays: 14,
   concordanceAutoPropagate: true,
+  // ADR-0086: the disclosure compiler's conventions. The cell floor is the
+  // small-cell floor the aggregate withholds below; a release may never run
+  // longer than 30 days or exceed the per-seat cap, whatever is declared here.
+  disclosureCellFloor: 5,
+  disclosureMaxDays: 30,
+  disclosureMaxActiveGrants: 6,
+  disclosureReviewDays: 14,
+  disclosureAutoPropagate: true,
+  // ADR-0085: the Board Room — declared conventions, all clamped.
+  boardCellFloor: 5,
+  boardEvidenceFloor: 4,
+  boardMaterialityPct: 10,
+  boardRecheckDays: 90,
+  boardAutoPropagate: true,
   seatMaterialityPp: 5,
   seatWindowDays: 90,
   seatMaxLinks: 24,
@@ -1650,13 +1724,45 @@ export const COLLECTIONS = [
   'catchballPacts',
   'catchballRounds',
   'catchballMarkers',
-  // Schema v91: identity-reduced frozen strategy renewal readings and markers.
-  'strategyCycles',
-  'strategyCycleMarkers',
+  // ADR-0085: the Operating Cadence Clock. Declared standing forums, an
+  // append-only sitting log, frozen queue readings graded once afterwards, and
+  // rule-idempotency markers. No attendance record, no per-person record and no
+  // meeting transcript is stored: a forum is a server with a declared capacity,
+  // and the only history kept is what it closed.
+  'cadenceForums',
+  'cadenceSessions',
+  'cadenceReadings',
+  'cadenceMarkers',
   // ADR-0083: two-sided expectation rounds (one row per pair per cycle, sealed
   // until both sides are in) and the idempotency markers their three rules use.
   'expectationRounds',
   'concordanceMarkers',
+  // ADR-0086: disclosure release contracts (the only records that can widen a
+  // read) and the idempotency markers RULE-DSC-01..02 use.
+  'disclosureGrants',
+  'disclosureMarkers',
+  // ADR-0085: board disclosure memos (declared claims + frozen snapshots) and
+  // the idempotency markers their three rules use.
+  'boardMemos',
+  'boardMarkers',
+
+  // ADR-0088: the Federated Envoy. `exchangePackets` is the ledger of every
+  // packet this workspace built, verified, ingested or refused; the stored rows
+  // carry the manifest (item hashes and projected fields) so a verification can
+  // always be recomputed from the ledger, never from a cached verdict.
+  'exchangePackets',
+  // `exchangeArtefacts` holds the attested COPIES imported from verified
+  // packets. A foreign packet never edits a local record: an imported artefact
+  // is an attributed snapshot, and a disagreement opens a decision (RULE-ENV-02).
+  'exchangeArtefacts',
+  // Rule-idempotency markers (carriage, divergence, attested exposure).
+  'exchangeMarkers',
+  // ADR-0085: Hoshin Carryover Terminal — one record per Catchball pact
+  // settled as thesis-invalidated, idempotency markers, and the once-only
+  // later grading rows.
+  'carryoverRecords',
+  'carryoverMarkers',
+  'carryoverGradings',
   'links',
   'portfolio',
   'events',
@@ -2304,9 +2410,13 @@ export function normalizeSettings(raw) {
     ...normalizeAuthorityCalibrationSettings(s),
     ...normalizeRouterSettings(s),
     ...normalizeConcordanceSettings(s),
+    ...normalizeDisclosureSettings(s),
+    // ADR-0085: the Board Room's declared conventions.
+    ...normalizeBoardSettings(s),
     ...normalizeSealSettings(s),
     ...normalizeCatchballSettings(s),
-    ...normalizeStrategyCycleSettings(s),
+    ...normalizeCarryoverSettings(s),
+    ...normalizeEnvoySettings(s),
   };
 }
 
@@ -6396,15 +6506,41 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.catchballPacts = normalizeCatchballPacts(raw.catchballPacts, warnings);
   state.catchballRounds = normalizeCatchballRounds(raw.catchballRounds, warnings);
   state.catchballMarkers = normalizeCatchballMarkers(raw.catchballMarkers);
-  // Schema v91: a frozen renewal cycle cites its Catchball cohort, strategy bets
-  // and owner seat, so resolve both collections before validating typed links.
-  state.strategyCycles = normalizeStrategyCycleReadings(raw.strategyCycles, warnings);
-  state.strategyCycleMarkers = normalizeStrategyCycleMarkers(raw.strategyCycleMarkers, warnings);
+  // ADR-0085: the Operating Cadence Clock. A malformed forum, a sitting with no
+  // date and a reading with no frozen figure are all dropped with a warning;
+  // none is repaired into something a leader might act on.
+  state.cadenceForums = normalizeCadenceForums(raw.cadenceForums, warnings);
+  state.cadenceSessions = normalizeCadenceSessions(raw.cadenceSessions, warnings);
+  state.cadenceReadings = normalizeCadenceReadings(raw.cadenceReadings, warnings);
+  state.cadenceMarkers = normalizeCadenceMarkers(raw.cadenceMarkers);
+  state.settings = { ...state.settings, ...normalizeCadenceSettings({ ...DEFAULT_SETTINGS, ...(raw.settings || {}) }) };
+  // ADR-0085: carryover records resolve after pacts so `carries-over` and
+  // `settles` edges validate against real pact and bet ids.
+  state.carryoverRecords = normalizeCarryoverRecords(raw.carryoverRecords, warnings);
+  state.carryoverMarkers = normalizeCarryoverMarkers(raw.carryoverMarkers, warnings);
+  state.carryoverGradings = normalizeCarryoverGradings(raw.carryoverGradings, warnings);
   // ADR-0083: rounds resolve before links so `rolls-up-to`, `re-contracts` and
   // `re-tests` edges validate against real round ids. A malformed round is
   // dropped; a round claiming to be closed with one side is reopened.
   state.expectationRounds = normalizeConcordanceRounds(raw.expectationRounds, warnings);
   state.concordanceMarkers = normalizeConcordanceMarkers(raw.concordanceMarkers, warnings);
+  // ADR-0086: grants resolve before links so `discloses-to`, `consented-by`,
+  // `authorizes` and `tracks-followup` edges validate against real grant ids.
+  // An expired grant loads as expired; it never loads as live authority.
+  state.disclosureGrants = normalizeDisclosureGrants(raw.disclosureGrants, warnings, { now, today: todayDay });
+  state.disclosureMarkers = normalizeDisclosureMarkers(raw.disclosureMarkers, warnings);
+  // ADR-0085: memos resolve before links so `summarizes-span`/`escalates-from`
+  // provenance edges validate against real memo ids. A memo claiming to be
+  // committed without a snapshot is reopened as a draft.
+  state.boardMemos = normalizeBoardMemos(raw.boardMemos, warnings);
+  state.boardMarkers = normalizeBoardMarkers(raw.boardMarkers, warnings);
+  // ADR-0085: packets and attested artefacts resolve before links so `carries`,
+  // `reconciles` and `tracks-followup` edges validate against real packet ids.
+  // A packet row this build cannot fully account for is dropped with a warning;
+  // a payload field outside the declared whitelist never survives ingestion.
+  state.exchangePackets = normalizeExchangePackets(raw.exchangePackets, warnings);
+  state.exchangeArtefacts = normalizeExchangeArtefacts(raw.exchangeArtefacts, warnings);
+  state.exchangeMarkers = normalizeExchangeMarkers(raw.exchangeMarkers);
   state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
 
   const events = asArray(raw, 'events', warnings).map((e, i) => ({
@@ -7103,20 +7239,52 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
-  // Schema v91: additive 90 → 91. Cycles are never back-filled from present
-  // Catchball or Strategy data: every reading is prospective evidence frozen by
-  // a human action, and every marker proves a later rule ran exactly once.
+  // ADR-0086: additive 91 → 92. No existing record is rewritten. An older
+  // workspace simply has an empty release ledger and the declared conventions;
+  // the compiler derives every posture from the module manifests, so no stored
+  // permission table has to be migrated.
+  91: (v91) => ({
+    ...v91,
+    schemaVersion: 92,
+    disclosureGrants: Array.isArray(v91.disclosureGrants) ? v91.disclosureGrants : [],
+    disclosureMarkers: Array.isArray(v91.disclosureMarkers) ? v91.disclosureMarkers : [],
+    settings: isPlainObject(v91.settings)
+      ? {
+        ...v91.settings,
+        disclosureCellFloor: v91.settings.disclosureCellFloor ?? 5,
+        disclosureMaxDays: v91.settings.disclosureMaxDays ?? 30,
+        disclosureMaxActiveGrants: v91.settings.disclosureMaxActiveGrants ?? 6,
+        disclosureReviewDays: v91.settings.disclosureReviewDays ?? 14,
+        disclosureAutoPropagate: v91.settings.disclosureAutoPropagate !== false,
+      }
+      : { ...DEFAULT_SETTINGS },
+  }),
+  // ADR-0086: additive 90 → 91. No existing record is rewritten: an older
+  // workspace simply has an empty memo ledger and the declared conventions.
+  // A memo is only ever created by a human opening one.
   90: (v90) => ({
     ...v90,
     schemaVersion: 91,
-    strategyCycles: Array.isArray(v90.strategyCycles) ? v90.strategyCycles : [],
-    strategyCycleMarkers: Array.isArray(v90.strategyCycleMarkers) ? v90.strategyCycleMarkers : [],
+    // v90 → 91 was merged from two branches on main; both additive sets belong in
+    // the one migration, or an upgraded workspace loses one of them.
+    boardMemos: Array.isArray(v90.boardMemos) ? v90.boardMemos : [],
+    boardMarkers: Array.isArray(v90.boardMarkers) ? v90.boardMarkers : [],
+    carryoverRecords: Array.isArray(v90.carryoverRecords) ? v90.carryoverRecords : [],
+    carryoverMarkers: Array.isArray(v90.carryoverMarkers) ? v90.carryoverMarkers : [],
+    carryoverGradings: Array.isArray(v90.carryoverGradings) ? v90.carryoverGradings : [],
     settings: isPlainObject(v90.settings)
       ? {
         ...v90.settings,
-        strategyCycleEvidenceFloor: v90.settings.strategyCycleEvidenceFloor ?? 5,
-        strategyCycleCellFloor: v90.settings.strategyCycleCellFloor ?? 3,
-        strategyCycleAutoPropagate: v90.settings.strategyCycleAutoPropagate !== false,
+        boardCellFloor: v90.settings.boardCellFloor ?? 5,
+        boardEvidenceFloor: v90.settings.boardEvidenceFloor ?? 4,
+        boardMaterialityPct: v90.settings.boardMaterialityPct ?? 10,
+        boardRecheckDays: v90.settings.boardRecheckDays ?? 90,
+        boardAutoPropagate: v90.settings.boardAutoPropagate !== false,
+        carryoverCellFloor: v90.settings.carryoverCellFloor ?? 5,
+        carryoverReliabilityFloorPct: v90.settings.carryoverReliabilityFloorPct ?? 60,
+        carryoverGradingDelayDays: v90.settings.carryoverGradingDelayDays ?? 14,
+        carryoverDecisionReviewDays: v90.settings.carryoverDecisionReviewDays ?? 14,
+        carryoverAutoPropagate: v90.settings.carryoverAutoPropagate !== false,
       }
       : { ...DEFAULT_SETTINGS },
   }),
@@ -7161,6 +7329,30 @@ export const MIGRATIONS = {
         catchballCellFloor: v89.settings.catchballCellFloor ?? 3,
         catchballMaxFanout: v89.settings.catchballMaxFanout ?? 4,
         catchballAutoPropagate: v89.settings.catchballAutoPropagate !== false,
+      }
+      : { ...DEFAULT_SETTINGS },
+  }),
+  // ADR-0087: additive 92 → 93. The Operating Cadence Clock adds a forum
+  // register, a sitting log, frozen readings and idempotency markers. Nothing
+  // historical is invented: an upgraded workspace opens with NO forums, because
+  // a meeting calendar back-filled from records would claim a cadence the
+  // organisation never actually ran.
+  92: (v92) => ({
+    ...v92,
+    schemaVersion: 93,
+    cadenceForums: Array.isArray(v92.cadenceForums) ? v92.cadenceForums : [],
+    cadenceSessions: Array.isArray(v92.cadenceSessions) ? v92.cadenceSessions : [],
+    cadenceReadings: Array.isArray(v92.cadenceReadings) ? v92.cadenceReadings : [],
+    cadenceMarkers: Array.isArray(v92.cadenceMarkers) ? v92.cadenceMarkers : [],
+    settings: isPlainObject(v92.settings)
+      ? {
+        ...v92.settings,
+        cadenceFloorN: v92.settings.cadenceFloorN ?? 5,
+        cadenceCellFloor: v92.settings.cadenceCellFloor ?? 3,
+        cadenceUtilisationTargetPct: v92.settings.cadenceUtilisationTargetPct ?? 85,
+        cadencePlanningFactorPct: v92.settings.cadencePlanningFactorPct ?? 130,
+        cadenceFlowTargetDays: v92.settings.cadenceFlowTargetDays ?? 14,
+        cadenceAutoPropagate: v92.settings.cadenceAutoPropagate !== false,
       }
       : { ...DEFAULT_SETTINGS },
   }),

@@ -79,6 +79,11 @@ export const DEFAULT_RECORD_POLICY = Object.freeze({
 
 export const RECORD_POLICIES = Object.freeze({
   mandates: { classKey: 'authority', label: 'Decision-rights contracts', route: '#/mandates' },
+  // ADR-0086: a disclosure release is a bounded authority contract, so it is
+  // readable at every altitude that can hold one — and its ledger is exactly
+  // what makes the widening auditable afterwards.
+  disclosureGrants: { classKey: 'authority', label: 'Disclosure release contracts', route: '#/disclosure' },
+  disclosureMarkers: { classKey: 'unit', label: 'Disclosure idempotency markers', route: '#/disclosure' },
   missionBriefs: { classKey: 'enterprise', label: 'Identity-free mission briefs', route: '#/mission?panel=brief' },
   // Individual detail. Names, notes and ratings live here.
   oneOnOnes: { classKey: 'individual', label: '1:1 conversations', route: '#/oneonones' },
@@ -105,10 +110,14 @@ export const RECORD_POLICIES = Object.freeze({
   catchballPacts: { classKey: 'unit', label: 'Hoshin Catchball pacts', route: '#/catchball' },
   catchballRounds: { classKey: 'unit', label: 'Hoshin Catchball rounds', route: '#/catchball' },
   catchballMarkers: { classKey: 'unit', label: 'Catchball idempotency markers', route: '#/catchball' },
-  // Raw cycle rows contain typed cohort IDs for the atomic rule engine. Every
-  // declared seat must use the identity-reduced report, never this projection.
-  strategyCycles: { classKey: 'unit', detailCeiling: 0, label: 'Frozen strategy renewal readings (report only)', route: '#/strategy-cycle' },
-  strategyCycleMarkers: { classKey: 'unit', detailCeiling: 0, label: 'Strategy renewal rule markers', route: '#/strategy-cycle' },
+  // ADR-0088: the Federated Envoy's ledger, its attested copies and its
+  // idempotency markers. A packet's *content* class is decided by the receiving
+  // altitude (`ENVOY_FIELDS`), not by this row; what this row fixes is that the
+  // ledger itself is span material, never enterprise material — a workspace may
+  // not read another span's exchange history at the top of the house.
+  exchangePackets: { classKey: 'unit', label: 'Sealed exchange packets', route: '#/envoy' },
+  exchangeArtefacts: { classKey: 'unit', label: 'Attested exchange copies', route: '#/envoy' },
+  exchangeMarkers: { classKey: 'unit', label: 'Exchange idempotency markers', route: '#/envoy' },
   // Portfolio material. Functions, quarters and capital.
   budgets: { classKey: 'portfolio', label: 'Budgets', route: '#/finance' },
   strategyBets: { classKey: 'portfolio', label: 'Strategic bets', route: '#/strategy' },
@@ -132,6 +141,10 @@ export const RECORD_POLICIES = Object.freeze({
   solvencyReadings: { classKey: 'enterprise', label: 'Frozen promise readings', route: '#/solvency' },
   orgDesigns: { classKey: 'enterprise', label: 'Structural designs', route: '#/orgdesign' },
   voiDecisions: { classKey: 'enterprise', label: 'Information-value frames', route: '#/voi' },
+  // ADR-0085: board memos are enterprise material. They carry claims, thresholds,
+  // verdicts and counts — never a person, a 1:1 or a rating — but they are the
+  // pack, and the pack is not handed below the executive floor.
+  boardMemos: { classKey: 'enterprise', label: 'Board disclosure memos', route: '#/board' },
 });
 
 /** Resolve a collection to its full, frozen policy (never undefined). */
@@ -185,7 +198,29 @@ const ENTERPRISE_ROUTES = Object.freeze([
   // function, while a frontline lead's horizon is the week.
   'merit', 'transition', 'parity', 'integrity', 'sceptic',
   'attribution', 'counterfactual', 'orgdesign', 'voi',
+  // ADR-0084: the board line is enterprise material. The executive altitude may
+  // READ it; committing and freezing the pack is the chief's own act right.
+  'board',
 ]);
+
+/**
+ * ADR-0086: the same windows, exposed as DATA so the Disclosure Compiler gates a
+ * route on exactly the window the nav uses. Two copies of a rank table is how a
+ * nav and a screen start disagreeing about who may see what.
+ */
+export function routeRankWindow(route) {
+  const enterprise = ENTERPRISE_ROUTES.includes(route);
+  const portfolio = PORTFOLIO_ROUTES.includes(route);
+  return {
+    floor: enterprise
+      ? RECORD_CLASSES.enterprise.minRank
+      : portfolio
+        ? RECORD_CLASSES.portfolio.minRank
+        : 1,
+    ceiling: INDIVIDUAL_ROUTES.includes(route) ? RECORD_CLASSES.individual.maxRank : 5,
+    kind: enterprise ? 'enterprise' : portfolio ? 'portfolio' : INDIVIDUAL_ROUTES.includes(route) ? 'individual' : 'open',
+  };
+}
 
 /** Which routes are simply not a frontline/manager question. */
 export function routeVerdict(route, seat) {
@@ -232,6 +267,10 @@ export const ACTION_RIGHTS = Object.freeze({
   'finalize-merit-cycle': { minRank: 4, maxRank: 5, label: 'Finalize a merit cycle' },
   'approve-capital': { minRank: 4, maxRank: 5, label: 'Approve capital allocation' },
   'freeze-board-summary': { minRank: 5, maxRank: 5, label: 'Freeze a board-ready summary' },
+  // ADR-0085: the Board Room. Reading is enterprise-level (route floor rank 4);
+  // opening, declaring, looking and committing are the chief's act, and freezing
+  // the disclosed pack stays on its own rank-5 right above.
+  'declare-board-line': { minRank: 5, maxRank: 5, label: 'Open, declare and commit a board disclosure memo' },
   'declare-seat': { minRank: 1, maxRank: 5, label: 'Declare the operating seat' },
   'route-intake': { minRank: 1, maxRank: 5, label: 'Route a natural-language situation note to modules and an altitude' },
   // ADR-0083: an expectation round is a two-sided instrument. Every altitude
@@ -247,9 +286,19 @@ export const ACTION_RIGHTS = Object.freeze({
   'audit-seal': { minRank: 1, maxRank: 5, label: 'Verify the sealed audit chain' },
   // ADR-0084: bilateral Hoshin Kanri & Catchball negotiation across spans.
   'negotiate-catchball': { minRank: 1, maxRank: 5, label: 'Propose, counter, accept or check in on a Hoshin Catchball pact' },
-  // Schema v91: each altitude freezes a scoped renewal reading and can explicitly
-  // scan its own window; only the rules may generate the cross-module links.
-  'govern-strategy-cycle': { minRank: 1, maxRank: 5, label: 'Freeze or scan a scoped strategy renewal cycle' },
+  // ADR-0086: a disclosure release is requested by the altitude that needs the
+  // detail and consented by the altitude that owns it. Both directions are open
+  // at every rank, because either side may sit at any altitude; the pair, the
+  // purpose, the days and the class are what the action checks.
+  'request-disclosure': { minRank: 1, maxRank: 5, label: 'Request a bounded disclosure release' },
+  'consent-disclosure': { minRank: 1, maxRank: 5, label: 'Consent to, refuse or revoke a disclosure release' },
+  // ADR-0087: the standing forum is a governance server; any altitude that chairs
+  // one may declare it and record its sittings, but never for a peer span.
+  'run-cadence': { minRank: 1, maxRank: 5, label: 'Declare a standing forum, record its sittings and freeze a cadence reading' },
+  // ADR-0087: every altitude that holds a record may attest it upward, and every
+  // altitude may receive one — the disclosure class is what limits the content,
+  // not the right to exchange. The action itself enforces the sending span.
+  'exchange-packets': { minRank: 1, maxRank: 5, label: 'Publish or ingest a sealed inter-workspace packet' },
 });
 
 export function actionVerdict(action, seat) {
