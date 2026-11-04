@@ -102,6 +102,9 @@ export const RECORD_POLICIES = Object.freeze({
   intakeDrafts: { classKey: 'unit', label: 'Intake drafts', route: '#/intake' },
   altitudeRoutingPlans: { classKey: 'unit', label: 'Altitude routing plans', route: '#/routing' },
   altitudeRoutingMarkers: { classKey: 'unit', label: 'Routing idempotency markers', route: '#/routing' },
+  catchballPacts: { classKey: 'unit', label: 'Hoshin Catchball pacts', route: '#/catchball' },
+  catchballRounds: { classKey: 'unit', label: 'Hoshin Catchball rounds', route: '#/catchball' },
+  catchballMarkers: { classKey: 'unit', label: 'Catchball idempotency markers', route: '#/catchball' },
   // Portfolio material. Functions, quarters and capital.
   budgets: { classKey: 'portfolio', label: 'Budgets', route: '#/finance' },
   strategyBets: { classKey: 'portfolio', label: 'Strategic bets', route: '#/strategy' },
@@ -234,6 +237,8 @@ export const ACTION_RIGHTS = Object.freeze({
   // ADR-0082: verifying the sealed audit chain is every altitude's business —
   // it writes only an audit event, never a record.
   'audit-seal': { minRank: 1, maxRank: 5, label: 'Verify the sealed audit chain' },
+  // ADR-0083: bilateral Hoshin Kanri & Catchball negotiation across spans.
+  'negotiate-catchball': { minRank: 1, maxRank: 5, label: 'Propose, counter, accept or check in on a Hoshin Catchball pact' },
 });
 
 export function actionVerdict(action, seat) {

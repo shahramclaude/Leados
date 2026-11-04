@@ -130,6 +130,14 @@ import {
 // ADR-0082: the Sealed Spine's settings. Backward compatible (defaults when
 // absent), so like ADR-0076's seat settings this needs NO schema bump of its own.
 import { normalizeSealSettings } from './domain/sealSchema.js';
+// ADR-0083: Hoshin Kanri & Catchball Cascade pacts, append-only rounds,
+// idempotency markers, and clamped conventions.
+import {
+  normalizeCatchballPacts,
+  normalizeCatchballRounds,
+  normalizeCatchballMarkers,
+  normalizeCatchballSettings,
+} from './domain/catchballSchema.js';
 import { addDays } from './time.js';
 import { validateWatchResponse } from './domain/watchResponse.js';
 import {
@@ -294,7 +302,7 @@ export {
 // older blob simply opens on the undeclared operator view. A version bump here
 // would have forced 78 test files to be rewritten for zero user benefit; the
 // honest choice is to add nothing to migrate.
-export const SCHEMA_VERSION = 88;
+export const SCHEMA_VERSION = 89;
 
 // v83 adds the Succession Terminal (`successionReadings`, `successionMarkers`): a
 // frozen bench claim per workspace or per span — the probability that at least one
@@ -1344,6 +1352,16 @@ export const DEFAULT_SETTINGS = Object.freeze({
   routingCalibrationFloorN: 5,
   routingReviewDays: 14,
   routingAutoPropagate: true,
+  // ADR-0083: Hoshin Kanri & Catchball Cascade — declared conventions, clamped.
+  catchballWatermelonGapPct: 25,
+  catchballLeadingFloorPct: 80,
+  catchballLaggingFloorPct: 70,
+  catchballThesisRedPct: 35,
+  catchballFloorN: 5,
+  catchballReliabilityFloorPct: 70,
+  catchballCellFloor: 3,
+  catchballMaxFanout: 4,
+  catchballAutoPropagate: true,
   seatMaterialityPp: 5,
   seatWindowDays: 90,
   seatMaxLinks: 24,
@@ -1613,6 +1631,11 @@ export const COLLECTIONS = [
   // rule-idempotency markers. Additive; no figure is inferred on migration.
   'altitudeRoutingPlans',
   'altitudeRoutingMarkers',
+  // ADR-0083: Hoshin Kanri & Catchball Cascade pacts, append-only rounds, and
+  // rule-idempotency markers.
+  'catchballPacts',
+  'catchballRounds',
+  'catchballMarkers',
   'links',
   'portfolio',
   'events',
@@ -2260,6 +2283,7 @@ export function normalizeSettings(raw) {
     ...normalizeAuthorityCalibrationSettings(s),
     ...normalizeRouterSettings(s),
     ...normalizeSealSettings(s),
+    ...normalizeCatchballSettings(s),
   };
 }
 
@@ -6343,6 +6367,12 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // real plan ids. A hostile or malformed plan is dropped, never repaired.
   state.altitudeRoutingPlans = normalizeRouterPlans(raw.altitudeRoutingPlans, warnings);
   state.altitudeRoutingMarkers = normalizeRouterMarkers(raw.altitudeRoutingMarkers);
+  // ADR-0083: Hoshin Catchball pacts and rounds resolve before links so
+  // `deploys-strategy`, `cascades-to`, `counters-upward`, `trades-off`, and
+  // `rolls-up-to` edges validate against real pact and round ids.
+  state.catchballPacts = normalizeCatchballPacts(raw.catchballPacts, warnings);
+  state.catchballRounds = normalizeCatchballRounds(raw.catchballRounds, warnings);
+  state.catchballMarkers = normalizeCatchballMarkers(raw.catchballMarkers);
   state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
 
   const events = asArray(raw, 'events', warnings).map((e, i) => ({
@@ -7041,6 +7071,30 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  // ADR-0083: additive 88 → 89. Adds Hoshin Kanri & Catchball Cascade pacts,
+  // append-only rounds, idempotency markers, and clamped conventions without
+  // fabricating historical cascades.
+  88: (v88) => ({
+    ...v88,
+    schemaVersion: 89,
+    catchballPacts: Array.isArray(v88.catchballPacts) ? v88.catchballPacts : [],
+    catchballRounds: Array.isArray(v88.catchballRounds) ? v88.catchballRounds : [],
+    catchballMarkers: Array.isArray(v88.catchballMarkers) ? v88.catchballMarkers : [],
+    settings: isPlainObject(v88.settings)
+      ? {
+        ...v88.settings,
+        catchballWatermelonGapPct: v88.settings.catchballWatermelonGapPct ?? 25,
+        catchballLeadingFloorPct: v88.settings.catchballLeadingFloorPct ?? 80,
+        catchballLaggingFloorPct: v88.settings.catchballLaggingFloorPct ?? 70,
+        catchballThesisRedPct: v88.settings.catchballThesisRedPct ?? 35,
+        catchballFloorN: v88.settings.catchballFloorN ?? 5,
+        catchballReliabilityFloorPct: v88.settings.catchballReliabilityFloorPct ?? 70,
+        catchballCellFloor: v88.settings.catchballCellFloor ?? 3,
+        catchballMaxFanout: v88.settings.catchballMaxFanout ?? 4,
+        catchballAutoPropagate: v88.settings.catchballAutoPropagate !== false,
+      }
+      : { ...DEFAULT_SETTINGS },
+  }),
   // ADR-0081: additive 87 → 88. No existing record is rewritten: an older
   // workspace simply has an empty routing ledger and the declared conventions.
   // Normalizers remain fail-closed on malformed rows (see altitudeRouterSchema).

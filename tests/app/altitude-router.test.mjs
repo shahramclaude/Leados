@@ -78,11 +78,11 @@ function bootDocument() {
 /* --------------------------------------------------------------- 1. schema */
 
 test('schema v88 migrates additively; malformed plans are dropped, not repaired', () => {
-  assert.equal(SCHEMA_VERSION, 88);
+  assert.equal(SCHEMA_VERSION, 89);
   const old = { schemaVersion: 87, settings: { leaderName: 'Keep' }, cases: [{ id: 'keep' }], missionBriefs: [{ id: 'brief' }] };
   const migrated = migrate(old);
-  assert.equal(migrated.raw.schemaVersion, 88);
-  assert.deepEqual(migrated.applied, ['87 → 88']);
+  assert.equal(migrated.raw.schemaVersion, 89);
+  assert.deepEqual(migrated.applied, ['87 → 88', '88 → 89']);
   assert.deepEqual(migrated.raw.altitudeRoutingPlans, []);
   assert.deepEqual(migrated.raw.altitudeRoutingMarkers, []);
   assert.equal(migrated.raw.cases[0].id, 'keep');

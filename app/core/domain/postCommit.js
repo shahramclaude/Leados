@@ -102,6 +102,7 @@ import { missionRule } from './missionRules.js';
 // boundary above them in the SAME transaction. Inert unless a plan is adopted
 // or an explicit scan runs; an undeclared workspace is unchanged.
 import { altitudeRouterRule } from './altitudeRouterRules.js';
+import { catchballRule } from './catchballRules.js';
 import { sealRule } from './sealRules.js';
 
 export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
@@ -472,6 +473,11 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // Placed before the market's final work-producing pass (the attention-market
   // invariant requires only successionRule and seatRule to trail it).
   altitudeRouterRule,
+  // ADR-0083: Hoshin Kanri & Catchball Cascade (`RULE-HK-01..03`). Writes
+  // vertical `rolls-up-to` provenance across every leadership ancestor, links
+  // strategy/goal/budget/trade-off edges, and opens governed Watermelon and
+  // Double-Loop Thesis Review DACI decisions before the final tail passes.
+  catchballRule,
   attentionMarketRule,
   // ADR-0077: the Succession Terminal (bench certification). Runs before the
   // Operating Seat because its certificate edges are provenance the seat's

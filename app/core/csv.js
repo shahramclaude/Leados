@@ -36,6 +36,7 @@ import { rollupMandates } from './domain/mandates.js';
 import { calibrateAuthority } from './domain/authorityCalibration.js';
 // ADR-0081: aggregate-only routing calibration rows (no note text or ids).
 import { routingCsvRows } from './domain/altitudeRouter.js';
+import { catchballCsvRows } from './domain/catchball.js';
 import { LEADER_ID } from './domain/chain.js';
 import { deprivationExposure, successionReport } from './domain/succession.js';
 import { observeFidelity } from './domain/fidelity.js';
@@ -909,6 +910,7 @@ export const CSV_EXPORTS = [
     description: 'Per-person retention model output: tenure band, baseline hazard with its band, modelled multiplier, risk band, expected-loss range by currency, factor codes, plan status and committed cost, plus model-level calibration rows. People are exported as opaque references, never names or roles; exit notes, review text and 1:1 content are excluded by design.',
   },
   { key: 'altitude-router', label: 'Altitude routing integrity (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'altitude-router', description: 'One row per detected-altitude cell plus one workspace row: graded trials, agreement, Wilson interval, mean heuristic confidence and verdict. No ids, names, situation-note text, case titles, evidence terms or per-person records.' },
+  { key: 'catchball-cascade', label: 'Catchball cascade (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'catchball-cascade', description: 'Altitude and workspace aggregate counts, delivery calibration and intervals; no names, IDs, pact titles or negotiation notes.' },
 ];
 
 function personLookup(state) {
@@ -5753,6 +5755,11 @@ function buildScopeTable(state, scope, now) {
       const rows = [];
       const visit = (node) => { rows.push({ scope: node.seatId === LEADER_ID ? 'workspace' : 'child-span', total: node.total, own: node.own, ...node.counts, past_expiry: node.expiredOpen }); node.children.forEach(visit); };
       visit(rollupMandates(state, LEADER_ID, { now }));
+      return { columns, rows };
+    }
+    case 'catchball-cascade': {
+      const rows = catchballCsvRows(state, { now, settings: state.settings || {} });
+      const columns = ['row_kind', 'altitude', 'rank', 'horizon_days', 'active_pacts', 'watermelon_n', 'thesis_suspect_n', 'settled_n', 'delivered_n', 'thesis_invalidated_n', 'hold_rate_pct', 'wilson_lo_pct', 'wilson_hi_pct', 'brier', 'brier_skill', 'negotiation_lift_pp', 'verdict'].map((key) => ({ key, header: key }));
       return { columns, rows };
     }
     case 'altitude-router': {

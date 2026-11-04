@@ -1,3 +1,7 @@
+## 2026-11-04 — Hoshin Catchball Cascade (Session 123, Schema v89)
+
+Open `#/catchball` to propose and negotiate span pacts, check capacity and budget headroom, compare leading and lagging outcomes, and inspect weakest-link roll-ups. The shared propagation spine records typed provenance and opens human review when divergence warrants it. CSV #78 and the executive brief are aggregate-oriented; declared local seats are not authenticated accounts. See [ADR-0083](./docs/adr/0083-hoshin-catchball-cascade.md) for boundaries and methodology.
+
 ## 2026-11-04 — The log you can check: hash-chained seals over every transaction (Session 122, Schema v88, [ADR-0082](./docs/adr/0082-sealed-spine.md), `#/seal`)
 
 **Why this and not another activity feed.** The workspace has been event-sourced since ADR-0001, but its append-only log was append-only *by convention*: nothing proved a hand-edited payload or a silent normalizer hadn't rewritten history. The 2026 category sells "audit trail logging" as a vendor-held table (RESEARCH §104 — Lattice, Cornerstone, Workday, Lucid's Audit Logs API); nobody surveyed offers a customer-*locally* verifiable chain, because their rows live on their servers. In a local-first workspace the data lives here, so the verifier belongs here too.

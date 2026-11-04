@@ -1,3 +1,10 @@
+# AI Session Log — Session 123, 2026-11-04: Hoshin Catchball Cascade (Schema v89, ADR-0083)
+
+- Added `#/catchball`: negotiated pacts and rounds, capacity and budget checks, bowler diagnostics, weakest-link roll-ups, calibration and an aggregate brief/CSV.
+- Schema migration 88 → 89 adds three collections. The shared spine has 63 rules and matching contracts, with Catchball before the final attention/seat/seal passes. Typed links, seat-scoped API, insights and CSV scope #78 are integrated.
+- Verification: focused Catchball suite 9/9, ESLint, boundary and documentation-link checks passed; standalone rebuilt (6,910,425 bytes, 376 source modules). Full `npm test` is still running; no final result is claimed here.
+- Limits: local seats are workflow declarations, not authentication. Executive item details and calibration cells are withheld; suppression is not differential privacy. Causal-thesis alerts are review prompts, not proof of causality.
+
 # AI Session Log — Session 122, 2026-11-04: The Sealed Spine (Schema v88, no additional bump, ADR-0082)
 
 ## Repository identity (checked first)

@@ -97,3 +97,4 @@ Format: copy `0001-record-architecture-decisions.md`, number sequentially, statu
 - [ADR-0080: Mission Control — the altitude-specific operating loop, scoped API and disclosure-safe brief](./0080-mission-control.md)
 - [ADR-0081: The Altitude Router — natural language in, module × altitude out, one atomic roll-up](./0081-altitude-router.md)
 - [ADR-0082: The Sealed Spine — a hash-chained, verifiable audit trail over the append-only event log, sealed per transaction and attested up the chain of command](./0082-sealed-spine.md)
+- [ADR-0083: Hoshin Kanri & Catchball Cascade — bilateral strategy deployment, watermelon divergence, double-loop thesis falsification, and capacity-priced cascade roll-up (`#/catchball`)](./0083-hoshin-catchball-cascade.md)

@@ -103,6 +103,7 @@ import { mandateRule } from './mandateRules.js';
 import { authorityCalibrationRule } from './authorityCalibrationRules.js';
 import { missionRule } from './missionRules.js';
 import { altitudeRouterRule } from './altitudeRouterRules.js';
+import { catchballRule } from './catchballRules.js';
 
 /**
  * One entry per rule, in the order the engine evaluates them. `writes` and
@@ -563,6 +564,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
   },
   {
     rule: altitudeRouterRule, module: 'altitudeRouterRules.js', purpose: 'RULE-AR-01 writes one routes-through edge, one discloses-to edge to the owning seat and one rolls-up-to edge per leadership ancestor (frontline → manager → director → executive) in the SAME atomic transaction as the adopted case; RULE-AR-02 opens one governed DACI re-routing decision per detected-altitude cell below the reliability floor per ISO week and fans it up every ancestor; RULE-AR-03 writes one advisory maturity marker. Marker-idempotent, pausable, and never auto-corrects a plan, setting or reporting line.', writes: ['altitudeRoutingMarkers', 'decisions', 'links'], emits: [], scansWorkspace: true,
+  },
+  {
+    rule: catchballRule,
+    module: 'catchballRules.js',
+    purpose: 'RULE-HK-01 writes idempotent Hoshin Catchball provenance (deploys-strategy, cascades-to, counters-upward, trades-off, funds) and one rolls-up-to edge per leadership ancestor in the reporting tree in the SAME atomic transaction; RULE-HK-02 opens one governed DACI decision + 1:1 prompt on Watermelon divergence and one upstream Double-Loop Strategy Review decision (exonerating execution) when leading adherence holds while lagging outcomes stall; RULE-HK-03 records calibration maturity markers and opens one governed review decision per altitude cell below the delivery hold floor.',
+    writes: ['catchballMarkers', 'decisions', 'people', 'links'],
+    emits: [],
+    scansWorkspace: true,
   },
   {
     rule: seatRule,

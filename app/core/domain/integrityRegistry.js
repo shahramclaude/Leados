@@ -176,6 +176,7 @@ const TABLE = [
   ['Capital allocation', 'rule', 'capital policies, effort weights and checkpoints'],
   ['Early warning', 'statistical', 'twelve reconstructed weekly series, XmR limits'],
   ['Strategy', 'rule', 'strategy bets, say–do gaps and stop rules'],
+  ['Strategy deployment', 'rule', 'negotiated pacts, capacity, bowler checks and settled delivery'],
   ['Learning', 'rule', 'after-action reviews and committed changes'],
   ['Scorecard integrity', 'rule', 'measurement models, games and frozen predictions'],
   ['Implementation fidelity', 'rule', 'dose, reach and delivered stages of an intervention'],

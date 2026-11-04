@@ -23,6 +23,8 @@ import { renderIntake } from './views/intake.js';
 // ADR-0081: the Altitude Router — natural language in, module × altitude out.
 import { renderAltitudeRouter } from './views/altitudeRouter.js';
 import { routingAttentionCount } from './core/domain/altitudeRouter.js';
+import { renderCatchball } from './views/catchball.js';
+import { catchballAttentionCount } from './core/domain/catchball.js';
 import { renderResponses } from './views/responses.js';
 import { renderActionBundles } from './views/actionBundles.js';
 import { bundleAttentionCount } from './core/domain/actionBundles.js';
@@ -204,6 +206,7 @@ export const NAV = [
     // ADR-0081: classify a note into modules AND the owning altitude, then
     // roll a disclosure-safe signal up every level in one transaction.
     { route: 'routing', label: 'Altitude Router', icon: '⇅', badge: 'routing' },
+    { route: 'catchball', label: 'Strategy cascade', icon: '◇', badge: 'catchball' },
     { route: 'comms', label: 'Comms outbox', icon: '✉', badge: 'comms' },
     { route: 'insights', label: 'Signals', icon: '⚑', badge: 'signals' },
   ] },
@@ -318,6 +321,7 @@ const RENDERERS = {
   mission: (ctx) => renderMission(ctx),
   intake: (ctx) => renderIntake(ctx),
   routing: (ctx) => renderAltitudeRouter(ctx),
+  catchball: (ctx) => renderCatchball(ctx),
   responses: (ctx) => renderResponses(ctx),
   bundles: (ctx) => renderActionBundles(ctx),
   attribution: (ctx) => renderSettlement(ctx),
@@ -501,6 +505,7 @@ export function parseRoute(hash) {
     // NOT 'coverage': that hash already routes to the Promise Solvency Terminal
     // (ADR-0073) and silently stealing it would break a shipped link.
     'mission': 'mission', 'mission-control': 'mission', 'command-center': 'mission', 'flight-deck': 'mission',
+    'catchball': 'catchball', 'hoshin': 'catchball', 'strategy-cascade': 'catchball',
     'routing': 'routing', 'altitude-router': 'routing', 'router': 'routing',
     'auto-route': 'routing', 'where-does-this-go': 'routing', 'route-note': 'routing',
     'seat': 'seat', 'operating-seat': 'seat', 'altitude-lens': 'seat',
@@ -802,6 +807,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       mandates: (state.mandates || []).filter((m) => ['proposed', 'active', 'delivered'].includes(m.status) && (m.fromSeatId === seatCtx?.seat?.id || m.toSeatId === seatCtx?.seat?.id)).length,
       authorityCalibration: authorityCalibrationAttentionCount(state, at, state.settings),
       routing: routingAttentionCount(state, at, state.settings),
+      catchball: catchballAttentionCount(state, at, state.settings),
       // ADR-0082: the badge counts chain breaks only — a valid chain is not noise.
       seal: sealAttentionCount(state),
       // Schema v32: drafts written from case facts that still await a human.
@@ -1224,6 +1230,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       mission: 'Mission Control',
       intake: 'Intake triage',
       routing: 'Altitude Router — natural-language intake classified into modules and the correct organizational altitude, with disclosure-safe roll-up to every leadership level',
+      catchball: 'Hoshin Kanri & Catchball Cascade — negotiated strategy deployment',
       responses: 'Response studio — rehearse and adopt a coordinated leadership response',
       bundles: 'Action bundles — review, adopt and safely withdraw coordinated work',
       attribution: 'Outcome attribution — Earned Schedule, clearance bottlenecks and variance settlement',

@@ -1,3 +1,10 @@
+## Changelog — 2026-11-04 · Session 123
+
+- **Added:** Hoshin Kanri & Catchball Cascade (`#/catchball`), with bilateral proposals/counters, receiver acceptance, capacity checks, bowler check-ins, settlement and optional same-currency budget commitments.
+- **Connected:** strategy bets, goals, budgets and reporting ancestors through typed links on the existing post-commit spine; watermelon and double-loop concerns open review decisions, not automatic strategy changes.
+- **Data & privacy:** additive Schema v89, scoped seat reads/actions, small-cell safeguards, identity-free brief and aggregate CSV #78. Local seats are not authentication; suppression is not differential privacy.
+- **Verification:** focused Catchball tests 9/9; ESLint, boundary and docs-link checks passed; standalone rebuilt. Full regression suite was still running at PR creation.
+
 ## Changelog — 2026-11-04
 
 - [The Sealed Spine (`#/seal`)]: the append-only event log is now hash-chained and tamper-evident. One `audit.seal` event per committed transaction, appended by `sealRule` registered **last** on the shared post-commit spine (62 rules), so a single seal commits to `sha256(prev ‖ digest ‖ revision)` over exactly the events every other module's rules appended in that same atomic write — by construction, not per-module glue. Genesis is 64 zeros; verification replays from genesis and reports the first break with a typed reason (`chain-break`, `seal-mismatch`, `content-mismatch` at the exact revision) plus trailing-unsealed events and retention-evicted blocks.
