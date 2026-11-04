@@ -166,11 +166,11 @@ function harness() {
 
 describe('schema v64: migration, clamps, normalizers', () => {
   test('SCHEMA_VERSION is 64 and the 63→64 migration is additive and empty', () => {
-    assert.equal(SCHEMA_VERSION, 91);
+    assert.equal(SCHEMA_VERSION, 93);
     assert.equal(typeof MIGRATIONS[63], 'function');
     const migrated = migrate({ schemaVersion: 63, settings: {}, people: [], cases: [] });
-    assert.deepEqual(migrated.applied, ['63 → 64', '64 → 65', '65 → 66', '66 → 67', '67 → 68', '68 → 69', '69 → 70', '70 → 71', '71 → 72', '72 → 73', '73 → 74', '74 → 75', '75 → 76', '76 → 77', '77 → 78', '78 → 79', '79 → 80', '80 → 81', '81 → 82', '82 → 83', '83 → 84', '84 → 85', '85 → 86', '86 → 87', '87 → 88', '88 → 89', '89 → 90', '90 → 91']);
-    assert.equal(migrated.raw.schemaVersion, 91);
+    assert.deepEqual(migrated.applied, ['63 → 64', '64 → 65', '65 → 66', '66 → 67', '67 → 68', '68 → 69', '69 → 70', '70 → 71', '71 → 72', '72 → 73', '73 → 74', '74 → 75', '75 → 76', '76 → 77', '77 → 78', '78 → 79', '79 → 80', '80 → 81', '81 → 82', '82 → 83', '83 → 84', '84 → 85', '85 → 86', '86 → 87', '87 → 88', '88 → 89', '89 → 90', '90 → 91', '91 → 92', '92 → 93']);
+    assert.equal(migrated.raw.schemaVersion, 93);
     assert.deepEqual(migrated.raw.waitPrices, []);
     assert.deepEqual(migrated.raw.waitExposures, []);
     assert.deepEqual(migrated.raw.waitCostMarkers, []);
@@ -179,7 +179,7 @@ describe('schema v64: migration, clamps, normalizers', () => {
   test('a v63 workspace normalizes into v64 with the three new collections', () => {
     const raw = { schemaVersion: 63, settings: {}, people: [], cases: [] };
     const { state, warnings } = normalizeState(migrate(raw).raw, { now: NOW });
-    assert.equal(state.schemaVersion, 91);
+    assert.equal(state.schemaVersion, 93);
     assert.deepEqual(state.waitPrices, []);
     assert.deepEqual(state.waitExposures, []);
     assert.deepEqual(state.waitCostMarkers, []);
@@ -620,7 +620,7 @@ describe('RULE-WAIT-01..05 on the post-commit spine', () => {
 
 describe('CSV scope #54 (waitcost)', () => {
   test('the scope is registered and exportable', () => {
-    assert.equal(CSV_EXPORTS.length, 80);
+    assert.equal(CSV_EXPORTS.length, 82);
     assert.ok(CSV_EXPORTS.some((s) => s.key === 'waitcost' && s.filenameSlug === 'cost-of-waiting'));
     const result = exportWorkspaceCsv(fixtureState(), 'waitcost', { now: NOW });
     assert.equal(result.ok, true);

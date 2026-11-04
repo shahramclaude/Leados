@@ -2962,7 +2962,7 @@ tr.is-focused td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
   .ec-ladder-row { grid-template-columns: 1fr; }
 }
 
-/* =====================================================================
+/* ==============================================================
    ADR-0084 — The Operating Model (#/operating-model)
    A utilisation bar whose declared ceiling is DRAWN on it: a threshold a
    reader cannot see is a threshold they have to trust.
@@ -3017,4 +3017,81 @@ tr.is-focused td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
 @media (max-width: 720px) {
   .om-norm-grid { grid-template-columns: 1fr; }
   .om-bar { height: 22px; }
+=======
+/* ADR-0085 — the Disclosure Console and the aggregate posture.
+   The nav marker is deliberately quiet: an aggregate is not a warning, it is
+   the altitude's own reading of the same records. */
+.nav-posture { margin-left: auto; font-size: 10px; color: var(--muted); }
+.nav-item .nav-count + .nav-posture, .nav-item .nav-posture + .nav-count { margin-left: 4px; }
+.dsc-brief { white-space: pre-wrap; }
+.aggregate-note { font-size: 12px; color: var(--muted); }
+/* ADR-0085: the Board Room. The claim is the unit, so the layout is a grid of
+   claims rather than a dashboard of charts — and the verdict colour is carried
+   by a border plus a text label, never by colour alone. */
+.board-page { gap: 14px; }
+.board-memo-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+.board-claim {
+  display: flex; flex-direction: column; gap: 8px; padding: 14px 16px;
+  border: 1px solid var(--line, #dfe3ea); border-left-width: 4px; border-radius: 12px;
+  background: var(--surface, #fff);
+}
+.board-claim-holding { border-left-color: #1f9d63; }
+.board-claim-failing { border-left-color: #c0392b; }
+.board-claim-inconclusive { border-left-color: #b7791f; }
+.board-claim-withheld { border-left-color: #6b7a90; }
+.board-claim-refused { border-left-color: #8a94a6; }
+.board-claim-head { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; align-items: flex-start; }
+.board-claim-title { font-size: 0.98rem; margin: 0 0 2px; }
+.board-claim .row-actions { flex-wrap: wrap; align-items: center; }
+.board-verdict { display: inline-flex; }
+.board-verdict-holding { color: #1f7a4d; }
+.board-verdict-failing { color: #a3302a; }
+.board-verdict-inconclusive { color: #8a5b12; }
+.board-figure {
+  margin: 0; font-variant-numeric: tabular-nums; font-weight: 600; font-size: 0.92rem;
+  padding: 8px 10px; border-radius: 8px; background: var(--surface-2, #f7f9fc);
+}
+.board-reason { margin: 0; font-size: 0.86rem; color: var(--ink-soft, #3c4757); }
+.board-facts { display: grid; gap: 4px; margin: 0; font-size: 0.82rem; }
+.board-facts > div { display: grid; grid-template-columns: 118px 1fr; gap: 8px; }
+.board-facts dt { color: var(--muted, #5b677a); }
+.board-facts dd { margin: 0; }
+.board-unverified { margin: 0; font-size: 0.8rem; font-weight: 600; color: #8a5b12; }
+.board-threshold { gap: 2px; }
+.board-threshold-row { display: flex; gap: 6px; align-items: center; }
+.board-threshold-row .input { width: 84px; }
+.board-claim-compact {
+  display: flex; justify-content: space-between; gap: 12px; align-items: center;
+  padding: 8px 0; border-bottom: 1px solid var(--line, #eef1f6); flex-wrap: wrap;
+}
+.board-claim-compact:last-child { border-bottom: 0; }
+.board-claim-picker { flex-wrap: wrap; }
+.board-reconcile {
+  display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border-radius: 10px;
+  border: 1px solid var(--line, #dfe3ea);
+}
+.board-reconcile-ok { background: #f2fbf6; }
+.board-reconcile-bad { background: #fdf2f1; border-color: #e4b4ae; }
+.board-reconcile p { margin: 0; font-size: 0.86rem; }
+.board-crosscheck {
+  display: grid; grid-template-columns: 1fr 36px 1fr; gap: 10px; align-items: start;
+  padding: 10px 12px; border-radius: 10px; background: var(--surface-2, #f7f9fc);
+}
+.board-crosscheck h4 { margin: 0 0 4px; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted, #5b677a); }
+.board-crosscheck p { margin: 0 0 2px; font-size: 0.9rem; }
+.board-crosscheck-sep { text-align: center; font-size: 1.1rem; color: var(--muted, #5b677a); padding-top: 14px; }
+.board-finding { margin: 0; font-weight: 600; }
+.board-conventions { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+.board-toggle { flex-direction: row; align-items: center; gap: 8px; }
+.board-toggle input { width: 18px; height: 18px; }
+.board-memo {
+  max-height: 60vh; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere;
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 0.8rem; line-height: 1.55; padding: 14px;
+  border: 1px solid var(--line, #dfe3ea); border-radius: 10px; background: var(--surface-2, #f7f9fc);
+}
+.board-memo:focus { outline: 2px solid var(--accent, #2f6df6); outline-offset: 2px; }
+@media (max-width: 720px) {
+  .board-crosscheck { grid-template-columns: 1fr; }
+  .board-crosscheck-sep { padding: 0; }
 }

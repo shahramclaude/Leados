@@ -48,16 +48,14 @@ const proposal = (toSeatId = 'lead1', extra = {}) => ({ title: 'Improve the deli
 
 // Schema and graph are additive; imported rows cannot silently become accepted pacts.
 test('v88 migration, record validation, graph vocabulary and spine parity', () => {
-  assert.equal(SCHEMA_VERSION, 91);
+  assert.equal(SCHEMA_VERSION, 93);
   const migrated = migrate({ schemaVersion: 88, settings: { leaderName: 'Keep' }, people: [] });
-  assert.deepEqual(migrated.applied, ['88 → 89', '89 → 90', '90 → 91']);
+  assert.deepEqual(migrated.applied, ['88 → 89', '89 → 90', '90 → 91', '91 → 92', '92 → 93']);
   assert.deepEqual(migrated.raw.catchballPacts, []);
   assert.deepEqual(migrated.raw.catchballRounds, []);
   assert.equal(migrated.raw.settings.leaderName, 'Keep');
-  // v89 → v91 is two additive steps now: Catchball's own (89 → 90) and the
-  // Operating Model's (90 → 91). Neither rewrites the other's records.
   const afterConcordance = migrate({ schemaVersion: 89, expectationRounds: [{ id: 'existing-round' }], settings: {} });
-  assert.deepEqual(afterConcordance.applied, ['89 → 90', '90 → 91']);
+  assert.deepEqual(afterConcordance.applied, ['89 → 90', '90 → 91', '91 → 92', '92 → 93']);
   assert.equal(afterConcordance.raw.expectationRounds[0].id, 'existing-round');
   assert.deepEqual(afterConcordance.raw.catchballPacts, []);
   const warnings = [];
@@ -73,11 +71,12 @@ test('v88 migration, record validation, graph vocabulary and spine parity', () =
   assert.equal(names.indexOf('catchballRule'), names.indexOf('altitudeRouterRule') + 1);
   assert.ok(names.indexOf('catchballRule') < names.indexOf('attentionMarketRule'));
   assert.equal(PROPAGATION_CONTRACTS.length, DEFAULT_POST_COMMIT_RULES.length);
-  // Two CSV scopes landed on the same day: Catchball is #79 and the Operating
-  // Model is #80. Assert by membership and by position, not by "the last one" —
-  // an order-dependent assertion breaks the moment a parallel session ships.
-  assert.equal(CSV_EXPORTS.findIndex((e) => e.key === 'catchball-cascade') + 1, 79);
-  assert.ok(CSV_EXPORTS.some((e) => e.key === 'catchball-cascade'));
+  // The registry is append-only and numbering follows position: CSV #79 is the
+  // Catchball cascade, and the Board Room's #80 is appended after it in Session
+  // 125. Asserting the scope survives is the contract; asserting it is LAST
+  // would break the moment any later session appends its own scope.
+  assert.ok(CSV_EXPORTS.some((scope) => scope.key === 'catchball-cascade'));
+  assert.ok(CSV_EXPORTS.findIndex((scope) => scope.key === 'catchball-cascade') < CSV_EXPORTS.findIndex((scope) => scope.key === 'board-claims'));
 });
 
 test('one proposal writes strategy and hierarchy provenance; scans are idempotent', () => {

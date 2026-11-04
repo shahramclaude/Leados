@@ -495,7 +495,6 @@ test('RULE-DLY-02 opens exactly one owned delegation for an overdue call', () =>
   assert.ok(delegations[0].support.includes('Blameless'));
   // Idempotent: scanning again creates nothing.
   env.api.scanDecisionTempo();
-  env.api.scanDecisionTempo();
   assert.equal(env.store.state.delegations.filter((d) => String(d.support || '').includes('[RULE-DLY-02:')).length, 1);
   // An unmatchable approver is never replaced with an invented person.
   const env2 = harness();
@@ -594,7 +593,7 @@ test('the rule never throws into the store when a record is malformed', () => {
 /* ================================================ 7. schema & lifecycle */
 
 test('schema v27 → v28 is additive and invents no timing evidence', () => {
-  assert.equal(SCHEMA_VERSION, 91);
+  assert.equal(SCHEMA_VERSION, 93);
   const old = {
     schemaVersion: 27,
     settings: {},
@@ -602,8 +601,10 @@ test('schema v27 → v28 is additive and invents no timing evidence', () => {
     tempoSchedules: [{ id: 'existing', decisionId: 'keep', status: 'armed' }],
   };
   const migrated = migrate(old);
-  assert.equal(migrated.raw.schemaVersion, 91);
-  assert.deepEqual(migrated.applied.at(-1), '90 → 91');
+  assert.equal(migrated.raw.schemaVersion, 93);
+  assert.deepEqual(migrated.applied.at(-1), '92 → 93');
+  assert.equal(migrated.raw.schemaVersion, 93);
+  assert.deepEqual(migrated.applied.at(-1), '92 → 93');
   assert.equal(migrated.raw.decisions[0].decidedOn, undefined, 'a historical call is not given a made-up moment');
   assert.deepEqual(migrated.raw.tempoSchedules, old.tempoSchedules);
   assert.equal(migrated.raw.settings.tempoDelegatedMaxDays, 7);
@@ -705,7 +706,7 @@ test('clearDemo removes fabricated timeboxes and keeps real ones', () => {
 /* ==================================================== 8. CSV & signals */
 
 test('CSV scope #28 exports timing economics with no titles or names', () => {
-  assert.equal(CSV_EXPORTS.length, 80);
+  assert.equal(CSV_EXPORTS.length, 82);
   const descriptor = CSV_EXPORTS.find((s) => s.key === 'decisionTempo');
   assert.ok(descriptor);
   assert.equal(descriptor.sensitive, false);

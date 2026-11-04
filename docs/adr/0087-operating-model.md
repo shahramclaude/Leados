@@ -1,9 +1,9 @@
-# ADR-0085 — The Operating Model: measure the position, not the person in it
+# ADR-0087 — The Operating Model: measure the position, not the person in it
 
 - **Status:** Accepted
 - **Date:** 2026-11-04
 - **Session:** 124
-- **Schema:** v91 (additive `90 → 91`)
+- **Schema:** v93 (additive `92 → 93`)
 - **Route:** `#/operating-model` (aliases: `operating-model`, `operatingmodel`, `position-design`, `displacement`, `utilization`, `utilisation`, `spans-of-control`, `work-design`, `lever-book`, `labour-model`)
 - **Rules:** `RULE-OMD-01` (governed design decision per congested span), `RULE-OMD-02` (typed vertical roll-up), `RULE-OMD-03` (continuity certification + one governed continuity decision)
 - **New relations:** `relieves` (decision → position design); vertical fan-out reuses `rolls-up-to`
@@ -140,7 +140,7 @@ frontline seat cannot open it. Every new API method is declared; an unknown name
 
 ## Migration
 
-Additive `90 → 91`: four collections (`omWorkSplits`, `omEdges`, `omDecisions`, `omMarkers`), eighteen
+Additive `92 → 93`: four collections (`omWorkSplits`, `omEdges`, `omDecisions`, `omMarkers`), eighteen
 clamped settings, one CSV scope, one relation, one route, one nav entry, one action right, four record
 policies. No existing record is rewritten, no hour is inferred, and an older workspace opens with
 `unmeasuredPositions > 0` and a single clear next step rather than a fabricated split.

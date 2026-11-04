@@ -68,10 +68,10 @@ function traceRow({ id = 'trace-test', entity = 'scorecard', entityId = 'scoreca
 }
 
 test('schema v48 migrates additively without guessing successful history and normalizes a bounded content-free trace', () => {
-  assert.equal(SCHEMA_VERSION, 91);
+  assert.equal(SCHEMA_VERSION, 93);
   const previousLedger = [traceRow({ id: 'untrusted-v47-history' })];
   const migrated = migrate({ schemaVersion: 47, propagationLineage: previousLedger, scorecards: [] });
-  assert.deepEqual(migrated.applied, ['47 → 48', '48 → 49', '49 → 50', '50 → 51', '51 → 52', '52 → 53', '53 → 54', '54 → 55', '55 → 56', '56 → 57', '57 → 58', '58 → 59', '59 → 60', '60 → 61', '61 → 62', '62 → 63', '63 → 64', '64 → 65', '65 → 66', '66 → 67', '67 → 68', '68 → 69', '69 → 70', '70 → 71', '71 → 72', '72 → 73', '73 → 74', '74 → 75', '75 → 76', '76 → 77', '77 → 78', '78 → 79', '79 → 80', '80 → 81', '81 → 82', '82 → 83', '83 → 84', '84 → 85', '85 → 86', '86 → 87', '87 → 88', '88 → 89', '89 → 90', '90 → 91']);
+  assert.deepEqual(migrated.applied, ['47 → 48', '48 → 49', '49 → 50', '50 → 51', '51 → 52', '52 → 53', '53 → 54', '54 → 55', '55 → 56', '56 → 57', '57 → 58', '58 → 59', '59 → 60', '60 → 61', '61 → 62', '62 → 63', '63 → 64', '64 → 65', '65 → 66', '66 → 67', '67 → 68', '68 → 69', '69 → 70', '70 → 71', '71 → 72', '72 → 73', '73 → 74', '74 → 75', '75 → 76', '76 → 77', '77 → 78', '78 → 79', '79 → 80', '80 → 81', '81 → 82', '82 → 83', '83 → 84', '84 → 85', '85 → 86', '86 → 87', '87 → 88', '88 → 89', '89 → 90', '90 → 91', '91 → 92', '92 → 93']);
   assert.deepEqual(migrated.raw.propagationLineage, [], 'the migration never infers or imports a pre-v48 success ledger');
 
   const rawTrace = traceRow();
@@ -89,7 +89,7 @@ test('schema v48 migrates additively without guessing successful history and nor
     propagationLineage: [rawTrace],
   }, { now: NOW });
   const [stored] = normalized.state.propagationLineage;
-  assert.equal(normalized.state.schemaVersion, 91);
+  assert.equal(normalized.state.schemaVersion, 93);
   assert.equal(normalized.state.propagationLineage.length, 1);
   assert.deepEqual(stored.steps[0].changedCollections, ['decisions', 'links']);
   assert.equal(stored.steps[0].links.length, 1, 'confidential typed edges are rejected');
@@ -538,20 +538,37 @@ test('every registered link type survives schema normalization/reload and resolv
     correct: null, overrideCorrect: null,
   }];
 
-  // Schema v89: an expectation round is a typed graph node too, so a re-contracting
-  // decision can navigate back to the sealed round that produced it.
+  // Schema v89: a closed expectation round. Two sealed sides, no person text:
+  // the graph edge may address the round and never one person's answers.
   raw.expectationRounds = [{
-    id: 'concordance-link-fixture', leaderId: 'mgr1', memberId: 'ic1', cycle: '2026-Q4',
-    openedOn: '2026-10-29', openedAt: NOW_ISO, openedBy: 'mgr1', status: 'open',
-    items: [{ key: 'done', leader: null, member: null }],
-    leaderSubmittedAt: null, memberSubmittedAt: null, leaderNote: '', memberNote: '',
-    closedOn: null, closedAt: null, withdrawnReason: '', pathKey: 'mgr1', createdAt: NOW_ISO,
+    id: 'exp-round-link-fixture', leaderId: 'mgr1', memberId: 'ic1', status: 'open',
+    cycle: '2026-Q4', openedAt: NOW_ISO, updatedAt: NOW_ISO, openedBy: 'mgr1',
+    dimensions: [], sides: {}, fingerprint: 'd4e5f60718293a4b',
   }];
-  raw.expectationRounds = [{ id: 'concordance-link-fixture', leaderId: 'mgr1', memberId: 'mgr2', status: 'open', createdAt: NOW_ISO }];
 
-  // Schema v89: pact and bilateral-round graph nodes survive normalization.
+  // Schema v91: a board memo. Its claims are aggregate by construction, so the
+  // node carries no person and needs no redaction.
+  raw.boardMemos = [{
+    id: 'board-memo-link-fixture', title: 'Q4 disclosure', cycle: '2026-Q4', status: 'draft', revision: 1,
+    createdAt: NOW_ISO, updatedAt: NOW_ISO, claims: [], looks: [], fingerprint: 'e5f60718293a4b5c',
+  }];
+
+  // Schema v90: pact and bilateral-round graph nodes survive normalization.
   raw.catchballPacts = [{ id: 'catchball-pact-link-fixture', title: 'Fixture pact', toSeatId: raw.people[0].id, status: 'proposed', createdAt: NOW_ISO }];
   raw.catchballRounds = [{ id: 'catchball-round-link-fixture', pactId: 'catchball-pact-link-fixture', ownerId: raw.people[0].id, kind: 'propose', createdAt: NOW_ISO }];
+
+  // Schema v92: a disclosure release is a typed graph node too, so the console can
+  // navigate from a live grant back to the record it released. The normalizer is
+  // strict by design (a named requester, a different named span, a written purpose
+  // and a real route the compiler knows), so the fixture satisfies all four.
+  raw.disclosureGrants = [{
+    id: 'disclosure-grant-link-fixture', route: 'mission', collection: 'cases',
+    moduleLabel: 'Mission Control', classKey: 'unit',
+    requesterId: 'mgr1', requesterSeatId: 'mgr1', spanId: 'mgr2', spanLabel: 'Billing',
+    purpose: 'Aggregate span counts for the quarterly staffing review.',
+    days: 14, status: 'requested', requestedOn: '2026-10-29', requestedAt: NOW_ISO,
+    grantedOn: null, expiresOn: null, revokedOn: null, decidedBy: null, note: '',
+  }];
 
   const targetIdFor = (type) => {
     if (type === 'case') return otherCase.id;
@@ -699,9 +716,12 @@ test('every registered link type survives schema normalization/reload and resolv
       // Schema v88: a routing plan is addressed by query on the Altitude
       // Router's ledger panel; no note text travels in the URL.
       routingplan: ['plan', resolved.id],
-      // Schema v89: a sealed expectation round is addressed by query on the
-      // concordance terminal's round panel; neither side's ratings travel in the URL.
+      // Schema v89: a round is addressed by query on the concordance terminal's
+      // rounds panel — the edge names the round, never either person's answers.
       concordance: ['round', resolved.id],
+      // Schema v90: a memo is addressed by query on the Board Room's memo panel.
+      boardmemo: ['memo', resolved.id],
+      disclosuregrant: ['grant', resolved.id],
       concordance: ['round', resolved.id],
       catchballpact: ['pact', resolved.id],
       catchballround: ['round', resolved.id],

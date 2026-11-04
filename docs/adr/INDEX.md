@@ -67,7 +67,6 @@ Format: copy `0001-record-architecture-decisions.md`, number sequentially, statu
 - [ADR-0052: The Delivery Survival terminal (censoring, competing risks and the hazard of waiting)](./0052-delivery-survival-terminal.md)
 - [ADR-0053: The Cost of Waiting terminal (pricing the queue the workspace already keeps)](./0053-cost-of-waiting-terminal.md)
 - [ADR-0054: The Leadership Parity & Standard Consistency terminal (LMX disparity decomposition, promise reliability, and intra-leader threshold audits)](./0054-leadership-parity-consistency-terminal.md)
-
 - [ADR-0055: The Evidence terminal (pooling what has actually worked here, and pricing one more study)](./0055-evidence-terminal.md)
 - [ADR-0056: Trace an unmade decision without inventing its domino effects](./0056-decision-consequence-lab.md)
 - [ADR-0057: Decompose delivery drift by cause instead of pooling exits](./0057-drift-decomposition-competing-risks.md)
@@ -78,7 +77,6 @@ Format: copy `0001-record-architecture-decisions.md`, number sequentially, statu
 - [ADR-0062: The Borrowed Evidence Engine (partial pooling for every small sample, graded on whether pooling helped)](./0062-borrowed-evidence-engine.md)
 - [ADR-0063: A governed authority covariate model — computed, previewed, never operational](./0063-authority-covariate-model-preview.md)
 - [ADR-0064: Certify the leader's probability words, and transport them only when the record earns it](./0064-confidence-transport.md)
-
 - [ADR-0065: Rehearse an incident across the real rule graph before committing it](./0065-response-studio.md)
 - [ADR-0066: Reviewable, reversible cross-module Action Bundles](./0066-action-bundles.md)
 - [ADR-0067: Outcome Attribution & Loop Settlement Terminal (`#/attribution`)](./0067-outcome-attribution-loop-settlement.md)
@@ -99,4 +97,6 @@ Format: copy `0001-record-architecture-decisions.md`, number sequentially, statu
 - [ADR-0082: The Sealed Spine — a hash-chained, verifiable audit trail over the append-only event log, sealed per transaction and attested up the chain of command](./0082-sealed-spine.md)
 - [ADR-0083: The Concordance Terminal — "meets expectations" as a measurement instrument, calibrated between two people and rolled up the chain](./0083-expectation-concordance.md)
 - [ADR-0084: Hoshin Kanri & Catchball Cascade — bilateral strategy deployment, watermelon divergence, double-loop thesis falsification, and capacity-priced cascade roll-up (`#/catchball`)](./0084-hoshin-catchball-cascade.md)
-- [ADR-0085: The Operating Model — the position design, not the person in it (displacement, abstention, congruence, continuity trap and Graicunas coupling, priced into a lever book)](./0085-operating-model.md)
+- [ADR-0085: The Board Room — the disclosure memo as a pre-registered terminal: thresholds declared before the first look, verdicts by the conservative interval end, disagreement surfaced instead of composited](./0085-board-room.md)
+- [ADR-0086: The Disclosure Compiler — every screen declares its posture, the aggregate replaces the refusal, and detail is released only by a consented, expiring contract](./0086-disclosure-compiler.md)
+- [ADR-0087: The Operating Model — the position design, not the person in it (displacement, abstention, congruence, continuity trap and Graicunas coupling, priced into a lever book)](./0087-operating-model.md)

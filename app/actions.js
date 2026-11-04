@@ -18,6 +18,10 @@ import { createCatchballActions } from './core/domain/catchballActions.js';
 // same post-commit spine, not a second command bus.
 import { createConcordanceActions } from './core/domain/concordanceActions.js';
 import { createOperatingModelActions } from './core/domain/operatingModelActions.js';
+import { createDisclosureActions } from './core/domain/disclosureActions.js';
+// ADR-0085: the Board Room's API mixin — one more consumer of the same
+// post-commit spine, not a second command bus.
+import { createBoardActions } from './core/domain/boardActions.js';
 import { guardApi } from './core/domain/accessGateway.js';
 import { analyzeMitigationRobustness, robustnessEvidenceKey, robustnessDecision, ROBUSTNESS_EVENT } from './core/domain/mitigationRobustness.js';
 import { DEFAULT_POST_COMMIT_RULES } from './core/domain/postCommit.js';
@@ -19647,6 +19651,10 @@ export function createApi(store, options = {}) {
   // ADR-0084: the Operating Model. Declarations and priced portfolio items only;
   // no attendance data, no person-level figure and no second command bus.
   Object.assign(api, createOperatingModelActions(store, { now: clock, idFactory: id, createApi }));
+  // ADR-0086: disclosure release contracts — the only records that can widen a read.
+  Object.assign(api, createDisclosureActions(store, { now: clock, idFactory: id, createApi }));
+  // ADR-0085: pre-registered board lines, committed with a frozen snapshot.
+  Object.assign(api, createBoardActions(store, { now: clock, idFactory: id }));
   // ADR-0080: one fail-closed API boundary. The local operator is unchanged;
   // a declared seat gets only reviewed adapters, with rank and span checks.
   return guardApi(api, store);

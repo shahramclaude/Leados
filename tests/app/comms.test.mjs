@@ -349,7 +349,8 @@ test('propagation guard: non-case events and autoPropagate:false cases are ignor
 /* --------------------------------------------------------------- 7. schema */
 
 test('schema v32: migration is additive and the normalizer repairs unsafe drafts', () => {
-  assert.equal(SCHEMA_VERSION, 91);
+  assert.equal(SCHEMA_VERSION, 93);
+  assert.equal(SCHEMA_VERSION, 93);
   assert.deepEqual(createEmptyState('2026-10-27T00:00:00Z').commsDrafts, []);
   const migrated = migrate({ schemaVersion: 31, settings: {}, people: [], cases: [] });
   assert.ok(migrated.applied.includes('31 → 32'));

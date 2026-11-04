@@ -149,12 +149,17 @@ test('standalone artifact exists and is a single inline HTML document', () => {
   // views/succession.js, and its panel wiring). The density bound below is what
   // still catches a duplication; this ceiling only tracks the module count.
   // Retention and Mission Control add four more source modules; density is checked below.
-  // Raised in Schema v91: two features landed in the same day — Hoshin Catchball (ADR-0084)
-  // and the Operating Model (ADR-0085, six modules of its own). The single-file build is now
-  // 7,081,115 bytes across 388 source modules — 18,250 bytes per module, still under the
-  // 24,000 density bound. The ceiling moves only because the module count moved; density is
-  // what catches a module inlined twice.
-  assert.ok(bytes < 7_200_000, `standalone file is unexpectedly large (${bytes} bytes)`);
+  // Raised in Schema v93: the Operating Model (ADR-0087) contributes six modules on top of
+  // Catchball (ADR-0084), the Board Room (ADR-0085) and the Disclosure Compiler (ADR-0086).
+  // The single-file build is 7,238,250 bytes across 401 source modules — 18,050 bytes per
+  // module, still under the 24,000 density bound. The ceiling moves only because the module
+  // count moved; density is what catches a module inlined twice.
+  assert.ok(bytes < 7_300_000, `standalone file is unexpectedly large (${bytes} bytes)`);
+  // Raised in Schema v92: the Disclosure Compiler adds seven real modules (registry,
+  // schema, manifests, compiler, rules, actions, view) beside the Board Room's six
+  // and the Catchball cascade's own. The per-module density bound below is what
+  // still catches a duplicated bundle; this ceiling only tracks module count.
+  assert.ok(bytes < 7_600_000, `standalone file is unexpectedly large (${bytes} bytes)`);
   const declaredModules = Number((html.match(/content="[^"]*?(\d+) source modules/) || [])[1]);
   assert.ok(declaredModules > 100, `expected the build to declare its module count (got ${declaredModules})`);
   const bytesPerModule = Math.round(bytes / declaredModules);

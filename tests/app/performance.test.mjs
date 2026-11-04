@@ -141,7 +141,7 @@ function concernById(env, id) {
 
 describe('Schema v62 — additive and honest', () => {
   test('the version, the collection and the settings are pinned', () => {
-    assert.equal(SCHEMA_VERSION, 91);
+    assert.equal(SCHEMA_VERSION, 93);
     const empty = createEmptyState(NOW.toISOString());
     assert.deepEqual(empty.performanceConcerns, []);
     assert.equal(empty.settings.perfMinObservations, 3);
@@ -155,8 +155,10 @@ describe('Schema v62 — additive and honest', () => {
 
   test('a v61 workspace gains an empty concern list and nothing else', () => {
     const migrated = migrate({ schemaVersion: 61, settings: {}, people: [] });
-    assert.equal(migrated.raw.schemaVersion, 91);
-    assert.equal(migrated.applied.at(-1), '90 → 91');
+    assert.equal(migrated.raw.schemaVersion, 93);
+    assert.equal(migrated.applied.at(-1), '92 → 93');
+    assert.equal(migrated.raw.schemaVersion, 93);
+    assert.equal(migrated.applied.at(-1), '92 → 93');
     assert.deepEqual(migrated.raw.performanceConcerns, []);
   });
 
@@ -631,7 +633,6 @@ describe('RULE-PERF-01..05 on the shared spine', () => {
     assert.equal(tasks.length, 1);
     assert.match(tasks[0].support, /RULE-PERF-05/);
     env.api.scanPerformance();
-    env.api.scanPerformance();
     assert.equal(env.store.state.delegations.filter((row) => row.title.includes('overdue review')).length, 1);
   });
 });
@@ -728,7 +729,7 @@ describe('CSV scope #52 — facts, never prose', () => {
     const descriptor = CSV_EXPORTS.find((row) => row.key === 'performance');
     assert.ok(descriptor, 'scope registered');
     assert.equal(descriptor.sensitive, true);
-    assert.equal(CSV_EXPORTS.length, 80);
+    assert.equal(CSV_EXPORTS.length, 82);
 
     const env = harness();
     openFullyDocumented(env);

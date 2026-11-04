@@ -1,5 +1,5 @@
 /**
- * ADR-0085 — The Operating Model (Schema v91).
+ * ADR-0087 — The Operating Model (Schema v93).
  *
  * Proves, against the REAL store and the REAL post-commit spine, that:
  *
@@ -202,8 +202,8 @@ test('on a declared workspace the new rule does not inflate another terminal\u20
 
 /* ------------------------------------------------------------------ schema */
 
-test('schema v91: the migration is additive and an undeclared workspace is untouched', () => {
-  assert.equal(SCHEMA_VERSION, 91);
+test('schema v93: the migration is additive and an undeclared workspace is untouched', () => {
+  assert.equal(SCHEMA_VERSION, 93);
   for (const key of ['omWorkSplits', 'omEdges', 'omDecisions', 'omMarkers']) {
     assert.ok(COLLECTIONS.includes(key), `${key} must be a declared collection`);
   }
@@ -214,9 +214,9 @@ test('schema v91: the migration is additive and an undeclared workspace is untou
   v89.settings = { ...v89.settings };
   for (const key of Object.keys(v89.settings)) if (key.startsWith('om')) delete v89.settings[key];
   const migrated = migrate(v89);
-  assert.ok(migrated.applied.includes('90 → 91'));
+  assert.ok(migrated.applied.includes('92 → 93'));
   const after = normalizeState(migrated.raw, { now: NOW }).state;
-  assert.equal(after.schemaVersion, 91);
+  assert.equal(after.schemaVersion, 93);
   assert.deepEqual(after.omWorkSplits, []);
   assert.deepEqual(after.omEdges, []);
   assert.deepEqual(after.omDecisions, []);
@@ -565,9 +565,9 @@ test('the aggregate-only CSV carries no person, name, title or individual hour',
   const { store, api } = boot();
   // Force the rules so the full reading exists.
   api.operatingModelScan();
-  assert.equal(CSV_EXPORTS.length, 80);
+  assert.equal(CSV_EXPORTS.length, 82);
   const scope = CSV_EXPORTS.find((e) => e.key === 'operating-model');
-  assert.ok(scope, 'CSV scope #80 is registered');
+  assert.ok(scope, 'CSV scope #82 is registered');
   assert.equal(scope.sensitive, false);
   assert.ok(scope.description.includes('NO person id'));
 
