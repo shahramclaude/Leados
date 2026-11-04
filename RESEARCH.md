@@ -6600,7 +6600,6 @@ Three properties hold across all of them:
 
 An authenticated two-device seal (the current one is a UI guarantee); an instrument v2 that scores a shared artefact rather than a self-report; temporal disclosure testing for repeated releases; and outcome-graded evidence that re-contracting an expectation changes anything downstream. Those are the next three roadmap items, not claims.
 
-
 ## §106 — Session 124 domain hunt: OKR cascades average away bottlenecks, and Hoshin X-Matrices never price capacity (fetched 2026-11-04, [ADR-0084](docs/adr/0084-hoshin-catchball-cascade.md))
 
 **Method.** Web search over the 2026 strategy-execution and Hoshin Kanri software landscape following Microsoft's retirement of Viva Goals (wind-down completed Dec 2025 / early 2026) and WorkBoard's acquisition and standalone sunset of Quantive, paired with operations-research and organizational-economics literature on decomposition, agency distortion, and cascade combinatorics. Vendor descriptions below reflect published 2026 product documentation and independent category comparisons, not audited deployments; the implementation response is [ADR-0084](docs/adr/0084-hoshin-catchball-cascade.md) / `#/catchball`.
@@ -6622,3 +6621,25 @@ An authenticated two-device seal (the current one is a UI guarantee); an instrum
 - Local Operating Seats remain auditable workspace declarations, not authenticated multi-user security; small-cell + complementary suppression prevents simple parent-minus-sibling subtraction on aggregate views, not differential privacy.
 - Fréchet joint delivery intervals bound unknown inter-span correlation honestly rather than inventing a copula where sample sizes are small; rates below `catchballFloorN = 5` are withheld as counts-only.
 - **Deliberately rejected:** unweighted `%` averaging across incommensurable KPIs; auto-accepting top-down goals without receiver consent; blaming frontline/manager execution when leading commitments held and the strategic hypothesis failed; person-level "alignment scores".
+
+## §107 — Session 125 domain hunt: the board pack nobody can falsify (2026-11-04, Schema v91, [ADR-0085](./docs/adr/0085-board-room.md))
+
+**Egress note (honest).** This sandbox could reach `github.com`, `codeload.github.com`, `api.github.com`, the npm registry and PyPI only. No vendor documentation page was fetched this session, so every product-specific statement below is carried from §100–§105 and marked **[UNVERIFIED]**; the statistical and organisational literature cited is standard and named explicitly.
+
+**The category's board-pack primitive.** Every surveyed platform ships the same three objects: a dashboard library, a scheduled "board pack" export, and a health index. Workday, SAP SuccessFactors, Oracle Fusion HCM, ChartHop, Culture Amp, Lattice, Leapsome, Betterworks, 15Five and Visier all sell some form of *executive summary of people analytics* **[UNVERIFIED]**. The common structure is: pick metrics → average them into a small number of indices → colour them against a target that is edited in the same admin screen the number is displayed in.
+
+Three defects follow, and each maps to an altitude:
+
+1. **[CEO / chief] The claim cannot fail.** Targets are admin-editable and rarely timestamped against the reporting period, so the threshold is de facto chosen after the number is seen. This is HARKing (Kerr 1998) at enterprise scale. The literature on pre-registration in organisational research (Simmons, Nelson & Simonsohn 2011; Nosek et al. 2018) is well known *inside* academia and absent from the product category.
+2. **[VP / director] The composite hides the disagreement.** A single "organisational health" number averages figures from instruments with different units, different denominators and different reliability. Simpson's paradox (1951) and the composite-index critique in public-sector measurement (Jacobs, Goddard & Smith 2007) are the standard references; the product category sells the composite precisely because it is readable.
+3. **[manager / frontline] The pack cannot be drilled.** A board number that no span can be held to is a number nobody owns. The roll-up literature (Jaques 1979 on time-span and stratum; the accountability literature on span of control) requires the parts to sum **exactly** to the whole, which is a checkable property and almost never checked.
+
+**What LeadOS now does differently, by altitude.**
+
+- **[CEO / chief]** Thresholds are declared before the first recorded look, each look carries a content fingerprint, movement afterwards is permanent and printed. Verdicts use the conservative end of a Wilson (1927) interval, so an enterprise claim is only called *holding* when the record can defend it.
+- **[VP]** Cross-module disagreement is the deliverable: three checks print both numbers and the route to the module that owns the other half, instead of averaging them into one index that cannot be argued with.
+- **[director]** Every attributable claim is partitioned over the reporting tree and reconciled against the claim's own denominator; a broken partition is reported, not drawn.
+- **[manager, frontline]** A failing claim produces a governed decision and, where the worst row is a span, a delegation to the person who holds it — with a due date and a review date, in the same transaction.
+- **[all altitudes]** A refusal is never zero. An unexamined record is not a clean one, and the seal's verdict is reported beside the sentence that it proves non-alteration and not truth.
+
+**What is still missing in the category and here.** Authenticated identity and tenant isolation remain prerequisites for multi-user use; repeated-release differencing of a quarterly pack remains unbuilt; and the seven claims are a chosen instrument whose thresholds are defaults rather than calibrated norms. Those are the next three roadmap items, in that order.

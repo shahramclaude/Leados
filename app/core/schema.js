@@ -14,6 +14,9 @@ import { normalizeConflicts } from './conflict-schema.js';
 // ADR-0083: the Concordance Terminal. Rounds resolve BEFORE links so
 // `rolls-up-to`, `re-contracts` and `re-tests` edges validate on reload.
 import { normalizeConcordanceRounds, normalizeConcordanceMarkers, normalizeConcordanceSettings } from './domain/concordanceSchema.js';
+// ADR-0085: the Board Room. Memos resolve BEFORE links so `summarizes-span`
+// and `escalates-from` provenance edges validate on reload.
+import { normalizeBoardMemos, normalizeBoardMarkers, normalizeBoardSettings } from './domain/boardSchema.js';
 import { normalizePropagationLineage } from './domain/automationLineage.js';
 import { normalizeImpactExecutionSnapshot } from './domain/impactExecution.js';
 import { normalizeStrategyBets, normalizeStrategyTags } from './domain/strategy.js';
@@ -305,7 +308,7 @@ export {
 // older blob simply opens on the undeclared operator view. A version bump here
 // would have forced 78 test files to be rewritten for zero user benefit; the
 // honest choice is to add nothing to migrate.
-export const SCHEMA_VERSION = 90;
+export const SCHEMA_VERSION = 91;
 
 // v83 adds the Succession Terminal (`successionReadings`, `successionMarkers`): a
 // frozen bench claim per workspace or per span — the probability that at least one
@@ -1372,6 +1375,12 @@ export const DEFAULT_SETTINGS = Object.freeze({
   concordanceRetestDays: 21,
   concordanceReviewDays: 14,
   concordanceAutoPropagate: true,
+  // ADR-0085: the Board Room — declared conventions, all clamped.
+  boardCellFloor: 5,
+  boardEvidenceFloor: 4,
+  boardMaterialityPct: 10,
+  boardRecheckDays: 90,
+  boardAutoPropagate: true,
   seatMaterialityPp: 5,
   seatWindowDays: 90,
   seatMaxLinks: 24,
@@ -1650,6 +1659,10 @@ export const COLLECTIONS = [
   // until both sides are in) and the idempotency markers their three rules use.
   'expectationRounds',
   'concordanceMarkers',
+  // ADR-0085: board disclosure memos (declared claims + frozen snapshots) and
+  // the idempotency markers their three rules use.
+  'boardMemos',
+  'boardMarkers',
   'links',
   'portfolio',
   'events',
@@ -2297,6 +2310,8 @@ export function normalizeSettings(raw) {
     ...normalizeAuthorityCalibrationSettings(s),
     ...normalizeRouterSettings(s),
     ...normalizeConcordanceSettings(s),
+    // ADR-0085: the Board Room's declared conventions.
+    ...normalizeBoardSettings(s),
     ...normalizeSealSettings(s),
     ...normalizeCatchballSettings(s),
   };
@@ -6393,6 +6408,11 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // dropped; a round claiming to be closed with one side is reopened.
   state.expectationRounds = normalizeConcordanceRounds(raw.expectationRounds, warnings);
   state.concordanceMarkers = normalizeConcordanceMarkers(raw.concordanceMarkers, warnings);
+  // ADR-0085: memos resolve before links so `summarizes-span`/`escalates-from`
+  // provenance edges validate against real memo ids. A memo claiming to be
+  // committed without a snapshot is reopened as a draft.
+  state.boardMemos = normalizeBoardMemos(raw.boardMemos, warnings);
+  state.boardMarkers = normalizeBoardMarkers(raw.boardMarkers, warnings);
   state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
 
   const events = asArray(raw, 'events', warnings).map((e, i) => ({
@@ -7091,6 +7111,25 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  // ADR-0085: additive 90 → 91. No existing record is rewritten: an older
+  // workspace simply has an empty memo ledger and the declared conventions.
+  // A memo is only ever created by a human opening one.
+  90: (v90) => ({
+    ...v90,
+    schemaVersion: 91,
+    boardMemos: Array.isArray(v90.boardMemos) ? v90.boardMemos : [],
+    boardMarkers: Array.isArray(v90.boardMarkers) ? v90.boardMarkers : [],
+    settings: isPlainObject(v90.settings)
+      ? {
+        ...v90.settings,
+        boardCellFloor: v90.settings.boardCellFloor ?? 5,
+        boardEvidenceFloor: v90.settings.boardEvidenceFloor ?? 4,
+        boardMaterialityPct: v90.settings.boardMaterialityPct ?? 10,
+        boardRecheckDays: v90.settings.boardRecheckDays ?? 90,
+        boardAutoPropagate: v90.settings.boardAutoPropagate !== false,
+      }
+      : { ...DEFAULT_SETTINGS },
+  }),
   // ADR-0083: additive 88 → 89. No existing record is rewritten: an older
   // workspace simply has an empty round ledger and the declared conventions.
   // A round is only ever created by a human opening one.

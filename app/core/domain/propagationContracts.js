@@ -105,6 +105,7 @@ import { missionRule } from './missionRules.js';
 import { altitudeRouterRule } from './altitudeRouterRules.js';
 import { catchballRule } from './catchballRules.js';
 import { concordanceRule } from './concordanceRules.js';
+import { boardRule } from './boardRules.js';
 
 /**
  * One entry per rule, in the order the engine evaluates them. `writes` and
@@ -568,6 +569,9 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
   },
   {
     rule: altitudeRouterRule, module: 'altitudeRouterRules.js', purpose: 'RULE-AR-01 writes one routes-through edge, one discloses-to edge to the owning seat and one rolls-up-to edge per leadership ancestor (frontline → manager → director → executive) in the SAME atomic transaction as the adopted case; RULE-AR-02 opens one governed DACI re-routing decision per detected-altitude cell below the reliability floor per ISO week and fans it up every ancestor; RULE-AR-03 writes one advisory maturity marker. Marker-idempotent, pausable, and never auto-corrects a plan, setting or reporting line.', writes: ['altitudeRoutingMarkers', 'decisions', 'links'], emits: [], scansWorkspace: true,
+  },
+  {
+    rule: boardRule, module: 'boardRules.js', purpose: 'RULE-BRD-01 opens exactly ONE governed DACI decision per failing claim per committed memo revision, and — where the failing reading is attributable to a span — exactly ONE owned obligation delegated to that span\'s holder, so an enterprise finding becomes a named directorate obligation in the SAME atomic transaction; RULE-BRD-02 writes one typed summarizes-span edge from the memo to every span whose records produced its figures and one escalates-from edge per generated decision, so provenance is walkable in both directions; RULE-BRD-03 writes one advisory marker when the workspace freezes its first memo. The rules take the FROZEN snapshot as given: no claim is edited, no threshold changed, no verdict rewritten, and no person is rated. Marker-idempotent, pausable by boardAutoPropagate, and an explicit scan always runs.', writes: ['boardMarkers', 'decisions', 'delegations', 'links'], emits: [], scansWorkspace: true,
   },
   {
     rule: catchballRule,
