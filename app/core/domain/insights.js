@@ -108,7 +108,7 @@ import { allocationSignals } from './allocation.js';
 import { loadSignals } from './load.js';
 import { strategySignals } from './strategy.js';
 import { catchballSignals } from './catchball.js';
-// Schema v91 (read-side, ADR-0085): the Escalation Economy contributes
+// Schema v94 (read-side, ADR-0088): the Escalation Economy contributes
 // ESC-01..05. It reads the disposition ledger and graded commitments only, so
 // it cannot recurse into the engine that is running it.
 import { escalationSignals } from './escalation.js';

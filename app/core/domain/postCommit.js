@@ -103,6 +103,7 @@ import { missionRule } from './missionRules.js';
 // or an explicit scan runs; an undeclared workspace is unchanged.
 import { altitudeRouterRule } from './altitudeRouterRules.js';
 import { catchballRule } from './catchballRules.js';
+import { carryoverRule } from './carryoverRules.js';
 // ADR-0085: the Operating Cadence Clock. Reads the finished queue after the
 // cascade has been negotiated and writes forum provenance, the constraint
 // escalation and the agenda-fit gap before the market rebalances attention.
@@ -515,6 +516,13 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // edge per leadership ancestor, one governed constraint decision per ISO week,
   // `fit-gap` edges for agenda mismatch, and one grade per due frozen reading.
   cadenceRule,
+  // ADR-0089: Hoshin Carryover Terminal (`RULE-CO-01..04`). Runs after the
+  // Catchball spine so a pact settled as thesis-invalidated creates its
+  // carryover record, its `rolls-up-to` fan-out AND its governed stop-rule
+  // settlement decision in the SAME transaction; resolutions written here are
+  // visible to Decision Tempo and the budget read models in the same commit,
+  // and `sealRule` attests the whole write.
+  carryoverRule,
   // ADR-0083: altitude as a dimension of the same engine, one rule set later.
   concordanceRule,
   // ADR-0086: the Disclosure Compiler's paperwork. Runs after every work-producing

@@ -95,9 +95,9 @@ const weeklyForum = (extra = {}) => ({
 /* ------------------------------------------------------------------ schema */
 
 test('v92 → v93 migration is additive, and no forum is ever invented', () => {
-  assert.equal(SCHEMA_VERSION, 94);
+  assert.equal(SCHEMA_VERSION, 95);
   const migrated = migrate({ schemaVersion: 90, settings: { leaderName: 'Keep' }, people: [] });
-  assert.deepEqual(migrated.applied, ['90 → 91', '91 → 92', '92 → 93', '93 → 94']);
+  assert.deepEqual(migrated.applied, ['90 → 91', '91 → 92', '92 → 93', '93 → 94', '94 → 95']);
   assert.deepEqual(migrated.raw.cadenceForums, []);
   assert.deepEqual(migrated.raw.cadenceSessions, []);
   assert.deepEqual(migrated.raw.cadenceReadings, []);
@@ -145,8 +145,8 @@ test('graph vocabulary and spine parity are exhaustive', () => {
   // so a later session legitimately appends the next ordinal.
   const keys = CSV_EXPORTS.map((e) => e.key);
   assert.ok(keys.indexOf('operating-cadence') < keys.indexOf('escalation-economy'));
-  assert.equal(keys.indexOf('escalation-economy'), keys.length - 1);
-  assert.equal(CSV_EXPORTS.length, 83);
+  assert.ok(keys.indexOf('escalation-economy') < keys.indexOf('carryover-settlement'));
+  assert.equal(CSV_EXPORTS.length, 84);
 });
 
 /* ------------------------------------- the concrete self-test: one transaction */

@@ -2,7 +2,7 @@
 
 - Added `#/escalation`: an absorbed-or-escalated decision ledger, per-span queue integrity, escalation yield with Wilson intervals, Shannon context loss per rung, a graded authority commitment (Brier), a subsidiarity index, a monkey ledger and defensive-reason attribution — plus an aggregate brief and CSV scope #83.
 - Schema migration 93 → 94 adds three collections and nineteen clamped settings. The shared spine has **68 rules and 68 contracts**, with `escalationRule` placed immediately before `decisionTempoRule` so a governed decision the rule opens is priced for cost-of-delay in the same atomic commit. Typed links, seat-scoped API, insights bucket, demo history and CSV are integrated.
-- Verification: **2,493 tests · 127 suites · 2,493 pass · 0 fail** on the complete full-suite run of the **merged** tree (2,642 s). Earlier runs surfaced six real integration failures — all fixed and re-verified — and the final clean run is the record.
+- Verification: **2,509 tests · 128 suites · 2,509 pass · 0 fail** on the complete full-suite run of the **merged** tree (2,648 s), after repairing `main`. Earlier runs surfaced nine real integration failures — all fixed and re-verified — and the final clean run is the record.
 - Limits: local seats are workflow declarations, not authentication. Rates below the cell floor are **blank, not zero**; ρ ≥ 1 prints a refusal instead of a number. Small-cell suppression is not differential privacy. Cost rates are declared conventions, not audited payroll. Grading is an association, never a causal claim. Real-browser AT walkthrough remains `[UNVERIFIED]`.
 
 ## 2026-11-04 — Session 128: The Escalation Economy (Schema v94, [ADR-0088](./docs/adr/0088-escalation-economy.md), `#/escalation`, RULE-ESC-01..05, CSV #83)
@@ -35,16 +35,17 @@
 
 | Gate | Result |
 | --- | --- |
-| Full suite (`node --test "tests/app/*.test.mjs"`), **merged tree, final** | **2,493 tests · 127 suites · 2,493 pass · 0 fail**, 2,642 s |
+| Full suite (`node --test "tests/app/*.test.mjs"`), **merged tree incl. the carryover repair** | **2,509 tests · 128 suites · 2,509 pass · 0 fail**, 2,648 s |
 | Full suite, pre-merge clean re-run | **2,410 tests · 2,410 pass · 0 fail**, 2,514 s |
 | Full suite, first complete pre-merge run | **2,410 tests · 2,407 pass · 3 fail** (all fixed) |
 | Full suite, post-merge run | **2,493 tests · 2,490 pass · 3 fail** (all fixed) |
+| Full suite, after the carryover repair | **2,509 tests · 2,506 pass · 3 fail** (all fixed) |
 | `tests/app/escalation-economy.test.mjs` | **23/23** |
 | `core` + `csv` + `app` (after demo seeding) | **53/53** |
 | `npx eslint .` | exit 0, whole tree |
 | `scripts/check-canonical-boundary.mjs` | **389 app ES modules / 124 test suites / 23 doc checks, 0 leaks** |
 | `scripts/check-docs-links.mjs` | **651 internal links across 196 markdown files, all resolve** |
-| `npm run build:standalone` | **7,339,644 bytes · 407 source modules · schema v94 · sha256 `4096b958ae2fec6f`** |
+| `npm run build:standalone` | **7,399,905 bytes · 413 source modules · schema v95 · sha256 `9d365f9104787b7d`** |
 
 **Three failures the full run found that no targeted run had** — recorded because each is a real integration seam, not a test artefact:
 
@@ -80,6 +81,61 @@ Resolved in this branch, not deferred:
 - **Four merge defects only the full suite could see.** The union left a truncated `case 'escalation-economy': { … }` block in `csv.js` and a truncated contract entry in `propagationContracts.js` (the conflict-region boundary fell inside my block), and it duplicated `workspaceRouteVerdict` in `accessGateway.js` (main changed its signature; my older two-argument copy was dropped in favour of main's, with `escalation` added to the reviewed-surface list) and duplicated `export const SCHEMA_VERSION` in `schema.js`. All four fixed and syntax-checked.
 - **CSV registry order is asserted, not ordinal.** Three tests asserted "my scope is LAST" (`catchball`, `operating-cadence`, `escalation`); all three now assert **relative order** with the reason printed, because append-only numbering means the next session legitimately appends scope #84.
 - **Docs.** `README.md`, `ROADMAP.md`, `RESEARCH.md`, `CHANGELOG.md`, `AI-SESSION-LOG.md` and `docs/adr/INDEX.md` carry all four sessions in descending order with matching ordinals. Main's session-log archive was kept whole and this session's section prepended rather than spliced into it.
+
+### Repairing `origin/main` through this PR (PR #147 — the Hoshin Carryover Terminal)
+
+`main` moved a **third** time after PR #146 was opened. PR #147 was merged with its
+conflicts **unresolved**: 94 files on `origin/main` carried literal `<<<<<<< HEAD`
+markers, including `app/core/schema.js`, which held two `export const SCHEMA_VERSION`
+declarations (91 and 93). **`main` could not parse.** `node --check` on a `.js` copy is
+silently tolerant, which is why the break was not obvious; as a module it is a hard
+syntax error. The user chose to repair `main` through this PR rather than revert #147.
+
+PR #147 is the **Hoshin Carryover Terminal** — a settlement record for a Catchball pact
+settled as `thesis-invalidated`. It had been built on an older `main` (v91) and
+collided with everything that had landed since:
+
+| | identifier PR #147 claimed | already taken by | resolved to |
+| --- | --- | --- | --- |
+| ADR | ADR-0085 | Board Room (Session 125) | **ADR-0089** |
+| Schema | `90 → 91` (v91) | Board Room v91, Disclosure v92, Cadence v93 | **`94 → 95` (v95)** |
+| Session | — | Session 127 was newest | **Session 129** |
+| CSV | #80 | Board Room #80 | **#84** |
+
+What the repair actually involved:
+
+- **92 conflicting files.** 87 test files were resolved to the v93 side of `main`'s own
+  markers (in PR #147's conflict, `HEAD` was the *older* carryover branch and
+  `origin/main` was the v93 base — so the correct side was the second one), then
+  re-swept: **248 pins across 92 test files** for v95 and CSV #84. Residual greps for
+  every `SCHEMA_VERSION, 9x`, `schemaVersion, 9x`, `CSV_EXPORTS.length, 8x` and
+  migration-chain pattern return **0**.
+- **`app/core/schema.js`** was rebuilt from my clean v94 file plus PR #147's six changes,
+  renumbered: `MIGRATIONS[94]` (`94 → 95`, parameter `v94`), `SCHEMA_VERSION = 95`, three
+  collections, the settings spread and the three normalization lines.
+- **Two files auto-merged *with* markers** (`app/actions.js`, `app/core/domain/postCommit.js`) —
+  git merges text, and markers are just text. A first attempt to strip them with a
+  regex removed the *cadence* wiring along with the markers; both files were reverted to
+  the last good commit and the carryover delta re-applied by hand, then syntax-checked.
+- **Spine order.** `carryoverRule` wants to run immediately after `catchballRule`
+  (it reads the cascade's output) — but Session 127's two tests already assert
+  `cadenceRule` occupies exactly that slot. Placed `carryoverRule` after `cadenceRule`
+  and relaxed PR #147's own assertion to its real dependency (after Catchball, after
+  cadence, before the market). **69 rules / 69 contracts**, `escalationRule` still
+  immediately before `decisionTempoRule`, `seatRule` second-to-last, `sealRule` last.
+- **A real gap in PR #147, found by `typed-links-lineage`.** The carryover registered a
+  `carryover` graph node with **no resolver** and **no fixture**, and its test fixture
+  used a status (`pending`) the normalizer rejects. Added a resolver returning
+  `#/carryover?panel=queue&record=<id>`, a focused record card in the view so the edge
+  lands somewhere real, and a valid fixture. The suite went 83 → 84 links.
+- **PR #147 shipped with no documentation at all** — no ADR, no README/ROADMAP/CHANGELOG/RESEARCH
+  entry. Written here: **[ADR-0089](docs/adr/0089-hoshin-carryover-terminal.md)** plus
+  entries in all four docs and the ADR index.
+- **Three "my scope is LAST" assertions in main were already fragile** and broke again;
+  all of them now assert relative order (`catchball`, `board`, `operating-cadence`,
+  `escalation`, `carryover`).
+
+**Post-repair gates.** ESLint clean on the whole tree; canonical boundary **414 app ES modules / 128 test suites / 23 documentation checks, 0 leaks**; **690 internal links across 200 markdown files, all resolve**; standalone rebuilt **7,399,905 bytes / 413 source modules / schema v95 / sha256 `9d365f9104787b7d`**; rule/contract parity **69 / 69**.
 
 **Changed files.** New: `app/core/domain/{escalationRegistry,escalationSchema,escalation,escalationRules,escalationActions}.js`, `app/views/escalation.js`, `docs/adr/0088-escalation-economy.md`, `tests/app/escalation-economy.test.mjs`. Modified: `app/core/schema.js`, `app/core/demo.js`, `app/core/csv.js`, `app/core/domain/{postCommit,propagationContracts,cases,seatRegistry,accessGateway,insights}.js`, `app/actions.js`, `app/main.js`, 88 swept test files, `README.md`, `ROADMAP.md`, `RESEARCH.md`, `CHANGELOG.md`, `docs/adr/INDEX.md`, `LeadOS-standalone.html`, and this log.
 

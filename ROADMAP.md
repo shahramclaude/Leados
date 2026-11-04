@@ -1,3 +1,15 @@
+## 2026-11-04 — Session 129: The Hoshin Carryover Terminal ([ADR-0089](docs/adr/0089-hoshin-carryover-terminal.md), Schema v95, `#/carryover`, RULE-CO-01..04, CSV #84)
+
+**The gap this closes.** Session 124 could *detect* a thesis-invalidated pact — faithful execution against a falsified upstream hypothesis — but not **settle** it. The bet was never judged against its stop rule, the encumbered person-days and budget line evaporated instead of re-entering the next allocation cycle, and no dated prediction was frozen so the settlement could ever be graded. The 2026 strategy-execution market renders invalidation as a status change; nobody models it as a settlement event.
+
+- **[Frontline / team lead]** The invalidated pact's settlement record, the resource bundle frozen at invalidation, and the settlement decision to answer — with the bundle printed in the question.
+- **[Manager]** Settlement queue across the span: awaiting verdict, release in flight, released, withheld (with the written reason).
+- **[Director]** Judge the bet against its stop rule: retire, revise the stop rule, or reaffirm with a new causal hypothesis. Unresolved bet bases surface as defects.
+- **[VP / executive]** Bets and stop rules with their state; the portfolio question — what did this falsification release for the next allocation cycle?
+- **[CEO / chief]** Altitude calibration cells (n, hold rate, Wilson 95% bounds), aggregate invalidation and released-capacity totals, and an identity-free brief.
+
+**Next targets.** (1) Cross-cycle carryover *forecasting* — price next cycle's expected released capacity before the settlements land, so the allocation governor can plan against it rather than discover it. (2) A stop-rule quality index: distinguish a span whose stop rules hold because it judges well from one whose stop rules hold because it bets safely. (3) Authenticated identity — every seat here is a declaration, not an account.
+
 ## 2026-11-04 — Session 128: The Escalation Economy ([ADR-0088](docs/adr/0088-escalation-economy.md), Schema v94, `#/escalation`, RULE-ESC-01..05, CSV #83)
 
 **The gap this closes.** The 2026 market sells "escalation management" and means ticket routing (ServiceNow, Jira Service Management, PagerDuty, Zendesk, HaloITSM; AI entrants Fini, Forethought, Traversal, Ada) — *who gets paged next, how fast*, with reason-clustering analytics. LeadOS was closer and still short: `load.js` measures cognitive load on a person, `signalPath.js` measures bad-news transmission up declared channels, `mandates.js` records who may decide. None of them measured the **escalation decision** — the moment a leader absorbs a problem or hands it up — its price, its yield, or the incentive that produced it. This session prices that market.

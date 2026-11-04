@@ -1,3 +1,12 @@
+## §110 — Session 129 domain hunt: everyone archives the invalidated initiative; nobody settles it (fetched 2026-11-04, [ADR-0089](docs/adr/0089-hoshin-carryover-terminal.md))
+
+- **The category surveyed.** Strategy-execution and OKR platforms: Cascade, AchieveIt, Workboard, Quantive, Perdoo, Rhythm Systems, plus the portfolio dashboards in Jira Align, Microsoft Planner and Smartsheet.
+- **What they all do.** Roll objectives up, colour them, and let an initiative be **closed** — red, archived, cancelled. Invalidation is a *status transition* in a workflow, recorded as a timestamp and an actor.
+- **What none of them does.** (1) **Judges the bet.** The falsification lands on the initiative; the thing that has to change is the *strategy bet* the initiative deployed, and no surveyed product records a verdict against a declared stop rule. (2) **Releases the resource.** An invalidated initiative has encumbered person-days and budget. In every surveyed product that capacity simply stops being planned without ever being *returned* — it is neither spent nor released, so the next cycle plans against a book that still pretends the work is live. (3) **Grades the prediction.** No dated forecast is frozen at decision time, so no hold rate can ever be computed for a span's stop rules.
+- **Why it matters.** These three are the same failure at three altitudes: the organisation cannot distinguish a *falsified hypothesis* from a *failed execution*, so it cannot reward the first, and it cannot recover the capacity the second never consumed.
+- **Vendor capability claims** in this section are marketing copy from public pages and are **[UNVERIFIED]** — no product was installed or tested.
+- **Local Operating Seats remain auditable workspace declarations, not authenticated multi-user security;** small-cell withholding in CSV #84 is not differential privacy.
+
 ## §109. 2026-11-04 — Everyone routes the escalation; nobody prices it (Session 128, Schema v94, [ADR-0088](docs/adr/0088-escalation-economy.md))
 
 ### The question

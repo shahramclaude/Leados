@@ -48,14 +48,14 @@ const proposal = (toSeatId = 'lead1', extra = {}) => ({ title: 'Improve the deli
 
 // Schema and graph are additive; imported rows cannot silently become accepted pacts.
 test('v88 migration, record validation, graph vocabulary and spine parity', () => {
-  assert.equal(SCHEMA_VERSION, 94);
+  assert.equal(SCHEMA_VERSION, 95);
   const migrated = migrate({ schemaVersion: 88, settings: { leaderName: 'Keep' }, people: [] });
-  assert.deepEqual(migrated.applied, ['88 → 89', '89 → 90', '90 → 91', '91 → 92', '92 → 93', '93 → 94']);
+  assert.deepEqual(migrated.applied, ['88 → 89', '89 → 90', '90 → 91', '91 → 92', '92 → 93', '93 → 94', '94 → 95']);
   assert.deepEqual(migrated.raw.catchballPacts, []);
   assert.deepEqual(migrated.raw.catchballRounds, []);
   assert.equal(migrated.raw.settings.leaderName, 'Keep');
   const afterConcordance = migrate({ schemaVersion: 89, expectationRounds: [{ id: 'existing-round' }], settings: {} });
-  assert.deepEqual(afterConcordance.applied, ['89 → 90', '90 → 91', '91 → 92', '92 → 93', '93 → 94']);
+  assert.deepEqual(afterConcordance.applied, ['89 → 90', '90 → 91', '91 → 92', '92 → 93', '93 → 94', '94 → 95']);
   assert.equal(afterConcordance.raw.expectationRounds[0].id, 'existing-round');
   assert.deepEqual(afterConcordance.raw.catchballPacts, []);
   const warnings = [];
@@ -81,11 +81,8 @@ test('v88 migration, record validation, graph vocabulary and spine parity', () =
   assert.ok(CSV_EXPORTS.some((scope) => scope.key === 'catchball-cascade'));
   assert.ok(CSV_EXPORTS.findIndex((scope) => scope.key === 'catchball-cascade') < CSV_EXPORTS.findIndex((scope) => scope.key === 'board-claims'));
   assert.ok(CSV_EXPORTS.findIndex((scope) => scope.key === 'board-claims') < CSV_EXPORTS.findIndex((scope) => scope.key === 'operating-cadence'));
-  // Asserted by RELATIVE order, not by being last: the registry is append-only,
-  // so a later session legitimately appends scope #84 and beyond.
-  const keys = CSV_EXPORTS.map((e) => e.key);
-  assert.ok(keys.indexOf('operating-cadence') < keys.indexOf('escalation-economy'));
-  assert.equal(keys.at(-1), 'escalation-economy');
+  assert.ok(CSV_EXPORTS.findIndex((scope) => scope.key === 'operating-cadence') < CSV_EXPORTS.findIndex((scope) => scope.key === 'escalation-economy'));
+  assert.ok(CSV_EXPORTS.findIndex((scope) => scope.key === 'escalation-economy') < CSV_EXPORTS.findIndex((scope) => scope.key === 'carryover-settlement'));
 });
 
 test('one proposal writes strategy and hierarchy provenance; scans are idempotent', () => {

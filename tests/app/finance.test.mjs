@@ -159,9 +159,9 @@ test('commitmentCalibration: counts-only below n=5, dimensionless pooling across
 /* ------------------------------------------------------------- schema v24 */
 
 test('schema v24: migration is additive; normalisation keeps amounts, clears dead pointers', () => {
-  assert.equal(SCHEMA_VERSION, 94);
+  assert.equal(SCHEMA_VERSION, 95);
   const migrated = migrate({ schemaVersion: 23, settings: {}, cases: [{ id: 'keep-me' }] });
-  assert.equal(migrated.raw.schemaVersion, 94);
+  assert.equal(migrated.raw.schemaVersion, 95);
   assert.deepEqual(migrated.raw.budgets, [], 'no envelope is invented for older workspaces');
   assert.equal(migrated.raw.settings.budgetWatchPct, 80);
   assert.ok(migrated.applied.includes('23 → 24'));
@@ -340,7 +340,7 @@ test('FIN-01/02/04/05 fire on their conditions; demo baseline is silent', () => 
 /* -------------------------------------------------------------- CSV + rewind */
 
 test('CSV: finance scope is per-line and formula-safe; calibration gains commitment rows', () => {
-  assert.equal(CSV_EXPORTS.length, 83);
+  assert.equal(CSV_EXPORTS.length, 84);
   assert.ok(CSV_EXPORTS.some((s) => s.key === 'finance'));
   const { store, api } = harness();
   const bud = api.addBudget({ name: '=cmd|calc envelope', currency: 'USD', limit: 5000 });
@@ -422,7 +422,10 @@ test('UI: #/finance list + detail render, record-actual dialog never pre-fills, 
     let view = env.document.querySelector('#view');
     assert.ok(view.textContent.includes('Budget & finance'));
     assert.ok(view.textContent.includes('Platform team operating budget'));
-    assert.ok(view.textContent.includes('USD 37,640'), 'forecast = 7,640 + 6,000 actuals + 24,000 encumbered');
+    // ADR-0089: the carryover demo encumbers one more committed line (18,000),
+    // so the forecast is 13,640 actuals + 42,000 encumbered. The released line
+    // (12,000) is correctly NOT counted — a released encumbrance is gone.
+    assert.ok(view.textContent.includes('USD 55,640'), 'forecast = 13,640 actuals + 42,000 encumbered');
     env.window.eval(AXE_SRC);
     let axeRes = await env.window.axe.run(view, { rules: { 'color-contrast': { enabled: false } } });
     assert.deepEqual(Array.from(axeRes.violations).map((v) => v.id), [], 'zero axe violations on #/finance');

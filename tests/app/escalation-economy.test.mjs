@@ -79,14 +79,14 @@ const esc = (toSeatId = 'mgr', extra = {}) => ({
 /* ------------------------------------------------------- 1. schema & spine */
 
 test('v94 migration, fail-closed records, graph vocabulary and spine parity', () => {
-  assert.equal(SCHEMA_VERSION, 94);
+  assert.equal(SCHEMA_VERSION, 95);
   const migrated = migrate({ schemaVersion: 93, settings: { leaderName: 'Keep' }, people: [] });
-  assert.deepEqual(migrated.applied, ['93 → 94']);
+  assert.deepEqual(migrated.applied, ['93 → 94', '94 → 95']);
   assert.deepEqual(migrated.raw.escalationRecords, []);
   assert.deepEqual(migrated.raw.escalationCommitments, []);
   assert.equal(migrated.raw.settings.leaderName, 'Keep');
   const afterCatchball = migrate({ schemaVersion: 92, catchballPacts: [{ id: 'keep-pact' }], settings: {} });
-  assert.deepEqual(afterCatchball.applied, ['92 → 93', '93 → 94']);
+  assert.deepEqual(afterCatchball.applied, ['92 → 93', '93 → 94', '94 → 95']);
   assert.equal(afterCatchball.raw.catchballPacts[0].id, 'keep-pact');
 
   const warnings = [];
@@ -129,7 +129,8 @@ test('v94 migration, fail-closed records, graph vocabulary and spine parity', ()
   const keys = CSV_EXPORTS.map((e) => e.key);
   assert.ok(keys.indexOf('operating-cadence') < keys.indexOf('escalation-economy'),
     'scope #83 is appended after main\'s #82');
-  assert.equal(keys.at(-1), 'escalation-economy');
+  assert.ok(keys.indexOf('escalation-economy') < keys.indexOf('carryover-settlement'),
+    'scope #83 precedes the carryover scope #84 appended after it');
 });
 
 /* --------------------------------------------- 2. cross-altitude roll-up */

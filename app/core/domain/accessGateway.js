@@ -42,7 +42,7 @@ const groups = [
   // ADR-0084: Hoshin Kanri & Catchball Cascade reviewed commands. Each handler
   // additionally enforces subtree + bilateral receiver consent inside catchballActions.
   ['negotiate-catchball', 'catchballPropose catchballCounter catchballAccept catchballCheckin catchballSettle catchballWithdraw catchballUpdateSettings catchballScan'],
-  // ADR-0085: the Escalation Economy. Every method is declared; an unknown name
+  // ADR-0088: the Escalation Economy. Every method is declared; an unknown name
   // still fails closed. Settlement is additionally receiver-only and the
   // escalator can never settle their own escalation, because a self-reported
   // escalation yield is worthless.

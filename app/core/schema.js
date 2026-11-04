@@ -153,6 +153,14 @@ import {
   normalizeEscalationMarkers,
   normalizeEscalationSettings,
 } from './domain/escalationSchema.js';
+// ADR-0089: Hoshin Carryover Terminal records, idempotency markers, once-only
+// grading rows, and clamped conventions.
+import {
+  normalizeCarryoverRecords,
+  normalizeCarryoverMarkers,
+  normalizeCarryoverGradings,
+  normalizeCarryoverSettings,
+} from './domain/carryoverSchema.js';
 // ADR-0085: the Operating Cadence Clock's fail-closed normalizers and clamped
 // conventions. A forum, a sitting or a frozen reading that cannot be validated is
 // dropped with a warning rather than repaired into something a leader might act on.
@@ -327,7 +335,7 @@ export {
 // older blob simply opens on the undeclared operator view. A version bump here
 // would have forced 78 test files to be rewritten for zero user benefit; the
 // honest choice is to add nothing to migrate.
-export const SCHEMA_VERSION = 94;
+export const SCHEMA_VERSION = 95;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -349,6 +357,12 @@ export const SCHEMA_VERSION = 94;
 // commitment. Purely additive: an upgraded workspace opens with an EMPTY ledger
 // that says no decision moment has been recorded, rather than a disposition
 // inferred from case titles. A decision moment is only ever logged by a human.
+// v95 adds the Hoshin Carryover Terminal (`carryoverRecords`, `carryoverMarkers`,
+// `carryoverGradings`, ADR-0089): a first-class record for a Catchball pact
+// settled as thesis-invalidated, with resource release, once-only grading and
+// calibration. Purely additive: an upgraded workspace opens with an EMPTY
+// carryover ledger, because a settlement back-filled from pact titles would claim
+// a decision the organisation never actually made.
 
 // v83 adds the Succession Terminal (`successionReadings`, `successionMarkers`): a
 // frozen bench claim per workspace or per span — the probability that at least one
@@ -1752,6 +1766,12 @@ export const COLLECTIONS = [
   'escalationRecords',
   'escalationCommitments',
   'escalationMarkers',
+  // ADR-0089: Hoshin Carryover Terminal — one record per Catchball pact
+  // settled as thesis-invalidated, idempotency markers, and the once-only
+  // later grading rows.
+  'carryoverRecords',
+  'carryoverMarkers',
+  'carryoverGradings',
   // ADR-0086: disclosure release contracts (the only records that can widen a
   // read) and the idempotency markers RULE-DSC-01..02 use.
   'disclosureGrants',
@@ -2408,11 +2428,12 @@ export function normalizeSettings(raw) {
     ...normalizeRouterSettings(s),
     ...normalizeConcordanceSettings(s),
     ...normalizeDisclosureSettings(s),
-    // ADR-0085: the Board Room's declared conventions.
+    // ADR-0088: the Board Room's declared conventions.
     ...normalizeBoardSettings(s),
     ...normalizeSealSettings(s),
     ...normalizeCatchballSettings(s),
     ...normalizeEscalationSettings(s),
+    ...normalizeCarryoverSettings(s),
   };
 }
 
@@ -6523,6 +6544,11 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.escalationRecords = normalizeEscalationRecords(raw.escalationRecords, warnings);
   state.escalationCommitments = normalizeEscalationCommitments(raw.escalationCommitments, warnings);
   state.escalationMarkers = normalizeEscalationMarkers(raw.escalationMarkers);
+  // ADR-0089: carryover records resolve after pacts so `carries-over` and
+  // `settles` edges validate against real pact and bet ids.
+  state.carryoverRecords = normalizeCarryoverRecords(raw.carryoverRecords, warnings);
+  state.carryoverMarkers = normalizeCarryoverMarkers(raw.carryoverMarkers, warnings);
+  state.carryoverGradings = normalizeCarryoverGradings(raw.carryoverGradings, warnings);
   // ADR-0086: grants resolve before links so `discloses-to`, `consented-by`,
   // `authorizes` and `tracks-followup` edges validate against real grant ids.
   // An expired grant loads as expired; it never loads as live authority.
@@ -7231,6 +7257,26 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  // ADR-0089: additive 94 → 95. No existing record is rewritten: an older
+  // workspace simply has an empty carryover ledger and the declared
+  // conventions. Normalizers remain fail-closed on malformed rows.
+  94: (v94) => ({
+    ...v94,
+    schemaVersion: 95,
+    carryoverRecords: Array.isArray(v94.carryoverRecords) ? v94.carryoverRecords : [],
+    carryoverMarkers: Array.isArray(v94.carryoverMarkers) ? v94.carryoverMarkers : [],
+    carryoverGradings: Array.isArray(v94.carryoverGradings) ? v94.carryoverGradings : [],
+    settings: isPlainObject(v94.settings)
+      ? {
+        ...v94.settings,
+        carryoverCellFloor: v94.settings.carryoverCellFloor ?? 5,
+        carryoverReliabilityFloorPct: v94.settings.carryoverReliabilityFloorPct ?? 60,
+        carryoverGradingDelayDays: v94.settings.carryoverGradingDelayDays ?? 14,
+        carryoverDecisionReviewDays: v94.settings.carryoverDecisionReviewDays ?? 14,
+        carryoverAutoPropagate: v94.settings.carryoverAutoPropagate !== false,
+      }
+      : { ...DEFAULT_SETTINGS },
+  }),
   // ADR-0088: additive 93 → 94. No existing decision moment is invented: an
   // older workspace simply has an empty escalation ledger, no commitments and
   // the declared conventions. Nothing here infers a disposition, a resolution,

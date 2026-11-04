@@ -31,9 +31,11 @@ import { routingAttentionCount } from './core/domain/altitudeRouter.js';
 import { renderCatchball } from './views/catchball.js';
 import { renderCadence } from './views/cadence.js';
 import { catchballAttentionCount } from './core/domain/catchball.js';
-// ADR-0085: the Escalation Economy — hierarchy priced as a market.
+// ADR-0088: the Escalation Economy — hierarchy priced as a market.
 import { renderEscalation } from './views/escalation.js';
 import { escalationAttentionCount } from './core/domain/escalation.js';
+import { renderCarryover } from './views/carryover.js';
+import { carryoverAttentionCount } from './core/domain/carryover.js';
 import { cadenceAttentionCount } from './core/domain/cadence.js';
 // ADR-0083: the Concordance Terminal — the two-gauge problem behind every
 // performance review, measured pair by pair and rolled up the tree.
@@ -232,9 +234,12 @@ export const NAV = [
     // it next sits, and whether the queue can reach it inside its own horizon.
     { route: 'cadence', label: 'Operating cadence', icon: '◷', badge: 'cadence' },
     { route: 'catchball', label: 'Strategy cascade', icon: '◇', badge: 'catchball' },
-    // ADR-0085: does the decision belong where it is being taken, and what did
+    // ADR-0088: does the decision belong where it is being taken, and what did
     // passing it upward buy? The whole chain of command, priced.
     { route: 'escalation', label: 'Escalation economy', icon: '⇧', badge: 'escalation' },
+    // ADR-0089: the thesis-invalidated pact's bet is settled — stop rule
+    // judged, resources released into the next allocation cycle.
+    { route: 'carryover', label: 'Carryover', icon: '⟳', badge: 'carryover' },
     { route: 'comms', label: 'Comms outbox', icon: '✉', badge: 'comms' },
     { route: 'insights', label: 'Signals', icon: '⚑', badge: 'signals' },
   ] },
@@ -358,6 +363,7 @@ const RENDERERS = {
   routing: (ctx) => renderAltitudeRouter(ctx),
   catchball: (ctx) => renderCatchball(ctx),
   escalation: (ctx) => renderEscalation(ctx),
+  carryover: (ctx) => renderCarryover(ctx),
   cadence: (ctx) => renderCadence(ctx),
   disclosure: (ctx) => renderDisclosure(ctx),
   concordance: (ctx) => renderConcordance(ctx),
@@ -546,10 +552,12 @@ export function parseRoute(hash) {
     // (ADR-0073) and silently stealing it would break a shipped link.
     'mission': 'mission', 'mission-control': 'mission', 'command-center': 'mission', 'flight-deck': 'mission',
     'catchball': 'catchball', 'hoshin': 'catchball', 'strategy-cascade': 'catchball',
-    // ADR-0085: deliberately NOT 'escalation' for 'escalate' alone — see below.
+    // ADR-0088: deliberately NOT 'escalation' for 'escalate' alone — see below.
     'escalation': 'escalation', 'escalation-economy': 'escalation', 'absorb-or-escalate': 'escalation',
     'who-decides': 'escalation', 'monkey': 'escalation', 'monkeys': 'escalation',
     'subsidiarity': 'escalation', 'intervention-rate': 'escalation', 'de-facto': 'escalation',
+    'carryover': 'carryover', 'hoshin-carryover': 'carryover', 'settlement': 'carryover',
+    'stop-rule': 'carryover', 'thesis-invalidation': 'carryover',
     'queue': 'escalation', 'absorption': 'escalation', 'escalation-yield': 'escalation',
     // ADR-0087: the Operating Cadence Clock's aliases. None may shadow a shipped
     // route: 'meetings' is free, 'calendar' is free, and 'review' is deliberately
@@ -870,6 +878,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       routing: routingAttentionCount(state, at, state.settings),
       catchball: catchballAttentionCount(state, at, state.settings),
       escalation: escalationAttentionCount(state, at, state.settings),
+      carryover: carryoverAttentionCount(state, at),
       cadence: cadenceAttentionCount(state, at, state.settings),
       concordance: concordanceAttentionCount(state, at, state.settings),
       // ADR-0086: consent work waiting on this seat, plus a live release of this
@@ -1342,6 +1351,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       routing: 'Altitude Router — natural-language intake classified into modules and the correct organizational altitude, with disclosure-safe roll-up to every leadership level',
       board: 'Board Room — the disclosure pack as a measurement problem: claims and thresholds pre-registered before the first look, verdicts decided by the conservative end of each interval, two-module cross-examination, exact span decomposition, and a permanent post-hoc mark on any threshold moved after looking',
       catchball: 'Hoshin Kanri & Catchball Cascade — negotiated strategy deployment',
+      carryover: 'Hoshin Carryover — a thesis-invalidated pact settles its bet: stop rule judged, encumbered person-days and budget released into the next allocation cycle',
       escalation: 'Escalation Economy — is this decided where the information is? Absorbed-or-escalated ledger, M/M/1 queue integrity per span, escalation yield, Shannon context loss per rung, Aghion & Tirole de facto centralisation against a graded intervention-rate commitment, and the Oncken & Wass monkey ledger',
       cadence: 'Operating Cadence Clock — your standing forums read as a finite decision machine: what each is competent to close, the demand converging on it, when it next sits, and which items cannot land inside their own horizon',
       disclosure: 'Disclosure Console — every screen states the posture it holds at this altitude, every withheld cell states why, and detail is released only by a consented, expiring, span-bounded contract',
