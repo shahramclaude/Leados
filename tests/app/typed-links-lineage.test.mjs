@@ -576,6 +576,14 @@ test('every registered link type survives schema normalization/reload and resolv
     engineVersion: 'cadence-2026.11-v1', forums: [], conventions: {}, subject: 'workspace',
   }];
 
+  // Schema v94: a carryover settlement record. The node carries the frozen
+  // bundle and the verdict; no person and no budget name rides the edge.
+  raw.carryoverRecords = [{
+    id: 'carryover-link-fixture', pactId: 'catchball-pact-link-fixture',
+    betBasis: 'thesis-invalidated', status: 'pending-settlement',
+    createdAt: NOW_ISO, updatedAt: NOW_ISO,
+  }];
+
   // Schema v90: pact and bilateral-round graph nodes survive normalization.
   raw.catchballPacts = [{ id: 'catchball-pact-link-fixture', title: 'Fixture pact', toSeatId: raw.people[0].id, status: 'proposed', createdAt: NOW_ISO }];
   raw.catchballRounds = [{ id: 'catchball-round-link-fixture', pactId: 'catchball-pact-link-fixture', ownerId: raw.people[0].id, kind: 'propose', createdAt: NOW_ISO }];
@@ -813,6 +821,11 @@ test('every registered link type survives schema normalization/reload and resolv
       // not yet to a single focused contract. The terminal is navigable; the
       // exact-record focus is a future route contract, not a fake query param.
       assert.equal(routePath, '/mandates', 'a decision-rights contract resolves to the mandates terminal');
+    } else if (link.targetType === 'carryover') {
+      // Honest known gap (same shape as mandate): the settlement record
+      // resolves to its terminal's queue panel, which is navigable but not
+      // record-focused yet. The exact-record focus is a future route contract.
+      assert.equal(routePath, '/carryover', 'a carryover record resolves to the carryover terminal');
     } else if (link.targetType === 'candidate') {
       assert.equal(query.get('candidate'), resolved.id, 'candidate route carries the exact candidate ID');
       assert.equal(routeSegments.at(-1), resolved.raw.reqId, 'candidate route also names its owning requisition');

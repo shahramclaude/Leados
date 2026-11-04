@@ -1,6 +1,6 @@
 /**
  * app/views/carryover.js — Hoshin Carryover Terminal
- * (`#/carryover`, Session 125, Schema v91, ADR-0085).
+ * (`#/carryover`, Session 128, Schema v94, ADR-0088).
  *
  * Five role-tiered panels across all five organizational altitudes:
  *   1. Settlement queue (`queue`): every pact settled as thesis-invalidated

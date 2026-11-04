@@ -137,7 +137,13 @@ export function renderAuthorityCalibration(ctx) {
   };
 
   const exportCsv = () => {
-    const res = ctx.api.exportCSV('authority-calibration');
+    let res;
+    try {
+      res = ctx.exportCSV('authority-calibration');
+    } catch (err) {
+      toast(err?.message || 'Export is not available from a declared seat.', 'warn');
+      return;
+    }
     if (res.ok && res.csv) {
       const ok = downloadText({ filename: res.filename, text: res.csv, mime: 'text/csv;charset=utf-8' });
       toast(ok ? 'CSV downloaded' : 'Download not available', ok ? 'good' : 'bad');

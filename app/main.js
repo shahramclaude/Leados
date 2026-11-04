@@ -36,6 +36,9 @@ import { renderCarryover } from './views/carryover.js';
 import { carryoverAttentionCount } from './core/domain/carryover.js';
 // ADR-0089: the altitude-specific, identity-reduced strategy renewal report.
 import { renderStrategyCycle } from './views/strategyCycle.js';
+
+
+
 // ADR-0083: the Concordance Terminal — the two-gauge problem behind every
 // performance review, measured pair by pair and rolled up the tree.
 import { renderConcordance } from './views/concordance.js';
@@ -200,6 +203,8 @@ import { scepticAttentionCount } from './core/domain/sceptic.js';
 // ADR-0082: the Sealed Spine — tamper-evident audit chain + altitude attestation.
 import { renderSeal } from './views/seal.js';
 import { sealAttentionCount } from './core/domain/sealChain.js';
+import { renderIdentity } from './views/identity.js';
+import { identityAttentionCount } from './core/domain/identity.js';
 
 function safeDecode(segment) {
   const raw = String(segment || '');
@@ -237,6 +242,7 @@ export const NAV = [
     // ADR-0090: which declared leadership edges are measurably connected — a
     // reading of the hierarchy's information system, never of its people.
     { route: 'federation', label: 'Federation', icon: '⨝', badge: 'federation' },
+    { route: 'identity', label: 'Attested commits', icon: '🔑', badge: 'identity' },
     { route: 'today', label: 'Today', icon: '◎' },
     { route: 'responses', label: 'Response studio', icon: '⌁', badge: 'responses' },
     { route: 'bundles', label: 'Action bundles', icon: '⊞', badge: 'bundles' },
@@ -387,6 +393,9 @@ const RENDERERS = {
   cadence: (ctx) => renderCadence(ctx),
   disclosure: (ctx) => renderDisclosure(ctx),
   carryover: (ctx) => renderCarryover(ctx),
+  carryover: (ctx) => renderCarryover(ctx),
+  cadence: (ctx) => renderCadence(ctx),
+  disclosure: (ctx) => renderDisclosure(ctx),
   concordance: (ctx) => renderConcordance(ctx),
   'operating-model': (ctx) => renderOperatingModel(ctx),
   board: (ctx) => renderBoard(ctx),
@@ -408,6 +417,7 @@ const RENDERERS = {
   mandates: (ctx) => renderMandates(ctx),
   authorityCalibration: (ctx) => renderAuthorityCalibration(ctx),
   seal: (ctx) => renderSeal(ctx),
+  identity: (ctx) => renderIdentity(ctx),
   people: (ctx) => renderPeople(ctx),
   person: (ctx, segments) => renderPerson(ctx, safeDecode(segments[1])),
   onboarding: (ctx) => renderOnboarding(ctx),
@@ -568,6 +578,8 @@ export function parseRoute(hash) {
     // `integrity` stays Signal integrity and `trust` stays Promise solvency —
     // neither may be stolen here (the docs say so explicitly).
     'seal': 'seal', 'seals': 'seal', 'audit-chain': 'seal', 'attestation': 'seal',
+    'identity': 'identity', 'attested-commits': 'identity', 'seat-identity': 'identity',
+    'credential': 'identity', 'authorship': 'identity', 'assurance-ladder': 'identity',
     'succession': 'succession', 'bench': 'succession', 'leadership-bench': 'succession',
     'key-person': 'succession', 'key-person-risk': 'succession',
     'bench-strength': 'succession', 'bus-factor': 'succession', 'min-cut': 'succession',
@@ -577,6 +589,8 @@ export function parseRoute(hash) {
     'mission': 'mission', 'mission-control': 'mission', 'command-center': 'mission', 'flight-deck': 'mission',
     'catchball': 'catchball', 'hoshin': 'catchball', 'strategy-cascade': 'catchball',
     'strategy-cycle': 'strategy-cycle', 'strategy-renewal': 'strategy-cycle', 'strategy-bridge': 'strategy-cycle',
+    'carryover': 'carryover', 'hoshin-carryover': 'carryover', 'settlement': 'carryover',
+    'stop-rule': 'carryover', 'thesis-invalidation': 'carryover',
     // ADR-0087: the Operating Cadence Clock's aliases. None may shadow a shipped
     // route: 'meetings' is free, 'calendar' is free, and 'review' is deliberately
     // NOT claimed here because it would collide with the review screens.
@@ -925,6 +939,8 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       catchball: catchballAttentionCount(state, at, state.settings),
       cadence: cadenceAttentionCount(state, at, state.settings),
       carryover: carryoverAttentionCount(state, at),
+      carryover: carryoverAttentionCount(state, at),
+      cadence: cadenceAttentionCount(state, at, state.settings),
       concordance: concordanceAttentionCount(state, at, state.settings),
       // ADR-0084: the badge counts congested spans that have a PRICED lever, not
       // every interesting reading. A reading is not a piece of work.
@@ -941,6 +957,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       federation: federationAttentionCount(state, { now: at, settings: state.settings }),
       // ADR-0082: the badge counts chain breaks only — a valid chain is not noise.
       seal: sealAttentionCount(state),
+      identity: identityAttentionCount(state, { now: at, settings: state.settings }),
       // Schema v32: drafts written from case facts that still await a human.
       comms: (state.commsDrafts || []).filter((d) => d && d.status === 'draft').length,
       due: dueMeetings(state, at, state.settings).length,
@@ -1406,6 +1423,9 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       cadence: 'Operating Cadence Clock — your standing forums read as a finite decision machine: what each is competent to close, the demand converging on it, when it next sits, and which items cannot land inside their own horizon',
       disclosure: 'Disclosure Console — every screen states the posture it holds at this altitude, every withheld cell states why, and detail is released only by a consented, expiring, span-bounded contract',
       carryover: 'Hoshin Carryover — a thesis-invalidated pact settles its bet: stop rule judged, encumbered person-days and budget released into the next allocation cycle',
+      carryover: 'Hoshin Carryover — a thesis-invalidated pact settles its bet: stop rule judged, encumbered person-days and budget released into the next allocation cycle',
+      cadence: 'Operating Cadence Clock — your standing forums read as a finite decision machine: what each is competent to close, the demand converging on it, when it next sits, and which items cannot land inside their own horizon',
+      disclosure: 'Disclosure Console — every screen states the posture it holds at this altitude, every withheld cell states why, and detail is released only by a consented, expiring, span-bounded contract',
       concordance: 'Expectation Concordance — “meets expectations” treated as a measurement instrument: two sealed sides, six dimensions, weighted κ / AC1 / PABAK / Bland–Altman agreement, a governed re-contracting decision on divergence and a typed roll-up to every leadership span',
       envoy: 'Sealed exchange — how a span’s pack leaves its own browser: projected at the receiving altitude’s disclosure class, committed with a per-item SHA-256 and a Merkle root, signed keyed when the vault is unlocked, verified by the receiver before a single field is stored, ingested idempotently, and turned into a governed reconciliation decision when two workspaces disagree',
       federation: 'Programme federation — which declared leadership edges actually carry work, measured from dated artefacts other modules already wrote: connected, bypassed, stale or silent, with a Wilson-bounded coverage rate that is withheld below the span floor and small cells suppressed',
@@ -1421,6 +1441,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       mandates: 'Decision Rights Exchange — bounded authority, explicit acceptance, capacity evidence, budget encumbrance and verified return through the reporting hierarchy',
       authorityCalibration: 'Authority Calibration Ledger — accepted mandate contracts graded against delivered outcomes: hold rate, Brier score and calibration skill by action class and receiver altitude, with no person rated or ranked',
       seal: 'Integrity & seals — the append-only event log as a hash-chained, tamper-evident audit trail: one seal per committed transaction across all modules, verified from genesis, keyed HMAC when the vault is unlocked, with per-span attestations rolled up the chain of command',
+      identity: 'Attested commits — who wrote this: every commit signed by a passphrase-derived seat credential held only in memory, verification with honest three-valued verdicts (verified / failed / key unavailable), unattributed writes escalated up the chain of command under enforcement, and signed checkpoints that detect truncation a hash chain cannot see',
       succession: 'Leadership bench — every span’s coverage certified as a flow-feasibility proof over dated records: what the span has promised, who could actually hold it, the minimum set of obligations nobody can take, and one probability with its lower bound and its refusals intact',
       seat: 'Altitude Lens — who is operating this workspace, what that position may see and do, and how every module rolls up through the chain of command',
       sceptic: 'Cross-examination — every claim this workspace makes about itself, compared against the records that contain it: which claims does the record contradict, how often is this terminal right when it says so, and what would one observation be worth?',

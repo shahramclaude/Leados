@@ -14,7 +14,7 @@ export function createMissionActions(store, { now, idFactory, createApi }) {
   // Mission adapters are allowlisted at the shell, but every operational write
   // still passes the same record/person/budget gateway as a direct API call.
   const guarded = (name, ...args) => {
-    const verdict = guardApiCall(store.state, name, args);
+    const verdict = guardApiCall(store.state, name, args, new Date(now()).getTime());
     if (!verdict.ok) return verdict;
     return createApi(store, { now, idFactory })[name](...args);
   };

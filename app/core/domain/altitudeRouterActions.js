@@ -93,7 +93,7 @@ export function createAltitudeRouterActions(store, { now, idFactory, createApi }
         involvedPersonIds: input.involvedPersonIds, reviewOn: input.reviewOn,
         fmeaSeverity: input.fmeaSeverity, autoPropagate: true,
       });
-      const verdict = guardApiCall(store.state, 'addCase', [caseInput]);
+      const verdict = guardApiCall(store.state, 'addCase', [caseInput], new Date(now()).getTime());
       if (!verdict.ok) return verdict;
       const result = createApi(store, { now, idFactory }).addCase({
         ...caseInput,

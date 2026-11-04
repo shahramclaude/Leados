@@ -337,6 +337,11 @@ export const LINK_ENTITY_TYPES = [
   // from them. The subject is a PAIR and a DIMENSION; a person's answers are the
   // instrument's readings, never a rating.
   'concordance',
+  // ADR-0088: the carryover settlement record is a first-class graph node, so
+  // the encumbered pact, the bet it settles, the leadership span it rolls up
+  // to and the released budget line it frees are all navigable from the
+  // record and back from them.
+  'carryover',
   // ADR-0086: a disclosure release is a first-class node: the decision that
   // governs it, the consent task it waits on and the span it discloses from are
   // all navigable from the release record itself.
@@ -613,6 +618,11 @@ export const SYSTEM_GENERATED_LINK_RELATIONS = Object.freeze([
   'deploys-strategy', 'cascades-to', 'counters-upward', 'trades-off',
   // ADR-0089: cycle-to-cohort provenance is emitted only by RULE-SCR-01.
   'audits-cascade',
+  // ADR-0088: emitted by the Carryover spine, not manually asserted.
+  // `carries-over` — the invalidated pact flows into the settlement terminal;
+  // `settles` — the record (or its decision) judges the bet's stop rule;
+  // `releases-resource` — the settled record returned encumbered authority.
+  'carries-over', 'settles', 'releases-resource',
   // ADR-0086: a bounded release names the altitude it discloses to and the span
   // that consented to it. Both are structure, never record content.
   'discloses-to',
@@ -879,6 +889,7 @@ export const LINK_RELATIONS = [
   'carries',
   'reconciles',
   // ADR-0085: Hoshin Carryover Terminal provenance edges (see
+  // ADR-0088: Hoshin Carryover Terminal provenance edges (see
   // SYSTEM_GENERATED_LINK_RELATIONS).
   'carries-over',
   'settles',
@@ -888,6 +899,10 @@ export const LINK_RELATIONS = [
   // frozen assessment to the span below the edge. It records a MEASUREMENT, not
   // a human sign-off: the earlier decision stays open for the people who own it.
   'reconnects',
+  // ADR-0087: an item is queued for the ONE forum competent to close it, and an
+  // agenda-fit gap names a seat a forum's membership is missing.
+  'queued-for',
+  'fit-gap',
 ];
 
 export const LINK_RELATION_LABELS = {

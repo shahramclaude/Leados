@@ -223,7 +223,13 @@ export function renderConcordance(ctx) {
   };
 
   const exportCsv = () => {
-    const res = ctx.api.exportCSV('expectation-concordance');
+    let res;
+    try {
+      res = ctx.exportCSV('expectation-concordance');
+    } catch (err) {
+      toast(err?.message || 'Export is not available from a declared seat.', 'warn');
+      return;
+    }
     if (res.ok && res.csv) {
       const ok = downloadText({ filename: res.filename, text: res.csv, mime: 'text/csv;charset=utf-8' });
       toast(ok ? 'Aggregate-only CSV downloaded' : 'Download not available', ok ? 'good' : 'bad');

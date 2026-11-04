@@ -9,6 +9,7 @@ import { routeVerdict } from './seatRegistry.js';
 import { validateMissionCommands } from './mission.js';
 import { postureFor } from './disclosure.js';
 import { DISCLOSURE_POSTURES } from './disclosureRegistry.js';
+import { activeIdentitySession } from './identitySession.js';
 
 const groups = [
   ['log-oneonone', 'updatePerson logOneOnOne toggleMeetingAction addMeetingAction addFeedback updateFeedback completeFollowUp saveGrowthPlan updateGrowthPlan addWillAction toggleWillAction carryWillAction dropWillAction logGrowthReview addRecognition setReadiness createReview updateReflection updateAssessment refreshReviewEvidence completeReview reopenReview createOnboardingPlan updateOnboardingPlan addOnboardingCheckpoint toggleOnboardingCheckpoint removeOnboardingCheckpoint addOnboardingStakeholder toggleOnboardingStakeholder removeOnboardingStakeholder recordOnboardingReview addManagerSupportCommitment toggleManagerSupportCommitment completeOnboardingPlan reopenOnboardingPlan addPerformanceConcern updatePerformanceConcern addPerformanceObservation removePerformanceObservation recordPerformanceConversation recordPerformanceSupport adoptPerformancePlan reviewPerformancePlan withdrawPerformanceConcern deletePerformanceConcern'],
@@ -23,7 +24,7 @@ const groups = [
   ['approve-capital', 'addBudgetLine updateBudgetLine recordBudgetActual releaseBudgetLine deleteBudgetLine'],
   ['coordinate-intervention', 'createActionBundle updateActionBundle saveActionBundlePreview commitActionBundle withdrawActionBundle archiveActionBundle'],
   ['declare-seat', 'setActiveSeat scanSeats'],
-  // ADR-0085: the Board Room. Every method is declared; an unknown name still
+  // ADR-0087: the Board Room. Every method is declared; an unknown name still
   // fails closed. Committing a pack is the chief's right; reading it is enterprise.
   ['declare-board-line', 'boardOpenMemo boardDeclareClaim boardRemoveClaim boardLook boardCommit boardSupersede boardSetConventions boardScan'],
   // ADR-0086: freezing the disclosed pack is its own rank-5 right (ADR-0076).
@@ -68,6 +69,11 @@ const groups = [
   // below. The handlers additionally enforce the seat scope and the rank window
   // on the window and floors.
   ['govern-federation', 'federationFreeze federationScan federationSetConventions'],
+  // ADR-0087: the Attested Commit. Session management is self-service at every
+  // altitude (your own seat only, enforced in identityActions); governing the
+  // boundary — enforcement on/off, revoking a credential — is director+.
+  ['attest-seat-identity', 'identityEnroll identityUnlock identityLock identityRotate identityScan identityCheckpoint identityTouch'],
+  ['govern-attestation', 'identitySetSettings identityRevoke'],
 ];
 export const API_RIGHTS = Object.freeze(Object.fromEntries(groups.flatMap(([right, names]) => names.split(' ').map((name) => [name, right]))));
 const FIRST_ID_COLLECTION = Object.freeze({
@@ -83,8 +89,19 @@ const FIRST_ID_COLLECTION = Object.freeze({
   createActionBundle: 'cases', updateActionBundle: 'actionBundles', saveActionBundlePreview: 'actionBundles', commitActionBundle: 'actionBundles', withdrawActionBundle: 'actionBundles', archiveActionBundle: 'actionBundles',
 });
 
-const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boardCsvRows', 'boardMemoText', 'boardPreview', 'boardRead', 'cadenceAttentionCount', 'cadenceBriefText', 'cadenceCsvRows', 'cadencePreviewForum', 'cadenceRead', 'catchballBriefText', 'catchballCsvRows', 'catchballPreviewFeasibility', 'catchballRead', 'concordanceAttentionCount', 'concordanceBriefText', 'concordanceCsvRows', 'concordanceRead', 'concordanceStats', 'disclosureAttentionCount', 'disclosureBriefText', 'disclosureCsvRows', 'disclosureGrantRead', 'disclosureGrants', 'disclosureRead', 'envoyAttentionCount', 'envoyBriefText', 'envoyCsvRows', 'envoyIdentity', 'envoyPacketText', 'envoyPreview', 'envoyRead', 'federationAttentionCount', 'federationBriefText', 'federationCsvRows', 'federationRead', 'mandateBriefText', 'mandateRead', 'missionArchive', 'missionBriefText', 'missionCommit', 'missionCreateIntervention', 'missionFreezeBrief', 'missionHandoffText', 'missionOpenCase', 'missionRead', 'missionScan', 'missionWithdraw', 'operatingModelAttentionCount', 'operatingModelBriefText', 'operatingModelCsvRows', 'operatingModelNorms', 'operatingModelRead', 'operatingModelWorkTypes', 'previewMandate', 'routingAnalyze', 'routingAttentionCount', 'routingBriefText', 'routingCalibration', 'routingCsvRows', 'routingRead', 'saveMissionPreview', 'sealBriefText', 'sealRead', 'sealVerify', 'seatBriefText', 'seatRead', 'setActiveSeat', 'strategyCycleBriefText', 'strategyCycleCsvRows', 'strategyCycleRead']);
+const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boardCsvRows', 'boardMemoText', 'boardPreview', 'boardRead', 'cadenceAttentionCount', 'cadenceBriefText', 'cadenceCsvRows', 'cadencePreviewForum', 'cadenceRead', 'carryoverAttentionCount', 'carryoverBriefText', 'carryoverCsvRows', 'carryoverReleasePreview', 'carryoverReport', 'catchballBriefText', 'catchballCsvRows', 'catchballPreviewFeasibility', 'catchballRead', 'concordanceAttentionCount', 'concordanceBriefText', 'concordanceCsvRows', 'concordanceRead', 'concordanceStats', 'disclosureAttentionCount', 'disclosureBriefText', 'disclosureCsvRows', 'disclosureGrantRead', 'disclosureGrants', 'disclosureRead', 'envoyAttentionCount', 'envoyBriefText', 'envoyCsvRows', 'envoyIdentity', 'envoyPacketText', 'envoyPreview', 'envoyRead', 'federationAttentionCount', 'federationBriefText', 'federationCsvRows', 'federationRead', 'identityAttentionCount', 'identityBriefText', 'identityCompareCheckpoint', 'identityCsvRows', 'identityRead', 'identityVerify', 'mandateBriefText', 'mandateRead', 'missionArchive', 'missionBriefText', 'missionCommit', 'missionCreateIntervention', 'missionFreezeBrief', 'missionHandoffText', 'missionOpenCase', 'missionRead', 'missionScan', 'missionWithdraw', 'operatingModelAttentionCount', 'operatingModelBriefText', 'operatingModelCsvRows', 'operatingModelNorms', 'operatingModelRead', 'operatingModelWorkTypes', 'previewMandate', 'routingAnalyze', 'routingAttentionCount', 'routingBriefText', 'routingCalibration', 'routingCsvRows', 'routingRead', 'saveMissionPreview', 'sealBriefText', 'sealRead', 'sealVerify', 'seatBriefText', 'seatRead', 'setActiveSeat', 'strategyCycleBriefText', 'strategyCycleCsvRows', 'strategyCycleRead']);
 const refusal = (reason) => ({ ok: false, code: 'scope-refusal', error: reason, field: 'scope' });
+
+/** ADR-0087: under enforcement, boundary-management commands stay reachable
+ * without a credential (you must be able to enroll, unlock, or turn
+ * enforcement back off); everything else that writes is refused until a seat
+ * credential session is unlocked. Prevention at the boundary; RULE-IDN-02 is
+ * the detection layer for anything that reaches the store another way. */
+const IDENTITY_ENFORCEMENT_EXEMPT = new Set([
+  'setActiveSeat', 'updateSettings',
+  'identityEnroll', 'identityUnlock', 'identityLock', 'identityRotate',
+  'identityRevoke', 'identitySetSettings', 'identityScan', 'identityCheckpoint', 'identityTouch',
+]);
 
 function payloadPeople(args) {
   const out = new Set();
@@ -108,13 +125,21 @@ function bundleFor(state, name, args) {
 }
 
 /** Exact method allowlist + rank + record/person scope. No arbitrary API names. */
-export function guardApiCall(state, name, args) {
+export function guardApiCall(state, name, args, nowMs = undefined) {
   if (!state.settings?.activeSeatId) return { ok: true };
   let built; let seat;
   try { built = buildSeats(state, { settings: state.settings }); seat = activeSeat(built); }
   catch { return refusal('The operating seat could not be resolved. No record was read or changed.'); }
   if (seat.readOnly && name !== 'setActiveSeat') return refusal('The operating seat is unresolved. Declare a valid seat first.');
   if (SAFE_READS.has(name)) return { ok: true, seat, built };
+  // ADR-0089: fail-closed authorship enforcement. A workspace that claims
+  // attestation enforcement refuses unattested writes at the API boundary.
+  // The session clock must be the caller's injected clock — comparing a
+  // fixture-timed session against the wall clock here made the gate expire
+  // sessions that were still live in their own time base.
+  if (state.settings?.identityEnforced === true && !activeIdentitySession(nowMs ?? Date.now()) && !IDENTITY_ENFORCEMENT_EXEMPT.has(name)) {
+    return refusal('This workspace enforces attested commits: every write must carry a seat credential signature. Unlock a seat credential first (Identity Ledger → Unlock), or turn enforcement off there — the refusal is the boundary doing its job, not an error.');
+  }
   // Module automation pauses are reviewed settings adapters. Seat identity and
   // disclosure floors still require their own rank-gated commands.
   if (name === 'updateSettings') {
@@ -207,5 +232,7 @@ export function workspaceRouteVerdict(route, seat, options = {}) {
   if (['mission', 'today', 'seat', 'routing', 'seal', 'catchball', 'strategy-cycle', 'board', 'disclosure', 'cadence', 'envoy', 'federation'].includes(route)) return { allow: true, reason: 'Reviewed scoped surface.' };
   if (['mission', 'today', 'seat', 'routing', 'seal', 'catchball', 'board', 'disclosure', 'operating-model'].includes(route)) return { allow: true, reason: 'Reviewed scoped surface.' };
   if (['mission', 'today', 'seat', 'routing', 'seal', 'catchball', 'board', 'disclosure', 'cadence'].includes(route)) return { allow: true, reason: 'Reviewed scoped surface.' };
+  // ADR-0081/0082/0087/0088/0089's reviewed surfaces stay open on the legacy path.
+  if (['mission', 'today', 'seat', 'routing', 'seal', 'catchball', 'board', 'disclosure', 'cadence', 'carryover', 'identity'].includes(route)) return { allow: true, reason: 'Reviewed scoped surface.' };
   return { allow: false, reason: 'No compiled disclosure posture is available for this route, so it is withheld. Open the Disclosure Console, or explicitly hand over to the local operator view.' };
 }

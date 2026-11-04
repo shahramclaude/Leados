@@ -109,12 +109,15 @@ import { strategyCycleRule } from './strategyCycleRules.js';
 import { federationRule } from './federationRules.js';
 import { cadenceRule } from './cadenceRules.js';
 import { carryoverRule } from './carryoverRules.js';
+
+
 import { concordanceRule } from './concordanceRules.js';
 import { operatingModelRule } from './operatingModelRules.js';
 import { disclosureRule } from './disclosureRules.js';
 import { boardRule } from './boardRules.js';
 // ADR-0088: the Federated Envoy.
 import { envoyRule } from './envoyRules.js';
+import { identityRule } from './identityRules.js';
 
 /**
  * One entry per rule, in the order the engine evaluates them. `writes` and
@@ -607,6 +610,10 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'federationRules.js',
     purpose: 'RULE-FED-01 writes one summarizes-span edge from a frozen federation assessment to the seat it assessed and one to every leadership ancestor above that seat in the SAME atomic transaction, plus one idempotent measurement marker — so the reading rolls up like any other record. RULE-FED-02 measures every declared child→parent edge from DATED CARRIAGE already written by other modules (envoy packet carriage, frozen renewal and cadence readings, accepted Catchball commitments, closed two-sided expectation rounds) and opens exactly ONE governed DACI decision per edge per ISO week when the edge is silent, bypassed or stale, owned at the span above the edge — naming the edge by altitude and typed id, never by a person. RULE-FED-03 records one reconnects edge and one marker when measured carriage resumes on an edge that once produced a silent-edge finding, and deliberately does NOT close the human decision. The module writes no measured channel, sends no message, changes no reporting line and rates no person. Marker-idempotent, pausable by federationAutoPropagate, and an explicit scan always runs.',
     writes: ['federationMarkers', 'decisions', 'links'],
+    rule: carryoverRule,
+    module: 'carryoverRules.js',
+    purpose: 'RULE-CO-01 creates one carryover record per Catchball pact settled as thesis-invalidated (frozen resource bundle: person-days + encumbered budget line), writes carries-over/settles edges and one rolls-up-to edge per leadership ancestor of the receiving span in the SAME atomic transaction, and opens ONE governed stop-rule settlement decision per resolved bet (retire / revise stop rule / reaffirm) with the bundle printed in the question; RULE-CO-02 on decision.made records the verdict and — for retire — releases the encumbered budget line (committed → released, never erasing a spent actual) and returns the person-day commitment in the same transaction, writing releases-resource edges; RULE-CO-03 settles pending records when a bet is retired or a retire verdict is recorded by a human; RULE-CO-04 grades settled records once, later, against the prediction frozen at decision time and opens one governed review decision per altitude cell below the reliability floor per ISO week. Marker-idempotent, pausable by carryoverAutoPropagate, and an explicit scan always runs.',
+    writes: ['carryoverRecords', 'carryoverMarkers', 'carryoverGradings', 'decisions', 'delegations', 'people', 'budgets', 'links'],
     emits: [],
     scansWorkspace: true,
   },
@@ -624,6 +631,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     purpose: 'RULE-CAD-01 writes one idempotent `queued-for` edge from every reviewable open item to the single standing forum competent to close it (kind competence AND time-span of discretion AND class horizon), plus one `rolls-up-to` edge per leadership ancestor of the owning span, in the SAME atomic transaction; a sensitive source contributes a count and never an edge. RULE-CAD-02 opens exactly one governed DACI decision per ISO week when the named binding constraint is forum capacity, a competence gap or service time, owned at the seat that can relieve it and fanned up every ancestor. RULE-CAD-03 writes bounded `fit-gap` edges naming the owning seats a forum’s membership is missing. RULE-CAD-04 grades each due frozen reading exactly once and records one maturity marker when a forum’s sitting history reaches the evidence floor. Never rates a person, never invents a waiting time below the floor, never auto-declares a forum.',
     writes: ['links', 'decisions', 'cadenceReadings', 'cadenceMarkers'],
     emits: [], scansWorkspace: true,
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: identityRule,
+    module: 'identityRules.js',
+    purpose: 'RULE-IDN-01 appends one `identity.attested` event per qualifying commit, whose entityId is HMAC-SHA256(seatKey, seat|keyId|revision|digest of the transaction\u2019s events-so-far) under the unlocked seat credential \u2014 no key, no attestation, never a declared fallback; idempotent by revision and deliberately NOT pausable. RULE-IDN-02 logs one `identity.unattributed` event per unattributed commit under enforcement (revision-idempotent) and opens ONE governed DACI authorship-boundary decision per acting seat per ISO week with a typed rolls-up-to edge to every leadership ancestor in the SAME transaction. RULE-IDN-03 records explicit-scan verification verdicts with honest three-valued outcomes (verified / FAILED / digest-verified-key-unavailable). Marker-idempotent; session-lifecycle events are never flagged unattributed; it rates no person and touches no performance record.',
+    writes: ['seatIdentities', 'identityMarkers', 'decisions', 'links', 'events'],
     emits: [],
     scansWorkspace: true,
   },

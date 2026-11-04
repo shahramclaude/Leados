@@ -18,6 +18,9 @@ import { normalizeDisclosureGrants, normalizeDisclosureMarkers, normalizeDisclos
 // ADR-0085: the Board Room. Memos resolve BEFORE links so `summarizes-span`
 // and `escalates-from` provenance edges validate on reload.
 import { normalizeBoardMemos, normalizeBoardMarkers, normalizeBoardSettings } from './domain/boardSchema.js';
+// ADR-0087: the Attested Commit. Credential enrollments resolve BEFORE links
+// and events so nothing validates against an enrollment that was never real.
+import { normalizeSeatIdentities, normalizeIdentityMarkers, normalizeIdentitySettings } from './domain/identitySchema.js';
 import { normalizePropagationLineage } from './domain/automationLineage.js';
 import { normalizeImpactExecutionSnapshot } from './domain/impactExecution.js';
 // ADR-0088: Hoshin Carryover Terminal records, idempotency markers, once-only
@@ -174,6 +177,9 @@ import {
   normalizeFederationSettings,
 } from './domain/federationSchema.js';
 // ADR-0085: the Operating Cadence Clock's fail-closed normalizers and clamped
+// ADR-0088: Hoshin Carryover Terminal records, idempotency markers, once-only
+// grading rows, and clamped conventions.
+
 // ADR-0087: the Operating Cadence Clock's fail-closed normalizers and clamped
 // conventions. A forum, a sitting or a frozen reading that cannot be validated is
 // dropped with a warning rather than repaired into something a leader might act on.
@@ -378,6 +384,16 @@ export const SCHEMA_VERSION = 95;
 // a fabricated meeting calendar. A forum is only ever created by a human.
 // v94 adds prospective, identity-reduced Strategy Renewal readings and rule
 // markers. It never back-fills a cohort from the current Catchball or bet state.
+// v94 adds the Hoshin Carryover Terminal (`carryoverRecords`, `carryoverMarkers`,
+// `carryoverGradings`, ADR-0088): one record per Catchball pact settled as
+// thesis-invalidated with its frozen resource bundle, settlement and release
+// steps, and once-only later gradings. Purely additive: an upgraded workspace
+// opens with an EMPTY carryover ledger rather than back-filled settlements.
+// v95 adds per-seat authorship attestation (`seatIdentities`, `identityMarkers`,
+// ADR-0089): public-half credential enrollments (salt, key fingerprint and an
+// HMAC verifier — never key material) and the identity rules' idempotency
+// markers. Purely additive: an older workspace attests nothing until someone
+// enrolls.
 
 // v83 adds the Succession Terminal (`successionReadings`, `successionMarkers`): a
 // frozen bench claim per workspace or per span — the probability that at least one
@@ -1485,6 +1501,12 @@ export const DEFAULT_SETTINGS = Object.freeze({
   boardMaterialityPct: 10,
   boardRecheckDays: 90,
   boardAutoPropagate: true,
+  // ADR-0087: The Attested Commit — declared conventions, all clamped.
+  // Opt-in like the seal: an unenrolled workspace is byte-for-byte unchanged.
+  identityEnabled: false,
+  identityAutoPropagate: true,
+  identityEnforced: false,
+  identityIdleMins: 30,
   seatMaterialityPp: 5,
   seatWindowDays: 90,
   seatMaxLinks: 24,
@@ -1775,6 +1797,12 @@ export const COLLECTIONS = [
   // until both sides are in) and the idempotency markers their three rules use.
   'expectationRounds',
   'concordanceMarkers',
+  // ADR-0088: Hoshin Carryover Terminal — one record per Catchball pact
+  // settled as thesis-invalidated, idempotency markers, and the once-only
+  // later grading rows.
+  'carryoverRecords',
+  'carryoverMarkers',
+  'carryoverGradings',
   // ADR-0086: disclosure release contracts (the only records that can widen a
   // read) and the idempotency markers RULE-DSC-01..02 use.
   'disclosureGrants',
@@ -1816,6 +1844,11 @@ export const COLLECTIONS = [
   // measured reconnections). No measured channel is written by this module.
   'federationAssessments',
   'federationMarkers',
+  // ADR-0089: seat credential enrollments (PUBLIC halves only — salt, key
+  // fingerprint and an HMAC verifier; never key material) and the identity
+  // rules' idempotency markers.
+  'seatIdentities',
+  'identityMarkers',
   'links',
   'portfolio',
   'events',
@@ -2475,6 +2508,9 @@ export function normalizeSettings(raw) {
     ...normalizeFederationSettings(s),
     ...normalizeCarryoverSettings(s),
     ...normalizeEnvoySettings(s),
+    ...normalizeIdentitySettings(s),
+    ...normalizeCarryoverSettings(s),
+    ...normalizeCadenceSettings(s),
   };
 }
 
@@ -6574,6 +6610,12 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.federationAssessments = normalizeFederationAssessments(raw.federationAssessments, warnings);
   state.federationMarkers = normalizeFederationMarkers(raw.federationMarkers);
   // ADR-0085: the Operating Cadence Clock. A malformed forum, a sitting with no
+  // ADR-0088: carryover records resolve after pacts so `carries-over` and
+  // `settles` edges validate against real pact and bet ids.
+  state.carryoverRecords = normalizeCarryoverRecords(raw.carryoverRecords, warnings);
+  state.carryoverMarkers = normalizeCarryoverMarkers(raw.carryoverMarkers, warnings);
+  state.carryoverGradings = normalizeCarryoverGradings(raw.carryoverGradings, warnings);
+  // ADR-0087: the Operating Cadence Clock. A malformed forum, a sitting with no
   // date and a reading with no frozen figure are all dropped with a warning;
   // none is repaired into something a leader might act on.
   state.cadenceForums = normalizeCadenceForums(raw.cadenceForums, warnings);
@@ -6635,6 +6677,10 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // committed without a snapshot is reopened as a draft.
   state.boardMemos = normalizeBoardMemos(raw.boardMemos, warnings);
   state.boardMarkers = normalizeBoardMarkers(raw.boardMarkers, warnings);
+  // ADR-0087: credential enrollments resolve before links; a malformed
+  // enrollment is dropped, never repaired.
+  state.seatIdentities = normalizeSeatIdentities(raw.seatIdentities, warnings);
+  state.identityMarkers = normalizeIdentityMarkers(raw.identityMarkers);
   state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
   state.boardMarkers = normalizeBoardMarkers(raw.boardMarkers, warnings);
   // ADR-0085: packets and attested artefacts resolve before links so `carries`,
@@ -7351,6 +7397,8 @@ export const MIGRATIONS = {
     schemaVersion: 95,
     federationAssessments: Array.isArray(v94.federationAssessments) ? v94.federationAssessments : [],
     federationMarkers: Array.isArray(v94.federationMarkers) ? v94.federationMarkers : [],
+    seatIdentities: Array.isArray(v94.seatIdentities) ? v94.seatIdentities : [],
+    identityMarkers: Array.isArray(v94.identityMarkers) ? v94.identityMarkers : [],
     settings: isPlainObject(v94.settings)
       ? {
         ...v94.settings,
@@ -7358,6 +7406,10 @@ export const MIGRATIONS = {
         federationMinSpans: v94.settings.federationMinSpans ?? 5,
         federationCellFloor: v94.settings.federationCellFloor ?? 3,
         federationAutoPropagate: v94.settings.federationAutoPropagate !== false,
+        identityEnabled: v94.settings.identityEnabled === true,
+        identityAutoPropagate: v94.settings.identityAutoPropagate !== false,
+        identityEnforced: v94.settings.identityEnforced === true,
+        identityIdleMins: v94.settings.identityIdleMins ?? 30,
       }
       : { ...DEFAULT_SETTINGS },
   }),
@@ -7513,6 +7565,27 @@ export const MIGRATIONS = {
         cadencePlanningFactorPct: v92.settings.cadencePlanningFactorPct ?? 130,
         cadenceFlowTargetDays: v92.settings.cadenceFlowTargetDays ?? 14,
         cadenceAutoPropagate: v92.settings.cadenceAutoPropagate !== false,
+      }
+      : { ...DEFAULT_SETTINGS },
+  }),
+  // ADR-0088: additive 93 → 94. The Hoshin Carryover Terminal adds settled-pact
+  // records, idempotency markers and the once-only later gradings. Nothing
+  // historical is invented: an upgraded workspace opens with an EMPTY carryover
+  // ledger rather than back-filled settlements.
+  93: (v93) => ({
+    ...v93,
+    schemaVersion: 94,
+    carryoverRecords: Array.isArray(v93.carryoverRecords) ? v93.carryoverRecords : [],
+    carryoverMarkers: Array.isArray(v93.carryoverMarkers) ? v93.carryoverMarkers : [],
+    carryoverGradings: Array.isArray(v93.carryoverGradings) ? v93.carryoverGradings : [],
+    settings: isPlainObject(v93.settings)
+      ? {
+        ...v93.settings,
+        carryoverCellFloor: v93.settings.carryoverCellFloor ?? 5,
+        carryoverReliabilityFloorPct: v93.settings.carryoverReliabilityFloorPct ?? 60,
+        carryoverGradingDelayDays: v93.settings.carryoverGradingDelayDays ?? 14,
+        carryoverDecisionReviewDays: v93.settings.carryoverDecisionReviewDays ?? 14,
+        carryoverAutoPropagate: v93.settings.carryoverAutoPropagate !== false,
       }
       : { ...DEFAULT_SETTINGS },
   }),

@@ -113,6 +113,11 @@ import { federationRule } from './federationRules.js';
 // escalation and the agenda-fit gap before the market rebalances attention.
 import { cadenceRule } from './cadenceRules.js';
 import { carryoverRule } from './carryoverRules.js';
+
+// ADR-0087: the Operating Cadence Clock. Reads the finished queue after the
+// cascade has been negotiated and writes forum provenance, the constraint
+// escalation and the agenda-fit gap before the market rebalances attention.
+
 // ADR-0083: the Concordance Terminal. Every closed two-sided expectation round
 // writes its typed roll-up ladder, and a breach opens one governed
 // re-contracting decision per pair per ISO week — on this same spine, in the
@@ -138,6 +143,15 @@ import { boardRule } from './boardRules.js';
 // before the market's final work-producing pass so a reconciliation decision is
 // priced like any other. Inert until a packet is composed or ingested.
 import { envoyRule } from './envoyRules.js';
+// ADR-0087: the Attested Commit. RULE-IDN-01 binds each commit to the unlocked
+// seat credential; RULE-IDN-02 opens one governed authorship-boundary decision
+// per seat per ISO week under enforcement and fans it up every leadership
+// ancestor; RULE-IDN-03 records explicit verification verdicts. Runs BEFORE
+// the Attention Market's final work-producing pass — deliberately, so the
+// integrity decision it opens is priced by the market like any other work and
+// the market keeps its "last work-producing rule" invariant — and long before
+// the seal, so ONE seal covers the attestation itself.
+import { identityRule } from './identityRules.js';
 import { sealRule } from './sealRules.js';
 
 export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
@@ -516,6 +530,13 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // ADR-0089: freeze cycle lineage, open only human renewal gates and grade the
   // exact in-window cohort; no bet, budget, owner, date or pact is auto-changed.
   strategyCycleRule,
+  // ADR-0088: Hoshin Carryover Terminal (`RULE-CO-01..04`). Immediately after
+  // the Catchball spine so a pact settled as thesis-invalidated creates its
+  // carryover record, its `rolls-up-to` fan-out AND its governed stop-rule
+  // settlement decision in the SAME transaction; resolutions written here are
+  // visible to Decision Tempo and the budget read models in the same commit,
+  // and `sealRule` attests the whole write.
+  carryoverRule,
   // ADR-0087: the Operating Cadence Clock (`RULE-CAD-01..04`). Runs after the
   // cascade so the queue it reads already contains every commitment the cascade
   // just created, and before the market so a constraint decision it opens is
@@ -530,7 +551,6 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // settlement decision in the SAME transaction; resolutions written here are
   // visible to Decision Tempo and the budget read models in the same commit,
   // and `sealRule` attests the whole write.
-  carryoverRule,
   // ADR-0083: altitude as a dimension of the same engine, one rule set later.
   concordanceRule,
   // Schema v90: the Operating Model runs before the seal so its design decisions,
@@ -557,6 +577,11 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // ledger and governed carriage decisions: no measured channel, no reporting
   // line and no decision a human opened is touched.
   federationRule,
+  // ADR-0087: the Attested Commit (RULE-IDN-01..03). Attestation is the
+  // identity of the write itself, so its digest covers every event this
+  // transaction appended before it — including the breach work RULE-IDN-02
+  // opens — and the seal (absolutely last) covers the attestation in turn.
+  identityRule,
   attentionMarketRule,
   // ADR-0077: the Succession Terminal (bench certification). Runs before the
   // Operating Seat because its certificate edges are provenance the seat's

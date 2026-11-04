@@ -127,6 +127,12 @@ export const RECORD_POLICIES = Object.freeze({
   exchangePackets: { classKey: 'unit', label: 'Sealed exchange packets', route: '#/envoy' },
   exchangeArtefacts: { classKey: 'unit', label: 'Attested exchange copies', route: '#/envoy' },
   exchangeMarkers: { classKey: 'unit', label: 'Exchange idempotency markers', route: '#/envoy' },
+  // ADR-0087: credential enrollments are enterprise security metadata — the
+  // PBKDF2 salt, key fingerprint and verifier of another span are not the
+  // frontline lead's business. Per-seat status reaches its holder through the
+  // session panel, not through record projection; roll-ups carry counts.
+  seatIdentities: { classKey: 'enterprise', label: 'Seat credential enrollments', route: '#/identity' },
+  identityMarkers: { classKey: 'unit', label: 'Attestation idempotency markers', route: '#/identity' },
   // Portfolio material. Functions, quarters and capital.
   budgets: { classKey: 'portfolio', label: 'Budgets', route: '#/finance' },
   strategyBets: { classKey: 'portfolio', label: 'Strategic bets', route: '#/strategy' },
@@ -158,7 +164,7 @@ export const RECORD_POLICIES = Object.freeze({
   omDecisions: { classKey: 'portfolio', label: 'Priced operating-model items', route: '#/operating-model?panel=levers' },
   omMarkers: { classKey: 'unit', label: 'Operating-model markers', route: '#/operating-model' },
   voiDecisions: { classKey: 'enterprise', label: 'Information-value frames', route: '#/voi' },
-  // ADR-0085: board memos are enterprise material. They carry claims, thresholds,
+  // ADR-0087: board memos are enterprise material. They carry claims, thresholds,
   // verdicts and counts — never a person, a 1:1 or a rating — but they are the
   // pack, and the pack is not handed below the executive floor.
   boardMemos: { classKey: 'enterprise', label: 'Board disclosure memos', route: '#/board' },
@@ -289,7 +295,7 @@ export const ACTION_RIGHTS = Object.freeze({
   'finalize-merit-cycle': { minRank: 4, maxRank: 5, label: 'Finalize a merit cycle' },
   'approve-capital': { minRank: 4, maxRank: 5, label: 'Approve capital allocation' },
   'freeze-board-summary': { minRank: 5, maxRank: 5, label: 'Freeze a board-ready summary' },
-  // ADR-0085: the Board Room. Reading is enterprise-level (route floor rank 4);
+  // ADR-0087: the Board Room. Reading is enterprise-level (route floor rank 4);
   // opening, declaring, looking and committing are the chief's act, and freezing
   // the disclosed pack stays on its own rank-5 right above.
   'declare-board-line': { minRank: 5, maxRank: 5, label: 'Open, declare and commit a board disclosure memo' },
@@ -331,6 +337,14 @@ export const ACTION_RIGHTS = Object.freeze({
   // altitude may receive one — the disclosure class is what limits the content,
   // not the right to exchange. The action itself enforces the sending span.
   'exchange-packets': { minRank: 1, maxRank: 5, label: 'Publish or ingest a sealed inter-workspace packet' },
+  // ADR-0089: managing your own seat credential is every altitude's right —
+  // attestation without the frontline is theater. The actions themselves
+  // enforce "your own seat only" under a declared seat.
+  'attest-seat-identity': { minRank: 1, maxRank: 5, label: 'Enroll, unlock, lock or scan a seat credential' },
+  // Governance of the authorship boundary itself (enforcement on/off,
+  // revoking a credential) is director-and-above: it is a claim the whole
+  // workspace makes about itself (cf. 'set-disclosure-floor').
+  'govern-attestation': { minRank: 3, maxRank: 5, label: 'Govern the attestation boundary (enforcement, revocation)' },
 });
 
 export function actionVerdict(action, seat) {
