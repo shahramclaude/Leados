@@ -114,7 +114,7 @@ function card(overrides = {}) {
 /* ===================================================== 1. Schema v47 */
 
 test('schema v47: additive migration never fabricates a scorecard or a prediction', () => {
-  assert.equal(SCHEMA_VERSION, 93);
+  assert.equal(SCHEMA_VERSION, 95);
   const v46 = {
     schemaVersion: 46,
     settings: { ...DEFAULT_SETTINGS },

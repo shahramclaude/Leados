@@ -145,7 +145,7 @@ import {
   normalizeCatchballMarkers,
   normalizeCatchballSettings,
 } from './domain/catchballSchema.js';
-// ADR-0087: lateral SLA contracts, negotiation rounds and carryover receipts.
+// ADR-0089: lateral SLA contracts, negotiation rounds and carryover receipts.
 import {
   normalizeValueStreamContracts,
   normalizeValueStreamRounds,
@@ -153,6 +153,25 @@ import {
   normalizeValueStreamMarkers,
   normalizeValueStreamSettings,
 } from './domain/valueStreamSchema.js';
+// ADR-0088 note: the Hoshin Carryover Terminal and the Operating Cadence Clock
+// arrive on this tree from main (Sessions 125–127). Their fail-closed
+// normalizers and clamped conventions load alongside the Value Stream's own.
+import {
+  normalizeCarryoverRecords,
+  normalizeCarryoverMarkers,
+  normalizeCarryoverGradings,
+  normalizeCarryoverSettings,
+} from './domain/carryoverSchema.js';
+// ADR-0087: the Operating Cadence Clock's fail-closed normalizers and clamped
+// conventions. A forum, a sitting or a frozen reading that cannot be validated is
+// dropped with a warning rather than repaired into something a leader might act on.
+import {
+  normalizeCadenceForums,
+  normalizeCadenceSessions,
+  normalizeCadenceReadings,
+  normalizeCadenceMarkers,
+  normalizeCadenceSettings,
+} from './domain/cadenceSchema.js';
 import { addDays } from './time.js';
 import { validateWatchResponse } from './domain/watchResponse.js';
 import {
@@ -317,10 +336,32 @@ export {
 // older blob simply opens on the undeclared operator view. A version bump here
 // would have forced 78 test files to be rewritten for zero user benefit; the
 // honest choice is to add nothing to migrate.
-export const SCHEMA_VERSION = 93;
+export const SCHEMA_VERSION = 95;
 
-// v93 adds peer-span SLAs and reviewed stop-rule carryover. The migration is
-// additive: no historical actual, grade or financial fact is reconstructed.
+// v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
+// thresholds are declared before the first look.
+// v92 adds the Disclosure Compiler (ADR-0086, main): each screen declares its
+// posture, and detail is released only by a consented, expiring contract.
+// v93 adds the Operating Cadence Clock (`cadenceForums`, `cadenceSessions`,
+// `cadenceReadings`, `cadenceMarkers`, ADR-0087): the standing-forum calendar as a
+// finite decision machine — declared per-forum decision capacity and service
+// time, append-only sittings, and frozen readings of the queue that are graded
+// once afterwards. Purely additive: every utilisation, flow time, breach
+// probability and constraint is derived on read from the roster and the dated
+// records other modules already keep, so an upgraded workspace opens with an
+// EMPTY forum register that says no cadence has ever been declared, rather than
+// a fabricated meeting calendar. A forum is only ever created by a human.
+// v94 adds the Hoshin Carryover Terminal (`carryoverRecords`,
+// `carryoverMarkers`, `carryoverGradings`, ADR-0088): one record per Catchball
+// pact settled as thesis-invalidated, with governed stop-rule settlement,
+// resource release and once-only later grading.
+// v95 adds the Value Stream Exchange (`valueStreamContracts`,
+// `valueStreamRounds`, `valueStreamReallocations`, `valueStreamMarkers`,
+// ADR-0089): bilateral peer-span SLAs, negotiated rounds and immutable
+// stop-rule carryover receipts. Both steps are additive: no historical actual,
+// grade or financial fact is reconstructed, so an upgraded workspace opens
+// with an EMPTY carryover ledger and NO peer contracts rather than an
+// operating history that never ran.
 
 // v83 adds the Succession Terminal (`successionReadings`, `successionMarkers`): a
 // frozen bench claim per workspace or per span — the probability that at least one
@@ -1380,10 +1421,19 @@ export const DEFAULT_SETTINGS = Object.freeze({
   catchballCellFloor: 3,
   catchballMaxFanout: 4,
   catchballAutoPropagate: true,
-  // ADR-0087: Value Stream Exchange — disclosure and bounded governance.
+  // ADR-0089: Value Stream Exchange — disclosure and bounded governance.
   valueStreamCellFloor: 3,
   valueStreamMaxDecisions: 4,
   valueStreamAutoPropagate: true,
+  // ADR-0087: the Operating Cadence Clock — declared conventions, clamped on read.
+  // `cadenceUtilisationTargetPct` is the ρ the calendar is planned against; the
+  // planning factor and flow target are named conventions, never fitted.
+  cadenceFloorN: 5,
+  cadenceCellFloor: 3,
+  cadenceUtilisationTargetPct: 85,
+  cadencePlanningFactorPct: 130,
+  cadenceFlowTargetDays: 14,
+  cadenceAutoPropagate: true,
   // ADR-0083: The Concordance Terminal — declared conventions, all clamped.
   concordanceAgreementFloorPct: 60,
   concordanceCellFloor: 5,
@@ -1684,10 +1734,25 @@ export const COLLECTIONS = [
   'valueStreamRounds',
   'valueStreamReallocations',
   'valueStreamMarkers',
+  // ADR-0087: the Operating Cadence Clock. Declared standing forums, an
+  // append-only sitting log, frozen queue readings graded once afterwards, and
+  // rule-idempotency markers. No attendance record, no per-person record and no
+  // meeting transcript is stored: a forum is a server with a declared capacity,
+  // and the only history kept is what it closed.
+  'cadenceForums',
+  'cadenceSessions',
+  'cadenceReadings',
+  'cadenceMarkers',
   // ADR-0083: two-sided expectation rounds (one row per pair per cycle, sealed
   // until both sides are in) and the idempotency markers their three rules use.
   'expectationRounds',
   'concordanceMarkers',
+  // ADR-0085: Hoshin Carryover Terminal — one record per Catchball pact
+  // settled as thesis-invalidated, idempotency markers, and the once-only
+  // later grading rows.
+  'carryoverRecords',
+  'carryoverMarkers',
+  'carryoverGradings',
   // ADR-0086: disclosure release contracts (the only records that can widen a
   // read) and the idempotency markers RULE-DSC-01..02 use.
   'disclosureGrants',
@@ -2349,6 +2414,7 @@ export function normalizeSettings(raw) {
     ...normalizeSealSettings(s),
     ...normalizeCatchballSettings(s),
     ...normalizeValueStreamSettings(s),
+    ...normalizeCarryoverSettings(s),
   };
 }
 
@@ -6438,11 +6504,24 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.catchballPacts = normalizeCatchballPacts(raw.catchballPacts, warnings);
   state.catchballRounds = normalizeCatchballRounds(raw.catchballRounds, warnings);
   state.catchballMarkers = normalizeCatchballMarkers(raw.catchballMarkers);
-  // ADR-0087: resolve peer contracts and immutable receipts before typed links.
+  // ADR-0089: resolve peer contracts and immutable receipts before typed links.
   state.valueStreamContracts = normalizeValueStreamContracts(raw.valueStreamContracts, warnings);
   state.valueStreamRounds = normalizeValueStreamRounds(raw.valueStreamRounds, warnings);
   state.valueStreamReallocations = normalizeValueStreamReallocations(raw.valueStreamReallocations, warnings);
   state.valueStreamMarkers = normalizeValueStreamMarkers(raw.valueStreamMarkers);
+  // ADR-0085: carryover records resolve after pacts so `carries-over` and
+  // `settles` edges validate against real pact and bet ids.
+  state.carryoverRecords = normalizeCarryoverRecords(raw.carryoverRecords, warnings);
+  state.carryoverMarkers = normalizeCarryoverMarkers(raw.carryoverMarkers, warnings);
+  state.carryoverGradings = normalizeCarryoverGradings(raw.carryoverGradings, warnings);
+  // ADR-0087: the Operating Cadence Clock. A malformed forum, a sitting with no
+  // date and a reading with no frozen figure are all dropped with a warning;
+  // none is repaired into something a leader might act on.
+  state.cadenceForums = normalizeCadenceForums(raw.cadenceForums, warnings);
+  state.cadenceSessions = normalizeCadenceSessions(raw.cadenceSessions, warnings);
+  state.cadenceReadings = normalizeCadenceReadings(raw.cadenceReadings, warnings);
+  state.cadenceMarkers = normalizeCadenceMarkers(raw.cadenceMarkers);
+  state.settings = { ...state.settings, ...normalizeCadenceSettings({ ...DEFAULT_SETTINGS, ...(raw.settings || {}) }) };
   // ADR-0083: rounds resolve before links so `rolls-up-to`, `re-contracts` and
   // `re-tests` edges validate against real round ids. A malformed round is
   // dropped; a round claiming to be closed with one side is reopened.
@@ -7156,21 +7235,27 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
-  // ADR-0087: additive 92 → 93. Existing Catchball/Finance records retain
-  // their exact bodies; unknown effort and historical actuals stay unknown.
+  // ADR-0087: additive 92 → 93. The Operating Cadence Clock adds a forum
+  // register, a sitting log, frozen readings and idempotency markers. Nothing
+  // historical is invented: an upgraded workspace opens with NO forums, because
+  // a meeting calendar back-filled from records would claim a cadence the
+  // organisation never actually ran.
   92: (v92) => ({
     ...v92,
     schemaVersion: 93,
-    valueStreamContracts: Array.isArray(v92.valueStreamContracts) ? v92.valueStreamContracts : [],
-    valueStreamRounds: Array.isArray(v92.valueStreamRounds) ? v92.valueStreamRounds : [],
-    valueStreamReallocations: Array.isArray(v92.valueStreamReallocations) ? v92.valueStreamReallocations : [],
-    valueStreamMarkers: Array.isArray(v92.valueStreamMarkers) ? v92.valueStreamMarkers : [],
+    cadenceForums: Array.isArray(v92.cadenceForums) ? v92.cadenceForums : [],
+    cadenceSessions: Array.isArray(v92.cadenceSessions) ? v92.cadenceSessions : [],
+    cadenceReadings: Array.isArray(v92.cadenceReadings) ? v92.cadenceReadings : [],
+    cadenceMarkers: Array.isArray(v92.cadenceMarkers) ? v92.cadenceMarkers : [],
     settings: isPlainObject(v92.settings)
       ? {
         ...v92.settings,
-        valueStreamCellFloor: v92.settings.valueStreamCellFloor ?? 3,
-        valueStreamMaxDecisions: v92.settings.valueStreamMaxDecisions ?? 4,
-        valueStreamAutoPropagate: v92.settings.valueStreamAutoPropagate !== false,
+        cadenceFloorN: v92.settings.cadenceFloorN ?? 5,
+        cadenceCellFloor: v92.settings.cadenceCellFloor ?? 3,
+        cadenceUtilisationTargetPct: v92.settings.cadenceUtilisationTargetPct ?? 85,
+        cadencePlanningFactorPct: v92.settings.cadencePlanningFactorPct ?? 130,
+        cadenceFlowTargetDays: v92.settings.cadenceFlowTargetDays ?? 14,
+        cadenceAutoPropagate: v92.settings.cadenceAutoPropagate !== false,
       }
       : { ...DEFAULT_SETTINGS },
   }),
@@ -7254,6 +7339,50 @@ export const MIGRATIONS = {
         catchballCellFloor: v89.settings.catchballCellFloor ?? 3,
         catchballMaxFanout: v89.settings.catchballMaxFanout ?? 4,
         catchballAutoPropagate: v89.settings.catchballAutoPropagate !== false,
+      }
+      : { ...DEFAULT_SETTINGS },
+  }),
+  // ADR-0088: additive 93 → 94. The Hoshin Carryover Terminal adds one record
+  // per Catchball pact settled as thesis-invalidated, idempotency markers and
+  // once-only later grading rows. Nothing historical is invented: an upgraded
+  // workspace opens with an EMPTY carryover ledger, because a settlement
+  // history back-filled from records would claim a stop-rule discipline the
+  // organisation never actually ran.
+  93: (v93) => ({
+    ...v93,
+    schemaVersion: 94,
+    carryoverRecords: Array.isArray(v93.carryoverRecords) ? v93.carryoverRecords : [],
+    carryoverMarkers: Array.isArray(v93.carryoverMarkers) ? v93.carryoverMarkers : [],
+    carryoverGradings: Array.isArray(v93.carryoverGradings) ? v93.carryoverGradings : [],
+    settings: isPlainObject(v93.settings)
+      ? {
+        ...v93.settings,
+        carryoverCellFloor: v93.settings.carryoverCellFloor ?? 5,
+        carryoverReliabilityFloorPct: v93.settings.carryoverReliabilityFloorPct ?? 60,
+        carryoverGradingDelayDays: v93.settings.carryoverGradingDelayDays ?? 14,
+        carryoverDecisionReviewDays: v93.settings.carryoverDecisionReviewDays ?? 14,
+        carryoverAutoPropagate: v93.settings.carryoverAutoPropagate !== false,
+      }
+      : { ...DEFAULT_SETTINGS },
+  }),
+  // ADR-0089: additive 94 → 95. Peer-span SLA contracts, negotiation rounds
+  // and immutable stop-rule carryover receipts. Nothing historical is
+  // invented: an upgraded workspace opens with NO peer contracts, because an
+  // SLA ledger back-filled from records would claim lateral commitments the
+  // organisation never actually negotiated.
+  94: (v94) => ({
+    ...v94,
+    schemaVersion: 95,
+    valueStreamContracts: Array.isArray(v94.valueStreamContracts) ? v94.valueStreamContracts : [],
+    valueStreamRounds: Array.isArray(v94.valueStreamRounds) ? v94.valueStreamRounds : [],
+    valueStreamReallocations: Array.isArray(v94.valueStreamReallocations) ? v94.valueStreamReallocations : [],
+    valueStreamMarkers: Array.isArray(v94.valueStreamMarkers) ? v94.valueStreamMarkers : [],
+    settings: isPlainObject(v94.settings)
+      ? {
+        ...v94.settings,
+        valueStreamCellFloor: v94.settings.valueStreamCellFloor ?? 3,
+        valueStreamMaxDecisions: v94.settings.valueStreamMaxDecisions ?? 4,
+        valueStreamAutoPropagate: v94.settings.valueStreamAutoPropagate !== false,
       }
       : { ...DEFAULT_SETTINGS },
   }),

@@ -1,4 +1,4 @@
-/** Fail-closed normalizers for Schema v93 Value Stream Exchange records. */
+/** Fail-closed normalizers for Schema v95 Value Stream Exchange records. */
 import {
   VALUE_STREAM_BOUNDS,
   VALUE_STREAM_CONTRACT_STATUSES,

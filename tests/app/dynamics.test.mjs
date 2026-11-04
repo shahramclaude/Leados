@@ -417,7 +417,7 @@ test('calibration scores against naive persistence and reports negative skill ho
 /* ------------------------------------------------- 6. schema v37 */
 
 test('Schema v37: additive migration adds the experiment ledger without inventing one', () => {
-  assert.equal(SCHEMA_VERSION, 93);
+  assert.equal(SCHEMA_VERSION, 95);
   assert.equal(DEFAULT_SETTINGS.dynamicsHorizonWeeks, 26);
   assert.equal(DEFAULT_SETTINGS.dynamicsTargetWipWeeks, 4);
   assert.equal(DEFAULT_SETTINGS.dynamicsPressureLagWeeks, 3);
@@ -429,7 +429,7 @@ test('Schema v37: additive migration adds the experiment ledger without inventin
   assert.deepEqual(empty.dynamicsExperiments, []);
   const migrated = migrate({ schemaVersion: 36, settings: {}, people: [], portfolio: [] });
   assert.equal(migrated.raw.schemaVersion, 93);
-  assert.equal(migrated.applied.at(-1), '92 → 93');
+  assert.equal(migrated.applied.at(-1), '92 → 93', '93 → 94', '94 → 95');
   assert.deepEqual(migrated.raw.dynamicsExperiments, []);
   const state = normalizeState(migrated.raw, { now: NOW }).state;
   assert.equal(state.schemaVersion, 93);

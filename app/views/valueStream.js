@@ -1,4 +1,4 @@
-/** ADR-0087: Value Stream Exchange — lateral SLA, CPM and capital carryover. */
+/** ADR-0089: Value Stream Exchange — lateral SLA, CPM and capital carryover. */
 import { h, toast, openModal, closeAllModals } from '../ui/dom.js';
 import { downloadText } from '../ui/download.js';
 import { serializeCsv } from '../core/csv.js';
@@ -238,7 +238,7 @@ export function renderValueStream(ctxOrReport, directOptions = {}) {
 
   const body = panel === 'contracts' ? contractsPanel() : panel === 'carryover' ? carryoverPanel() : panel === 'rollup' ? rollupPanel() : panel === 'brief' ? briefPanel() : networkPanel();
   return h('div', { class: 'page value-stream-page' },
-    pageHeader({ eyebrow: `Session 127 · Schema v93 · ${report.seat.label}`, title: 'Value Stream Exchange',
+    pageHeader({ eyebrow: `Session 129 · Schema v95 · ${report.seat.label}`, title: 'Value Stream Exchange',
       subtitle: playbook ? `${playbook.duty} ${playbook.question}` : 'Peer supplier–customer commitments, critical-path flow and reviewed stop-rule capital carryover.',
       actions: ctx ? [button('Run spine scan', () => run(ctx.api.valueStreamScan(), 'Value Stream spine reconciled.'), 'btn-ghost')] : [],
       meta: h('span', null, `${report.disclosureMode} · ${report.engineVersion}`) }),

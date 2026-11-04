@@ -1,4 +1,4 @@
-# ADR-0087: Value Stream Exchange — lateral SLAs and reviewed stop-rule capital carryover
+# ADR-0089: Value Stream Exchange — lateral SLAs and reviewed stop-rule capital carryover
 
 - Status: Accepted
 - Date: 2026-11-04

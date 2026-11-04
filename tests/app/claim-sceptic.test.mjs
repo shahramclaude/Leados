@@ -150,13 +150,13 @@ function disposition(claimKey, verdict, at = '2026-09-01T10:00:00.000Z', extra =
 /* ------------------------------------------------------------- 1. the schema */
 
 test('schema v81 is additive and invents no round, verdict or rate', () => {
-  assert.equal(SCHEMA_VERSION, 93);
+  assert.equal(SCHEMA_VERSION, 95);
   const v80 = { ...createEmptyState(NOW.toISOString()), schemaVersion: 80 };
   delete v80.scepticRounds;
   delete v80.scepticDispositions;
   delete v80.scepticMarkers;
   const migrated = migrate(v80);
-  assert.equal(migrated.applied.at(-1), '92 → 93');
+  assert.equal(migrated.applied.at(-1), '92 → 93', '93 → 94', '94 → 95');
   assert.deepEqual(migrated.raw.scepticRounds, []);
   assert.deepEqual(migrated.raw.scepticDispositions, []);
   assert.deepEqual(migrated.raw.scepticMarkers, []);

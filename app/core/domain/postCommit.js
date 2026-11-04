@@ -104,6 +104,11 @@ import { missionRule } from './missionRules.js';
 import { altitudeRouterRule } from './altitudeRouterRules.js';
 import { catchballRule } from './catchballRules.js';
 import { valueStreamRule } from './valueStreamRules.js';
+import { carryoverRule } from './carryoverRules.js';
+// ADR-0085: the Operating Cadence Clock. Reads the finished queue after the
+// cascade has been negotiated and writes forum provenance, the constraint
+// escalation and the agenda-fit gap before the market rebalances attention.
+import { cadenceRule } from './cadenceRules.js';
 // ADR-0083: the Concordance Terminal. Every closed two-sided expectation round
 // writes its typed roll-up ladder, and a breach opens one governed
 // re-contracting decision per pair per ISO week — on this same spine, in the
@@ -460,7 +465,7 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // engines left it, and before nothing in particular — it delegates no authority
   // and moves no reporting line, so no other rule depends on its output.
   chainRule,
-  // ADR-0087: peer supplier→consumer roll-up, overdue SLA governance and
+  // ADR-0089: peer supplier→consumer roll-up, overdue SLA governance and
   // stop-rule carryover lineage. Runs before Decision Tempo so a breach decision
   // is priced now, and before Catchball so its proposed receiving pact rolls up
   // from the SAME valuestream.reallocated event in this atomic transaction.
@@ -495,6 +500,21 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // strategy/goal/budget/trade-off edges, and opens governed Watermelon and
   // Double-Loop Thesis Review DACI decisions before the final tail passes.
   catchballRule,
+  // ADR-0085: Hoshin Carryover Terminal (`RULE-CO-01..04`). Immediately after
+  // the Catchball spine so a pact settled as thesis-invalidated creates its
+  // carryover record, its `rolls-up-to` fan-out AND its governed stop-rule
+  // settlement decision in the SAME transaction; resolutions written here are
+  // visible to Decision Tempo and the budget read models in the same commit,
+  // and `sealRule` attests the whole write.
+  carryoverRule,
+  // ADR-0087: the Operating Cadence Clock (`RULE-CAD-01..04`). Runs after the
+  // cascade so the queue it reads already contains every commitment the cascade
+  // just created, and before the market so a constraint decision it opens is
+  // priced in the SAME atomic commit. It writes: one `queued-for` edge per
+  // reviewable item to the ONE forum competent to close it, one `rolls-up-to`
+  // edge per leadership ancestor, one governed constraint decision per ISO week,
+  // `fit-gap` edges for agenda mismatch, and one grade per due frozen reading.
+  cadenceRule,
   // ADR-0083: altitude as a dimension of the same engine, one rule set later.
   concordanceRule,
   // ADR-0086: the Disclosure Compiler's paperwork. Runs after every work-producing

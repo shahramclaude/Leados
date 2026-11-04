@@ -288,6 +288,9 @@ export const ACTION_RIGHTS = Object.freeze({
   // purpose, the days and the class are what the action checks.
   'request-disclosure': { minRank: 1, maxRank: 5, label: 'Request a bounded disclosure release' },
   'consent-disclosure': { minRank: 1, maxRank: 5, label: 'Consent to, refuse or revoke a disclosure release' },
+  // ADR-0087: the standing forum is a governance server; any altitude that chairs
+  // one may declare it and record its sittings, but never for a peer span.
+  'run-cadence': { minRank: 1, maxRank: 5, label: 'Declare a standing forum, record its sittings and freeze a cadence reading' },
 });
 
 export function actionVerdict(action, seat) {

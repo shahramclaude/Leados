@@ -29,13 +29,17 @@ import { renderIntake } from './views/intake.js';
 import { renderAltitudeRouter } from './views/altitudeRouter.js';
 import { routingAttentionCount } from './core/domain/altitudeRouter.js';
 import { renderCatchball } from './views/catchball.js';
+import { renderCadence } from './views/cadence.js';
 import { catchballAttentionCount } from './core/domain/catchball.js';
 import { renderValueStream } from './views/valueStream.js';
 import { valueStreamAttentionCount } from './core/domain/valueStream.js';
+import { renderCarryover } from './views/carryover.js';
+import { carryoverAttentionCount } from './core/domain/carryover.js';
+import { cadenceAttentionCount } from './core/domain/cadence.js';
 // ADR-0083: the Concordance Terminal — the two-gauge problem behind every
 // performance review, measured pair by pair and rolled up the tree.
 import { renderConcordance } from './views/concordance.js';
-// ADR-0085: the Board Room — pre-registered disclosure at the chief altitude.
+// ADR-0086: the Board Room — pre-registered disclosure at the chief altitude.
 import { renderBoard } from './views/board.js';
 import { concordanceAttentionCount } from './core/domain/concordance.js';
 import { boardAttentionCount } from './core/domain/board.js';
@@ -224,8 +228,15 @@ export const NAV = [
     // ADR-0081: classify a note into modules AND the owning altitude, then
     // roll a disclosure-safe signal up every level in one transaction.
     { route: 'routing', label: 'Altitude Router', icon: '⇅', badge: 'routing' },
+    // ADR-0086: the governance calendar itself. Every other screen asks what to
+    // decide; this one asks which standing forum is competent to decide it, when
+    // it next sits, and whether the queue can reach it inside its own horizon.
+    { route: 'cadence', label: 'Operating cadence', icon: '◷', badge: 'cadence' },
     { route: 'catchball', label: 'Strategy cascade', icon: '◇', badge: 'catchball' },
     { route: 'valuestream', label: 'Value streams', icon: '⇢', badge: 'valuestream' },
+    // ADR-0085: the thesis-invalidated pact's bet is settled — stop rule
+    // judged, resources released into the next allocation cycle.
+    { route: 'carryover', label: 'Carryover', icon: '⟳', badge: 'carryover' },
     { route: 'comms', label: 'Comms outbox', icon: '✉', badge: 'comms' },
     { route: 'insights', label: 'Signals', icon: '⚑', badge: 'signals' },
   ] },
@@ -349,6 +360,8 @@ const RENDERERS = {
   routing: (ctx) => renderAltitudeRouter(ctx),
   catchball: (ctx) => renderCatchball(ctx),
   valuestream: (ctx) => renderValueStream(ctx),
+  carryover: (ctx) => renderCarryover(ctx),
+  cadence: (ctx) => renderCadence(ctx),
   disclosure: (ctx) => renderDisclosure(ctx),
   concordance: (ctx) => renderConcordance(ctx),
   board: (ctx) => renderBoard(ctx),
@@ -537,6 +550,18 @@ export function parseRoute(hash) {
     'mission': 'mission', 'mission-control': 'mission', 'command-center': 'mission', 'flight-deck': 'mission',
     'catchball': 'catchball', 'hoshin': 'catchball', 'strategy-cascade': 'catchball',
     'valuestream': 'valuestream', 'value-stream': 'valuestream', 'peer-sla': 'valuestream',
+    // ADR-0085: carryover aliases. `settlement`/`settlements` stay with the
+    // Outcome Attribution screen — claiming them here would silently steal a
+    // shipped link, so they are deliberately NOT re-declared.
+    'carryover': 'carryover', 'hoshin-carryover': 'carryover',
+    'stop-rule': 'carryover', 'thesis-invalidation': 'carryover',
+    // ADR-0087: the Operating Cadence Clock's aliases. None may shadow a shipped
+    // route: 'meetings' is free, 'calendar' is free, and 'review' is deliberately
+    // NOT claimed here because it would collide with the review screens.
+    'cadence': 'cadence', 'operating-cadence': 'cadence', 'forums': 'cadence',
+    'standing-forum': 'cadence', 'governance-calendar': 'cadence', 'meetings': 'cadence',
+    'operating-review': 'cadence', 'qbr': 'cadence', 'steerco': 'cadence',
+    'agenda': 'cadence', 'capacity-clock': 'cadence', 'little-law': 'cadence',
     'concordance': 'concordance', 'expectation-concordance': 'concordance',
     // ADR-0086: the disclosure compiler's own aliases. `access` and `posture`
     // were unused; `coverage` still belongs to Promise Solvency and is not taken.
@@ -849,6 +874,8 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       routing: routingAttentionCount(state, at, state.settings),
       catchball: catchballAttentionCount(state, at, state.settings),
       valuestream: valueStreamAttentionCount(state, at, state.settings),
+      carryover: carryoverAttentionCount(state, at),
+      cadence: cadenceAttentionCount(state, at, state.settings),
       concordance: concordanceAttentionCount(state, at, state.settings),
       // ADR-0086: consent work waiting on this seat, plus a live release of this
       // seat's that lapses within three days.
@@ -1321,6 +1348,8 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       board: 'Board Room — the disclosure pack as a measurement problem: claims and thresholds pre-registered before the first look, verdicts decided by the conservative end of each interval, two-module cross-examination, exact span decomposition, and a permanent post-hoc mark on any threshold moved after looking',
       catchball: 'Hoshin Kanri & Catchball Cascade — negotiated strategy deployment',
       valuestream: 'Value Stream Exchange — lateral supplier–customer SLAs, critical-path flow and reviewed stop-rule capital carryover',
+      carryover: 'Hoshin Carryover — a thesis-invalidated pact settles its bet: stop rule judged, encumbered person-days and budget released into the next allocation cycle',
+      cadence: 'Operating Cadence Clock — your standing forums read as a finite decision machine: what each is competent to close, the demand converging on it, when it next sits, and which items cannot land inside their own horizon',
       disclosure: 'Disclosure Console — every screen states the posture it holds at this altitude, every withheld cell states why, and detail is released only by a consented, expiring, span-bounded contract',
       concordance: 'Expectation Concordance — “meets expectations” treated as a measurement instrument: two sealed sides, six dimensions, weighted κ / AC1 / PABAK / Bland–Altman agreement, a governed re-contracting decision on divergence and a typed roll-up to every leadership span',
       responses: 'Response studio — rehearse and adopt a coordinated leadership response',
