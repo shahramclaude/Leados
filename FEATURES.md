@@ -1,3 +1,18 @@
+## Canonical app — Session 121 (Schema v87, **no version bump**)
+
+### The Sealed Spine (`#/seal`, [ADR-0081](./docs/adr/0081-sealed-spine.md), RULE-SEAL-01/02)
+
+- ✅ One `audit.seal` event per committed transaction, appended by `sealRule` registered **last** on the shared post-commit spine (61 rules): `seal = sha256(prev ‖ digest ‖ revision)`, genesis 64 zeros, digest over the transaction's fresh events in canonical JSON.
+- ✅ HMAC-SHA256 keyed by a PBKDF2 256-bit session key (domain `leados-seal-v1:`) when the vault is unlocked; plain SHA-256 otherwise; the mode is printed on every surface. Session key is memory-only and cleared at every lock site.
+- ✅ Genesis-walk verification with typed failures (`chain-break`, `seal-mismatch`, `content-mismatch` at the exact revision), trailing-unsealed events and retention-evicted blocks reported honestly.
+- ✅ Seal events exempt from the 600-event retention cap (own cap 5000); eviction reported, never hidden.
+- ✅ Span attestation roll-up: sealed transactions counted at the owning span AND every leadership ancestor in the same transaction; out-of-subtree spans collapse to `__out-of-scope__` under a declared seat.
+- ✅ Gateway: `audit-seal` right (ranks 1–5) for `sealScan`; `sealRead`/`sealVerify`/`sealBriefText` are safe reads; enable/disable/pause fail closed under a seat (operator-only).
+- ✅ Identity-free integrity certificate download; four axe-clean panels; `seal` nav badge counts chain breaks only.
+- ✅ Altitude-routed NL intake (intake `v2`): LCA-based owning-seat resolution with `ownerId`/`ownerBasis` and an altitude-routing card on `#/intake`.
+- ✅ Schema **stays v87**: no new collection, no migration; three settings default when absent (`sealEnabled`, `sealAutoPropagate`, `sealMode`).
+- ⚠️ Not authentication, not a multi-user boundary; plain-hash mode is tamper-evident, not forgery-proof; no external timestamping; verification is on demand, not continuous.
+
 ## Conflict integration — Session 45 retention (Schema v86, additive `85 → 86`)
 
 ### Retention Intelligence & Talent Economics (`#/retention`, [ADR-0012](./docs/adr/0012-retention-intelligence.md), RULE-RET-01..04, CSV #76)

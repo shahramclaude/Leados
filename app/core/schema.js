@@ -119,6 +119,9 @@ import {
 } from './domain/successionSchema.js';
 import { normalizeMandates, normalizeMandateSettings } from './domain/mandateSchema.js';
 import { normalizeAuthorityCalibrationMarkers, normalizeAuthorityCalibrationSettings } from './domain/authorityCalibrationSchema.js';
+// ADR-0081: the Sealed Spine's settings. Backward compatible (defaults when
+// absent), so like ADR-0076's seat settings this needs NO schema bump.
+import { normalizeSealSettings } from './domain/sealSchema.js';
 import { addDays } from './time.js';
 import { validateWatchResponse } from './domain/watchResponse.js';
 import {
@@ -2237,6 +2240,7 @@ export function normalizeSettings(raw) {
     ...normalizeMissionSettings(s),
     ...normalizeMandateSettings(s),
     ...normalizeAuthorityCalibrationSettings(s),
+    ...normalizeSealSettings(s),
   };
 }
 

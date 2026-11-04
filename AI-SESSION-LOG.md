@@ -1,3 +1,81 @@
+# AI Session Log — Session 121, 2026-11-04: The Sealed Spine (Schema v87 no bump, ADR-0081)
+
+## Repository identity (checked first)
+
+- `git remote -v` → `https://github.com/shahramclaude/Leados.git` (fetch + push). Branch `arena/66ef986a-leados`, base `ccecf0a4b9f1b88f923917f184379131bf244993` (= `origin/main`). Identity **PASS**; no stop condition.
+
+## Blunt audit (what was actually inspected)
+
+- **Inventory:** programmatic reads of `actions.js`, `store.js`, `schema.js`, `postCommit.js` (rule array + engine), `propagationContracts.js`, `seatRegistry.js`, `accessGateway.js`, `intake.js`, `chain.js`/`chainRegistry.js`, `main.js` (nav/ROUTES/aliases/badges), `ui/components.js` + `ui/download.js`, the tests fixture pattern, and the boundary/docs-link scripts.
+- **Working:** transactional store (clone → mutator → audit → 60 post-commit rules with savepoints → persist), append-only event log with `EVENT_CAP`, five altitudes over `person.managerId`, Operating Seat ABAC + `rolls-up-to` fan-out, ADR-0080 gateway (allowlist + fail-closed), intake with suggestion cards.
+- **The gap:** the append-only log was append-only *by convention* — no proof against a hand-edited `localStorage` payload, a buggy import or a silent normalizer rewrite, and every downstream figure would recompute from the altered record with no signal.
+- **Missing (now shipped):** a hash-chained, on-demand verifiable seal over every committed transaction, keyed when the vault is unlocked, attested up the chain of command, with an integrity certificate an auditor can hold.
+- **Honesty:** the full app was not semantically audited line by line; untouched surfaces remain `[UNVERIFIED]` beyond the executed tests.
+
+## Fresh domain hunt
+
+Recorded in `RESEARCH.md §103` (fetched 2026-11-04): the 2026 performance-management roundups (Lattice, Culture Amp, Workday, Trakstar) sell reviews/OKRs/engagement with "audit trail logging" as a vendor-held table; Lucid's Audit Logs API is an Enterprise Shield *read* of vendor rows; the hash-chain + signed-checkpoint construction exists in security-engineering practice (per-tenant `sha256(prev || canonical)` chains, write-once export, verifiers that report reordered/truncated/re-hashed rows) but no surveyed people-analytics vendor offers a customer-*locally* verifiable sealed chain. Vendor numbers are marketing claims; we did not test any vendor's log.
+
+## Named frameworks encoded
+
+- **Hash chain / append-only integrity:** `seal = sha256(prev ‖ digest ‖ revision)`, genesis 64 zeros, linear replay verification — certificate-transparency construction at workspace scale.
+- **HMAC-SHA256 (RFC 2104) over SHA-256 (FIPS 180-4):** `sealCrypto.js` verified against RFC 4231 test vectors and FIPS examples, node:crypto-confirmed; canonical sorted-key JSON so digests are content functions.
+- **PBKDF2 (RFC 8018):** 256-bit session seal key, domain `leados-seal-v1:`, derived at unlock/enable/change-passphrase, memory-only, cleared at all five lock sites.
+- **Jaques' time-span of discretion / LCA ownership:** intake routing resolves the owning seat as the lowest common ancestor of the mentioned people's managers — the same tree the Command Chain and seat roll-up use.
+- **Attestation semantics:** a seal is a statement about a transaction; the roll-up counts it at each ancestor span. No person is ever bound to a seal (binding rejection: no identity/signature scheme over persons).
+
+## Shipped
+
+- `app/core/domain/sealCrypto.js`, `sealRegistry.js`, `sealSchema.js`, `sealChain.js`, `sealRules.js` (RULE-SEAL-01/02, `sealRule.id`/`label`); `app/views/seal.js` (four panels, testids `seal-verify`/`seal-scan`/`seal-enable`/`seal-disable`/`seal-toggle-auto`/`seal-verify-top`/`seal-download-cert`).
+- Wiring: `schema.js` (`normalizeSealSettings` spread), `store.js` (seal-key derive/clear at five sites, cap exemption), `postCommit.js` (`sealRule` LAST, 61 rules), `propagationContracts.js`, `actions.js` (`sealRead`/`sealVerify`/`sealScan`/`sealBriefText`/`enableSealing`/`disableSealing`/`setSealAutoPropagate`), `seatRegistry.js` (`audit-seal` rank 1–5), `accessGateway.js` (`SAFE_READS`, API rights, `seal` route on the reviewed allowlist), `intake.js` (`resolveIntakeRouting`, `ownerId`/`ownerBasis`, `altitudeRouting`), `views/intake.js` (altitude-routing card), `main.js` (nav/ROUTES/aliases/badges/descriptions for `#/seal`).
+- Schema **stays v87**: no new collection, no migration; three settings default when absent.
+- Tests: `tests/app/seal-chain.test.mjs` (15) + two shipped rule-order assertions updated to the ADR-0081 contract.
+
+## Verification (actual results)
+
+- `node --test tests/app/seal-chain.test.mjs` → **15/15 pass**.
+- Regression sweep, nine suites (seal-chain, intake, operating-seat, command-chain, core, encryption, mission-control, decision-rights, access-audit) → **152/152 pass, 0 fail**.
+- `node scripts/check-canonical-boundary.mjs` → OK (365 app modules, 120 test suites, 23 documentation checks, 0 leaks).
+- `npx eslint .` → clean.
+- `node scripts/check-docs-links.mjs` → 617/617 internal links resolve (192 markdown files).
+- `npm run build:standalone` → written (6,739,623 bytes, 364 modules, schema v87); `node --test tests/app/standalone.test.mjs` → **7/7 pass**.
+- **[UNVERIFIED]:** the combined `npm run verify:canonical` wrapper was not run to completion in-session (its jsdom/a11y phase times out in this container; its constituent checks — lint, boundary, links, and the targeted suites above — were run individually and are green). A real-browser assistive-technology walkthrough of `#/seal` remains `[UNVERIFIED]`, as in every session.
+
+## Defects found and fixed in this session’s own code
+
+- **edit_file silent no-ops (5×):** `store.js` imports, `actions.js` imports, `propagationContracts` entry, and two others reported success without changing text. Re-applied with python `str.replace` + `assert old in src` and grep-verified. (Standing rule for this repo: verify every edit_file.)
+- **HMAC v1 hex-in-pipeline bug:** the digest was hex-encoded before HMAC, so RFC 4231 vectors failed; fixed and re-verified against TC1/TC2/TC6.
+- **Seal summary stored only 16-hex prefixes:** verification could not recompute full hashes (chain-break/seal-mismatch on clean state). Fixed: full `prev=`/`digest=` travel in the summary with `root` last so the 300-char cap truncates only the root; parser regex `{16,64}` with padEnd fallback.
+- **`ctx.previousState` is deleted by the engine before rules run:** seal freshness was rewritten to a positional scan (events after the last seal, capped at 512) with idempotence by revision.
+- **`renderSeal` returned `<main>` inside the shell's `<main id="view">`:** duplicate-landmark axe failures on `#/integrity`; both returns now `div.page` like every other view.
+- **Alias shadowing:** the new alias block stole `integrity` (Signal integrity) and `trust` (Promise solvency); removed — only `seal`/`seals`/`audit-chain`/`attestation` remain.
+- **`sealScan` had no seat right:** refused under every declared seat; added the `audit-seal` right (ranks 1–5) plus `SAFE_READS` entries and the `seal` route allowlist entry.
+- **Two shipped rule-order assertions** (`DEFAULT_POST_COMMIT_RULES.at(-1) === seatRule`) updated to the ADR-0081 contract (`seatRule` at −2, `sealRule` at −1); `sealRule.id` added to mirror `seatRule.id`.
+- **Sandbox outage mid-session:** the execution sandbox died after the first regression pass ("Sandbox is probably not running anymore" across all tools, ~10 retries). Work resumed after restart; the two pending rule-order fixes and the full verification sweep above are post-restart.
+
+## Known gaps (honest)
+
+- Full `npm run verify:canonical` and a real-browser AT walkthrough: `[UNVERIFIED]` (constituent checks green; wrapper times out in this container).
+- No external timestamping, no write-once off-site copy, no HSM, no signed checkpoints co-signed by a second party; verification is on demand, not continuous.
+- The chain proves non-alteration *since seal time* under the printed mode — not wall-clock time and not who operated.
+- Legacy modules remain un-scoped under declared seats (carried from ADR-0080); the gateway refuses their raw reads/writes.
+
+## Next 1–3 roadmap targets
+
+1. [all altitudes] Authenticated identity + tenant boundary (carried).
+2. [manager → CEO] External timestamping / signed checkpoints + write-once export.
+3. [all altitudes] Continuous background verification with a visible last-verified stamp, then reviewed adapters for remaining legacy modules.
+
+## Changed files (summary)
+
+- New: `app/core/domain/{sealCrypto,sealRegistry,sealSchema,sealChain,sealRules}.js`, `app/views/seal.js`, `tests/app/seal-chain.test.mjs`, `docs/adr/0081-sealed-spine.md`.
+- Edited: `app/{main.js,actions.js}`, `app/core/{schema.js,store.js}`, `app/core/domain/{postCommit,propagationContracts,seatRegistry,accessGateway,intake}.js`, `app/views/intake.js`, `tests/app/{operating-seat,decision-rights}.test.mjs`.
+- Docs: `docs/adr/INDEX.md`, `README.md`, `FEATURES.md`, `ARCHITECTURE.md`, `LEADOS-STATE.md`, `ROADMAP.md`, `RESEARCH.md` (§103), `CHANGELOG.md`, `AI-SESSION-LOG.md`, `index.html` (meta), rebuilt `LeadOS-standalone.html`.
+
+## Sync
+
+- Branch `arena/66ef986a-leados` → `origin`, pull request opened against `main` (see CHANGELOG Repository status for the PR number).
+
 ## PR triage note — 2026-11-03
 
 PR #84 (Session 74, `#/pay`, Schema v51, ADR-0039) closed as superseded: PR #85 merged the Merit & Pay-Equity Terminal under the same schema version and ADR number on 2026-10-30, and main is now at Schema v87 / ADR-0080 with 67 of #84's 74 files in conflict. No code from #84 was merged. Its three unique mechanics — pay-quartile reporting, the ≥5% joint pay assessment workflow, and remediation priced by re-fitting the gap model — are preserved as candidates in the top ROADMAP entry, with the ADR-0039 privacy constraint a future session must resolve explicitly.

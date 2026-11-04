@@ -216,6 +216,40 @@ function renderCategoryPanel(analysis) {
   });
 }
 
+/**
+ * ADR-0081: the altitude routing banner. The same reporting tree the Command
+ * Chain and Altitude Lens use decides which seat a note belongs to: the LCA of
+ * the managers of the people named (or the declared seat / workspace leader),
+ * with that altitude's own routes, hand-up rules and disclosure level shown.
+ */
+function renderAltitudeRouting(analysis) {
+  const r = analysis.altitudeRouting;
+  if (!r) return null;
+  const path = (r.ancestors || []).map((a) => `${a.label} (${a.altitudeLabel})`).join(' → ');
+  return card({
+    title: 'Organizational routing',
+    subtitle: r.basis,
+    body: h('div', { class: 'stack-sm', 'data-testid': 'intake-altitude-routing' },
+      h('div', { class: 'stat-row' },
+        stat({ label: 'Owning seat', value: r.ownerLabel, hint: `rank ${r.rank ?? '—'}` }),
+        stat({ label: 'Altitude', value: r.altitudeLabel, hint: r.horizonDays ? `horizon ${r.horizonDays}d` : '' }),
+        stat({ label: 'Rolls up to', value: `${(r.ancestors || []).length - 1} span(s)`, hint: path }),
+      ),
+      r.decisionQuestion ? h('p', { class: 'small' }, h('strong', null, 'This altitude’s question: '), r.decisionQuestion) : null,
+      r.routes.length ? h('p', { class: 'small' },
+        h('strong', null, 'Altitude-appropriate surfaces: '),
+        r.routes.map((route) => h('a', { class: 'btn btn-tiny btn-ghost', href: route }, route)).reduce((acc, el, i) => (i === 0 ? [el] : [...acc, ' ', el]), [])) : null,
+      r.handUp.length ? h('div', null,
+        h('span', { class: 'field-label' }, 'This altitude hands up:'),
+        h('ul', { class: 'plain-list tiny muted' }, ...r.handUp.map((x) => h('li', null, x)))) : null,
+      r.forbidden.length ? h('div', null,
+        h('span', { class: 'field-label' }, 'Not this altitude’s call:'),
+        h('ul', { class: 'plain-list tiny muted' }, ...r.forbidden.map((x) => h('li', null, x)))) : null,
+      h('p', { class: 'muted tiny' }, 'On confirm, the case is created with this seat as owner; the Operating Seat’s roll-up then fans it up every ancestor span in the same transaction.'),
+    ),
+  });
+}
+
 function renderSuggestionPanel(analysis, ctx, draftId) {
   const s = analysis.caseSuggestion;
   if (!s) {
@@ -437,6 +471,7 @@ function renderAnalysis(ctx, analysis, draftId = null) {
       subtitle: 'Every extraction shows the exact source span. Ambiguous names and assumed currencies are never silently accepted.',
       body: renderEntities(analysis, ctx),
     }),
+    renderAltitudeRouting(analysis),
     renderSuggestionPanel(analysis, ctx, draftId),
   );
 }

@@ -33,8 +33,15 @@
  */
 
 import { addDays, dayKey } from '../time.js';
+// ADR-0081: altitude routing. The intake engine resolves the ORGANIZATIONAL
+// owner of a note — the lowest common ancestor of the managers of the people
+// named in it, via the same reporting tree the Command Chain and the Operating
+// Seat use — so a free-text note lands on the correct seat, at the correct
+// altitude, with the routes and hand-up rules that altitude is allowed.
+import { buildChain, responsibleNodeId, managerNodeId, LEADER_ID } from './chain.js';
+import { altitudeByKey, altitudeRank } from './chainRegistry.js';
 
-export const INTAKE_ENGINE_VERSION = 'intake-2026.10-v1';
+export const INTAKE_ENGINE_VERSION = 'intake-2026.11-v2';
 
 /** Rule ids surfaced in the UI, the audit trail and the calibration ledger. */
 export const INTAKE_RULES = {
@@ -911,6 +918,15 @@ export function analyzeIntakeText(text, state = {}, { now = new Date() } = {}) {
   const routingPlan = insufficient ? []
     : buildRoutingPlan({ sourceText, categories: [primary, ...secondaries], conflictWall, people, caseSuggestion, state });
 
+  // ADR-0081: resolve the owning seat/altitude from the same reporting tree
+  // the rest of the app uses. Named people -> LCA of their managers; nobody
+  // named -> the declared operating seat; otherwise the workspace leader.
+  const altitudeRouting = resolveIntakeRouting(people, state, { now });
+  if (caseSuggestion) {
+    caseSuggestion.ownerId = altitudeRouting.ownerPersonId;
+    caseSuggestion.ownerBasis = altitudeRouting.basis;
+  }
+
   return {
     engineVersion: INTAKE_ENGINE_VERSION,
     analyzedAt: now.toISOString(),
@@ -950,6 +966,87 @@ export function analyzeIntakeText(text, state = {}, { now = new Date() } = {}) {
     suggestedTitle,
     caseSuggestion,
     routingPlan,
+    altitudeRouting,
+  };
+}
+
+/* ------------------------------------------------- altitude routing (ADR-0081) */
+
+/**
+ * Resolve where a note belongs in the chain of command.
+ *
+ * The owner is the lowest common ancestor of the managers of the people named
+ * in the note (`responsibleNodeId` — the same function the seat engine uses to
+ * attribute cross-unit work), walked up to the nearest node that actually holds
+ * a span. With no people named, the declared operating seat owns it; with no
+ * seat declared, the workspace leader does. The result carries the altitude's
+ * own routes, hand-up rules, forbidden list and disclosure level, so the UI
+ * can show not just "who" but "what this altitude is allowed to do with it".
+ */
+export function resolveIntakeRouting(people, state = {}, { now = new Date() } = {}) {
+  const settings = state?.settings || {};
+  const chain = buildChain(state, { now, settings });
+  const personIds = [...new Set((people || []).map((p) => p.personId).filter(Boolean))];
+
+  let ownerNodeId = responsibleNodeId(chain, personIds);
+  let basis;
+  if (personIds.length) {
+    basis = `LCA of the managers of the ${personIds.length} named person(s) in the reporting tree`;
+  } else if (settings.activeSeatId && chain.nodes.has(settings.activeSeatId)) {
+    ownerNodeId = settings.activeSeatId;
+    basis = 'No person named; routed to the declared operating seat';
+  } else {
+    basis = 'No person named and no seat declared; the workspace leader owns it';
+  }
+  // An IC owner means the note is about one person: the responsible leader is
+  // their manager, never the IC themselves.
+  const ownerNode = chain.nodes.get(ownerNodeId);
+  if (ownerNode && ownerNode.id !== LEADER_ID && !ownerNode.span) {
+    ownerNodeId = managerNodeId(chain, ownerNodeId);
+  }
+
+  // Ancestor chain: every leadership span the item will roll up to.
+  const ancestors = [];
+  let cursor = ownerNodeId;
+  let guard = 0;
+  while (cursor && guard < 16) {
+    const node = chain.nodes.get(cursor);
+    if (!node) break;
+    const altitude = altitudeByKey(node.altitude || (cursor === LEADER_ID ? settings.chainLeaderAltitude : null));
+    ancestors.push({
+      nodeId: cursor,
+      label: cursor === LEADER_ID ? (settings.leaderName || 'Workspace leader') : node.name,
+      altitudeKey: altitude?.key || null,
+      altitudeLabel: altitude?.label || 'Enterprise',
+      rank: altitudeRank(node.altitude || settings.chainLeaderAltitude),
+    });
+    const parent = node.parentId;
+    if (!parent || parent === cursor) break;
+    cursor = parent;
+    guard += 1;
+  }
+
+  const ownerAltitude = altitudeByKey(
+    (chain.nodes.get(ownerNodeId)?.altitude) || (ownerNodeId === LEADER_ID ? settings.chainLeaderAltitude : null),
+  );
+  const routes = [...new Set((ownerAltitude?.duties || []).flatMap((d) => d.routes || []))].slice(0, 8);
+
+  return {
+    ownerNodeId,
+    // A case owner must be a roster person; the synthetic leader node is not one.
+    ownerPersonId: ownerNodeId !== LEADER_ID && chain.byId.has(ownerNodeId) ? ownerNodeId : null,
+    ownerLabel: ancestors[0]?.label || 'Workspace leader',
+    altitudeKey: ownerAltitude?.key || null,
+    altitudeLabel: ownerAltitude?.label || 'Enterprise',
+    rank: altitudeRank((chain.nodes.get(ownerNodeId)?.altitude) || settings.chainLeaderAltitude),
+    horizonDays: ownerAltitude?.horizonDays ?? null,
+    decisionQuestion: ownerAltitude?.decisionQuestion || '',
+    routes,
+    handUp: ownerAltitude?.handUp || [],
+    forbidden: ownerAltitude?.forbidden || [],
+    disclosure: ownerAltitude?.disclosure || { names: 'none', itemDetail: false, floorN: 8 },
+    ancestors,
+    basis,
   };
 }
 

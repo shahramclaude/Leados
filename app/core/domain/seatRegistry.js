@@ -228,6 +228,9 @@ export const ACTION_RIGHTS = Object.freeze({
   'test-assumption': { minRank: 3, maxRank: 5, label: 'Register a testable operating assumption' },
   'prepare-comms': { minRank: 3, maxRank: 5, label: 'Prepare a stakeholder communication' },
   'set-disclosure-floor': { minRank: 3, maxRank: 5, label: 'Set the small-cell disclosure floor' },
+  // ADR-0081: verifying the sealed audit chain is every altitude's business —
+  // it writes only an audit event, never a record.
+  'audit-seal': { minRank: 1, maxRank: 5, label: 'Verify the sealed audit chain' },
 });
 
 export function actionVerdict(action, seat) {
