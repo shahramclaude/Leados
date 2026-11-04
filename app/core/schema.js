@@ -141,6 +141,11 @@ import {
   normalizeCatchballMarkers,
   normalizeCatchballSettings,
 } from './domain/catchballSchema.js';
+import {
+  normalizeStrategyCycleReadings,
+  normalizeStrategyCycleMarkers,
+  normalizeStrategyCycleSettings,
+} from './domain/strategyCycleSchema.js';
 import { addDays } from './time.js';
 import { validateWatchResponse } from './domain/watchResponse.js';
 import {
@@ -296,16 +301,11 @@ export {
   DRILL_OUTCOMES,
 };
 
-// v82 remains the schema version. ADR-0076 (the Operating Seat) is additive
-// WITHOUT a version bump by design: it introduces no new stored entity. The
-// acting seat is a settings declaration, the handover and every access refusal
-// are entries in the existing append-only event log, typed provenance reuses
-// the existing `rolls-up-to` relation and existing graph entity types, and the
-// roll-up is derived live from `person.managerId` and the dated records. An
-// older blob simply opens on the undeclared operator view. A version bump here
-// would have forced 78 test files to be rewritten for zero user benefit; the
-// honest choice is to add nothing to migrate.
-export const SCHEMA_VERSION = 90;
+// ADR-0076 (the Operating Seat) was additive WITHOUT a version bump by design:
+// it introduced no new stored entity. Schema v91 adds immutable strategy
+// renewal readings and idempotency markers; older workspaces migrate with empty
+// ledgers rather than invented history.
+export const SCHEMA_VERSION = 91;
 
 // v83 adds the Succession Terminal (`successionReadings`, `successionMarkers`): a
 // frozen bench claim per workspace or per span — the probability that at least one
@@ -1365,6 +1365,10 @@ export const DEFAULT_SETTINGS = Object.freeze({
   catchballCellFloor: 3,
   catchballMaxFanout: 4,
   catchballAutoPropagate: true,
+  // Schema v91: Strategy Renewal Bridge evidence, suppression and propagation conventions.
+  strategyCycleEvidenceFloor: 5,
+  strategyCycleCellFloor: 3,
+  strategyCycleAutoPropagate: true,
   // ADR-0083: The Concordance Terminal — declared conventions, all clamped.
   concordanceAgreementFloorPct: 60,
   concordanceCellFloor: 5,
@@ -1646,6 +1650,9 @@ export const COLLECTIONS = [
   'catchballPacts',
   'catchballRounds',
   'catchballMarkers',
+  // Schema v91: identity-reduced frozen strategy renewal readings and markers.
+  'strategyCycles',
+  'strategyCycleMarkers',
   // ADR-0083: two-sided expectation rounds (one row per pair per cycle, sealed
   // until both sides are in) and the idempotency markers their three rules use.
   'expectationRounds',
@@ -2299,6 +2306,7 @@ export function normalizeSettings(raw) {
     ...normalizeConcordanceSettings(s),
     ...normalizeSealSettings(s),
     ...normalizeCatchballSettings(s),
+    ...normalizeStrategyCycleSettings(s),
   };
 }
 
@@ -6388,6 +6396,10 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.catchballPacts = normalizeCatchballPacts(raw.catchballPacts, warnings);
   state.catchballRounds = normalizeCatchballRounds(raw.catchballRounds, warnings);
   state.catchballMarkers = normalizeCatchballMarkers(raw.catchballMarkers);
+  // Schema v91: a frozen renewal cycle cites its Catchball cohort, strategy bets
+  // and owner seat, so resolve both collections before validating typed links.
+  state.strategyCycles = normalizeStrategyCycleReadings(raw.strategyCycles, warnings);
+  state.strategyCycleMarkers = normalizeStrategyCycleMarkers(raw.strategyCycleMarkers, warnings);
   // ADR-0083: rounds resolve before links so `rolls-up-to`, `re-contracts` and
   // `re-tests` edges validate against real round ids. A malformed round is
   // dropped; a round claiming to be closed with one side is reopened.
@@ -7091,6 +7103,23 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  // Schema v91: additive 90 → 91. Cycles are never back-filled from present
+  // Catchball or Strategy data: every reading is prospective evidence frozen by
+  // a human action, and every marker proves a later rule ran exactly once.
+  90: (v90) => ({
+    ...v90,
+    schemaVersion: 91,
+    strategyCycles: Array.isArray(v90.strategyCycles) ? v90.strategyCycles : [],
+    strategyCycleMarkers: Array.isArray(v90.strategyCycleMarkers) ? v90.strategyCycleMarkers : [],
+    settings: isPlainObject(v90.settings)
+      ? {
+        ...v90.settings,
+        strategyCycleEvidenceFloor: v90.settings.strategyCycleEvidenceFloor ?? 5,
+        strategyCycleCellFloor: v90.settings.strategyCycleCellFloor ?? 3,
+        strategyCycleAutoPropagate: v90.settings.strategyCycleAutoPropagate !== false,
+      }
+      : { ...DEFAULT_SETTINGS },
+  }),
   // ADR-0083: additive 88 → 89. No existing record is rewritten: an older
   // workspace simply has an empty round ledger and the declared conventions.
   // A round is only ever created by a human opening one.

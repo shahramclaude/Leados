@@ -103,6 +103,9 @@ import { missionRule } from './missionRules.js';
 // or an explicit scan runs; an undeclared workspace is unchanged.
 import { altitudeRouterRule } from './altitudeRouterRules.js';
 import { catchballRule } from './catchballRules.js';
+// Schema v91: strategy cycle snapshots connect Hoshin bets, Catchball
+// commitments and altitude provenance in this same atomic propagation spine.
+import { strategyCycleRule } from './strategyCycleRules.js';
 // ADR-0083: the Concordance Terminal. Every closed two-sided expectation round
 // writes its typed roll-up ladder, and a breach opens one governed
 // re-contracting decision per pair per ISO week — on this same spine, in the
@@ -484,6 +487,10 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // strategy/goal/budget/trade-off edges, and opens governed Watermelon and
   // Double-Loop Thesis Review DACI decisions before the final tail passes.
   catchballRule,
+  // Schema v91: freezes typed Strategy↔Catchball↔altitude lineage, opens only
+  // a human renewal gate for carryover/retired-bet work, and grades a cycle
+  // against its own bounded in-window outcomes; no allocation is auto-applied.
+  strategyCycleRule,
   // ADR-0083: altitude as a dimension of the same engine, one rule set later.
   concordanceRule,
   attentionMarketRule,

@@ -175,6 +175,7 @@ import { scepticAttentionCount } from './core/domain/sceptic.js';
 // ADR-0082: the Sealed Spine — tamper-evident audit chain + altitude attestation.
 import { renderSeal } from './views/seal.js';
 import { sealAttentionCount } from './core/domain/sealChain.js';
+import { renderStrategyCycle } from './views/strategyCycle.js';
 
 function safeDecode(segment) {
   const raw = String(segment || '');
@@ -211,6 +212,7 @@ export const NAV = [
     // roll a disclosure-safe signal up every level in one transaction.
     { route: 'routing', label: 'Altitude Router', icon: '⇅', badge: 'routing' },
     { route: 'catchball', label: 'Strategy cascade', icon: '◇', badge: 'catchball' },
+    { route: 'strategy-cycle', label: 'Strategy renewal', icon: '⟳' },
     { route: 'comms', label: 'Comms outbox', icon: '✉', badge: 'comms' },
     { route: 'insights', label: 'Signals', icon: '⚑', badge: 'signals' },
   ] },
@@ -329,6 +331,7 @@ const RENDERERS = {
   intake: (ctx) => renderIntake(ctx),
   routing: (ctx) => renderAltitudeRouter(ctx),
   catchball: (ctx) => renderCatchball(ctx),
+  'strategy-cycle': (ctx) => renderStrategyCycle(ctx),
   concordance: (ctx) => renderConcordance(ctx),
   responses: (ctx) => renderResponses(ctx),
   bundles: (ctx) => renderActionBundles(ctx),
@@ -1243,6 +1246,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       intake: 'Intake triage',
       routing: 'Altitude Router — natural-language intake classified into modules and the correct organizational altitude, with disclosure-safe roll-up to every leadership level',
       catchball: 'Hoshin Kanri & Catchball Cascade — negotiated strategy deployment',
+      'strategy-cycle': 'Strategy renewal bridge — scoped Hoshin learning, Catchball commitments and human-governed reinvestment',
       concordance: 'Expectation Concordance — “meets expectations” treated as a measurement instrument: two sealed sides, six dimensions, weighted κ / AC1 / PABAK / Bland–Altman agreement, a governed re-contracting decision on divergence and a typed roll-up to every leadership span',
       responses: 'Response studio — rehearse and adopt a coordinated leadership response',
       bundles: 'Action bundles — review, adopt and safely withdraw coordinated work',

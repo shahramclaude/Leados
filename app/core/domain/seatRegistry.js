@@ -105,6 +105,10 @@ export const RECORD_POLICIES = Object.freeze({
   catchballPacts: { classKey: 'unit', label: 'Hoshin Catchball pacts', route: '#/catchball' },
   catchballRounds: { classKey: 'unit', label: 'Hoshin Catchball rounds', route: '#/catchball' },
   catchballMarkers: { classKey: 'unit', label: 'Catchball idempotency markers', route: '#/catchball' },
+  // Raw cycle rows contain typed cohort IDs for the atomic rule engine. Every
+  // declared seat must use the identity-reduced report, never this projection.
+  strategyCycles: { classKey: 'unit', detailCeiling: 0, label: 'Frozen strategy renewal readings (report only)', route: '#/strategy-cycle' },
+  strategyCycleMarkers: { classKey: 'unit', detailCeiling: 0, label: 'Strategy renewal rule markers', route: '#/strategy-cycle' },
   // Portfolio material. Functions, quarters and capital.
   budgets: { classKey: 'portfolio', label: 'Budgets', route: '#/finance' },
   strategyBets: { classKey: 'portfolio', label: 'Strategic bets', route: '#/strategy' },
@@ -143,7 +147,7 @@ export function recordPolicy(collection) {
     declared: Boolean(declared),
     minRank: cls.minRank,
     maxRank: cls.maxRank,
-    detailCeiling: cls.detailCeiling,
+    detailCeiling: Number.isInteger(declared?.detailCeiling) ? declared.detailCeiling : cls.detailCeiling,
     classLabel: cls.label,
     reason: cls.reason,
   });
@@ -243,6 +247,9 @@ export const ACTION_RIGHTS = Object.freeze({
   'audit-seal': { minRank: 1, maxRank: 5, label: 'Verify the sealed audit chain' },
   // ADR-0084: bilateral Hoshin Kanri & Catchball negotiation across spans.
   'negotiate-catchball': { minRank: 1, maxRank: 5, label: 'Propose, counter, accept or check in on a Hoshin Catchball pact' },
+  // Schema v91: each altitude freezes a scoped renewal reading and can explicitly
+  // scan its own window; only the rules may generate the cross-module links.
+  'govern-strategy-cycle': { minRank: 1, maxRank: 5, label: 'Freeze or scan a scoped strategy renewal cycle' },
 });
 
 export function actionVerdict(action, seat) {

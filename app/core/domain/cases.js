@@ -328,6 +328,9 @@ export const LINK_ENTITY_TYPES = [
   // negotiation rounds.
   'catchballpact',
   'catchballround',
+  // Schema v91: an identity-reduced strategy renewal cycle joins frozen
+  // portfolio learning to Catchball commitments and altitude provenance.
+  'strategycycle',
   // ADR-0083: one closed two-sided expectation round. A first-class node so the
   // re-contracting decision it opened, the round that re-tests it and every
   // leadership span it rolled up to are navigable from the round — and the round
@@ -455,6 +458,8 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   // ADR-0084: Hoshin Kanri & Catchball Cascade collections.
   catchballpact: 'catchballPacts',
   catchballround: 'catchballRounds',
+  // Schema v91: frozen, identity-reduced strategy renewal readings.
+  strategycycle: 'strategyCycles',
   // ADR-0083: keep the registry exhaustive with LINK_ENTITY_TYPES.
   concordance: 'expectationRounds',
 });
@@ -551,6 +556,9 @@ export const SYSTEM_GENERATED_LINK_RELATIONS = Object.freeze([
   'summarizes-span',
   // ADR-0084: emitted by the Catchball spine, not manually asserted.
   'deploys-strategy', 'cascades-to', 'counters-upward', 'trades-off',
+  // Schema v91: the frozen cycle audits the bet-to-Catchball cascade and
+  // informs a human renewal choice; attached pacts reconcile through consent.
+  'audits-cascade', 'reconciles',
 ]);
 
 export const LINK_RELATIONS = [
@@ -775,6 +783,10 @@ export const LINK_RELATIONS = [
   'cascades-to',
   'counters-upward',
   'trades-off',
+  // Schema v91: the frozen strategy cycle audits its typed cascade and a
+  // linked Catchball pact may require a human reconciliation decision.
+  'audits-cascade',
+  'reconciles',
   // Schema v89 (ADR-0083): the Concordance Terminal. `re-contracts` — this
   // governed decision was opened from that diverged expectation;
   // `re-tests` — this later round tests the standard that decision set.
@@ -888,6 +900,8 @@ export const LINK_RELATION_LABELS = {
   'cascades-to': 'Cascades vertically into downstream pact or goal',
   'counters-upward': 'Bilateral Catchball counter-offer upward',
   'trades-off': 'Explicitly de-scopes commitment to free span capacity',
+  'audits-cascade': 'Audits the typed strategy-to-Catchball cascade',
+  reconciles: 'Requires a human Catchball reconciliation',
 };
 
 const Z_80_INTERVAL = 1.2815515655446004; // Standard normal 90th percentile (P10 / P90)
@@ -2186,6 +2200,22 @@ export function resolveLinkedEntity(state, entityType, entityId) {
         status: `${rec.mechanism} · ${rec.recordedOn}`,
         route: `#/catchball?panel=calibration&round=${encodeURIComponent(rec.id)}`,
         raw: rec,
+      };
+    }
+    case 'strategycycle': {
+      const rec = (state.strategyCycles || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      // The shared graph carries only a frozen cycle id and status; it never
+      // projects the cohort IDs, strategy labels or local work into the node.
+      return {
+        type: 'strategycycle',
+        id: rec.id,
+        title: `Strategy renewal cycle · ${rec.altitudeKey}`,
+        status: `${rec.status} · frozen ${rec.frozenOn} · review ${rec.reviewOn}`,
+        route: `#/strategy-cycle?cycle=${encodeURIComponent(rec.id)}`,
+        // Do not return the raw cohort IDs or frozen aggregates through the
+        // general-purpose graph resolver; the scoped report is the only reader.
+        raw: { id: rec.id, altitudeKey: rec.altitudeKey, status: rec.status, frozenOn: rec.frozenOn, reviewOn: rec.reviewOn },
       };
     }
     default:
