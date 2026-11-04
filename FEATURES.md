@@ -1,3 +1,14 @@
+## Canonical app — Session 124 (Schema v90, additive `89 → 90`)
+
+### Disclosure Compiler (`#/disclosure`, [ADR-0084](./docs/adr/0084-disclosure-compiler.md), RULE-DSC-01..02)
+
+- ✅ **Every screen declares a posture.** 97 module manifests → one compile per render → `detail` / `aggregate` / `withheld`, with the reason printed. A route with no manifest is withheld, never guessed at.
+- ✅ **The aggregate replaces the refusal.** Above a detail ceiling: records, open, overdue, severity load, oldest age, money per currency and per-child-span rows; sub-floor cells withheld; **complementary suppression**; total withheld below the floor; out-of-span records excluded and counted.
+- ✅ **A leak oracle, not a hand audit.** `tests/app/disclosure-compiler.test.mjs` plants sentinels in every private field and navigates all 96 routes at four altitudes through the real app — 19/19 pass.
+- ✅ **Release contracts.** Request → consent by the span that owns the records → one screen × one span × 1–30 days → expiry swept and graded. `enterprise` classes are never releasable; a grant lifts a ceiling, never a floor; the requester can never consent.
+- ✅ **The console.** Coverage (with reasons), the seat's aggregate, the release ledger, and an identity-free brief; nav marks aggregate screens `◌`; aliases `visibility`, `access`, `posture`, `who-sees-what`, `small-cell`.
+- ⚠️ **Honest limits.** Seats are auditable declarations, not authentication. Suppression is cell withholding, not differential privacy. ~45 analytic terminals are `aggregate` by declaration because their report reads are not yet seat-scoped — stated on screen, and next on the roadmap.
+
 ## Canonical app — Session 123 (Schema v89, additive `88 → 89`)
 
 ### Expectation Concordance Terminal (`#/concordance`, [ADR-0083](./docs/adr/0083-expectation-concordance.md), RULE-ECN-01..03, CSV #78)

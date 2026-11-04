@@ -14,6 +14,7 @@ import { normalizeConflicts } from './conflict-schema.js';
 // ADR-0083: the Concordance Terminal. Rounds resolve BEFORE links so
 // `rolls-up-to`, `re-contracts` and `re-tests` edges validate on reload.
 import { normalizeConcordanceRounds, normalizeConcordanceMarkers, normalizeConcordanceSettings } from './domain/concordanceSchema.js';
+import { normalizeDisclosureGrants, normalizeDisclosureMarkers, normalizeDisclosureSettings } from './domain/disclosureSchema.js';
 import { normalizePropagationLineage } from './domain/automationLineage.js';
 import { normalizeImpactExecutionSnapshot } from './domain/impactExecution.js';
 import { normalizeStrategyBets, normalizeStrategyTags } from './domain/strategy.js';
@@ -297,7 +298,7 @@ export {
 // older blob simply opens on the undeclared operator view. A version bump here
 // would have forced 78 test files to be rewritten for zero user benefit; the
 // honest choice is to add nothing to migrate.
-export const SCHEMA_VERSION = 89;
+export const SCHEMA_VERSION = 90;
 
 // v83 adds the Succession Terminal (`successionReadings`, `successionMarkers`): a
 // frozen bench claim per workspace or per span — the probability that at least one
@@ -1354,6 +1355,14 @@ export const DEFAULT_SETTINGS = Object.freeze({
   concordanceRetestDays: 21,
   concordanceReviewDays: 14,
   concordanceAutoPropagate: true,
+  // ADR-0084: the disclosure compiler's conventions. The cell floor is the
+  // small-cell floor the aggregate withholds below; a release may never run
+  // longer than 30 days or exceed the per-seat cap, whatever is declared here.
+  disclosureCellFloor: 5,
+  disclosureMaxDays: 30,
+  disclosureMaxActiveGrants: 6,
+  disclosureReviewDays: 14,
+  disclosureAutoPropagate: true,
   seatMaterialityPp: 5,
   seatWindowDays: 90,
   seatMaxLinks: 24,
@@ -1627,6 +1636,10 @@ export const COLLECTIONS = [
   // until both sides are in) and the idempotency markers their three rules use.
   'expectationRounds',
   'concordanceMarkers',
+  // ADR-0084: disclosure release contracts (the only records that can widen a
+  // read) and the idempotency markers RULE-DSC-01..02 use.
+  'disclosureGrants',
+  'disclosureMarkers',
   'links',
   'portfolio',
   'events',
@@ -2274,6 +2287,7 @@ export function normalizeSettings(raw) {
     ...normalizeAuthorityCalibrationSettings(s),
     ...normalizeRouterSettings(s),
     ...normalizeConcordanceSettings(s),
+    ...normalizeDisclosureSettings(s),
     ...normalizeSealSettings(s),
   };
 }
@@ -6363,6 +6377,11 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // dropped; a round claiming to be closed with one side is reopened.
   state.expectationRounds = normalizeConcordanceRounds(raw.expectationRounds, warnings);
   state.concordanceMarkers = normalizeConcordanceMarkers(raw.concordanceMarkers, warnings);
+  // ADR-0084: grants resolve before links so `discloses-to`, `consented-by`,
+  // `authorizes` and `tracks-followup` edges validate against real grant ids.
+  // An expired grant loads as expired; it never loads as live authority.
+  state.disclosureGrants = normalizeDisclosureGrants(raw.disclosureGrants, warnings, { now, today: todayDay });
+  state.disclosureMarkers = normalizeDisclosureMarkers(raw.disclosureMarkers, warnings);
   state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
 
   const events = asArray(raw, 'events', warnings).map((e, i) => ({
@@ -7061,6 +7080,26 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  // ADR-0084: additive 89 → 90. No existing record is rewritten. An older
+  // workspace simply has an empty release ledger and the declared conventions;
+  // the compiler derives every posture from the module manifests, so no stored
+  // permission table has to be migrated.
+  89: (v89) => ({
+    ...v89,
+    schemaVersion: 90,
+    disclosureGrants: Array.isArray(v89.disclosureGrants) ? v89.disclosureGrants : [],
+    disclosureMarkers: Array.isArray(v89.disclosureMarkers) ? v89.disclosureMarkers : [],
+    settings: isPlainObject(v89.settings)
+      ? {
+        ...v89.settings,
+        disclosureCellFloor: v89.settings.disclosureCellFloor ?? 5,
+        disclosureMaxDays: v89.settings.disclosureMaxDays ?? 30,
+        disclosureMaxActiveGrants: v89.settings.disclosureMaxActiveGrants ?? 6,
+        disclosureReviewDays: v89.settings.disclosureReviewDays ?? 14,
+        disclosureAutoPropagate: v89.settings.disclosureAutoPropagate !== false,
+      }
+      : { ...DEFAULT_SETTINGS },
+  }),
   // ADR-0083: additive 88 → 89. No existing record is rewritten: an older
   // workspace simply has an empty round ledger and the declared conventions.
   // A round is only ever created by a human opening one.

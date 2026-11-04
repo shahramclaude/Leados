@@ -330,6 +330,10 @@ export const LINK_ENTITY_TYPES = [
   // from them. The subject is a PAIR and a DIMENSION; a person's answers are the
   // instrument's readings, never a rating.
   'concordance',
+  // ADR-0084: a disclosure release is a first-class node: the decision that
+  // governs it, the consent task it waits on and the span it discloses from are
+  // all navigable from the release record itself.
+  'disclosuregrant',
 ];
 
 /**
@@ -450,6 +454,8 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   routingplan: 'altitudeRoutingPlans',
   // ADR-0083: keep the registry exhaustive with LINK_ENTITY_TYPES.
   concordance: 'expectationRounds',
+  // ADR-0084: keep the registry exhaustive with LINK_ENTITY_TYPES.
+  disclosuregrant: 'disclosureGrants',
 });
 
 export const FORBIDDEN_LINK_TYPES = ['conflict', 'pulse'];
@@ -542,10 +548,15 @@ export const SYSTEM_GENERATED_LINK_RELATIONS = Object.freeze([
   'binds-receiver',
   'recovers-authority',
   'summarizes-span',
+  // ADR-0084: a bounded release names the altitude it discloses to and the span
+  // that consented to it. Both are structure, never record content.
+  'discloses-to',
+  'consented-by',
 ]);
 
 export const LINK_RELATIONS = [
   'authorizes', 'binds-receiver', 'recovers-authority', 'summarizes-span',
+  'discloses-to', 'consented-by',
   'mitigates',
   'decides',
   'impacts-goal',
@@ -2134,6 +2145,19 @@ export function resolveLinkedEntity(state, entityType, entityId) {
         type: 'concordance', id: rec.id, title: `Expectation round · ${rec.cycle}`,
         status: rec.status === 'closed' ? 'Closed · both sides in' : rec.status === 'withdrawn' ? 'Withdrawn' : 'Open · sealed',
         route: `#/concordance?panel=rounds&round=${encodeURIComponent(rec.id)}`, raw: rec,
+      };
+    }
+    case 'disclosuregrant': {
+      const rec = (state.disclosureGrants || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      // The purpose is a one-line reason written to be read by the span leader,
+      // so it may sit on the edge; nothing else from the release is projected.
+      return {
+        type: 'disclosuregrant', id: rec.id,
+        title: `Disclosure release · ${rec.moduleLabel || rec.route}`,
+        status: rec.status === 'granted' ? `Live until ${rec.expiresOn}` : rec.status === 'requested' ? 'Awaiting the span leader' : String(rec.status),
+        route: `#/disclosure?panel=releases&grant=${encodeURIComponent(rec.id)}`,
+        raw: rec,
       };
     }
     case 'routingplan': {

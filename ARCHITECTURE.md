@@ -273,3 +273,20 @@ Schema v86 adds the bounded immutable `missionBriefs` collection and `missionCel
 Key lifecycle: `store.js` derives a PBKDF2 256-bit session key (domain `leados-seal-v1:`) from the vault passphrase at unlock / enable / change-passphrase, holds it in memory only, and clears it at all five vault-lock sites. HMAC mode is used whenever the key is present; plain SHA-256 otherwise — and every surface prints which. The ADR-0080 gateway exposes `sealRead`/`sealVerify`/`sealBriefText` as safe reads, `sealScan` under the `audit-seal` right (ranks 1–5), and refuses enable/disable/pause under a declared seat (operator-only).
 
 Honest limits: this is not authentication and not a multi-user boundary; plain-hash mode is tamper-evident against corruption, not forgery-proof; retention-evicted blocks stay chain-verified but content-unverifiable and are reported as such; verification is on demand, not continuous.
+
+## Disclosure layer (ADR-0084, Schema v90)
+
+The Operating Seat ([ADR-0076](docs/adr/0076-operating-seat.md)) decides *per record* whether a seat may read it. That is necessary and not sufficient: a leader above a class ceiling needs the module's **aggregate**, and a leader who needs one span's detail needs a way to ask for it. The disclosure layer is the compile between the two.
+
+```text
+app/core/domain/disclosureManifests.js   97 route manifests: collections, class, counted fields, mode
+app/core/domain/disclosure.js            postureFor / compileDisclosure / moduleAggregate / validateGrantRequest
+app/core/domain/disclosureRules.js       RULE-DSC-01 open (decision + consent task + edges), RULE-DSC-02 sweep
+app/core/domain/disclosureActions.js     request / consent / refuse / revoke / scan, plus the pure reads
+app/views/disclosure.js                  the console, and renderAggregatePosture for every module above its ceiling
+```
+
+- **One compile per render.** `main.js` compiles a posture table once and feeds it to the nav, the route gate and the screen, so the three cannot disagree.
+- **The aggregate is generated, never hand-built.** `moduleAggregate` walks the manifest's collections, attributes each record to a span by `responsibleNodeId`, refuses records outside the seat's subtree (and counts them), then applies the floor, one complementary suppression and total suppression. Money stays per currency; a missing date is `unknown`.
+- **Grants are policy input, not settings.** `postureFor` reads live grants from the ledger; `viewScope.scopedViewState` adds exactly the granted span's records, marked `__disclosureGrant`. The rule engine never grants anything — only the span leader's consent does.
+- **The proof lives in the tests, not the prose.** `tests/app/disclosure-compiler.test.mjs` navigates every route at four altitudes against sentinel-bearing private data and fails on any out-of-span name, peer record or private note reaching the DOM.

@@ -1,3 +1,20 @@
+## 2026-11-04 — everyone ships "role-based dashboards"; nobody compiles disclosure (Session 124, Schema v90, [ADR-0084](docs/adr/0084-disclosure-compiler.md))
+
+Search-result/snippet-level scan (2026-11-04; vendor claims are benchmarks, not independently validated capabilities):
+
+- **Microsoft Viva Glint / Viva Insights** — role-based manager and leader dashboards on a hierarchy, with **aggregation thresholds** and small-cell suppression so a manager cannot infer an individual from a team cut. The pattern worth stealing: a floor is a product feature, not a legal footnote.
+- **Workday / Visier / ChartHop** — hierarchy-derived security: an object is visible because the org chart says so, and reporting rolls up by node ownership. Visier documents aggregate cuts; Workday's security groups are the market default.
+- **OneTrust / BigID / Collibra (data-governance)** — **field-level classification** and purpose-based access: fields carry sensitivity classes and access is computed from policy × purpose, not from a hand-written per-screen rule. This is the closest analogue to the compiler's manifest and the reason the design is a table, not an adapter per screen.
+- **Google Zanzibar / OpenFGA / SpiceDB (authorization)** — relationship-based access control as a *graph* of typed relations, evaluated centrally. LeadOS already has the graph; this session makes the release ledger a first-class node in it.
+- **Statistical disclosure control (FCSM cell suppression; complementary suppression)** — the standard practice for publishing tables without disclosing small cells, including the complementary suppression this session implements so a hidden cell cannot be recovered by subtraction. Named and implemented rather than re-invented.
+- **Cloverpop / Loom / decision-log vendors** — decision governance and an audit trail of *who decided what, why, with what authority*. They govern the decision, not the disclosure of the evidence behind it.
+
+**The gap in the searched material:** every vendor above either (a) filters data by role, or (b) publishes aggregates with a privacy floor. None makes **disclosure itself a compiled, per-screen, per-altitude posture that a leader can read, request an exception to, and have the owning span consent to for a bounded window.** That is the shipped slice, and the leak oracle is what lets it be claimed rather than asserted.
+
+**Implemented [all altitudes]:** module manifests × compiler × leak oracle; aggregate posture replacing route refusals; complementary suppression; per-currency money; parity of rule contracts 64/64; consent-bound release contracts with expiry sweeps.
+**Planned [manager → CEO]:** temporal disclosure control (repeated-release differencing, decay), seat-scoped report reads for the analytic terminals, authenticated identity.
+**Rejected [all altitudes]:** differential-privacy claims (this is cell suppression and is labelled as such); a generic "roles & permissions" settings page (a table nobody reads); per-screen hand audits (the queue outgrows the capacity to drain it).
+
 ## 2026-11-03 — authority is a contract, not a forwarded message
 
 - **Implemented [frontline → CEO] Decision Rights Exchange:** bounded authority over existing work with two-sided acceptance, capacity evidence, budget encumbrance, expiry/recovery and receiver-partitioned roll-up. ADR-0078, schema v84, `#/mandates`.

@@ -79,6 +79,11 @@ export const DEFAULT_RECORD_POLICY = Object.freeze({
 
 export const RECORD_POLICIES = Object.freeze({
   mandates: { classKey: 'authority', label: 'Decision-rights contracts', route: '#/mandates' },
+  // ADR-0084: a disclosure release is a bounded authority contract, so it is
+  // readable at every altitude that can hold one — and its ledger is exactly
+  // what makes the widening auditable afterwards.
+  disclosureGrants: { classKey: 'authority', label: 'Disclosure release contracts', route: '#/disclosure' },
+  disclosureMarkers: { classKey: 'unit', label: 'Disclosure idempotency markers', route: '#/disclosure' },
   missionBriefs: { classKey: 'enterprise', label: 'Identity-free mission briefs', route: '#/mission?panel=brief' },
   // Individual detail. Names, notes and ratings live here.
   oneOnOnes: { classKey: 'individual', label: '1:1 conversations', route: '#/oneonones' },
@@ -180,6 +185,25 @@ const ENTERPRISE_ROUTES = Object.freeze([
   'attribution', 'counterfactual', 'orgdesign', 'voi',
 ]);
 
+/**
+ * ADR-0084: the same windows, exposed as DATA so the Disclosure Compiler gates a
+ * route on exactly the window the nav uses. Two copies of a rank table is how a
+ * nav and a screen start disagreeing about who may see what.
+ */
+export function routeRankWindow(route) {
+  const enterprise = ENTERPRISE_ROUTES.includes(route);
+  const portfolio = PORTFOLIO_ROUTES.includes(route);
+  return {
+    floor: enterprise
+      ? RECORD_CLASSES.enterprise.minRank
+      : portfolio
+        ? RECORD_CLASSES.portfolio.minRank
+        : 1,
+    ceiling: INDIVIDUAL_ROUTES.includes(route) ? RECORD_CLASSES.individual.maxRank : 5,
+    kind: enterprise ? 'enterprise' : portfolio ? 'portfolio' : INDIVIDUAL_ROUTES.includes(route) ? 'individual' : 'open',
+  };
+}
+
 /** Which routes are simply not a frontline/manager question. */
 export function routeVerdict(route, seat) {
   if (!seat || seat.fullAccess) return { allow: true, reason: 'Undeclared operator view — the whole workspace, as before.' };
@@ -238,6 +262,12 @@ export const ACTION_RIGHTS = Object.freeze({
   // ADR-0082: verifying the sealed audit chain is every altitude's business —
   // it writes only an audit event, never a record.
   'audit-seal': { minRank: 1, maxRank: 5, label: 'Verify the sealed audit chain' },
+  // ADR-0084: a disclosure release is requested by the altitude that needs the
+  // detail and consented by the altitude that owns it. Both directions are open
+  // at every rank, because either side may sit at any altitude; the pair, the
+  // purpose, the days and the class are what the action checks.
+  'request-disclosure': { minRank: 1, maxRank: 5, label: 'Request a bounded disclosure release' },
+  'consent-disclosure': { minRank: 1, maxRank: 5, label: 'Consent to, refuse or revoke a disclosure release' },
 });
 
 export function actionVerdict(action, seat) {

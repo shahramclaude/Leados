@@ -108,6 +108,7 @@ import { altitudeRouterRule } from './altitudeRouterRules.js';
 // same transaction, with no second workflow engine. Inert until a round closes;
 // an undeclared workspace is byte-for-byte unchanged.
 import { concordanceRule } from './concordanceRules.js';
+import { disclosureRule } from './disclosureRules.js';
 import { sealRule } from './sealRules.js';
 
 export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
@@ -480,6 +481,10 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   altitudeRouterRule,
   // ADR-0083: altitude as a dimension of the same engine, one rule set later.
   concordanceRule,
+  // ADR-0084: the Disclosure Compiler's paperwork. Runs after every work-producing
+  // module so the consent task and the governed decision it opens describe the
+  // finished transaction; it grants nothing itself.
+  disclosureRule,
   attentionMarketRule,
   // ADR-0077: the Succession Terminal (bench certification). Runs before the
   // Operating Seat because its certificate edges are provenance the seat's
