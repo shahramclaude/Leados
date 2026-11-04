@@ -1,6 +1,6 @@
 /**
  * app/core/domain/identityRules.js — post-commit rules for the Attested Commit
- * (Schema v93, ADR-0087).
+ * (Schema v95, ADR-0089).
  *
  * RULE-IDN-01 ATTEST. When a seat credential session is unlocked and the
  * commit qualifies, append ONE `identity.attested` event whose entityId is the

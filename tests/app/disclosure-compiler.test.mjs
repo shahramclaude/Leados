@@ -164,10 +164,10 @@ function seatsOrThrow(state) {
 /* --------------------------------------------------------------- 1. schema */
 
 test('schema v90 migrates additively and refuses malformed or stale grants', () => {
-  assert.equal(SCHEMA_VERSION, 93);
+  assert.equal(SCHEMA_VERSION, 95);
   const old = { schemaVersion: 89, settings: { leaderName: 'Keep' }, cases: [{ id: 'keep' }], disclosureGrants: [{ id: 'existing' }] };
   const migrated = migrate(old);
-  assert.equal(migrated.raw.schemaVersion, 93);
+  assert.equal(migrated.raw.schemaVersion, 95);
   assert.deepEqual(migrated.raw.disclosureMarkers, []);
   assert.equal(migrated.raw.cases[0].id, 'keep');
   assert.equal(migrated.raw.settings.disclosureCellFloor, 5);
@@ -748,10 +748,11 @@ test('csv: the disclosure export is aggregate-only, seat-compiled and names noth
   const { disclosureReport, disclosureCsvRows } = await import('../../app/core/domain/disclosure.js');
   const spec = CSV_EXPORTS.find((s) => s.key === 'disclosure-posture');
   assert.ok(spec, 'the disclosure posture export is registered, not just an API method');
-  // The registry is append-only: later sessions append their own scopes after
-  // this one. Asserting LAST would break the moment any later scope lands —
-  // assert survival and ordering instead.
-  assert.ok(CSV_EXPORTS.findIndex((s) => s.key === 'disclosure-posture') < CSV_EXPORTS.findIndex((s) => s.key === 'seat-attestation'));
+  // Append-only registry: catchball #79, board #80, disclosure #81, operating
+  // cadence #82. Asserting the ORDER is the contract; asserting disclosure is LAST
+  // would break the moment a later session appends its own scope.
+  assert.ok(CSV_EXPORTS.findIndex((s) => s.key === 'board-claims') < CSV_EXPORTS.findIndex((s) => s.key === 'disclosure-posture'));
+  assert.ok(CSV_EXPORTS.findIndex((s) => s.key === 'disclosure-posture') < CSV_EXPORTS.findIndex((s) => s.key === 'operating-cadence'));
   assert.equal(spec.sensitive, false);
 
   const base = fixture();

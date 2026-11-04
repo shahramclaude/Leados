@@ -334,6 +334,11 @@ export const LINK_ENTITY_TYPES = [
   // from them. The subject is a PAIR and a DIMENSION; a person's answers are the
   // instrument's readings, never a rating.
   'concordance',
+  // ADR-0088: the carryover settlement record is a first-class graph node, so
+  // the encumbered pact, the bet it settles, the leadership span it rolls up
+  // to and the released budget line it frees are all navigable from the
+  // record and back from them.
+  'carryover',
   // ADR-0086: a disclosure release is a first-class node: the decision that
   // governs it, the consent task it waits on and the span it discloses from are
   // all navigable from the release record itself.
@@ -344,6 +349,10 @@ export const LINK_ENTITY_TYPES = [
   // memo from them. It carries counts, verdicts and conventions; no person's
   // private record is ever an endpoint.
   'boardmemo',
+  // ADR-0087: the Operating Cadence Clock. A forum and a frozen queue reading are
+  // first-class nodes; nothing person-level is ever a cadence node.
+  'cadenceforum',
+  'cadencereading',
 ];
 
 /**
@@ -465,12 +474,19 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   // ADR-0084: Hoshin Kanri & Catchball Cascade collections.
   catchballpact: 'catchballPacts',
   catchballround: 'catchballRounds',
+  carryover: 'carryoverRecords',
   // ADR-0083: keep the registry exhaustive with LINK_ENTITY_TYPES.
   concordance: 'expectationRounds',
   // ADR-0086: keep the registry exhaustive with LINK_ENTITY_TYPES.
   disclosuregrant: 'disclosureGrants',
   // ADR-0084: keep the registry exhaustive with LINK_ENTITY_TYPES.
   boardmemo: 'boardMemos',
+  // ADR-0087: the Operating Cadence Clock. A forum is a first-class graph node
+  // every queued item, escalated constraint and agenda-fit gap is navigable FROM
+  // the forum that is supposed to close it; a frozen reading is a node so the
+  // queue it predicted can be read back against what actually closed.
+  cadenceforum: 'cadenceForums',
+  cadencereading: 'cadenceReadings',
 });
 
 export const FORBIDDEN_LINK_TYPES = ['conflict', 'pulse'];
@@ -565,10 +581,19 @@ export const SYSTEM_GENERATED_LINK_RELATIONS = Object.freeze([
   'summarizes-span',
   // ADR-0084: emitted by the Catchball spine, not manually asserted.
   'deploys-strategy', 'cascades-to', 'counters-upward', 'trades-off',
+  // ADR-0088: emitted by the Carryover spine, not manually asserted.
+  // `carries-over` — the invalidated pact flows into the settlement terminal;
+  // `settles` — the record (or its decision) judges the bet's stop rule;
+  // `releases-resource` — the settled record returned encumbered authority.
+  'carries-over', 'settles', 'releases-resource',
   // ADR-0086: a bounded release names the altitude it discloses to and the span
   // that consented to it. Both are structure, never record content.
   'discloses-to',
   'consented-by',
+  // ADR-0087: written only by RULE-CAD-01/02/03. `queued-for` says which forum is
+  // competent to close an item; `fit-gap` says which owning seat a forum's
+  // membership is missing. Neither is ever asserted by hand.
+  'queued-for', 'fit-gap',
 ]);
 
 export const LINK_RELATIONS = [
@@ -801,6 +826,15 @@ export const LINK_RELATIONS = [
   // PAIR and an EXPECTATION, never a person's performance.
   're-contracts',
   're-tests',
+  // ADR-0088: Hoshin Carryover Terminal provenance edges (see
+  // SYSTEM_GENERATED_LINK_RELATIONS).
+  'carries-over',
+  'settles',
+  'releases-resource',
+  // ADR-0087: an item is queued for the ONE forum competent to close it, and an
+  // agenda-fit gap names a seat a forum's membership is missing.
+  'queued-for',
+  'fit-gap',
 ];
 
 export const LINK_RELATION_LABELS = {
@@ -907,6 +941,9 @@ export const LINK_RELATION_LABELS = {
   'cascades-to': 'Cascades vertically into downstream pact or goal',
   'counters-upward': 'Bilateral Catchball counter-offer upward',
   'trades-off': 'Explicitly de-scopes commitment to free span capacity',
+  'carries-over': 'Invalidated pact flows into the settlement terminal',
+  'settles': 'Judges the bet against its stop rule',
+  'releases-resource': 'Settled record returned encumbered budget authority',
 };
 
 const Z_80_INTERVAL = 1.2815515655446004; // Standard normal 90th percentile (P10 / P90)
@@ -2219,6 +2256,50 @@ export function resolveLinkedEntity(state, entityType, entityId) {
         title: rec.title || `Catchball pact · ${rec.altitudeKey}`,
         status: `${rec.status} · ${rec.altitudeKey} (${rec.horizonDays}d)`,
         route: `#/catchball?panel=workbench&pact=${encodeURIComponent(rec.id)}`,
+        raw: rec,
+      };
+    }
+    case 'cadenceforum': {
+      const rec = (state.cadenceForums || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      // A forum is a governance server; its attendance list is deliberately NOT
+      // projected into the shared graph, because an edge is world-readable above
+      // the span and attendance is a working fact, not a governance claim.
+      return {
+        type: 'cadenceforum',
+        id: rec.id,
+        title: rec.title,
+        status: `${rec.status} · ${rec.cadence} · capacity ${rec.decisionCapacity}`,
+        route: `#/cadence?panel=workbench&forum=${encodeURIComponent(rec.id)}`,
+        raw: rec,
+      };
+    }
+    case 'cadencereading': {
+      const rec = (state.cadenceReadings || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      return {
+        type: 'cadencereading',
+        id: rec.id,
+        title: `Cadence reading · ${rec.frozenOn}`,
+        status: rec.grade
+          ? (rec.grade.outcome === 'held' ? 'Prediction held' : 'Prediction did not hold')
+          : `Frozen ${rec.frozenOn}`,
+        route: `#/cadence?panel=constraint&reading=${encodeURIComponent(rec.id)}`,
+        raw: rec,
+      };
+    }
+    case 'carryover': {
+      const rec = (state.carryoverRecords || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      // The node addresses the settlement record and its frozen resource bundle;
+      // the record's own bet basis is a one-line reason and rides the edge. No
+      // person and no budget NAME is projected — only the released amounts.
+      return {
+        type: 'carryover',
+        id: rec.id,
+        title: `Carryover · ${rec.betBasis || rec.status}`,
+        status: rec.settlementVerdict ? `${rec.status} · ${rec.settlementVerdict}` : String(rec.status),
+        route: `#/carryover?panel=queue`,
         raw: rec,
       };
     }

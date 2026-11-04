@@ -1,4 +1,4 @@
-# ADR-0087: The Attested Commit — per-seat credential authorship over the sealed log (Session 127, Schema v93)
+# ADR-0089: The Attested Commit — per-seat credential authorship over the sealed log (Session 129, Schema v95)
 
 **Status:** Accepted, 2026-11-04. Supersedes no earlier decision; extends [ADR-0082 (the Sealed Spine)](./0082-sealed-spine.md) and honours the limit every ADR from [ADR-0076](./0076-operating-seat.md) onward has printed: *seats are local analytical lenses, not authenticated access controls.*
 
@@ -9,7 +9,7 @@ The Sealed Spine made the event log tamper-*evident*: one hash chain, sealed per
 1. **Attribution is a claim, not evidence.** A seat label can be back-dated, swapped or typed by anyone holding the keyboard. When the log later says "Mei Manager closed this case", the log is repeating a self-report.
 2. **Silence is invisible.** Under a workspace that *claims* attestation discipline, a commit with no signature at all is indistinguishable from a compliant one. An enforcement posture that can be silently violated is theatre.
 
-The competitive hunt ([RESEARCH §107](../../RESEARCH.md)) found no exception to close this honestly: every vendor in people analytics (Workday, Visier, Lattice, Culture Amp, Crunchr) authenticates *server-side* via SSO and keeps its audit tables vendor-held; none offers customer-locally verifiable authorship. Public audit-log practice ([ProofLog's assurance ladder](../../RESEARCH.md), ogentic-audit, cryptography-audit-logs) orders the rungs: hash chain → HMAC signing → external signature → external anchor → trusted timestamp. The next honest rung for a local-first, single-workspace app is rung 2–3, and the last two rungs cannot exist here without leaving the product's own boundary.
+The competitive hunt ([RESEARCH §109](../../RESEARCH.md)) found no exception to close this honestly: every vendor in people analytics (Workday, Visier, Lattice, Culture Amp, Crunchr) authenticates *server-side* via SSO and keeps its audit tables vendor-held; none offers customer-locally verifiable authorship. Public audit-log practice ([ProofLog's assurance ladder](../../RESEARCH.md), ogentic-audit, cryptography-audit-logs) orders the rungs: hash chain → HMAC signing → external signature → external anchor → trusted timestamp. The next honest rung for a local-first, single-workspace app is rung 2–3, and the last two rungs cannot exist here without leaving the product's own boundary.
 
 ## Decision
 
@@ -71,5 +71,5 @@ Attestation is the identity of the write itself, not automation: `shouldAttest` 
 - The log can now say **who declared authorship of what, verifiable with a key that never left their session**, and can say **"unattributed"** out loud when nobody did.
 - Verification is honest but not omnipotent: a credential whose key is gone verifies *structurally* only; a tampered window is `FAILED`; retention-truncated history is *evicted*, not clean.
 - **Not claimed:** third-party non-repudiation (the passphrase is the operator's, the HMAC is symmetric), authentication of a human being, a multi-user or tenant boundary, protection against whoever controls the browser (a keylogger defeats this, as it defeats every client-side secret), or security of an unencrypted workspace backup. HMAC is tamper-evident authorship **within** the local-first boundary; the honest claim is *accountable authorship*, not identity.
-- Aggregate-only CSV #82 (`seat-attestation`) and the identity-free certificate leak no seat id, name, fingerprint or MAC. Attestation rate below a 5-transaction floor is **blank**, never 0.
+- Aggregate-only CSV #84 (`seat-attestation`) and the identity-free certificate leak no seat id, name, fingerprint or MAC. Attestation rate below a 5-transaction floor is **blank**, never 0.
 - Browser walkthrough of the credential flow remains `[UNVERIFIED]`; the mechanical behaviour is covered by `tests/app/identity-ledger.test.mjs` (27/27), including the cross-module propagation example and the cross-altitude roll-up mandated by the build bar.

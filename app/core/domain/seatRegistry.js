@@ -290,7 +290,10 @@ export const ACTION_RIGHTS = Object.freeze({
   // purpose, the days and the class are what the action checks.
   'request-disclosure': { minRank: 1, maxRank: 5, label: 'Request a bounded disclosure release' },
   'consent-disclosure': { minRank: 1, maxRank: 5, label: 'Consent to, refuse or revoke a disclosure release' },
-  // ADR-0087: managing your own seat credential is every altitude's right —
+  // ADR-0087: the standing forum is a governance server; any altitude that chairs
+  // one may declare it and record its sittings, but never for a peer span.
+  'run-cadence': { minRank: 1, maxRank: 5, label: 'Declare a standing forum, record its sittings and freeze a cadence reading' },
+  // ADR-0089: managing your own seat credential is every altitude's right —
   // attestation without the frontline is theater. The actions themselves
   // enforce "your own seat only" under a declared seat.
   'attest-seat-identity': { minRank: 1, maxRank: 5, label: 'Enroll, unlock, lock or scan a seat credential' },

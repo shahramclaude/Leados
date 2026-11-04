@@ -1,6 +1,6 @@
 /**
  * app/core/domain/identityRegistry.js — constants for the Attested Commit
- * (Schema v93, ADR-0087, Session 127).
+ * (Schema v95, ADR-0089, Session 129).
  *
  * The Sealed Spine (ADR-0082) proved the event log has not been altered. It
  * could not say WHO altered it: every seat on the workspace was a declared
@@ -17,7 +17,7 @@
  * the seal proves the log is intact; the attestation proves which credential
  * wrote each block of it.
  *
- * This is the second rung of an explicit assurance ladder (see ADR-0087):
+ * This is the second rung of an explicit assurance ladder (see ADR-0089):
  *   rung 1  hash chain (ADR-0082)         — detects edits, reorders, deletes;
  *   rung 2  per-seat HMAC attestation     — defeats whole-log re-hash forgery
  *           (this module)                    without the seat passphrase;

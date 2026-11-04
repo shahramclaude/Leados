@@ -68,10 +68,10 @@ function traceRow({ id = 'trace-test', entity = 'scorecard', entityId = 'scoreca
 }
 
 test('schema v48 migrates additively without guessing successful history and normalizes a bounded content-free trace', () => {
-  assert.equal(SCHEMA_VERSION, 93);
+  assert.equal(SCHEMA_VERSION, 95);
   const previousLedger = [traceRow({ id: 'untrusted-v47-history' })];
   const migrated = migrate({ schemaVersion: 47, propagationLineage: previousLedger, scorecards: [] });
-  assert.deepEqual(migrated.applied, ['47 → 48', '48 → 49', '49 → 50', '50 → 51', '51 → 52', '52 → 53', '53 → 54', '54 → 55', '55 → 56', '56 → 57', '57 → 58', '58 → 59', '59 → 60', '60 → 61', '61 → 62', '62 → 63', '63 → 64', '64 → 65', '65 → 66', '66 → 67', '67 → 68', '68 → 69', '69 → 70', '70 → 71', '71 → 72', '72 → 73', '73 → 74', '74 → 75', '75 → 76', '76 → 77', '77 → 78', '78 → 79', '79 → 80', '80 → 81', '81 → 82', '82 → 83', '83 → 84', '84 → 85', '85 → 86', '86 → 87', '87 → 88', '88 → 89', '89 → 90', '90 → 91', '91 → 92', '92 → 93']);
+  assert.deepEqual(migrated.applied, ['47 → 48', '48 → 49', '49 → 50', '50 → 51', '51 → 52', '52 → 53', '53 → 54', '54 → 55', '55 → 56', '56 → 57', '57 → 58', '58 → 59', '59 → 60', '60 → 61', '61 → 62', '62 → 63', '63 → 64', '64 → 65', '65 → 66', '66 → 67', '67 → 68', '68 → 69', '69 → 70', '70 → 71', '71 → 72', '72 → 73', '73 → 74', '74 → 75', '75 → 76', '76 → 77', '77 → 78', '78 → 79', '79 → 80', '80 → 81', '81 → 82', '82 → 83', '83 → 84', '84 → 85', '85 → 86', '86 → 87', '87 → 88', '88 → 89', '89 → 90', '90 → 91', '91 → 92', '92 → 93', '93 → 94', '94 → 95']);
   assert.deepEqual(migrated.raw.propagationLineage, [], 'the migration never infers or imports a pre-v48 success ledger');
 
   const rawTrace = traceRow();
@@ -89,7 +89,7 @@ test('schema v48 migrates additively without guessing successful history and nor
     propagationLineage: [rawTrace],
   }, { now: NOW });
   const [stored] = normalized.state.propagationLineage;
-  assert.equal(normalized.state.schemaVersion, 93);
+  assert.equal(normalized.state.schemaVersion, 95);
   assert.equal(normalized.state.propagationLineage.length, 1);
   assert.deepEqual(stored.steps[0].changedCollections, ['decisions', 'links']);
   assert.equal(stored.steps[0].links.length, 1, 'confidential typed edges are rejected');
@@ -553,13 +553,35 @@ test('every registered link type survives schema normalization/reload and resolv
     createdAt: NOW_ISO, updatedAt: NOW_ISO, claims: [], looks: [], fingerprint: 'e5f60718293a4b5c',
   }];
 
-  // Schema v92: a disclosure release contract. The graph node addresses the
-  // contract, never the widened records it authorises.
+  // Schema v92: a bounded disclosure release. The node names the pair, the class
+  // and the window; it never carries record content.
   raw.disclosureGrants = [{
-    id: 'disclosure-grant-link-fixture', route: 'cases',
-    requesterId: 'ic1', spanId: 'mgr1',
-    purpose: 'Fixture release purpose, long enough to survive validation.',
-    days: 14, status: 'requested', requestedOn: NOW_ISO.slice(0, 10), requestedAt: NOW_ISO,
+    id: 'disclosure-grant-link-fixture', route: 'cases', moduleLabel: 'Cases',
+    collection: 'cases', classKey: 'individual', requesterId: 'mgr1', requesterSeatId: 'mgr1',
+    spanId: 'dir1', spanLabel: 'Directorate', status: 'requested',
+    requestedOn: NOW_ISO, requestedAt: NOW_ISO, createdAt: NOW_ISO,
+    purpose: 'Fixture release contract for a bounded audit', days: 14, history: [],
+  }];
+
+  // Schema v93: the Operating Cadence Clock's two graph nodes. A forum carries a
+  // title and no person; a frozen reading carries counts and conventions.
+  raw.cadenceForums = [{
+    id: 'cadence-forum-link-fixture', title: 'Weekly operating review', kind: 'operating-review',
+    cadence: 'weekly', status: 'active', chairSeatId: 'mgr1', attending: ['mgr1'],
+    decisionCapacity: 4, serviceDays: 3, intervalDays: 7, horizonDays: 30,
+    createdAt: NOW_ISO, updatedAt: NOW_ISO,
+  }];
+  raw.cadenceReadings = [{
+    id: 'cadence-reading-link-fixture', frozenOn: NOW_ISO, createdAt: NOW_ISO,
+    engineVersion: 'cadence-2026.11-v1', forums: [], conventions: {}, subject: 'workspace',
+  }];
+
+  // Schema v94: a carryover settlement record. The node carries the frozen
+  // bundle and the verdict; no person and no budget name rides the edge.
+  raw.carryoverRecords = [{
+    id: 'carryover-link-fixture', pactId: 'catchball-pact-link-fixture',
+    betBasis: 'thesis-invalidated', status: 'pending-settlement',
+    createdAt: NOW_ISO, updatedAt: NOW_ISO,
   }];
 
   // Schema v90: pact and bilateral-round graph nodes survive normalization.
@@ -717,12 +739,15 @@ test('every registered link type survives schema normalization/reload and resolv
       concordance: ['round', resolved.id],
       // Schema v90: a memo is addressed by query on the Board Room's memo panel.
       boardmemo: ['memo', resolved.id],
-      // Schema v92: a release contract is addressed by query on the Disclosure
-      // Console's releases panel — the edge names the contract, never the
-      // widened records it authorises.
-      disclosuregrant: ['grant', resolved.id],
       catchballpact: ['pact', resolved.id],
       catchballround: ['round', resolved.id],
+      // Schema v93: a forum is addressed by query on the cadence terminal's
+      // workbench panel; a frozen reading by query on its constraint panel.
+      cadenceforum: ['forum', resolved.id],
+      cadencereading: ['reading', resolved.id],
+      // Schema v92: a bounded release is addressed by query on the Disclosure
+      // Console's releases panel — the edge names the contract, not its content.
+      disclosuregrant: ['grant', resolved.id],
     }[link.targetType];
     if (focusParam) {
       assert.equal(query.get(focusParam[0]), focusParam[1], `${link.targetType} route carries an encoded, exact focus ID`);
@@ -731,6 +756,11 @@ test('every registered link type survives schema normalization/reload and resolv
       // not yet to a single focused contract. The terminal is navigable; the
       // exact-record focus is a future route contract, not a fake query param.
       assert.equal(routePath, '/mandates', 'a decision-rights contract resolves to the mandates terminal');
+    } else if (link.targetType === 'carryover') {
+      // Honest known gap (same shape as mandate): the settlement record
+      // resolves to its terminal's queue panel, which is navigable but not
+      // record-focused yet. The exact-record focus is a future route contract.
+      assert.equal(routePath, '/carryover', 'a carryover record resolves to the carryover terminal');
     } else if (link.targetType === 'candidate') {
       assert.equal(query.get('candidate'), resolved.id, 'candidate route carries the exact candidate ID');
       assert.equal(routeSegments.at(-1), resolved.raw.reqId, 'candidate route also names its owning requisition');

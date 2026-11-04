@@ -117,11 +117,11 @@ function ruleIdnLinks(state) {
 /* ------------------------------------------------------------- 1. schema */
 
 test('schema v91 migrates additively; malformed credential rows are dropped, never repaired', () => {
-  assert.equal(SCHEMA_VERSION, 93);
+  assert.equal(SCHEMA_VERSION, 95);
   const old = { schemaVersion: 90, settings: { leaderName: 'Keep' }, cases: [{ id: 'keep' }] };
   const migrated = migrate(old);
-  assert.equal(migrated.raw.schemaVersion, 93);
-  assert.deepEqual(migrated.applied, ['90 → 91', '91 → 92', '92 → 93']);
+  assert.equal(migrated.raw.schemaVersion, 95);
+  assert.deepEqual(migrated.applied, ['90 → 91', '91 → 92', '92 → 93', '93 → 94', '94 → 95']);
   assert.deepEqual(migrated.raw.seatIdentities, []);
   assert.deepEqual(migrated.raw.identityMarkers, []);
   assert.equal(migrated.raw.settings.identityEnabled, false);
@@ -374,23 +374,23 @@ test('RULE-IDN-02 is pausable; the explicit scan path still surfaces the gap', (
 
 test('the gateway refuses unattested writes fail-closed under enforcement; boundary management is exempt but rank-gated', async () => {
   const { store, api } = boot(fixture({ activeSeatId: 'mgr1', identityEnforced: true }));
-  const denied = guardApiCall(store.state, 'addCase', [{ title: 'Should be refused' }]);
+  const denied = guardApiCall(store.state, 'addCase', [{ title: 'Should be refused' }], NOW.getTime());
   assert.equal(denied.ok, false);
   assert.equal(denied.code, 'scope-refusal');
   assert.match(denied.error, /enforces attested commits/);
   // Boundary management is exempt from the enforcement gate — you must be
   // able to enroll your way out…
-  assert.ok(guardApiCall(store.state, 'identityEnroll', [{ seatId: 'mgr1', passphrase: PASS }]).ok);
-  assert.ok(guardApiCall(store.state, 'identityRead', []).ok, 'reads never need a credential');
+  assert.ok(guardApiCall(store.state, 'identityEnroll', [{ seatId: 'mgr1', passphrase: PASS }], NOW.getTime()).ok);
+  assert.ok(guardApiCall(store.state, 'identityRead', [], NOW.getTime()).ok, 'reads never need a credential');
   // …but GOVERNING the boundary is director+ (govern-attestation, rank 3–5):
   // a manager may not switch enforcement off on their own authority.
-  const usurp = guardApiCall(store.state, 'identitySetSettings', [{ identityEnforced: false }]);
+  const usurp = guardApiCall(store.state, 'identitySetSettings', [{ identityEnforced: false }], NOW.getTime());
   assert.equal(usurp.ok, false);
   assert.match(usurp.error, /rank window/);
   const { store: vpStore } = boot(fixture({ activeSeatId: 'vp1', identityEnforced: true }));
-  assert.ok(guardApiCall(vpStore.state, 'identitySetSettings', [{ identityEnforced: false }]).ok, 'the VP may govern the boundary');
+  assert.ok(guardApiCall(vpStore.state, 'identitySetSettings', [{ identityEnforced: false }], NOW.getTime()).ok, 'the VP may govern the boundary');
   await enroll(api, 'mgr1');
-  const allowed = guardApiCall(store.state, 'addCase', [{ title: 'Signed work' }]);
+  const allowed = guardApiCall(store.state, 'addCase', [{ title: 'Signed work' }], NOW.getTime());
   assert.equal(allowed.ok, true, 'with a session unlocked, writes pass');
 });
 
@@ -550,7 +550,7 @@ test('CSV #82 and the certificate carry counts only — no seat id, name, finger
   const { store, api } = boot();
   await enroll(api, 'mgr1');
   store.update(() => {}, { type: 'note.added', entity: 'note', entityId: 'n1', summary: 'work' });
-  assert.equal(CSV_EXPORTS.length, 82);
+  assert.equal(CSV_EXPORTS.length, 84);
   assert.ok(CSV_EXPORTS.some((s) => s.key === 'seat-attestation'));
   const out = exportWorkspaceCsv(store.state, 'seat-attestation', { now: NOW });
   assert.equal(out.ok, true, out.error);

@@ -48,14 +48,14 @@ const proposal = (toSeatId = 'lead1', extra = {}) => ({ title: 'Improve the deli
 
 // Schema and graph are additive; imported rows cannot silently become accepted pacts.
 test('v88 migration, record validation, graph vocabulary and spine parity', () => {
-  assert.equal(SCHEMA_VERSION, 93);
+  assert.equal(SCHEMA_VERSION, 95);
   const migrated = migrate({ schemaVersion: 88, settings: { leaderName: 'Keep' }, people: [] });
-  assert.deepEqual(migrated.applied, ['88 → 89', '89 → 90', '90 → 91', '91 → 92', '92 → 93']);
+  assert.deepEqual(migrated.applied, ['88 → 89', '89 → 90', '90 → 91', '91 → 92', '92 → 93', '93 → 94', '94 → 95']);
   assert.deepEqual(migrated.raw.catchballPacts, []);
   assert.deepEqual(migrated.raw.catchballRounds, []);
   assert.equal(migrated.raw.settings.leaderName, 'Keep');
   const afterConcordance = migrate({ schemaVersion: 89, expectationRounds: [{ id: 'existing-round' }], settings: {} });
-  assert.deepEqual(afterConcordance.applied, ['89 → 90', '90 → 91', '91 → 92', '92 → 93']);
+  assert.deepEqual(afterConcordance.applied, ['89 → 90', '90 → 91', '91 → 92', '92 → 93', '93 → 94', '94 → 95']);
   assert.equal(afterConcordance.raw.expectationRounds[0].id, 'existing-round');
   assert.deepEqual(afterConcordance.raw.catchballPacts, []);
   const warnings = [];
@@ -69,15 +69,22 @@ test('v88 migration, record validation, graph vocabulary and spine parity', () =
   }
   const names = DEFAULT_POST_COMMIT_RULES.map((rule) => rule.name);
   assert.equal(names.indexOf('catchballRule'), names.indexOf('altitudeRouterRule') + 1);
+  // The settle step (carryover) and the queue step (cadence) both run after the
+  // cascade and before the market, so any constraint or settlement they open is
+  // priced in the same transaction. Carryover settles the invalidated pacts
+  // first; cadence then queues every reviewable item those settlements left.
+  assert.equal(names.indexOf('carryoverRule'), names.indexOf('catchballRule') + 1);
+  assert.equal(names.indexOf('cadenceRule'), names.indexOf('carryoverRule') + 1);
   assert.ok(names.indexOf('catchballRule') < names.indexOf('attentionMarketRule'));
   assert.equal(PROPAGATION_CONTRACTS.length, DEFAULT_POST_COMMIT_RULES.length);
   // The registry is append-only and numbering follows position: CSV #79 is the
-  // Catchball cascade, and later sessions append their own scopes after it.
-  // Asserting the scope survives is the contract; asserting it is LAST would
-  // break the moment any later session appends its own scope.
+  // Catchball cascade, #80 the Board Room (Session 125) and #81 the Operating
+  // Cadence Clock (Session 126). Asserting the ORDER is the contract; asserting
+  // one of them is LAST would break the moment a later session appends its own.
   assert.ok(CSV_EXPORTS.some((scope) => scope.key === 'catchball-cascade'));
   assert.ok(CSV_EXPORTS.findIndex((scope) => scope.key === 'catchball-cascade') < CSV_EXPORTS.findIndex((scope) => scope.key === 'board-claims'));
-  assert.ok(CSV_EXPORTS.findIndex((scope) => scope.key === 'board-claims') < CSV_EXPORTS.findIndex((scope) => scope.key === 'seat-attestation'));
+  assert.ok(CSV_EXPORTS.findIndex((scope) => scope.key === 'board-claims') < CSV_EXPORTS.findIndex((scope) => scope.key === 'operating-cadence'));
+  assert.ok(CSV_EXPORTS.findIndex((scope) => scope.key === 'operating-cadence') < CSV_EXPORTS.findIndex((scope) => scope.key === 'seat-attestation'));
 });
 
 test('one proposal writes strategy and hierarchy provenance; scans are idempotent', () => {

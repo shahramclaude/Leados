@@ -1,13 +1,13 @@
-## Canonical app — Session 127 (Schema v93, additive `92 → 93`)
+## Canonical app — Session 129 (Schema v95, additive `94 → 95`)
 
-### The Attested Commit (`#/identity`, [ADR-0087](./docs/adr/0087-attested-commit.md), RULE-IDN-01..03, CSV #82)
+### The Attested Commit (`#/identity`, [ADR-0089](./docs/adr/0089-attested-commit.md), RULE-IDN-01..03, CSV #84)
 
 - ✅ **A credential you derive, never store.** A seat passphrase runs through PBKDF2 to a memory-only key; the workspace keeps only the salt, a 16-hex fingerprint and an HMAC verifier. The key is cleared at all five lock sites beside the seal key; nothing key-shaped is ever written to disk, and no WebCrypto means attestation is unavailable rather than downgraded.
 - ✅ **One attestation per commit, sealed beneath the seal.** Each operational commit under an unlocked session appends one `identity.attested` event whose HMAC-SHA256 covers the seat, key fingerprint, revision and a digest of every event the transaction appended before it — and `sealRule`, running absolutely last, covers the attestation in turn. The enrollment commit is the credential's first attested act.
 - ✅ **Unattributed writes open governed work.** Under enforcement, a write with no credential logs `identity.unattributed` and opens one authorship-boundary DACI decision per seat per ISO week, rolling up to every leadership ancestor in the same transaction. Session-lifecycle events are never flagged; the rule is pausable while an explicit scan always runs.
 - ✅ **Three-valued verification, never flattering.** verified · FAILED · **digest-verified, key unavailable** (never upgraded to verified, never punished as failed) · evicted, counted not hidden. Tampered content fails; a retired key degrades honestly.
 - ✅ **Rung 3 checkpoints kept outside the workspace.** Signed checkpoint documents (MAC bound to the body, `UNSIGNED` said out loud when unsigned) detect TRUNCATED / REWOUND / REWRITTEN that a self-referential chain cannot see. Rung 4 (auditor signatures) and rung 5 (external timestamps) are deliberately rejected — no PKI without a second party, no network in a local-first product.
-- ✅ **Fail-closed enforcement, rank-gated governance.** `identityEnforced` makes the gateway refuse unattested writes while boundary management stays reachable; switching enforcement off is the director+ `govern-attestation` right. Aggregate-only CSV #82 and the identity-free brief leak no seat id, name, fingerprint or MAC.
+- ✅ **Fail-closed enforcement, rank-gated governance.** `identityEnforced` makes the gateway refuse unattested writes while boundary management stays reachable; switching enforcement off is the director+ `govern-attestation` right. Aggregate-only CSV #84 and the identity-free brief leak no seat id, name, fingerprint or MAC.
 - ⚠️ **Honest limit.** This is accountable authorship inside one browser — not authentication of a human being, not third-party non-repudiation, not a tenant boundary, and no defence against whoever controls the browser.
 ## Canonical app — Session 126 (Schema v92, additive `91 → 92`)
 
@@ -29,9 +29,9 @@
 - ✅ **Disclosure & exports.** Small-cell suppression with complementary intervals, identity-free executive brief, aggregate-only CSV #79.
 - ⚠️ Declared local seats are not authenticated accounts; suppression is not differential privacy.
 
-## Canonical app — Session 125 (Schema v93, additive `92 → 93`)
+## Canonical app — Session 125 (Schema v95, additive `94 → 95`)
 
-### Board Room (`#/board`, [ADR-0087](./docs/adr/0085-board-room.md), RULE-BRD-01..03, CSV #82)
+### Board Room (`#/board`, [ADR-0089](./docs/adr/0085-board-room.md), RULE-BRD-01..03, CSV #84)
 
 - ✅ **Pre-registration, not reporting.** Seven enterprise claims are declared with a comparator, unit and threshold before the first look; each look records a content fingerprint of exactly what was visible.
 - ✅ **Post-hoc movement is permanent.** A threshold revised after a look carries `revisedAfterLook` forever — printed on the claim, in the memo text and in the export.
@@ -41,8 +41,8 @@
 - ✅ **Disagreement surfaced, never composited.** Three cross-checks (coverage vs flow, rate vs book, integrity vs examination) print both numbers and a route; there is no composite score anywhere in the module.
 - ✅ **Reconciled roll-up only.** Span partitions are checked against the claim's own denominator; a broken partition is reported with its delta and an unattributed claim is drawn as "nothing attributed".
 - ✅ **Cross-module × cross-altitude in one transaction.** A failing claim opens one governed DACI decision (chief altitude), one delegation to the failing span (capped at `min(60, boardRecheckDays)`), and typed `rolls-up-to` edges to every ancestor. 67 rules / 67 contracts, marker-idempotent, pausable, explicit scan always available.
-- ✅ **Five distinct read models.** Frontline (read-only failing-line view), manager (partition arithmetic), director (named spans + delegation), VP (discrepancies and settling arithmetic), CEO / chief (memory-less memorandum, attestation, aggregate CSV #82). `commit-board-memo` is chief-only.
-- ✅ **Wiring.** Additive `MIGRATIONS[92]`, two collections (`boardMemos`, `boardMarkers`), five clamped settings, one API right group, six safe reads, one nav entry with a fact-only badge, seven route aliases, five axe-clean panels, CSS, aggregate-only CSV #79 with blank-not-zero refusals.
+- ✅ **Five distinct read models.** Frontline (read-only failing-line view), manager (partition arithmetic), director (named spans + delegation), VP (discrepancies and settling arithmetic), CEO / chief (memory-less memorandum, attestation, aggregate CSV #84). `commit-board-memo` is chief-only.
+- ✅ **Wiring.** Additive `MIGRATIONS[94]`, two collections (`boardMemos`, `boardMarkers`), five clamped settings, one API right group, six safe reads, one nav entry with a fact-only badge, seven route aliases, five axe-clean panels, CSS, aggregate-only CSV #79 with blank-not-zero refusals.
 - ⚠️ Wilson assumes independent observations and spans are not independent, so the interval is a lower bound on uncertainty. Seven claims are a chosen instrument, not a validated one; a declared seat is not authentication.
 
 ## Canonical app — Session 123 (Schema v89, additive `88 → 89`)
