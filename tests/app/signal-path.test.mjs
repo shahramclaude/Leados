@@ -147,7 +147,6 @@ test('Schema v59 is additive: a v58 workspace gains three empty collections and 
   assert.equal(migrated.raw.schemaVersion, 95);
   assert.equal(migrated.applied.at(-1), '94 → 95');
   assert.equal(migrated.raw.schemaVersion, 95);
-  assert.equal(migrated.applied.at(-1), '90 → 91');
   assert.deepEqual(migrated.raw.signalClasses, []);
   assert.deepEqual(migrated.raw.signalProbes, []);
   assert.deepEqual(migrated.raw.signalLevers, []);

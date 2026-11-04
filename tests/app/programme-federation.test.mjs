@@ -376,18 +376,23 @@ test('a freeze writes an identity-reduced assessment, rolls it up, and opens one
   assert.equal(store.state.federationAssessments.length, 1);
 });
 
-test('a manager’s freeze opens findings only inside its own span, never about a peer', () => {
+test('a manager’s freeze or scan opens findings only inside its own span, never about a peer', () => {
   const state = tree({ activeSeatId: 'mgr1' });
   const { store, api } = harness(state);
+  const scanned = api.federationScan();
+  assert.equal(scanned.ok, true, scanned.error);
+  const fromScan = store.state.decisions.filter((decision) => String(decision.rationale || '').includes('RULE-FED-02'));
+  assert.equal(fromScan.length, 2, 'exactly the manager’s own two edges: its lead’s and its own');
+  const scannedText = fromScan.map((decision) => decision.question).join(' ');
+  assert.ok(scannedText.includes('#lead1'), 'the lead under this manager is in scope');
+  assert.ok(scannedText.includes('#mgr1'), 'the manager’s own edge to the director is in scope');
+  assert.ok(!scannedText.includes('#lead2'), 'a peer manager’s lead is never in scope');
+  assert.ok(!scannedText.includes('#mgr2'), 'a peer manager is never in scope');
+
   const frozen = api.federationFreeze();
   assert.equal(frozen.ok, true, frozen.error);
-  const opened = store.state.decisions.filter((decision) => String(decision.rationale || '').includes('RULE-FED-02'));
-  const questions = opened.map((decision) => decision.question).join(' ');
-  assert.ok(opened.length >= 1, 'the manager’s own edges are measured');
-  assert.ok(questions.includes('#lead1'), 'the lead under this manager is in scope');
-  assert.ok(questions.includes('#mgr1'), 'the manager’s own edge to the director is in scope');
-  assert.ok(!questions.includes('#lead2'), 'a peer manager’s lead is never in scope');
-  assert.ok(!questions.includes('#mgr2'), 'a peer manager is never in scope');
+  const afterFreeze = store.state.decisions.filter((decision) => String(decision.rationale || '').includes('RULE-FED-02'));
+  assert.equal(afterFreeze.length, 2, 'the same week’s findings are not re-opened by a freeze');
 });
 
 test('a recovering measurement records a reconnection and does NOT close the human decision', () => {
