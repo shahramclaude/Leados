@@ -1,0 +1,190 @@
+/**
+ * app/core/domain/disclosureManifests.js — the module catalogue, declared once.
+ *
+ * Every route the shell can render appears here exactly once. A route that is
+ * missing is WITHHELD with a printed reason (fail closed), so adding a module is
+ * one row — not a new adapter, and never a silent hole.
+ *
+ * A row answers four questions:
+ *   1. Which governed collections does this screen read?
+ *   2. Which record class does it belong to? (defaults to the collection's own
+ *      declared class in seatRegistry.RECORD_POLICIES — never duplicated here
+ *      unless the route has no collection of its own.)
+ *   3. What can be counted without reading a single sentence? (`dates`, `dues`,
+ *      `statuses`, `severities`, `amounts`, `currencies` — candidate field
+ *      paths, first one present wins, so a rename degrades to "unknown" instead
+ *      of inventing a number.)
+ *   4. May the legacy screen render under a declared seat inside its own rank
+ *      window (`adaptive`), or is it a modelling surface that publishes only its
+ *      span aggregate to a seat (`aggregate`)?
+ *
+ * The `aggregate` choice is not modesty: a terminal whose report reads scan the
+ * whole workspace cannot be handed to a seat that sees one span of it without
+ * leaking peers. It publishes the altitude-appropriate aggregate and says so,
+ * rather than pretending to be audited. Each row's `note` is printed in the
+ * Disclosure Console, so the reason travels with the screen.
+ */
+
+import { DISCLOSURE_MODES } from './disclosureRegistry.js';
+
+const A = DISCLOSURE_MODES.ADAPTIVE;
+const G = DISCLOSURE_MODES.AGGREGATE;
+
+const OPEN = ['open', 'active', 'pending', 'draft', 'running', 'in-progress', 'in_progress', 'requested', 'granted', 'held'];
+
+function row(route, label, collections, opts = {}) {
+  return Object.freeze({
+    route,
+    label,
+    collections: Object.freeze(collections),
+    mode: opts.mode || G,
+    // Only used when the route has no governed collection to borrow a class from.
+    classKey: opts.classKey || null,
+    dates: Object.freeze(opts.dates || ['createdAt', 'openedAt']),
+    dues: Object.freeze(opts.dues || []),
+    statuses: Object.freeze(opts.statuses || ['status']),
+    severities: Object.freeze(opts.severities || []),
+    amounts: Object.freeze(opts.amounts || []),
+    currencies: Object.freeze(opts.currencies || []),
+    openStatuses: Object.freeze(opts.open || OPEN),
+    // Some screens read a record from the URL (a detail page). They inherit the
+    // parent list's posture so the list and the row cannot disagree.
+    parent: opts.parent || null,
+    note: opts.note || '',
+  });
+}
+
+const WORK = ['cases', 'decisions', 'delegations', 'goals'];
+
+export const MODULE_MANIFESTS = Object.freeze({
+  /* ----------------------------------------------------- every-altitude core */
+  today: row('today', 'Today', WORK, { mode: A, open: ['open', 'active', 'pending'], note: 'A seat always sees its own week.' }),
+  mission: row('mission', 'Mission Control', WORK, { mode: A, note: 'The seat’s operating loop; already scoped by ADR-0080.' }),
+  disclosure: row('disclosure', 'Disclosure Console', ['disclosureGrants'], { mode: A, classKey: 'authority', note: 'Where the boundary explains itself: coverage, posture, grants and the upward brief.' }),
+  seat: row('seat', 'Altitude Lens', [], { mode: A, classKey: 'authority', note: 'Who is operating, and what the position may see.' }),
+  settings: row('settings', 'Settings & data', [], { mode: A, classKey: 'authority', note: 'Operator settings stay readable; identity and floor changes keep their rank gate.' }),
+  assurance: row('assurance', 'Automation control', [], { mode: A, classKey: 'authority', note: 'Module automation pauses are a reviewed settings adapter.' }),
+  propagation: row('propagation', 'Propagation ledger', [], { mode: A, classKey: 'authority', note: 'Rule provenance and typed edges, with no record content copied in.' }),
+  seal: row('seal', 'Integrity & seals', [], { mode: A, classKey: 'authority', note: 'Verifies the append-only audit chain; writes only an audit event.' }),
+  intake: row('intake', 'Intake triage', ['intakeDrafts'], { mode: A, note: 'A draft a seat typed itself.' }),
+  routing: row('routing', 'Altitude Router', ['altitudeRoutingPlans'], { mode: A }),
+
+  /* ------------------------------------------------------- frontline duties */
+  oneonones: row('oneonones', '1:1s', ['oneOnOnes'], { mode: A, dates: ['date'], statuses: ['status'], note: 'Notes are individual detail: full at the manager altitude, counts above it.' }),
+  feedback: row('feedback', 'Feedback', ['feedback'], { mode: A, dates: ['date', 'observedOn'], note: 'Free-text observations are never rolled up — only their count.' }),
+  conflicts: row('conflicts', 'Conflict resolution', ['conflicts'], { mode: A, dates: ['openedOn'], dues: ['resolveBy'], severities: ['severity'] }),
+  conflict: row('conflict', 'Conflict detail', ['conflicts'], { mode: A, parent: 'conflicts' }),
+  goals: row('goals', 'Goals', ['goals'], { mode: A, dates: ['createdOn', 'createdAt'], dues: ['dueOn', 'targetOn'], statuses: ['status'] }),
+  delegations: row('delegations', 'Delegations', ['delegations'], { mode: A, dates: ['delegatedOn'], dues: ['dueOn'], statuses: ['status'] }),
+  growth: row('growth', 'Growth plans', ['growthPlans'], { mode: A, statuses: ['status'] }),
+  readiness: row('readiness', 'Succession readings', ['readiness'], { mode: A, dates: ['assessedOn'], note: 'A readiness reading names a person; above the manager rank it is a count.' }),
+  onboarding: row('onboarding', 'Onboarding', ['onboarding'], { mode: A, dates: ['startOn'], dues: ['targetOn'] }),
+  recognition: row('recognition', 'Recognition', ['recognition'], { mode: A, dates: ['date'] }),
+  reviews: row('reviews', 'Performance reviews', ['reviews'], { mode: A, dates: ['openedOn', 'cycleStart'], dues: ['dueOn'], statuses: ['status'] }),
+  review: row('review', 'Review detail', ['reviews'], { mode: A, parent: 'reviews' }),
+  prep: row('prep', 'Conversation prep', ['oneOnOnes'], { mode: A, parent: 'oneonones' }),
+  performance: row('performance', 'Performance recovery', ['performanceConcerns'], { mode: A, dates: ['openedOn'], statuses: ['status'], note: 'A recovery plan is individual detail by construction.' }),
+  people: row('people', 'People', ['people'], { mode: A, classKey: 'individual', note: 'Above the manager rank the roster is structure: names, roles and reporting lines — never pay or talking points.' }),
+  person: row('person', 'Person', ['people'], { mode: A, classKey: 'individual', parent: 'people' }),
+
+  /* ------------------------------------------------------ manager/unit work */
+  cases: row('cases', 'Operational cases', ['cases'], { mode: A, dates: ['openedOn'], dues: ['reviewOn'], severities: ['fmea.severity', 'severity'], statuses: ['status'] }),
+  case: row('case', 'Case detail', ['cases'], { mode: A, parent: 'cases' }),
+  decisions: row('decisions', 'Decisions', ['decisions'], { mode: A, dates: ['date'], dues: ['reviewOn'], statuses: ['outcome'], open: ['pending', 'open'] }),
+  health: row('health', 'Team health', ['pulses'], { mode: A, classKey: 'unit', dates: ['date'], note: 'Pulse aggregates keep their own anonymity floor; that floor is never lowered by this console.' }),
+  capacity: row('capacity', 'Capacity', ['delegations', 'cases'], { mode: A, dates: ['delegatedOn', 'openedOn'], dues: ['dueOn', 'reviewOn'] }),
+  load: row('load', 'Coupled load', WORK, { mode: A, dates: ['openedOn', 'delegatedOn', 'date'] }),
+  hiring: row('hiring', 'Hiring', ['requisitions', 'candidates'], { mode: A, dates: ['openedOn'], dues: ['targetOn'], statuses: ['status'] }),
+  'hiring-detail': row('hiring-detail', 'Requisition detail', ['requisitions'], { mode: A, parent: 'hiring' }),
+  changes: row('changes', 'Org changes', ['changes'], { mode: A, dates: ['openedOn'], dues: ['reviewOn'], statuses: ['status'] }),
+  change: row('change', 'Change detail', ['changes'], { mode: A, parent: 'changes' }),
+  comms: row('comms', 'Comms outbox', ['commsDrafts'], { mode: A, dates: ['createdAt'], statuses: ['status'] }),
+  retention: row('retention', 'Retention & economics', ['retentionPlans'], { mode: A, dates: ['createdOn'], dues: ['reviewOn'] }),
+  stakeholders: row('stakeholders', 'Stakeholders', ['stakeholders'], { mode: A, dates: ['createdAt'], note: 'Mendelow salience is not personal data; free-text influence notes still roll up as counts.' }),
+  stakeholder: row('stakeholder', 'Stakeholder detail', ['stakeholders'], { mode: A, parent: 'stakeholders' }),
+  negotiations: row('negotiations', 'Negotiation', ['negotiations'], { mode: A, dates: ['openedOn'], dues: ['reviewOn'], statuses: ['status'] }),
+  negotiation: row('negotiation', 'Negotiation detail', ['negotiations'], { mode: A, parent: 'negotiations' }),
+  finance: row('finance', 'Budget & finance', ['budgets'], { mode: A, dates: ['createdAt'], amounts: ['limit'], currencies: ['currency'], statuses: ['status'], note: 'Money is aggregated per currency and never pooled across currencies.' }),
+  budget: row('budget', 'Budget detail', ['budgets'], { mode: A, parent: 'finance' }),
+  insights: row('insights', 'Signals', WORK, { mode: A, dates: ['openedOn'] }),
+
+  /* ------------------------------------------------------------- succession */
+  succession: row('succession', 'Leadership bench', ['successionReadings'], { mode: G, dates: ['frozenOn'], classKey: 'unit', note: 'Every span’s certified bench reading is published to a seat as counts; the terminal’s own report reads are not seat-scoped yet.' }),
+  mandates: row('mandates', 'Decision rights', ['mandates'], { mode: A, dates: ['requestedOn'], dues: ['expiresOn'], statuses: ['status'] }),
+  authorityCalibration: row('authorityCalibration', 'Authority calibration', ['authorityCalibrationMarkers'], { mode: A, classKey: 'enterprise', note: 'Grades contracts by action class and altitude; no person is rated.' }),
+  responses: row('responses', 'Response studio', ['responsePlans'], { mode: A, dates: ['createdAt'] }),
+  bundles: row('bundles', 'Action bundles', ['actionBundles'], { mode: A, dates: ['createdAt'], statuses: ['status'] }),
+  concordance: row('concordance', 'Expectation concordance', ['expectationRounds'], { mode: A, dates: ['openedOn'], statuses: ['status'] }),
+  // ADR-0087: the Federated Envoy. Adaptive: its report filters packets to the
+  // operating subtree and the item content is already capped by the receiving
+  // altitude's disclosure class, so a declared seat may open its own desk.
+  envoy: row('envoy', 'Federated exchange', ['exchangePackets'], { mode: A, dates: ['receivedAt'], statuses: ['status'] }),
+
+  /* ------------------------------------------------------------------ analytics terminals */
+  attribution: row('attribution', 'Outcome attribution', ['settlements'], { note: 'Earned-schedule settlement runs over the whole workspace ledger.' }),
+  counterfactual: row('counterfactual', 'Counterfactual policy', ['policyEvaluations']),
+  reliability: row('reliability', 'Measurement reliability', ['reliabilityReadings'], { classKey: 'enterprise' }),
+  supply: row('supply', 'Evidence supply chain', ['supplyPlans'], { classKey: 'portfolio' }),
+  solvency: row('solvency', 'Promise solvency', ['solvencyReadings'], { classKey: 'enterprise' }),
+  sceptic: row('sceptic', 'Cross-examination', ['scepticRounds'], { classKey: 'enterprise' }),
+  chain: row('chain', 'Command chain', ['chainReadings'], { classKey: 'enterprise' }),
+  measurement: row('measurement', 'Measurement lab', ['scorecards'], { classKey: 'portfolio' }),
+  allocation: row('allocation', 'Resource allocation', ['capitalPolicies'], { classKey: 'portfolio' }),
+  dynamics: row('dynamics', 'Operating dynamics', ['dynamicsExperiments'], { classKey: 'portfolio' }),
+  capital: row('capital', 'Capital portfolio', ['capitalPolicies'], { classKey: 'portfolio' }),
+  strategy: row('strategy', 'Strategy', ['strategyBets'], { classKey: 'portfolio' }),
+  learning: row('learning', 'Learning ledger', ['retros'], { classKey: 'portfolio' }),
+  premises: row('premises', 'Assumption ledger', ['premises'], { classKey: 'portfolio' }),
+  anomaly: row('anomaly', 'Anomaly intelligence', WORK, { classKey: 'portfolio' }),
+  watch: row('watch', 'Early warning', ['watchAlerts', 'watchForecasts'], { classKey: 'portfolio' }),
+  handover: row('handover', 'Handover', WORK, { classKey: 'portfolio' }),
+  scenarios: row('scenarios', 'Scenarios', WORK, { classKey: 'portfolio' }),
+  resilience: row('resilience', 'Resilience', ['dependencies'], { classKey: 'portfolio' }),
+  'resilience-detail': row('resilience-detail', 'Dependency detail', ['dependencies'], { parent: 'resilience' }),
+  power: row('power', 'Coalition map', ['powerGames'], { classKey: 'portfolio' }),
+  'power-detail': row('power-detail', 'Coalition game detail', ['powerGames'], { parent: 'power' }),
+  network: row('network', 'Org network', ['people'], { classKey: 'portfolio', note: 'Derived structure only: reporting and collaboration edges, never private fields.' }),
+  impact: row('impact', 'Impact ledger', ['impactStudies'], { classKey: 'portfolio' }),
+  fidelity: row('fidelity', 'Implementation fidelity', ['fidelityPlans'], { classKey: 'portfolio' }),
+  merit: row('merit', 'Merit & pay equity', ['meritCycles', 'compBands'], { classKey: 'enterprise' }),
+  transition: row('transition', 'Workforce transition', ['transitionPrograms'], { classKey: 'enterprise' }),
+  orgdesign: row('orgdesign', 'Org design', ['orgDesigns'], { classKey: 'enterprise' }),
+  voi: row('voi', 'Information value', ['voiDecisions', 'voiStudies'], { classKey: 'enterprise' }),
+  portfolio: row('portfolio', 'Decision portfolio', ['portfolio'], { classKey: 'portfolio' }),
+  attention: row('attention', 'Attention market', ['attentionPlans'], { classKey: 'portfolio' }),
+  signal: row('signal', 'Signal path', ['signalClasses'], { classKey: 'portfolio' }),
+  autopilot: row('autopilot', 'Autopilot', ['autopilotPolicies', 'autopilotRuns'], { classKey: 'portfolio' }),
+  survival: row('survival', 'Delivery survival', ['survivalReadings'], { classKey: 'portfolio' }),
+  wait: row('wait', 'Cost of waiting', WORK, { classKey: 'portfolio' }),
+  parity: row('parity', 'Pay/leadership parity', ['parityAudits'], { classKey: 'enterprise' }),
+  evidence: row('evidence', 'Evidence reviews', ['evidenceReviews'], { classKey: 'portfolio' }),
+  consequences: row('consequences', 'Consequences', ['consequenceReadings'], { classKey: 'portfolio' }),
+  deferral: row('deferral', 'Deferral option', ['deferralFrames'], { classKey: 'portfolio' }),
+  integrity: row('integrity', 'Signal integrity', ['integrityReviews'], { classKey: 'enterprise' }),
+  credibility: row('credibility', 'Evidence credibility', ['credibilityFrames'], { classKey: 'portfolio' }),
+  confidence: row('confidence', 'Confidence transport', ['confidenceCertificates'], { classKey: 'enterprise' }),
+  forecasts: row('forecasts', 'Forecast integrity', ['forecastChallenges'], { classKey: 'portfolio' }),
+  tempo: row('tempo', 'Decision tempo', ['tempoSchedules'], { classKey: 'portfolio' }),
+  wargame: row('wargame', 'War game', ['warGames'], { classKey: 'portfolio' }),
+  coupling: row('coupling', 'Coupled load', ['couplingMarkers'], { classKey: 'portfolio' }),
+});
+
+/** Detail screens inherit their parent list's manifest. */
+export const MANIFEST_PARENTS = Object.freeze(Object.fromEntries(
+  Object.values(MODULE_MANIFESTS).filter((m) => m.parent).map((m) => [m.route, m.parent]),
+));
+
+export const MANIFEST_ROUTES = Object.freeze(Object.keys(MODULE_MANIFESTS));
+
+/** The route a manifest is governed by (its parent when it is a detail page). */
+export function manifestFor(route) {
+  const own = MODULE_MANIFESTS[route];
+  if (own) return own;
+  const parent = MANIFEST_PARENTS[route];
+  return parent ? MODULE_MANIFESTS[parent] || null : null;
+}
+
+/** Every collection any manifest can read — used by the compile-time audit. */
+export const MANIFEST_COLLECTIONS = Object.freeze([...new Set(
+  Object.values(MODULE_MANIFESTS).flatMap((m) => m.collections),
+)].sort());

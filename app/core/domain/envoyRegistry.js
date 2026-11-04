@@ -1,6 +1,6 @@
 /**
  * app/core/domain/envoyRegistry.js — canonical vocabulary for the Federated
- * Envoy (`#/envoy`, ADR-0085).
+ * Envoy (`#/envoy`, ADR-0087).
  *
  * THE PROBLEM THIS NAMES
  * ----------------------

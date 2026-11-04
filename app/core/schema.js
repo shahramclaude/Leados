@@ -14,6 +14,10 @@ import { normalizeConflicts } from './conflict-schema.js';
 // ADR-0083: the Concordance Terminal. Rounds resolve BEFORE links so
 // `rolls-up-to`, `re-contracts` and `re-tests` edges validate on reload.
 import { normalizeConcordanceRounds, normalizeConcordanceMarkers, normalizeConcordanceSettings } from './domain/concordanceSchema.js';
+import { normalizeDisclosureGrants, normalizeDisclosureMarkers, normalizeDisclosureSettings } from './domain/disclosureSchema.js';
+// ADR-0085: the Board Room. Memos resolve BEFORE links so `summarizes-span`
+// and `escalates-from` provenance edges validate on reload.
+import { normalizeBoardMemos, normalizeBoardMarkers, normalizeBoardSettings } from './domain/boardSchema.js';
 import { normalizePropagationLineage } from './domain/automationLineage.js';
 import { normalizeImpactExecutionSnapshot } from './domain/impactExecution.js';
 import { normalizeStrategyBets, normalizeStrategyTags } from './domain/strategy.js';
@@ -141,7 +145,7 @@ import {
   normalizeCatchballMarkers,
   normalizeCatchballSettings,
 } from './domain/catchballSchema.js';
-// ADR-0085: the Federated Envoy. Three additive collections (the packet
+// ADR-0087: the Federated Envoy. Three additive collections (the packet
 // ledger, the attested artefact ledger and the rule-idempotency markers) and
 // five clamped conventions. Like ADR-0076 and ADR-0082 this needs **no schema
 // version bump**: an older blob simply has none of these keys, and every one of
@@ -317,7 +321,7 @@ export {
 // older blob simply opens on the undeclared operator view. A version bump here
 // would have forced 78 test files to be rewritten for zero user benefit; the
 // honest choice is to add nothing to migrate.
-export const SCHEMA_VERSION = 90;
+export const SCHEMA_VERSION = 92;
 
 // v83 adds the Succession Terminal (`successionReadings`, `successionMarkers`): a
 // frozen bench claim per workspace or per span — the probability that at least one
@@ -1377,7 +1381,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   catchballCellFloor: 3,
   catchballMaxFanout: 4,
   catchballAutoPropagate: true,
-  // ADR-0085: the Federated Envoy — declared conventions, all clamped.
+  // ADR-0087: the Federated Envoy — declared conventions, all clamped.
   envoyMaxItems: 60,
   envoyRequireKeyedSignature: true,
   envoyDivergenceReviewDays: 14,
@@ -1390,6 +1394,20 @@ export const DEFAULT_SETTINGS = Object.freeze({
   concordanceRetestDays: 21,
   concordanceReviewDays: 14,
   concordanceAutoPropagate: true,
+  // ADR-0086: the disclosure compiler's conventions. The cell floor is the
+  // small-cell floor the aggregate withholds below; a release may never run
+  // longer than 30 days or exceed the per-seat cap, whatever is declared here.
+  disclosureCellFloor: 5,
+  disclosureMaxDays: 30,
+  disclosureMaxActiveGrants: 6,
+  disclosureReviewDays: 14,
+  disclosureAutoPropagate: true,
+  // ADR-0085: the Board Room — declared conventions, all clamped.
+  boardCellFloor: 5,
+  boardEvidenceFloor: 4,
+  boardMaterialityPct: 10,
+  boardRecheckDays: 90,
+  boardAutoPropagate: true,
   seatMaterialityPp: 5,
   seatWindowDays: 90,
   seatMaxLinks: 24,
@@ -1668,7 +1686,15 @@ export const COLLECTIONS = [
   // until both sides are in) and the idempotency markers their three rules use.
   'expectationRounds',
   'concordanceMarkers',
-  // ADR-0085: the Federated Envoy. `exchangePackets` is the ledger of every
+  // ADR-0086: disclosure release contracts (the only records that can widen a
+  // read) and the idempotency markers RULE-DSC-01..02 use.
+  'disclosureGrants',
+  'disclosureMarkers',
+  // ADR-0085: board disclosure memos (declared claims + frozen snapshots) and
+  // the idempotency markers their three rules use.
+  'boardMemos',
+  'boardMarkers',
+  // ADR-0087: the Federated Envoy. `exchangePackets` is the ledger of every
   // packet this workspace built, verified, ingested or refused; the stored rows
   // carry the manifest (item hashes and projected fields) so a verification can
   // always be recomputed from the ledger, never from a cached verdict.
@@ -2326,6 +2352,9 @@ export function normalizeSettings(raw) {
     ...normalizeAuthorityCalibrationSettings(s),
     ...normalizeRouterSettings(s),
     ...normalizeConcordanceSettings(s),
+    ...normalizeDisclosureSettings(s),
+    // ADR-0085: the Board Room's declared conventions.
+    ...normalizeBoardSettings(s),
     ...normalizeSealSettings(s),
     ...normalizeCatchballSettings(s),
     ...normalizeEnvoySettings(s),
@@ -6423,6 +6452,16 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // dropped; a round claiming to be closed with one side is reopened.
   state.expectationRounds = normalizeConcordanceRounds(raw.expectationRounds, warnings);
   state.concordanceMarkers = normalizeConcordanceMarkers(raw.concordanceMarkers, warnings);
+  // ADR-0086: grants resolve before links so `discloses-to`, `consented-by`,
+  // `authorizes` and `tracks-followup` edges validate against real grant ids.
+  // An expired grant loads as expired; it never loads as live authority.
+  state.disclosureGrants = normalizeDisclosureGrants(raw.disclosureGrants, warnings, { now, today: todayDay });
+  state.disclosureMarkers = normalizeDisclosureMarkers(raw.disclosureMarkers, warnings);
+  // ADR-0085: memos resolve before links so `summarizes-span`/`escalates-from`
+  // provenance edges validate against real memo ids. A memo claiming to be
+  // committed without a snapshot is reopened as a draft.
+  state.boardMemos = normalizeBoardMemos(raw.boardMemos, warnings);
+  state.boardMarkers = normalizeBoardMarkers(raw.boardMarkers, warnings);
   // ADR-0085: packets and attested artefacts resolve before links so `carries`,
   // `reconciles` and `tracks-followup` edges validate against real packet ids.
   // A packet row this build cannot fully account for is dropped with a warning;
@@ -7128,6 +7167,45 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  // ADR-0086: additive 91 → 92. No existing record is rewritten. An older
+  // workspace simply has an empty release ledger and the declared conventions;
+  // the compiler derives every posture from the module manifests, so no stored
+  // permission table has to be migrated.
+  91: (v91) => ({
+    ...v91,
+    schemaVersion: 92,
+    disclosureGrants: Array.isArray(v91.disclosureGrants) ? v91.disclosureGrants : [],
+    disclosureMarkers: Array.isArray(v91.disclosureMarkers) ? v91.disclosureMarkers : [],
+    settings: isPlainObject(v91.settings)
+      ? {
+        ...v91.settings,
+        disclosureCellFloor: v91.settings.disclosureCellFloor ?? 5,
+        disclosureMaxDays: v91.settings.disclosureMaxDays ?? 30,
+        disclosureMaxActiveGrants: v91.settings.disclosureMaxActiveGrants ?? 6,
+        disclosureReviewDays: v91.settings.disclosureReviewDays ?? 14,
+        disclosureAutoPropagate: v91.settings.disclosureAutoPropagate !== false,
+      }
+      : { ...DEFAULT_SETTINGS },
+  }),
+  // ADR-0086: additive 90 → 91. No existing record is rewritten: an older
+  // workspace simply has an empty memo ledger and the declared conventions.
+  // A memo is only ever created by a human opening one.
+  90: (v90) => ({
+    ...v90,
+    schemaVersion: 91,
+    boardMemos: Array.isArray(v90.boardMemos) ? v90.boardMemos : [],
+    boardMarkers: Array.isArray(v90.boardMarkers) ? v90.boardMarkers : [],
+    settings: isPlainObject(v90.settings)
+      ? {
+        ...v90.settings,
+        boardCellFloor: v90.settings.boardCellFloor ?? 5,
+        boardEvidenceFloor: v90.settings.boardEvidenceFloor ?? 4,
+        boardMaterialityPct: v90.settings.boardMaterialityPct ?? 10,
+        boardRecheckDays: v90.settings.boardRecheckDays ?? 90,
+        boardAutoPropagate: v90.settings.boardAutoPropagate !== false,
+      }
+      : { ...DEFAULT_SETTINGS },
+  }),
   // ADR-0083: additive 88 → 89. No existing record is rewritten: an older
   // workspace simply has an empty round ledger and the declared conventions.
   // A round is only ever created by a human opening one.

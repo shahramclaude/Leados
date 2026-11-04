@@ -1,11 +1,47 @@
-## Session 125 — The Federated Envoy (`#/envoy`, ADR-0085)
+## Session 127 — The Federated Envoy (`#/envoy`, ADR-0087)
 
 - **Sealed packets between workspaces.** `leados.envoy.packet` v1: per-item SHA-256, Merkle root, identity bound to origin + recipient altitude + creation stamp, HMAC-SHA256 when the vault is unlocked (keyed **required** by default), plain mode printed as plain. Verification returns typed failures (`item-hash`, `merkle-root`, `packet-id`, `schema-ahead`, `signature`, `signature-required`, `altitude-mismatch`).
 - **Disclosure by projection.** `aggregate → unit → names → detail`; the receiving rank caps the class, the sender sees what was withheld and why, and the receiver is told how many items it did not get. No time-relative field enters an item hash.
 - **Ingest that never edits.** Attested copies (`imported` / `duplicate` / `diverged`); divergence opens one governed DACI decision per record per ISO week and leaves the local record byte-identical.
 - **Carriage in one transaction.** `carries` edges to the receiving seat and every ancestor; `reconciles` from packet to reconciliation decision; `tracks-followup` from packet to review.
-- **Five altitudes, five surfaces.** Desk / Packets / Carriage / Divergence / Certificate; aggregate-only CSV scope #80 `federated-exchange`; coverage refused below five spans.
+- **Five altitudes, five surfaces.** Desk / Packets / Carriage / Divergence / Certificate; one `disclosureManifests` row (so the ADR-0086 compiler places it), three `RECORD_POLICIES` rows, aggregate-only CSV scope #82 `federated-exchange`, coverage refused below five spans.
 - **Limits, printed in the product.** Not authentication, not encryption, no person-level figure.
+
+## Canonical app — Session 126 (Schema v92, additive `91 → 92`)
+
+### Disclosure Compiler (`#/disclosure`, [ADR-0086](./docs/adr/0086-disclosure-compiler.md), RULE-DSC-01..02)
+
+- ✅ **Every screen declares a posture.** 97 module manifests → one compile per render → `detail` / `aggregate` / `withheld`, with the reason printed. A route with no manifest is withheld, never guessed at.
+- ✅ **The aggregate replaces the refusal.** Above a detail ceiling: records, open, overdue, severity load, oldest age, money per currency and per-child-span rows; sub-floor cells withheld; **complementary suppression**; total withheld below the floor; out-of-span records excluded and counted.
+- ✅ **A leak oracle, not a hand audit.** `tests/app/disclosure-compiler.test.mjs` plants sentinels in every private field and navigates all 96 routes at four altitudes through the real app — 19/19 pass.
+- ✅ **Release contracts.** Request → consent by the span that owns the records → one screen × one span × 1–30 days → expiry swept and graded. `enterprise` classes are never releasable; a grant lifts a ceiling, never a floor; the requester can never consent.
+- ✅ **The console.** Coverage (with reasons), the seat's aggregate, the release ledger, and an identity-free brief; nav marks aggregate screens `◌`; aliases `visibility`, `access`, `posture`, `who-sees-what`, `small-cell`.
+- ⚠️ **Honest limits.** Seats are auditable declarations, not authentication. Suppression is cell withholding, not differential privacy. ~45 analytic terminals are `aggregate` by declaration because their report reads are not yet seat-scoped — stated on screen, and next on the roadmap.
+
+## Canonical app — Session 124 (Schema v90, additive `89 → 90`)
+
+### Hoshin Catchball Cascade (`#/catchball`, [ADR-0084](./docs/adr/0084-hoshin-catchball-cascade.md), RULE-HK-01..03, CSV #79)
+
+- ✅ **Bilateral strategy deployment.** Declared span pacts and append-only negotiation rounds, with capacity and budget feasibility checked before a pact is accepted, weakest-link roll-ups, leading/lagging divergence ("watermelon") detection, and calibration against delivery.
+- ✅ **One transaction, modules × hierarchy.** `RULE-HK-01` writes typed provenance (`deploys-strategy`, `cascades-to`, `counters-upward`, `trades-off`, `funds`) plus one `rolls-up-to` edge per ancestor; `RULE-HK-02` opens a governed decision on divergence and an upstream double-loop review when execution held and the strategy did not; `RULE-HK-03` records calibration maturity and opens reviews for cells below the delivery floor.
+- ✅ **Disclosure & exports.** Small-cell suppression with complementary intervals, identity-free executive brief, aggregate-only CSV #79.
+- ⚠️ Declared local seats are not authenticated accounts; suppression is not differential privacy.
+
+## Canonical app — Session 125 (Schema v91, additive `90 → 91`)
+
+### Board Room (`#/board`, [ADR-0085](./docs/adr/0085-board-room.md), RULE-BRD-01..03, CSV #80)
+
+- ✅ **Pre-registration, not reporting.** Seven enterprise claims are declared with a comparator, unit and threshold before the first look; each look records a content fingerprint of exactly what was visible.
+- ✅ **Post-hoc movement is permanent.** A threshold revised after a look carries `revisedAfterLook` forever — printed on the claim, in the memo text and in the export.
+- ✅ **The interval decides.** Verdicts come from the conservative end of a Wilson interval; `inconclusive` is a real answer and the terminal prints the sample size that would settle it (and refuses to pretend a sample exists for a claim exactly on its threshold).
+- ✅ **Refusals are first-class.** `refused`, `withheld`, `inconclusive` and `stale` all print their reasons; an empty workspace computes nothing and says so rather than showing zeroes.
+- ✅ **Provenance on every figure** — `recomputed`, `attested`, `asserted`, `withheld`, `refused` — so an operator's declaration is never mistaken for a measurement.
+- ✅ **Disagreement surfaced, never composited.** Three cross-checks (coverage vs flow, rate vs book, integrity vs examination) print both numbers and a route; there is no composite score anywhere in the module.
+- ✅ **Reconciled roll-up only.** Span partitions are checked against the claim's own denominator; a broken partition is reported with its delta and an unattributed claim is drawn as "nothing attributed".
+- ✅ **Cross-module × cross-altitude in one transaction.** A failing claim opens one governed DACI decision (chief altitude), one delegation to the failing span (capped at `min(60, boardRecheckDays)`), and typed `rolls-up-to` edges to every ancestor. 64 rules / 64 contracts, marker-idempotent, pausable, explicit scan always available.
+- ✅ **Five distinct read models.** Frontline (read-only failing-line view), manager (partition arithmetic), director (named spans + delegation), VP (discrepancies and settling arithmetic), CEO / chief (memory-less memorandum, attestation, aggregate CSV #80). `commit-board-memo` is chief-only.
+- ✅ **Wiring.** Additive `MIGRATIONS[90]`, two collections (`boardMemos`, `boardMarkers`), five clamped settings, one API right group, six safe reads, one nav entry with a fact-only badge, seven route aliases, five axe-clean panels, CSS, aggregate-only CSV #79 with blank-not-zero refusals.
+- ⚠️ Wilson assumes independent observations and spans are not independent, so the interval is a lower bound on uncertainty. Seven claims are a chosen instrument, not a validated one; a declared seat is not authentication.
 
 ## Canonical app — Session 123 (Schema v89, additive `88 → 89`)
 

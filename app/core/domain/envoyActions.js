@@ -1,6 +1,6 @@
 /**
  * app/core/domain/envoyActions.js — API mixin for the Federated Envoy
- * (`#/envoy`, ADR-0085). Mounted with `Object.assign(api, …)` like every other
+ * (`#/envoy`, ADR-0087). Mounted with `Object.assign(api, …)` like every other
  * module mixin: one command bus, one transaction boundary, one spine.
  *
  * The write path is deliberately small and fail-closed:

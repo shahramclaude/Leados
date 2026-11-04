@@ -1,6 +1,6 @@
 /**
  * app/core/domain/envoySchema.js — fail-closed normalizers for the Federated
- * Envoy (`#/envoy`, ADR-0085).
+ * Envoy (`#/envoy`, ADR-0087).
  *
  * Two rules, applied without exception:
  *

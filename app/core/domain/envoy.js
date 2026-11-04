@@ -1,5 +1,5 @@
 /**
- * app/core/domain/envoy.js — the Federated Envoy (`#/envoy`, ADR-0085).
+ * app/core/domain/envoy.js — the Federated Envoy (`#/envoy`, ADR-0087).
  *
  * THE QUESTION THIS ANSWERS
  * -------------------------

@@ -1,5 +1,5 @@
 /**
- * ADR-0085 — the Federated Envoy (`#/envoy`).
+ * ADR-0087 — the Federated Envoy (`#/envoy`).
  *
  * Cross-module and cross-altitude by construction: these tests build a packet
  * in one workspace, verify and ingest it in a second, and then prove that the
@@ -123,9 +123,9 @@ const withKey = (fn) => {
 /* ------------------------------------------------------------------ schema */
 
 test('additive with no schema bump: collections, graph vocabulary, spine and exports', () => {
-  assert.equal(SCHEMA_VERSION, 90, 'ADR-0085 is additive without a version bump, like ADR-0076/0082');
-  const migrated = migrate({ schemaVersion: 89, settings: { leaderName: 'Keep me' }, people: [] });
-  assert.deepEqual(migrated.applied, ['89 → 90']);
+  assert.equal(SCHEMA_VERSION, 92, 'ADR-0087 is additive without a version bump of its own, like ADR-0076/0082/0086');
+  const migrated = migrate({ schemaVersion: 91, settings: { leaderName: 'Keep me' }, people: [] });
+  assert.deepEqual(migrated.applied, ['91 → 92']);
   assert.equal(migrated.raw.settings.leaderName, 'Keep me');
   const empty = createEmptyState(NOW.toISOString());
   for (const key of ['exchangePackets', 'exchangeArtefacts', 'exchangeMarkers']) {
@@ -142,8 +142,12 @@ test('additive with no schema bump: collections, graph vocabulary, spine and exp
   }
   assert.equal(ACTION_RIGHTS['exchange-packets'].minRank, 1);
   const names = DEFAULT_POST_COMMIT_RULES.map((rule) => rule.name);
-  assert.equal(names.indexOf('envoyRule'), names.indexOf('concordanceRule') + 1);
+  // Position is by dependency, not by seniority: the envoy reads ingested packets
+  // and opens decisions the market then prices, so it sits before the final
+  // work-producing pass and before the seat audit and the seal.
+  assert.ok(names.indexOf('envoyRule') > names.indexOf('boardRule'));
   assert.ok(names.indexOf('envoyRule') < names.indexOf('attentionMarketRule'));
+  assert.equal(names.at(-1), 'sealRule', 'the seal still covers every write, including an ingest');
   assert.equal(PROPAGATION_CONTRACTS.length, DEFAULT_POST_COMMIT_RULES.length, 'rule/contract parity');
   assert.equal(CSV_EXPORTS.at(-1).key, 'federated-exchange', 'the new scope is appended, never inserted');
 });

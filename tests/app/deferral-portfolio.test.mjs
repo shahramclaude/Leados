@@ -139,11 +139,11 @@ function harness(initial = fixture(), now = () => NOW) {
 
 describe('schema v69 and fail-closed persistence', () => {
   test('the 68→69 migration adds empty ledgers, never a retrospective forecast', () => {
-    assert.equal(SCHEMA_VERSION, 90);
+    assert.equal(SCHEMA_VERSION, 92);
     assert.equal(typeof MIGRATIONS[68], 'function');
     const raw = migrate({ schemaVersion: 68, settings: {}, decisions: [decision('old')] });
-    assert.deepEqual(raw.applied, ['68 → 69', '69 → 70', '70 → 71', '71 → 72', '72 → 73', '73 → 74', '74 → 75', '75 → 76', '76 → 77', '77 → 78', '78 → 79', '79 → 80', '80 → 81', '81 → 82', '82 → 83', '83 → 84', '84 → 85', '85 → 86', '86 → 87', '87 → 88', '88 → 89', '89 → 90']);
-    assert.equal(raw.raw.schemaVersion, 90);
+    assert.deepEqual(raw.applied, ['68 → 69', '69 → 70', '70 → 71', '71 → 72', '72 → 73', '73 → 74', '74 → 75', '75 → 76', '76 → 77', '77 → 78', '78 → 79', '79 → 80', '80 → 81', '81 → 82', '82 → 83', '83 → 84', '84 → 85', '85 → 86', '86 → 87', '87 → 88', '88 → 89', '89 → 90', '90 → 91', '91 → 92']);
+    assert.equal(raw.raw.schemaVersion, 92);
     assert.deepEqual(raw.raw.deferralPortfolioReadings, []);
     assert.deepEqual(raw.raw.correlationDeclarations, []);
     assert.deepEqual(raw.raw.deferralPortfolioMarkers, []);
@@ -716,7 +716,7 @@ describe('CSV scope #59: deferral-portfolio', () => {
   test('the scope is registered after the per-call terminal', () => {
     const scope = CSV_EXPORTS.find((s) => s.key === 'deferral-portfolio');
     assert.ok(scope, 'scope #59 exists');
-    assert.equal(CSV_EXPORTS.length, 80);
+    assert.equal(CSV_EXPORTS.length, 82);
     const droIndex = CSV_EXPORTS.findIndex((s) => s.key === 'deferral-option');
     assert.ok(CSV_EXPORTS.indexOf(scope) > droIndex);
   });

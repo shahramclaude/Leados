@@ -109,7 +109,12 @@ import { catchballRule } from './catchballRules.js';
 // same transaction, with no second workflow engine. Inert until a round closes;
 // an undeclared workspace is byte-for-byte unchanged.
 import { concordanceRule } from './concordanceRules.js';
-// ADR-0085: the Federated Envoy. A verified inter-workspace packet carries
+import { disclosureRule } from './disclosureRules.js';
+// ADR-0084: the Board Room. Committed board lines fan DOWNWARD (a governed
+// decision plus an owned obligation on the span the failing reading points at)
+// and their provenance is written into the typed graph in the same transaction.
+import { boardRule } from './boardRules.js';
+// ADR-0087: the Federated Envoy. A verified inter-workspace packet carries
 // itself up the chain of command (`carries`), turns a divergence between two
 // workspaces into one governed reconciliation question, and opens one review
 // when the packet's own attested exposure clears the declared floor. It runs
@@ -494,7 +499,16 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   catchballRule,
   // ADR-0083: altitude as a dimension of the same engine, one rule set later.
   concordanceRule,
-  // ADR-0085: the Federated Envoy (`RULE-ENV-01..03`). Carriage, divergence and
+  // ADR-0086: the Disclosure Compiler's paperwork. Runs after every work-producing
+  // module so the consent task and the governed decision it opens describe the
+  // finished transaction; it grants nothing itself.
+  disclosureRule,
+  // ADR-0084: it reads the finished module reports (bench, promise book,
+  // authority ledger, concordance, culture, seal), so it sits after every module
+  // that produces one and before the market's final work-producing pass — the
+  // same position rule the concordance terminal follows.
+  boardRule,
+  // ADR-0087: the Federated Envoy (`RULE-ENV-01..03`). Carriage, divergence and
   // attested exposure are three questions about one ingested packet, answered on
   // this spine in the same atomic transaction as the ingestion itself.
   envoyRule,
