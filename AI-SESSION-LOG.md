@@ -36,7 +36,7 @@ Two further failures were **flakes under parallel execution, not defects** — `
 
 **Changed files.** New: `app/core/domain/operatingModelRegistry.js`, `operatingModelSchema.js`, `operatingModel.js`, `operatingModelRules.js`, `operatingModelActions.js`, `app/views/operatingModel.js`, `docs/adr/0084-operating-model.md`, `tests/app/operating-model.test.mjs`. Modified: `app/core/schema.js`, `app/core/csv.js`, `app/core/domain/postCommit.js`, `propagationContracts.js`, `accessGateway.js`, `seatRegistry.js`, `cases.js`, `app/actions.js`, `app/main.js`, `app/styles.css`, `docs/adr/INDEX.md`, `ROADMAP.md`, `RESEARCH.md`, `README.md`, `FEATURES.md`, `CHANGELOG.md`, `index.html`, plus 86 legacy test files for the schema/CSV pins.
 
-**Repository status.** Branch `arena/6f9a0830-leados`, committed and pushed to that branch; the pull request is opened against `main` and its number is recorded in the conversation, not invented here. Nothing about the push or PR is claimed that was not observed in the tool output.
+**Repository status (observed).** Branch `arena/6f9a0830-leados`. Commit `533d84e` — 115 files changed, +4,662 / −356. `git push -u origin arena/6f9a0830-leados` → `* [new branch]` and upstream set (remote output confirmed). `gh pr create --base main` → **https://github.com/shahramclaude/Leados/pull/142**, verified with `gh pr view 142`: `OPEN`, head `arena/6f9a0830-leados` → base `main`, +4,662 / −356 across 115 files. Nothing about the push or the PR is claimed that was not read back from the remote.
 
 ---
 ## 2026-11-04 — Session 123: The Concordance Terminal (Schema v89, [ADR-0083](./docs/adr/0083-expectation-concordance.md), `#/concordance`, RULE-ECN-01..03, CSV #78)
