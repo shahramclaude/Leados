@@ -768,11 +768,17 @@ export const LINK_RELATIONS = [
   // PAIR and an EXPECTATION, never a person's performance.
   're-contracts',
   're-tests',
+  // Schema v90 (ADR-0084): written only by RULE-OMD-01. A governed DESIGN
+  // decision was opened to relieve this position design. The subject is the
+  // design — the edge never asserts anything about the person holding it, and
+  // vertical fan-out reuses the existing `rolls-up-to` relation.
+  'relieves',
 ];
 
 export const LINK_RELATION_LABELS = {
   're-contracts': 'Re-contracting decision opened from this expectation',
   're-tests': 'Re-tests the standard this decision set',
+  relieves: 'Design decision opened to relieve this position',
   'calibrates-coupling': 'Audited against realised joint resolution timing',
   'measures-coupling': 'Shared premise behind a measured coupling',
   'cross-examines': 'Frozen round cross-examines this claim',

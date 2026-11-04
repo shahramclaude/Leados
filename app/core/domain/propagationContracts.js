@@ -104,6 +104,7 @@ import { authorityCalibrationRule } from './authorityCalibrationRules.js';
 import { missionRule } from './missionRules.js';
 import { altitudeRouterRule } from './altitudeRouterRules.js';
 import { concordanceRule } from './concordanceRules.js';
+import { operatingModelRule } from './operatingModelRules.js';
 
 /**
  * One entry per rule, in the order the engine evaluates them. `writes` and
@@ -564,6 +565,10 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
   },
   {
     rule: concordanceRule, module: 'concordanceRules.js', purpose: 'RULE-ECN-01 writes one rolls-up-to edge per leadership ancestor above the pair\'s leader for every closed two-sided expectation round, plus a re-tests edge when the round re-tests an earlier re-contracting decision; RULE-ECN-02 opens ONE governed DACI re-contracting decision per pair per ISO week when weighted κ sits below the declared floor or any dimension is two whole steps apart, and places ONE generated agenda line on the pair\'s most recent 1:1 so the conversation has a place to happen; RULE-ECN-03 writes one advisory maturity marker at the evidence floor. The subject of every write is a PAIR and an EXPECTATION: no person is rated, ranked or scored, no performance record is edited, and no expectation is changed without a human decision. Marker-idempotent, pausable by concordanceAutoPropagate, and an explicit scan always runs.', writes: ['concordanceMarkers', 'decisions', 'links', 'oneOnOnes'], emits: [], scansWorkspace: true,
+  },
+
+  {
+    rule: operatingModelRule, module: 'operatingModelRules.js', purpose: 'RULE-OMD-01 opens ONE governed DACI design decision per congested span per ISO week, addressed to the nearest ancestor whose altitude can author the change, with the options being the levers the lever engine actually priced (never a hire first, and never a hire at all below the continuity floor); RULE-OMD-02 writes typed rolls-up-to edges from a congested span to every leadership ancestor in the SAME transaction and one relieves edge from the decision to the span it is about; RULE-OMD-03 writes one advisory fragility marker per distinct fragile set (a fingerprint, not the set, so the marker ledger is not a second unredacted copy) and opens at most ONE governed continuity decision per ISO week. The subject of every write is a POSITION DESIGN, a SPAN or a frozen reading: no person is rated, ranked, scored or compared, no reporting line is edited, no work is reassigned and no commitment is cut. Marker-idempotent, pausable by omAutoPropagate, and an explicit scan always runs.', writes: ['omMarkers', 'decisions', 'links'], emits: [], scansWorkspace: true,
   },
   {
     rule: altitudeRouterRule, module: 'altitudeRouterRules.js', purpose: 'RULE-AR-01 writes one routes-through edge, one discloses-to edge to the owning seat and one rolls-up-to edge per leadership ancestor (frontline → manager → director → executive) in the SAME atomic transaction as the adopted case; RULE-AR-02 opens one governed DACI re-routing decision per detected-altitude cell below the reliability floor per ISO week and fans it up every ancestor; RULE-AR-03 writes one advisory maturity marker. Marker-idempotent, pausable, and never auto-corrects a plan, setting or reporting line.', writes: ['altitudeRoutingMarkers', 'decisions', 'links'], emits: [], scansWorkspace: true,

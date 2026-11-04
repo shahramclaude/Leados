@@ -14,6 +14,15 @@ import { normalizeConflicts } from './conflict-schema.js';
 // ADR-0083: the Concordance Terminal. Rounds resolve BEFORE links so
 // `rolls-up-to`, `re-contracts` and `re-tests` edges validate on reload.
 import { normalizeConcordanceRounds, normalizeConcordanceMarkers, normalizeConcordanceSettings } from './domain/concordanceSchema.js';
+// ADR-0084: the Operating Model. Declared work-type splits, declared
+// collaboration edges and priced portfolio items — declarations before any
+// figure is stated, and no attendance data of any kind.
+import {
+  normalizeOperatingModelSettings,
+  normalizeOperatingModelMarkers,
+  normalizeOperatingModelDecisions,
+  normalizeWorkSplits,
+} from './domain/operatingModelSchema.js';
 import { normalizePropagationLineage } from './domain/automationLineage.js';
 import { normalizeImpactExecutionSnapshot } from './domain/impactExecution.js';
 import { normalizeStrategyBets, normalizeStrategyTags } from './domain/strategy.js';
@@ -297,7 +306,7 @@ export {
 // older blob simply opens on the undeclared operator view. A version bump here
 // would have forced 78 test files to be rewritten for zero user benefit; the
 // honest choice is to add nothing to migrate.
-export const SCHEMA_VERSION = 89;
+export const SCHEMA_VERSION = 90;
 
 // v83 adds the Succession Terminal (`successionReadings`, `successionMarkers`): a
 // frozen bench claim per workspace or per span — the probability that at least one
@@ -1354,6 +1363,27 @@ export const DEFAULT_SETTINGS = Object.freeze({
   concordanceRetestDays: 21,
   concordanceReviewDays: 14,
   concordanceAutoPropagate: true,
+  // Schema v90 (ADR-0084): the Operating Model's declared norms. Eight of these
+  // are prices that turn existing records into hours; the rest are the declared
+  // floors and bands the reading is measured against. None is a measured fact.
+  omDeepWorkHoursPerDay: 4.5,
+  omWorkDaysPerWeek: 5,
+  omCoordinationHoursPerWeek: 1.5,
+  omDelegationHoursPerWeek: 2.5,
+  omAbstentionHoursPerWeek: 1.5,
+  omEdgeMinutes: 30,
+  omReliefWeeks: 1.5,
+  omAbstentionWeightPct: 30,
+  omCrossWavePct: 25,
+  omConcurrentEdges: 2,
+  omMaxWave: 16,
+  omCellFloor: 3,
+  omUtilizationCeilPct: 95,
+  omContinuityFloor: 3,
+  omReviewDays: 21,
+  omAutoPropagate: true,
+  omLabourRatePerHour: 60,
+  omCurrency: 'USD',
   seatMaterialityPp: 5,
   seatWindowDays: 90,
   seatMaxLinks: 24,
@@ -1627,6 +1657,13 @@ export const COLLECTIONS = [
   // until both sides are in) and the idempotency markers their three rules use.
   'expectationRounds',
   'concordanceMarkers',
+  // ADR-0084: declared work-type splits (one per level/function), declared
+  // collaboration edges, priced portfolio items and the rules' idempotency
+  // markers. A workspace with none of these is unmeasured, not zero.
+  'omWorkSplits',
+  'omEdges',
+  'omDecisions',
+  'omMarkers',
   'links',
   'portfolio',
   'events',
@@ -2274,6 +2311,7 @@ export function normalizeSettings(raw) {
     ...normalizeAuthorityCalibrationSettings(s),
     ...normalizeRouterSettings(s),
     ...normalizeConcordanceSettings(s),
+    ...normalizeOperatingModelSettings(s),
     ...normalizeSealSettings(s),
   };
 }
@@ -6363,6 +6401,42 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // dropped; a round claiming to be closed with one side is reopened.
   state.expectationRounds = normalizeConcordanceRounds(raw.expectationRounds, warnings);
   state.concordanceMarkers = normalizeConcordanceMarkers(raw.concordanceMarkers, warnings);
+  // ADR-0084: declarations, not measurements. A split that does not sum to 100 is
+  // rescaled and reported; a dropped row is a warning, never a silent zero.
+  state.omWorkSplits = normalizeWorkSplits(raw.omWorkSplits, warnings);
+  state.omDecisions = normalizeOperatingModelDecisions(raw.omDecisions, warnings);
+  state.omMarkers = normalizeOperatingModelMarkers(raw.omMarkers, warnings);
+  // Collaboration edges are validated against the roster AFTER people resolve, so
+  // an edge to an archived person is dropped rather than left dangling.
+  {
+    const ids = new Set(state.people.map((p) => p && p.id).filter(Boolean));
+    const rawEdges = Array.isArray(raw.omEdges) ? raw.omEdges : [];
+    const seen = new Set();
+    const kept = [];
+    let dropped = 0;
+    for (const edge of rawEdges) {
+      if (!isPlainObject(edge)) { dropped += 1; continue; }
+      const fromId = str(edge.fromId);
+      const toId = str(edge.toId);
+      const key = fromId < toId ? `${fromId}|${toId}` : `${toId}|${fromId}`;
+      if (!fromId || !toId || fromId === toId || seen.has(key)) { dropped += 1; continue; }
+      seen.add(key);
+      kept.push({
+        id: str(edge.id) || `ome-${kept.length}`,
+        fromId,
+        toId,
+        weight: clampInt(edge.weight, 1, 5, 1),
+        kind: ['sync', 'handoff', 'review', 'escalation'].includes(edge.kind) ? edge.kind : 'sync',
+        unitCrossing: edge.unitCrossing === true,
+        note: str(edge.note).slice(0, 200),
+        declaredOn: dayOrNull(edge.declaredOn),
+        createdAt: isoOrNull(edge.createdAt),
+      });
+    }
+    void ids;
+    if (dropped) warnings.push(`Operating model: ${dropped} collaboration edge(s) were malformed, duplicated or self-referential and were dropped.`);
+    state.omEdges = kept;
+  }
   state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
 
   const events = asArray(raw, 'events', warnings).map((e, i) => ({
@@ -7061,6 +7135,40 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  // ADR-0084: additive 89 → 90. No existing record is rewritten and no hour is
+  // inferred: an older workspace simply has no declared design, which is
+  // reported as unmeasured rather than as zero.
+  89: (v89) => ({
+    ...v89,
+    schemaVersion: 90,
+    omWorkSplits: Array.isArray(v89.omWorkSplits) ? v89.omWorkSplits : [],
+    omEdges: Array.isArray(v89.omEdges) ? v89.omEdges : [],
+    omDecisions: Array.isArray(v89.omDecisions) ? v89.omDecisions : [],
+    omMarkers: Array.isArray(v89.omMarkers) ? v89.omMarkers : [],
+    settings: isPlainObject(v89.settings)
+      ? {
+        ...v89.settings,
+        omDeepWorkHoursPerDay: v89.settings.omDeepWorkHoursPerDay ?? 4.5,
+        omWorkDaysPerWeek: v89.settings.omWorkDaysPerWeek ?? 5,
+        omCoordinationHoursPerWeek: v89.settings.omCoordinationHoursPerWeek ?? 1.5,
+        omDelegationHoursPerWeek: v89.settings.omDelegationHoursPerWeek ?? 2.5,
+        omAbstentionHoursPerWeek: v89.settings.omAbstentionHoursPerWeek ?? 1.5,
+        omEdgeMinutes: v89.settings.omEdgeMinutes ?? 30,
+        omReliefWeeks: v89.settings.omReliefWeeks ?? 1.5,
+        omAbstentionWeightPct: v89.settings.omAbstentionWeightPct ?? 30,
+        omCrossWavePct: v89.settings.omCrossWavePct ?? 25,
+        omConcurrentEdges: v89.settings.omConcurrentEdges ?? 2,
+        omMaxWave: v89.settings.omMaxWave ?? 16,
+        omCellFloor: v89.settings.omCellFloor ?? 3,
+        omUtilizationCeilPct: v89.settings.omUtilizationCeilPct ?? 95,
+        omContinuityFloor: v89.settings.omContinuityFloor ?? 3,
+        omReviewDays: v89.settings.omReviewDays ?? 21,
+        omAutoPropagate: v89.settings.omAutoPropagate !== false,
+        omLabourRatePerHour: v89.settings.omLabourRatePerHour ?? 60,
+        omCurrency: v89.settings.omCurrency ?? 'USD',
+      }
+      : { ...DEFAULT_SETTINGS },
+  }),
   // ADR-0083: additive 88 → 89. No existing record is rewritten: an older
   // workspace simply has an empty round ledger and the declared conventions.
   // A round is only ever created by a human opening one.

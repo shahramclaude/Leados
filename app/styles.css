@@ -2961,3 +2961,60 @@ tr.is-focused td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
 @media (max-width: 720px) {
   .ec-ladder-row { grid-template-columns: 1fr; }
 }
+
+/* =====================================================================
+   ADR-0084 — The Operating Model (#/operating-model)
+   A utilisation bar whose declared ceiling is DRAWN on it: a threshold a
+   reader cannot see is a threshold they have to trust.
+   ===================================================================== */
+.om-bar {
+  position: relative; height: 26px; border-radius: 7px;
+  background: var(--surface-2, #f7f9fc); border: 1px solid var(--line, #dfe3ea);
+  overflow: hidden; margin: 6px 0 10px;
+}
+.om-bar-fill { position: absolute; inset: 0 auto 0 0; border-radius: 6px 0 0 6px; transition: width 160ms ease; }
+.om-bar-good { background: #1f9d63; }
+.om-bar-warn { background: #d99312; }
+.om-bar-bad { background: #cf3b3b; }
+.om-bar-neutral { background: #b6bfcd; }
+.om-bar-ceil {
+  position: absolute; top: -2px; bottom: -2px; width: 2px; background: #1b2430; opacity: 0.75;
+}
+.om-bar-ceil::after {
+  content: ''; position: absolute; top: 0; left: -3px;
+  border-left: 4px solid transparent; border-right: 4px solid transparent;
+  border-top: 5px solid #1b2430;
+}
+.om-bar-label {
+  position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+  font-size: 0.78rem; font-weight: 600; font-variant-numeric: tabular-nums;
+  color: #16202e; background: rgba(255, 255, 255, 0.82); padding: 0 5px; border-radius: 4px;
+}
+.om-workgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin: 4px 0 10px; }
+.om-workcell {
+  display: flex; flex-direction: column; gap: 2px; padding: 8px 10px;
+  border: 1px solid var(--line, #eef1f6); border-radius: 9px; background: var(--surface-2, #f7f9fc);
+}
+.om-workcell-pct { font-size: 1.05rem; font-weight: 650; font-variant-numeric: tabular-nums; }
+.om-statgrid .stat-value { font-size: 1.05rem; }
+.om-lever-row { padding: 10px 0; border-bottom: 1px solid var(--line, #eef1f6); }
+.om-lever-row:last-child { border-bottom: 0; }
+.om-lever-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.om-lever-row p { margin: 4px 0 0; }
+.om-norm-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+.om-gate { padding: 10px 0; border-bottom: 1px solid var(--line, #eef1f6); }
+.om-gate:last-child { border-bottom: 0; }
+.om-gate p { margin: 4px 0 0; }
+.om-gate-fail .om-lever-head strong { color: #8f2b2b; }
+.om-gate-pass .om-lever-head strong { color: #1b6b47; }
+.om-inline { flex-direction: row; align-items: center; gap: 10px; }
+.om-brief {
+  max-height: 60vh; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere;
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 0.82rem; line-height: 1.55; padding: 14px;
+  border: 1px solid var(--line, #dfe3ea); border-radius: 10px; background: var(--surface-2, #f7f9fc);
+}
+@media (max-width: 720px) {
+  .om-norm-grid { grid-template-columns: 1fr; }
+  .om-bar { height: 22px; }
+}

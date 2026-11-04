@@ -124,6 +124,14 @@ export const RECORD_POLICIES = Object.freeze({
   chainReadings: { classKey: 'enterprise', label: 'Frozen command-chain readings', route: '#/chain' },
   solvencyReadings: { classKey: 'enterprise', label: 'Frozen promise readings', route: '#/solvency' },
   orgDesigns: { classKey: 'enterprise', label: 'Structural designs', route: '#/orgdesign' },
+  // ADR-0084: the operating model's declarations. A declared work-type split is
+  // PORTFOLIO material: it is a claim about how every position at a level spends
+  // its week, which is not a frontline lead's artefact to author. A declared
+  // collaboration edge is unit work; a priced portfolio item is portfolio work.
+  omWorkSplits: { classKey: 'portfolio', label: 'Declared work-type splits', route: '#/operating-model?panel=norms' },
+  omEdges: { classKey: 'unit', label: 'Declared collaboration edges', route: '#/operating-model?panel=coupling' },
+  omDecisions: { classKey: 'portfolio', label: 'Priced operating-model items', route: '#/operating-model?panel=levers' },
+  omMarkers: { classKey: 'unit', label: 'Operating-model markers', route: '#/operating-model' },
   voiDecisions: { classKey: 'enterprise', label: 'Information-value frames', route: '#/voi' },
 });
 
@@ -171,6 +179,11 @@ const PORTFOLIO_ROUTES = Object.freeze([
   'stakeholder', 'finance', 'budget', 'negotiations', 'negotiation',
   'tempo', 'decisions', 'sceptic', 'integrity', 'merit', 'transition',
   'parity', 'changes', 'change', 'hiring', 'hiring-detail', 'scenarios',
+  // ADR-0084: the operating model carries attributable labour cost, the
+  // utilisation ceiling and structural levers — portfolio material. A frontline
+  // lead reads their own span's design through Mission Control, not by authoring
+  // the split for an entire level.
+  'operating-model',
 ]);
 const ENTERPRISE_ROUTES = Object.freeze([
   // Pay, workforce shape and board-reported statistical audit claims. Capital
@@ -238,6 +251,10 @@ export const ACTION_RIGHTS = Object.freeze({
   // ADR-0082: verifying the sealed audit chain is every altitude's business —
   // it writes only an audit event, never a record.
   'audit-seal': { minRank: 1, maxRank: 5, label: 'Verify the sealed audit chain' },
+  // ADR-0084: authoring the operating model is an org-design act — it declares
+  // how every position at a level spends its week and prices structural change.
+  // The same right that edits a reporting line authors the model of the lines.
+  'author-operating-model': { minRank: 3, maxRank: 5, label: 'Author the operating model — declared splits, edges and priced items' },
 });
 
 export function actionVerdict(action, seat) {

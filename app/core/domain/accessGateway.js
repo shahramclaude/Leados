@@ -32,6 +32,9 @@ const groups = [
   // verified read with a trace); the pure reads are SAFE_READS below. Enabling
   // or pausing sealing is operator-only and stays fail-closed under a seat.
   ['audit-seal', 'sealScan'],
+  // ADR-0084: the Operating Model. Declarations and priced items only. Every
+  // method is declared; an unknown name still fails closed.
+  ['author-operating-model', 'omDeclareSplit omRemoveSplit omDeclareEdge omRemoveEdge omPriceItem omRemoveItem omSetNorms operatingModelScan'],
 ];
 export const API_RIGHTS = Object.freeze(Object.fromEntries(groups.flatMap(([right, names]) => names.split(' ').map((name) => [name, right]))));
 const FIRST_ID_COLLECTION = Object.freeze({
@@ -46,7 +49,7 @@ const FIRST_ID_COLLECTION = Object.freeze({
   approveCommsDraft: 'commsDrafts', editCommsDraft: 'commsDrafts', markCommsDraftSent: 'commsDrafts', dismissCommsDraft: 'commsDrafts',
   createActionBundle: 'cases', updateActionBundle: 'actionBundles', saveActionBundlePreview: 'actionBundles', commitActionBundle: 'actionBundles', withdrawActionBundle: 'actionBundles', archiveActionBundle: 'actionBundles',
 });
-const SAFE_READS = new Set(['concordanceRead', 'concordanceStats', 'concordanceBriefText', 'concordanceCsvRows', 'concordanceAttentionCount', 'routingRead', 'routingCalibration', 'routingBriefText', 'routingCsvRows', 'routingAttentionCount', 'routingAnalyze', 'seatRead', 'seatBriefText', 'missionRead', 'missionOpenCase', 'missionBriefText', 'missionHandoffText', 'setActiveSeat', 'missionCreateIntervention', 'saveMissionPreview', 'missionCommit', 'missionWithdraw', 'missionArchive', 'missionFreezeBrief', 'missionScan', 'mandateRead', 'mandateBriefText', 'previewMandate', 'sealRead', 'sealVerify', 'sealBriefText']);
+const SAFE_READS = new Set(['operatingModelRead', 'operatingModelNorms', 'operatingModelBriefText', 'operatingModelCsvRows', 'operatingModelAttentionCount', 'operatingModelWorkTypes', 'concordanceRead', 'concordanceStats', 'concordanceBriefText', 'concordanceCsvRows', 'concordanceAttentionCount', 'routingRead', 'routingCalibration', 'routingBriefText', 'routingCsvRows', 'routingAttentionCount', 'routingAnalyze', 'seatRead', 'seatBriefText', 'missionRead', 'missionOpenCase', 'missionBriefText', 'missionHandoffText', 'setActiveSeat', 'missionCreateIntervention', 'saveMissionPreview', 'missionCommit', 'missionWithdraw', 'missionArchive', 'missionFreezeBrief', 'missionScan', 'mandateRead', 'mandateBriefText', 'previewMandate', 'sealRead', 'sealVerify', 'sealBriefText']);
 const refusal = (reason) => ({ ok: false, code: 'scope-refusal', error: reason, field: 'scope' });
 
 function payloadPeople(args) {
@@ -144,6 +147,10 @@ export function workspaceRouteVerdict(route, seat) {
   // above the manager rank, so a declared seat may open it directly.
   // ADR-0082: the Integrity surface is a reviewed scoped surface — its reads go
   // through sealRead, which collapses out-of-subtree spans to aggregate rows.
-  if (['mission', 'today', 'seat', 'routing', 'seal'].includes(route)) return base;
+  // ADR-0084: the Operating Model completed its seat-scoped read audit — the
+  // roll-up filters to the operating subtree, everything more than one level
+  // below the reader collapses to ONE aggregate row per level, and position
+  // detail is replaced above director rank. A declared seat may open it.
+  if (['mission', 'today', 'seat', 'routing', 'seal', 'operating-model'].includes(route)) return base;
   return { allow: false, reason: 'This legacy module has not yet completed its seat-scoped read audit. Its work still contributes to Mission Control. Open the scoped command center, or explicitly hand over to the local operator view for the full legacy workspace.' };
 }

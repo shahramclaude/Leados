@@ -38,6 +38,7 @@ import { calibrateAuthority } from './domain/authorityCalibration.js';
 import { routingCsvRows } from './domain/altitudeRouter.js';
 // ADR-0083: the Concordance Terminal's aggregate-only rows.
 import { concordanceCsvRows } from './domain/concordance.js';
+import { operatingModelCsvRows } from './domain/operatingModel.js';
 import { LEADER_ID } from './domain/chain.js';
 import { deprivationExposure, successionReport } from './domain/succession.js';
 import { observeFidelity } from './domain/fidelity.js';
@@ -916,6 +917,11 @@ export const CSV_EXPORTS = [
   // instrument dimension. No person id, no pair, no round id, no note, no
   // individual rating — an exported file can never reconstruct one person's answers.
   { key: 'expectation-concordance', label: 'Expectation concordance (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'expectation-concordance', description: 'One workspace row, one row per leadership altitude and one row per instrument dimension: closed rounds, assessed and refused pairs, pairs at or above the agreed floor, the Wilson 95% interval, mean weighted κ, diverged-pair counts, the declared floors and a verdict. NO person id, NO pair, NO round id, NO name, NO note and NO individual rating. Every refused figure is BLANK rather than zero.' },
+  // CSV scope #79 (Schema v90, ADR-0084). Aggregate-only operating-model
+  // telemetry: one workspace row, one row per altitude, and one row per priced
+  // lever family. No person id, no name, no position title, no span label, no
+  // individual hour. Every refused figure is BLANK rather than zero.
+  { key: 'operating-model', label: 'Operating model (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'operating-model', description: 'One workspace row, one row per leadership altitude and one row per priced lever: positions modelled, committed and designed capacity hours, utilisation, hours spent below the position’s own altitude, routed-up hours, positions over the ceiling, spans below the continuity floor, declared edges, the cross-unit share, the declared cell floor and a verdict. NO person id, NO name, NO position or span title, NO individual hours and NO attendance data of any kind. Every refused figure is BLANK rather than zero.' },
 ];
 
 function personLookup(state) {
@@ -5760,6 +5766,30 @@ function buildScopeTable(state, scope, now) {
       const rows = [];
       const visit = (node) => { rows.push({ scope: node.seatId === LEADER_ID ? 'workspace' : 'child-span', total: node.total, own: node.own, ...node.counts, past_expiry: node.expiredOpen }); node.children.forEach(visit); };
       visit(rollupMandates(state, LEADER_ID, { now }));
+      return { columns, rows };
+    }
+    case 'operating-model': {
+      // CSV scope #79 (Schema v90, ADR-0084). Aggregate-only. A refused figure
+      // is BLANK, never 0. No person, name, title or individual hour can enter.
+      const rows = operatingModelCsvRows(state, { now, settings: state.settings || {} });
+      const columns = [
+        { key: 'scope', header: 'scope' },
+        { key: 'altitude', header: 'altitude' },
+        { key: 'positions', header: 'positions' },
+        { key: 'unmeasured', header: 'unmeasured' },
+        { key: 'capacity_h', header: 'capacity_h' },
+        { key: 'committed_h', header: 'committed_h' },
+        { key: 'utilisation_pct', header: 'utilisation_pct' },
+        { key: 'displaced_h', header: 'displaced_h' },
+        { key: 'displaced_pct', header: 'displaced_pct' },
+        { key: 'abstention_h', header: 'abstention_h' },
+        { key: 'over_ceiling_n', header: 'over_ceiling_n' },
+        { key: 'fragile_n', header: 'fragile_n' },
+        { key: 'edges_n', header: 'edges_n' },
+        { key: 'cross_unit_pct', header: 'cross_unit_pct' },
+        { key: 'cell_floor', header: 'cell_floor' },
+        { key: 'verdict', header: 'verdict' },
+      ];
       return { columns, rows };
     }
     case 'expectation-concordance': {
