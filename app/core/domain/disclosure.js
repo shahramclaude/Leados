@@ -1,5 +1,5 @@
 /**
- * app/core/domain/disclosure.js — the Disclosure Compiler (Schema v90, ADR-0084).
+ * app/core/domain/disclosure.js — the Disclosure Compiler (Schema v90, ADR-0085).
  *
  * WHAT THIS REPLACES
  * ------------------

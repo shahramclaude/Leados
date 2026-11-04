@@ -53,6 +53,7 @@ const ROUTES = [
   ['#/confidence', 'Confidence transport'],
   ['#/responses', 'Response studio'],
   ['#/chain', 'Command chain'],
+  ['#/catchball', 'Hoshin Kanri & Catchball Cascade'],
   ['#/settings', 'Settings'],
 ];
 

@@ -2962,7 +2962,7 @@ tr.is-focused td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
   .ec-ladder-row { grid-template-columns: 1fr; }
 }
 
-/* ADR-0084 — the Disclosure Console and the aggregate posture.
+/* ADR-0085 — the Disclosure Console and the aggregate posture.
    The nav marker is deliberately quiet: an aggregate is not a warning, it is
    the altitude's own reading of the same records. */
 .nav-posture { margin-left: auto; font-size: 10px; color: var(--muted); }

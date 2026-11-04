@@ -1,6 +1,6 @@
 ## Canonical app — Session 124 (Schema v90, additive `89 → 90`)
 
-### Disclosure Compiler (`#/disclosure`, [ADR-0084](./docs/adr/0084-disclosure-compiler.md), RULE-DSC-01..02)
+### Disclosure Compiler (`#/disclosure`, [ADR-0085](./docs/adr/0085-disclosure-compiler.md), RULE-DSC-01..02)
 
 - ✅ **Every screen declares a posture.** 97 module manifests → one compile per render → `detail` / `aggregate` / `withheld`, with the reason printed. A route with no manifest is withheld, never guessed at.
 - ✅ **The aggregate replaces the refusal.** Above a detail ceiling: records, open, overdue, severity load, oldest age, money per currency and per-child-span rows; sub-floor cells withheld; **complementary suppression**; total withheld below the floor; out-of-span records excluded and counted.

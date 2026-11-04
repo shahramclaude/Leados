@@ -17,7 +17,7 @@ import { dueMeetings } from './core/domain/oneonone.js';
 import { renderToday } from './views/today.js';
 import { renderMission } from './views/mission.js';
 import { scopedViewState, safeSeatContext } from './core/domain/viewScope.js';
-// ADR-0084: the Disclosure Compiler. Every route's posture is compiled once per
+// ADR-0085: the Disclosure Compiler. Every route's posture is compiled once per
 // render; above a detail ceiling the shell serves the altitude-appropriate
 // aggregate instead of a refusal page.
 import { renderDisclosure, renderAggregatePosture } from './views/disclosure.js';
@@ -28,6 +28,8 @@ import { renderIntake } from './views/intake.js';
 // ADR-0081: the Altitude Router — natural language in, module × altitude out.
 import { renderAltitudeRouter } from './views/altitudeRouter.js';
 import { routingAttentionCount } from './core/domain/altitudeRouter.js';
+import { renderCatchball } from './views/catchball.js';
+import { catchballAttentionCount } from './core/domain/catchball.js';
 // ADR-0083: the Concordance Terminal — the two-gauge problem behind every
 // performance review, measured pair by pair and rolled up the tree.
 import { renderConcordance } from './views/concordance.js';
@@ -213,6 +215,7 @@ export const NAV = [
     // ADR-0081: classify a note into modules AND the owning altitude, then
     // roll a disclosure-safe signal up every level in one transaction.
     { route: 'routing', label: 'Altitude Router', icon: '⇅', badge: 'routing' },
+    { route: 'catchball', label: 'Strategy cascade', icon: '◇', badge: 'catchball' },
     { route: 'comms', label: 'Comms outbox', icon: '✉', badge: 'comms' },
     { route: 'insights', label: 'Signals', icon: '⚑', badge: 'signals' },
   ] },
@@ -323,7 +326,7 @@ export const NAV = [
     { route: 'settings', label: 'Settings & data', icon: '⚙' },
   ] },
   { section: 'Governance', items: [
-    // ADR-0084: the boundary that explains itself, at every altitude.
+    // ADR-0085: the boundary that explains itself, at every altitude.
     { route: 'disclosure', label: 'Disclosure Console', icon: '◑', badge: 'disclosure' },
   ] },
 ];
@@ -334,6 +337,7 @@ const RENDERERS = {
   mission: (ctx) => renderMission(ctx),
   intake: (ctx) => renderIntake(ctx),
   routing: (ctx) => renderAltitudeRouter(ctx),
+  catchball: (ctx) => renderCatchball(ctx),
   disclosure: (ctx) => renderDisclosure(ctx),
   concordance: (ctx) => renderConcordance(ctx),
   responses: (ctx) => renderResponses(ctx),
@@ -519,8 +523,9 @@ export function parseRoute(hash) {
     // NOT 'coverage': that hash already routes to the Promise Solvency Terminal
     // (ADR-0073) and silently stealing it would break a shipped link.
     'mission': 'mission', 'mission-control': 'mission', 'command-center': 'mission', 'flight-deck': 'mission',
+    'catchball': 'catchball', 'hoshin': 'catchball', 'strategy-cascade': 'catchball',
     'concordance': 'concordance', 'expectation-concordance': 'concordance',
-    // ADR-0084: the disclosure compiler's own aliases. `access` and `posture`
+    // ADR-0085: the disclosure compiler's own aliases. `access` and `posture`
     // were unused; `coverage` still belongs to Promise Solvency and is not taken.
     'disclosure': 'disclosure', 'visibility': 'disclosure', 'access': 'disclosure',
     'posture': 'disclosure', 'who-sees-what': 'disclosure', 'small-cell': 'disclosure',
@@ -827,8 +832,9 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       mandates: (state.mandates || []).filter((m) => ['proposed', 'active', 'delivered'].includes(m.status) && (m.fromSeatId === seatCtx?.seat?.id || m.toSeatId === seatCtx?.seat?.id)).length,
       authorityCalibration: authorityCalibrationAttentionCount(state, at, state.settings),
       routing: routingAttentionCount(state, at, state.settings),
+      catchball: catchballAttentionCount(state, at, state.settings),
       concordance: concordanceAttentionCount(state, at, state.settings),
-      // ADR-0084: consent work waiting on this seat, plus a live release of this
+      // ADR-0085: consent work waiting on this seat, plus a live release of this
       // seat's that lapses within three days.
       disclosure: disclosureAttentionFor(state, seatCtx?.seat || null, { now: at }),
       // ADR-0082: the badge counts chain breaks only — a valid chain is not noise.
@@ -1016,7 +1022,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
     // ADR-0076: role-tiered navigation. A frontline lead is not shown CEO-level
     // portfolio analytics; a CEO is not shown individual 1:1 content. The same
     // pure route verdict gates both the link and direct navigation.
-    // ADR-0084: the nav asks the same compiler the render gate asks. A screen in
+    // ADR-0085: the nav asks the same compiler the render gate asks. A screen in
     // the aggregate posture is still open — it is marked so the leader knows the
     // click lands on counts, not on detail, before they take it.
     const verdictFor = (item) => workspaceRouteVerdict(item.route, seat, {
@@ -1182,7 +1188,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       mount(view, h('div', { class: 'page' }, h('h1', { class: 'page-title' }, 'The operating boundary could not be resolved'), h('p', null, 'No records were projected. Reload to retry; the saved workspace has not been changed.'), h('pre', { class: 'error-detail' }, seatCtx.error)));
       return;
     }
-    // ADR-0084: one compile per render. Navigation, the route gate and the
+    // ADR-0085: one compile per render. Navigation, the route gate and the
     // screen itself all read the same posture table, so they cannot disagree.
     const enforced = Boolean(seatCtx?.seat && !seatCtx.seat.fullAccess);
     const compiled = enforced
@@ -1234,7 +1240,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
         document.title = 'Withheld at this altitude · LeadOS';
         return;
       }
-      // ADR-0084: above the detail ceiling the module still opens — as the read
+      // ADR-0085: above the detail ceiling the module still opens — as the read
       // the level above actually acts on. No dead end, no fake records.
       if (verdict.posture === 'aggregate') {
         const entry = compiled?.entries?.[route] || null;
@@ -1292,6 +1298,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       mission: 'Mission Control',
       intake: 'Intake triage',
       routing: 'Altitude Router — natural-language intake classified into modules and the correct organizational altitude, with disclosure-safe roll-up to every leadership level',
+      catchball: 'Hoshin Kanri & Catchball Cascade — negotiated strategy deployment',
       disclosure: 'Disclosure Console — every screen states the posture it holds at this altitude, every withheld cell states why, and detail is released only by a consented, expiring, span-bounded contract',
       concordance: 'Expectation Concordance — “meets expectations” treated as a measurement instrument: two sealed sides, six dimensions, weighted κ / AC1 / PABAK / Bland–Altman agreement, a governed re-contracting decision on divergence and a typed roll-up to every leadership span',
       responses: 'Response studio — rehearse and adopt a coordinated leadership response',

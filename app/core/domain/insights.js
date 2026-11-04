@@ -107,6 +107,7 @@ import { commsSignals } from './comms.js';
 import { allocationSignals } from './allocation.js';
 import { loadSignals } from './load.js';
 import { strategySignals } from './strategy.js';
+import { catchballSignals } from './catchball.js';
 import { learningSignals } from './learning.js';
 import { measurementSignals } from './measurement.js';
 import { premiseSignals } from './premises.js';
@@ -163,6 +164,7 @@ export const DOMAIN_ORDER = [
   // listed here is silently dropped from `byDomain`, so the bucket is part of
   // the contract, not a cosmetic label.
   'Strategy',
+  'Strategy deployment',
   // Schema v43: After-Action Review signals (LEARN-01..06). Listed here for the
   // same reason the strategy bucket is: `byDomain` filters on this array, so an
   // unlisted domain is counted in `findings` and silently dropped from the
@@ -2593,6 +2595,7 @@ export function buildInsights(state, now) {
   // bets, overdue stop-rule verdicts, recent-flow drift and an organisation
   // funding work with no stated strategy at all.
   for (const signal of strategySignals(state, now)) add(signal);
+  for (const signal of catchballSignals(state, now)) add(signal);
   // Schema v43 (read-side): the After-Action Review & Learning Ledger
   // contributes LEARN-01..06 for closures waiting on a review, a repeated class
   // whose committed change was never made, committed changes still open,

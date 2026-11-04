@@ -79,7 +79,7 @@ export const DEFAULT_RECORD_POLICY = Object.freeze({
 
 export const RECORD_POLICIES = Object.freeze({
   mandates: { classKey: 'authority', label: 'Decision-rights contracts', route: '#/mandates' },
-  // ADR-0084: a disclosure release is a bounded authority contract, so it is
+  // ADR-0085: a disclosure release is a bounded authority contract, so it is
   // readable at every altitude that can hold one — and its ledger is exactly
   // what makes the widening auditable afterwards.
   disclosureGrants: { classKey: 'authority', label: 'Disclosure release contracts', route: '#/disclosure' },
@@ -107,6 +107,9 @@ export const RECORD_POLICIES = Object.freeze({
   intakeDrafts: { classKey: 'unit', label: 'Intake drafts', route: '#/intake' },
   altitudeRoutingPlans: { classKey: 'unit', label: 'Altitude routing plans', route: '#/routing' },
   altitudeRoutingMarkers: { classKey: 'unit', label: 'Routing idempotency markers', route: '#/routing' },
+  catchballPacts: { classKey: 'unit', label: 'Hoshin Catchball pacts', route: '#/catchball' },
+  catchballRounds: { classKey: 'unit', label: 'Hoshin Catchball rounds', route: '#/catchball' },
+  catchballMarkers: { classKey: 'unit', label: 'Catchball idempotency markers', route: '#/catchball' },
   // Portfolio material. Functions, quarters and capital.
   budgets: { classKey: 'portfolio', label: 'Budgets', route: '#/finance' },
   strategyBets: { classKey: 'portfolio', label: 'Strategic bets', route: '#/strategy' },
@@ -186,7 +189,7 @@ const ENTERPRISE_ROUTES = Object.freeze([
 ]);
 
 /**
- * ADR-0084: the same windows, exposed as DATA so the Disclosure Compiler gates a
+ * ADR-0085: the same windows, exposed as DATA so the Disclosure Compiler gates a
  * route on exactly the window the nav uses. Two copies of a rank table is how a
  * nav and a screen start disagreeing about who may see what.
  */
@@ -262,7 +265,9 @@ export const ACTION_RIGHTS = Object.freeze({
   // ADR-0082: verifying the sealed audit chain is every altitude's business —
   // it writes only an audit event, never a record.
   'audit-seal': { minRank: 1, maxRank: 5, label: 'Verify the sealed audit chain' },
-  // ADR-0084: a disclosure release is requested by the altitude that needs the
+  // ADR-0084: bilateral Hoshin Kanri & Catchball negotiation across spans.
+  'negotiate-catchball': { minRank: 1, maxRank: 5, label: 'Propose, counter, accept or check in on a Hoshin Catchball pact' },
+  // ADR-0085: a disclosure release is requested by the altitude that needs the
   // detail and consented by the altitude that owns it. Both directions are open
   // at every rank, because either side may sit at any altitude; the pair, the
   // purpose, the days and the class are what the action checks.

@@ -1,4 +1,4 @@
-# ADR-0084: The Disclosure Compiler — every screen declares its posture, the aggregate replaces the refusal, and detail is released only by a consented, expiring contract
+# ADR-0085: The Disclosure Compiler — every screen declares its posture, the aggregate replaces the refusal, and detail is released only by a consented, expiring contract
 
 - **Status:** Accepted
 - **Date:** 2026-11-04
@@ -142,3 +142,7 @@ narrow), ONE consent task, and the typed edges `authorizes`, `discloses-to`,
   permission, which is the thing the boundary exists to prevent.
 - **Make releases a workspace setting** — a setting has no owner, no purpose, no expiry and
   no grade.
+
+## Export boundary
+
+`disclosure-posture` is CSV scope **#80**, registered in `CSV_EXPORTS` beside every other export and compiled at the *exporting* seat, not the operator's: one row per declared module carrying the posture, the record class, the floor and ceiling ranks, the aggregate counts, the withheld-cell count, money separated by currency, and the boundary's own reason. A larger file is not a safer file — a file that carries the same aggregate a screen would have shown is the only kind that can leave the workspace without inventing a second, weaker boundary.

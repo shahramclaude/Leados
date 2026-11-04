@@ -324,13 +324,17 @@ export const LINK_ENTITY_TYPES = [
   // disclosure ladder and the governed re-routing question are navigable
   // from the plan — and the plan from them. No note text is a link endpoint.
   'routingplan',
+  // ADR-0084: Hoshin Kanri & Catchball Cascade pacts and append-only bilateral
+  // negotiation rounds.
+  'catchballpact',
+  'catchballround',
   // ADR-0083: one closed two-sided expectation round. A first-class node so the
   // re-contracting decision it opened, the round that re-tests it and every
   // leadership span it rolled up to are navigable from the round — and the round
   // from them. The subject is a PAIR and a DIMENSION; a person's answers are the
   // instrument's readings, never a rating.
   'concordance',
-  // ADR-0084: a disclosure release is a first-class node: the decision that
+  // ADR-0085: a disclosure release is a first-class node: the decision that
   // governs it, the consent task it waits on and the span it discloses from are
   // all navigable from the release record itself.
   'disclosuregrant',
@@ -452,9 +456,12 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   missionbrief: 'missionBriefs',
   // ADR-0081: keep the registry exhaustive with LINK_ENTITY_TYPES.
   routingplan: 'altitudeRoutingPlans',
+  // ADR-0084: Hoshin Kanri & Catchball Cascade collections.
+  catchballpact: 'catchballPacts',
+  catchballround: 'catchballRounds',
   // ADR-0083: keep the registry exhaustive with LINK_ENTITY_TYPES.
   concordance: 'expectationRounds',
-  // ADR-0084: keep the registry exhaustive with LINK_ENTITY_TYPES.
+  // ADR-0085: keep the registry exhaustive with LINK_ENTITY_TYPES.
   disclosuregrant: 'disclosureGrants',
 });
 
@@ -548,7 +555,9 @@ export const SYSTEM_GENERATED_LINK_RELATIONS = Object.freeze([
   'binds-receiver',
   'recovers-authority',
   'summarizes-span',
-  // ADR-0084: a bounded release names the altitude it discloses to and the span
+  // ADR-0084: emitted by the Catchball spine, not manually asserted.
+  'deploys-strategy', 'cascades-to', 'counters-upward', 'trades-off',
+  // ADR-0085: a bounded release names the altitude it discloses to and the span
   // that consented to it. Both are structure, never record content.
   'discloses-to',
   'consented-by',
@@ -772,6 +781,11 @@ export const LINK_RELATIONS = [
   'routes-through',
   'discloses-to',
   'grades-routing',
+  // ADR-0084: Hoshin Kanri & Catchball Cascade provenance edges.
+  'deploys-strategy',
+  'cascades-to',
+  'counters-upward',
+  'trades-off',
   // Schema v89 (ADR-0083): the Concordance Terminal. `re-contracts` — this
   // governed decision was opened from that diverged expectation;
   // `re-tests` — this later round tests the standard that decision set.
@@ -881,6 +895,10 @@ export const LINK_RELATION_LABELS = {
   'routes-through': 'Adopted from this reviewed altitude-routing plan',
   'discloses-to': 'Disclosure-safe view at this leadership altitude',
   'grades-routing': 'Graded evidence in a governed re-routing question',
+  'deploys-strategy': 'Deploys Breakthrough Bet via Hoshin Catchball pact',
+  'cascades-to': 'Cascades vertically into downstream pact or goal',
+  'counters-upward': 'Bilateral Catchball counter-offer upward',
+  'trades-off': 'Explicitly de-scopes commitment to free span capacity',
 };
 
 const Z_80_INTERVAL = 1.2815515655446004; // Standard normal 90th percentile (P10 / P90)
@@ -2168,6 +2186,30 @@ export function resolveLinkedEntity(state, entityType, entityId) {
         type: 'routingplan', id: rec.id, title: `Altitude routing plan · ${rec.detectedAltitudeKey || 'altitude refused'}`,
         status: `${rec.status} · rank ${rec.effectiveRank}`,
         route: `#/routing?panel=ledger&plan=${encodeURIComponent(rec.id)}`, raw: rec,
+      };
+    }
+    case 'catchballpact': {
+      const rec = (state.catchballPacts || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      return {
+        type: 'catchballpact',
+        id: rec.id,
+        title: rec.title || `Catchball pact · ${rec.altitudeKey}`,
+        status: `${rec.status} · ${rec.altitudeKey} (${rec.horizonDays}d)`,
+        route: `#/catchball?panel=workbench&pact=${encodeURIComponent(rec.id)}`,
+        raw: rec,
+      };
+    }
+    case 'catchballround': {
+      const rec = (state.catchballRounds || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      return {
+        type: 'catchballround',
+        id: rec.id,
+        title: `Catchball round #${rec.roundNumber} · ${rec.kind}`,
+        status: `${rec.mechanism} · ${rec.recordedOn}`,
+        route: `#/catchball?panel=calibration&round=${encodeURIComponent(rec.id)}`,
+        raw: rec,
       };
     }
     default:

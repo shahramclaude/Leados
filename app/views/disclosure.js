@@ -1,7 +1,7 @@
 /**
  * app/views/disclosure.js — the Disclosure Console (`#/disclosure`) and the
  * altitude-appropriate aggregate screen every withheld-detail module now gets
- * (Schema v90, ADR-0084).
+ * (Schema v90, ADR-0085).
  *
  * Two screens, one idea: the workspace should be usable at every altitude and
  * say exactly why it is showing what it is showing. Above a module's detail
@@ -257,7 +257,7 @@ export function renderDisclosure(ctx) {
 
   return h('div', { class: 'page' },
     pageHeader({
-      eyebrow: 'Governance · ADR-0084',
+      eyebrow: 'Governance · ADR-0085',
       title: 'Disclosure Console',
       subtitle: `${report.compiled.enforced ? report.compiled.seatLabel : 'Undeclared operator view'} · every screen states the posture it holds here, and every withheld cell states why.`,
       actions: [

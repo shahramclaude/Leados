@@ -102,6 +102,7 @@ import { missionRule } from './missionRules.js';
 // boundary above them in the SAME transaction. Inert unless a plan is adopted
 // or an explicit scan runs; an undeclared workspace is unchanged.
 import { altitudeRouterRule } from './altitudeRouterRules.js';
+import { catchballRule } from './catchballRules.js';
 // ADR-0083: the Concordance Terminal. Every closed two-sided expectation round
 // writes its typed roll-up ladder, and a breach opens one governed
 // re-contracting decision per pair per ISO week — on this same spine, in the
@@ -479,9 +480,14 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // Placed before the market's final work-producing pass (the attention-market
   // invariant requires only successionRule and seatRule to trail it).
   altitudeRouterRule,
+  // ADR-0084: Hoshin Kanri & Catchball Cascade (`RULE-HK-01..03`). Writes
+  // vertical `rolls-up-to` provenance across every leadership ancestor, links
+  // strategy/goal/budget/trade-off edges, and opens governed Watermelon and
+  // Double-Loop Thesis Review DACI decisions before the final tail passes.
+  catchballRule,
   // ADR-0083: altitude as a dimension of the same engine, one rule set later.
   concordanceRule,
-  // ADR-0084: the Disclosure Compiler's paperwork. Runs after every work-producing
+  // ADR-0085: the Disclosure Compiler's paperwork. Runs after every work-producing
   // module so the consent task and the governed decision it opens describe the
   // finished transaction; it grants nothing itself.
   disclosureRule,

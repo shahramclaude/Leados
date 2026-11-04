@@ -1,5 +1,5 @@
 /**
- * tests/app/disclosure-compiler.test.mjs — ADR-0084, Session 124: the Disclosure
+ * tests/app/disclosure-compiler.test.mjs — ADR-0085, Session 124: the Disclosure
  * Compiler (Schema v90).
  *
  * The claims this suite makes, in order:
@@ -164,10 +164,10 @@ function seatsOrThrow(state) {
 /* --------------------------------------------------------------- 1. schema */
 
 test('schema v90 migrates additively and refuses malformed or stale grants', () => {
-  assert.equal(SCHEMA_VERSION, 90);
+  assert.equal(SCHEMA_VERSION, 91);
   const old = { schemaVersion: 89, settings: { leaderName: 'Keep' }, cases: [{ id: 'keep' }], disclosureGrants: [{ id: 'existing' }] };
   const migrated = migrate(old);
-  assert.equal(migrated.raw.schemaVersion, 90);
+  assert.equal(migrated.raw.schemaVersion, 91);
   assert.deepEqual(migrated.raw.disclosureMarkers, []);
   assert.equal(migrated.raw.cases[0].id, 'keep');
   assert.equal(migrated.raw.settings.disclosureCellFloor, 5);
@@ -741,4 +741,40 @@ test('ONE frontline record rolls up four altitudes as detail → counts → coun
   const vpBuilt = seatsOrThrow(vpState);
   const vpAgg = moduleAggregate(vpState, 'cases', activeSeat(vpBuilt), vpBuilt, { now: NOW, settings: vpState.settings });
   assert.ok(vpAgg.totals.rows >= dirAgg.totals.rows, 'the VP’s span contains the director’s');
+});
+
+test('csv: the disclosure export is aggregate-only, seat-compiled and names nothing', async () => {
+  const { CSV_EXPORTS, exportWorkspaceCsv } = await import('../../app/core/csv.js');
+  const { disclosureReport, disclosureCsvRows } = await import('../../app/core/domain/disclosure.js');
+  const spec = CSV_EXPORTS.find((s) => s.key === 'disclosure-posture');
+  assert.ok(spec, 'the disclosure posture export is registered, not just an API method');
+  assert.equal(CSV_EXPORTS.at(-1).key, 'disclosure-posture');
+  assert.equal(spec.sensitive, false);
+
+  const base = fixture();
+  const state = seated(base, 'vp1');
+  const built = seatsOrThrow(state);
+  const seat = activeSeat(built);
+  const report = disclosureReport(state, { now: NOW, settings: state.settings, seat, built });
+  const rows = disclosureCsvRows(report);
+  // One row per declared module, and the VP is never told a module is in detail
+  // posture when the compiler placed it above its ceiling.
+  assert.equal(rows.length, Object.keys(report.compiled.entries).length);
+  assert.ok(rows.length > 90);
+  const vpEntries = rows.filter((r) => r.posture === 'detail');
+  const leadReport = disclosureReport(seated(base, 'lead1'), {
+    now: NOW, settings: state.settings, seat: activeSeat(seatsOrThrow(seated(base, 'lead1'))), built: seatsOrThrow(seated(base, 'lead1')),
+  });
+  assert.ok(rows.filter((r) => r.posture === 'detail').length <= disclosureCsvRows(leadReport).filter((r) => r.posture === 'detail').length,
+    'the VP is offered less detail than the frontline lead');
+  assert.ok(vpEntries.every((r) => r.reason !== undefined));
+
+  // The real export path works and names nothing: no person, no record, no sentence.
+  const out = exportWorkspaceCsv(state, 'disclosure-posture', { now: NOW });
+  assert.equal(out.ok, true);
+  const text = `${out.csv}\n${JSON.stringify(rows)}`;
+  for (const forbidden of ['Priya', 'Marcus', 'sentinel', 'Peers see']) {
+    assert.ok(!text.includes(forbidden), `the export must not contain "${forbidden}"`);
+  }
+  assert.ok(rows.every((r) => ['detail', 'aggregate', 'withheld'].includes(r.posture)));
 });

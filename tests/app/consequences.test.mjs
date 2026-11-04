@@ -105,11 +105,11 @@ function harness(initial = fixture(), now = () => NOW) {
 
 describe('schema v67 and fail-closed persistence', () => {
   test('the 66→67 migration adds empty ledgers, never a retrospective forecast', () => {
-    assert.equal(SCHEMA_VERSION, 90);
+    assert.equal(SCHEMA_VERSION, 91);
     assert.equal(typeof MIGRATIONS[66], 'function');
     const raw = migrate({ schemaVersion: 66, settings: {}, decisions: [decision('old')] });
-    assert.deepEqual(raw.applied, ['66 → 67', '67 → 68', '68 → 69', '69 → 70', '70 → 71', '71 → 72', '72 → 73', '73 → 74', '74 → 75', '75 → 76', '76 → 77', '77 → 78', '78 → 79', '79 → 80', '80 → 81', '81 → 82', '82 → 83', '83 → 84', '84 → 85', '85 → 86', '86 → 87', '87 → 88', '88 → 89', '89 → 90']);
-    assert.equal(raw.raw.schemaVersion, 90);
+    assert.deepEqual(raw.applied, ['66 → 67', '67 → 68', '68 → 69', '69 → 70', '70 → 71', '71 → 72', '72 → 73', '73 → 74', '74 → 75', '75 → 76', '76 → 77', '77 → 78', '78 → 79', '79 → 80', '80 → 81', '81 → 82', '82 → 83', '83 → 84', '84 → 85', '85 → 86', '86 → 87', '87 → 88', '88 → 89', '89 → 90', '90 → 91']);
+    assert.equal(raw.raw.schemaVersion, 91);
     assert.deepEqual(raw.raw.consequenceReadings, []);
     assert.deepEqual(raw.raw.consequenceMarkers, []);
     const state = normalizeState(raw.raw, { now: NOW }).state;
@@ -524,7 +524,7 @@ describe('five-panel terminal, inclusive routes and working controls', () => {
 
 describe('CSV scope #57: aggregate-only, floors and no identifiers', () => {
   test('one reading exports counts, but no individual forecast, money, title, name, or IDs', () => {
-    assert.equal(CSV_EXPORTS.length, 78);
+    assert.equal(CSV_EXPORTS.length, 79);
     assert.ok(CSV_EXPORTS.some((e) => e.key === 'consequences' && e.filenameSlug === 'decision-consequences'));
     const s = fixture();
     s.consequenceReadings = [buildConsequenceReading(consequenceForDecision(s, 'd-root', NOW, s.settings), 2, NOW, 'private-reading-id')];

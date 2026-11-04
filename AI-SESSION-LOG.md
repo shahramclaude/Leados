@@ -1,4 +1,4 @@
-## 2026-11-04 — Session 124: The Disclosure Compiler (Schema v90, [ADR-0084](./docs/adr/0084-disclosure-compiler.md), `#/disclosure`, RULE-DSC-01..02)
+## 2026-11-04 — Session 125: The Disclosure Compiler (Schema v91, [ADR-0085](./docs/adr/0085-disclosure-compiler.md), `#/disclosure`, RULE-DSC-01..02)
 
 **Repository identity (checked first).** `git remote -v` → `https://github.com/shahramclaude/Leados.git` (fetch + push). Branch `arena/b927efc3-leados`, base `3a40fbb` (= `main`, merge of PR #138), worktree clean at session start. Identity **PASS**; no stop condition.
 
@@ -15,13 +15,13 @@
 
 **Shipped (all in this session, all executed).**
 
-- **New:** `app/core/domain/disclosureRegistry.js`, `disclosureSchema.js`, `disclosureManifests.js` (97 rows), `disclosure.js` (compiler + aggregate + validators + brief + CSV rows), `disclosureRules.js` (RULE-DSC-01/02), `disclosureActions.js`; `app/views/disclosure.js` (console + `renderAggregatePosture`); `tests/app/disclosure-compiler.test.mjs` (20 tests); `docs/adr/0084-disclosure-compiler.md`.
+- **New:** `app/core/domain/disclosureRegistry.js`, `disclosureSchema.js`, `disclosureManifests.js` (97 rows), `disclosure.js` (compiler + aggregate + validators + brief + CSV rows), `disclosureRules.js` (RULE-DSC-01/02), `disclosureActions.js`; `app/views/disclosure.js` (console + `renderAggregatePosture`); `tests/app/disclosure-compiler.test.mjs` (20 tests); `docs/adr/0085-disclosure-compiler.md`.
 - **Compiler:** `postureFor` → `detail | aggregate | withheld` per route from `(manifest × seat × live grants)`; `compileDisclosure` per render; `moduleAggregate` with per-span buckets, floor withholding, one complementary suppression, total suppression, per-currency money, `unknown` dates, and an explicit count of excluded out-of-span records.
 - **Shell:** `main.js` compiles once in `render()`, feeds the nav, the gate and the screen; above a ceiling the module renders `renderAggregatePosture` instead of `renderAccessDenied`; nav marks aggregate screens `◌` with a title; new Governance section, aliases (`visibility`, `access`, `posture`, `who-sees-what`, `small-cell`), badge = consent work waiting on this seat + releases lapsing in 3 days, `documentTitle` entry.
 - **Release contracts:** request (purpose ≥ 12 chars, 1–30 days, one screen × one span, cap 6, duplicate refusal) → **consent only by the span leader** (requester refused, operator view refused) → live window honoured by the projection (`viewScope` adds exactly the granted span's records, marked `__disclosureGrant`) → refuse with reason / revoke by either party or the enterprise seat → expiry swept. `enterprise` classes never releasable; a grant can never lift a floor; `aggregate`-mode terminals never releasable.
 - **Propagation:** `RULE-DSC-01` in one transaction writes one governed DACI decision (release / refuse-and-share / narrow), one consent task addressed to the span, and `authorizes` + `discloses-to` + `tracks-followup` edges; `RULE-DSC-02` expires lapsed grants (including ones an imported workspace already carried as expired), opens exactly one review task per release, and reconciles stale edges. Marker-idempotent, pausable by `disclosureAutoPropagate` (operator-only), explicit scan always runs. **64 rules / 64 contracts.**
 - **Graph:** node `disclosuregrant` (→ `disclosureGrants`), relations `discloses-to` and `consented-by`, registered across `LINK_ENTITY_TYPES`, `LINK_ENTITY_COLLECTIONS`, `LINK_RELATIONS`, `SYSTEM_GENERATED_LINK_RELATIONS` and `resolveLinkedEntity` (no record content projected).
-- **Schema v90:** additive `MIGRATIONS[89]`, `disclosureGrants` + `disclosureMarkers`, five clamped settings, fail-closed grant normalizers (granted-without-consent-or-expiry reopens as `requested`; lapsed loads as `expired`; a row without requester, span or a real purpose is dropped with a warning).
+- **Schema v91:** additive `MIGRATIONS[90]`, `disclosureGrants` + `disclosureMarkers`, five clamped settings, fail-closed grant normalizers (granted-without-consent-or-expiry reopens as `requested`; lapsed loads as `expired`; a row without requester, span or a real purpose is dropped with a warning).
 
 **The concrete self-tests (cross-module × cross-altitude).**
 
@@ -33,7 +33,7 @@
 
 - `node --test tests/app/disclosure-compiler.test.mjs` — **20/20 PASS** (schema/migration refusals, catalogue exhaustiveness, per-altitude posture matrix incl. the chief, aggregate arithmetic + complementary suppression + per-currency money + total suppression, one-transaction propagation, consent/refusal/revocation lifecycle, floor/class/mode refusals, cap and duplicate refusals, projection-vs-grant agreement, route-gate fallback, brief/CSV identity-free, four axe-clean panels, four-altitude roll-up trail, operator view unchanged).
 - `node --test tests/app/app.test.mjs` — **33/33**; `tests/app/standalone.test.mjs` — **7/7** (after an honest ceiling raise for the seven new modules); `tests/app/csv.test.mjs` + `access-audit` + `event-cascade` + `redacted-export` + `storage-safety` — **48/48**; `mission-control` + `operating-seat` + `altitude-router` + `propagation-ledger` — **68/68**; `core` — **15/15**; `expectation-concordance` — **18/18**; `command-chain`, `decision-rights`, `domain`, `action-bundles`, `cases-automation` green in the same batch (160 passed / 2 failures triaged and fixed: a migration-tail assertion this session's own sweep had skipped, and the standalone size ceiling).
-- `npm run lint` — **clean** (whole tree). `npm run check:boundary` — **384 app ES modules, 123 test suites, 23 documentation checks, 0 leaks**. `npm run check:links` — **637 internal links across 195 markdown files, all resolve**. `npm run build:standalone` + `verify:standalone` — **6,946,726 bytes · 383 modules · schema v90 · sha256 `c9195fcc16d503ce`**.
+- `npm run lint` — **clean** (whole tree). `npm run check:boundary` — **384 app ES modules, 123 test suites, 23 documentation checks, 0 leaks**. `npm run check:links` — **637 internal links across 195 markdown files, all resolve**. `npm run build:standalone` + `verify:standalone` — **6,946,726 bytes · 383 modules · schema v91 · sha256 `c9195fcc16d503ce`**.
 - Live preview served on `0.0.0.0:5173`; `/` and `/app/views/disclosure.js` both **200**.
 - **Not run to completion:** the full 123-suite `npm test`. It is the slowest thing in the repo and was not allowed to finish inside this session; every suite listed above was run individually and is green, and CI runs the rest on the pull request — its result, not this paragraph, is the record. Real-browser assistive-technology walkthrough remains `[UNVERIFIED]` (axe-core in jsdom is what ran).
 
@@ -60,11 +60,17 @@
 2. **[all altitudes] Authenticated identity + tenant boundary** — server-side authorization on every read/write/export; the compiler is already a pure policy function and is the natural engine for it.
 3. **[manager → CEO] Temporal disclosure control** — repeated-release differencing tests, a decay rule for grant frequency, and a formal privacy review before any predictive claim.
 
-**Changed files (summary).** New: `app/core/domain/{disclosureRegistry,disclosureSchema,disclosureManifests,disclosure,disclosureRules,disclosureActions}.js`, `app/views/disclosure.js`, `tests/app/disclosure-compiler.test.mjs`, `docs/adr/0084-disclosure-compiler.md`. Modified: `app/main.js`, `app/actions.js`, `app/core/schema.js`, `app/core/domain/{seatRegistry,viewScope,accessGateway,cases,postCommit,propagationContracts}.js`, `app/styles.css`, `index.html`, `docs/adr/INDEX.md`, `README.md`, `ROADMAP.md`, `RESEARCH.md`, `CHANGELOG.md`, `FEATURES.md`, `LEADOS-STATE.md`, `LeadOS-standalone.html`, `tests/app/standalone.test.mjs`, and the schema-v90 / migration-tail sweep across 85 test files.
+**Changed files (summary).** New: `app/core/domain/{disclosureRegistry,disclosureSchema,disclosureManifests,disclosure,disclosureRules,disclosureActions}.js`, `app/views/disclosure.js`, `tests/app/disclosure-compiler.test.mjs`, `docs/adr/0085-disclosure-compiler.md`. Modified: `app/main.js`, `app/actions.js`, `app/core/schema.js`, `app/core/domain/{seatRegistry,viewScope,accessGateway,cases,postCommit,propagationContracts}.js`, `app/styles.css`, `index.html`, `docs/adr/INDEX.md`, `README.md`, `ROADMAP.md`, `RESEARCH.md`, `CHANGELOG.md`, `FEATURES.md`, `LEADOS-STATE.md`, `LeadOS-standalone.html`, `tests/app/standalone.test.mjs`, and the schema-v90 / migration-tail sweep across 85 test files.
 
 **Sync.** Commit, push to `origin/arena/b927efc3-leados` and the pull request are reported in the final response; the real result (and any failure) is recorded there rather than assumed here.
 
 ---
+# AI Session Log — Session 124, 2026-11-04: Hoshin Catchball Cascade (Schema v90, ADR-0084)
+
+- Added `#/catchball`: negotiated pacts and rounds, capacity and budget checks, bowler diagnostics, weakest-link roll-ups, calibration and an aggregate brief/CSV.
+- Schema migration 89 → 90 adds three collections. The shared spine has 64 rules and matching contracts, with Catchball before the final attention/seat/seal passes. Typed links, seat-scoped API, insights and CSV scope #79 are integrated.
+- Verification after the parallel-main merge: 73 focused Catchball, Concordance, graph, routing, seal, CSV and standalone tests passed; ESLint, boundary and documentation-link checks passed; standalone rebuilt (6,984,496 bytes, 382 source modules). The pre-merge full `npm test` was interrupted when main advanced; no final full-suite result is claimed here.
+- Limits: local seats are workflow declarations, not authentication. Executive item details and calibration cells are withheld; suppression is not differential privacy. Causal-thesis alerts are review prompts, not proof of causality.
 
 ## 2026-11-04 — Session 123: The Concordance Terminal (Schema v89, [ADR-0083](./docs/adr/0083-expectation-concordance.md), `#/concordance`, RULE-ECN-01..03, CSV #78)
 
