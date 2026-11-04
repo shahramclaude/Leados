@@ -1,4 +1,4 @@
-/** Schema v91: cross-altitude Strategy ↔ Catchball renewal bridge. */
+/** ADR-0089, Schema v94: cross-altitude Strategy ↔ Catchball renewal bridge. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -6,7 +6,9 @@ import { createApi } from '../../app/actions.js';
 import { exportWorkspaceCsv, CSV_EXPORTS, parseCsv } from '../../app/core/csv.js';
 import { createEmptyState, migrate, normalizeState, SCHEMA_VERSION } from '../../app/core/schema.js';
 import { createStore, STORAGE_KEY } from '../../app/core/store.js';
-import { buildSeats, canSee, projectForSeat } from '../../app/core/domain/seat.js';
+import { buildSeats, activeSeat, canSee, projectForSeat } from '../../app/core/domain/seat.js';
+import { compileDisclosure } from '../../app/core/domain/disclosure.js';
+import { workspaceRouteVerdict } from '../../app/core/domain/accessGateway.js';
 import { LINK_ENTITY_COLLECTIONS, LINK_ENTITY_TYPES, resolveLinkedEntity } from '../../app/core/domain/cases.js';
 import { DEFAULT_POST_COMMIT_RULES } from '../../app/core/domain/postCommit.js';
 import { PROPAGATION_CONTRACTS } from '../../app/core/domain/propagationContracts.js';
@@ -125,10 +127,10 @@ function reading(id, scopeSeatId, altitudeKey, rank, patch = {}) {
   };
 }
 
-test('Schema v91 migrates additively without fabricating cycles and strips untyped snapshot content', () => {
-  assert.equal(SCHEMA_VERSION, 91);
-  const migrated = migrate({ schemaVersion: 90, settings: { leaderName: 'Keep this' }, catchballPacts: [{ id: 'existing-pact' }] });
-  assert.deepEqual(migrated.applied, ['90 → 91']);
+test('Schema v94 migrates additively without fabricating cycles and strips untyped snapshot content', () => {
+  assert.equal(SCHEMA_VERSION, 94);
+  const migrated = migrate({ schemaVersion: 93, settings: { leaderName: 'Keep this' }, catchballPacts: [{ id: 'existing-pact' }] });
+  assert.deepEqual(migrated.applied, ['93 → 94']);
   assert.deepEqual(migrated.raw.strategyCycles, []);
   assert.deepEqual(migrated.raw.strategyCycleMarkers, []);
   assert.equal(migrated.raw.settings.leaderName, 'Keep this');
@@ -154,6 +156,20 @@ test('Schema v91 migrates additively without fabricating cycles and strips untyp
   for (const secret of ['PRIVATE CYCLE TITLE', 'PRIVATE CYCLE NOTE', 'PRIVATE PERSON', 'PRIVATE BET TITLE', 'PRIVATE BET NOTE']) {
     assert.ok(!serialized.includes(secret), `frozen reading drops ${secret}`);
   }
+});
+
+test('the Disclosure Compiler opens only the scoped Strategy Cycle adapter, not raw cohort rows', () => {
+  const state = fixture({ activeSeatId: 'lead1', cycles: [reading('opaque-cycle', 'leader', 'chief', 5)] });
+  state.strategyCycleMarkers = [{ id: 'opaque-marker', cycleId: 'opaque-cycle' }];
+  const built = buildSeats(state, { now: NOW, settings: state.settings });
+  const seat = activeSeat(built);
+  const projection = projectForSeat(state, seat, built);
+  const compiled = compileDisclosure(state, seat, built, { now: NOW, settings: state.settings });
+
+  assert.deepEqual(projection.visible.strategyCycles, [], 'raw frozen cohort IDs never enter a declared-seat projection');
+  assert.deepEqual(projection.visible.strategyCycleMarkers, [], 'internal rule markers never enter a declared-seat projection');
+  assert.equal(compiled.entries['strategy-cycle'].posture, 'detail', 'the route renders its independently scoped report rather than a generic aggregate');
+  assert.equal(workspaceRouteVerdict('strategy-cycle', seat, { state, built, compiled }).allow, true);
 });
 
 test('five altitude surfaces have different decision objects and the intended detail boundary', () => {

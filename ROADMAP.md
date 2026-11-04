@@ -1,3 +1,13 @@
+## Session 129 outcome — 2026-11-04: Strategy Renewal Bridge — a frozen learning line across five operating altitudes (Schema v94, [ADR-0089](docs/adr/0089-strategy-renewal-bridge.md), `RULE-SCR-01..02`, CSV #85)
+
+**The gap.** The Catchball cascade could negotiate and price strategy deployment, but did not preserve which commitments and bets were in scope at a review date, grade that exact cohort later, or give each altitude a distinct renewal decision.
+
+**What shipped.** `#/strategy-cycle` freezes prospective identity-reduced readings, links the exact cohort to Catchball, bets and leadership ancestors, and presents five altitude-specific playbooks. The historical delivery reference is not called a prediction; Brier is withheld without explicit-confidence evidence; ranks 3+ receive cell suppression and complementary redaction. The director scenario is display-only. Human decisions and Catchball consent remain required: no bet, budget, owner, date or pact is auto-changed. Schema v94 adds empty prospective cycle/marker ledgers and defaults only; CSV #85 exports the active-seat report. The raw cycle and marker collections stay out of declared-seat projections, while the Disclosure Compiler opens the custom scoped report adapter.
+
+**Honest limits.** Seats are local declarations, not authentication. Cell suppression is not differential privacy, repeated-release/reorganization differencing remains open, and the LEI strategy-deployment page was not verified for a specific claim. Vendor pages are treated as vendor-described capabilities, not independent product verification.
+
+**Next.** Validate the five decisions with users; strengthen settlement/data-quality signals; review repeated-release privacy; and close the authenticated identity/tenant boundary.
+
 ## Session 128 outcome — 2026-11-04: The Federated Envoy — the hierarchy leaves the browser (Schema v93, no bump of its own, ADR-0088, `RULE-ENV-01..03`, CSV #84)
 
 **The gap.** Every module so far — chain, seat, mandate, catchball, concordance, board, disclosure, cadence — models the hierarchy *inside one store*. Real organisations are not one store, and leadership work crosses workspace boundaries daily. Until now it crossed them as a document with no provenance, no disclosure scope and no way to record disagreement except a merge.

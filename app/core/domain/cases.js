@@ -328,7 +328,7 @@ export const LINK_ENTITY_TYPES = [
   // negotiation rounds.
   'catchballpact',
   'catchballround',
-  // Schema v91: an identity-reduced strategy renewal cycle joins frozen
+  // ADR-0089 (Schema v94): an identity-reduced renewal cycle joins frozen
   // portfolio learning to Catchball commitments and altitude provenance.
   'strategycycle',
   // ADR-0083: one closed two-sided expectation round. A first-class node so the
@@ -484,6 +484,7 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   // ADR-0084: Hoshin Kanri & Catchball Cascade collections.
   catchballpact: 'catchballPacts',
   catchballround: 'catchballRounds',
+  strategycycle: 'strategyCycles',
   carryover: 'carryoverRecords',
   // ADR-0085: the packet ledger owns the packet node's IDs.
   exchangepacket: 'exchangePackets',
@@ -599,6 +600,8 @@ export const SYSTEM_GENERATED_LINK_RELATIONS = Object.freeze([
   'reconciles',
   // ADR-0084: emitted by the Catchball spine, not manually asserted.
   'deploys-strategy', 'cascades-to', 'counters-upward', 'trades-off',
+  // ADR-0089: cycle-to-cohort provenance is emitted only by RULE-SCR-01.
+  'audits-cascade',
   // ADR-0086: a bounded release names the altitude it discloses to and the span
   // that consented to it. Both are structure, never record content.
   'discloses-to',
@@ -837,10 +840,9 @@ export const LINK_RELATIONS = [
   'cascades-to',
   'counters-upward',
   'trades-off',
-  // Schema v91: the frozen strategy cycle audits its typed cascade and a
-  // linked Catchball pact may require a human reconciliation decision.
+  // ADR-0089: the frozen cycle audits its typed cascade; human renewal
+  // decisions use the existing system-generated `reconciles` relation.
   'audits-cascade',
-  'reconciles',
   // Schema v89 (ADR-0083): the Concordance Terminal. `re-contracts` — this
   // governed decision was opened from that diverged expectation;
   // `re-tests` — this later round tests the standard that decision set.
@@ -869,7 +871,8 @@ export const LINK_RELATIONS = [
 
 export const LINK_RELATION_LABELS = {
   carries: 'Carried to this leadership span as a sealed packet',
-  reconciles: 'Governed reconciliation opened by a packet divergence',
+  'audits-cascade': 'Frozen cycle audits this typed strategy-to-delivery cascade',
+  reconciles: 'Governed reconciliation opened by a renewal trigger or packet divergence',
   're-contracts': 'Re-contracting decision opened from this expectation',
   're-tests': 'Re-tests the standard this decision set',
   'calibrates-coupling': 'Audited against realised joint resolution timing',

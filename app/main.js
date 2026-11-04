@@ -34,6 +34,8 @@ import { catchballAttentionCount } from './core/domain/catchball.js';
 import { cadenceAttentionCount } from './core/domain/cadence.js';
 import { renderCarryover } from './views/carryover.js';
 import { carryoverAttentionCount } from './core/domain/carryover.js';
+// ADR-0089: the altitude-specific, identity-reduced strategy renewal report.
+import { renderStrategyCycle } from './views/strategyCycle.js';
 // ADR-0083: the Concordance Terminal — the two-gauge problem behind every
 // performance review, measured pair by pair and rolled up the tree.
 import { renderConcordance } from './views/concordance.js';
@@ -191,7 +193,6 @@ import { scepticAttentionCount } from './core/domain/sceptic.js';
 // ADR-0082: the Sealed Spine — tamper-evident audit chain + altitude attestation.
 import { renderSeal } from './views/seal.js';
 import { sealAttentionCount } from './core/domain/sealChain.js';
-import { renderStrategyCycle } from './views/strategyCycle.js';
 
 function safeDecode(segment) {
   const raw = String(segment || '');
@@ -240,6 +241,8 @@ export const NAV = [
     // it next sits, and whether the queue can reach it inside its own horizon.
     { route: 'cadence', label: 'Operating cadence', icon: '◷', badge: 'cadence' },
     { route: 'catchball', label: 'Strategy cascade', icon: '◇', badge: 'catchball' },
+    // ADR-0089: each operating altitude gets its own frozen renewal view.
+    { route: 'strategy-cycle', label: 'Strategy renewal', icon: '⟳' },
     // ADR-0085: the thesis-invalidated pact's bet is settled — stop rule
     // judged, resources released into the next allocation cycle.
     { route: 'carryover', label: 'Carryover', icon: '⟳', badge: 'carryover' },
@@ -365,6 +368,7 @@ const RENDERERS = {
   intake: (ctx) => renderIntake(ctx),
   routing: (ctx) => renderAltitudeRouter(ctx),
   catchball: (ctx) => renderCatchball(ctx),
+  'strategy-cycle': (ctx) => renderStrategyCycle(ctx),
   cadence: (ctx) => renderCadence(ctx),
   disclosure: (ctx) => renderDisclosure(ctx),
   carryover: (ctx) => renderCarryover(ctx),
@@ -555,6 +559,7 @@ export function parseRoute(hash) {
     // (ADR-0073) and silently stealing it would break a shipped link.
     'mission': 'mission', 'mission-control': 'mission', 'command-center': 'mission', 'flight-deck': 'mission',
     'catchball': 'catchball', 'hoshin': 'catchball', 'strategy-cascade': 'catchball',
+    'strategy-cycle': 'strategy-cycle', 'strategy-renewal': 'strategy-cycle', 'strategy-bridge': 'strategy-cycle',
     // ADR-0087: the Operating Cadence Clock's aliases. None may shadow a shipped
     // route: 'meetings' is free, 'calendar' is free, and 'review' is deliberately
     // NOT claimed here because it would collide with the review screens.
@@ -1356,6 +1361,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       routing: 'Altitude Router — natural-language intake classified into modules and the correct organizational altitude, with disclosure-safe roll-up to every leadership level',
       board: 'Board Room — the disclosure pack as a measurement problem: claims and thresholds pre-registered before the first look, verdicts decided by the conservative end of each interval, two-module cross-examination, exact span decomposition, and a permanent post-hoc mark on any threshold moved after looking',
       catchball: 'Hoshin Kanri & Catchball Cascade — negotiated strategy deployment',
+      'strategy-cycle': 'Strategy renewal — freeze the Catchball-to-bet cohort, review outcomes within its window and make the altitude-specific renewal decision',
       cadence: 'Operating Cadence Clock — your standing forums read as a finite decision machine: what each is competent to close, the demand converging on it, when it next sits, and which items cannot land inside their own horizon',
       disclosure: 'Disclosure Console — every screen states the posture it holds at this altitude, every withheld cell states why, and detail is released only by a consented, expiring, span-bounded contract',
       carryover: 'Hoshin Carryover — a thesis-invalidated pact settles its bet: stop rule judged, encumbered person-days and budget released into the next allocation cycle',

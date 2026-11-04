@@ -145,6 +145,12 @@ import {
   normalizeCatchballMarkers,
   normalizeCatchballSettings,
 } from './domain/catchballSchema.js';
+// ADR-0089: bounded, identity-reduced Strategy Renewal readings and markers.
+import {
+  normalizeStrategyCycleReadings,
+  normalizeStrategyCycleMarkers,
+  normalizeStrategyCycleSettings,
+} from './domain/strategyCycleSchema.js';
 // ADR-0085: the Operating Cadence Clock's fail-closed normalizers and clamped
 // conventions. A forum, a sitting or a frozen reading that cannot be validated is
 // dropped with a warning rather than repaired into something a leader might act on.
@@ -331,8 +337,8 @@ export {
   DRILL_OUTCOMES,
 };
 
-// v82 remains the schema version. ADR-0076 (the Operating Seat) is additive
-// WITHOUT a version bump by design: it introduces no new stored entity. The
+// ADR-0076 (the Operating Seat) was additive WITHOUT a version bump by design:
+// it introduced no new stored entity. The
 // acting seat is a settings declaration, the handover and every access refusal
 // are entries in the existing append-only event log, typed provenance reuses
 // the existing `rolls-up-to` relation and existing graph entity types, and the
@@ -340,7 +346,7 @@ export {
 // older blob simply opens on the undeclared operator view. A version bump here
 // would have forced 78 test files to be rewritten for zero user benefit; the
 // honest choice is to add nothing to migrate.
-export const SCHEMA_VERSION = 93;
+export const SCHEMA_VERSION = 94;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -355,6 +361,8 @@ export const SCHEMA_VERSION = 93;
 // records other modules already keep, so an upgraded workspace opens with an
 // EMPTY forum register that says no cadence has ever been declared, rather than
 // a fabricated meeting calendar. A forum is only ever created by a human.
+// v94 adds prospective, identity-reduced Strategy Renewal readings and rule
+// markers. It never back-fills a cohort from the current Catchball or bet state.
 
 // v83 adds the Succession Terminal (`successionReadings`, `successionMarkers`): a
 // frozen bench claim per workspace or per span — the probability that at least one
@@ -1414,6 +1422,10 @@ export const DEFAULT_SETTINGS = Object.freeze({
   catchballCellFloor: 3,
   catchballMaxFanout: 4,
   catchballAutoPropagate: true,
+  // ADR-0089: Strategy Renewal evidence, suppression and propagation conventions.
+  strategyCycleEvidenceFloor: 5,
+  strategyCycleCellFloor: 3,
+  strategyCycleAutoPropagate: true,
   // ADR-0085: the Operating Cadence Clock — declared conventions, clamped on read.
   // `cadenceUtilisationTargetPct` is the ρ the calendar is planned against; the
   // planning factor and flow target are named conventions, never fitted.
@@ -1724,6 +1736,9 @@ export const COLLECTIONS = [
   'catchballPacts',
   'catchballRounds',
   'catchballMarkers',
+  // ADR-0089: identity-reduced frozen renewal readings and idempotency markers.
+  'strategyCycles',
+  'strategyCycleMarkers',
   // ADR-0085: the Operating Cadence Clock. Declared standing forums, an
   // append-only sitting log, frozen queue readings graded once afterwards, and
   // rule-idempotency markers. No attendance record, no per-person record and no
@@ -2415,6 +2430,7 @@ export function normalizeSettings(raw) {
     ...normalizeBoardSettings(s),
     ...normalizeSealSettings(s),
     ...normalizeCatchballSettings(s),
+    ...normalizeStrategyCycleSettings(s),
     ...normalizeCarryoverSettings(s),
     ...normalizeEnvoySettings(s),
   };
@@ -6506,6 +6522,10 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.catchballPacts = normalizeCatchballPacts(raw.catchballPacts, warnings);
   state.catchballRounds = normalizeCatchballRounds(raw.catchballRounds, warnings);
   state.catchballMarkers = normalizeCatchballMarkers(raw.catchballMarkers);
+  // ADR-0089: resolve frozen cycles after their Catchball cohort sources and
+  // before typed links, while keeping raw cohort IDs out of scoped projections.
+  state.strategyCycles = normalizeStrategyCycleReadings(raw.strategyCycles, warnings);
+  state.strategyCycleMarkers = normalizeStrategyCycleMarkers(raw.strategyCycleMarkers);
   // ADR-0085: the Operating Cadence Clock. A malformed forum, a sitting with no
   // date and a reading with no frozen figure are all dropped with a warning;
   // none is repaired into something a leader might act on.
@@ -7239,6 +7259,22 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  // ADR-0089: additive 93 → 94. No history is inferred from current bets or
+  // pacts; existing workspaces receive empty prospective-cycle ledgers.
+  93: (v93) => ({
+    ...v93,
+    schemaVersion: 94,
+    strategyCycles: Array.isArray(v93.strategyCycles) ? v93.strategyCycles : [],
+    strategyCycleMarkers: Array.isArray(v93.strategyCycleMarkers) ? v93.strategyCycleMarkers : [],
+    settings: isPlainObject(v93.settings)
+      ? {
+        ...v93.settings,
+        strategyCycleEvidenceFloor: v93.settings.strategyCycleEvidenceFloor ?? 5,
+        strategyCycleCellFloor: v93.settings.strategyCycleCellFloor ?? 3,
+        strategyCycleAutoPropagate: v93.settings.strategyCycleAutoPropagate !== false,
+      }
+      : { ...DEFAULT_SETTINGS },
+  }),
   // ADR-0086: additive 91 → 92. No existing record is rewritten. An older
   // workspace simply has an empty release ledger and the declared conventions;
   // the compiler derives every posture from the module manifests, so no stored

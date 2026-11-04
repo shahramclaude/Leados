@@ -103,3 +103,4 @@ Format: copy `0001-record-architecture-decisions.md`, number sequentially, statu
 - [ADR-0086: The Disclosure Compiler — every screen declares its posture, the aggregate replaces the refusal, and detail is released only by a consented, expiring contract](./0086-disclosure-compiler.md)
 - [ADR-0087: The Operating Cadence Clock — the standing-forum calendar as a queueing system, with declared service time, competence routing, and a planning-fallacy correction (`#/cadence`)](./0087-operating-cadence-clock.md)
 - [ADR-0088: The Federated Envoy — sealed, disclosure-scoped, Merkle-committed packets between LeadOS workspaces (`#/envoy`)](./0088-federated-envoy.md)
+- [ADR-0089: Strategy Renewal Bridge — freeze the Catchball-to-bet cohort, make each altitude a different renewal decision, and grade only outcomes inside that cycle (`#/strategy-cycle`)](./0089-strategy-renewal-bridge.md)

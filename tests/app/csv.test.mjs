@@ -116,11 +116,11 @@ test('every CSV scope round-trips cleanly and preserves unknown values as blank 
 
   // All registered exports, including authority calibration (#74) and retention (#76),
   // participate in the same round-trip contract; #75 remains reserved.
-  assert.equal(CSV_EXPORTS.length, 84);
+  assert.equal(CSV_EXPORTS.length, 85);
   // All registered exports, including authority calibration (#74), retention
   // (#76) and the carryover settlement scope (#80), participate in the same
   // round-trip contract; #75 remains reserved.
-  assert.equal(CSV_EXPORTS.length, 84);
+  assert.equal(CSV_EXPORTS.length, 85);
   for (const spec of CSV_EXPORTS) {
     const res = exportWorkspaceCsv(state, spec.key, { now: NOW });
     assert.equal(res.ok, true, `${spec.key} export succeeds`);

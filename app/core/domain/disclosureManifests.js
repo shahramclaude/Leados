@@ -38,8 +38,11 @@ function row(route, label, collections, opts = {}) {
     label,
     collections: Object.freeze(collections),
     mode: opts.mode || G,
-    // Only used when the route has no governed collection to borrow a class from.
+    // Used when there is no collection, or when a custom report adapter owns
+    // the scoping and suppression contract instead of exposing raw records.
     classKey: opts.classKey || null,
+    adapterScoped: Boolean(opts.adapterScoped),
+    detailCeiling: Number.isInteger(opts.detailCeiling) ? opts.detailCeiling : null,
     dates: Object.freeze(opts.dates || ['createdAt', 'openedAt']),
     dues: Object.freeze(opts.dues || []),
     statuses: Object.freeze(opts.statuses || ['status']),
@@ -119,6 +122,10 @@ export const MODULE_MANIFESTS = Object.freeze({
   // operating subtree and the item content is already capped by the receiving
   // altitude's disclosure class, so a declared seat may open its own desk.
   envoy: row('envoy', 'Federated exchange', ['exchangePackets'], { mode: A, dates: ['receivedAt'], statuses: ['status'] }),
+  // ADR-0089: the report adapter recomputes the active seat's scoped cohort,
+  // redacts pact details at high altitude and suppresses small cells. Raw cycle
+  // and marker rows are never projected into declared-seat view state.
+  'strategy-cycle': row('strategy-cycle', 'Strategy renewal', ['strategyCycles'], { mode: A, classKey: 'unit', adapterScoped: true, detailCeiling: 5, dates: ['frozenOn', 'reviewOn'], statuses: ['status'], note: 'The Strategy Cycle adapter applies subtree scope, altitude redaction and small-cell withholding. Raw cohort IDs and stored marker rows are not disclosed.' }),
 
   /* ------------------------------------------------------------------ analytics terminals */
   attribution: row('attribution', 'Outcome attribution', ['settlements'], { note: 'Earned-schedule settlement runs over the whole workspace ledger.' }),

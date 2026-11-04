@@ -1,5 +1,5 @@
 /**
- * Persistence contract for the Strategy Renewal Bridge (Schema v91). Frozen
+ * Persistence contract for the Strategy Renewal Bridge (Schema v94, ADR-0089). Frozen
  * readings contain bounded counts, rates and typed IDs only: no pact title,
  * free text, person name, budget amount or private decision text is copied.
  */

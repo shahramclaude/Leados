@@ -95,9 +95,9 @@ const weeklyForum = (extra = {}) => ({
 /* ------------------------------------------------------------------ schema */
 
 test('v92 → v93 migration is additive, and no forum is ever invented', () => {
-  assert.equal(SCHEMA_VERSION, 93);
+  assert.equal(SCHEMA_VERSION, 94);
   const migrated = migrate({ schemaVersion: 90, settings: { leaderName: 'Keep' }, people: [] });
-  assert.deepEqual(migrated.applied, ['90 → 91', '91 → 92', '92 → 93']);
+  assert.deepEqual(migrated.applied, ['90 → 91', '91 → 92', '92 → 93', '93 → 94']);
   assert.deepEqual(migrated.raw.cadenceForums, []);
   assert.deepEqual(migrated.raw.cadenceSessions, []);
   assert.deepEqual(migrated.raw.cadenceReadings, []);
@@ -131,7 +131,7 @@ test('graph vocabulary and spine parity are exhaustive', () => {
     assert.ok(SYSTEM_GENERATED_LINK_RELATIONS.includes(relation), `${relation} is written by the spine, never by hand`);
   }
   const names = DEFAULT_POST_COMMIT_RULES.map((rule) => rule.name);
-  assert.equal(names.indexOf('cadenceRule'), names.indexOf('catchballRule') + 1);
+  assert.equal(names.indexOf('cadenceRule'), names.indexOf('strategyCycleRule') + 1);
   assert.ok(names.indexOf('cadenceRule') < names.indexOf('attentionMarketRule'));
   assert.ok(names.indexOf('cadenceRule') < names.indexOf('seatRule'));
   assert.equal(names.at(-1), 'sealRule', 'the seal must remain absolutely last');
@@ -143,7 +143,7 @@ test('graph vocabulary and spine parity are exhaustive', () => {
   assert.ok(contract.writes.includes('decisions'));
   // ADR-0088 appends after this scope, so the registry ORDER is the contract.
   assert.ok(CSV_EXPORTS.findIndex((s) => s.key === 'operating-cadence') < CSV_EXPORTS.findIndex((s) => s.key === 'federated-exchange'));
-  assert.equal(CSV_EXPORTS.length, 84);
+  assert.equal(CSV_EXPORTS.length, 85);
 });
 
 /* ------------------------------------- the concrete self-test: one transaction */
