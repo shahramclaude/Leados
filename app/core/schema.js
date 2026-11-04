@@ -141,6 +141,15 @@ import {
   normalizeCatchballMarkers,
   normalizeCatchballSettings,
 } from './domain/catchballSchema.js';
+// ADR-0085: lateral supplier→consumer SLA contracts, append-only negotiation
+// rounds, immutable stop-rule carryover receipts and rule-idempotency markers.
+import {
+  normalizeValueStreamContracts,
+  normalizeValueStreamRounds,
+  normalizeValueStreamReallocations,
+  normalizeValueStreamMarkers,
+  normalizeValueStreamSettings,
+} from './domain/valueStreamSchema.js';
 import { addDays } from './time.js';
 import { validateWatchResponse } from './domain/watchResponse.js';
 import {
@@ -305,7 +314,13 @@ export {
 // older blob simply opens on the undeclared operator view. A version bump here
 // would have forced 78 test files to be rewritten for zero user benefit; the
 // honest choice is to add nothing to migrate.
-export const SCHEMA_VERSION = 90;
+export const SCHEMA_VERSION = 91;
+
+// v91 adds the Value Stream Exchange: peer-span SLA contracts and rounds,
+// immutable reviewed carryover receipts, and bounded automation markers. The
+// migration is additive: no existing pact, actual, grade or budget amount is
+// reconstructed, and unknown historical effort remains unknown rather than
+// becoming a fabricated person-day saving.
 
 // v83 adds the Succession Terminal (`successionReadings`, `successionMarkers`): a
 // frozen bench claim per workspace or per span — the probability that at least one
@@ -1365,6 +1380,10 @@ export const DEFAULT_SETTINGS = Object.freeze({
   catchballCellFloor: 3,
   catchballMaxFanout: 4,
   catchballAutoPropagate: true,
+  // ADR-0085: Value Stream Exchange — disclosure and bounded governance.
+  valueStreamCellFloor: 3,
+  valueStreamMaxDecisions: 4,
+  valueStreamAutoPropagate: true,
   // ADR-0083: The Concordance Terminal — declared conventions, all clamped.
   concordanceAgreementFloorPct: 60,
   concordanceCellFloor: 5,
@@ -1646,6 +1665,11 @@ export const COLLECTIONS = [
   'catchballPacts',
   'catchballRounds',
   'catchballMarkers',
+  // ADR-0085: lateral value-stream contracts and stop-rule carryover.
+  'valueStreamContracts',
+  'valueStreamRounds',
+  'valueStreamReallocations',
+  'valueStreamMarkers',
   // ADR-0083: two-sided expectation rounds (one row per pair per cycle, sealed
   // until both sides are in) and the idempotency markers their three rules use.
   'expectationRounds',
@@ -2299,6 +2323,7 @@ export function normalizeSettings(raw) {
     ...normalizeConcordanceSettings(s),
     ...normalizeSealSettings(s),
     ...normalizeCatchballSettings(s),
+    ...normalizeValueStreamSettings(s),
   };
 }
 
@@ -6388,6 +6413,11 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.catchballPacts = normalizeCatchballPacts(raw.catchballPacts, warnings);
   state.catchballRounds = normalizeCatchballRounds(raw.catchballRounds, warnings);
   state.catchballMarkers = normalizeCatchballMarkers(raw.catchballMarkers);
+  // ADR-0085: resolve peer contracts and immutable receipts before typed links.
+  state.valueStreamContracts = normalizeValueStreamContracts(raw.valueStreamContracts, warnings);
+  state.valueStreamRounds = normalizeValueStreamRounds(raw.valueStreamRounds, warnings);
+  state.valueStreamReallocations = normalizeValueStreamReallocations(raw.valueStreamReallocations, warnings);
+  state.valueStreamMarkers = normalizeValueStreamMarkers(raw.valueStreamMarkers);
   // ADR-0083: rounds resolve before links so `rolls-up-to`, `re-contracts` and
   // `re-tests` edges validate against real round ids. A malformed round is
   // dropped; a round claiming to be closed with one side is reopened.
@@ -7091,6 +7121,24 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  // ADR-0085: additive 90 → 91. No historical SLA, effort actual or reallocation
+  // is invented. Existing Catchball/Finance records retain their exact bodies.
+  90: (v90) => ({
+    ...v90,
+    schemaVersion: 91,
+    valueStreamContracts: Array.isArray(v90.valueStreamContracts) ? v90.valueStreamContracts : [],
+    valueStreamRounds: Array.isArray(v90.valueStreamRounds) ? v90.valueStreamRounds : [],
+    valueStreamReallocations: Array.isArray(v90.valueStreamReallocations) ? v90.valueStreamReallocations : [],
+    valueStreamMarkers: Array.isArray(v90.valueStreamMarkers) ? v90.valueStreamMarkers : [],
+    settings: isPlainObject(v90.settings)
+      ? {
+        ...v90.settings,
+        valueStreamCellFloor: v90.settings.valueStreamCellFloor ?? 3,
+        valueStreamMaxDecisions: v90.settings.valueStreamMaxDecisions ?? 4,
+        valueStreamAutoPropagate: v90.settings.valueStreamAutoPropagate !== false,
+      }
+      : { ...DEFAULT_SETTINGS },
+  }),
   // ADR-0083: additive 88 → 89. No existing record is rewritten: an older
   // workspace simply has an empty round ledger and the declared conventions.
   // A round is only ever created by a human opening one.

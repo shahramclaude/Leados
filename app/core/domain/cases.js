@@ -328,6 +328,9 @@ export const LINK_ENTITY_TYPES = [
   // negotiation rounds.
   'catchballpact',
   'catchballround',
+  // ADR-0085: peer SLA contracts and immutable stop-rule carryover receipts.
+  'valuestreamcontract',
+  'valuestreamreallocation',
   // ADR-0083: one closed two-sided expectation round. A first-class node so the
   // re-contracting decision it opened, the round that re-tests it and every
   // leadership span it rolled up to are navigable from the round — and the round
@@ -455,6 +458,8 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   // ADR-0084: Hoshin Kanri & Catchball Cascade collections.
   catchballpact: 'catchballPacts',
   catchballround: 'catchballRounds',
+  valuestreamcontract: 'valueStreamContracts',
+  valuestreamreallocation: 'valueStreamReallocations',
   // ADR-0083: keep the registry exhaustive with LINK_ENTITY_TYPES.
   concordance: 'expectationRounds',
 });
@@ -551,6 +556,9 @@ export const SYSTEM_GENERATED_LINK_RELATIONS = Object.freeze([
   'summarizes-span',
   // ADR-0084: emitted by the Catchball spine, not manually asserted.
   'deploys-strategy', 'cascades-to', 'counters-upward', 'trades-off',
+  // ADR-0085: emitted by the Value Stream spine, never manually asserted.
+  'mediated-by', 'supplies-pact', 'breaches-sla',
+  'releases-capacity', 'funds-next-cycle', 'reallocates-to',
 ]);
 
 export const LINK_RELATIONS = [
@@ -775,6 +783,13 @@ export const LINK_RELATIONS = [
   'cascades-to',
   'counters-upward',
   'trades-off',
+  // ADR-0085: lateral SLA and reviewed capital-carryover provenance.
+  'mediated-by',
+  'supplies-pact',
+  'breaches-sla',
+  'releases-capacity',
+  'funds-next-cycle',
+  'reallocates-to',
   // Schema v89 (ADR-0083): the Concordance Terminal. `re-contracts` — this
   // governed decision was opened from that diverged expectation;
   // `re-tests` — this later round tests the standard that decision set.
@@ -888,6 +903,12 @@ export const LINK_RELATION_LABELS = {
   'cascades-to': 'Cascades vertically into downstream pact or goal',
   'counters-upward': 'Bilateral Catchball counter-offer upward',
   'trades-off': 'Explicitly de-scopes commitment to free span capacity',
+  'mediated-by': 'Peer contract governed by its lowest common ancestor',
+  'supplies-pact': 'Supplier SLA feeds a receiving Catchball pact',
+  'breaches-sla': 'Governed recovery opened for an overdue SLA miss',
+  'releases-capacity': 'Stop-rule receipt releases settled source authority',
+  'funds-next-cycle': 'Carryover creates a proposed receiving pact',
+  'reallocates-to': 'Released authority targets a surviving strategy bet',
 };
 
 const Z_80_INTERVAL = 1.2815515655446004; // Standard normal 90th percentile (P10 / P90)
@@ -2186,6 +2207,24 @@ export function resolveLinkedEntity(state, entityType, entityId) {
         status: `${rec.mechanism} · ${rec.recordedOn}`,
         route: `#/catchball?panel=calibration&round=${encodeURIComponent(rec.id)}`,
         raw: rec,
+      };
+    }
+    case 'valuestreamcontract': {
+      const rec = (state.valueStreamContracts || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      return {
+        type: 'valuestreamcontract', id: rec.id, title: rec.title,
+        status: `${rec.status} · ${rec.direction} ${rec.target} ${rec.unit}`,
+        route: `#/valuestream?panel=contracts&contract=${encodeURIComponent(rec.id)}`, raw: rec,
+      };
+    }
+    case 'valuestreamreallocation': {
+      const rec = (state.valueStreamReallocations || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      return {
+        type: 'valuestreamreallocation', id: rec.id, title: `Carryover · ${rec.title}`,
+        status: `${rec.status} · ${rec.releasedBudgetAmount} ${rec.currency || ''} · ${rec.releasedEffortDays}d`,
+        route: `#/valuestream?panel=carryover&receipt=${encodeURIComponent(rec.id)}`, raw: rec,
       };
     }
     default:

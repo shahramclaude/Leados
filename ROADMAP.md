@@ -1,3 +1,16 @@
+## 2026-11-04 — Session 125: Value Stream Exchange & Stop-Rule Carryover ([ADR-0085](docs/adr/0085-value-stream-exchange.md), Schema v91, `#/valuestream`, RULE-VS-01..03, CSV #80)
+
+- **Implemented [frontline]:** bilateral supplier/customer peer proposals, append-only counters, supplier actuals, directional SLA targets, consumer verification, weekly hand-off commitments, and visible unknown-actual refusals.
+- **Implemented [manager]:** monthly peer negotiation with LCA mediation, capacity/lead-time terms, settlement that cannot contradict the actual, and a receiving Catchball proposal that still requires receiver consent.
+- **Implemented [director]:** real CPM longest path, slack, cycle refusal and downstream blast radius; one governed DACI breach decision per contract/week; typed peer roll-up through both branches.
+- **Implemented [VP / executive]:** pre-priced stop-rule carryover with stale-digest refusal, same-currency budget release, measured person-day capacity, one immutable receipt, and FAC-unchanged planned receiving lines.
+- **Implemented [CEO / chief]:** enterprise flow, traceable Cases links, identity-free brief, aggregate-only CSV #80, primary/complementary small-cell safeguards and one sealed cross-module transaction.
+- **Connected:** Session 124's two follow-ups — horizontal peer Catchball and Hoshin stop-rule reallocation — are now delivered together rather than as two unpriced copies.
+- **Next 1 — [all altitudes] Authenticated identity + tenant boundary.** Local seat declarations, LCA checks, local digest/seals and disclosure projections are not a server-side security boundary.
+- **Next 2 — [director → CEO] Temporal disclosure and reorganisation differencing.** Repeated aggregate releases, split/merge spans and inactive seats need complementary-suppression tests beyond a single snapshot.
+- **Next 3 — [manager → VP] Measured SLA forecast skill.** Keep strictly-prior forecasts, grade them against later actuals and withhold recommendations until out-of-sample evidence exists; CPM itself remains deterministic lead-time arithmetic.
+- **Rejected [all altitudes]:** peer auto-acceptance; LCA impersonation; fabricated historical effort; autonomous capital movement; mixed-currency netting; releasing spent lines; cycle-breaking without evidence; calling FNV hashes or local seats authentication.
+
 ## 2026-11-04 — Session 124: Hoshin Kanri & Catchball Cascade ([ADR-0084](docs/adr/0084-hoshin-catchball-cascade.md), Schema v90, `#/catchball`, RULE-HK-01..03, CSV #79)
 
 - **Implemented [frontline → CEO]:** Hoshin Kanri & Catchball Cascade Terminal (`#/catchball`) — closes the vertical gap between CEO Breakthrough Bets (`strategyBets`), multi-level reporting spans (`person.managerId` / `buildSeats`), measured person-day capacity (`buildLoadReport`), and commitment-accounting budgets (`evaluateBudget`). Five panels: X-Matrix, Catchball Workbench, Bowler & Watermelon, Calibration & Fan-Out, and Executive Brief.

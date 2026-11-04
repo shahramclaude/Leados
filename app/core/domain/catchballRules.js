@@ -30,7 +30,10 @@ import {
   CATCHBALL_RULE_IDS,
 } from './catchballRegistry.js';
 
-const CATCHBALL_TRIGGER_SET = new Set(Object.values(CATCHBALL_EVENTS));
+// ADR-0085: a stop-rule carryover creates its receiving pact inside the
+// valuestream.reallocated transaction. Consuming that same event is what makes
+// Strategy links and cross-altitude roll-up atomic rather than a second-pass job.
+const CATCHBALL_TRIGGER_SET = new Set([...Object.values(CATCHBALL_EVENTS), 'valuestream.reallocated']);
 
 function clampStr(v, max = 280) {
   return typeof v === 'string' ? v.trim().slice(0, max) : '';

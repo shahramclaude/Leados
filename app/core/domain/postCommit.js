@@ -103,6 +103,7 @@ import { missionRule } from './missionRules.js';
 // or an explicit scan runs; an undeclared workspace is unchanged.
 import { altitudeRouterRule } from './altitudeRouterRules.js';
 import { catchballRule } from './catchballRules.js';
+import { valueStreamRule } from './valueStreamRules.js';
 // ADR-0083: the Concordance Terminal. Every closed two-sided expectation round
 // writes its typed roll-up ladder, and a breach opens one governed
 // re-contracting decision per pair per ISO week — on this same spine, in the
@@ -454,6 +455,11 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // engines left it, and before nothing in particular — it delegates no authority
   // and moves no reporting line, so no other rule depends on its output.
   chainRule,
+  // ADR-0085: peer supplier→consumer roll-up, overdue SLA governance and
+  // stop-rule carryover lineage. Runs before Decision Tempo so a breach decision
+  // is priced now, and before Catchball so its proposed receiving pact rolls up
+  // from the SAME valuestream.reallocated event in this atomic transaction.
+  valueStreamRule,
   // Schema v28: decision timeboxes settle themselves, overdue calls become one
   // owned delegation, priced decisions get a proposal and value drift refreshes
   // the derived economics — all inside the source transaction (RULE-DLY-01..05).

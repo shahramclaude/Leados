@@ -1,3 +1,11 @@
+## Changelog — 2026-11-04 · Session 125
+
+- **Added:** Value Stream Exchange (`#/valuestream`) with bilateral peer SLAs, directional actuals, real CPM/slack/blast-radius computation, LCA mediation and receiver consent.
+- **Added:** reviewed stop-rule carryover from settled `thesis-invalidated` Catchball pacts: stale-state preview, open-line-only budget release, measured effort release, immutable receipts and a proposed receiving pact with a planned Finance line.
+- **Connected:** two-branch roll-up, breach DACI governance, Catchball carryover lineage, Strategy/Finance links, Cases entities and the existing sealed post-commit spine (65 rules / 65 contracts).
+- **Data & privacy:** additive Schema v91, fail-closed normalizers, exact-party read exceptions, scoped briefs and aggregate-only CSV #80. Unknown historical effort is not fabricated; small-cell suppression is not differential privacy.
+- **Verification:** focused Value Stream lifecycle suite and affected regression batches pass. Full-suite/build/check results are recorded in `AI-SESSION-LOG.md` after execution; no unobserved full-suite result is claimed here.
+
 ## Changelog — 2026-11-04 · Session 124
 
 - **Added:** Hoshin Kanri & Catchball Cascade (`#/catchball`), with bilateral proposals/counters, receiver acceptance, capacity checks, bowler check-ins, settlement and optional same-currency budget commitments.

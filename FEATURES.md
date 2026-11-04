@@ -1,3 +1,15 @@
+## Canonical app — Session 125 (Schema v91, additive `90 → 91`)
+
+### Value Stream Exchange (`#/valuestream`, [ADR-0085](./docs/adr/0085-value-stream-exchange.md), RULE-VS-01..03, CSV #80)
+
+- ✅ Bilateral peer supplier–customer SLAs with append-only counters, supplier actuals, consumer verification and LCA-mediated breach governance.
+- ✅ Real CPM longest path, slack, downstream blast radius and explicit cycle refusal over agreed hand-offs.
+- ✅ Stop-rule carryover preview/commit: only invalidated settled pacts and open committed lines; same currency, measured effort, stale-digest and budget checks.
+- ✅ One receipt, one proposed receiving Catchball pact, at most one planned Finance line; acceptance commits it once and withdrawal cannot reopen sources.
+- ✅ Same-transaction Strategy, Finance, Catchball, two-branch hierarchy and typed Cases lineage on the existing spine; 65 rules / 65 contracts.
+- ✅ Five altitude-specific panels, scoped disclosure, identity-free brief and aggregate-only CSV #80.
+- ⚠️ Local seats are not authentication; planned lines are not FAC; unknown actual effort releases zero person-days; suppression is not differential privacy.
+
 ## Canonical app — Session 123 (Schema v89, additive `88 → 89`)
 
 ### Expectation Concordance Terminal (`#/concordance`, [ADR-0083](./docs/adr/0083-expectation-concordance.md), RULE-ECN-01..03, CSV #78)

@@ -25,6 +25,8 @@ import { renderAltitudeRouter } from './views/altitudeRouter.js';
 import { routingAttentionCount } from './core/domain/altitudeRouter.js';
 import { renderCatchball } from './views/catchball.js';
 import { catchballAttentionCount } from './core/domain/catchball.js';
+import { renderValueStream } from './views/valueStream.js';
+import { valueStreamAttentionCount } from './core/domain/valueStream.js';
 // ADR-0083: the Concordance Terminal — the two-gauge problem behind every
 // performance review, measured pair by pair and rolled up the tree.
 import { renderConcordance } from './views/concordance.js';
@@ -211,6 +213,7 @@ export const NAV = [
     // roll a disclosure-safe signal up every level in one transaction.
     { route: 'routing', label: 'Altitude Router', icon: '⇅', badge: 'routing' },
     { route: 'catchball', label: 'Strategy cascade', icon: '◇', badge: 'catchball' },
+    { route: 'valuestream', label: 'Value streams', icon: '⇢', badge: 'valuestream' },
     { route: 'comms', label: 'Comms outbox', icon: '✉', badge: 'comms' },
     { route: 'insights', label: 'Signals', icon: '⚑', badge: 'signals' },
   ] },
@@ -329,6 +332,7 @@ const RENDERERS = {
   intake: (ctx) => renderIntake(ctx),
   routing: (ctx) => renderAltitudeRouter(ctx),
   catchball: (ctx) => renderCatchball(ctx),
+  valuestream: (ctx) => renderValueStream(ctx),
   concordance: (ctx) => renderConcordance(ctx),
   responses: (ctx) => renderResponses(ctx),
   bundles: (ctx) => renderActionBundles(ctx),
@@ -514,6 +518,7 @@ export function parseRoute(hash) {
     // (ADR-0073) and silently stealing it would break a shipped link.
     'mission': 'mission', 'mission-control': 'mission', 'command-center': 'mission', 'flight-deck': 'mission',
     'catchball': 'catchball', 'hoshin': 'catchball', 'strategy-cascade': 'catchball',
+    'valuestream': 'valuestream', 'value-stream': 'valuestream', 'peer-sla': 'valuestream',
     'concordance': 'concordance', 'expectation-concordance': 'concordance',
     'two-gauges': 'concordance', 'expectations': 'concordance', 'standard': 'concordance',
     'gauge': 'concordance', 'definition-of-done': 'concordance', 'kappa': 'concordance',
@@ -819,6 +824,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       authorityCalibration: authorityCalibrationAttentionCount(state, at, state.settings),
       routing: routingAttentionCount(state, at, state.settings),
       catchball: catchballAttentionCount(state, at, state.settings),
+      valuestream: valueStreamAttentionCount(state, at, state.settings),
       concordance: concordanceAttentionCount(state, at, state.settings),
       // ADR-0082: the badge counts chain breaks only — a valid chain is not noise.
       seal: sealAttentionCount(state),
@@ -1243,6 +1249,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       intake: 'Intake triage',
       routing: 'Altitude Router — natural-language intake classified into modules and the correct organizational altitude, with disclosure-safe roll-up to every leadership level',
       catchball: 'Hoshin Kanri & Catchball Cascade — negotiated strategy deployment',
+      valuestream: 'Value Stream Exchange — lateral supplier–customer SLAs, critical-path flow and reviewed stop-rule capital carryover',
       concordance: 'Expectation Concordance — “meets expectations” treated as a measurement instrument: two sealed sides, six dimensions, weighted κ / AC1 / PABAK / Bland–Altman agreement, a governed re-contracting decision on divergence and a typed roll-up to every leadership span',
       responses: 'Response studio — rehearse and adopt a coordinated leadership response',
       bundles: 'Action bundles — review, adopt and safely withdraw coordinated work',

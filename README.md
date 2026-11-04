@@ -1,3 +1,7 @@
+## 2026-11-04 — Value Stream Exchange (Session 125, Schema v91)
+
+Open `#/valuestream` to negotiate bilateral supplier–customer SLAs between peer spans, compute the critical path and downstream blast radius of agreed hand-offs, and carry budget/capacity from an invalidated strategy into a new proposed pact. The lowest common ancestor mediates; it cannot consent for either party. Stop-rule carryover previews stale-state, currency, capacity and budget checks before one atomic release-and-propose commit, with typed lineage through both reporting branches and the shared sealed spine. Receiver acceptance commits the pre-priced planned line once; withdrawal releases it without reopening sources. CSV #80 and the executive brief are aggregate-only with small-cell safeguards. See [ADR-0085](./docs/adr/0085-value-stream-exchange.md) and `RESEARCH.md §107` for method and limits.
+
 ## 2026-11-04 — Hoshin Catchball Cascade (Session 124, Schema v90)
 
 Open `#/catchball` to propose and negotiate span pacts, check capacity and budget headroom, compare leading and lagging outcomes, and inspect weakest-link roll-ups. The shared propagation spine records typed provenance and opens human review when divergence warrants it. CSV #79 and the executive brief are aggregate-oriented; declared local seats are not authenticated accounts. See [ADR-0084](./docs/adr/0084-hoshin-catchball-cascade.md) for boundaries and methodology.

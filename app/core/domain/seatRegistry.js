@@ -105,6 +105,10 @@ export const RECORD_POLICIES = Object.freeze({
   catchballPacts: { classKey: 'unit', label: 'Hoshin Catchball pacts', route: '#/catchball' },
   catchballRounds: { classKey: 'unit', label: 'Hoshin Catchball rounds', route: '#/catchball' },
   catchballMarkers: { classKey: 'unit', label: 'Catchball idempotency markers', route: '#/catchball' },
+  valueStreamContracts: { classKey: 'unit', label: 'Peer value-stream SLA contracts', route: '#/valuestream' },
+  valueStreamRounds: { classKey: 'unit', label: 'Peer SLA negotiation rounds', route: '#/valuestream' },
+  valueStreamReallocations: { classKey: 'portfolio', label: 'Stop-rule capital carryover receipts', route: '#/valuestream?panel=carryover' },
+  valueStreamMarkers: { classKey: 'unit', label: 'Value Stream idempotency markers', route: '#/valuestream' },
   // Portfolio material. Functions, quarters and capital.
   budgets: { classKey: 'portfolio', label: 'Budgets', route: '#/finance' },
   strategyBets: { classKey: 'portfolio', label: 'Strategic bets', route: '#/strategy' },

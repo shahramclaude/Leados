@@ -35,6 +35,11 @@ const groups = [
   // ADR-0084: Hoshin Kanri & Catchball Cascade reviewed commands. Each handler
   // additionally enforces subtree + bilateral receiver consent inside catchballActions.
   ['negotiate-catchball', 'catchballPropose catchballCounter catchballAccept catchballCheckin catchballSettle catchballWithdraw catchballUpdateSettings catchballScan'],
+  // ADR-0085: peer commands have explicit party/LCA authorization inside the
+  // mixin; carryover uses the existing executive capital right, never a weaker
+  // peer-negotiation right, to move financial authority.
+  ['negotiate-catchball', 'valueStreamContractPropose valueStreamContractCounter valueStreamContractAccept valueStreamContractCheckin valueStreamContractSettle valueStreamContractWithdraw valueStreamUpdateSettings valueStreamScan'],
+  ['approve-capital', 'valueStreamReallocate'],
 ];
 export const API_RIGHTS = Object.freeze(Object.fromEntries(groups.flatMap(([right, names]) => names.split(' ').map((name) => [name, right]))));
 const FIRST_ID_COLLECTION = Object.freeze({
@@ -49,7 +54,7 @@ const FIRST_ID_COLLECTION = Object.freeze({
   approveCommsDraft: 'commsDrafts', editCommsDraft: 'commsDrafts', markCommsDraftSent: 'commsDrafts', dismissCommsDraft: 'commsDrafts',
   createActionBundle: 'cases', updateActionBundle: 'actionBundles', saveActionBundlePreview: 'actionBundles', commitActionBundle: 'actionBundles', withdrawActionBundle: 'actionBundles', archiveActionBundle: 'actionBundles',
 });
-const SAFE_READS = new Set(['concordanceRead', 'concordanceStats', 'concordanceBriefText', 'concordanceCsvRows', 'concordanceAttentionCount', 'routingRead', 'routingCalibration', 'routingBriefText', 'routingCsvRows', 'routingAttentionCount', 'routingAnalyze', 'seatRead', 'seatBriefText', 'missionRead', 'missionOpenCase', 'missionBriefText', 'missionHandoffText', 'setActiveSeat', 'missionCreateIntervention', 'saveMissionPreview', 'missionCommit', 'missionWithdraw', 'missionArchive', 'missionFreezeBrief', 'missionScan', 'mandateRead', 'mandateBriefText', 'previewMandate', 'sealRead', 'sealVerify', 'sealBriefText', 'catchballRead', 'catchballPreviewFeasibility', 'catchballBriefText', 'catchballCsvRows']);
+const SAFE_READS = new Set(['concordanceRead', 'concordanceStats', 'concordanceBriefText', 'concordanceCsvRows', 'concordanceAttentionCount', 'routingRead', 'routingCalibration', 'routingBriefText', 'routingCsvRows', 'routingAttentionCount', 'routingAnalyze', 'seatRead', 'seatBriefText', 'missionRead', 'missionOpenCase', 'missionBriefText', 'missionHandoffText', 'setActiveSeat', 'missionCreateIntervention', 'saveMissionPreview', 'missionCommit', 'missionWithdraw', 'missionArchive', 'missionFreezeBrief', 'missionScan', 'mandateRead', 'mandateBriefText', 'previewMandate', 'sealRead', 'sealVerify', 'sealBriefText', 'catchballRead', 'catchballPreviewFeasibility', 'catchballBriefText', 'catchballCsvRows', 'valueStreamRead', 'valueStreamBriefText', 'valueStreamCsvRows', 'valueStreamReallocationPreview']);
 const refusal = (reason) => ({ ok: false, code: 'scope-refusal', error: reason, field: 'scope' });
 
 function payloadPeople(args) {
@@ -112,7 +117,13 @@ export function guardApiCall(state, name, args) {
       if (collection === 'budgets' && !record.ownerId && !seat.isLeader) return refusal('An unowned budget envelope belongs to the enterprise root, not to every executive.');
     }
   }
-  const unknown = payloadPeople(args).filter((id) => !seat.scope.has(id));
+  // A lateral contract deliberately names a peer outside this subtree. The
+  // generic vertical payload-person gate would make the feature impossible, so
+  // ONLY the reviewed proposal command bypasses it; the mixin then requires the
+  // active seat to be one of exactly two parties and resolves the LCA mediator.
+  // Every other command continues through the generic boundary.
+  const reviewedPeerProposal = name === 'valueStreamContractPropose';
+  const unknown = reviewedPeerProposal ? [] : payloadPeople(args).filter((id) => !seat.scope.has(id));
   if (unknown.length) return refusal('The request names a person outside the operating span. Escalate through the common leader instead of crossing a peer boundary.');
   if (['createActionBundle', 'updateActionBundle', 'saveActionBundlePreview', 'commitActionBundle', 'withdrawActionBundle', 'archiveActionBundle'].includes(name)) {
     const b = bundleFor(state, name, args);
@@ -147,6 +158,6 @@ export function workspaceRouteVerdict(route, seat) {
   // above the manager rank, so a declared seat may open it directly.
   // ADR-0082: the Integrity surface is a reviewed scoped surface — its reads go
   // through sealRead, which collapses out-of-subtree spans to aggregate rows.
-  if (['mission', 'today', 'seat', 'routing', 'seal', 'catchball'].includes(route)) return base;
+  if (['mission', 'today', 'seat', 'routing', 'seal', 'catchball', 'valuestream'].includes(route)) return base;
   return { allow: false, reason: 'This legacy module has not yet completed its seat-scoped read audit. Its work still contributes to Mission Control. Open the scoped command center, or explicitly hand over to the local operator view for the full legacy workspace.' };
 }

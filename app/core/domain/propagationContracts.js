@@ -104,6 +104,7 @@ import { authorityCalibrationRule } from './authorityCalibrationRules.js';
 import { missionRule } from './missionRules.js';
 import { altitudeRouterRule } from './altitudeRouterRules.js';
 import { catchballRule } from './catchballRules.js';
+import { valueStreamRule } from './valueStreamRules.js';
 import { concordanceRule } from './concordanceRules.js';
 
 /**
@@ -277,6 +278,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'leaderContinuityRule.js',
     purpose: 'Turns a human-commissioned absence cover plan into one DACI hand-over decision, owned deputy delegations with explicit authority, typed links and blameless prompts; re-allocates returned cover delegations to backup deputies or opens a cover-gap decision; and drafts an AAR plus calibration/execution follow-up when a drill or window closes.',
     writes: ['decisions', 'delegations', 'people', 'links', 'retros'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: valueStreamRule,
+    module: 'valueStreamRules.js',
+    purpose: 'RULE-VS-01 writes two-branch peer supplier/consumer rolls-up-to provenance through the existing reporting tree plus LCA mediation and strategy/pact links; RULE-VS-02 opens at most one governed SLA recovery decision per overdue directional miss per ISO week without changing the outcome; RULE-VS-03 links each immutable stop-rule carryover receipt to its settled sources, proposed receiving pact, surviving bet and planned budget. Catchball consumes valuestream.reallocated later in the same transaction, Decision Tempo prices the breach decision, and the seal covers all writes.',
+    writes: ['valueStreamMarkers', 'decisions', 'links', 'events'],
     emits: [],
     scansWorkspace: true,
   },
