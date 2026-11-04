@@ -1,9 +1,9 @@
-# ADR-0087: The Federated Envoy — sealed, disclosure-scoped, Merkle-committed packets between LeadOS workspaces (`#/envoy`)
+# ADR-0088: The Federated Envoy — sealed, disclosure-scoped, Merkle-committed packets between LeadOS workspaces (`#/envoy`)
 
 - **Status:** Accepted
 - **Date:** 2026-11-04
-- **Session:** 127 (Schema v92, no bump of its own)
-- **Related:** [ADR-0008](./0008-post-commit-rules-hook.md), [ADR-0048](./0048-shared-barrier-exposure-sensitivity.md), [ADR-0075](./0075-command-chain.md), [ADR-0076](./0076-operating-seat.md), [ADR-0082](./0082-sealed-spine.md), [ADR-0083](./0083-expectation-concordance.md), [ADR-0084](./0084-hoshin-catchball-cascade.md), [RESEARCH §108](../../RESEARCH.md)
+- **Session:** 128 (Schema v93, no bump of its own)
+- **Related:** [ADR-0008](./0008-post-commit-rules-hook.md), [ADR-0048](./0048-shared-barrier-exposure-sensitivity.md), [ADR-0075](./0075-command-chain.md), [ADR-0076](./0076-operating-seat.md), [ADR-0082](./0082-sealed-spine.md), [ADR-0083](./0083-expectation-concordance.md), [ADR-0084](./0084-hoshin-catchball-cascade.md), [RESEARCH §109](../../RESEARCH.md)
 
 ## 1. Context
 
@@ -113,7 +113,7 @@ All three are marker-idempotent, pausable by `envoyAutoPropagate`, and an explic
 | Manager | Compose to their own span or the leader above; packets, verdicts, typed failures, and the divergence list they must answer. |
 | Director | Carriage coverage across their spans, divergences with both hashes, attested value at stake by currency. |
 | VP / executive | Carriage coverage with a Wilson interval, **refused below five spans**, keyed-signature share, aggregate attestation, no titles at all. |
-| CEO / chief | An identity-free certificate (`envoyBriefText`) and aggregate-only CSV scope #82 (`federated-exchange`), with the limits printed in the document itself. |
+| CEO / chief | An identity-free certificate (`envoyBriefText`) and aggregate-only CSV scope #83 (`federated-exchange`), with the limits printed in the document itself. |
 
 ## 3. Rejected alternatives
 
@@ -139,7 +139,7 @@ All three are marker-idempotent, pausable by `envoyAutoPropagate`, and an explic
 boundary with provenance, disclosure scope and tamper evidence, and disagreement
 arrives as a decision instead of a merge. Carriage is rolled up the hierarchy in
 the same transaction and sealed by `sealRule` (still last), because it writes
-through the shared spine and not around it. The certificate and CSV #82 are
+through the shared spine and not around it. The certificate and CSV #83 are
 identity-free by construction, so the chief can hand one up without exposing one
 person.
 

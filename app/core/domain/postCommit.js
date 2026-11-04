@@ -103,6 +103,10 @@ import { missionRule } from './missionRules.js';
 // or an explicit scan runs; an undeclared workspace is unchanged.
 import { altitudeRouterRule } from './altitudeRouterRules.js';
 import { catchballRule } from './catchballRules.js';
+// ADR-0085: the Operating Cadence Clock. Reads the finished queue after the
+// cascade has been negotiated and writes forum provenance, the constraint
+// escalation and the agenda-fit gap before the market rebalances attention.
+import { cadenceRule } from './cadenceRules.js';
 // ADR-0083: the Concordance Terminal. Every closed two-sided expectation round
 // writes its typed roll-up ladder, and a breach opens one governed
 // re-contracting decision per pair per ISO week — on this same spine, in the
@@ -114,7 +118,7 @@ import { disclosureRule } from './disclosureRules.js';
 // decision plus an owned obligation on the span the failing reading points at)
 // and their provenance is written into the typed graph in the same transaction.
 import { boardRule } from './boardRules.js';
-// ADR-0087: the Federated Envoy. A verified inter-workspace packet carries
+// ADR-0088: the Federated Envoy. A verified inter-workspace packet carries
 // itself up the chain of command (`carries`), turns a divergence between two
 // workspaces into one governed reconciliation question, and opens one review
 // when the packet's own attested exposure clears the declared floor. It runs
@@ -497,6 +501,14 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // strategy/goal/budget/trade-off edges, and opens governed Watermelon and
   // Double-Loop Thesis Review DACI decisions before the final tail passes.
   catchballRule,
+  // ADR-0087: the Operating Cadence Clock (`RULE-CAD-01..04`). Runs after the
+  // cascade so the queue it reads already contains every commitment the cascade
+  // just created, and before the market so a constraint decision it opens is
+  // priced in the SAME atomic commit. It writes: one `queued-for` edge per
+  // reviewable item to the ONE forum competent to close it, one `rolls-up-to`
+  // edge per leadership ancestor, one governed constraint decision per ISO week,
+  // `fit-gap` edges for agenda mismatch, and one grade per due frozen reading.
+  cadenceRule,
   // ADR-0083: altitude as a dimension of the same engine, one rule set later.
   concordanceRule,
   // ADR-0086: the Disclosure Compiler's paperwork. Runs after every work-producing
@@ -508,7 +520,7 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // that produces one and before the market's final work-producing pass — the
   // same position rule the concordance terminal follows.
   boardRule,
-  // ADR-0087: the Federated Envoy (`RULE-ENV-01..03`). Carriage, divergence and
+  // ADR-0088: the Federated Envoy (`RULE-ENV-01..03`). Carriage, divergence and
   // attested exposure are three questions about one ingested packet, answered on
   // this spine in the same atomic transaction as the ingestion itself.
   envoyRule,

@@ -1,6 +1,6 @@
 /**
  * app/core/domain/envoyRules.js — post-commit propagation for the Federated
- * Envoy (`#/envoy`, ADR-0087).
+ * Envoy (`#/envoy`, ADR-0088).
  *
  * Three rules, one transaction, no second workflow engine:
  *

@@ -29,15 +29,17 @@ import { renderIntake } from './views/intake.js';
 import { renderAltitudeRouter } from './views/altitudeRouter.js';
 import { routingAttentionCount } from './core/domain/altitudeRouter.js';
 import { renderCatchball } from './views/catchball.js';
+import { renderCadence } from './views/cadence.js';
 import { catchballAttentionCount } from './core/domain/catchball.js';
+import { cadenceAttentionCount } from './core/domain/cadence.js';
 // ADR-0083: the Concordance Terminal — the two-gauge problem behind every
 // performance review, measured pair by pair and rolled up the tree.
 import { renderConcordance } from './views/concordance.js';
-// ADR-0085: the Board Room — pre-registered disclosure at the chief altitude.
+// ADR-0086: the Board Room — pre-registered disclosure at the chief altitude.
 import { renderBoard } from './views/board.js';
 import { concordanceAttentionCount } from './core/domain/concordance.js';
 import { boardAttentionCount } from './core/domain/board.js';
-// ADR-0087: the Federated Envoy — sealed, disclosure-scoped packets between
+// ADR-0088: the Federated Envoy — sealed, disclosure-scoped packets between
 // workspaces, so a hierarchy can exist across installations without a server.
 import { renderEnvoy } from './views/envoy.js';
 import { envoyAttentionCount } from './core/domain/envoy.js';
@@ -217,7 +219,7 @@ export const NAV = [
     // transaction, hash-chained from genesis, keyed by the vault passphrase
     // when unlocked, verified on demand, attested up the chain of command.
     { route: 'seal', label: 'Integrity & seals', icon: '🛡', badge: 'seal' },
-    // ADR-0087: the Envoy. Every other screen assumes one workspace; this one
+    // ADR-0088: the Envoy. Every other screen assumes one workspace; this one
     // moves a span's attested pack to the altitude above it, sealed and
     // disclosure-scoped, so the hierarchy is real across installations.
     { route: 'envoy', label: 'Sealed exchange', icon: '⇋', badge: 'envoy' },
@@ -230,6 +232,10 @@ export const NAV = [
     // ADR-0081: classify a note into modules AND the owning altitude, then
     // roll a disclosure-safe signal up every level in one transaction.
     { route: 'routing', label: 'Altitude Router', icon: '⇅', badge: 'routing' },
+    // ADR-0086: the governance calendar itself. Every other screen asks what to
+    // decide; this one asks which standing forum is competent to decide it, when
+    // it next sits, and whether the queue can reach it inside its own horizon.
+    { route: 'cadence', label: 'Operating cadence', icon: '◷', badge: 'cadence' },
     { route: 'catchball', label: 'Strategy cascade', icon: '◇', badge: 'catchball' },
     { route: 'comms', label: 'Comms outbox', icon: '✉', badge: 'comms' },
     { route: 'insights', label: 'Signals', icon: '⚑', badge: 'signals' },
@@ -353,6 +359,7 @@ const RENDERERS = {
   intake: (ctx) => renderIntake(ctx),
   routing: (ctx) => renderAltitudeRouter(ctx),
   catchball: (ctx) => renderCatchball(ctx),
+  cadence: (ctx) => renderCadence(ctx),
   disclosure: (ctx) => renderDisclosure(ctx),
   concordance: (ctx) => renderConcordance(ctx),
   board: (ctx) => renderBoard(ctx),
@@ -541,6 +548,13 @@ export function parseRoute(hash) {
     // (ADR-0073) and silently stealing it would break a shipped link.
     'mission': 'mission', 'mission-control': 'mission', 'command-center': 'mission', 'flight-deck': 'mission',
     'catchball': 'catchball', 'hoshin': 'catchball', 'strategy-cascade': 'catchball',
+    // ADR-0087: the Operating Cadence Clock's aliases. None may shadow a shipped
+    // route: 'meetings' is free, 'calendar' is free, and 'review' is deliberately
+    // NOT claimed here because it would collide with the review screens.
+    'cadence': 'cadence', 'operating-cadence': 'cadence', 'forums': 'cadence',
+    'standing-forum': 'cadence', 'governance-calendar': 'cadence', 'meetings': 'cadence',
+    'operating-review': 'cadence', 'qbr': 'cadence', 'steerco': 'cadence',
+    'agenda': 'cadence', 'capacity-clock': 'cadence', 'little-law': 'cadence',
     'concordance': 'concordance', 'expectation-concordance': 'concordance',
     // ADR-0086: the disclosure compiler's own aliases. `access` and `posture`
     // were unused; `coverage` still belongs to Promise Solvency and is not taken.
@@ -550,7 +564,7 @@ export function parseRoute(hash) {
     'disclosure': 'board', 'disclosure-memo': 'board', 'board-memo': 'board', 'chair': 'board',
     'two-gauges': 'concordance', 'expectations': 'concordance', 'standard': 'concordance',
     'gauge': 'concordance', 'definition-of-done': 'concordance', 'kappa': 'concordance',
-    // ADR-0087: the Envoy's own aliases. None may shadow an existing route —
+    // ADR-0088: the Envoy's own aliases. None may shadow an existing route —
     // 'seal' stays the Sealed Spine, 'supply' stays the evidence chain, and
     // 'export'/'import' belong to workspace data, not to a packet exchange.
     'envoy': 'envoy', 'sealed-exchange': 'envoy', 'packet': 'envoy', 'packets': 'envoy',
@@ -859,6 +873,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       authorityCalibration: authorityCalibrationAttentionCount(state, at, state.settings),
       routing: routingAttentionCount(state, at, state.settings),
       catchball: catchballAttentionCount(state, at, state.settings),
+      cadence: cadenceAttentionCount(state, at, state.settings),
       concordance: concordanceAttentionCount(state, at, state.settings),
       // ADR-0086: consent work waiting on this seat, plus a live release of this
       // seat's that lapses within three days.
@@ -1331,6 +1346,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       routing: 'Altitude Router — natural-language intake classified into modules and the correct organizational altitude, with disclosure-safe roll-up to every leadership level',
       board: 'Board Room — the disclosure pack as a measurement problem: claims and thresholds pre-registered before the first look, verdicts decided by the conservative end of each interval, two-module cross-examination, exact span decomposition, and a permanent post-hoc mark on any threshold moved after looking',
       catchball: 'Hoshin Kanri & Catchball Cascade — negotiated strategy deployment',
+      cadence: 'Operating Cadence Clock — your standing forums read as a finite decision machine: what each is competent to close, the demand converging on it, when it next sits, and which items cannot land inside their own horizon',
       disclosure: 'Disclosure Console — every screen states the posture it holds at this altitude, every withheld cell states why, and detail is released only by a consented, expiring, span-bounded contract',
       concordance: 'Expectation Concordance — “meets expectations” treated as a measurement instrument: two sealed sides, six dimensions, weighted κ / AC1 / PABAK / Bland–Altman agreement, a governed re-contracting decision on divergence and a typed roll-up to every leadership span',
       envoy: 'Sealed exchange — how a span’s pack leaves its own browser: projected at the receiving altitude’s disclosure class, committed with a per-item SHA-256 and a Merkle root, signed keyed when the vault is unlocked, verified by the receiver before a single field is stored, ingested idempotently, and turned into a governed reconciliation decision when two workspaces disagree',

@@ -68,7 +68,7 @@ const RENDERER_ROUTES = [
   'budget', 'stakeholders', 'stakeholder', 'forecasts', 'tempo', 'retention', 'negotiation',
   'changes', 'change', 'decisions', 'conflicts', 'conflict', 'recognition', 'reviews', 'review',
   'settings', 'prep', 'disclosure', 'wargame', 'coupling',
-  // ADR-0087: the Federated Envoy declares its own manifest row, so the
+  // ADR-0088: the Federated Envoy declares its own manifest row, so the
   // catalogue and the shell stay one route for one route.
   'envoy',
 ];
@@ -167,10 +167,10 @@ function seatsOrThrow(state) {
 /* --------------------------------------------------------------- 1. schema */
 
 test('schema v90 migrates additively and refuses malformed or stale grants', () => {
-  assert.equal(SCHEMA_VERSION, 92);
+  assert.equal(SCHEMA_VERSION, 93);
   const old = { schemaVersion: 89, settings: { leaderName: 'Keep' }, cases: [{ id: 'keep' }], disclosureGrants: [{ id: 'existing' }] };
   const migrated = migrate(old);
-  assert.equal(migrated.raw.schemaVersion, 92);
+  assert.equal(migrated.raw.schemaVersion, 93);
   assert.deepEqual(migrated.raw.disclosureMarkers, []);
   assert.equal(migrated.raw.cases[0].id, 'keep');
   assert.equal(migrated.raw.settings.disclosureCellFloor, 5);
@@ -751,9 +751,14 @@ test('csv: the disclosure export is aggregate-only, seat-compiled and names noth
   const { disclosureReport, disclosureCsvRows } = await import('../../app/core/domain/disclosure.js');
   const spec = CSV_EXPORTS.find((s) => s.key === 'disclosure-posture');
   assert.ok(spec, 'the disclosure posture export is registered, not just an API method');
-  // ADR-0087 appends after this scope; the append-last convention still holds.
-  assert.ok(CSV_EXPORTS.some((s) => s.key === 'disclosure-posture'));
-  assert.equal(CSV_EXPORTS.at(-1).key, 'federated-exchange');
+  // Append-only registry: catchball #79, board #80, disclosure #81, operating
+  // cadence #82. Asserting the ORDER is the contract; asserting disclosure is LAST
+  // would break the moment a later session appends its own scope.
+  assert.ok(CSV_EXPORTS.findIndex((s) => s.key === 'board-claims') < CSV_EXPORTS.findIndex((s) => s.key === 'disclosure-posture'));
+  assert.ok(CSV_EXPORTS.findIndex((s) => s.key === 'disclosure-posture') < CSV_EXPORTS.findIndex((s) => s.key === 'operating-cadence'));
+  // ADR-0088 appends after the cadence scope; order is the contract, not
+  // "disclosure is last".
+  assert.ok(CSV_EXPORTS.findIndex((s) => s.key === 'operating-cadence') < CSV_EXPORTS.findIndex((s) => s.key === 'federated-exchange'));
   assert.equal(spec.sensitive, false);
 
   const base = fixture();

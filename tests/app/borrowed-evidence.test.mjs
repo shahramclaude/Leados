@@ -403,18 +403,18 @@ describe('the adapters read the ledgers exactly as documented', () => {
 
 describe('Schema v71 is additive and fail-closed', () => {
   test('the 70 → 72 chain adds three empty ledgers and invents nothing', () => {
-    assert.equal(SCHEMA_VERSION, 92);
+    assert.equal(SCHEMA_VERSION, 93);
     assert.equal(typeof MIGRATIONS[70], 'function');
     assert.equal(typeof MIGRATIONS[71], 'function');
     const raw = migrate({ schemaVersion: 70, settings: {}, people: [] });
-    assert.deepEqual(raw.applied, ['70 → 71', '71 → 72', '72 → 73', '73 → 74', '74 → 75', '75 → 76', '76 → 77', '77 → 78', '78 → 79', '79 → 80', '80 → 81', '81 → 82', '82 → 83', '83 → 84', '84 → 85', '85 → 86', '86 → 87', '87 → 88', '88 → 89', '89 → 90', '90 → 91', '91 → 92']);
+    assert.deepEqual(raw.applied, ['70 → 71', '71 → 72', '72 → 73', '73 → 74', '74 → 75', '75 → 76', '76 → 77', '77 → 78', '78 → 79', '79 → 80', '80 → 81', '81 → 82', '82 → 83', '83 → 84', '84 → 85', '85 → 86', '86 → 87', '87 → 88', '88 → 89', '89 → 90', '90 → 91', '91 → 92', '92 → 93']);
     assert.deepEqual(raw.raw.confidenceCertificates, [], 'v72 invents no certificate on upgrade');
     assert.deepEqual(raw.raw.confidenceMarkers, []);
     assert.deepEqual(raw.raw.credibilityFrames, []);
     assert.deepEqual(raw.raw.credibilityDeclarations, []);
     assert.deepEqual(raw.raw.credibilityMarkers, []);
     const state = normalizeState({ schemaVersion: 70 }, { now: NOW }).state;
-    assert.equal(state.schemaVersion, 92);
+    assert.equal(state.schemaVersion, 93);
     assert.equal(state.settings.credibilityDecisivePct, 95);
   });
 

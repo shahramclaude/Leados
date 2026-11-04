@@ -104,10 +104,11 @@ import { authorityCalibrationRule } from './authorityCalibrationRules.js';
 import { missionRule } from './missionRules.js';
 import { altitudeRouterRule } from './altitudeRouterRules.js';
 import { catchballRule } from './catchballRules.js';
+import { cadenceRule } from './cadenceRules.js';
 import { concordanceRule } from './concordanceRules.js';
 import { disclosureRule } from './disclosureRules.js';
 import { boardRule } from './boardRules.js';
-// ADR-0087: the Federated Envoy.
+// ADR-0088: the Federated Envoy.
 import { envoyRule } from './envoyRules.js';
 
 /**
@@ -585,7 +586,20 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     scansWorkspace: true,
   },
   {
-    rule: disclosureRule, module: 'disclosureRules.js', purpose: 'RULE-DSC-01 turns one recorded release request into ONE governed DACI decision (release / refuse-and-share-the-aggregate / narrow), ONE consent task addressed to the span leader whose records would be widened, and the typed edges that make it navigable (`authorizes` from the decision, `discloses-to` the requesting altitude, `tracks-followup` to the consent task). The rule grants nothing: only the span leader\'s consent creates authority, and only the compiler reads it. RULE-DSC-02 sweeps expiries — a lapsed window stops authorising reads, opens ONE review task on whether the released detail changed the decision, and reconciles edges to releases that no longer exist. Marker-idempotent, pausable by disclosureAutoPropagate, and an explicit scan always runs.', writes: ['disclosureGrants', 'disclosureMarkers', 'decisions', 'delegations', 'links'], emits: [], scansWorkspace: false,
+    rule: disclosureRule,
+    module: 'disclosureRules.js',
+    purpose: 'RULE-DSC-01 turns one recorded release request into ONE governed DACI decision (release / refuse-and-share-the-aggregate / narrow), ONE consent task addressed to the span leader whose records would be widened, and the typed edges that make it navigable (`authorizes` from the decision, `discloses-to` the requesting altitude, `tracks-followup` to the consent task). The rule grants nothing: only the consenting span leader creates authority, and only the compiler reads it. RULE-DSC-02 sweeps expiries — a lapsed window stops authorising reads, opens ONE review task on whether the released detail changed the decision, and reconciles edges to releases that no longer exist. Marker-idempotent, pausable by disclosureAutoPropagate, and an explicit scan always runs.',
+    writes: ['disclosureGrants', 'disclosureMarkers', 'decisions', 'delegations', 'links'],
+    emits: [],
+    scansWorkspace: false,
+  },
+  {
+    rule: cadenceRule,
+    module: 'cadenceRules.js',
+    purpose: 'RULE-CAD-01 writes one idempotent `queued-for` edge from every reviewable open item to the single standing forum competent to close it (kind competence AND time-span of discretion AND class horizon), plus one `rolls-up-to` edge per leadership ancestor of the owning span, in the SAME atomic transaction; a sensitive source contributes a count and never an edge. RULE-CAD-02 opens exactly one governed DACI decision per ISO week when the named binding constraint is forum capacity, a competence gap or service time, owned at the seat that can relieve it and fanned up every ancestor. RULE-CAD-03 writes bounded `fit-gap` edges naming the owning seats a forum’s membership is missing. RULE-CAD-04 grades each due frozen reading exactly once and records one maturity marker when a forum’s sitting history reaches the evidence floor. Never rates a person, never invents a waiting time below the floor, never auto-declares a forum.',
+    writes: ['links', 'decisions', 'cadenceReadings', 'cadenceMarkers'],
+    emits: [],
+    scansWorkspace: true,
   },
   {
     rule: envoyRule,

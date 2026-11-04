@@ -145,7 +145,17 @@ import {
   normalizeCatchballMarkers,
   normalizeCatchballSettings,
 } from './domain/catchballSchema.js';
-// ADR-0087: the Federated Envoy. Three additive collections (the packet
+// ADR-0085: the Operating Cadence Clock's fail-closed normalizers and clamped
+// conventions. A forum, a sitting or a frozen reading that cannot be validated is
+// dropped with a warning rather than repaired into something a leader might act on.
+import {
+  normalizeCadenceForums,
+  normalizeCadenceSessions,
+  normalizeCadenceReadings,
+  normalizeCadenceMarkers,
+  normalizeCadenceSettings,
+} from './domain/cadenceSchema.js';
+// ADR-0088: the Federated Envoy. Three additive collections (the packet
 // ledger, the attested artefact ledger and the rule-idempotency markers) and
 // five clamped conventions. Like ADR-0076 and ADR-0082 this needs **no schema
 // version bump**: an older blob simply has none of these keys, and every one of
@@ -321,7 +331,21 @@ export {
 // older blob simply opens on the undeclared operator view. A version bump here
 // would have forced 78 test files to be rewritten for zero user benefit; the
 // honest choice is to add nothing to migrate.
-export const SCHEMA_VERSION = 92;
+export const SCHEMA_VERSION = 93;
+
+// v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
+// thresholds are declared before the first look.
+// v92 adds the Disclosure Compiler (ADR-0086, main): each screen declares its
+// posture, and detail is released only by a consented, expiring contract.
+// v93 adds the Operating Cadence Clock (`cadenceForums`, `cadenceSessions`,
+// `cadenceReadings`, `cadenceMarkers`, ADR-0087): the standing-forum calendar as a
+// finite decision machine — declared per-forum decision capacity and service
+// time, append-only sittings, and frozen readings of the queue that are graded
+// once afterwards. Purely additive: every utilisation, flow time, breach
+// probability and constraint is derived on read from the roster and the dated
+// records other modules already keep, so an upgraded workspace opens with an
+// EMPTY forum register that says no cadence has ever been declared, rather than
+// a fabricated meeting calendar. A forum is only ever created by a human.
 
 // v83 adds the Succession Terminal (`successionReadings`, `successionMarkers`): a
 // frozen bench claim per workspace or per span — the probability that at least one
@@ -1381,7 +1405,16 @@ export const DEFAULT_SETTINGS = Object.freeze({
   catchballCellFloor: 3,
   catchballMaxFanout: 4,
   catchballAutoPropagate: true,
-  // ADR-0087: the Federated Envoy — declared conventions, all clamped.
+  // ADR-0085: the Operating Cadence Clock — declared conventions, clamped on read.
+  // `cadenceUtilisationTargetPct` is the ρ the calendar is planned against; the
+  // planning factor and flow target are named conventions, never fitted.
+  cadenceFloorN: 5,
+  cadenceCellFloor: 3,
+  cadenceUtilisationTargetPct: 85,
+  cadencePlanningFactorPct: 130,
+  cadenceFlowTargetDays: 14,
+  cadenceAutoPropagate: true,
+  // ADR-0088: the Federated Envoy — declared conventions, all clamped.
   envoyMaxItems: 60,
   envoyRequireKeyedSignature: true,
   envoyDivergenceReviewDays: 14,
@@ -1682,6 +1715,15 @@ export const COLLECTIONS = [
   'catchballPacts',
   'catchballRounds',
   'catchballMarkers',
+  // ADR-0085: the Operating Cadence Clock. Declared standing forums, an
+  // append-only sitting log, frozen queue readings graded once afterwards, and
+  // rule-idempotency markers. No attendance record, no per-person record and no
+  // meeting transcript is stored: a forum is a server with a declared capacity,
+  // and the only history kept is what it closed.
+  'cadenceForums',
+  'cadenceSessions',
+  'cadenceReadings',
+  'cadenceMarkers',
   // ADR-0083: two-sided expectation rounds (one row per pair per cycle, sealed
   // until both sides are in) and the idempotency markers their three rules use.
   'expectationRounds',
@@ -1694,7 +1736,7 @@ export const COLLECTIONS = [
   // the idempotency markers their three rules use.
   'boardMemos',
   'boardMarkers',
-  // ADR-0087: the Federated Envoy. `exchangePackets` is the ledger of every
+  // ADR-0088: the Federated Envoy. `exchangePackets` is the ledger of every
   // packet this workspace built, verified, ingested or refused; the stored rows
   // carry the manifest (item hashes and projected fields) so a verification can
   // always be recomputed from the ledger, never from a cached verdict.
@@ -6447,6 +6489,14 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.catchballPacts = normalizeCatchballPacts(raw.catchballPacts, warnings);
   state.catchballRounds = normalizeCatchballRounds(raw.catchballRounds, warnings);
   state.catchballMarkers = normalizeCatchballMarkers(raw.catchballMarkers);
+  // ADR-0085: the Operating Cadence Clock. A malformed forum, a sitting with no
+  // date and a reading with no frozen figure are all dropped with a warning;
+  // none is repaired into something a leader might act on.
+  state.cadenceForums = normalizeCadenceForums(raw.cadenceForums, warnings);
+  state.cadenceSessions = normalizeCadenceSessions(raw.cadenceSessions, warnings);
+  state.cadenceReadings = normalizeCadenceReadings(raw.cadenceReadings, warnings);
+  state.cadenceMarkers = normalizeCadenceMarkers(raw.cadenceMarkers);
+  state.settings = { ...state.settings, ...normalizeCadenceSettings({ ...DEFAULT_SETTINGS, ...(raw.settings || {}) }) };
   // ADR-0083: rounds resolve before links so `rolls-up-to`, `re-contracts` and
   // `re-tests` edges validate against real round ids. A malformed round is
   // dropped; a round claiming to be closed with one side is reopened.
@@ -7247,6 +7297,30 @@ export const MIGRATIONS = {
         catchballCellFloor: v89.settings.catchballCellFloor ?? 3,
         catchballMaxFanout: v89.settings.catchballMaxFanout ?? 4,
         catchballAutoPropagate: v89.settings.catchballAutoPropagate !== false,
+      }
+      : { ...DEFAULT_SETTINGS },
+  }),
+  // ADR-0087: additive 92 → 93. The Operating Cadence Clock adds a forum
+  // register, a sitting log, frozen readings and idempotency markers. Nothing
+  // historical is invented: an upgraded workspace opens with NO forums, because
+  // a meeting calendar back-filled from records would claim a cadence the
+  // organisation never actually ran.
+  92: (v92) => ({
+    ...v92,
+    schemaVersion: 93,
+    cadenceForums: Array.isArray(v92.cadenceForums) ? v92.cadenceForums : [],
+    cadenceSessions: Array.isArray(v92.cadenceSessions) ? v92.cadenceSessions : [],
+    cadenceReadings: Array.isArray(v92.cadenceReadings) ? v92.cadenceReadings : [],
+    cadenceMarkers: Array.isArray(v92.cadenceMarkers) ? v92.cadenceMarkers : [],
+    settings: isPlainObject(v92.settings)
+      ? {
+        ...v92.settings,
+        cadenceFloorN: v92.settings.cadenceFloorN ?? 5,
+        cadenceCellFloor: v92.settings.cadenceCellFloor ?? 3,
+        cadenceUtilisationTargetPct: v92.settings.cadenceUtilisationTargetPct ?? 85,
+        cadencePlanningFactorPct: v92.settings.cadencePlanningFactorPct ?? 130,
+        cadenceFlowTargetDays: v92.settings.cadenceFlowTargetDays ?? 14,
+        cadenceAutoPropagate: v92.settings.cadenceAutoPropagate !== false,
       }
       : { ...DEFAULT_SETTINGS },
   }),

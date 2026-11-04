@@ -1,5 +1,5 @@
 /**
- * ADR-0087 — the Federated Envoy (`#/envoy`).
+ * ADR-0088 — the Federated Envoy (`#/envoy`).
  *
  * Cross-module and cross-altitude by construction: these tests build a packet
  * in one workspace, verify and ingest it in a second, and then prove that the
@@ -123,9 +123,9 @@ const withKey = (fn) => {
 /* ------------------------------------------------------------------ schema */
 
 test('additive with no schema bump: collections, graph vocabulary, spine and exports', () => {
-  assert.equal(SCHEMA_VERSION, 92, 'ADR-0087 is additive without a version bump of its own, like ADR-0076/0082/0086');
-  const migrated = migrate({ schemaVersion: 91, settings: { leaderName: 'Keep me' }, people: [] });
-  assert.deepEqual(migrated.applied, ['91 → 92']);
+  assert.equal(SCHEMA_VERSION, 93, 'ADR-0088 is additive without a version bump of its own, like ADR-0076/0082/0086/0087');
+  const migrated = migrate({ schemaVersion: 92, settings: { leaderName: 'Keep me' }, people: [] });
+  assert.deepEqual(migrated.applied, ['92 → 93']);
   assert.equal(migrated.raw.settings.leaderName, 'Keep me');
   const empty = createEmptyState(NOW.toISOString());
   for (const key of ['exchangePackets', 'exchangeArtefacts', 'exchangeMarkers']) {

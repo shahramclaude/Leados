@@ -68,10 +68,10 @@ function traceRow({ id = 'trace-test', entity = 'scorecard', entityId = 'scoreca
 }
 
 test('schema v48 migrates additively without guessing successful history and normalizes a bounded content-free trace', () => {
-  assert.equal(SCHEMA_VERSION, 92);
+  assert.equal(SCHEMA_VERSION, 93);
   const previousLedger = [traceRow({ id: 'untrusted-v47-history' })];
   const migrated = migrate({ schemaVersion: 47, propagationLineage: previousLedger, scorecards: [] });
-  assert.deepEqual(migrated.applied, ['47 → 48', '48 → 49', '49 → 50', '50 → 51', '51 → 52', '52 → 53', '53 → 54', '54 → 55', '55 → 56', '56 → 57', '57 → 58', '58 → 59', '59 → 60', '60 → 61', '61 → 62', '62 → 63', '63 → 64', '64 → 65', '65 → 66', '66 → 67', '67 → 68', '68 → 69', '69 → 70', '70 → 71', '71 → 72', '72 → 73', '73 → 74', '74 → 75', '75 → 76', '76 → 77', '77 → 78', '78 → 79', '79 → 80', '80 → 81', '81 → 82', '82 → 83', '83 → 84', '84 → 85', '85 → 86', '86 → 87', '87 → 88', '88 → 89', '89 → 90', '90 → 91', '91 → 92']);
+  assert.deepEqual(migrated.applied, ['47 → 48', '48 → 49', '49 → 50', '50 → 51', '51 → 52', '52 → 53', '53 → 54', '54 → 55', '55 → 56', '56 → 57', '57 → 58', '58 → 59', '59 → 60', '60 → 61', '61 → 62', '62 → 63', '63 → 64', '64 → 65', '65 → 66', '66 → 67', '67 → 68', '68 → 69', '69 → 70', '70 → 71', '71 → 72', '72 → 73', '73 → 74', '74 → 75', '75 → 76', '76 → 77', '77 → 78', '78 → 79', '79 → 80', '80 → 81', '81 → 82', '82 → 83', '83 → 84', '84 → 85', '85 → 86', '86 → 87', '87 → 88', '88 → 89', '89 → 90', '90 → 91', '91 → 92', '92 → 93']);
   assert.deepEqual(migrated.raw.propagationLineage, [], 'the migration never infers or imports a pre-v48 success ledger');
 
   const rawTrace = traceRow();
@@ -89,7 +89,7 @@ test('schema v48 migrates additively without guessing successful history and nor
     propagationLineage: [rawTrace],
   }, { now: NOW });
   const [stored] = normalized.state.propagationLineage;
-  assert.equal(normalized.state.schemaVersion, 92);
+  assert.equal(normalized.state.schemaVersion, 93);
   assert.equal(normalized.state.propagationLineage.length, 1);
   assert.deepEqual(stored.steps[0].changedCollections, ['decisions', 'links']);
   assert.equal(stored.steps[0].links.length, 1, 'confidential typed edges are rejected');
@@ -553,6 +553,29 @@ test('every registered link type survives schema normalization/reload and resolv
     createdAt: NOW_ISO, updatedAt: NOW_ISO, claims: [], looks: [], fingerprint: 'e5f60718293a4b5c',
   }];
 
+  // Schema v92: a bounded disclosure release. The node names the pair, the class
+  // and the window; it never carries record content.
+  raw.disclosureGrants = [{
+    id: 'disclosure-grant-link-fixture', route: 'cases', moduleLabel: 'Cases',
+    collection: 'cases', classKey: 'individual', requesterId: 'mgr1', requesterSeatId: 'mgr1',
+    spanId: 'dir1', spanLabel: 'Directorate', status: 'requested',
+    requestedOn: NOW_ISO, requestedAt: NOW_ISO, createdAt: NOW_ISO,
+    purpose: 'Fixture release contract for a bounded audit', days: 14, history: [],
+  }];
+
+  // Schema v93: the Operating Cadence Clock's two graph nodes. A forum carries a
+  // title and no person; a frozen reading carries counts and conventions.
+  raw.cadenceForums = [{
+    id: 'cadence-forum-link-fixture', title: 'Weekly operating review', kind: 'operating-review',
+    cadence: 'weekly', status: 'active', chairSeatId: 'mgr1', attending: ['mgr1'],
+    decisionCapacity: 4, serviceDays: 3, intervalDays: 7, horizonDays: 30,
+    createdAt: NOW_ISO, updatedAt: NOW_ISO,
+  }];
+  raw.cadenceReadings = [{
+    id: 'cadence-reading-link-fixture', frozenOn: NOW_ISO, createdAt: NOW_ISO,
+    engineVersion: 'cadence-2026.11-v1', forums: [], conventions: {}, subject: 'workspace',
+  }];
+
   // Schema v90: pact and bilateral-round graph nodes survive normalization.
   raw.catchballPacts = [{ id: 'catchball-pact-link-fixture', title: 'Fixture pact', toSeatId: raw.people[0].id, status: 'proposed', createdAt: NOW_ISO }];
   raw.catchballRounds = [{ id: 'catchball-round-link-fixture', pactId: 'catchball-pact-link-fixture', ownerId: raw.people[0].id, kind: 'propose', createdAt: NOW_ISO }];
@@ -570,7 +593,7 @@ test('every registered link type survives schema normalization/reload and resolv
     purpose: 'Fixture release so the grant survives a reload as a navigable record.',
     requestedOn: '2026-11-01', requestedAt: NOW_ISO, createdAt: NOW_ISO,
   }];
-  // Schema v92 (ADR-0087, no bump of its own): a sealed packet is a graph node so the spans it was
+  // Schema v92 (ADR-0088, no bump of its own): a sealed packet is a graph node so the spans it was
   // carried to and the decision its divergence forced are navigable from it.
   raw.exchangePackets = [{
     id: 'exchange-packet-link-fixture', packetId: 'a'.repeat(64), direction: 'inbound', status: 'ingested',
@@ -732,9 +755,14 @@ test('every registered link type survives schema normalization/reload and resolv
       concordance: ['round', resolved.id],
       // Schema v90: a memo is addressed by query on the Board Room's memo panel.
       boardmemo: ['memo', resolved.id],
-      concordance: ['round', resolved.id],
       catchballpact: ['pact', resolved.id],
       catchballround: ['round', resolved.id],
+      // Schema v93: a forum is addressed by query on the cadence terminal's
+      // workbench panel; a frozen reading by query on its constraint panel.
+      cadenceforum: ['forum', resolved.id],
+      cadencereading: ['reading', resolved.id],
+      // Schema v92: a bounded release is addressed by query on the Disclosure
+      // Console's releases panel — the edge names the contract, not its content.
       // Schema v90: a packet is addressed by query on the envelope's packets
       // panel, so a carriage or reconciliation task can navigate back to the
       // exact sealed envelope it came from — by row id, never by content.
