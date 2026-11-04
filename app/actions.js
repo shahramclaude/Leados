@@ -16,6 +16,9 @@ import { createAltitudeRouterActions } from './core/domain/altitudeRouterActions
 import { createCatchballActions } from './core/domain/catchballActions.js';
 // ADR-0089: seat-scoped cycle reads and human-triggered freeze/scan actions.
 import { createStrategyCycleActions } from './core/domain/strategyCycleActions.js';
+// ADR-0090: the Programme Federation Reading's API mixin — one more consumer of
+// the same post-commit spine, not a second command bus.
+import { createFederationActions } from './core/domain/federationActions.js';
 import { createCadenceActions } from './core/domain/cadenceActions.js';
 import { createCarryoverActions } from './core/domain/carryoverActions.js';
 // ADR-0083: the Concordance Terminal's API mixin — one more consumer of the
@@ -19654,6 +19657,8 @@ export function createApi(store, options = {}) {
   Object.assign(api, createCatchballActions(store, { now: clock, idFactory: id }));
   // ADR-0089: frozen strategy cycles share the standard access and rule spine.
   Object.assign(api, createStrategyCycleActions(store, { now: clock, idFactory: id }));
+  // ADR-0090: freeze a measured federation reading, or scan the declared edges.
+  Object.assign(api, createFederationActions(store, { now: clock, idFactory: id }));
   // ADR-0087: the Operating Cadence Clock's reviewed commands.
   Object.assign(api, createCadenceActions(store, { now: clock, idFactory: id }));
   Object.assign(api, createCarryoverActions(store, { now: clock, idFactory: id }));

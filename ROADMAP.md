@@ -4,13 +4,14 @@ This section is the session-scoped execution view of [NORTH_STAR.md](NORTH_STAR.
 
 ### Implemented
 
-- **[all altitudes]** One connected local-first leadership workspace, not separate apps: 129 shipped sessions, a five-altitude reporting tree (frontline → team lead → manager → director → VP → CEO), and a single shared work graph. Evidence: `app/core/domain/`, `app/views/`, `LEADOS-STATE.md`.
+- **[all altitudes]** One connected local-first leadership workspace, not separate apps: 130 shipped sessions, a five-altitude reporting tree (frontline → team lead → manager → director → VP → CEO), and a single shared work graph. Evidence: `app/core/domain/`, `app/views/`, `LEADOS-STATE.md`.
 - **[all altitudes]** Generalized event-driven propagation: one transactional store applies rule-owned cross-module updates atomically with savepoints, rather than one-off hardcoded links. Evidence: `app/core/domain/postCommit.js`, `propagationContracts.js`, `savepoint.js`, `RULE-*` registries.
-- **[all altitudes]** Safe-write, versioned data: additive migrations only, fail-closed normalizers, `SCHEMA_VERSION` at v94, and an append-only action/audit history. Evidence: `app/core/schema.js`, `app/core/store.js`, `app/core/audit.js`.
+- **[all altitudes]** Safe-write, versioned data: additive migrations only, fail-closed normalizers, `SCHEMA_VERSION` at v95, and an append-only action/audit history. Evidence: `app/core/schema.js`, `app/core/store.js`, `app/core/audit.js`.
 - **[all altitudes]** Decoupled business logic / data / UI: domain modules own rules and writes; views render projections; no view writes directly to storage. Enforced by `npm run check:boundary`.
 - **[frontline → CEO]** Altitude-appropriate views with automatic roll-up: the operating seat and disclosure compiler project the same records at each altitude, with per-record disclosure classes and a lowest-common-ancestor roll-up. Evidence: `app/core/domain/seat*.js`, `disclosureManifests.js`, `#/disclosure`.
-- **[manager → CEO]** Aggregate-only exports with small-cell suppression and complementary redaction; no individual note, name or rating reaches an executive aggregate. Evidence: `app/core/csv.js`, CSV scopes #1–#85.
+- **[manager → CEO]** Aggregate-only exports with small-cell suppression and complementary redaction; no individual note, name or rating reaches an executive aggregate. Evidence: `app/core/csv.js`, CSV scopes #1–#86.
 - **[director → CEO]** Cross-module decision and risk propagation: cases, decisions, delegations, finance, stakeholders and coaching update in parallel from one event, with typed links and an auditable trail. Evidence: `app/core/domain/cases.js`, `automation.js`, `mandate*.js`, `envoy*.js`.
+- **[VP → CEO, measured at every altitude]** A programme-level federation reading: every declared leadership edge is classified connected / bypassed / stale / silent from DATED CARRIAGE that other modules already wrote (packet carriage, frozen renewal and cadence readings, accepted commitments, closed expectation rounds), with a Wilson-bounded coverage rate that is withheld below a declared span floor and small cells suppressed with a complementary cell. Evidence: `app/core/domain/federation*.js`, `app/views/federation.js`, `#/federation`, `docs/adr/0090-programme-federation.md`.
 - **[engineering]** Named-framework discipline is recorded per module (root-cause analysis, principal–agent, real options, Brier scoring, statistical disclosure control, Jaques time-span), with ADRs and rule contracts. Evidence: `docs/adr/`, `RESEARCH.md`.
 
 ### In Progress
@@ -24,8 +25,7 @@ This section is the session-scoped execution view of [NORTH_STAR.md](NORTH_STAR.
 
 - **[all altitudes]** Server-side authorization and tenant isolation on every read, write and export, with explicit-consent data migration and independent security review.
 - **[all altitudes]** A complete cross-module event catalogue audit: prove every module subscribes through the generalized engine and no rule-owned edge is written by hand.
-- **[director → CEO]** Temporal disclosure testing for repeated aggregate releases (differencing a series over time), now that the disclosure compiler is posture-aware.
-- **[VP → CEO]** A programme-level federation reading: which spans are actually connected to the span above them, measured from carriage rather than declared.
+- **[director → CEO]** Temporal disclosure testing for repeated aggregate releases (differencing a series over time), now that the disclosure compiler is posture-aware AND the federation reading publishes a suppressed per-altitude series that can be differenced across freezes.
 - **[frontline → CEO]** Prospective calibration ledger for every altitude's recommendations: freeze the recommendation, grade the outcome, and report Brier/confidence intervals without rating persons.
 - **[all altitudes]** Real-browser and assistive-technology verification of every new panel, plus performance testing at scale.
 
@@ -36,6 +36,20 @@ This section is the session-scoped execution view of [NORTH_STAR.md](NORTH_STAR.
 - **[all altitudes]** Automatic people decisions from case narratives — unvalidated harm and bias outweigh speculative benefit.
 - **[all altitudes]** Implicit 1:1 FX conversion — false precision; mixed currencies stay unpooled.
 - **[all altitudes]** Another stand-alone dashboard instead of guarding existing decision paths — duplicates the surface without closing the trust gap.
+
+## Session 130 outcome — 2026-11-04: Programme Federation — which declared edges actually carry work (Schema v95, [ADR-0090](docs/adr/0090-programme-federation.md), `RULE-FED-01..03`, CSV #86, `#/federation`)
+
+**The gap.** Every module so far read the hierarchy from a DECLARATION. Nothing measured whether the declared edge above a span was used. A tree in which no artefact crosses an edge is an org chart, not a connected system — and the [VP → CEO] Planned item had sat unbuilt across two sessions.
+
+**What shipped.** `#/federation` with five panels and five altitude-specific decisions. Every leadership edge is measured from five declared channels — attested packet carriage (`RULE-ENV-01`), frozen renewal readings (`RULE-SCR-01`), accepted Catchball commitments (`RULE-HK-01`), closed two-sided expectation rounds (`RULE-ECN-01`), frozen cadence readings (`RULE-CAD-01`) — and classified **direct / bypass / stale / silent / root**. Coverage is published with a Wilson 95% interval and WITHHELD below a declared span floor; rank 3+ suppresses small cells with a complementary cell. `RULE-FED-01` rolls a frozen reading to every ancestor in the same transaction, `RULE-FED-02` opens exactly one governed carriage decision per edge per ISO week (owned at the span ABOVE the edge), and `RULE-FED-03` records a reconnection **without** closing the human decision. Schema v95 adds two empty, identity-reduced ledgers and clamped conventions only; **71 rules / 71 contracts**; CSV #86 is aggregate-only.
+
+**Altitudes served.** Frontline (did my work reach my lead, and what did not), manager (which of my spans are silent or bypassed), director (is the line above me real, or is work arriving from above it), executive (bounded programme coverage with a refusal below the floor and complementary suppression), chief (counts by altitude and channel; no span or person named).
+
+**Frameworks encoded.** Jaques' time span of discretion as the unit of analysis; Beer's VSM requisite information channel; Burt's structural holes for the `bypass` state; the Wilson score interval; statistical disclosure control (small-cell + complementary suppression, minimum-aggregate refusal); DMAIC measurement-system analysis (the screen measures the measurement system, not the people).
+
+**Honest limits.** A seat is still a local declaration, not authentication. The reading sees only this workspace's ledgers: carriage that happens outside LeadOS reads as silent, and the screen says so before its numbers. Suppression is not differential privacy and the new per-altitude series re-opens the temporal-differencing item below.
+
+**Next.** (1) Temporal disclosure testing for repeated federation releases. (2) The cross-module event catalogue audit. (3) Real-browser/AT verification of the two newest panels.
 
 ## Session 129 outcome — 2026-11-04: Strategy Renewal Bridge — a frozen learning line across five operating altitudes (Schema v94, [ADR-0089](docs/adr/0089-strategy-renewal-bridge.md), `RULE-SCR-01..02`, CSV #85)
 

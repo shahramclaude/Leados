@@ -39,6 +39,8 @@ import { routingCsvRows } from './domain/altitudeRouter.js';
 import { catchballCsvRows } from './domain/catchball.js';
 // ADR-0089: the active-seat strategy-renewal report only, never raw cycle rows.
 import { buildStrategyCycleReport, strategyCycleCsvRows } from './domain/strategyCycle.js';
+// ADR-0090: the programme federation reading's aggregate-only export.
+import { buildFederationReport, federationCsvRows } from './domain/federation.js';
 import { buildCadenceReport, cadenceCsvRows } from './domain/cadence.js';
 import { carryoverCsvRows } from './domain/carryover.js';
 // ADR-0083: the Concordance Terminal's aggregate-only rows.
@@ -955,6 +957,11 @@ export const CSV_EXPORTS = [
   { key: 'carryover-settlement', label: 'Carryover settlement (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'carryover-settlement', description: 'Counts of invalidated pacts, pending settlements, releases and next-cycle released person-days, plus altitude calibration cells (n, hold rate, Wilson 95% bounds). NO pact id, NO bet id, NO record id, NO title, NO name, NO budget name. Refused rates are BLANK, never zero.' },
   // CSV scope #85 (Schema v94, ADR-0089). The active-seat report applies the
   // same scoped reads, high-altitude redaction and small-cell withholding as the UI.
+  // CSV scope #86 (Schema v95, ADR-0090). Aggregate-only federation telemetry: one
+  // row per declared leadership edge inside the active seat's span, plus one
+  // workspace row. No span name, no person name, no record id, no channel free
+  // text; a suppressed cell is BLANK and a refused rate is BLANK, never zero.
+  { key: 'programme-federation', label: 'Programme federation (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'programme-federation', description: 'One row per declared leadership edge in the active seat\u2019s span plus one workspace row: altitude, rank, measured state (connected / bypassed / stale / silent / top-of-tree), direct and bypass carriage counts, oldest carriage date and whether the row was suppressed. No span name, person name, record id or free text; suppressed and refused figures are BLANK rather than zero.' },
   { key: 'strategy-renewal', label: 'Strategy renewal (active-seat aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'strategy-renewal', description: 'Active-seat altitude and workspace learning rows only: active, carryover and overdue commitments, effort, in-window delivery reference with interval, evidence count and verdict. No pact IDs, bet IDs, titles, cohort identifiers, names or notes; refused and suppressed figures are BLANK rather than zero.' },
 ];
 
@@ -5897,6 +5904,15 @@ function buildScopeTable(state, scope, now) {
         'items', 'withheld', 'omitted', 'keyed', 'verified', 'failures',
         'attested_open_critical', 'attested_oldest_open_days', 'received_on', 'created_on',
       ].map((key) => ({ key, header: key }));
+      return { columns, rows };
+    }
+    case 'programme-federation': {
+      // CSV scope #86 (Schema v95, ADR-0090). Aggregate-only and refusal-honest:
+      // a suppressed count and a withheld coverage rate are BLANK, never zero.
+      const report = buildFederationReport(state, { now });
+      const rows = federationCsvRows(report);
+      const columns = ['row_kind', 'altitude', 'rank', 'state', 'evidence_n', 'direct_n', 'bypass_n', 'last_carriage_on', 'days_since', 'suppressed']
+        .map((key) => ({ key, header: key }));
       return { columns, rows };
     }
     case 'strategy-renewal': {

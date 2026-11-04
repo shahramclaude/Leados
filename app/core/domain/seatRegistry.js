@@ -119,6 +119,11 @@ export const RECORD_POLICIES = Object.freeze({
   // altitude (`ENVOY_FIELDS`), not by this row; what this row fixes is that the
   // ledger itself is span material, never enterprise material — a workspace may
   // not read another span's exchange history at the top of the house.
+  // ADR-0090: frozen federation readings are span material by contract. The
+  // stored rows carry span ids, counts and dates — never a name, title or note —
+  // and a declared seat receives only the scoped report, never the raw ledger.
+  federationAssessments: { classKey: 'unit', detailCeiling: 0, label: 'Frozen federation readings (report only)', route: '#/federation' },
+  federationMarkers: { classKey: 'unit', detailCeiling: 0, label: 'Federation rule markers', route: '#/federation' },
   exchangePackets: { classKey: 'unit', label: 'Sealed exchange packets', route: '#/envoy' },
   exchangeArtefacts: { classKey: 'unit', label: 'Attested exchange copies', route: '#/envoy' },
   exchangeMarkers: { classKey: 'unit', label: 'Exchange idempotency markers', route: '#/envoy' },
@@ -292,6 +297,10 @@ export const ACTION_RIGHTS = Object.freeze({
   'negotiate-catchball': { minRank: 1, maxRank: 5, label: 'Propose, counter, accept or check in on a Hoshin Catchball pact' },
   // ADR-0089: each altitude freezes a scoped renewal reading and may explicitly scan it.
   'govern-strategy-cycle': { minRank: 1, maxRank: 5, label: 'Freeze or scan a scoped strategy renewal cycle' },
+  // ADR-0090: every altitude may freeze its own scoped federation reading and
+  // run an explicit scan. Setting the WINDOW and the FLOORS is director-and-above
+  // (checked in the action), because those numbers bound what everyone below reads.
+  'govern-federation': { minRank: 1, maxRank: 5, label: 'Freeze or scan a scoped programme federation reading' },
   // ADR-0086: a disclosure release is requested by the altitude that needs the
   // detail and consented by the altitude that owns it. Both directions are open
   // at every rank, because either side may sit at any altitude; the pair, the

@@ -70,7 +70,7 @@ const RENDERER_ROUTES = [
   'settings', 'prep', 'disclosure', 'wargame', 'coupling',
   // ADR-0088: the Federated Envoy declares its own manifest row, so the
   // catalogue and the shell stay one route for one route.
-  'envoy', 'strategy-cycle',
+  'envoy', 'federation', 'strategy-cycle',
 ];
 
 /** Sentinel-bearing roster: every person, span and private note is traceable. */
@@ -167,10 +167,10 @@ function seatsOrThrow(state) {
 /* --------------------------------------------------------------- 1. schema */
 
 test('schema v90 migrates additively and refuses malformed or stale grants', () => {
-  assert.equal(SCHEMA_VERSION, 94);
+  assert.equal(SCHEMA_VERSION, 95);
   const old = { schemaVersion: 89, settings: { leaderName: 'Keep' }, cases: [{ id: 'keep' }], disclosureGrants: [{ id: 'existing' }] };
   const migrated = migrate(old);
-  assert.equal(migrated.raw.schemaVersion, 94);
+  assert.equal(migrated.raw.schemaVersion, 95);
   assert.deepEqual(migrated.raw.disclosureMarkers, []);
   assert.equal(migrated.raw.cases[0].id, 'keep');
   assert.equal(migrated.raw.settings.disclosureCellFloor, 5);

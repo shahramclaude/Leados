@@ -122,6 +122,11 @@ export const MODULE_MANIFESTS = Object.freeze({
   // operating subtree and the item content is already capped by the receiving
   // altitude's disclosure class, so a declared seat may open its own desk.
   envoy: row('envoy', 'Federated exchange', ['exchangePackets'], { mode: A, dates: ['receivedAt'], statuses: ['status'] }),
+  // ADR-0090: the Programme Federation Reading. Adaptive: the report adapter
+  // recomputes the active seat's scope, suppresses small cells with a
+  // complementary cell and refuses a coverage rate below the span floor, so a
+  // declared seat may open its own reading and cannot read a peer span's rows.
+  federation: row('federation', 'Programme federation', ['federationAssessments'], { mode: A, classKey: 'unit', adapterScoped: true, detailCeiling: 5, dates: ['frozenOn'], note: 'The federation adapter measures carriage per declared leadership edge inside the active seat\u2019s span, blanks small cells with a complementary cell and withholds the coverage rate below the declared span floor. Raw assessment and marker rows are never projected into declared-seat view state, and no person is ever named.' }),
   // ADR-0089: the report adapter recomputes the active seat's scoped cohort,
   // redacts pact details at high altitude and suppresses small cells. Raw cycle
   // and marker rows are never projected into declared-seat view state.
