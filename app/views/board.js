@@ -1,5 +1,5 @@
 /**
- * app/views/board.js — The Board Room (Schema v90, ADR-0084).
+ * app/views/board.js — The Board Room (Schema v91, ADR-0085).
  *
  * Five panels, five different questions:
  *   Memo           "What would we tell the board today, and what must we mark unverified?"
@@ -203,7 +203,7 @@ export function renderBoard(ctx) {
     title: 'Board Room',
     subtitle: 'The pack as a measurement problem: claims and thresholds pre-registered before the first look, verdicts decided by the conservative end of an interval, and every figure tagged with where it came from.',
     meta: h('div', { class: 'row-actions' },
-      badge(`Schema v90`, 'neutral'),
+      badge(`Schema v91`, 'neutral'),
       badge(`${ledger.total} memo(s)`, 'neutral'),
       memo ? badge(memo.status.toUpperCase(), memo.status === 'frozen' ? 'good' : memo.status === 'committed' ? 'warn' : 'neutral') : null,
       evaluation && evaluation.attestation.verified ? badge('chain verified', 'good', evaluation.attestation.note) : badge(evaluation?.attestation?.available ? 'chain NOT verified' : 'not sealed', evaluation?.attestation?.available ? 'bad' : 'neutral', evaluation?.attestation?.note || '')),
@@ -542,7 +542,7 @@ export function renderBoard(ctx) {
         title: 'Exports',
         subtitle: 'Aggregate-only. One row per claim; no memo id, no operator, no note, no span or person name.',
         actions: [h('button', { class: 'btn btn-ghost btn-sm', type: 'button', onClick: exportCsv }, 'Download CSV')],
-        body: h('p', { class: 'muted' }, `CSV scope #79 · ${report.rows ? '' : ''}A refused or withheld figure is BLANK in the file, never zero. The attestation column reports whether the chain verified at the moment of export.`),
+        body: h('p', { class: 'muted' }, `CSV scope #80 · ${report.rows ? '' : ''}A refused or withheld figure is BLANK in the file, never zero. The attestation column reports whether the chain verified at the moment of export.`),
       }),
       card({
         title: 'Attestation',

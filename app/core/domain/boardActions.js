@@ -1,6 +1,6 @@
 /**
- * app/core/domain/boardActions.js — API mixin for the Board Room (Schema v90,
- * ADR-0084). Mounted via `Object.assign(api, ...)` exactly like the Altitude
+ * app/core/domain/boardActions.js — API mixin for the Board Room (Schema v91,
+ * ADR-0085). Mounted via `Object.assign(api, ...)` exactly like the Altitude
  * Router and Concordance mixes; no second command bus.
  *
  * The write path is deliberately tiny and the ORDER is the feature:

@@ -102,6 +102,9 @@ export const RECORD_POLICIES = Object.freeze({
   intakeDrafts: { classKey: 'unit', label: 'Intake drafts', route: '#/intake' },
   altitudeRoutingPlans: { classKey: 'unit', label: 'Altitude routing plans', route: '#/routing' },
   altitudeRoutingMarkers: { classKey: 'unit', label: 'Routing idempotency markers', route: '#/routing' },
+  catchballPacts: { classKey: 'unit', label: 'Hoshin Catchball pacts', route: '#/catchball' },
+  catchballRounds: { classKey: 'unit', label: 'Hoshin Catchball rounds', route: '#/catchball' },
+  catchballMarkers: { classKey: 'unit', label: 'Catchball idempotency markers', route: '#/catchball' },
   // Portfolio material. Functions, quarters and capital.
   budgets: { classKey: 'portfolio', label: 'Budgets', route: '#/finance' },
   strategyBets: { classKey: 'portfolio', label: 'Strategic bets', route: '#/strategy' },
@@ -125,7 +128,7 @@ export const RECORD_POLICIES = Object.freeze({
   solvencyReadings: { classKey: 'enterprise', label: 'Frozen promise readings', route: '#/solvency' },
   orgDesigns: { classKey: 'enterprise', label: 'Structural designs', route: '#/orgdesign' },
   voiDecisions: { classKey: 'enterprise', label: 'Information-value frames', route: '#/voi' },
-  // ADR-0084: board memos are enterprise material. They carry claims, thresholds,
+  // ADR-0085: board memos are enterprise material. They carry claims, thresholds,
   // verdicts and counts — never a person, a 1:1 or a rating — but they are the
   // pack, and the pack is not handed below the executive floor.
   boardMemos: { classKey: 'enterprise', label: 'Board disclosure memos', route: '#/board' },
@@ -232,7 +235,7 @@ export const ACTION_RIGHTS = Object.freeze({
   'finalize-merit-cycle': { minRank: 4, maxRank: 5, label: 'Finalize a merit cycle' },
   'approve-capital': { minRank: 4, maxRank: 5, label: 'Approve capital allocation' },
   'freeze-board-summary': { minRank: 5, maxRank: 5, label: 'Freeze a board-ready summary' },
-  // ADR-0084: the Board Room. Reading is enterprise-level (route floor rank 4);
+  // ADR-0085: the Board Room. Reading is enterprise-level (route floor rank 4);
   // opening, declaring, looking and committing are the chief's act, and freezing
   // the disclosed pack stays on its own rank-5 right above.
   'declare-board-line': { minRank: 5, maxRank: 5, label: 'Open, declare and commit a board disclosure memo' },
@@ -249,6 +252,8 @@ export const ACTION_RIGHTS = Object.freeze({
   // ADR-0082: verifying the sealed audit chain is every altitude's business —
   // it writes only an audit event, never a record.
   'audit-seal': { minRank: 1, maxRank: 5, label: 'Verify the sealed audit chain' },
+  // ADR-0084: bilateral Hoshin Kanri & Catchball negotiation across spans.
+  'negotiate-catchball': { minRank: 1, maxRank: 5, label: 'Propose, counter, accept or check in on a Hoshin Catchball pact' },
 });
 
 export function actionVerdict(action, seat) {

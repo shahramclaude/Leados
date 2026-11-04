@@ -1,6 +1,15 @@
 ## Canonical app — Session 124 (Schema v90, additive `89 → 90`)
 
-### Board Room (`#/board`, [ADR-0084](./docs/adr/0084-board-room.md), RULE-BRD-01..03, CSV #79)
+### Hoshin Catchball Cascade (`#/catchball`, [ADR-0084](./docs/adr/0084-hoshin-catchball-cascade.md), RULE-HK-01..03, CSV #79)
+
+- ✅ **Bilateral strategy deployment.** Declared span pacts and append-only negotiation rounds, with capacity and budget feasibility checked before a pact is accepted, weakest-link roll-ups, leading/lagging divergence ("watermelon") detection, and calibration against delivery.
+- ✅ **One transaction, modules × hierarchy.** `RULE-HK-01` writes typed provenance (`deploys-strategy`, `cascades-to`, `counters-upward`, `trades-off`, `funds`) plus one `rolls-up-to` edge per ancestor; `RULE-HK-02` opens a governed decision on divergence and an upstream double-loop review when execution held and the strategy did not; `RULE-HK-03` records calibration maturity and opens reviews for cells below the delivery floor.
+- ✅ **Disclosure & exports.** Small-cell suppression with complementary intervals, identity-free executive brief, aggregate-only CSV #79.
+- ⚠️ Declared local seats are not authenticated accounts; suppression is not differential privacy.
+
+## Canonical app — Session 125 (Schema v91, additive `90 → 91`)
+
+### Board Room (`#/board`, [ADR-0085](./docs/adr/0085-board-room.md), RULE-BRD-01..03, CSV #80)
 
 - ✅ **Pre-registration, not reporting.** Seven enterprise claims are declared with a comparator, unit and threshold before the first look; each look records a content fingerprint of exactly what was visible.
 - ✅ **Post-hoc movement is permanent.** A threshold revised after a look carries `revisedAfterLook` forever — printed on the claim, in the memo text and in the export.
@@ -10,8 +19,8 @@
 - ✅ **Disagreement surfaced, never composited.** Three cross-checks (coverage vs flow, rate vs book, integrity vs examination) print both numbers and a route; there is no composite score anywhere in the module.
 - ✅ **Reconciled roll-up only.** Span partitions are checked against the claim's own denominator; a broken partition is reported with its delta and an unattributed claim is drawn as "nothing attributed".
 - ✅ **Cross-module × cross-altitude in one transaction.** A failing claim opens one governed DACI decision (chief altitude), one delegation to the failing span (capped at `min(60, boardRecheckDays)`), and typed `rolls-up-to` edges to every ancestor. 64 rules / 64 contracts, marker-idempotent, pausable, explicit scan always available.
-- ✅ **Five distinct read models.** Frontline (read-only failing-line view), manager (partition arithmetic), director (named spans + delegation), VP (discrepancies and settling arithmetic), CEO / chief (memory-less memorandum, attestation, aggregate CSV #79). `commit-board-memo` is chief-only.
-- ✅ **Wiring.** Additive `MIGRATIONS[89]`, two collections (`boardMemos`, `boardMarkers`), five clamped settings, one API right group, six safe reads, one nav entry with a fact-only badge, seven route aliases, five axe-clean panels, CSS, aggregate-only CSV #79 with blank-not-zero refusals.
+- ✅ **Five distinct read models.** Frontline (read-only failing-line view), manager (partition arithmetic), director (named spans + delegation), VP (discrepancies and settling arithmetic), CEO / chief (memory-less memorandum, attestation, aggregate CSV #80). `commit-board-memo` is chief-only.
+- ✅ **Wiring.** Additive `MIGRATIONS[90]`, two collections (`boardMemos`, `boardMarkers`), five clamped settings, one API right group, six safe reads, one nav entry with a fact-only badge, seven route aliases, five axe-clean panels, CSS, aggregate-only CSV #79 with blank-not-zero refusals.
 - ⚠️ Wilson assumes independent observations and spans are not independent, so the interval is a lower bound on uncertainty. Seven claims are a chosen instrument, not a validated one; a declared seat is not authentication.
 
 ## Canonical app — Session 123 (Schema v89, additive `88 → 89`)

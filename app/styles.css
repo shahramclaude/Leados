@@ -2962,7 +2962,7 @@ tr.is-focused td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
   .ec-ladder-row { grid-template-columns: 1fr; }
 }
 
-/* ADR-0084: the Board Room. The claim is the unit, so the layout is a grid of
+/* ADR-0085: the Board Room. The claim is the unit, so the layout is a grid of
    claims rather than a dashboard of charts — and the verdict colour is carried
    by a border plus a text label, never by colour alone. */
 .board-page { gap: 14px; }

@@ -1,5 +1,5 @@
 /**
- * app/core/domain/board.js — the Board Room engine (Schema v90, ADR-0084).
+ * app/core/domain/board.js — the Board Room engine (Schema v91, ADR-0085).
  *
  * Pure read model. No storage writes, no clock reads, no DOM. Every figure is
  * derived from a module's own report, so the board line cannot drift from the

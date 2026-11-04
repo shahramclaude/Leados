@@ -1,13 +1,13 @@
-# ADR-0084 — The Board Room: the disclosure memo as a pre-registered terminal
+# ADR-0085 — The Board Room: the disclosure memo as a pre-registered terminal
 
 - **Status:** Accepted
 - **Date:** 2026-11-04
-- **Session:** 124
-- **Schema:** v90 (additive `89 → 90`)
+- **Session:** 125
+- **Schema:** v91 (additive `90 → 91`)
 - **Route:** `#/board` (aliases: `board-room`, `board-pack`, `board-line`, `board-memo`, `disclosure`, `disclosure-memo`, `chair`)
 - **Rules:** `RULE-BRD-01` (governed decision per failing claim), `RULE-BRD-02` (typed span roll-up), `RULE-BRD-03` (advisory maturity)
 - **New collections:** `boardMemos`, `boardMarkers` — no new graph node; the memo links to spans through `rolls-up-to` edges
-- **CSV:** scope #79 `board-claims` (aggregate-only; a refused figure is blank, never zero)
+- **CSV:** scope #80 `board-claims` (aggregate-only; a refused figure is blank, never zero)
 
 ## The problem
 
@@ -108,12 +108,12 @@ One read model, five genuinely different jobs:
 
 ## Consequences
 
-- `SCHEMA_VERSION` → **90**, one additive step (`boardMemos: []`, `boardMarkers: []`), five clamped
+- `SCHEMA_VERSION` → **91**, one additive step (`90 → 91`: `boardMemos: []`, `boardMarkers: []`), five clamped
   settings (`boardCellFloor`, `boardEvidenceFloor`, `boardMaterialityPct`, `boardRecheckDays`,
   `boardAutoPropagate`), and a fail-closed normalizer that drops a memo with no claims, clamps
   thresholds to 0–100, and refuses a duplicate claim key while allowing a later valid declaration to
   repair an earlier unreadable one.
-- 63 → **64 rules / 64 contracts**, one new CSV scope (#78 → **#79**), one new API right group
+- 64 → **65 rules / 65 contracts**, one new CSV scope (#79 → **#80**), one new API right group
   (`declare-board-line`, `freeze-board-summary`), six safe reads, one nav entry with a badge that
   counts stored facts only (committed memos with a failing claim or a stale fingerprint).
 - `RULE-BRD-01` is idempotent through `boardMarkers`, pausable through `boardAutoPropagate`, and an

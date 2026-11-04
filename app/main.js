@@ -23,10 +23,12 @@ import { renderIntake } from './views/intake.js';
 // ADR-0081: the Altitude Router — natural language in, module × altitude out.
 import { renderAltitudeRouter } from './views/altitudeRouter.js';
 import { routingAttentionCount } from './core/domain/altitudeRouter.js';
+import { renderCatchball } from './views/catchball.js';
+import { catchballAttentionCount } from './core/domain/catchball.js';
 // ADR-0083: the Concordance Terminal — the two-gauge problem behind every
 // performance review, measured pair by pair and rolled up the tree.
 import { renderConcordance } from './views/concordance.js';
-// ADR-0084: the Board Room — pre-registered disclosure at the chief altitude.
+// ADR-0085: the Board Room — pre-registered disclosure at the chief altitude.
 import { renderBoard } from './views/board.js';
 import { concordanceAttentionCount } from './core/domain/concordance.js';
 import { boardAttentionCount } from './core/domain/board.js';
@@ -215,6 +217,7 @@ export const NAV = [
     // ADR-0081: classify a note into modules AND the owning altitude, then
     // roll a disclosure-safe signal up every level in one transaction.
     { route: 'routing', label: 'Altitude Router', icon: '⇅', badge: 'routing' },
+    { route: 'catchball', label: 'Strategy cascade', icon: '◇', badge: 'catchball' },
     { route: 'comms', label: 'Comms outbox', icon: '✉', badge: 'comms' },
     { route: 'insights', label: 'Signals', icon: '⚑', badge: 'signals' },
   ] },
@@ -332,6 +335,7 @@ const RENDERERS = {
   mission: (ctx) => renderMission(ctx),
   intake: (ctx) => renderIntake(ctx),
   routing: (ctx) => renderAltitudeRouter(ctx),
+  catchball: (ctx) => renderCatchball(ctx),
   concordance: (ctx) => renderConcordance(ctx),
   board: (ctx) => renderBoard(ctx),
   responses: (ctx) => renderResponses(ctx),
@@ -517,6 +521,7 @@ export function parseRoute(hash) {
     // NOT 'coverage': that hash already routes to the Promise Solvency Terminal
     // (ADR-0073) and silently stealing it would break a shipped link.
     'mission': 'mission', 'mission-control': 'mission', 'command-center': 'mission', 'flight-deck': 'mission',
+    'catchball': 'catchball', 'hoshin': 'catchball', 'strategy-cascade': 'catchball',
     'concordance': 'concordance', 'expectation-concordance': 'concordance',
     'board': 'board', 'board-room': 'board', 'board-pack': 'board', 'board-line': 'board',
     'disclosure': 'board', 'disclosure-memo': 'board', 'board-memo': 'board', 'chair': 'board',
@@ -823,6 +828,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       mandates: (state.mandates || []).filter((m) => ['proposed', 'active', 'delivered'].includes(m.status) && (m.fromSeatId === seatCtx?.seat?.id || m.toSeatId === seatCtx?.seat?.id)).length,
       authorityCalibration: authorityCalibrationAttentionCount(state, at, state.settings),
       routing: routingAttentionCount(state, at, state.settings),
+      catchball: catchballAttentionCount(state, at, state.settings),
       concordance: concordanceAttentionCount(state, at, state.settings),
       // ADR-0084: drafts awaiting a commit, committed packs past the re-check
       // window, and committed packs carrying a failing claim. Stored snapshots
@@ -1251,6 +1257,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       intake: 'Intake triage',
       routing: 'Altitude Router — natural-language intake classified into modules and the correct organizational altitude, with disclosure-safe roll-up to every leadership level',
       board: 'Board Room — the disclosure pack as a measurement problem: claims and thresholds pre-registered before the first look, verdicts decided by the conservative end of each interval, two-module cross-examination, exact span decomposition, and a permanent post-hoc mark on any threshold moved after looking',
+      catchball: 'Hoshin Kanri & Catchball Cascade — negotiated strategy deployment',
       concordance: 'Expectation Concordance — “meets expectations” treated as a measurement instrument: two sealed sides, six dimensions, weighted κ / AC1 / PABAK / Bland–Altman agreement, a governed re-contracting decision on divergence and a typed roll-up to every leadership span',
       responses: 'Response studio — rehearse and adopt a coordinated leadership response',
       bundles: 'Action bundles — review, adopt and safely withdraw coordinated work',

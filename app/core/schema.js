@@ -14,7 +14,7 @@ import { normalizeConflicts } from './conflict-schema.js';
 // ADR-0083: the Concordance Terminal. Rounds resolve BEFORE links so
 // `rolls-up-to`, `re-contracts` and `re-tests` edges validate on reload.
 import { normalizeConcordanceRounds, normalizeConcordanceMarkers, normalizeConcordanceSettings } from './domain/concordanceSchema.js';
-// ADR-0084: the Board Room. Memos resolve BEFORE links so `summarizes-span`
+// ADR-0085: the Board Room. Memos resolve BEFORE links so `summarizes-span`
 // and `escalates-from` provenance edges validate on reload.
 import { normalizeBoardMemos, normalizeBoardMarkers, normalizeBoardSettings } from './domain/boardSchema.js';
 import { normalizePropagationLineage } from './domain/automationLineage.js';
@@ -136,6 +136,14 @@ import {
 // ADR-0082: the Sealed Spine's settings. Backward compatible (defaults when
 // absent), so like ADR-0076's seat settings this needs NO schema bump of its own.
 import { normalizeSealSettings } from './domain/sealSchema.js';
+// ADR-0084: Hoshin Kanri & Catchball Cascade pacts, append-only rounds,
+// idempotency markers, and clamped conventions.
+import {
+  normalizeCatchballPacts,
+  normalizeCatchballRounds,
+  normalizeCatchballMarkers,
+  normalizeCatchballSettings,
+} from './domain/catchballSchema.js';
 import { addDays } from './time.js';
 import { validateWatchResponse } from './domain/watchResponse.js';
 import {
@@ -300,7 +308,7 @@ export {
 // older blob simply opens on the undeclared operator view. A version bump here
 // would have forced 78 test files to be rewritten for zero user benefit; the
 // honest choice is to add nothing to migrate.
-export const SCHEMA_VERSION = 90;
+export const SCHEMA_VERSION = 91;
 
 // v83 adds the Succession Terminal (`successionReadings`, `successionMarkers`): a
 // frozen bench claim per workspace or per span — the probability that at least one
@@ -1350,6 +1358,16 @@ export const DEFAULT_SETTINGS = Object.freeze({
   routingCalibrationFloorN: 5,
   routingReviewDays: 14,
   routingAutoPropagate: true,
+  // ADR-0084: Hoshin Kanri & Catchball Cascade — declared conventions, clamped.
+  catchballWatermelonGapPct: 25,
+  catchballLeadingFloorPct: 80,
+  catchballLaggingFloorPct: 70,
+  catchballThesisRedPct: 35,
+  catchballFloorN: 5,
+  catchballReliabilityFloorPct: 70,
+  catchballCellFloor: 3,
+  catchballMaxFanout: 4,
+  catchballAutoPropagate: true,
   // ADR-0083: The Concordance Terminal — declared conventions, all clamped.
   concordanceAgreementFloorPct: 60,
   concordanceCellFloor: 5,
@@ -1357,7 +1375,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   concordanceRetestDays: 21,
   concordanceReviewDays: 14,
   concordanceAutoPropagate: true,
-  // ADR-0084: the Board Room — declared conventions, all clamped.
+  // ADR-0085: the Board Room — declared conventions, all clamped.
   boardCellFloor: 5,
   boardEvidenceFloor: 4,
   boardMaterialityPct: 10,
@@ -1632,11 +1650,16 @@ export const COLLECTIONS = [
   // rule-idempotency markers. Additive; no figure is inferred on migration.
   'altitudeRoutingPlans',
   'altitudeRoutingMarkers',
+  // ADR-0084: Hoshin Kanri & Catchball Cascade pacts, append-only rounds, and
+  // rule-idempotency markers.
+  'catchballPacts',
+  'catchballRounds',
+  'catchballMarkers',
   // ADR-0083: two-sided expectation rounds (one row per pair per cycle, sealed
   // until both sides are in) and the idempotency markers their three rules use.
   'expectationRounds',
   'concordanceMarkers',
-  // ADR-0084: board disclosure memos (declared claims + frozen snapshots) and
+  // ADR-0085: board disclosure memos (declared claims + frozen snapshots) and
   // the idempotency markers their three rules use.
   'boardMemos',
   'boardMarkers',
@@ -2287,9 +2310,10 @@ export function normalizeSettings(raw) {
     ...normalizeAuthorityCalibrationSettings(s),
     ...normalizeRouterSettings(s),
     ...normalizeConcordanceSettings(s),
-    // ADR-0084: the Board Room's declared conventions.
+    // ADR-0085: the Board Room's declared conventions.
     ...normalizeBoardSettings(s),
     ...normalizeSealSettings(s),
+    ...normalizeCatchballSettings(s),
   };
 }
 
@@ -6373,12 +6397,18 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // real plan ids. A hostile or malformed plan is dropped, never repaired.
   state.altitudeRoutingPlans = normalizeRouterPlans(raw.altitudeRoutingPlans, warnings);
   state.altitudeRoutingMarkers = normalizeRouterMarkers(raw.altitudeRoutingMarkers);
+  // ADR-0084: Hoshin Catchball pacts and rounds resolve before links so
+  // `deploys-strategy`, `cascades-to`, `counters-upward`, `trades-off`, and
+  // `rolls-up-to` edges validate against real pact and round ids.
+  state.catchballPacts = normalizeCatchballPacts(raw.catchballPacts, warnings);
+  state.catchballRounds = normalizeCatchballRounds(raw.catchballRounds, warnings);
+  state.catchballMarkers = normalizeCatchballMarkers(raw.catchballMarkers);
   // ADR-0083: rounds resolve before links so `rolls-up-to`, `re-contracts` and
   // `re-tests` edges validate against real round ids. A malformed round is
   // dropped; a round claiming to be closed with one side is reopened.
   state.expectationRounds = normalizeConcordanceRounds(raw.expectationRounds, warnings);
   state.concordanceMarkers = normalizeConcordanceMarkers(raw.concordanceMarkers, warnings);
-  // ADR-0084: memos resolve before links so `summarizes-span`/`escalates-from`
+  // ADR-0085: memos resolve before links so `summarizes-span`/`escalates-from`
   // provenance edges validate against real memo ids. A memo claiming to be
   // committed without a snapshot is reopened as a draft.
   state.boardMemos = normalizeBoardMemos(raw.boardMemos, warnings);
@@ -7081,22 +7111,22 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
-  // ADR-0084: additive 89 → 90. No existing record is rewritten: an older
+  // ADR-0085: additive 90 → 91. No existing record is rewritten: an older
   // workspace simply has an empty memo ledger and the declared conventions.
   // A memo is only ever created by a human opening one.
-  89: (v89) => ({
-    ...v89,
-    schemaVersion: 90,
-    boardMemos: Array.isArray(v89.boardMemos) ? v89.boardMemos : [],
-    boardMarkers: Array.isArray(v89.boardMarkers) ? v89.boardMarkers : [],
-    settings: isPlainObject(v89.settings)
+  90: (v90) => ({
+    ...v90,
+    schemaVersion: 91,
+    boardMemos: Array.isArray(v90.boardMemos) ? v90.boardMemos : [],
+    boardMarkers: Array.isArray(v90.boardMarkers) ? v90.boardMarkers : [],
+    settings: isPlainObject(v90.settings)
       ? {
-        ...v89.settings,
-        boardCellFloor: v89.settings.boardCellFloor ?? 5,
-        boardEvidenceFloor: v89.settings.boardEvidenceFloor ?? 4,
-        boardMaterialityPct: v89.settings.boardMaterialityPct ?? 10,
-        boardRecheckDays: v89.settings.boardRecheckDays ?? 90,
-        boardAutoPropagate: v89.settings.boardAutoPropagate !== false,
+        ...v90.settings,
+        boardCellFloor: v90.settings.boardCellFloor ?? 5,
+        boardEvidenceFloor: v90.settings.boardEvidenceFloor ?? 4,
+        boardMaterialityPct: v90.settings.boardMaterialityPct ?? 10,
+        boardRecheckDays: v90.settings.boardRecheckDays ?? 90,
+        boardAutoPropagate: v90.settings.boardAutoPropagate !== false,
       }
       : { ...DEFAULT_SETTINGS },
   }),
@@ -7117,6 +7147,30 @@ export const MIGRATIONS = {
         concordanceRetestDays: v88.settings.concordanceRetestDays ?? 21,
         concordanceReviewDays: v88.settings.concordanceReviewDays ?? 14,
         concordanceAutoPropagate: v88.settings.concordanceAutoPropagate !== false,
+      }
+      : { ...DEFAULT_SETTINGS },
+  }),
+  // ADR-0084: additive 89 → 90. Adds Hoshin Kanri & Catchball Cascade pacts,
+  // append-only rounds, idempotency markers, and clamped conventions without
+  // fabricating historical cascades.
+  89: (v89) => ({
+    ...v89,
+    schemaVersion: 90,
+    catchballPacts: Array.isArray(v89.catchballPacts) ? v89.catchballPacts : [],
+    catchballRounds: Array.isArray(v89.catchballRounds) ? v89.catchballRounds : [],
+    catchballMarkers: Array.isArray(v89.catchballMarkers) ? v89.catchballMarkers : [],
+    settings: isPlainObject(v89.settings)
+      ? {
+        ...v89.settings,
+        catchballWatermelonGapPct: v89.settings.catchballWatermelonGapPct ?? 25,
+        catchballLeadingFloorPct: v89.settings.catchballLeadingFloorPct ?? 80,
+        catchballLaggingFloorPct: v89.settings.catchballLaggingFloorPct ?? 70,
+        catchballThesisRedPct: v89.settings.catchballThesisRedPct ?? 35,
+        catchballFloorN: v89.settings.catchballFloorN ?? 5,
+        catchballReliabilityFloorPct: v89.settings.catchballReliabilityFloorPct ?? 70,
+        catchballCellFloor: v89.settings.catchballCellFloor ?? 3,
+        catchballMaxFanout: v89.settings.catchballMaxFanout ?? 4,
+        catchballAutoPropagate: v89.settings.catchballAutoPropagate !== false,
       }
       : { ...DEFAULT_SETTINGS },
   }),

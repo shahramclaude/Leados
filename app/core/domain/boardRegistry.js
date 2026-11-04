@@ -1,5 +1,5 @@
 /**
- * app/core/domain/boardRegistry.js — Schema v90 / ADR-0084.
+ * app/core/domain/boardRegistry.js — Schema v91 / ADR-0085.
  *
  * "The Board Room": the one surface the chief altitude's own charter names and
  * the app never had. `chainRegistry` has declared a chief duty called

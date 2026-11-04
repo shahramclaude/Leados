@@ -149,11 +149,11 @@ test('standalone artifact exists and is a single inline HTML document', () => {
   // views/succession.js, and its panel wiring). The density bound below is what
   // still catches a duplication; this ceiling only tracks the module count.
   // Retention and Mission Control add four more source modules; density is checked below.
-  // Raised in Schema v90: the Board Room added six real modules (boardRegistry,
-  // boardSchema, board, boardRules, boardActions, views/board). The density
-  // bound below is what still catches a duplication; this ceiling only tracks
-  // the module count, so it moves with it and never silently.
-  assert.ok(bytes < 7_050_000, `standalone file is unexpectedly large (${bytes} bytes)`);
+  // Raised in Schema v91: the Board Room added six real modules (boardRegistry,
+  // boardSchema, board, boardRules, boardActions, views/board) beside the
+  // Catchball cascade's own. The density bound below is what still catches a
+  // duplication; this ceiling only tracks the module count.
+  assert.ok(bytes < 7_200_000, `standalone file is unexpectedly large (${bytes} bytes)`);
   const declaredModules = Number((html.match(/content="[^"]*?(\d+) source modules/) || [])[1]);
   assert.ok(declaredModules > 100, `expected the build to declare its module count (got ${declaredModules})`);
   const bytesPerModule = Math.round(bytes / declaredModules);
