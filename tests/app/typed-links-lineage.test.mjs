@@ -544,6 +544,17 @@ test('every registered link type survives schema normalization/reload and resolv
   raw.catchballPacts = [{ id: 'catchball-pact-link-fixture', title: 'Fixture pact', toSeatId: raw.people[0].id, status: 'proposed', createdAt: NOW_ISO }];
   raw.catchballRounds = [{ id: 'catchball-round-link-fixture', pactId: 'catchball-pact-link-fixture', ownerId: raw.people[0].id, kind: 'propose', createdAt: NOW_ISO }];
 
+  // Schema v90 (ADR-0085): a sealed packet is a graph node so the spans it was
+  // carried to and the decision its divergence forced are navigable from it.
+  raw.exchangePackets = [{
+    id: 'exchange-packet-link-fixture', packetId: 'a'.repeat(64), direction: 'inbound', status: 'ingested',
+    recipientAltitudeKey: 'manager', recipientClass: 'names', originLabel: 'Fixture workspace',
+    originWorkspaceId: 'b'.repeat(64), merkleRoot: 'c'.repeat(64), items: [],
+    attestation: { items: 0, openCritical: 0, oldestOpenDays: null, valueAtStake: [] },
+    withheldCount: 0, signature: { algo: 'sha256', keyed: false, value: 'd'.repeat(64) },
+    createdAt: NOW_ISO, receivedAt: NOW_ISO,
+  }];
+
   const targetIdFor = (type) => {
     if (type === 'case') return otherCase.id;
     if (type === 'lesson') return raw.retros.flatMap((retro) => retro.lessons || [])[0].id;
@@ -693,6 +704,10 @@ test('every registered link type survives schema normalization/reload and resolv
       concordance: ['round', resolved.id],
       catchballpact: ['pact', resolved.id],
       catchballround: ['round', resolved.id],
+      // Schema v90: a packet is addressed by query on the envelope's packets
+      // panel, so a carriage or reconciliation task can navigate back to the
+      // exact sealed envelope it came from — by row id, never by content.
+      exchangepacket: ['packet', resolved.id],
     }[link.targetType];
     if (focusParam) {
       assert.equal(query.get(focusParam[0]), focusParam[1], `${link.targetType} route carries an encoded, exact focus ID`);

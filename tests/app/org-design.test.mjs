@@ -655,7 +655,7 @@ test('CSV scope #47 carries counts only and never a name, identifier or label', 
   api.updateOrgDesign(id, { moves: [{ personId: 'b-1', toManagerId: 'p-m1' }] });
   api.commitOrgDesign(id);
 
-  assert.equal(CSV_EXPORTS.length, 79);
+  assert.equal(CSV_EXPORTS.length, 80);
   const scope = CSV_EXPORTS.find((entry) => entry.key === 'orgdesign');
   assert.ok(scope);
   const csv = exportWorkspaceCsv(store.state, 'orgdesign', { now: NOW }).csv;

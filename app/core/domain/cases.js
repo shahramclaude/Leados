@@ -334,6 +334,12 @@ export const LINK_ENTITY_TYPES = [
   // from them. The subject is a PAIR and a DIMENSION; a person's answers are the
   // instrument's readings, never a rating.
   'concordance',
+  // ADR-0085: a sealed inter-workspace packet. A first-class node so the spans
+  // it was carried to, the reconciliation decision a divergence forced and the
+  // review an attested exposure opened are navigable from the packet — and the
+  // packet from them. The attested COPIES a packet imports are deliberately not
+  // graph nodes: a foreign record is not this workspace's record.
+  'exchangepacket',
 ];
 
 /**
@@ -455,6 +461,8 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   // ADR-0084: Hoshin Kanri & Catchball Cascade collections.
   catchballpact: 'catchballPacts',
   catchballround: 'catchballRounds',
+  // ADR-0085: the packet ledger owns the packet node's IDs.
+  exchangepacket: 'exchangePackets',
   // ADR-0083: keep the registry exhaustive with LINK_ENTITY_TYPES.
   concordance: 'expectationRounds',
 });
@@ -549,6 +557,12 @@ export const SYSTEM_GENERATED_LINK_RELATIONS = Object.freeze([
   'binds-receiver',
   'recovers-authority',
   'summarizes-span',
+  // ADR-0085: written only by RULE-ENV-01/02. `carries` records that an
+  // ingested packet reached this leadership span in the disclosure form that
+  // span may hold; `reconciles` records that a divergence between two
+  // workspaces opened one governed decision. Neither edits a record.
+  'carries',
+  'reconciles',
   // ADR-0084: emitted by the Catchball spine, not manually asserted.
   'deploys-strategy', 'cascades-to', 'counters-upward', 'trades-off',
 ]);
@@ -782,9 +796,18 @@ export const LINK_RELATIONS = [
   // PAIR and an EXPECTATION, never a person's performance.
   're-contracts',
   're-tests',
+  // ADR-0085 (the Federated Envoy). `carries` — an ingested packet is carried to
+  // this leadership span, in the disclosure form that span may hold; `reconciles`
+  // — this governed decision was opened because the two workspaces disagree about
+  // one origin record. Neither edge edits a record or asserts that a claim is
+  // true; both are written only by RULE-ENV-01/02.
+  'carries',
+  'reconciles',
 ];
 
 export const LINK_RELATION_LABELS = {
+  carries: 'Carried to this leadership span as a sealed packet',
+  reconciles: 'Governed reconciliation opened by a packet divergence',
   're-contracts': 'Re-contracting decision opened from this expectation',
   're-tests': 'Re-tests the standard this decision set',
   'calibrates-coupling': 'Audited against realised joint resolution timing',
@@ -2173,6 +2196,21 @@ export function resolveLinkedEntity(state, entityType, entityId) {
         title: rec.title || `Catchball pact · ${rec.altitudeKey}`,
         status: `${rec.status} · ${rec.altitudeKey} (${rec.horizonDays}d)`,
         route: `#/catchball?panel=workbench&pact=${encodeURIComponent(rec.id)}`,
+        raw: rec,
+      };
+    }
+    case 'exchangepacket': {
+      const rec = (state.exchangePackets || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      // The packet's item payloads are deliberately NOT projected into the
+      // shared graph: an edge may point at a packet, never at a foreign record's
+      // fields. The title names the altitude and the count, nothing else.
+      return {
+        type: 'exchangepacket',
+        id: rec.id,
+        title: `Sealed packet · ${rec.direction} · ${rec.recipientAltitudeKey}`,
+        status: `${rec.status} · ${rec.itemCount} item(s) · ${rec.signatureKeyed ? 'keyed' : 'plain'}`,
+        route: `#/envoy?panel=packets&packet=${encodeURIComponent(rec.id)}`,
         raw: rec,
       };
     }

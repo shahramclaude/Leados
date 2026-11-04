@@ -243,6 +243,10 @@ export const ACTION_RIGHTS = Object.freeze({
   'audit-seal': { minRank: 1, maxRank: 5, label: 'Verify the sealed audit chain' },
   // ADR-0084: bilateral Hoshin Kanri & Catchball negotiation across spans.
   'negotiate-catchball': { minRank: 1, maxRank: 5, label: 'Propose, counter, accept or check in on a Hoshin Catchball pact' },
+  // ADR-0085: every altitude that holds a record may attest it upward, and every
+  // altitude may receive one — the disclosure class is what limits the content,
+  // not the right to exchange. The action itself enforces the sending span.
+  'exchange-packets': { minRank: 1, maxRank: 5, label: 'Publish or ingest a sealed inter-workspace packet' },
 });
 
 export function actionVerdict(action, seat) {

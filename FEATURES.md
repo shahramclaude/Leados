@@ -1,3 +1,12 @@
+## Session 125 — The Federated Envoy (`#/envoy`, ADR-0085)
+
+- **Sealed packets between workspaces.** `leados.envoy.packet` v1: per-item SHA-256, Merkle root, identity bound to origin + recipient altitude + creation stamp, HMAC-SHA256 when the vault is unlocked (keyed **required** by default), plain mode printed as plain. Verification returns typed failures (`item-hash`, `merkle-root`, `packet-id`, `schema-ahead`, `signature`, `signature-required`, `altitude-mismatch`).
+- **Disclosure by projection.** `aggregate → unit → names → detail`; the receiving rank caps the class, the sender sees what was withheld and why, and the receiver is told how many items it did not get. No time-relative field enters an item hash.
+- **Ingest that never edits.** Attested copies (`imported` / `duplicate` / `diverged`); divergence opens one governed DACI decision per record per ISO week and leaves the local record byte-identical.
+- **Carriage in one transaction.** `carries` edges to the receiving seat and every ancestor; `reconciles` from packet to reconciliation decision; `tracks-followup` from packet to review.
+- **Five altitudes, five surfaces.** Desk / Packets / Carriage / Divergence / Certificate; aggregate-only CSV scope #80 `federated-exchange`; coverage refused below five spans.
+- **Limits, printed in the product.** Not authentication, not encryption, no person-level figure.
+
 ## Canonical app — Session 123 (Schema v89, additive `88 → 89`)
 
 ### Expectation Concordance Terminal (`#/concordance`, [ADR-0083](./docs/adr/0083-expectation-concordance.md), RULE-ECN-01..03, CSV #78)

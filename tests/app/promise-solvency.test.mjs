@@ -597,7 +597,7 @@ test('insights carry the domain, and the badge counts only what is urgent', () =
 });
 
 test('CSV scope #70 exports aggregates only, and a refusal is blank rather than zero', () => {
-  assert.equal(CSV_EXPORTS.length, 79);
+  assert.equal(CSV_EXPORTS.length, 80);
   const scope = CSV_EXPORTS.find((e) => e.key === 'promise-solvency');
   assert.ok(scope);
   const state = buildDemoState(NOW);

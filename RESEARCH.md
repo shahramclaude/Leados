@@ -6622,3 +6622,33 @@ An authenticated two-device seal (the current one is a UI guarantee); an instrum
 - Local Operating Seats remain auditable workspace declarations, not authenticated multi-user security; small-cell + complementary suppression prevents simple parent-minus-sibling subtraction on aggregate views, not differential privacy.
 - Fréchet joint delivery intervals bound unknown inter-span correlation honestly rather than inventing a copula where sample sizes are small; rates below `catchballFloorN = 5` are withheld as counts-only.
 - **Deliberately rejected:** unweighted `%` averaging across incommensurable KPIs; auto-accepting top-down goals without receiver consent; blaming frontline/manager execution when leading commitments held and the strategic hypothesis failed; person-level "alignment scores".
+
+
+## §107 — Session 125 domain hunt: the enterprise suite is the trust anchor nobody can verify, and "cross-company" data sharing ships as a vendor API (fetched 2026-11-04, [ADR-0085](docs/adr/0085-federated-envoy.md))
+
+**Method.** A structural reading of the 2026 people-and-strategy software category (Lattice, 15Five, Culture Amp, Leapsome, Betterworks, Workday, SAP SuccessFactors, Visier plus the post-Viva-Goals OKR field in `§106`) against the *distributed-systems* literature on verifiable exchange — Merkle trees and transparency logs (Merkle 1979; Crosby & Wallach 2009; RFC 6962 Certificate Transparency), zero-trust disclosure control and small-cell suppression (Sweeney 2002; CDC cell-suppression practice), and the economics of firm boundaries (Coase 1937; Holmström & Milgrom 1994; Laudon 1996 on boundary-spanning information systems). Vendor behaviour below is described from published product categories and public documentation; no vendor deployment was audited, so every vendor-specific statement is `[UNVERIFIED]`.
+
+### What the category ships — and what it structurally cannot do
+
+1. **"Cross-company" means "inside our tenant".** `[UNVERIFIED]` Enterprise suites offer portfolio roll-ups, partner portals and tenant-to-tenant integrations, but the packet is assembled, stored and re-served by the vendor. The customer cannot answer the three questions a board actually asks: *what exactly left our system, who was allowed to read it, and has it changed since?* The vendor is the trust anchor, and the customer has no independent verifier.
+   - *Altitude impact (`director` → `CEO`):* The chief signs a consolidated number they cannot check, produced from a document they cannot verify, in a format they cannot recompute.
+   - *LeadOS response:* `#/envoy` packets are files. Integrity is per item and per set; identity binds origin, recipient altitude and stamp; the HMAC uses the workspace's own session key and the packet prints whether it was keyed. Verification is **recomputation in the receiving workspace**, not a status field from a server.
+2. **Disclosure control is applied at the wrong end.** `[UNVERIFIED]` Sharing features typically send the record and mask it in the destination UI. Anything masked has been *transmitted*, so it lives in the destination's storage, backups and exports — a classic "policy at the read path" failure.
+   - *Altitude impact (`frontline`, `manager`):* A manager's honest note about a named person is inside a packet sent "aggregated" to a VP; the VP's export carries it anyway.
+   - *LeadOS response:* classes are declared per field and **projection happens at the source**; a class above the receiving rank is never written into the packet, and the sender is shown what was withheld and why. The receiving side is told how many items it did not get, so silence is never mistaken for completeness.
+3. **Disagreement is resolved by an ordering rule.** `[UNVERIFIED]` Sync and merge semantics — last-write-wins, source-of-truth designation, "master data" — treat divergence as a plumbing problem. In two honest workspaces it is not plumbing; it is *two records of what happened*, and the merge silently destroys one.
+   - *Altitude impact (`manager` → `VP / executive`):* A subsidiary's close and head office's close disagree by a week; the tool picks one, and the audit trail of the disagreement disappears.
+   - *LeadOS response:* a divergence is a first-class artefact. `RULE-ENV-02` opens exactly one governed DACI decision per origin record per ISO week, naming both hashes, and the local record is never edited. The question — "which version is the record of what happened?" — is answered by a named human, in the log, with the seal.
+4. **Small-n coverage is published anyway.** `[UNVERIFIED]` Adoption/"connectedness" dashboards report a percentage over however many units happen to exist, including three. A share over three spans is a description of three spans.
+   - *Altitude impact (`VP / executive`, `CEO`):* A fabricated-looking 100% next to a real 40% destroys trust in every other figure on the page.
+   - *LeadOS response:* coverage is refused below five spans with the refusal printed; above it, a Wilson 95% interval accompanies the share, and the numerator/denominator are shown (`envoyReport.coverage`).
+
+### What no vendor publishes — and what this session builds
+
+A packet a human can carry, whose **disclosure class is enforced by what bytes exist**, whose **identity cannot be re-dated**, whose ingest **cannot overwrite a local record**, and whose disagreement is a **governed decision with both hashes attached** — plus carriage to every ancestor written in the same atomic transaction, so the altitude above learns of the packet without anyone retyping it.
+
+### Honest limits & deliberately rejected
+
+- A packet is **not authentication**: the operating seat is a declaration, and whoever holds a workspace can sign what it holds. It is **not encryption**: confidentiality is achieved by refusing to write detail, not by hiding bytes — stated as the stronger claim it is, and printed in every certificate.
+- Keyed mode requires both sides to hold the same session key; this slice assumes it is arranged out of band. A rendezvous/key-exchange protocol that keeps the local-first promise is the next roadmap item, not a claim.
+- **Deliberately rejected:** vendor-mediated exchange; encryption theatre with the key stored beside the data; last-write-wins or timestamp reconciliation; receiving-end filtering; publishing a coverage share over three spans; any per-person send/compliance score.

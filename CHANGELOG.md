@@ -1,3 +1,10 @@
+## Changelog — 2026-11-04 · Session 125
+
+- **Added:** the Federated Envoy (`#/envoy`) — sealed, disclosure-scoped packets between LeadOS workspaces, verified by recomputation and ingested idempotently.
+- **Connected:** an ingest writes its chain-of-command carriage to every ancestor in the same transaction; a divergence opens one governed reconciliation decision instead of overwriting either record; an attested exposure above the declared floor opens one review. New graph node `exchangepacket`, relations `carries` and `reconciles`, `RULE-ENV-01..03` (65 rules / 65 contracts).
+- **Data & privacy:** additive collections on Schema v90 (no bump), scoped seat reads/actions, aggregate-only CSV scope #80 `federated-exchange`, identity-free certificate. Packets are not authentication and not encryption — detail is refused at the source, never hidden.
+- **Verification:** `tests/app/federated-envoy.test.mjs` 11/11; 590 tests across the 25 CSV-pinned suites; 122 graph/seat/propagation tests; typed-links and CSV pins updated. Full-run result is whatever CI reports on the PR.
+
 ## Changelog — 2026-11-04 · Session 124
 
 - **Added:** Hoshin Kanri & Catchball Cascade (`#/catchball`), with bilateral proposals/counters, receiver acceptance, capacity checks, bowler check-ins, settlement and optional same-currency budget commitments.

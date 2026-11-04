@@ -1,3 +1,7 @@
+## 2026-11-04 — The Federated Envoy (Session 125, Schema v90)
+
+Open `#/envoy` to build a sealed packet for the altitude above you, verify one a peer workspace sent, and ingest it as an attested copy. Every item is hashed, the set is Merkle-committed, and the packet's identity binds its origin, recipient altitude and creation stamp; a keyed HMAC is required by default. Detail above the receiving altitude's class is **refused at the source**, never hidden inside the file, and a packet that disagrees with a local record opens one governed reconciliation decision instead of overwriting either version. Carriage reaches every ancestor in the same transaction. CSV #80 `federated-exchange` and the certificate are aggregate-only. See [ADR-0085](./docs/adr/0085-federated-envoy.md).
+
 ## 2026-11-04 — Hoshin Catchball Cascade (Session 124, Schema v90)
 
 Open `#/catchball` to propose and negotiate span pacts, check capacity and budget headroom, compare leading and lagging outcomes, and inspect weakest-link roll-ups. The shared propagation spine records typed provenance and opens human review when divergence warrants it. CSV #79 and the executive brief are aggregate-oriented; declared local seats are not authenticated accounts. See [ADR-0084](./docs/adr/0084-hoshin-catchball-cascade.md) for boundaries and methodology.

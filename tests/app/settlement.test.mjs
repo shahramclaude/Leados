@@ -452,7 +452,7 @@ test('Out-of-sample Brier Skill Score is withheld below 5 graded samples and unl
 });
 
 test('CSV #65 privacy wall, demo seeding + clearDemo(), and WCAG axe-core accessibility across panels', async () => {
-  assert.equal(CSV_EXPORTS.length, 79);
+  assert.equal(CSV_EXPORTS.length, 80);
   const scope = CSV_EXPORTS.find((s) => s.key === 'settlement-attribution');
   assert.ok(scope);
 

@@ -105,6 +105,8 @@ import { missionRule } from './missionRules.js';
 import { altitudeRouterRule } from './altitudeRouterRules.js';
 import { catchballRule } from './catchballRules.js';
 import { concordanceRule } from './concordanceRules.js';
+// ADR-0085: the Federated Envoy.
+import { envoyRule } from './envoyRules.js';
 
 /**
  * One entry per rule, in the order the engine evaluates them. `writes` and
@@ -576,6 +578,13 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     writes: ['catchballMarkers', 'decisions', 'people', 'links'],
     emits: [],
     scansWorkspace: true,
+  },
+  {
+    rule: envoyRule,
+    module: 'envoyRules.js',
+    purpose: 'RULE-ENV-01 writes one `carries` edge from an ingested packet to the receiving leadership span AND every ancestor of it, in the same atomic transaction as the ingestion, so a span’s attested pack is visible at each altitude in the form that altitude may hold; RULE-ENV-02 opens exactly ONE governed DACI reconciliation decision per divergent origin record per ISO week and links it to the packet (`reconciles`) — the local record is never overwritten by a foreign packet; RULE-ENV-03 opens ONE governed review when a verified packet’s own attested open-critical share clears the declared floor and records an advisory marker below the 3-item floor where no share may be published. Every figure in every decision comes from the packet’s own attestation. Marker-idempotent, pausable by envoyAutoPropagate, an explicit scan always runs, and no rule edits a foreign record, rates a person or accepts an unverified packet.',
+    writes: ['exchangeMarkers', 'decisions', 'links'],
+    emits: [], scansWorkspace: true,
   },
   {
     rule: seatRule,

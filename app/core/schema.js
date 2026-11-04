@@ -141,6 +141,18 @@ import {
   normalizeCatchballMarkers,
   normalizeCatchballSettings,
 } from './domain/catchballSchema.js';
+// ADR-0085: the Federated Envoy. Three additive collections (the packet
+// ledger, the attested artefact ledger and the rule-idempotency markers) and
+// five clamped conventions. Like ADR-0076 and ADR-0082 this needs **no schema
+// version bump**: an older blob simply has none of these keys, and every one of
+// them normalises to "never exchanged a packet", which is the truth rather than
+// a fabricated empty exchange.
+import {
+  normalizeExchangeArtefacts,
+  normalizeExchangeMarkers,
+  normalizeExchangePackets,
+  normalizeEnvoySettings,
+} from './domain/envoySchema.js';
 import { addDays } from './time.js';
 import { validateWatchResponse } from './domain/watchResponse.js';
 import {
@@ -1365,6 +1377,12 @@ export const DEFAULT_SETTINGS = Object.freeze({
   catchballCellFloor: 3,
   catchballMaxFanout: 4,
   catchballAutoPropagate: true,
+  // ADR-0085: the Federated Envoy — declared conventions, all clamped.
+  envoyMaxItems: 60,
+  envoyRequireKeyedSignature: true,
+  envoyDivergenceReviewDays: 14,
+  envoyAttestationRiskFloorPct: 25,
+  envoyAutoPropagate: true,
   // ADR-0083: The Concordance Terminal — declared conventions, all clamped.
   concordanceAgreementFloorPct: 60,
   concordanceCellFloor: 5,
@@ -1650,6 +1668,17 @@ export const COLLECTIONS = [
   // until both sides are in) and the idempotency markers their three rules use.
   'expectationRounds',
   'concordanceMarkers',
+  // ADR-0085: the Federated Envoy. `exchangePackets` is the ledger of every
+  // packet this workspace built, verified, ingested or refused; the stored rows
+  // carry the manifest (item hashes and projected fields) so a verification can
+  // always be recomputed from the ledger, never from a cached verdict.
+  'exchangePackets',
+  // `exchangeArtefacts` holds the attested COPIES imported from verified
+  // packets. A foreign packet never edits a local record: an imported artefact
+  // is an attributed snapshot, and a disagreement opens a decision (RULE-ENV-02).
+  'exchangeArtefacts',
+  // Rule-idempotency markers (carriage, divergence, attested exposure).
+  'exchangeMarkers',
   'links',
   'portfolio',
   'events',
@@ -2299,6 +2328,7 @@ export function normalizeSettings(raw) {
     ...normalizeConcordanceSettings(s),
     ...normalizeSealSettings(s),
     ...normalizeCatchballSettings(s),
+    ...normalizeEnvoySettings(s),
   };
 }
 
@@ -6393,6 +6423,13 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // dropped; a round claiming to be closed with one side is reopened.
   state.expectationRounds = normalizeConcordanceRounds(raw.expectationRounds, warnings);
   state.concordanceMarkers = normalizeConcordanceMarkers(raw.concordanceMarkers, warnings);
+  // ADR-0085: packets and attested artefacts resolve before links so `carries`,
+  // `reconciles` and `tracks-followup` edges validate against real packet ids.
+  // A packet row this build cannot fully account for is dropped with a warning;
+  // a payload field outside the declared whitelist never survives ingestion.
+  state.exchangePackets = normalizeExchangePackets(raw.exchangePackets, warnings);
+  state.exchangeArtefacts = normalizeExchangeArtefacts(raw.exchangeArtefacts, warnings);
+  state.exchangeMarkers = normalizeExchangeMarkers(raw.exchangeMarkers);
   state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
 
   const events = asArray(raw, 'events', warnings).map((e, i) => ({

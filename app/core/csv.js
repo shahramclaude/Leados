@@ -39,6 +39,9 @@ import { routingCsvRows } from './domain/altitudeRouter.js';
 import { catchballCsvRows } from './domain/catchball.js';
 // ADR-0083: the Concordance Terminal's aggregate-only rows.
 import { concordanceCsvRows } from './domain/concordance.js';
+// ADR-0085: the Federated Envoy's aggregate-only ledger rows (no titles, no
+// origin ids, no purpose text, no recipient names).
+import { envoyCsvRows } from './domain/envoy.js';
 import { LEADER_ID } from './domain/chain.js';
 import { deprivationExposure, successionReport } from './domain/succession.js';
 import { observeFidelity } from './domain/fidelity.js';
@@ -918,6 +921,7 @@ export const CSV_EXPORTS = [
   // individual rating — an exported file can never reconstruct one person's answers.
   { key: 'expectation-concordance', label: 'Expectation concordance (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'expectation-concordance', description: 'One workspace row, one row per leadership altitude and one row per instrument dimension: closed rounds, assessed and refused pairs, pairs at or above the agreed floor, the Wilson 95% interval, mean weighted κ, diverged-pair counts, the declared floors and a verdict. NO person id, NO pair, NO round id, NO name, NO note and NO individual rating. Every refused figure is BLANK rather than zero.' },
   { key: 'catchball-cascade', label: 'Catchball cascade (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'catchball-cascade', description: 'Altitude and workspace aggregate counts, delivery calibration and intervals; no names, IDs, pact titles or negotiation notes.' },
+  { key: 'federated-exchange', label: 'Federated exchange (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'federated-exchange', description: 'One aggregate row per sealed packet plus a workspace summary: direction, receiving altitude and disclosure class, item and withheld counts, keyed/verified flags and failure codes. No titles, origin record ids, purpose text, workspace names or person records.' },
 ];
 
 function personLookup(state) {
@@ -5785,6 +5789,17 @@ function buildScopeTable(state, scope, now) {
         { key: 'cell_floor', header: 'cell_floor' },
         { key: 'verdict', header: 'verdict' },
       ];
+      return { columns, rows };
+    }
+    case 'federated-exchange': {
+      // CSV scope #80 (ADR-0085). Aggregate-only and refusal-honest: a packet
+      // with fewer than 3 items prints its attested counts as BLANK, never 0.
+      const rows = envoyCsvRows(state, { now, settings: state.settings || {} });
+      const columns = [
+        'row_kind', 'direction', 'recipient_altitude', 'recipient_class', 'status',
+        'items', 'withheld', 'omitted', 'keyed', 'verified', 'failures',
+        'attested_open_critical', 'attested_oldest_open_days', 'received_on', 'created_on',
+      ].map((key) => ({ key, header: key }));
       return { columns, rows };
     }
     case 'catchball-cascade': {

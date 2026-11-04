@@ -1,3 +1,15 @@
+## Session 125 outcome — 2026-11-04: The Federated Envoy — the hierarchy leaves the browser (Schema v90, ADR-0085, `RULE-ENV-01..03`, CSV #80)
+
+**The gap.** Every module so far — chain, seat, mandate, catchball, concordance — models the hierarchy *inside one store*. Real organisations are not one store, and leadership work crosses workspace boundaries daily. Until now it crossed them as a document with no provenance, no disclosure scope and no way to record disagreement except a merge.
+
+**What shipped.** `#/envoy`: five panels; packets projected by disclosure class at the source; SHA-256 per item → Merkle root → identity → HMAC (keyed required by default) with typed failures; idempotent ingest into attested copies that never edit the local record; `RULE-ENV-01` carriage to every ancestor in the same transaction; `RULE-ENV-02` one reconciliation decision per record per ISO week; `RULE-ENV-03` attested-exposure review above a declared floor and a marker below it. 65 rules / 65 contracts, aggregate-only CSV #80, identity-free certificate.
+
+**Altitudes served.** Frontline/team lead (what the altitude above may hold, and what is withheld), manager (compose to own span or leader, verdicts and divergences), director (coverage and both hashes), VP/executive (Wilson-bounded coverage refused below five spans, keyed-signature share, no titles), CEO/chief (certificate + CSV).
+
+**Honest limits.** Not authentication (the seat is a declaration), not encryption (detail is refused, not hidden), cannot prove a foreign record is true, and a keyed exchange needs the same session key on both sides arranged out of band.
+
+**Next up.** (1) A two-workspace key-exchange/rendezvous protocol that keeps the local-first promise — the honest prerequisite for keyed mode at scale. (2) Temporal disclosure testing for repeated packet releases (differencing a series of aggregates). (3) A programme-level federation reading: which spans in *this* organisation are actually connected to the spans above them, measured from carriage rather than declared.
+
 ## 2026-11-04 — Session 124: Hoshin Kanri & Catchball Cascade ([ADR-0084](docs/adr/0084-hoshin-catchball-cascade.md), Schema v90, `#/catchball`, RULE-HK-01..03, CSV #79)
 
 - **Implemented [frontline → CEO]:** Hoshin Kanri & Catchball Cascade Terminal (`#/catchball`) — closes the vertical gap between CEO Breakthrough Bets (`strategyBets`), multi-level reporting spans (`person.managerId` / `buildSeats`), measured person-day capacity (`buildLoadReport`), and commitment-accounting budgets (`evaluateBudget`). Five panels: X-Matrix, Catchball Workbench, Bowler & Watermelon, Calibration & Fan-Out, and Executive Brief.

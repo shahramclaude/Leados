@@ -35,6 +35,11 @@ const groups = [
   // ADR-0084: Hoshin Kanri & Catchball Cascade reviewed commands. Each handler
   // additionally enforces subtree + bilateral receiver consent inside catchballActions.
   ['negotiate-catchball', 'catchballPropose catchballCounter catchballAccept catchballCheckin catchballSettle catchballWithdraw catchballUpdateSettings catchballScan'],
+  // ADR-0085: the Federated Envoy. Composing a packet publishes this span's
+  // declared artefacts outward; ingesting one writes attested copies inward.
+  // Both are declared commands (deny-by-default), and the handlers additionally
+  // enforce the sending span and the receiving altitude inside envoyActions.
+  ['exchange-packets', 'envoyCompose envoyIngest envoyVerify envoySetConventions envoyScan'],
 ];
 export const API_RIGHTS = Object.freeze(Object.fromEntries(groups.flatMap(([right, names]) => names.split(' ').map((name) => [name, right]))));
 const FIRST_ID_COLLECTION = Object.freeze({
@@ -49,7 +54,7 @@ const FIRST_ID_COLLECTION = Object.freeze({
   approveCommsDraft: 'commsDrafts', editCommsDraft: 'commsDrafts', markCommsDraftSent: 'commsDrafts', dismissCommsDraft: 'commsDrafts',
   createActionBundle: 'cases', updateActionBundle: 'actionBundles', saveActionBundlePreview: 'actionBundles', commitActionBundle: 'actionBundles', withdrawActionBundle: 'actionBundles', archiveActionBundle: 'actionBundles',
 });
-const SAFE_READS = new Set(['concordanceRead', 'concordanceStats', 'concordanceBriefText', 'concordanceCsvRows', 'concordanceAttentionCount', 'routingRead', 'routingCalibration', 'routingBriefText', 'routingCsvRows', 'routingAttentionCount', 'routingAnalyze', 'seatRead', 'seatBriefText', 'missionRead', 'missionOpenCase', 'missionBriefText', 'missionHandoffText', 'setActiveSeat', 'missionCreateIntervention', 'saveMissionPreview', 'missionCommit', 'missionWithdraw', 'missionArchive', 'missionFreezeBrief', 'missionScan', 'mandateRead', 'mandateBriefText', 'previewMandate', 'sealRead', 'sealVerify', 'sealBriefText', 'catchballRead', 'catchballPreviewFeasibility', 'catchballBriefText', 'catchballCsvRows']);
+const SAFE_READS = new Set(['concordanceRead', 'concordanceStats', 'concordanceBriefText', 'concordanceCsvRows', 'concordanceAttentionCount', 'routingRead', 'routingCalibration', 'routingBriefText', 'routingCsvRows', 'routingAttentionCount', 'routingAnalyze', 'seatRead', 'seatBriefText', 'missionRead', 'missionOpenCase', 'missionBriefText', 'missionHandoffText', 'setActiveSeat', 'missionCreateIntervention', 'saveMissionPreview', 'missionCommit', 'missionWithdraw', 'missionArchive', 'missionFreezeBrief', 'missionScan', 'mandateRead', 'mandateBriefText', 'previewMandate', 'sealRead', 'sealVerify', 'sealBriefText', 'catchballRead', 'catchballPreviewFeasibility', 'catchballBriefText', 'catchballCsvRows', 'envoyRead', 'envoyPreview', 'envoyPacketText', 'envoyIdentity', 'envoyBriefText', 'envoyCsvRows', 'envoyAttentionCount']);
 const refusal = (reason) => ({ ok: false, code: 'scope-refusal', error: reason, field: 'scope' });
 
 function payloadPeople(args) {
@@ -147,6 +152,10 @@ export function workspaceRouteVerdict(route, seat) {
   // above the manager rank, so a declared seat may open it directly.
   // ADR-0082: the Integrity surface is a reviewed scoped surface — its reads go
   // through sealRead, which collapses out-of-subtree spans to aggregate rows.
-  if (['mission', 'today', 'seat', 'routing', 'seal', 'catchball'].includes(route)) return base;
+  // ADR-0085: the Federated Envoy completed its seat-scoped read audit — its
+  // report filters packets to the operating subtree, a declared seat cannot read
+  // a packet addressed to a shallower disclosure class, and an ingested artefact
+  // is an attested copy that never edits a local record.
+  if (['mission', 'today', 'seat', 'routing', 'seal', 'catchball', 'envoy'].includes(route)) return base;
   return { allow: false, reason: 'This legacy module has not yet completed its seat-scoped read audit. Its work still contributes to Mission Control. Open the scoped command center, or explicitly hand over to the local operator view for the full legacy workspace.' };
 }

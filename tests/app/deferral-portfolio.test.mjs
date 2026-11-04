@@ -716,7 +716,7 @@ describe('CSV scope #59: deferral-portfolio', () => {
   test('the scope is registered after the per-call terminal', () => {
     const scope = CSV_EXPORTS.find((s) => s.key === 'deferral-portfolio');
     assert.ok(scope, 'scope #59 exists');
-    assert.equal(CSV_EXPORTS.length, 79);
+    assert.equal(CSV_EXPORTS.length, 80);
     const droIndex = CSV_EXPORTS.findIndex((s) => s.key === 'deferral-option');
     assert.ok(CSV_EXPORTS.indexOf(scope) > droIndex);
   });

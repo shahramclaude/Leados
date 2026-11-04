@@ -29,6 +29,10 @@ import { catchballAttentionCount } from './core/domain/catchball.js';
 // performance review, measured pair by pair and rolled up the tree.
 import { renderConcordance } from './views/concordance.js';
 import { concordanceAttentionCount } from './core/domain/concordance.js';
+// ADR-0085: the Federated Envoy — sealed, disclosure-scoped packets between
+// workspaces, so a hierarchy can exist across installations without a server.
+import { renderEnvoy } from './views/envoy.js';
+import { envoyAttentionCount } from './core/domain/envoy.js';
 import { renderResponses } from './views/responses.js';
 import { renderActionBundles } from './views/actionBundles.js';
 import { bundleAttentionCount } from './core/domain/actionBundles.js';
@@ -201,6 +205,10 @@ export const NAV = [
     // transaction, hash-chained from genesis, keyed by the vault passphrase
     // when unlocked, verified on demand, attested up the chain of command.
     { route: 'seal', label: 'Integrity & seals', icon: '🛡', badge: 'seal' },
+    // ADR-0085: the Envoy. Every other screen assumes one workspace; this one
+    // moves a span's attested pack to the altitude above it, sealed and
+    // disclosure-scoped, so the hierarchy is real across installations.
+    { route: 'envoy', label: 'Sealed exchange', icon: '⇋', badge: 'envoy' },
     { route: 'today', label: 'Today', icon: '◎' },
     { route: 'responses', label: 'Response studio', icon: '⌁', badge: 'responses' },
     { route: 'bundles', label: 'Action bundles', icon: '⊞', badge: 'bundles' },
@@ -330,6 +338,7 @@ const RENDERERS = {
   routing: (ctx) => renderAltitudeRouter(ctx),
   catchball: (ctx) => renderCatchball(ctx),
   concordance: (ctx) => renderConcordance(ctx),
+  envoy: (ctx) => renderEnvoy(ctx),
   responses: (ctx) => renderResponses(ctx),
   bundles: (ctx) => renderActionBundles(ctx),
   attribution: (ctx) => renderSettlement(ctx),
@@ -517,6 +526,13 @@ export function parseRoute(hash) {
     'concordance': 'concordance', 'expectation-concordance': 'concordance',
     'two-gauges': 'concordance', 'expectations': 'concordance', 'standard': 'concordance',
     'gauge': 'concordance', 'definition-of-done': 'concordance', 'kappa': 'concordance',
+    // ADR-0085: the Envoy's own aliases. None may shadow an existing route —
+    // 'seal' stays the Sealed Spine, 'supply' stays the evidence chain, and
+    // 'export'/'import' belong to workspace data, not to a packet exchange.
+    'envoy': 'envoy', 'sealed-exchange': 'envoy', 'packet': 'envoy', 'packets': 'envoy',
+    'federation': 'envoy', 'federated': 'envoy', 'exchange': 'envoy', 'inter-workspace': 'envoy',
+    'attest': 'envoy', 'attestation-packet': 'envoy', 'merkle': 'envoy', 'handoff-pack': 'envoy',
+    'cross-workspace': 'envoy', 'span-pack': 'envoy',
     'routing': 'routing', 'altitude-router': 'routing', 'router': 'routing',
     'auto-route': 'routing', 'where-does-this-go': 'routing', 'route-note': 'routing',
     'seat': 'seat', 'operating-seat': 'seat', 'altitude-lens': 'seat',
@@ -820,6 +836,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       routing: routingAttentionCount(state, at, state.settings),
       catchball: catchballAttentionCount(state, at, state.settings),
       concordance: concordanceAttentionCount(state, at, state.settings),
+      envoy: envoyAttentionCount(state, { now: at, settings: state.settings }),
       // ADR-0082: the badge counts chain breaks only — a valid chain is not noise.
       seal: sealAttentionCount(state),
       // Schema v32: drafts written from case facts that still await a human.
@@ -1244,6 +1261,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       routing: 'Altitude Router — natural-language intake classified into modules and the correct organizational altitude, with disclosure-safe roll-up to every leadership level',
       catchball: 'Hoshin Kanri & Catchball Cascade — negotiated strategy deployment',
       concordance: 'Expectation Concordance — “meets expectations” treated as a measurement instrument: two sealed sides, six dimensions, weighted κ / AC1 / PABAK / Bland–Altman agreement, a governed re-contracting decision on divergence and a typed roll-up to every leadership span',
+      envoy: 'Sealed exchange — how a span’s pack leaves its own browser: projected at the receiving altitude’s disclosure class, committed with a per-item SHA-256 and a Merkle root, signed keyed when the vault is unlocked, verified by the receiver before a single field is stored, ingested idempotently, and turned into a governed reconciliation decision when two workspaces disagree',
       responses: 'Response studio — rehearse and adopt a coordinated leadership response',
       bundles: 'Action bundles — review, adopt and safely withdraw coordinated work',
       attribution: 'Outcome attribution — Earned Schedule, clearance bottlenecks and variance settlement',
