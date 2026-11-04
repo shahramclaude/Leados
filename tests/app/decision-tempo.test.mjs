@@ -605,7 +605,6 @@ test('schema v27 → v28 is additive and invents no timing evidence', () => {
   assert.equal(migrated.raw.schemaVersion, 95);
   assert.deepEqual(migrated.applied.at(-1), '94 → 95');
   assert.equal(migrated.raw.schemaVersion, 95);
-  assert.deepEqual(migrated.applied.at(-1), '90 → 91');
   assert.equal(migrated.raw.decisions[0].decidedOn, undefined, 'a historical call is not given a made-up moment');
   assert.deepEqual(migrated.raw.tempoSchedules, old.tempoSchedules);
   assert.equal(migrated.raw.settings.tempoDelegatedMaxDays, 7);

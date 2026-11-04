@@ -162,7 +162,6 @@ test('Schema v58 is additive: a v57 workspace gains two empty collections and no
   assert.equal(migrated.raw.schemaVersion, 95);
   assert.equal(migrated.applied.at(-1), '94 → 95');
   assert.equal(migrated.raw.schemaVersion, 95);
-  assert.equal(migrated.applied.at(-1), '90 → 91');
   assert.deepEqual(migrated.raw.autopilotPolicies, []);
   assert.deepEqual(migrated.raw.autopilotRuns, []);
 

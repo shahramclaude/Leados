@@ -158,7 +158,6 @@ describe('Schema v62 — additive and honest', () => {
     assert.equal(migrated.raw.schemaVersion, 95);
     assert.equal(migrated.applied.at(-1), '94 → 95');
     assert.equal(migrated.raw.schemaVersion, 95);
-    assert.equal(migrated.applied.at(-1), '90 → 91');
     assert.deepEqual(migrated.raw.performanceConcerns, []);
   });
 
