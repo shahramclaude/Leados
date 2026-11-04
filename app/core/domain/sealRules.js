@@ -1,5 +1,5 @@
 /**
- * app/core/domain/sealRules.js — the Sealed Spine's post-commit rule (ADR-0081).
+ * app/core/domain/sealRules.js — the Sealed Spine's post-commit rule (ADR-0082).
  *
  * Registered LAST on the shared spine (after seatRule), so the seal of a
  * transaction covers everything every other module's rules wrote in that same

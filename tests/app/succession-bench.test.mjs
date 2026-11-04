@@ -170,7 +170,7 @@ function bootDocument() {
 /* ---------------------------------------------------------------- 1. schema */
 
 test('1. Schema v83 is additive and fail-closed', () => {
-  assert.equal(SCHEMA_VERSION, 87);
+  assert.equal(SCHEMA_VERSION, 88);
   assert.equal(typeof MIGRATIONS[82], 'function', 'the 82→83 migration exists');
   const upgraded = MIGRATIONS[82]({ schemaVersion: 82, people: [] });
   assert.equal(upgraded.schemaVersion, 83);
@@ -186,7 +186,7 @@ test('1. Schema v83 is additive and fail-closed', () => {
   assert.deepEqual(empty.settings.successionDailyCosts, {});
   // Round-trip through the normalizer and back to the same version.
   const normalized = normalizeState({ ...empty, schemaVersion: 82 }, { now: NOW }).state;
-  assert.equal(normalized.schemaVersion, 87);
+  assert.equal(normalized.schemaVersion, 88);
   assert.deepEqual(normalized.successionReadings, []);
 
   // A daily cost needs a currency; a bad amount is dropped, not defaulted.
@@ -567,7 +567,11 @@ test('8. one committed delegation runs the spine: certificate + multi-altitude r
 });
 
 test('8b. a declared seat rolls the bench decision up the chain in the same transaction', () => {
-  const state = fixture({ activeSeatId: 'mgr1' });
+  // `ic6` reports to `mgr2`. A seat declared at `mgr1` therefore CANNOT name
+  // them — the seat boundary correctly refuses a peer-span write and says to
+  // escalate through the common leader. Declaring that common leader (`dir1`)
+  // is the honest way to exercise this roll-up without weakening permissions.
+  const state = fixture({ activeSeatId: 'dir1' });
   const store = newStore(state);
   const api = createApi(store, { now: () => NOW });
   const beforeDecisions = (store.state.decisions || []).length;

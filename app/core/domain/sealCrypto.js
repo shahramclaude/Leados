@@ -1,6 +1,6 @@
 /**
  * app/core/domain/sealCrypto.js — synchronous SHA-256 / HMAC-SHA256 for the
- * Sealed Spine (ADR-0081).
+ * Sealed Spine (ADR-0082).
  *
  * WHY PURE JS AND NOT WebCrypto: the post-commit rule spine is synchronous
  * (ADR-0008 — rules run inside the store transaction), and `crypto.subtle`

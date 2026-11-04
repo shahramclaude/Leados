@@ -1,9 +1,11 @@
 /**
- * tests/app/seal-chain.test.mjs — ADR-0081, Session 121: the Sealed Spine
+ * tests/app/seal-chain.test.mjs — ADR-0082, Session 122: the Sealed Spine
  * (tamper-evident audit chain) + altitude-routed intake.
  *
  * The claims this suite makes, in order:
- *   1. Settings normalize with safe defaults and need NO schema bump (v87).
+ *   1. Settings normalize with safe defaults and need NO schema bump of their
+ *      own (repo at v88 after ADR-0081's Altitude Router; this feature adds no
+ *      migration on top).
  *   2. INERTNESS: with sealing not enabled, an operational commit appends no
  *      `audit.seal` event — existing behaviour is byte-for-byte unchanged.
  *   3. Enabling sealing appends exactly one seal per committed transaction;
@@ -96,8 +98,8 @@ const sealEventsOf = (state) => state.events.filter((e) => e.type === SEAL_EVENT
 
 /* ------------------------------------------------------------ 1. settings */
 
-test('1. seal settings normalize with safe defaults; schema stays v87', () => {
-  assert.equal(SCHEMA_VERSION, 87, 'ADR-0081 deliberately needs no schema bump');
+test('1. seal settings normalize with safe defaults; no schema bump of its own', () => {
+  assert.equal(SCHEMA_VERSION, 88, 'ADR-0082 deliberately needs no schema bump beyond v88');
   const s = normalizeSettings({});
   assert.equal(s.sealEnabled, false);
   assert.equal(s.sealAutoPropagate, true);
@@ -108,7 +110,7 @@ test('1. seal settings normalize with safe defaults; schema stays v87', () => {
   assert.equal(clamped.sealMode, 'auto', 'unknown mode falls back');
   const normalized = normalizeState({ ...createEmptyState(NOW.toISOString()), settings: { sealEnabled: true } }, { now: NOW });
   assert.equal(normalized.state.settings.sealEnabled, true);
-  assert.equal(normalized.state.schemaVersion, 87);
+  assert.equal(normalized.state.schemaVersion, 88);
 });
 
 /* ------------------------------------------------- 2-4. sealing behaviour */

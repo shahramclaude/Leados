@@ -112,18 +112,18 @@ function deliver(app, id, to = 'lead1', extra = {}) {
 /* ---------------------------------------------------------------- 1. schema */
 
 test('1. schema v84 is additive and fail-closed', () => {
-  assert.equal(SCHEMA_VERSION, 87);
+  assert.equal(SCHEMA_VERSION, 88);
   const migrated = migrate({ schemaVersion: 83, people: [] });
-  assert.equal(migrated.raw.schemaVersion, 87);
+  assert.equal(migrated.raw.schemaVersion, 88);
   assert.deepEqual(migrated.raw.mandates, []);
-  assert.equal(migrated.applied.at(-1), '86 → 87');
+  assert.equal(migrated.applied.at(-1), '87 → 88');
   assert.equal(typeof MIGRATIONS[83], 'function');
   const empty = createEmptyState(NOW.toISOString());
   assert.deepEqual(empty.mandates, []);
   assert.equal(empty.settings.mandateAutoPropagate, true);
   assert.equal(LINK_ENTITY_COLLECTIONS.mandate, 'mandates');
   for (const rel of ['authorizes', 'binds-receiver', 'recovers-authority']) assert.ok(LINK_RELATIONS.includes(rel));
-  // ADR-0081: seatRule reads the finished workspace at -2; sealRule runs last.
+  // ADR-0082: seatRule reads the finished workspace at -2; sealRule runs last.
   assert.equal(DEFAULT_POST_COMMIT_RULES.at(-2).name, 'seatRule');
   assert.equal(DEFAULT_POST_COMMIT_RULES.at(-1).name, 'sealRule');
   assert.ok(DEFAULT_POST_COMMIT_RULES.some((r) => r.name === 'mandateRule'));

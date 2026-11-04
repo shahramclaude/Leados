@@ -29,7 +29,7 @@ import { omitPropagationLineageReferences, scrubPropagationLineageReferences } f
 import { EW_SERIES_BY_ID } from './domain/watchRegistry.js';
 import { isCandidateAuditEvent } from './domain/export-governance.js';
 import { runPostCommitRules } from './domain/postCommit.js';
-// ADR-0081: the Sealed Spine. Seal events are exempt from the event-log
+// ADR-0082: the Sealed Spine. Seal events are exempt from the event-log
 // retention cap (the chain head must survive), and the session seal key is
 // derived from the vault passphrase at unlock/enable/change time — memory only.
 import { SEAL_EVENTS, SEAL_LIMITS } from './domain/sealRegistry.js';
@@ -687,10 +687,10 @@ export function createStore(options = {}) {
   }
 
   /**
-   * ADR-0081: retention caps. Ordinary events cap at EVENT_CAP exactly as
+   * ADR-0082: retention caps. Ordinary events cap at EVENT_CAP exactly as
    * before; `audit.seal` events are exempt (they are the chain itself) and
    * carry their own, higher cap. On workspaces that never seal, the behaviour
-   * is byte-for-byte the pre-0081 splice.
+   * is byte-for-byte the pre-0082 splice.
    */
   function capEvents(draft) {
     let events = draft.events;

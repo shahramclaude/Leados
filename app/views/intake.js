@@ -217,7 +217,7 @@ function renderCategoryPanel(analysis) {
 }
 
 /**
- * ADR-0081: the altitude routing banner. The same reporting tree the Command
+ * ADR-0082: the altitude routing banner. The same reporting tree the Command
  * Chain and Altitude Lens use decides which seat a note belongs to: the LCA of
  * the managers of the people named (or the declared seat / workspace leader),
  * with that altitude's own routes, hand-up rules and disclosure level shown.

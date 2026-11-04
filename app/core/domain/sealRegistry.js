@@ -1,6 +1,6 @@
 /**
  * app/core/domain/sealRegistry.js — constants for the Sealed Spine
- * (ADR-0081, Session 121).
+ * (ADR-0082, Session 122).
  *
  * The Sealed Spine turns the existing append-only event log into a
  * hash-chained, tamper-evident audit trail. One `audit.seal` event is appended

@@ -102,6 +102,7 @@ import { successionRule } from './successionRules.js';
 import { mandateRule } from './mandateRules.js';
 import { authorityCalibrationRule } from './authorityCalibrationRules.js';
 import { missionRule } from './missionRules.js';
+import { altitudeRouterRule } from './altitudeRouterRules.js';
 
 /**
  * One entry per rule, in the order the engine evaluates them. `writes` and
@@ -559,6 +560,9 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
   },
   {
     rule: missionRule, module: 'missionRules.js', purpose: 'RULE-MIS-01: a frozen identity-free brief opens one governed review and typed summarizes-span provenance to child leadership seats. Runs before the final vertical fan-out.', writes: ['decisions', 'links'], emits: [], scansWorkspace: false,
+  },
+  {
+    rule: altitudeRouterRule, module: 'altitudeRouterRules.js', purpose: 'RULE-AR-01 writes one routes-through edge, one discloses-to edge to the owning seat and one rolls-up-to edge per leadership ancestor (frontline → manager → director → executive) in the SAME atomic transaction as the adopted case; RULE-AR-02 opens one governed DACI re-routing decision per detected-altitude cell below the reliability floor per ISO week and fans it up every ancestor; RULE-AR-03 writes one advisory maturity marker. Marker-idempotent, pausable, and never auto-corrects a plan, setting or reporting line.', writes: ['altitudeRoutingMarkers', 'decisions', 'links'], emits: [], scansWorkspace: true,
   },
   {
     rule: seatRule,

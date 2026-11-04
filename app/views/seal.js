@@ -1,5 +1,5 @@
 /**
- * app/views/seal.js — the Integrity & Seals surface (ADR-0081, `#/seal`).
+ * app/views/seal.js — the Integrity & Seals surface (ADR-0082, `#/seal`).
  *
  * One screen that answers, for every altitude: has anything in this workspace's
  * append-only event log been altered since it was committed? It shows the

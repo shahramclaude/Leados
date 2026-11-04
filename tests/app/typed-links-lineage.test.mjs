@@ -68,10 +68,10 @@ function traceRow({ id = 'trace-test', entity = 'scorecard', entityId = 'scoreca
 }
 
 test('schema v48 migrates additively without guessing successful history and normalizes a bounded content-free trace', () => {
-  assert.equal(SCHEMA_VERSION, 87);
+  assert.equal(SCHEMA_VERSION, 88);
   const previousLedger = [traceRow({ id: 'untrusted-v47-history' })];
   const migrated = migrate({ schemaVersion: 47, propagationLineage: previousLedger, scorecards: [] });
-  assert.deepEqual(migrated.applied, ['47 → 48', '48 → 49', '49 → 50', '50 → 51', '51 → 52', '52 → 53', '53 → 54', '54 → 55', '55 → 56', '56 → 57', '57 → 58', '58 → 59', '59 → 60', '60 → 61', '61 → 62', '62 → 63', '63 → 64', '64 → 65', '65 → 66', '66 → 67', '67 → 68', '68 → 69', '69 → 70', '70 → 71', '71 → 72', '72 → 73', '73 → 74', '74 → 75', '75 → 76', '76 → 77', '77 → 78', '78 → 79', '79 → 80', '80 → 81', '81 → 82', '82 → 83', '83 → 84', '84 → 85', '85 → 86', '86 → 87']);
+  assert.deepEqual(migrated.applied, ['47 → 48', '48 → 49', '49 → 50', '50 → 51', '51 → 52', '52 → 53', '53 → 54', '54 → 55', '55 → 56', '56 → 57', '57 → 58', '58 → 59', '59 → 60', '60 → 61', '61 → 62', '62 → 63', '63 → 64', '64 → 65', '65 → 66', '66 → 67', '67 → 68', '68 → 69', '69 → 70', '70 → 71', '71 → 72', '72 → 73', '73 → 74', '74 → 75', '75 → 76', '76 → 77', '77 → 78', '78 → 79', '79 → 80', '80 → 81', '81 → 82', '82 → 83', '83 → 84', '84 → 85', '85 → 86', '86 → 87', '87 → 88']);
   assert.deepEqual(migrated.raw.propagationLineage, [], 'the migration never infers or imports a pre-v48 success ledger');
 
   const rawTrace = traceRow();
@@ -89,7 +89,7 @@ test('schema v48 migrates additively without guessing successful history and nor
     propagationLineage: [rawTrace],
   }, { now: NOW });
   const [stored] = normalized.state.propagationLineage;
-  assert.equal(normalized.state.schemaVersion, 87);
+  assert.equal(normalized.state.schemaVersion, 88);
   assert.equal(normalized.state.propagationLineage.length, 1);
   assert.deepEqual(stored.steps[0].changedCollections, ['decisions', 'links']);
   assert.equal(stored.steps[0].links.length, 1, 'confidential typed edges are rejected');
@@ -504,6 +504,40 @@ test('every registered link type survives schema normalization/reload and resolv
     challengeNotes: [],
   }];
 
+  // Schema v84 / v87 / v88: the three newest first-class graph nodes also need
+  // a real fixture row. The test iterates EVERY declared link type, so a new
+  // type without a record here is a latent failure even when normalization and
+  // resolution are correct.
+  raw.mandates = [{
+    id: 'mandate-link-fixture', sourceType: 'case', sourceId: sourceCase.id,
+    fromSeatId: 'mgr1', toSeatId: 'mgr2', status: 'proposed',
+    outcome: 'A written statutory ledger close runbook', actions: ['commit'],
+    effortDays: 5, expiresOn: '2026-11-30', createdAt: NOW_ISO,
+    history: [{ at: NOW_ISO, status: 'proposed', actorSeatId: 'mgr1', note: 'Fixture proposal.' }],
+  }];
+  raw.missionBriefs = [{
+    id: 'mission-brief-link-fixture', seatId: 'mgr1', rank: 2, altitude: 'manager',
+    createdAt: NOW_ISO, reviewOn: '2026-11-12', sourceRevision: 1,
+    fingerprint: 'a1b2c3d4e5f60718',
+    open: { lower: 2, upper: 2 }, overdue: { lower: 0, upper: 0 }, horizonDebt: { lower: 0, upper: 0 },
+    cells: [], sources: [],
+  }];
+  raw.altitudeRoutingPlans = [{
+    id: 'routing-plan-link-fixture', status: 'analyzed', createdAt: NOW_ISO, updatedAt: NOW_ISO,
+    engineVersion: 'altitude-router-2026.11-v1',
+    sourceHash: 'b2c3d4e5f6071829', fingerprint: 'c3d4e5f607182930',
+    sourceText: '', sourceLength: 0,
+    detectedAltitudeKey: 'frontline', confirmedAltitudeKey: null, gradedAltitudeKey: null,
+    altitudeConfidence: 0.6, altitudeBand: 'medium', altitudeMargin: 0.2,
+    evidenceWeight: 4, altitudeEvidence: [], refusalReasons: [], refused: false,
+    needsReview: false, stakesReviewRequired: false, privacyBlocked: false,
+    stakesFloorRank: 0, ownerSeatId: 'mgr1', ownerSeatLabel: 'Billing', effectiveRank: 1,
+    seatPath: [{ seatId: 'mgr1', rank: 1, altitudeKey: 'frontline', label: 'Shift lead', disclosure: 'names', horizonDays: 7 }],
+    moduleRoutes: [], primaryCategoryId: null, primaryModule: '', primaryRoute: '',
+    confirmedCaseId: null, confirmedOn: null, gradedOn: null, gradeNote: '',
+    correct: null, overrideCorrect: null,
+  }];
+
   const targetIdFor = (type) => {
     if (type === 'case') return otherCase.id;
     if (type === 'lesson') return raw.retros.flatMap((retro) => retro.lessons || [])[0].id;
@@ -542,7 +576,8 @@ test('every registered link type survives schema normalization/reload and resolv
       feedback: ['item', resolved.id], onboarding: ['plan', resolved.id], readiness: ['seat', resolved.raw.seat],
       premise: ['premise', resolved.id], comms: ['draft', resolved.id],
       recognition: ['item', resolved.id], portfolio: ['item', resolved.id], forecast: ['challenge', resolved.id],
-      tempo: ['schedule', resolved.id], strategy: ['bet', resolved.id], impact: ['study', resolved.id],
+      tempo: ['schedule', resolved.id], retention: ['plan', resolved.id],
+      strategy: ['bet', resolved.id], impact: ['study', resolved.id],
       premiseOutcome: ['outcome', resolved.id], dynamics: ['experiment', resolved.id], series: ['series', resolved.id],
       alert: ['alert', resolved.id], scorecard: ['card', resolved.id], capital: ['policy', resolved.id],
       fidelity: ['plan', resolved.id],
@@ -643,9 +678,20 @@ test('every registered link type survives schema normalization/reload and resolv
       // succession readings panel, so a certificate task can navigate back to
       // the claim that produced it.
       successionreading: ['reading', resolved.id],
+      // Schema v87: an identity-free mission brief is addressed by query on
+      // the mission terminal's brief panel.
+      missionbrief: ['brief', resolved.id],
+      // Schema v88: a routing plan is addressed by query on the Altitude
+      // Router's ledger panel; no note text travels in the URL.
+      routingplan: ['plan', resolved.id],
     }[link.targetType];
     if (focusParam) {
       assert.equal(query.get(focusParam[0]), focusParam[1], `${link.targetType} route carries an encoded, exact focus ID`);
+    } else if (link.targetType === 'mandate') {
+      // Honest known gap: a decision-rights contract resolves to its terminal,
+      // not yet to a single focused contract. The terminal is navigable; the
+      // exact-record focus is a future route contract, not a fake query param.
+      assert.equal(routePath, '/mandates', 'a decision-rights contract resolves to the mandates terminal');
     } else if (link.targetType === 'candidate') {
       assert.equal(query.get('candidate'), resolved.id, 'candidate route carries the exact candidate ID');
       assert.equal(routeSegments.at(-1), resolved.raw.reqId, 'candidate route also names its owning requisition');

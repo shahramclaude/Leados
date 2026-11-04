@@ -21,7 +21,10 @@ const groups = [
   ['approve-capital', 'addBudgetLine updateBudgetLine recordBudgetActual releaseBudgetLine deleteBudgetLine'],
   ['coordinate-intervention', 'createActionBundle updateActionBundle saveActionBundlePreview commitActionBundle withdrawActionBundle archiveActionBundle'],
   ['declare-seat', 'setActiveSeat scanSeats'],
-  // ADR-0081: the Sealed Spine. sealScan writes only an audit event (a
+  // ADR-0081: reviewed altitude routing. Every method is declared; an unknown
+  // name still fails closed. Reads are safe; writes pass the person/span gate.
+  ['route-intake', 'routingSaveDraft routingConfirm routingDismiss routingGrade routingScan routingSetConventions'],
+  // ADR-0082: the Sealed Spine. sealScan writes only an audit event (a
   // verified read with a trace); the pure reads are SAFE_READS below. Enabling
   // or pausing sealing is operator-only and stays fail-closed under a seat.
   ['audit-seal', 'sealScan'],
@@ -39,7 +42,7 @@ const FIRST_ID_COLLECTION = Object.freeze({
   approveCommsDraft: 'commsDrafts', editCommsDraft: 'commsDrafts', markCommsDraftSent: 'commsDrafts', dismissCommsDraft: 'commsDrafts',
   createActionBundle: 'cases', updateActionBundle: 'actionBundles', saveActionBundlePreview: 'actionBundles', commitActionBundle: 'actionBundles', withdrawActionBundle: 'actionBundles', archiveActionBundle: 'actionBundles',
 });
-const SAFE_READS = new Set(['seatRead', 'seatBriefText', 'missionRead', 'missionOpenCase', 'missionBriefText', 'missionHandoffText', 'setActiveSeat', 'missionCreateIntervention', 'saveMissionPreview', 'missionCommit', 'missionWithdraw', 'missionArchive', 'missionFreezeBrief', 'missionScan', 'mandateRead', 'mandateBriefText', 'previewMandate', 'sealRead', 'sealVerify', 'sealBriefText']);
+const SAFE_READS = new Set(['routingRead', 'routingCalibration', 'routingBriefText', 'routingCsvRows', 'routingAttentionCount', 'routingAnalyze', 'seatRead', 'seatBriefText', 'missionRead', 'missionOpenCase', 'missionBriefText', 'missionHandoffText', 'setActiveSeat', 'missionCreateIntervention', 'saveMissionPreview', 'missionCommit', 'missionWithdraw', 'missionArchive', 'missionFreezeBrief', 'missionScan', 'mandateRead', 'mandateBriefText', 'previewMandate', 'sealRead', 'sealVerify', 'sealBriefText']);
 const refusal = (reason) => ({ ok: false, code: 'scope-refusal', error: reason, field: 'scope' });
 
 function payloadPeople(args) {
@@ -132,8 +135,11 @@ export function guardApi(api, store) {
 export function workspaceRouteVerdict(route, seat) {
   const base = routeVerdict(route, seat);
   if (!base.allow || !seat || seat.fullAccess || seat.readOnly) return base;
-  // ADR-0081: the Integrity surface is a reviewed scoped surface — its reads go
+  // ADR-0081: the Altitude Router completed its seat-scoped read audit — its
+  // read model filters plans to the operating subtree and withholds item detail
+  // above the manager rank, so a declared seat may open it directly.
+  // ADR-0082: the Integrity surface is a reviewed scoped surface — its reads go
   // through sealRead, which collapses out-of-subtree spans to aggregate rows.
-  if (['mission', 'today', 'seat', 'seal'].includes(route)) return base;
+  if (['mission', 'today', 'seat', 'routing', 'seal'].includes(route)) return base;
   return { allow: false, reason: 'This legacy module has not yet completed its seat-scoped read audit. Its work still contributes to Mission Control. Open the scoped command center, or explicitly hand over to the local operator view for the full legacy workspace.' };
 }

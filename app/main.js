@@ -20,6 +20,9 @@ import { scopedViewState, safeSeatContext } from './core/domain/viewScope.js';
 import { workspaceRouteVerdict } from './core/domain/accessGateway.js';
 import { runActionBundleRehearsal } from './ui/response-worker.js';
 import { renderIntake } from './views/intake.js';
+// ADR-0081: the Altitude Router — natural language in, module × altitude out.
+import { renderAltitudeRouter } from './views/altitudeRouter.js';
+import { routingAttentionCount } from './core/domain/altitudeRouter.js';
 import { renderResponses } from './views/responses.js';
 import { renderActionBundles } from './views/actionBundles.js';
 import { bundleAttentionCount } from './core/domain/actionBundles.js';
@@ -163,7 +166,7 @@ import { renderSolvency } from './views/solvency.js';
 import { solvencyAttentionCount } from './core/domain/solvency.js';
 import { renderSceptic } from './views/sceptic.js';
 import { scepticAttentionCount } from './core/domain/sceptic.js';
-// ADR-0081: the Sealed Spine — tamper-evident audit chain + altitude attestation.
+// ADR-0082: the Sealed Spine — tamper-evident audit chain + altitude attestation.
 import { renderSeal } from './views/seal.js';
 import { sealAttentionCount } from './core/domain/sealChain.js';
 
@@ -188,7 +191,7 @@ export const NAV = [
     // contracts against delivered outcomes — which spans reliably hold which
     // rights — at every altitude, without rating a person.
     { route: 'authority-calibration', label: 'Authority calibration', icon: '⚖', badge: 'authorityCalibration' },
-    // ADR-0081: the Sealed Spine. One audit.seal event per committed
+    // ADR-0082: the Sealed Spine. One audit.seal event per committed
     // transaction, hash-chained from genesis, keyed by the vault passphrase
     // when unlocked, verified on demand, attested up the chain of command.
     { route: 'seal', label: 'Integrity & seals', icon: '🛡', badge: 'seal' },
@@ -198,6 +201,9 @@ export const NAV = [
     { route: 'attribution', label: 'Outcome attribution', icon: '⚖', badge: 'attribution' },
     { route: 'counterfactual', label: 'Counterfactual policy', icon: '⟲', badge: 'counterfactual' },
     { route: 'intake', label: 'Intake triage', icon: '⌖', badge: 'intake' },
+    // ADR-0081: classify a note into modules AND the owning altitude, then
+    // roll a disclosure-safe signal up every level in one transaction.
+    { route: 'routing', label: 'Altitude Router', icon: '⇅', badge: 'routing' },
     { route: 'comms', label: 'Comms outbox', icon: '✉', badge: 'comms' },
     { route: 'insights', label: 'Signals', icon: '⚑', badge: 'signals' },
   ] },
@@ -311,6 +317,7 @@ const RENDERERS = {
   today: (ctx) => ctx.seatContext?.seat && !ctx.seatContext.seat.fullAccess ? renderMission(ctx) : renderToday(ctx),
   mission: (ctx) => renderMission(ctx),
   intake: (ctx) => renderIntake(ctx),
+  routing: (ctx) => renderAltitudeRouter(ctx),
   responses: (ctx) => renderResponses(ctx),
   bundles: (ctx) => renderActionBundles(ctx),
   attribution: (ctx) => renderSettlement(ctx),
@@ -483,7 +490,7 @@ export function parseRoute(hash) {
     // route — `chain` stays the Command Chain, `role` is new to this surface.
     'mandates': 'mandates', 'decision-rights': 'mandates', 'authority': 'mandates', 'handoffs': 'mandates',
     'authority-calibration': 'authorityCalibration', 'authority-calibration-ledger': 'authorityCalibration',
-    // ADR-0081: the Sealed Spine's aliases. None may shadow an existing route.
+    // ADR-0082: the Sealed Spine's aliases. None may shadow an existing route.
     // `integrity` stays Signal integrity and `trust` stays Promise solvency —
     // neither may be stolen here (the docs say so explicitly).
     'seal': 'seal', 'seals': 'seal', 'audit-chain': 'seal', 'attestation': 'seal',
@@ -494,6 +501,8 @@ export function parseRoute(hash) {
     // NOT 'coverage': that hash already routes to the Promise Solvency Terminal
     // (ADR-0073) and silently stealing it would break a shipped link.
     'mission': 'mission', 'mission-control': 'mission', 'command-center': 'mission', 'flight-deck': 'mission',
+    'routing': 'routing', 'altitude-router': 'routing', 'router': 'routing',
+    'auto-route': 'routing', 'where-does-this-go': 'routing', 'route-note': 'routing',
     'seat': 'seat', 'operating-seat': 'seat', 'altitude-lens': 'seat',
     'lens': 'seat', 'permissions': 'seat', 'access': 'seat',
     'role': 'seat', 'roles': 'seat', 'acting-as': 'seat',
@@ -792,7 +801,8 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       succession: successionAttentionCount(state, at, state.settings),
       mandates: (state.mandates || []).filter((m) => ['proposed', 'active', 'delivered'].includes(m.status) && (m.fromSeatId === seatCtx?.seat?.id || m.toSeatId === seatCtx?.seat?.id)).length,
       authorityCalibration: authorityCalibrationAttentionCount(state, at, state.settings),
-      // ADR-0081: the badge counts chain breaks only — a valid chain is not noise.
+      routing: routingAttentionCount(state, at, state.settings),
+      // ADR-0082: the badge counts chain breaks only — a valid chain is not noise.
       seal: sealAttentionCount(state),
       // Schema v32: drafts written from case facts that still await a human.
       comms: (state.commsDrafts || []).filter((d) => d && d.status === 'draft').length,
@@ -1213,6 +1223,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       today: 'Today',
       mission: 'Mission Control',
       intake: 'Intake triage',
+      routing: 'Altitude Router — natural-language intake classified into modules and the correct organizational altitude, with disclosure-safe roll-up to every leadership level',
       responses: 'Response studio — rehearse and adopt a coordinated leadership response',
       bundles: 'Action bundles — review, adopt and safely withdraw coordinated work',
       attribution: 'Outcome attribution — Earned Schedule, clearance bottlenecks and variance settlement',

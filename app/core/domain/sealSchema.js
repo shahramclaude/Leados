@@ -1,6 +1,6 @@
 /**
  * app/core/domain/sealSchema.js — settings normalization for the Sealed Spine
- * (ADR-0081). Backward compatible by construction: every key defaults when
+ * (ADR-0082). Backward compatible by construction: every key defaults when
  * absent, so no schema-version bump and no migration are needed — exactly
  * like the Operating Seat's declaration settings (ADR-0076, schema v82).
  */

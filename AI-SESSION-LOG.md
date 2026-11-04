@@ -1,4 +1,4 @@
-# AI Session Log — Session 121, 2026-11-04: The Sealed Spine (Schema v87 no bump, ADR-0081)
+# AI Session Log — Session 122, 2026-11-04: The Sealed Spine (Schema v88, no additional bump, ADR-0082)
 
 ## Repository identity (checked first)
 
@@ -14,7 +14,7 @@
 
 ## Fresh domain hunt
 
-Recorded in `RESEARCH.md §103` (fetched 2026-11-04): the 2026 performance-management roundups (Lattice, Culture Amp, Workday, Trakstar) sell reviews/OKRs/engagement with "audit trail logging" as a vendor-held table; Lucid's Audit Logs API is an Enterprise Shield *read* of vendor rows; the hash-chain + signed-checkpoint construction exists in security-engineering practice (per-tenant `sha256(prev || canonical)` chains, write-once export, verifiers that report reordered/truncated/re-hashed rows) but no surveyed people-analytics vendor offers a customer-*locally* verifiable sealed chain. Vendor numbers are marketing claims; we did not test any vendor's log.
+Recorded in `RESEARCH.md §104` (fetched 2026-11-04): the 2026 performance-management roundups (Lattice, Culture Amp, Workday, Trakstar) sell reviews/OKRs/engagement with "audit trail logging" as a vendor-held table; Lucid's Audit Logs API is an Enterprise Shield *read* of vendor rows; the hash-chain + signed-checkpoint construction exists in security-engineering practice (per-tenant `sha256(prev || canonical)` chains, write-once export, verifiers that report reordered/truncated/re-hashed rows) but no surveyed people-analytics vendor offers a customer-*locally* verifiable sealed chain. Vendor numbers are marketing claims; we did not test any vendor's log.
 
 ## Named frameworks encoded
 
@@ -27,9 +27,9 @@ Recorded in `RESEARCH.md §103` (fetched 2026-11-04): the 2026 performance-manag
 ## Shipped
 
 - `app/core/domain/sealCrypto.js`, `sealRegistry.js`, `sealSchema.js`, `sealChain.js`, `sealRules.js` (RULE-SEAL-01/02, `sealRule.id`/`label`); `app/views/seal.js` (four panels, testids `seal-verify`/`seal-scan`/`seal-enable`/`seal-disable`/`seal-toggle-auto`/`seal-verify-top`/`seal-download-cert`).
-- Wiring: `schema.js` (`normalizeSealSettings` spread), `store.js` (seal-key derive/clear at five sites, cap exemption), `postCommit.js` (`sealRule` LAST, 61 rules), `propagationContracts.js`, `actions.js` (`sealRead`/`sealVerify`/`sealScan`/`sealBriefText`/`enableSealing`/`disableSealing`/`setSealAutoPropagate`), `seatRegistry.js` (`audit-seal` rank 1–5), `accessGateway.js` (`SAFE_READS`, API rights, `seal` route on the reviewed allowlist), `intake.js` (`resolveIntakeRouting`, `ownerId`/`ownerBasis`, `altitudeRouting`), `views/intake.js` (altitude-routing card), `main.js` (nav/ROUTES/aliases/badges/descriptions for `#/seal`).
-- Schema **stays v87**: no new collection, no migration; three settings default when absent.
-- Tests: `tests/app/seal-chain.test.mjs` (15) + two shipped rule-order assertions updated to the ADR-0081 contract.
+- Wiring: `schema.js` (`normalizeSealSettings` spread), `store.js` (seal-key derive/clear at five sites, cap exemption), `postCommit.js` (`sealRule` LAST, 62 rules (merged spine)), `propagationContracts.js`, `actions.js` (`sealRead`/`sealVerify`/`sealScan`/`sealBriefText`/`enableSealing`/`disableSealing`/`setSealAutoPropagate`), `seatRegistry.js` (`audit-seal` rank 1–5), `accessGateway.js` (`SAFE_READS`, API rights, `seal` route on the reviewed allowlist), `intake.js` (`resolveIntakeRouting`, `ownerId`/`ownerBasis`, `altitudeRouting`), `views/intake.js` (altitude-routing card), `main.js` (nav/ROUTES/aliases/badges/descriptions for `#/seal`).
+- Schema: **no new collection and no migration of its own** — `SCHEMA_VERSION` is 88 after Session 121's additive bump (merged in parallel); three settings default when absent (`sealEnabled`, `sealAutoPropagate`, `sealMode`).
+- Tests: `tests/app/seal-chain.test.mjs` (15) + two shipped rule-order assertions updated to the ADR-0082 contract.
 
 ## Verification (actual results)
 
@@ -38,7 +38,8 @@ Recorded in `RESEARCH.md §103` (fetched 2026-11-04): the 2026 performance-manag
 - `node scripts/check-canonical-boundary.mjs` → OK (365 app modules, 120 test suites, 23 documentation checks, 0 leaks).
 - `npx eslint .` → clean.
 - `node scripts/check-docs-links.mjs` → 617/617 internal links resolve (192 markdown files).
-- `npm run build:standalone` → written (6,739,623 bytes, 364 modules, schema v87); `node --test tests/app/standalone.test.mjs` → **7/7 pass**.
+- **Post-merge full suite (`node --test "tests/app/*.test.mjs"`): 2360/2360 pass, 0 fail — 137 suites, 41 min, EXIT=0.** This is the same command CI runs; it covers this branch and PR #136's Altitude Router side by side, including the updated tail-order assertions (seat at −2, seal at −1).
+- `npm run build:standalone` → written (post-merge rebuild numbers recorded in the follow-up commit); `node --test tests/app/standalone.test.mjs` → **7/7 pass** (pre-merge; standalone artifact is source-stamped, behaviour unchanged).
 - **[UNVERIFIED]:** the combined `npm run verify:canonical` wrapper was not run to completion in-session (its jsdom/a11y phase times out in this container; its constituent checks — lint, boundary, links, and the targeted suites above — were run individually and are green). A real-browser assistive-technology walkthrough of `#/seal` remains `[UNVERIFIED]`, as in every session.
 
 ## Defects found and fixed in this session’s own code
@@ -50,7 +51,7 @@ Recorded in `RESEARCH.md §103` (fetched 2026-11-04): the 2026 performance-manag
 - **`renderSeal` returned `<main>` inside the shell's `<main id="view">`:** duplicate-landmark axe failures on `#/integrity`; both returns now `div.page` like every other view.
 - **Alias shadowing:** the new alias block stole `integrity` (Signal integrity) and `trust` (Promise solvency); removed — only `seal`/`seals`/`audit-chain`/`attestation` remain.
 - **`sealScan` had no seat right:** refused under every declared seat; added the `audit-seal` right (ranks 1–5) plus `SAFE_READS` entries and the `seal` route allowlist entry.
-- **Two shipped rule-order assertions** (`DEFAULT_POST_COMMIT_RULES.at(-1) === seatRule`) updated to the ADR-0081 contract (`seatRule` at −2, `sealRule` at −1); `sealRule.id` added to mirror `seatRule.id`.
+- **Two shipped rule-order assertions** (`DEFAULT_POST_COMMIT_RULES.at(-1) === seatRule`) updated to the ADR-0082 contract (`seatRule` at −2, `sealRule` at −1); `sealRule.id` added to mirror `seatRule.id`.
 - **Sandbox outage mid-session:** the execution sandbox died after the first regression pass ("Sandbox is probably not running anymore" across all tools, ~10 retries). Work resumed after restart; the two pending rule-order fixes and the full verification sweep above are post-restart.
 
 ## Known gaps (honest)
@@ -68,9 +69,21 @@ Recorded in `RESEARCH.md §103` (fetched 2026-11-04): the 2026 performance-manag
 
 ## Changed files (summary)
 
-- New: `app/core/domain/{sealCrypto,sealRegistry,sealSchema,sealChain,sealRules}.js`, `app/views/seal.js`, `tests/app/seal-chain.test.mjs`, `docs/adr/0081-sealed-spine.md`.
+- New: `app/core/domain/{sealCrypto,sealRegistry,sealSchema,sealChain,sealRules}.js`, `app/views/seal.js`, `tests/app/seal-chain.test.mjs`, `docs/adr/0082-sealed-spine.md`.
 - Edited: `app/{main.js,actions.js}`, `app/core/{schema.js,store.js}`, `app/core/domain/{postCommit,propagationContracts,seatRegistry,accessGateway,intake}.js`, `app/views/intake.js`, `tests/app/{operating-seat,decision-rights}.test.mjs`.
-- Docs: `docs/adr/INDEX.md`, `README.md`, `FEATURES.md`, `ARCHITECTURE.md`, `LEADOS-STATE.md`, `ROADMAP.md`, `RESEARCH.md` (§103), `CHANGELOG.md`, `AI-SESSION-LOG.md`, `index.html` (meta), rebuilt `LeadOS-standalone.html`.
+- Docs: `docs/adr/INDEX.md`, `README.md`, `FEATURES.md`, `ARCHITECTURE.md`, `LEADOS-STATE.md`, `ROADMAP.md`, `RESEARCH.md` (§104), `CHANGELOG.md`, `AI-SESSION-LOG.md`, `index.html` (meta), rebuilt `LeadOS-standalone.html`.
+
+## Merge resolution (parallel Session 121 collision)
+
+While this branch was open, `main` merged **PR #136 — "Session 121, The Altitude Router (Schema v88, ADR-0081)"** from the same base (`ccecf0a`): a parallel session that took the same session number, the same ADR number and a schema bump. Resolutions applied when merging `origin/main` into this branch:
+
+- **Renumbering (theirs wins):** PR #136 keeps Session 121, ADR-0081 and the additive `87 → 88` bump. This session renumbers to **Session 122 / ADR-0082** — `docs/adr/0081-sealed-spine.md` → `0082-sealed-spine.md`, INDEX entry, and every seal-context `ADR-0081` reference across `app/`, `tests/` and docs (verified: no seal-context `ADR-0081` remains; their `0081-altitude-router.md` references untouched). RESEARCH numbering likewise: their §103 stays, this session's hunt becomes **§104**.
+- **Schema claims:** this feature's docs now say "no additional bump atop v88" rather than "stays v87"; `seal-chain.test.mjs` asserts `SCHEMA_VERSION === 88`.
+- **Kept both, verbatim unions:** `schema.js` imports + settings spreads (`normalizeRouterSettings` + `normalizeSealSettings`), `accessGateway` rights (`route-intake` + `audit-seal`), `SAFE_READS` (routing reads + seal reads), route allowlist (`routing` + `seal`), `main.js` nav/ROUTES/aliases/badges/descriptions for both surfaces, `INDEX.md` (0081 then 0082), and both prepend-style doc entries (README/ROADMAP/CHANGELOG/log; RESEARCH in ascending § order).
+- **Spine order after merge:** `… → altitudeRouterRule → attentionMarketRule → successionRule → seatRule → sealRule` — **62 rules, 62 propagation contracts, 1:1 verified**; `sealRule` stays absolutely last so the seal covers the router's writes too.
+- **Their tail-order assertions updated to the merged contract** (they encoded "seatRule is last", which was true on their branch alone): `attention-market.test.mjs` (derived readers now `['successionRule','seatRule','sealRule']`, market index `length-4`, `at(-1)` split across seat/seal), `altitude-router.test.mjs` (`at(-2)`/`at(-1)`), `wait-cost.test.mjs` (`length-4`, `slice(-3)`). Position-agnostic parity asserts (`PROPAGATION_CONTRACTS.length === DEFAULT_POST_COMMIT_RULES.length`) hold at 62.
+- **Shallow clone:** `.git/shallow` (depth 1) made `git merge-base` fail with "no merge base"; fixed with `git fetch --unshallow origin` before merging.
+- Alias audit after merge: `integrity → integrity`, `trust → solvency` intact; seal and routing alias sets disjoint; the only duplicate keys are the three pre-existing last-wins entries (`delivery`, `reporting-lines`, `escalation`) present at baseline.
 
 ## Sync
 
@@ -78,6 +91,21 @@ Recorded in `RESEARCH.md §103` (fetched 2026-11-04): the 2026 performance-manag
 - **Pull request [#137](https://github.com/shahramclaude/Leados/pull/137) opened and OPEN** against `main` (verified with `gh pr view 137 --json state` → `OPEN`).
 - Follow-up commit: rebuilt `LeadOS-standalone.html` against source `ddf9e39`, CHANGELOG Repository status, this sync line.
 
+## 2026-11-03 — Session 121: The Altitude Router (Schema v88, [ADR-0081](./docs/adr/0081-altitude-router.md), `#/routing`, RULE-AR-01..03, CSV #77)
+
+**Audit result.** The canonical zero-build `app/**` was read at the seams that matter: `intake.js` (14-category pure on-device triage with weighted evidence, NegEx-style negation, softmax shrinkage, confidence bands, evidence spans and a hard conflict wall — but **no** `managerId`, `buildChain`, LCA or roll-up), `chain.js` / `seat.js` / `seatRules.js` (five Jaques horizons, LCA responsibility, per-altitude clocks, typed `rolls-up-to` edges), `postCommit.js` / `propagationContracts.js` (61 declared rules, 61 contracts, savepoints, derived-event guards), `actions.js` (atomic `_intakeDraftId` adoption), `automation.js` (`ensureEntityLink` exact-edge uniqueness), `cases.js` (graph labels/resolver), `accessGateway.js` / `seatRegistry.js` (fail-closed allowlist and record policies), `csv.js` and `main.js`. The gap was precise: a note chose a **module**, and the hierarchy was a **separate model**; the note never chose an altitude, never resolved onto a real seat, and never rolled up. Role tiering **does exist** (five ranks, attribute-based read/write decisions, deny-by-default) but is a local declaration, not authenticated multi-user security — and the app says so.
+
+**What shipped.** Six new modules (`altitudeRouterRegistry.js`, `altitudeRouterSchema.js`, `altitudeRouter.js`, `altitudeRouterRules.js`, `altitudeRouterActions.js`, `app/views/altitudeRouter.js`), a shared-spine rule registered before `attentionMarketRule` with an auditable contract, an additive `MIGRATIONS[87]`, two collections, five settings, one graph node + three relations, one CSV scope, five nav panels, aliases/badge/title, gateway + seat-registry rights, CSS, and `tests/app/altitude-router.test.mjs` (11 tests). The new test file is the session's concrete self-test: it proves a single `routingConfirm` writes the case, fires `RULE-DEC-01` / `RULE-COACH-01` / `RULE-CFP-01` / `RULE-SUC-01` **and** `RULE-AR-01` edges to `mgr1`, `dir1`, `vp1` in one atomic transaction with zero re-entry, then proves staleness refusal, privacy wall, LCA, quarter-horizon lift, five-rung disclosure ladder, out-of-sample Wilson/Brier/rank-error calibration, one governed floor-breach decision per ISO week, seat boundary, aggregate-only exports, inertness and axe-clean rendering of all five panels.
+
+**Verification performed this session (actual, 2026-11-03).** `node --check` on every changed JS/MJS file: PASS. `tests/app/altitude-router.test.mjs`: **11/11 PASS**. `npm run lint`: exit 0. `npm run check:boundary`: **365 app ES modules / 120 test suites / 23 documentation checks, 0 quarantined-tree, network or stale-onboarding leaks**. `npm run check:links`: **612 internal links across 192 markdown files, all resolve**. `node --test tests/app/standalone.test.mjs`: **7/7 PASS**. **Full `npm test` on the final source: 2,345 tests across 137 suites — 2,345 pass, 0 fail, 0 cancelled, 0 skipped, exit 0 (2,359,433 ms).** The four stages of `npm run verify:canonical` were each run and passed individually; the chained script itself was not re-run end-to-end because a single run exceeds a 30-minute shell limit. `npm run build:standalone`: rebuilt from canonical `index.html` at **6,772,940 bytes / 364 source modules / schema v88 / sha256 `875487fd8a8e9a11`**. Live preview on `0.0.0.0:5173`: `/`, `/index.html`, `/app/main.js`, both new router modules and the standalone artifact all return 200; the `#/routing` topbar shortcut and `leados-altitude-router` meta are present; preview-style Host/Origin accepted.
+
+**Four pre-existing failures found at baseline and fixed in this tree (no shipped behaviour was weakened).** Each was reproduced on a detached worktree at `ccecf0a` before being touched, so none is a regression from ADR-0081: (1) `dynamics.test.mjs` asserted the saturated demo's `protect-learning` policy was an `investment`, contradicting the engine's own "learning is not a rescue once the team is saturated" regression — now asserts the honest `worsens`/`neutral` verdict plus the printed invoice; (2) `signal-integrity.test.mjs` pinned a stale CSV ordinal (#60) — the new `altitude-router` scope was **moved from index 2 to the end** so it is genuinely scope #77 and no existing ordinal shifts, and a positional assertion now guards against future mid-array insertions; (3) `succession-bench.test.mjs` declared seat `mgr1` but named `ic6`, a peer-span write the boundary correctly refuses — the seat is now declared at the common leader `dir1`; (4) `typed-links-lineage.test.mjs` had no fixture rows or route contracts for `mandate`, `missionbrief`, the new `routingplan`, or the `retention` query focus — fixtures and query contracts were added, and a mandate link's resolution to its terminal is recorded as an explicit known gap rather than a fake focus parameter. The typed-links test now exercises the new `routingplan` graph node through normalization, reload, resolution and navigation.
+
+**Sync result (actual, not assumed).** `git add -A` → commit `f417f30` ("Session 121 — The Altitude Router (Schema v88, ADR-0081)", 111 files, 2,828 insertions / 349 deletions) → `git push -u origin arena/d4a34bd8-leados` succeeded with `[new branch] arena/d4a34bd8-leados -> arena/d4a34bd8-leados`. `gh pr create --base main --head arena/d4a34bd8-leados` returned `https://github.com/shahramclaude/Leados/pull/136`; `gh pr view 136` confirms **PR #136 is OPEN**, `mergeable MERGEABLE`, base `main`, head `arena/d4a34bd8-leados`, containing commit `f417f30`. Its `canonical` GitHub Actions check is **still in progress** at the time of writing (`npm test` takes ~39 minutes in CI too) and `CodeRabbit` is skipped; no CI success is claimed. All 111 changed files are in the commit: 8 new (six `app/` modules, `docs/adr/0081-altitude-router.md`, `tests/app/altitude-router.test.mjs`) and 103 modified (canonical `index.html`, `LeadOS-standalone.html`, `README.md`, `ROADMAP.md`, `RESEARCH.md`, `CHANGELOG.md`, this log, `docs/adr/INDEX.md`, nine `app/` wiring files, `app/styles.css`, and the mechanically swept v88 / 77-scope test assertions). A small follow-up commit records this result; no sync failure occurred.
+
+**Known gaps / honest limits.** Authenticated identity and tenant boundary; reviewed adapters for legacy raw-data modules; temporal disclosure / repeated-release differencing tests; outcome-graded recommendations rather than confidence bands; a decision-rights `mandate` link resolves to `#/mandates` but not yet to a single focused contract. No production RBAC, no differential privacy, no survey anonymity, no message/keystroke/sentiment ingestion, no person scored or ranked. Real-browser screen-reader/contrast walkthrough remains **[UNVERIFIED]**. `LeadOS-standalone.html` is regenerated, not hand-edited. Local seats are auditable declarations.
+
+---
 ## PR triage note — 2026-11-03
 
 PR #84 (Session 74, `#/pay`, Schema v51, ADR-0039) closed as superseded: PR #85 merged the Merit & Pay-Equity Terminal under the same schema version and ADR number on 2026-10-30, and main is now at Schema v87 / ADR-0080 with 67 of #84's 74 files in conflict. No code from #84 was merged. Its three unique mechanics — pay-quartile reporting, the ≥5% joint pay assessment workflow, and remediation priced by re-fitting the gap model — are preserved as candidates in the top ROADMAP entry, with the ADR-0039 privacy constraint a future session must resolve explicitly.

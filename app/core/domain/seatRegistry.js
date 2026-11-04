@@ -100,6 +100,8 @@ export const RECORD_POLICIES = Object.freeze({
   candidates: { classKey: 'unit', label: 'Candidates', route: '#/hiring' },
   commsDrafts: { classKey: 'unit', label: 'Stakeholder briefs', route: '#/comms' },
   intakeDrafts: { classKey: 'unit', label: 'Intake drafts', route: '#/intake' },
+  altitudeRoutingPlans: { classKey: 'unit', label: 'Altitude routing plans', route: '#/routing' },
+  altitudeRoutingMarkers: { classKey: 'unit', label: 'Routing idempotency markers', route: '#/routing' },
   // Portfolio material. Functions, quarters and capital.
   budgets: { classKey: 'portfolio', label: 'Budgets', route: '#/finance' },
   strategyBets: { classKey: 'portfolio', label: 'Strategic bets', route: '#/strategy' },
@@ -224,11 +226,12 @@ export const ACTION_RIGHTS = Object.freeze({
   'approve-capital': { minRank: 4, maxRank: 5, label: 'Approve capital allocation' },
   'freeze-board-summary': { minRank: 5, maxRank: 5, label: 'Freeze a board-ready summary' },
   'declare-seat': { minRank: 1, maxRank: 5, label: 'Declare the operating seat' },
+  'route-intake': { minRank: 1, maxRank: 5, label: 'Route a natural-language situation note to modules and an altitude' },
   'coordinate-intervention': { minRank: 1, maxRank: 5, label: 'Rehearse and adopt a bounded cross-module intervention' },
   'test-assumption': { minRank: 3, maxRank: 5, label: 'Register a testable operating assumption' },
   'prepare-comms': { minRank: 3, maxRank: 5, label: 'Prepare a stakeholder communication' },
   'set-disclosure-floor': { minRank: 3, maxRank: 5, label: 'Set the small-cell disclosure floor' },
-  // ADR-0081: verifying the sealed audit chain is every altitude's business —
+  // ADR-0082: verifying the sealed audit chain is every altitude's business —
   // it writes only an audit event, never a record.
   'audit-seal': { minRank: 1, maxRank: 5, label: 'Verify the sealed audit chain' },
 });

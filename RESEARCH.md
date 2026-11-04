@@ -6500,9 +6500,44 @@ is novel. The novel object is the **production line made of the workspace's own 
 
 - A generic dashboard with a role badge; individual risk scoring; autonomous spending or message sending; presenting a software rehearsal as a causal forecast; calling complementary suppression “anonymous”; claiming production RBAC from a browser-local seat.
 
-## §103 — Session 121 domain hunt: nobody sells a locally verifiable audit chain (fetched 2026-11-04)
+## §103 — Session 121 domain hunt: confidence-gated intelligent triage × hierarchy confidentiality (fetched 2026-11-03, Schema v88, [ADR-0081](docs/adr/0081-altitude-router.md))
 
-**Method.** Web search over 2026 performance-management / people-analytics roundups, vendor audit-log documentation and the security-engineering literature for the tamper-evident-log pattern. Claims below are vendor- or reviewer-described capabilities, not independent security audits; we did not test any vendor's log. The implementation response is ADR-0081 / the Sealed Spine (`#/seal`).
+Vendor and platform documentation from 2026; these are **claims and product descriptions, not independently validated benchmarks**. Every design consequence below is implemented in code and exercised by `tests/app/altitude-router.test.mjs`.
+
+### Two literatures that never meet
+
+1. **Intelligent triage / routing.** [Moveworks (2026-03-11)](https://www.moveworks.com/us/en/resources/blog/what-is-intelligent-triage-it-support) describes classification by intent, urgency and historical patterns with probabilistic confidence scores, auto-populated category/subcategory/urgency/assignment group, and — the decisive detail — **when confidence is below threshold the system does not auto-update fields** and falls back to a human clarification workflow. [ServiceNow / vendor roundups (2026-07)](https://www.aiuniverse.xyz/top-10-ai-ticket-triage-routing-systems-features-pros-cons-comparison/) and [2026 comparisons](http://aiopsschool.com/blog/top-10-ai-ticket-triage-routing-systems-features-pros-cons-comparison-2/) describe Predictive Intelligence / Now Assist classifying incidents, routing to assignment groups, enriching with service/CI/context, duplicate detection and SLA-risk monitoring; multilingual and account/region context are becoming table stakes. [Console's 2026 agent roundup](https://www.console.com/blog/best-ai-agents-for-enterprise-2026/) and the [ServiceNow community use-case list](https://www.servicenow.com/community/servicenow-otto-forum/agentic-ai-use-cases/td-p/3573516) make the limitation explicit: these workflows execute **inside their own platform**, not as a universal cross-module spine.
+2. **Hierarchy-scoped confidentiality.** [Microsoft Learn, Continuous Engagement (2026-05-11)](https://learn.microsoft.com/en-us/viva/glint/reports/continuous-engagement-workplace-metrics) documents an admin-controlled pipeline, role-based access, tenant consent, aggregated data only, "always enforces the higher of the Viva Glint and Viva Insights thresholds", **inference prevention that hides both the small group and its next higher level**, trend lines only for weeks with enough employees, and manager hierarchy breakdowns hidden when a child team is under threshold for the recent four weeks. [Invizipoll (2026-10-14)](https://invizipoll.com/blog/is-microsoft-viva-glint-anonymous) is blunt that Glint is **confidential, not anonymous** — ballots link to employee records for manager/department/tenure breakdowns; ~5 numeric / 10 verbatim thresholds; below-threshold cells hidden or rolled up; verbatims may still identify people. The [Oct 2026 Action Taking Report coverage](https://windowsforum.com/news/viva-glint-action-taking-report-arrives-worldwide-october-2026.439920/) warns that activity counts are not outcomes and lists small teams, insufficient responses, reorganisations, inactive users and phased access as scenarios requiring validation; [TomorrowDesk](https://tomorrowdesk.com/info/microsoft-viva-glint) records Copilot Highlights GA Apr 2026, Continuous Engagement private preview mid-2026 and a Raw Data Exports API private preview. [HR Tech SaaS (2026-06-28)](https://hrtechsaas.com/blog/team-level-workforce-analytics-privacy-safe-platforms/) compares privacy-safe team analytics (Viva Insights min 5, Culture Amp configurable thresholds, Lattice) and reinforces aggregate-only, thresholded, role-scoped surfaces.
+
+**The gap:** triage systems route to a *queue*; hierarchy systems report on a *survey*. Neither takes one free-text operational note and decides, in a single reviewed transaction, which modules it belongs to **and** which rung of the real reporting tree owns it — then writes the typed roll-up to every ancestor without re-entry. Neither publishes the accuracy of its own routing out of sample.
+
+### What the research changes in the design, by altitude
+
+- **[frontline]** Reuse the existing on-device 14-category intake engine rather than a second model; add a deterministic five-horizon lexicon with a three-token negation window and softmax-shrunk confidence bands. Below the evidence floor the report **refuses** instead of guessing. Save ≠ confirm: a draft writes no case.
+- **[manager]** Named people resolve to the lowest common ancestor of their managers (`responsibleNodeId`), so two frontline spans meet at their manager exactly once. `names` disclosure at ranks 1–2, with a peer-span refusal on confirmation.
+- **[director]** Safety/legal stakes and long-lived categories print a Jaques horizon floor; a `quarter` cue lifts `effectiveRank` above the LCA while the two named reports keep the same LCA — no silent reassignment. `unit` disclosure at rank 3.
+- **[VP / executive]** `effectiveRank = max(inferredRank, lcaRank, stakesFloor)` and `escalationTarget` walk the real tree; `RULE-AR-01` writes one `rolls-up-to` edge per ancestor with the disclosure form on the edge and **no note text in any edge summary**. `RULE-AR-02` opens exactly one governed DACI decision per breaching calibration cell per ISO week.
+- **[CEO]** Aggregate-only brief and CSV #77; no names, ids, note text or evidence spans. Small cells are **refused with a reason**, not shown as a proportion of one — and we do not call that "anonymous".
+- **[all altitudes]** A two-lane fingerprint over the note **and the seat path** makes a saved plan stale after a reorganisation (a Viva-style reorg scenario, made mechanical). Marker-idempotent rescan prevents duplicate edges. Pausable `routingAutoPropagate`, but an explicit `routingScan()` always runs.
+
+### The part no vendor publishes — implemented here
+
+Plans are graded **once**, later, against the altitude the work actually belonged to. `routingCalibration` prints Wilson 95% intervals (refused below 5), **strictly-prior** sequential probability forecasts with Brier skill against a pooled base rate, **mean rank error** (routing a 7-day item to the CEO costs three ranks, not one miss), under/over-routing counts and human-override lift. A prediction that uses its own outcome is not a prediction; accuracy alone hides the cost of the miss. The governed floor-breach decision is a *question*, not an autonomous rewrite of a grade, a case, a person, a setting or a seat.
+
+### Where LeadOS is narrower than the claim it might appear to make
+
+- Local seats are auditable **declarations**, not authenticated multi-user security. There is no server, no tenant isolation and no identity proof; `guardApiCall` is a fail-closed workflow boundary inside one browser.
+- Suppression is a small-cell refusal, **not** differential privacy and **not** survey anonymity; repeated-release / complementary differencing tests remain open (Next 3 in ROADMAP).
+- Confidence bands are not outcome-graded predictions; the calibration loop grades human decisions about altitude, not realised intervention outcomes.
+- No message, calendar, keystroke, sentiment, HRIS or telemetry ingestion. No person is rated, ranked or scored. Vendor scoring tables cited above are `[UNVERIFIED]` marketing, reproduced only as design pressure.
+
+### Rejected
+
+A second NLP engine, a second rule spine, autonomous adoption without a human confirmation, a five-times-duplicated role dashboard, a person-level "routing score", and any claim that a small-cell refusal constitutes anonymity.
+
+## §104 — Session 122 domain hunt: nobody sells a locally verifiable audit chain (fetched 2026-11-04, [ADR-0082](docs/adr/0082-sealed-spine.md))
+
+**Method.** Web search over 2026 performance-management / people-analytics roundups, vendor audit-log documentation and the security-engineering literature for the tamper-evident-log pattern. Claims below are vendor- or reviewer-described capabilities, not independent security audits; we did not test any vendor's log. The implementation response is ADR-0082 / the Sealed Spine (`#/seal`).
 
 ### What the category actually sells as "audit"
 

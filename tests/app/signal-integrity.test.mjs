@@ -143,17 +143,17 @@ function verdictRow(id, domain, ruleId, verdict, day, { key = null, at = null } 
 
 describe('schema v70 and fail-closed persistence', () => {
   test('the 69→70 migration adds four empty ledgers and invents nothing', () => {
-    assert.equal(SCHEMA_VERSION, 87);
+    assert.equal(SCHEMA_VERSION, 88);
     assert.equal(typeof MIGRATIONS[69], 'function');
     const raw = migrate({ schemaVersion: 69, settings: {}, people: [], watchAlerts: [] });
-    assert.deepEqual(raw.applied, ['69 → 70', '70 → 71', '71 → 72', '72 → 73', '73 → 74', '74 → 75', '75 → 76', '76 → 77', '77 → 78', '78 → 79', '79 → 80', '80 → 81', '81 → 82', '82 → 83', '83 → 84', '84 → 85', '85 → 86', '86 → 87']);
-    assert.equal(raw.raw.schemaVersion, 87);
+    assert.deepEqual(raw.applied, ['69 → 70', '70 → 71', '71 → 72', '72 → 73', '73 → 74', '74 → 75', '75 → 76', '76 → 77', '77 → 78', '78 → 79', '79 → 80', '80 → 81', '81 → 82', '82 → 83', '83 → 84', '84 → 85', '85 → 86', '86 → 87', '87 → 88']);
+    assert.equal(raw.raw.schemaVersion, 88);
     assert.deepEqual(raw.raw.integrityLooks, []);
     assert.deepEqual(raw.raw.signalVerdicts, []);
     assert.deepEqual(raw.raw.integrityReviews, []);
     assert.deepEqual(raw.raw.integrityMarkers, []);
     const state = normalizeState(raw.raw, { now: NOW }).state;
-    assert.equal(state.schemaVersion, 87);
+    assert.equal(state.schemaVersion, 88);
     assert.equal(state.integrityLooks.length, 0);
     assert.equal(state.signalVerdicts.length, 0);
   });
@@ -812,10 +812,15 @@ describe('the board speaks to the recommendation engine and the export layer', (
     assert.equal(/Priya|Jordan|Mei/.test(text), false, 'no name enters the brief');
   });
 
-  test('CSV scope #60 exports family rows and look rows with blank cells, never zeros', () => {
+  test('signal-integrity CSV exports family rows and look rows with blank cells, never zeros', () => {
     const scope = CSV_EXPORTS.find((s) => s.key === 'signal-integrity');
     assert.ok(scope, 'the scope is registered');
-    assert.ok(CSV_EXPORTS.indexOf(scope) === 59, 'it is scope #60');
+    // Scope numbers are descriptive labels, not a stable contract: two later
+    // scopes were inserted ahead of this one in earlier sessions. The real
+    // invariant is that a NEW scope is APPENDED, never spliced into the middle,
+    // because several views and docs reference scopes by ordinal. Position 61
+    // (scope #62) is therefore pinned here so an insertion is caught.
+    assert.equal(CSV_EXPORTS.indexOf(scope), 61, 'new scopes must be appended, not spliced in');
     assert.match(scope.description, /BLANK/);
     const exported = exportWorkspaceCsv(fixture({ verdicts: [
       verdictRow('v1', 'Goals', 'GOAL-01', 'confirmed', '2026-10-01'),

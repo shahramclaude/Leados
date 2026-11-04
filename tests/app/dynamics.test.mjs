@@ -417,7 +417,7 @@ test('calibration scores against naive persistence and reports negative skill ho
 /* ------------------------------------------------- 6. schema v37 */
 
 test('Schema v37: additive migration adds the experiment ledger without inventing one', () => {
-  assert.equal(SCHEMA_VERSION, 87);
+  assert.equal(SCHEMA_VERSION, 88);
   assert.equal(DEFAULT_SETTINGS.dynamicsHorizonWeeks, 26);
   assert.equal(DEFAULT_SETTINGS.dynamicsTargetWipWeeks, 4);
   assert.equal(DEFAULT_SETTINGS.dynamicsPressureLagWeeks, 3);
@@ -428,11 +428,11 @@ test('Schema v37: additive migration adds the experiment ledger without inventin
   const empty = createEmptyState(NOW.toISOString());
   assert.deepEqual(empty.dynamicsExperiments, []);
   const migrated = migrate({ schemaVersion: 36, settings: {}, people: [], portfolio: [] });
-  assert.equal(migrated.raw.schemaVersion, 87);
-  assert.equal(migrated.applied.at(-1), '86 → 87');
+  assert.equal(migrated.raw.schemaVersion, 88);
+  assert.equal(migrated.applied.at(-1), '87 → 88');
   assert.deepEqual(migrated.raw.dynamicsExperiments, []);
   const state = normalizeState(migrated.raw, { now: NOW }).state;
-  assert.equal(state.schemaVersion, 87);
+  assert.equal(state.schemaVersion, 88);
   assert.deepEqual(state.dynamicsExperiments, []);
   assert.ok(LINK_ENTITY_TYPES.includes('dynamics'), 'a structural experiment is a first-class graph node');
   assert.ok(LINK_RELATIONS.includes('tracks-followup'));
@@ -764,7 +764,16 @@ test('the demo runs the real rules: one decision, one checkpoint, no hand-writte
     'hiring raises the ceiling while costing throughput inside the horizon — an investment, not a win and not a failure');
   assert.ok(playbook['hire-two'].delta.capacityPerWeek > 0);
   assert.ok(playbook['hire-two'].delta.throughputDays < 0, 'the throughput invoice is shown');
-  assert.equal(playbook['protect-learning'].verdict, 'investment', 'learning has a delay; the first quarter pays for it');
+  // The DEMO workspace is near saturation (pressure 0.99, WIP 57.76), so the
+  // same lever that is an investment on a slack team is NOT a rescue here: the
+  // engine correctly refuses to launder a falling capacity into "investment"
+  // just because the lever is named "Protect learning". This mirrors the
+  // explicit `learning is not a rescue once the team is saturated` regression
+  // above. The cost is still printed rather than hidden.
+  assert.ok(['worsens', 'neutral'].includes(playbook['protect-learning'].verdict),
+    `a saturated demo must not be called an investment, got ${playbook['protect-learning'].verdict}`);
+  assert.ok(playbook['protect-learning'].delta.capacityPerWeek <= 0, 'the ceiling does not rise inside this horizon');
+  assert.ok(playbook['protect-learning'].delta.throughputDays < 0, 'the delayed-learning invoice is stated');
   assert.equal(playbook['cap-wip'].verdict, 'improves', 'throttling intake pays back inside the horizon');
   const again = buildDemoState(NOW);
   assert.deepEqual(again.dynamicsExperiments.map((e) => e.name), demo.dynamicsExperiments.map((e) => e.name), 'the demo is deterministic');

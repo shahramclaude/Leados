@@ -1,5 +1,5 @@
 /**
- * app/core/domain/sealChain.js — the Sealed Spine's pure engine (ADR-0081).
+ * app/core/domain/sealChain.js — the Sealed Spine's pure engine (ADR-0082).
  *
  * A hash chain over the append-only event log. One `audit.seal` event closes
  * each sealed transaction and commits to:

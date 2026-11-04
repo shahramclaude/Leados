@@ -33,7 +33,7 @@
  */
 
 import { addDays, dayKey } from '../time.js';
-// ADR-0081: altitude routing. The intake engine resolves the ORGANIZATIONAL
+// ADR-0082: altitude routing. The intake engine resolves the ORGANIZATIONAL
 // owner of a note — the lowest common ancestor of the managers of the people
 // named in it, via the same reporting tree the Command Chain and the Operating
 // Seat use — so a free-text note lands on the correct seat, at the correct
@@ -918,7 +918,7 @@ export function analyzeIntakeText(text, state = {}, { now = new Date() } = {}) {
   const routingPlan = insufficient ? []
     : buildRoutingPlan({ sourceText, categories: [primary, ...secondaries], conflictWall, people, caseSuggestion, state });
 
-  // ADR-0081: resolve the owning seat/altitude from the same reporting tree
+  // ADR-0082: resolve the owning seat/altitude from the same reporting tree
   // the rest of the app uses. Named people -> LCA of their managers; nobody
   // named -> the declared operating seat; otherwise the workspace leader.
   const altitudeRouting = resolveIntakeRouting(people, state, { now });
@@ -970,7 +970,7 @@ export function analyzeIntakeText(text, state = {}, { now = new Date() } = {}) {
   };
 }
 
-/* ------------------------------------------------- altitude routing (ADR-0081) */
+/* ------------------------------------------------- altitude routing (ADR-0082) */
 
 /**
  * Resolve where a note belongs in the chain of command.

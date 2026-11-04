@@ -10,6 +10,9 @@
 import { addDays, dayKey, daysBetween } from './core/time.js';
 import { createMandateActions } from './core/domain/mandateActions.js';
 import { createMissionActions } from './core/domain/missionActions.js';
+// ADR-0081: the Altitude Router's API mixin (one more consumer of the same
+// addCase adoption seam, not a second command bus).
+import { createAltitudeRouterActions } from './core/domain/altitudeRouterActions.js';
 import { guardApi } from './core/domain/accessGateway.js';
 import { analyzeMitigationRobustness, robustnessEvidenceKey, robustnessDecision, ROBUSTNESS_EVENT } from './core/domain/mitigationRobustness.js';
 import { DEFAULT_POST_COMMIT_RULES } from './core/domain/postCommit.js';
@@ -607,7 +610,7 @@ import {
   pendingIntakeDrafts,
   toCaseInput,
 } from './core/domain/intake.js';
-// ADR-0081: the Sealed Spine (tamper-evident audit chain).
+// ADR-0082: the Sealed Spine (tamper-evident audit chain).
 import { SEAL_EVENTS, SEAL_RULE_IDS } from './core/domain/sealRegistry.js';
 import {
   sealReport,
@@ -3692,6 +3695,19 @@ export function createApi(store, options = {}) {
         intakeAdoption = (store.state.intakeDrafts || []).find((d) => d.id === data._intakeDraftId);
         if (!intakeAdoption || intakeAdoption.status !== 'analyzed') return fail('This intake draft is no longer pending.', 'intakeDraftId');
       }
+      // ADR-0081: internal, validated routing adoption seam. The plan, the
+      // case and every cross-module + vertical rule are written in ONE store
+      // transaction; a stale fingerprint (note or org changed) is refused.
+      let routingAdoption = null;
+      if (data._routingPlan) {
+        const rp = data._routingPlan;
+        const plan = (store.state.altitudeRoutingPlans || []).find((p) => p && p.id === rp.id);
+        if (!plan || plan.status !== 'analyzed' || plan.fingerprint !== rp.fingerprint) {
+          return fail('This routing plan is no longer pending, or the situation note or reporting tree changed since it was saved. Re-analyze before confirming.', 'routingPlan');
+        }
+        if (typeof rp.confirmedAltitudeKey !== 'string' || !rp.confirmedAltitudeKey) return fail('Choose an organizational altitude.', 'confirmedAltitudeKey');
+        routingAdoption = { plan, confirmedAltitudeKey: rp.confirmedAltitudeKey };
+      }
       let responseAdoption = null;
       if (data._responsePlan) {
         const plan = (store.state.responsePlans || []).find((p) => p.id === data._responsePlan.id);
@@ -3904,6 +3920,16 @@ export function createApi(store, options = {}) {
               { idFactory: id, todayStr: today(), nowIso: stamp() },
             );
           }
+          if (routingAdoption) {
+            const row = (draft.altitudeRoutingPlans || []).find((p) => p.id === routingAdoption.plan.id);
+            if (row) {
+              row.status = 'confirmed';
+              row.confirmedCaseId = caseRecord.id;
+              row.confirmedAltitudeKey = routingAdoption.confirmedAltitudeKey;
+              row.confirmedOn = today();
+              row.updatedAt = stamp();
+            }
+          }
           if (intakeAdoption && !responseAdoption) {
             const intake = (draft.intakeDrafts || []).find((d) => d.id === intakeAdoption.id);
             intake.status = 'confirmed'; intake.confirmedCaseId = caseRecord.id;
@@ -3926,6 +3952,9 @@ export function createApi(store, options = {}) {
           entityId: caseRecord.id,
           summary: `Operational case registered (${kind}): ${caseRecord.title.slice(0, 70)}`,
           ...(responseAdoption ? { responsePlanId: responseAdoption.plan.id } : {}),
+          // ADR-0081: RULE-AR-01 reads this to fan the disclosure ladder out
+          // on the same event spine, in the same atomic transaction.
+          ...(routingAdoption ? { routingPlanId: routingAdoption.plan.id } : {}),
           automationOptions: {
             ...(data.propagateDecision === undefined ? {} : { propagateDecision: data.propagateDecision }),
             ...(data.propagateDelegation === undefined ? {} : { propagateDelegation: data.propagateDelegation }),
@@ -19530,7 +19559,7 @@ export function createApi(store, options = {}) {
     freezeReliabilityReading,
     scanReliability,
 
-    /* ------------- ADR-0081: the Sealed Spine (tamper-evident audit chain) */
+    /* ------------- ADR-0082: the Sealed Spine (tamper-evident audit chain) */
     /**
      * Read-only chain status + verification, scoped to the acting seat when one
      * is declared (spans outside the subtree collapse to one aggregate row).
@@ -19604,6 +19633,8 @@ export function createApi(store, options = {}) {
   });
 
   Object.assign(api, createMissionActions(store, { now: clock, idFactory: id, createApi }));
+  // ADR-0081: the Altitude Router's reviewed commands.
+  Object.assign(api, createAltitudeRouterActions(store, { now: clock, idFactory: id, createApi }));
   // ADR-0080: one fail-closed API boundary. The local operator is unchanged;
   // a declared seat gets only reviewed adapters, with rank and span checks.
   return guardApi(api, store);
