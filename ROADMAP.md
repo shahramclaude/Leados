@@ -1,3 +1,15 @@
+## Session 128 outcome — 2026-11-04: The Federated Envoy — the hierarchy leaves the browser (Schema v93, no bump of its own, ADR-0088, `RULE-ENV-01..03`, CSV #84)
+
+**The gap.** Every module so far — chain, seat, mandate, catchball, concordance, board, disclosure, cadence — models the hierarchy *inside one store*. Real organisations are not one store, and leadership work crosses workspace boundaries daily. Until now it crossed them as a document with no provenance, no disclosure scope and no way to record disagreement except a merge.
+
+**What shipped.** `#/envoy`: five panels; packets projected by disclosure class at the source; SHA-256 per item → Merkle root → identity → HMAC (keyed required by default) with typed failures; idempotent ingest into attested copies that never edit the local record; `RULE-ENV-01` carriage to every ancestor in the same transaction; `RULE-ENV-02` one reconciliation decision per record per ISO week; `RULE-ENV-03` attested-exposure review above a declared floor and a marker below it. **69 rules / 69 contracts**, aggregate-only CSV #84, identity-free certificate. Registered as one `disclosureManifests` row and three `RECORD_POLICIES` rows, so the ADR-0086 compiler places `#/envoy` for a declared seat instead of withholding it.
+
+**Altitudes served.** Frontline/team lead (what the altitude above may hold, and what is withheld), manager (compose to own span or leader, verdicts and divergences), director (coverage and both hashes), VP/executive (Wilson-bounded coverage refused below five spans, keyed-signature share, no titles), CEO/chief (certificate + CSV).
+
+**Honest limits.** Not authentication (the seat is a declaration), not encryption (detail is refused, not hidden), cannot prove a foreign record is true, and a keyed exchange needs the same session key on both sides arranged out of band.
+
+**Next up.** (1) A two-workspace key rendezvous that keeps the local-first promise — the honest prerequisite for keyed mode at scale. (2) Temporal disclosure testing for repeated packet releases (differencing a series of aggregates), now that ADR-0086 made every screen posture-aware and ADR-0087 made the aggregate a read model. (3) A programme-level federation reading: which spans are actually connected to the span above them, measured from carriage rather than declared.
+
 ## 2026-11-04 — Session 127: The Operating Cadence Clock ([ADR-0086](docs/adr/0087-operating-cadence-clock.md), Schema v92, `#/cadence`, RULE-CAD-01..04, CSV #81)
 
 ## 2026-11-04 — Session 126: the catalogue opens, and the boundary proves itself (Schema v92, [ADR-0086](docs/adr/0086-disclosure-compiler.md), `#/disclosure`, RULE-DSC-01..02)

@@ -1,3 +1,11 @@
+## Changelog — 2026-11-04 · Session 128
+
+- **Added:** the Federated Envoy (`#/envoy`) — sealed, disclosure-scoped packets between LeadOS workspaces, verified by recomputation and ingested idempotently. *Why:* every module so far models the hierarchy inside one store; real leadership work crosses a boundary, and until now it crossed as a forwarded document with no provenance and no way to record disagreement except a merge.
+- **Connected:** an ingest writes its chain-of-command carriage to every ancestor in the same transaction; a divergence opens one governed reconciliation decision instead of overwriting either record; an attested exposure above the declared floor opens one review. New graph node `exchangepacket`, relations `carries` and `reconciles`, `RULE-ENV-01..03` (**68 rules / 68 contracts**, seal still last).
+- **Integrated with ADR-0086:** one `disclosureManifests` row and three `RECORD_POLICIES` rows, so the compiled posture places `#/envoy` rather than withholding it; `envoy` joins the reviewed fallback list in the route gate and the seven envoy reads join `SAFE_READS`.
+- **Data & privacy:** additive collections on Schema v93 (no bump of its own), scoped seat reads/actions, aggregate-only CSV scope #84 `federated-exchange`, identity-free certificate. Packets are not authentication and not encryption — detail is refused at the source, never hidden.
+- **Merge with `origin/main` (twice).** Main merged the Board Room (ADR-0085), the Disclosure Compiler (ADR-0086, v92) and then the Operating Cadence Clock (ADR-0087, v93, CSV #82). This session was renumbered from ADR-0085/Session 125/CSV #80 to **ADR-0088 / Session 128 / CSV #83**; all three features are kept, the spine is **68 rules / 68 contracts**, and this branch also fixed main's red `typed-links-lineage` sweep (no fixtures for `disclosuregrant`/`boardmemo`).
+
 ## Changelog — 2026-11-04 · Session 127
 
 ## Changelog — 2026-11-04 (Session 126)

@@ -110,6 +110,14 @@ export const RECORD_POLICIES = Object.freeze({
   catchballPacts: { classKey: 'unit', label: 'Hoshin Catchball pacts', route: '#/catchball' },
   catchballRounds: { classKey: 'unit', label: 'Hoshin Catchball rounds', route: '#/catchball' },
   catchballMarkers: { classKey: 'unit', label: 'Catchball idempotency markers', route: '#/catchball' },
+  // ADR-0088: the Federated Envoy's ledger, its attested copies and its
+  // idempotency markers. A packet's *content* class is decided by the receiving
+  // altitude (`ENVOY_FIELDS`), not by this row; what this row fixes is that the
+  // ledger itself is span material, never enterprise material — a workspace may
+  // not read another span's exchange history at the top of the house.
+  exchangePackets: { classKey: 'unit', label: 'Sealed exchange packets', route: '#/envoy' },
+  exchangeArtefacts: { classKey: 'unit', label: 'Attested exchange copies', route: '#/envoy' },
+  exchangeMarkers: { classKey: 'unit', label: 'Exchange idempotency markers', route: '#/envoy' },
   // Portfolio material. Functions, quarters and capital.
   budgets: { classKey: 'portfolio', label: 'Budgets', route: '#/finance' },
   strategyBets: { classKey: 'portfolio', label: 'Strategic bets', route: '#/strategy' },
@@ -287,6 +295,10 @@ export const ACTION_RIGHTS = Object.freeze({
   // ADR-0087: the standing forum is a governance server; any altitude that chairs
   // one may declare it and record its sittings, but never for a peer span.
   'run-cadence': { minRank: 1, maxRank: 5, label: 'Declare a standing forum, record its sittings and freeze a cadence reading' },
+  // ADR-0087: every altitude that holds a record may attest it upward, and every
+  // altitude may receive one — the disclosure class is what limits the content,
+  // not the right to exchange. The action itself enforces the sending span.
+  'exchange-packets': { minRank: 1, maxRank: 5, label: 'Publish or ingest a sealed inter-workspace packet' },
 });
 
 export function actionVerdict(action, seat) {

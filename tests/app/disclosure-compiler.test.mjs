@@ -68,6 +68,9 @@ const RENDERER_ROUTES = [
   'budget', 'stakeholders', 'stakeholder', 'forecasts', 'tempo', 'retention', 'negotiation',
   'changes', 'change', 'decisions', 'conflicts', 'conflict', 'recognition', 'reviews', 'review',
   'settings', 'prep', 'disclosure', 'wargame', 'coupling',
+  // ADR-0088: the Federated Envoy declares its own manifest row, so the
+  // catalogue and the shell stay one route for one route.
+  'envoy',
 ];
 
 /** Sentinel-bearing roster: every person, span and private note is traceable. */
@@ -753,6 +756,9 @@ test('csv: the disclosure export is aggregate-only, seat-compiled and names noth
   // would break the moment a later session appends its own scope.
   assert.ok(CSV_EXPORTS.findIndex((s) => s.key === 'board-claims') < CSV_EXPORTS.findIndex((s) => s.key === 'disclosure-posture'));
   assert.ok(CSV_EXPORTS.findIndex((s) => s.key === 'disclosure-posture') < CSV_EXPORTS.findIndex((s) => s.key === 'operating-cadence'));
+  // ADR-0088 appends after the cadence scope; order is the contract, not
+  // "disclosure is last".
+  assert.ok(CSV_EXPORTS.findIndex((s) => s.key === 'operating-cadence') < CSV_EXPORTS.findIndex((s) => s.key === 'federated-exchange'));
   assert.equal(spec.sensitive, false);
 
   const base = fixture();

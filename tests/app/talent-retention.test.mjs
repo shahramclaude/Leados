@@ -705,11 +705,7 @@ test('the rule never throws into the store when a record is malformed', () => {
 /* ================================================== 10. schema & migration */
 
 test('schema v85 → v86 is additive and invents no compensation, departure or plan', () => {
-<<<<<<< HEAD
-  assert.equal(SCHEMA_VERSION, 91);
-=======
   assert.equal(SCHEMA_VERSION, 93);
->>>>>>> origin/main
   const v28 = {
     schemaVersion: 85,
     meta: { createdAt: `${TODAY}T09:00:00.000Z`, updatedAt: `${TODAY}T09:00:00.000Z`, isDemo: false, revision: 3 },
@@ -718,19 +714,11 @@ test('schema v85 → v86 is additive and invents no compensation, departure or p
     decisions: [], links: [], events: [],
   };
   const migrated = migrate(v28);
-<<<<<<< HEAD
-  assert.equal(migrated.raw.schemaVersion, 91, 'the migrator rewrites the version');
-  assert.ok(migrated.applied.length > 0);
-  // migrate() returns { raw, applied }; normalisation is a separate step.
-  const state = normalizeState(migrated.raw, { now: new Date(`${TODAY}T09:00:00Z`) }).state;
-  assert.equal(state.schemaVersion, 91);
-=======
   assert.equal(migrated.raw.schemaVersion, 93, 'the migrator rewrites the version');
   assert.ok(migrated.applied.length > 0);
   // migrate() returns { raw, applied }; normalisation is a separate step.
   const state = normalizeState(migrated.raw, { now: new Date(`${TODAY}T09:00:00Z`) }).state;
   assert.equal(state.schemaVersion, 93);
->>>>>>> origin/main
   assert.deepEqual(state.departures, []);
   assert.deepEqual(state.retentionPlans, []);
   assert.equal(state.people[0].compensation, null, 'no compensation is invented');

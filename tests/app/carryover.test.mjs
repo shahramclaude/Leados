@@ -87,9 +87,9 @@ function encumberedLine(state, budgetId) {
 // ---------------------------------------------------------------------------
 
 test('v90 migration, record validation, graph vocabulary and spine parity', () => {
-  assert.equal(SCHEMA_VERSION, 91);
+  assert.equal(SCHEMA_VERSION, 93);
   const migrated = migrate({ schemaVersion: 90, settings: { leaderName: 'Keep' }, people: [] });
-  assert.deepEqual(migrated.applied, ['90 → 91']);
+  assert.deepEqual(migrated.applied, ['90 → 91', '91 → 92', '92 → 93']);
   assert.deepEqual(migrated.raw.carryoverRecords, []);
   assert.deepEqual(migrated.raw.carryoverMarkers, []);
   assert.deepEqual(migrated.raw.carryoverGradings, []);
@@ -104,10 +104,12 @@ test('v90 migration, record validation, graph vocabulary and spine parity', () =
     assert.ok(SYSTEM_GENERATED_LINK_RELATIONS.includes(relation));
   }
   const names = DEFAULT_POST_COMMIT_RULES.map((rule) => rule.name);
-  assert.equal(names.indexOf('carryoverRule'), names.indexOf('catchballRule') + 1);
+  // Position is by dependency, not adjacency: it reads settled pacts, so it must
+  // come after the catchball rule and before the market's work-producing pass.
+  assert.ok(names.indexOf('carryoverRule') > names.indexOf('catchballRule'));
   assert.ok(names.indexOf('carryoverRule') < names.indexOf('attentionMarketRule'));
   assert.equal(PROPAGATION_CONTRACTS.length, DEFAULT_POST_COMMIT_RULES.length);
-  assert.equal(CSV_EXPORTS.at(-1).key, 'carryover-settlement');
+  assert.equal(CSV_EXPORTS.filter((s) => s.key === 'carryover-settlement').length, 1, 'registered exactly once');
   // Settings clamp to declared bounds.
   const clamped = normalizeCarryoverSettings({ carryoverCellFloor: 999, carryoverReliabilityFloorPct: -5 });
   assert.equal(clamped.carryoverCellFloor, 100);

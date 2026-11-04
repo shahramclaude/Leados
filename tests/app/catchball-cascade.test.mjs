@@ -48,24 +48,14 @@ const proposal = (toSeatId = 'lead1', extra = {}) => ({ title: 'Improve the deli
 
 // Schema and graph are additive; imported rows cannot silently become accepted pacts.
 test('v88 migration, record validation, graph vocabulary and spine parity', () => {
-<<<<<<< HEAD
-  assert.equal(SCHEMA_VERSION, 91);
-  const migrated = migrate({ schemaVersion: 88, settings: { leaderName: 'Keep' }, people: [] });
-  assert.deepEqual(migrated.applied, ['88 → 89', '89 → 90', '90 → 91']);
-=======
   assert.equal(SCHEMA_VERSION, 93);
   const migrated = migrate({ schemaVersion: 88, settings: { leaderName: 'Keep' }, people: [] });
   assert.deepEqual(migrated.applied, ['88 → 89', '89 → 90', '90 → 91', '91 → 92', '92 → 93']);
->>>>>>> origin/main
   assert.deepEqual(migrated.raw.catchballPacts, []);
   assert.deepEqual(migrated.raw.catchballRounds, []);
   assert.equal(migrated.raw.settings.leaderName, 'Keep');
   const afterConcordance = migrate({ schemaVersion: 89, expectationRounds: [{ id: 'existing-round' }], settings: {} });
-<<<<<<< HEAD
-  assert.deepEqual(afterConcordance.applied, ['89 → 90', '90 → 91']);
-=======
   assert.deepEqual(afterConcordance.applied, ['89 → 90', '90 → 91', '91 → 92', '92 → 93']);
->>>>>>> origin/main
   assert.equal(afterConcordance.raw.expectationRounds[0].id, 'existing-round');
   assert.deepEqual(afterConcordance.raw.catchballPacts, []);
   const warnings = [];
@@ -84,9 +74,6 @@ test('v88 migration, record validation, graph vocabulary and spine parity', () =
   assert.equal(names.indexOf('cadenceRule'), names.indexOf('catchballRule') + 1);
   assert.ok(names.indexOf('catchballRule') < names.indexOf('attentionMarketRule'));
   assert.equal(PROPAGATION_CONTRACTS.length, DEFAULT_POST_COMMIT_RULES.length);
-<<<<<<< HEAD
-  assert.equal(CSV_EXPORTS.at(-1).key, 'carryover-settlement');
-=======
   // The registry is append-only and numbering follows position: CSV #79 is the
   // Catchball cascade, #80 the Board Room (Session 125) and #81 the Operating
   // Cadence Clock (Session 126). Asserting the ORDER is the contract; asserting
@@ -94,8 +81,8 @@ test('v88 migration, record validation, graph vocabulary and spine parity', () =
   assert.ok(CSV_EXPORTS.some((scope) => scope.key === 'catchball-cascade'));
   assert.ok(CSV_EXPORTS.findIndex((scope) => scope.key === 'catchball-cascade') < CSV_EXPORTS.findIndex((scope) => scope.key === 'board-claims'));
   assert.ok(CSV_EXPORTS.findIndex((scope) => scope.key === 'board-claims') < CSV_EXPORTS.findIndex((scope) => scope.key === 'operating-cadence'));
-  assert.equal(CSV_EXPORTS.at(-1).key, 'operating-cadence');
->>>>>>> origin/main
+  // A later session may append; registration ORDER is the contract, not the tail.
+  assert.ok(CSV_EXPORTS.findIndex((s) => s.key === 'catchball-cascade') < CSV_EXPORTS.findIndex((s) => s.key === 'operating-cadence'));
 });
 
 test('one proposal writes strategy and hierarchy provenance; scans are idempotent', () => {

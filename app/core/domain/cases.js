@@ -334,13 +334,6 @@ export const LINK_ENTITY_TYPES = [
   // from them. The subject is a PAIR and a DIMENSION; a person's answers are the
   // instrument's readings, never a rating.
   'concordance',
-<<<<<<< HEAD
-  // ADR-0085: the carryover settlement record is a first-class graph node, so
-  // the encumbered pact, the bet it settles, the leadership span it rolls up
-  // to and the released budget line it frees are all navigable from the
-  // record and back from them.
-  'carryover',
-=======
   // ADR-0086: a disclosure release is a first-class node: the decision that
   // governs it, the consent task it waits on and the span it discloses from are
   // all navigable from the release record itself.
@@ -355,7 +348,18 @@ export const LINK_ENTITY_TYPES = [
   // first-class nodes; nothing person-level is ever a cadence node.
   'cadenceforum',
   'cadencereading',
->>>>>>> origin/main
+
+  // ADR-0085: a sealed inter-workspace packet. A first-class node so the spans
+  // it was carried to, the reconciliation decision a divergence forced and the
+  // review an attested exposure opened are navigable from the packet — and the
+  // packet from them. The attested COPIES a packet imports are deliberately not
+  // graph nodes: a foreign record is not this workspace's record.
+  'exchangepacket',
+  // ADR-0085: the carryover settlement record is a first-class graph node, so
+  // the encumbered pact, the bet it settles, the leadership span it rolls up
+  // to and the released budget line it frees are all navigable from the
+  // record and back from them.
+  'carryover',
 ];
 
 /**
@@ -478,6 +482,8 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   catchballpact: 'catchballPacts',
   catchballround: 'catchballRounds',
   carryover: 'carryoverRecords',
+  // ADR-0085: the packet ledger owns the packet node's IDs.
+  exchangepacket: 'exchangePackets',
   // ADR-0083: keep the registry exhaustive with LINK_ENTITY_TYPES.
   concordance: 'expectationRounds',
   // ADR-0086: keep the registry exhaustive with LINK_ENTITY_TYPES.
@@ -582,15 +588,14 @@ export const SYSTEM_GENERATED_LINK_RELATIONS = Object.freeze([
   'binds-receiver',
   'recovers-authority',
   'summarizes-span',
+  // ADR-0085: written only by RULE-ENV-01/02. `carries` records that an
+  // ingested packet reached this leadership span in the disclosure form that
+  // span may hold; `reconciles` records that a divergence between two
+  // workspaces opened one governed decision. Neither edits a record.
+  'carries',
+  'reconciles',
   // ADR-0084: emitted by the Catchball spine, not manually asserted.
   'deploys-strategy', 'cascades-to', 'counters-upward', 'trades-off',
-<<<<<<< HEAD
-  // ADR-0085: emitted by the Carryover spine, not manually asserted.
-  // `carries-over` — the invalidated pact flows into the settlement terminal;
-  // `settles` — the record (or its decision) judges the bet's stop rule;
-  // `releases-resource` — the settled record returned encumbered authority.
-  'carries-over', 'settles', 'releases-resource',
-=======
   // ADR-0086: a bounded release names the altitude it discloses to and the span
   // that consented to it. Both are structure, never record content.
   'discloses-to',
@@ -599,7 +604,11 @@ export const SYSTEM_GENERATED_LINK_RELATIONS = Object.freeze([
   // competent to close an item; `fit-gap` says which owning seat a forum's
   // membership is missing. Neither is ever asserted by hand.
   'queued-for', 'fit-gap',
->>>>>>> origin/main
+  // ADR-0085: emitted by the Carryover spine, not manually asserted.
+  // `carries-over` — the invalidated pact flows into the settlement terminal;
+  // `settles` — the record (or its decision) judges the bet's stop rule;
+  // `releases-resource` — the settled record returned encumbered authority.
+  'carries-over', 'settles', 'releases-resource',
 ]);
 
 export const LINK_RELATIONS = [
@@ -832,21 +841,28 @@ export const LINK_RELATIONS = [
   // PAIR and an EXPECTATION, never a person's performance.
   're-contracts',
   're-tests',
-<<<<<<< HEAD
+  // ADR-0085: an item is queued for the ONE forum competent to close it, and an
+  // agenda-fit gap names a seat a forum's membership is missing.
+  'queued-for',
+  'fit-gap',
+
+  // ADR-0088 (the Federated Envoy). `carries` — an ingested packet is carried to
+  // this leadership span, in the disclosure form that span may hold; `reconciles`
+  // — this governed decision was opened because the two workspaces disagree about
+  // one origin record. Neither edge edits a record or asserts that a claim is
+  // true; both are written only by RULE-ENV-01/02.
+  'carries',
+  'reconciles',
   // ADR-0085: Hoshin Carryover Terminal provenance edges (see
   // SYSTEM_GENERATED_LINK_RELATIONS).
   'carries-over',
   'settles',
   'releases-resource',
-=======
-  // ADR-0085: an item is queued for the ONE forum competent to close it, and an
-  // agenda-fit gap names a seat a forum's membership is missing.
-  'queued-for',
-  'fit-gap',
->>>>>>> origin/main
 ];
 
 export const LINK_RELATION_LABELS = {
+  carries: 'Carried to this leadership span as a sealed packet',
+  reconciles: 'Governed reconciliation opened by a packet divergence',
   're-contracts': 'Re-contracting decision opened from this expectation',
   're-tests': 'Re-tests the standard this decision set',
   'calibrates-coupling': 'Audited against realised joint resolution timing',
@@ -2294,6 +2310,35 @@ export function resolveLinkedEntity(state, entityType, entityId) {
           ? (rec.grade.outcome === 'held' ? 'Prediction held' : 'Prediction did not hold')
           : `Frozen ${rec.frozenOn}`,
         route: `#/cadence?panel=constraint&reading=${encodeURIComponent(rec.id)}`,
+        raw: rec,
+      };
+    }
+    case 'carryover': {
+      const rec = (state.carryoverRecords || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      // The frozen resource bundle is summarised, never itemised into the graph:
+      // an edge names the settlement, not the money of a span.
+      return {
+        type: 'carryover',
+        id: rec.id,
+        title: `Carryover settlement · ${rec.settlementReason ? String(rec.settlementReason).slice(0, 60) : rec.pactId}`,
+        status: `${rec.status} · ${rec.resource ? rec.resource.effortDays : 0} person-day(s)`,
+        route: `#/carryover?panel=settlements&settlement=${encodeURIComponent(rec.id)}`,
+        raw: rec,
+      };
+    }
+    case 'exchangepacket': {
+      const rec = (state.exchangePackets || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      // The packet's item payloads are deliberately NOT projected into the
+      // shared graph: an edge may point at a packet, never at a foreign record's
+      // fields. The title names the altitude and the count, nothing else.
+      return {
+        type: 'exchangepacket',
+        id: rec.id,
+        title: `Sealed packet · ${rec.direction} · ${rec.recipientAltitudeKey}`,
+        status: `${rec.status} · ${rec.itemCount} item(s) · ${rec.signatureKeyed ? 'keyed' : 'plain'}`,
+        route: `#/envoy?panel=packets&packet=${encodeURIComponent(rec.id)}`,
         raw: rec,
       };
     }

@@ -115,6 +115,10 @@ export const MODULE_MANIFESTS = Object.freeze({
   responses: row('responses', 'Response studio', ['responsePlans'], { mode: A, dates: ['createdAt'] }),
   bundles: row('bundles', 'Action bundles', ['actionBundles'], { mode: A, dates: ['createdAt'], statuses: ['status'] }),
   concordance: row('concordance', 'Expectation concordance', ['expectationRounds'], { mode: A, dates: ['openedOn'], statuses: ['status'] }),
+  // ADR-0087: the Federated Envoy. Adaptive: its report filters packets to the
+  // operating subtree and the item content is already capped by the receiving
+  // altitude's disclosure class, so a declared seat may open its own desk.
+  envoy: row('envoy', 'Federated exchange', ['exchangePackets'], { mode: A, dates: ['receivedAt'], statuses: ['status'] }),
 
   /* ------------------------------------------------------------------ analytics terminals */
   attribution: row('attribution', 'Outcome attribution', ['settlements'], { note: 'Earned-schedule settlement runs over the whole workspace ledger.' }),

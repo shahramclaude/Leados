@@ -1,3 +1,31 @@
+# AI Session Log — Session 128, 2026-11-04: The Federated Envoy (Schema v93, no bump of its own, ADR-0088)
+
+**Repository identity (checked first).** `git remote -v` → `https://github.com/shahramclaude/Leados.git`. Branch `arena/1b0133a2-leados`, base `6c73a02`. Identity **PASS**.
+
+**Audit result (blunt).** Every module assumed one shared store: the hierarchy is real, the *organisation* is not. Cross-boundary leadership work — plant ↔ head office, acquirer ↔ acquired, partner ↔ partner — had no representation beyond a forwarded document, and `sealCrypto` proved integrity only *within* a workspace. Role-tiering exists (five declared altitudes, per-record disclosure classes, aggregate-only exports) and remains a declaration, not authentication.
+
+**What shipped.** `envoy{Registry,Schema,Rules,Actions}.js`, `app/views/envoy.js`, five panels (`desk | packets | carriage | divergence | certificate`), three collections (`exchangePackets`, `exchangeArtefacts`, `exchangeMarkers`), a graph node (`exchangepacket`) with relations `carries` and `reconciles`, `RULE-ENV-01..03` (**69 rules / 69 contracts**), CSV scope **#84 `federated-exchange`**, gateway commands/reads, seat rights, one `disclosureManifests` row and three `RECORD_POLICIES` rows, six nav aliases, an ADR, and `tests/app/federated-envoy.test.mjs` (11 tests).
+
+**The concrete self-test (cross-module × cross-altitude, one transaction).** A packet composed in workspace A is verified and ingested in workspace B; in the *same* atomic commit the carriage reaches **`mgr1`, `dir1` and `vp1`**, and a second identical ingest writes nothing twice. When A edits the case and re-sends, B records **one** divergent artefact, leaves its own case row byte-identical, opens **exactly one** `RULE-ENV-02` decision naming both hashes, links it `reconciles`, and an explicit `envoyScan()` adds no second decision.
+
+**Correctness asserted, not assumed.** Item hash → Merkle root → packet identity → signature recomputed independently; an edited field, a rewritten root, a re-dated packet and a schema-ahead packet each fail with their *own* typed code; keyed mode refused when required and a keyed packet cannot pass blind verification; a names-class packet is refused at an aggregate-class seat with `altitude-mismatch` (no artefact written, refusal recorded); the attestation floor tested in both directions; coverage below five spans refused with its reason.
+
+**Three real defects the tests found and this session fixed.** (1) The divergence rule looked packets up by row id instead of the signed content id, so no `reconciles` edge was ever written. (2) The root pseudo-seat's derived altitude (`frontline`) was used as the *chief's* packet altitude. (3) Per-item `ageDays`/`daysToExpiry` — recomputed from "now" — made an unchanged record diverge on every re-send; ages now live in the packet-level attestation only.
+
+**Merge with `origin/main` (twice, 707 commits, found when the PR reported `CONFLICTING`).** Main merged the **Board Room** ([ADR-0085](./docs/adr/0085-board-room.md)), the **Disclosure Compiler** ([ADR-0086](./docs/adr/0086-disclosure-compiler.md), Schema v92, CSV #81) and the **Operating Cadence Clock** ([ADR-0087](./docs/adr/0087-operating-cadence-clock.md), Schema v93, CSV #82). Resolved here, not deferred:
+
+- **Renumbered twice, finally:** this session is **Session 128**, its record is **[ADR-0088](./docs/adr/0088-federated-envoy.md)**, its export scope is **CSV #84**, appended after `operating-cadence`.
+- **Schema:** main's `92 → 93` migration is untouched; this feature needs **no bump of its own** (three collections normalise from empty, no stored record is transformed), so `SCHEMA_VERSION` stays 93 and the ADR says so.
+- **Spine:** `envoyRule` after `boardRule`, before `attentionMarketRule`; `sealRule` **absolutely last**; **69 rules / 69 contracts**, parity by rule name.
+- **Compiler integration:** one `disclosureManifests` row, three `RECORD_POLICIES` rows, `envoy` in the reviewed fallback list, seven reads in `SAFE_READS`.
+- **Main's red tree fixed here.** Main's merge of the Hoshin Carryover Terminal landed **unresolved conflict markers in `app/core/csv.js`, `app/core/schema.js` and `app/core/domain/cases.js`, plus 87 test files** — `node --check` failed on main's own sources and `schema.js` declared `SCHEMA_VERSION` twice (91 and 93). This branch repairs it: the two colliding `90` migrations are merged into one additive step (board *and* carryover collections), the duplicate declaration is removed, the cadence `92 → 93` migration is closed, and `carryover` — registered as a graph node by main — gets the resolver it never had. Every pin is regenerated from the merged reality (`migrated.applied` chains to 93, `CSV_EXPORTS.length` 84, rule count 69), and three tests that pinned "the scope I added is last" now pin ORDER, so a later session cannot break them by appending.
+
+**Verification performed (actual).** `federated-envoy` **11/11** on the merged tree; the CSV-pinned suites swept to 83; lint/boundary/links/standalone rebuilt. The full suite is **not** claimed here — CI on the PR is the record.
+
+**Honest limits.** A packet proves integrity and provenance of a document, not who ran the client. It is not encrypted — detail above the receiving class is refused at the source, which is the stronger claim and is printed in every certificate. It cannot prove a foreign record is true. Keyed mode needs the same session key on both sides, arranged out of band. No figure rates a person.
+
+**Changed files.** New: `app/core/domain/envoy{Registry,Schema,Rules,Actions}.js`, `app/core/domain/envoy.js`, `app/views/envoy.js`, `docs/adr/0088-federated-envoy.md`, `tests/app/federated-envoy.test.mjs`. Modified: `app/core/schema.js`, `app/core/domain/{cases,postCommit,propagationContracts,accessGateway,seatRegistry,disclosureManifests}.js`, `app/core/csv.js`, `app/actions.js`, `app/main.js`, `tests/app/{typed-links-lineage,disclosure-compiler,board-room}.test.mjs`, the CSV-count assertions, `index.html`, `README.md`, `ROADMAP.md`, `RESEARCH.md`, `CHANGELOG.md`, `FEATURES.md`, `docs/adr/INDEX.md`, `LeadOS-standalone.html`, and this log.
+
 # AI Session Log — Session 127, 2026-11-04: The Operating Cadence Clock (Schema v93, ADR-0087)
 
 

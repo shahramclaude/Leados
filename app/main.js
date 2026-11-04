@@ -31,12 +31,9 @@ import { routingAttentionCount } from './core/domain/altitudeRouter.js';
 import { renderCatchball } from './views/catchball.js';
 import { renderCadence } from './views/cadence.js';
 import { catchballAttentionCount } from './core/domain/catchball.js';
-<<<<<<< HEAD
+import { cadenceAttentionCount } from './core/domain/cadence.js';
 import { renderCarryover } from './views/carryover.js';
 import { carryoverAttentionCount } from './core/domain/carryover.js';
-=======
-import { cadenceAttentionCount } from './core/domain/cadence.js';
->>>>>>> origin/main
 // ADR-0083: the Concordance Terminal — the two-gauge problem behind every
 // performance review, measured pair by pair and rolled up the tree.
 import { renderConcordance } from './views/concordance.js';
@@ -44,6 +41,10 @@ import { renderConcordance } from './views/concordance.js';
 import { renderBoard } from './views/board.js';
 import { concordanceAttentionCount } from './core/domain/concordance.js';
 import { boardAttentionCount } from './core/domain/board.js';
+// ADR-0088: the Federated Envoy — sealed, disclosure-scoped packets between
+// workspaces, so a hierarchy can exist across installations without a server.
+import { renderEnvoy } from './views/envoy.js';
+import { envoyAttentionCount } from './core/domain/envoy.js';
 import { renderResponses } from './views/responses.js';
 import { renderActionBundles } from './views/actionBundles.js';
 import { bundleAttentionCount } from './core/domain/actionBundles.js';
@@ -220,6 +221,10 @@ export const NAV = [
     // transaction, hash-chained from genesis, keyed by the vault passphrase
     // when unlocked, verified on demand, attested up the chain of command.
     { route: 'seal', label: 'Integrity & seals', icon: '🛡', badge: 'seal' },
+    // ADR-0088: the Envoy. Every other screen assumes one workspace; this one
+    // moves a span's attested pack to the altitude above it, sealed and
+    // disclosure-scoped, so the hierarchy is real across installations.
+    { route: 'envoy', label: 'Sealed exchange', icon: '⇋', badge: 'envoy' },
     { route: 'today', label: 'Today', icon: '◎' },
     { route: 'responses', label: 'Response studio', icon: '⌁', badge: 'responses' },
     { route: 'bundles', label: 'Action bundles', icon: '⊞', badge: 'bundles' },
@@ -359,14 +364,12 @@ const RENDERERS = {
   intake: (ctx) => renderIntake(ctx),
   routing: (ctx) => renderAltitudeRouter(ctx),
   catchball: (ctx) => renderCatchball(ctx),
-<<<<<<< HEAD
-  carryover: (ctx) => renderCarryover(ctx),
-=======
   cadence: (ctx) => renderCadence(ctx),
   disclosure: (ctx) => renderDisclosure(ctx),
->>>>>>> origin/main
+  carryover: (ctx) => renderCarryover(ctx),
   concordance: (ctx) => renderConcordance(ctx),
   board: (ctx) => renderBoard(ctx),
+  envoy: (ctx) => renderEnvoy(ctx),
   responses: (ctx) => renderResponses(ctx),
   bundles: (ctx) => renderActionBundles(ctx),
   attribution: (ctx) => renderSettlement(ctx),
@@ -551,10 +554,6 @@ export function parseRoute(hash) {
     // (ADR-0073) and silently stealing it would break a shipped link.
     'mission': 'mission', 'mission-control': 'mission', 'command-center': 'mission', 'flight-deck': 'mission',
     'catchball': 'catchball', 'hoshin': 'catchball', 'strategy-cascade': 'catchball',
-<<<<<<< HEAD
-    'carryover': 'carryover', 'hoshin-carryover': 'carryover', 'settlement': 'carryover',
-    'stop-rule': 'carryover', 'thesis-invalidation': 'carryover',
-=======
     // ADR-0087: the Operating Cadence Clock's aliases. None may shadow a shipped
     // route: 'meetings' is free, 'calendar' is free, and 'review' is deliberately
     // NOT claimed here because it would collide with the review screens.
@@ -562,7 +561,8 @@ export function parseRoute(hash) {
     'standing-forum': 'cadence', 'governance-calendar': 'cadence', 'meetings': 'cadence',
     'operating-review': 'cadence', 'qbr': 'cadence', 'steerco': 'cadence',
     'agenda': 'cadence', 'capacity-clock': 'cadence', 'little-law': 'cadence',
->>>>>>> origin/main
+    'carryover': 'carryover', 'hoshin-carryover': 'carryover', 'settlement': 'carryover',
+    'stop-rule': 'carryover', 'thesis-invalidation': 'carryover',
     'concordance': 'concordance', 'expectation-concordance': 'concordance',
     // ADR-0086: the disclosure compiler's own aliases. `access` and `posture`
     // were unused; `coverage` still belongs to Promise Solvency and is not taken.
@@ -572,6 +572,13 @@ export function parseRoute(hash) {
     'disclosure': 'board', 'disclosure-memo': 'board', 'board-memo': 'board', 'chair': 'board',
     'two-gauges': 'concordance', 'expectations': 'concordance', 'standard': 'concordance',
     'gauge': 'concordance', 'definition-of-done': 'concordance', 'kappa': 'concordance',
+    // ADR-0088: the Envoy's own aliases. None may shadow an existing route —
+    // 'seal' stays the Sealed Spine, 'supply' stays the evidence chain, and
+    // 'export'/'import' belong to workspace data, not to a packet exchange.
+    'envoy': 'envoy', 'sealed-exchange': 'envoy', 'packet': 'envoy', 'packets': 'envoy',
+    'federation': 'envoy', 'federated': 'envoy', 'exchange': 'envoy', 'inter-workspace': 'envoy',
+    'attest': 'envoy', 'attestation-packet': 'envoy', 'merkle': 'envoy', 'handoff-pack': 'envoy',
+    'cross-workspace': 'envoy', 'span-pack': 'envoy',
     'routing': 'routing', 'altitude-router': 'routing', 'router': 'routing',
     'auto-route': 'routing', 'where-does-this-go': 'routing', 'route-note': 'routing',
     'seat': 'seat', 'operating-seat': 'seat', 'altitude-lens': 'seat',
@@ -874,11 +881,8 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       authorityCalibration: authorityCalibrationAttentionCount(state, at, state.settings),
       routing: routingAttentionCount(state, at, state.settings),
       catchball: catchballAttentionCount(state, at, state.settings),
-<<<<<<< HEAD
-      carryover: carryoverAttentionCount(state, at),
-=======
       cadence: cadenceAttentionCount(state, at, state.settings),
->>>>>>> origin/main
+      carryover: carryoverAttentionCount(state, at),
       concordance: concordanceAttentionCount(state, at, state.settings),
       // ADR-0086: consent work waiting on this seat, plus a live release of this
       // seat's that lapses within three days.
@@ -887,6 +891,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       // window, and committed packs carrying a failing claim. Stored snapshots
       // only — the badge never recomputes a module report.
       board: boardAttentionCount(state, at, state.settings),
+      envoy: envoyAttentionCount(state, { now: at, settings: state.settings }),
       // ADR-0082: the badge counts chain breaks only — a valid chain is not noise.
       seal: sealAttentionCount(state),
       // Schema v32: drafts written from case facts that still await a human.
@@ -1350,13 +1355,11 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       routing: 'Altitude Router — natural-language intake classified into modules and the correct organizational altitude, with disclosure-safe roll-up to every leadership level',
       board: 'Board Room — the disclosure pack as a measurement problem: claims and thresholds pre-registered before the first look, verdicts decided by the conservative end of each interval, two-module cross-examination, exact span decomposition, and a permanent post-hoc mark on any threshold moved after looking',
       catchball: 'Hoshin Kanri & Catchball Cascade — negotiated strategy deployment',
-<<<<<<< HEAD
-      carryover: 'Hoshin Carryover — a thesis-invalidated pact settles its bet: stop rule judged, encumbered person-days and budget released into the next allocation cycle',
-=======
       cadence: 'Operating Cadence Clock — your standing forums read as a finite decision machine: what each is competent to close, the demand converging on it, when it next sits, and which items cannot land inside their own horizon',
       disclosure: 'Disclosure Console — every screen states the posture it holds at this altitude, every withheld cell states why, and detail is released only by a consented, expiring, span-bounded contract',
->>>>>>> origin/main
+      carryover: 'Hoshin Carryover — a thesis-invalidated pact settles its bet: stop rule judged, encumbered person-days and budget released into the next allocation cycle',
       concordance: 'Expectation Concordance — “meets expectations” treated as a measurement instrument: two sealed sides, six dimensions, weighted κ / AC1 / PABAK / Bland–Altman agreement, a governed re-contracting decision on divergence and a typed roll-up to every leadership span',
+      envoy: 'Sealed exchange — how a span’s pack leaves its own browser: projected at the receiving altitude’s disclosure class, committed with a per-item SHA-256 and a Merkle root, signed keyed when the vault is unlocked, verified by the receiver before a single field is stored, ingested idempotently, and turned into a governed reconciliation decision when two workspaces disagree',
       responses: 'Response studio — rehearse and adopt a coordinated leadership response',
       bundles: 'Action bundles — review, adopt and safely withdraw coordinated work',
       attribution: 'Outcome attribution — Earned Schedule, clearance bottlenecks and variance settlement',

@@ -203,7 +203,7 @@ test('the graph vocabulary covers the memo: type, collection and both relations'
 
 test('the rule is on the shared spine, has an auditable contract, and cannot outrun the seal', () => {
   assert.equal(PROPAGATION_CONTRACTS.length, DEFAULT_POST_COMMIT_RULES.length, '1:1 rule/contract parity');
-  assert.equal(DEFAULT_POST_COMMIT_RULES.length, 67);
+  assert.equal(DEFAULT_POST_COMMIT_RULES.length, 69, '67 at ADR-0087 (cadence) + RULE-ENV on the same spine');
   assert.ok(DEFAULT_POST_COMMIT_RULES.includes(boardRule));
   const contract = contractFor(boardRule);
   assert.ok(contract, 'boardRule has a declared contract');
@@ -241,7 +241,7 @@ test('the route exists, is enterprise material, and is reachable from the nav', 
 });
 
 test('CSV scope #80 exists and refuses to guess', () => {
-  assert.equal(CSV_EXPORTS.length, 82);
+  assert.equal(CSV_EXPORTS.length, 84);
   const scope = CSV_EXPORTS.find((s) => s.key === 'board-claims');
   assert.ok(scope);
   assert.equal(scope.sensitive, false);

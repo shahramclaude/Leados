@@ -113,19 +113,11 @@ function harness(initial = fixture(), now = () => NOW) {
 
 describe('schema v68 and fail-closed persistence', () => {
   test('the 67→68 migration adds an empty frame ledger, never a retrospective forecast', () => {
-<<<<<<< HEAD
-    assert.equal(SCHEMA_VERSION, 91);
-    assert.equal(typeof MIGRATIONS[67], 'function');
-    const raw = migrate({ schemaVersion: 67, settings: {}, decisions: [decision('old')] });
-    assert.deepEqual(raw.applied, ['67 → 68', '68 → 69', '69 → 70', '70 → 71', '71 → 72', '72 → 73', '73 → 74', '74 → 75', '75 → 76', '76 → 77', '77 → 78', '78 → 79', '79 → 80', '80 → 81', '81 → 82', '82 → 83', '83 → 84', '84 → 85', '85 → 86', '86 → 87', '87 → 88', '88 → 89', '89 → 90', '90 → 91']);
-    assert.equal(raw.raw.schemaVersion, 91);
-=======
     assert.equal(SCHEMA_VERSION, 93);
     assert.equal(typeof MIGRATIONS[67], 'function');
     const raw = migrate({ schemaVersion: 67, settings: {}, decisions: [decision('old')] });
     assert.deepEqual(raw.applied, ['67 → 68', '68 → 69', '69 → 70', '70 → 71', '71 → 72', '72 → 73', '73 → 74', '74 → 75', '75 → 76', '76 → 77', '77 → 78', '78 → 79', '79 → 80', '80 → 81', '81 → 82', '82 → 83', '83 → 84', '84 → 85', '85 → 86', '86 → 87', '87 → 88', '88 → 89', '89 → 90', '90 → 91', '91 → 92', '92 → 93']);
     assert.equal(raw.raw.schemaVersion, 93);
->>>>>>> origin/main
     assert.deepEqual(raw.raw.deferralFrames, []);
     assert.deepEqual(raw.raw.deferralMarkers, []);
     const state = normalizeState(raw.raw, { now: NOW }).state;

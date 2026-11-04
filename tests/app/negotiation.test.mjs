@@ -502,11 +502,7 @@ test('negotiations CSV scope exports analytical rows honestly and survives round
 /* ------------------------------------------------------------------ schema */
 
 test('Schema v23: v22 workspaces migrate additively and negotiation records repair, never invent', () => {
-<<<<<<< HEAD
-  assert.equal(SCHEMA_VERSION, 91);
-=======
   assert.equal(SCHEMA_VERSION, 93);
->>>>>>> origin/main
   const v22 = {
     schemaVersion: 22,
     people: [{ id: 'p1', name: 'Ada', status: 'active', startDate: '2025-01-01' }],
@@ -515,19 +511,11 @@ test('Schema v23: v22 workspaces migrate additively and negotiation records repa
   const snapshot = JSON.stringify(v22);
   const migrated = migrate(v22);
   assert.equal(JSON.stringify(v22), snapshot, 'migration never mutates its input');
-<<<<<<< HEAD
-  assert.deepEqual(migrated.applied.at(-1), '90 → 91');
-  assert.ok(migrated.applied.includes('22 → 23'), 'v23 negotiation step still in the additive chain');
-  const { state, warnings } = normalizeState(migrated.raw, { now: NOW });
-  assert.deepEqual(state.negotiations, [], 'a v22 workspace simply starts with no negotiations');
-  assert.equal(state.schemaVersion, 91);
-=======
   assert.deepEqual(migrated.applied.at(-1), '92 → 93');
   assert.ok(migrated.applied.includes('22 → 23'), 'v23 negotiation step still in the additive chain');
   const { state, warnings } = normalizeState(migrated.raw, { now: NOW });
   assert.deepEqual(state.negotiations, [], 'a v22 workspace simply starts with no negotiations');
   assert.equal(state.schemaVersion, 93);
->>>>>>> origin/main
   assert.deepEqual(warnings, []);
 
   const dirty = normalizeState({
@@ -567,11 +555,7 @@ test('Schema v23: v22 workspaces migrate additively and negotiation records repa
 
 test('empty workspace carries the v23 negotiation collection and a no-op re-normalization', () => {
   const empty = createEmptyState();
-<<<<<<< HEAD
-  assert.equal(empty.schemaVersion, 91);
-=======
   assert.equal(empty.schemaVersion, 93);
->>>>>>> origin/main
   assert.deepEqual(empty.negotiations, []);
   const once = normalizeState(empty, { now: NOW }).state;
   const twice = normalizeState(JSON.parse(JSON.stringify(once)), { now: NOW }).state;
