@@ -1,3 +1,42 @@
+## Bootstrap doctrine roadmap — 2026-11-04 (binding scope for all sessions)
+
+This section is the session-scoped execution view of [NORTH_STAR.md](NORTH_STAR.md). It does not restate the doctrine. Every item is tagged with the organizational altitude(s) it serves. The historical session outcomes below are retained verbatim; new work is planned against these four buckets.
+
+### Implemented
+
+- **[all altitudes]** One connected local-first leadership workspace, not separate apps: 129 shipped sessions, a five-altitude reporting tree (frontline → team lead → manager → director → VP → CEO), and a single shared work graph. Evidence: `app/core/domain/`, `app/views/`, `LEADOS-STATE.md`.
+- **[all altitudes]** Generalized event-driven propagation: one transactional store applies rule-owned cross-module updates atomically with savepoints, rather than one-off hardcoded links. Evidence: `app/core/domain/postCommit.js`, `propagationContracts.js`, `savepoint.js`, `RULE-*` registries.
+- **[all altitudes]** Safe-write, versioned data: additive migrations only, fail-closed normalizers, `SCHEMA_VERSION` at v94, and an append-only action/audit history. Evidence: `app/core/schema.js`, `app/core/store.js`, `app/core/audit.js`.
+- **[all altitudes]** Decoupled business logic / data / UI: domain modules own rules and writes; views render projections; no view writes directly to storage. Enforced by `npm run check:boundary`.
+- **[frontline → CEO]** Altitude-appropriate views with automatic roll-up: the operating seat and disclosure compiler project the same records at each altitude, with per-record disclosure classes and a lowest-common-ancestor roll-up. Evidence: `app/core/domain/seat*.js`, `disclosureManifests.js`, `#/disclosure`.
+- **[manager → CEO]** Aggregate-only exports with small-cell suppression and complementary redaction; no individual note, name or rating reaches an executive aggregate. Evidence: `app/core/csv.js`, CSV scopes #1–#85.
+- **[director → CEO]** Cross-module decision and risk propagation: cases, decisions, delegations, finance, stakeholders and coaching update in parallel from one event, with typed links and an auditable trail. Evidence: `app/core/domain/cases.js`, `automation.js`, `mandate*.js`, `envoy*.js`.
+- **[engineering]** Named-framework discipline is recorded per module (root-cause analysis, principal–agent, real options, Brier scoring, statistical disclosure control, Jaques time-span), with ADRs and rule contracts. Evidence: `docs/adr/`, `RESEARCH.md`.
+
+### In Progress
+
+- **[all altitudes]** Authenticated identity and tenant isolation. The five altitudes are a declared local seat, not authentication; server-side authorization on every read/write/export is still open. Evidence: `AI-SESSION-LOG.md` Session 128 "Honest limits"; `ROADMAP.md` 2026-11-02 entry.
+- **[director → CEO]** Complementary suppression across drill-down chains and reorganisation/differencing tests, so a small child span cannot be recovered by subtracting a parent aggregate. Evidence: Session 118/128 known gaps.
+- **[manager → CEO]** A two-workspace key rendezvous that preserves the local-first promise, the honest prerequisite for keyed Federated Envoy mode at scale. Evidence: Session 128 "Next up".
+- **[all altitudes]** Full canonical verification and real-browser/assistive-technology walkthroughs. Automated jsdom/axe checks pass; real-browser AT behaviour remains `[UNVERIFIED]`. Evidence: Session 118/128 verification sections.
+
+### Planned — Not Started
+
+- **[all altitudes]** Server-side authorization and tenant isolation on every read, write and export, with explicit-consent data migration and independent security review.
+- **[all altitudes]** A complete cross-module event catalogue audit: prove every module subscribes through the generalized engine and no rule-owned edge is written by hand.
+- **[director → CEO]** Temporal disclosure testing for repeated aggregate releases (differencing a series over time), now that the disclosure compiler is posture-aware.
+- **[VP → CEO]** A programme-level federation reading: which spans are actually connected to the span above them, measured from carriage rather than declared.
+- **[frontline → CEO]** Prospective calibration ledger for every altitude's recommendations: freeze the recommendation, grade the outcome, and report Brier/confidence intervals without rating persons.
+- **[all altitudes]** Real-browser and assistive-technology verification of every new panel, plus performance testing at scale.
+
+### Rejected (with one-line reason)
+
+- **[all altitudes]** Claiming production RBAC or predictive individual risk from a self-declared browser seat — neither identity nor calibration is established.
+- **[all altitudes]** LLM-generated financial certainty — no causal validity and no auditable derivation.
+- **[all altitudes]** Automatic people decisions from case narratives — unvalidated harm and bias outweigh speculative benefit.
+- **[all altitudes]** Implicit 1:1 FX conversion — false precision; mixed currencies stay unpooled.
+- **[all altitudes]** Another stand-alone dashboard instead of guarding existing decision paths — duplicates the surface without closing the trust gap.
+
 ## Session 129 outcome — 2026-11-04: Strategy Renewal Bridge — a frozen learning line across five operating altitudes (Schema v94, [ADR-0089](docs/adr/0089-strategy-renewal-bridge.md), `RULE-SCR-01..02`, CSV #85)
 
 **The gap.** The Catchball cascade could negotiate and price strategy deployment, but did not preserve which commitments and bets were in scope at a review date, grade that exact cohort later, or give each altitude a distinct renewal decision.
