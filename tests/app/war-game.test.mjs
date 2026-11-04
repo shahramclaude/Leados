@@ -49,6 +49,7 @@ describe('Schema v60 — war-game additivity', () => {
     const v59State = { schemaVersion: 59, signalClasses: [], signalProbes: [], signalLevers: [] };
     const { state: migrated } = normalizeState(v59State, { now: new Date() });
     assert.equal(migrated.schemaVersion, 93);
+    assert.equal(migrated.schemaVersion, 93);
     assert.ok(Array.isArray(migrated.warGames));
     assert.ok(Array.isArray(migrated.warGameMarkers));
   });

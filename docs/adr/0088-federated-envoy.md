@@ -113,7 +113,7 @@ All three are marker-idempotent, pausable by `envoyAutoPropagate`, and an explic
 | Manager | Compose to their own span or the leader above; packets, verdicts, typed failures, and the divergence list they must answer. |
 | Director | Carriage coverage across their spans, divergences with both hashes, attested value at stake by currency. |
 | VP / executive | Carriage coverage with a Wilson interval, **refused below five spans**, keyed-signature share, aggregate attestation, no titles at all. |
-| CEO / chief | An identity-free certificate (`envoyBriefText`) and aggregate-only CSV scope #83 (`federated-exchange`), with the limits printed in the document itself. |
+| CEO / chief | An identity-free certificate (`envoyBriefText`) and aggregate-only CSV scope #84 (`federated-exchange`), with the limits printed in the document itself. |
 
 ## 3. Rejected alternatives
 

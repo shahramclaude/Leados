@@ -150,11 +150,13 @@ test('schema v82 is additive: two collections, no rewrite, and a probability-fre
   v81.people = [{ id: 'p1', name: 'Existing person', level: 'lead', status: 'active' }];
   const migrated = migrate(v81);
   assert.equal(migrated.applied.at(-1), '92 → 93');
+  assert.equal(migrated.applied.at(-1), '90 → 91');
   assert.deepEqual(migrated.raw.chainReadings, []);
   assert.deepEqual(migrated.raw.chainMarkers, []);
   assert.equal(migrated.raw.people.length, 1, 'no existing record is touched');
 
   const normalized = normalizeState(migrated.raw, { now: NOW });
+  assert.equal(normalized.state.schemaVersion, 93);
   assert.equal(normalized.state.schemaVersion, 93);
 
   const warnings = [];

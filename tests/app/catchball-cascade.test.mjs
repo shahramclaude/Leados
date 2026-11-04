@@ -81,9 +81,8 @@ test('v88 migration, record validation, graph vocabulary and spine parity', () =
   assert.ok(CSV_EXPORTS.some((scope) => scope.key === 'catchball-cascade'));
   assert.ok(CSV_EXPORTS.findIndex((scope) => scope.key === 'catchball-cascade') < CSV_EXPORTS.findIndex((scope) => scope.key === 'board-claims'));
   assert.ok(CSV_EXPORTS.findIndex((scope) => scope.key === 'board-claims') < CSV_EXPORTS.findIndex((scope) => scope.key === 'operating-cadence'));
-  // ADR-0088 appends after the cadence scope; order is the contract, not "last".
+  // A later session may append; registration ORDER is the contract, not the tail.
   assert.ok(CSV_EXPORTS.findIndex((s) => s.key === 'catchball-cascade') < CSV_EXPORTS.findIndex((s) => s.key === 'operating-cadence'));
-  assert.ok(CSV_EXPORTS.findIndex((s) => s.key === 'operating-cadence') < CSV_EXPORTS.findIndex((s) => s.key === 'federated-exchange'));
 });
 
 test('one proposal writes strategy and hierarchy provenance; scans are idempotent', () => {

@@ -149,7 +149,10 @@ test('additive with no schema bump: collections, graph vocabulary, spine and exp
   assert.ok(names.indexOf('envoyRule') < names.indexOf('attentionMarketRule'));
   assert.equal(names.at(-1), 'sealRule', 'the seal still covers every write, including an ingest');
   assert.equal(PROPAGATION_CONTRACTS.length, DEFAULT_POST_COMMIT_RULES.length, 'rule/contract parity');
-  assert.equal(CSV_EXPORTS.at(-1).key, 'federated-exchange', 'the new scope is appended, never inserted');
+  // The scope is appended after every scope that existed when it shipped; a
+  // later session appending its own must not break this, so ORDER is asserted.
+  assert.ok(CSV_EXPORTS.findIndex((s) => s.key === 'operating-cadence') < CSV_EXPORTS.findIndex((s) => s.key === 'federated-exchange'));
+  assert.equal(CSV_EXPORTS.filter((s) => s.key === 'federated-exchange').length, 1, 'registered exactly once');
 });
 
 /* ------------------------------------------------------------------ compose */

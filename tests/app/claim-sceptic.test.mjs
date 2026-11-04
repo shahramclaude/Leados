@@ -157,11 +157,13 @@ test('schema v81 is additive and invents no round, verdict or rate', () => {
   delete v80.scepticMarkers;
   const migrated = migrate(v80);
   assert.equal(migrated.applied.at(-1), '92 → 93');
+  assert.equal(migrated.applied.at(-1), '90 → 91');
   assert.deepEqual(migrated.raw.scepticRounds, []);
   assert.deepEqual(migrated.raw.scepticDispositions, []);
   assert.deepEqual(migrated.raw.scepticMarkers, []);
   assert.equal(typeof MIGRATIONS[80], 'function');
   const normalized = normalizeState(migrated.raw, { now: NOW }).state;
+  assert.equal(normalized.schemaVersion, 93);
   assert.equal(normalized.schemaVersion, 93);
   assert.deepEqual(normalized.scepticDispositions, []);
   // An upgraded workspace says the true thing: nothing has been examined.

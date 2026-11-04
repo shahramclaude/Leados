@@ -451,6 +451,7 @@ test('v75 -> v78 migrates additively and invents nothing', () => {
   assert.ok(applied.includes('76 → 77'));
   assert.ok(applied.includes('77 → 78'));
   assert.equal(v77.schemaVersion, 93);
+  assert.equal(v77.schemaVersion, 93);
   assert.deepEqual(v77.policyEvaluations, []);
   assert.deepEqual(v77.policyMarkers, []);
   assert.deepEqual(v77.reliabilityReadings, []);

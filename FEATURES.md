@@ -4,7 +4,7 @@
 - **Disclosure by projection.** `aggregate → unit → names → detail`; the receiving rank caps the class, the sender sees what was withheld and why, and the receiver is told how many items it did not get. No time-relative field enters an item hash.
 - **Ingest that never edits.** Attested copies (`imported` / `duplicate` / `diverged`); divergence opens one governed DACI decision per record per ISO week and leaves the local record byte-identical.
 - **Carriage in one transaction.** `carries` edges to the receiving seat and every ancestor; `reconciles` from packet to reconciliation decision; `tracks-followup` from packet to review.
-- **Five altitudes, five surfaces.** Desk / Packets / Carriage / Divergence / Certificate; one `disclosureManifests` row, three `RECORD_POLICIES` rows, aggregate-only CSV scope #83 `federated-exchange`, coverage refused below five spans.
+- **Five altitudes, five surfaces.** Desk / Packets / Carriage / Divergence / Certificate; one `disclosureManifests` row, three `RECORD_POLICIES` rows, aggregate-only CSV scope #84 `federated-exchange`, coverage refused below five spans.
 - **Limits, printed in the product.** Not authentication, not encryption, no person-level figure.
 
 ## Session 127 — The Federated Envoy (`#/envoy`, ADR-0087)

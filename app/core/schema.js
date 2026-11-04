@@ -155,6 +155,7 @@ import {
   normalizeCadenceMarkers,
   normalizeCadenceSettings,
 } from './domain/cadenceSchema.js';
+
 // ADR-0088: the Federated Envoy. Three additive collections (the packet
 // ledger, the attested artefact ledger and the rule-idempotency markers) and
 // five clamped conventions. Like ADR-0076 and ADR-0082 this needs **no schema
@@ -167,6 +168,14 @@ import {
   normalizeExchangePackets,
   normalizeEnvoySettings,
 } from './domain/envoySchema.js';
+// ADR-0085: Hoshin Carryover Terminal records, idempotency markers, once-only
+// grading rows, and clamped conventions.
+import {
+  normalizeCarryoverRecords,
+  normalizeCarryoverMarkers,
+  normalizeCarryoverGradings,
+  normalizeCarryoverSettings,
+} from './domain/carryoverSchema.js';
 import { addDays } from './time.js';
 import { validateWatchResponse } from './domain/watchResponse.js';
 import {
@@ -1736,6 +1745,7 @@ export const COLLECTIONS = [
   // the idempotency markers their three rules use.
   'boardMemos',
   'boardMarkers',
+
   // ADR-0088: the Federated Envoy. `exchangePackets` is the ledger of every
   // packet this workspace built, verified, ingested or refused; the stored rows
   // carry the manifest (item hashes and projected fields) so a verification can
@@ -1747,6 +1757,12 @@ export const COLLECTIONS = [
   'exchangeArtefacts',
   // Rule-idempotency markers (carriage, divergence, attested exposure).
   'exchangeMarkers',
+  // ADR-0085: Hoshin Carryover Terminal — one record per Catchball pact
+  // settled as thesis-invalidated, idempotency markers, and the once-only
+  // later grading rows.
+  'carryoverRecords',
+  'carryoverMarkers',
+  'carryoverGradings',
   'links',
   'portfolio',
   'events',
@@ -2399,6 +2415,7 @@ export function normalizeSettings(raw) {
     ...normalizeBoardSettings(s),
     ...normalizeSealSettings(s),
     ...normalizeCatchballSettings(s),
+    ...normalizeCarryoverSettings(s),
     ...normalizeEnvoySettings(s),
   };
 }
@@ -6497,6 +6514,11 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.cadenceReadings = normalizeCadenceReadings(raw.cadenceReadings, warnings);
   state.cadenceMarkers = normalizeCadenceMarkers(raw.cadenceMarkers);
   state.settings = { ...state.settings, ...normalizeCadenceSettings({ ...DEFAULT_SETTINGS, ...(raw.settings || {}) }) };
+  // ADR-0085: carryover records resolve after pacts so `carries-over` and
+  // `settles` edges validate against real pact and bet ids.
+  state.carryoverRecords = normalizeCarryoverRecords(raw.carryoverRecords, warnings);
+  state.carryoverMarkers = normalizeCarryoverMarkers(raw.carryoverMarkers, warnings);
+  state.carryoverGradings = normalizeCarryoverGradings(raw.carryoverGradings, warnings);
   // ADR-0083: rounds resolve before links so `rolls-up-to`, `re-contracts` and
   // `re-tests` edges validate against real round ids. A malformed round is
   // dropped; a round claiming to be closed with one side is reopened.
@@ -7243,8 +7265,13 @@ export const MIGRATIONS = {
   90: (v90) => ({
     ...v90,
     schemaVersion: 91,
+    // v90 → 91 was merged from two branches on main; both additive sets belong in
+    // the one migration, or an upgraded workspace loses one of them.
     boardMemos: Array.isArray(v90.boardMemos) ? v90.boardMemos : [],
     boardMarkers: Array.isArray(v90.boardMarkers) ? v90.boardMarkers : [],
+    carryoverRecords: Array.isArray(v90.carryoverRecords) ? v90.carryoverRecords : [],
+    carryoverMarkers: Array.isArray(v90.carryoverMarkers) ? v90.carryoverMarkers : [],
+    carryoverGradings: Array.isArray(v90.carryoverGradings) ? v90.carryoverGradings : [],
     settings: isPlainObject(v90.settings)
       ? {
         ...v90.settings,
@@ -7253,6 +7280,11 @@ export const MIGRATIONS = {
         boardMaterialityPct: v90.settings.boardMaterialityPct ?? 10,
         boardRecheckDays: v90.settings.boardRecheckDays ?? 90,
         boardAutoPropagate: v90.settings.boardAutoPropagate !== false,
+        carryoverCellFloor: v90.settings.carryoverCellFloor ?? 5,
+        carryoverReliabilityFloorPct: v90.settings.carryoverReliabilityFloorPct ?? 60,
+        carryoverGradingDelayDays: v90.settings.carryoverGradingDelayDays ?? 14,
+        carryoverDecisionReviewDays: v90.settings.carryoverDecisionReviewDays ?? 14,
+        carryoverAutoPropagate: v90.settings.carryoverAutoPropagate !== false,
       }
       : { ...DEFAULT_SETTINGS },
   }),

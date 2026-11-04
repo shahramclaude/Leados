@@ -409,6 +409,7 @@ test('Schema v42 adds empty strategy collections and additive migration invents 
 
   const migrated = migrate({ schemaVersion: 41, people: [], cases: [] });
   assert.equal(migrated.raw.schemaVersion, 93);
+  assert.equal(migrated.raw.schemaVersion, 93);
   assert.deepEqual(migrated.raw.strategyBets, []);
   assert.deepEqual(migrated.raw.strategyTags, []);
 });

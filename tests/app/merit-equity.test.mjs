@@ -189,6 +189,8 @@ test('v50 → v51 is additive: no band, no cycle and no pay figure is invented',
   const migrated = migrate(v50);
   assert.equal(migrated.raw.schemaVersion, 93);
   assert.equal(migrated.applied.at(-1), '92 → 93');
+  assert.equal(migrated.raw.schemaVersion, 93);
+  assert.equal(migrated.applied.at(-1), '90 → 91');
   assert.deepEqual(migrated.raw.compBands, []);
   assert.deepEqual(migrated.raw.meritCycles, []);
   const { state, warnings } = normalizeState(migrated.raw, { now: NOW });
@@ -530,7 +532,7 @@ test('a departure resolves the frozen prediction and the model grades itself onl
 /* -------------------------------------------------------------- CSV & demo */
 
 test('CSV scope #45 carries ratios and counts and leaks no salary, name or label', () => {
-  assert.equal(CSV_EXPORTS.length, 83);
+  assert.equal(CSV_EXPORTS.length, 84);
   const scope = CSV_EXPORTS.find((row) => row.key === 'merit');
   assert.ok(scope);
   assert.match(scope.description, /NO salaries/);

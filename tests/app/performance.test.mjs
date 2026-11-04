@@ -157,6 +157,8 @@ describe('Schema v62 — additive and honest', () => {
     const migrated = migrate({ schemaVersion: 61, settings: {}, people: [] });
     assert.equal(migrated.raw.schemaVersion, 93);
     assert.equal(migrated.applied.at(-1), '92 → 93');
+    assert.equal(migrated.raw.schemaVersion, 93);
+    assert.equal(migrated.applied.at(-1), '90 → 91');
     assert.deepEqual(migrated.raw.performanceConcerns, []);
   });
 
@@ -728,7 +730,7 @@ describe('CSV scope #52 — facts, never prose', () => {
     const descriptor = CSV_EXPORTS.find((row) => row.key === 'performance');
     assert.ok(descriptor, 'scope registered');
     assert.equal(descriptor.sensitive, true);
-    assert.equal(CSV_EXPORTS.length, 83);
+    assert.equal(CSV_EXPORTS.length, 84);
 
     const env = harness();
     openFullyDocumented(env);

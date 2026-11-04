@@ -187,6 +187,7 @@ test('1. Schema v83 is additive and fail-closed', () => {
   // Round-trip through the normalizer and back to the same version.
   const normalized = normalizeState({ ...empty, schemaVersion: 82 }, { now: NOW }).state;
   assert.equal(normalized.schemaVersion, 93);
+  assert.equal(normalized.schemaVersion, 93);
   assert.deepEqual(normalized.successionReadings, []);
 
   // A daily cost needs a currency; a bad amount is dropped, not defaulted.

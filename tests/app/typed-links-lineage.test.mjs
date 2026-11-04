@@ -580,9 +580,8 @@ test('every registered link type survives schema normalization/reload and resolv
   raw.catchballPacts = [{ id: 'catchball-pact-link-fixture', title: 'Fixture pact', toSeatId: raw.people[0].id, status: 'proposed', createdAt: NOW_ISO }];
   raw.catchballRounds = [{ id: 'catchball-round-link-fixture', pactId: 'catchball-pact-link-fixture', ownerId: raw.people[0].id, kind: 'propose', createdAt: NOW_ISO }];
 
-  // Schema v91/v92 (ADR-0085/0086): a board memo and a disclosure release are
-  // graph nodes too; main merged both without adding these fixtures, so the
-  // exhaustive type sweep went red on the merged tree.
+  // Schema v91–v93 (ADR-0085/0086/0087/0088): a board memo, a disclosure release
+  // and a sealed packet are graph nodes too.
   raw.boardMemos = [{
     id: 'board-memo-link-fixture', status: 'draft', title: 'Fixture memo', cycle: 'H2 2026',
     openedOn: '2026-11-01', createdAt: NOW_ISO,
@@ -593,8 +592,6 @@ test('every registered link type survives schema normalization/reload and resolv
     purpose: 'Fixture release so the grant survives a reload as a navigable record.',
     requestedOn: '2026-11-01', requestedAt: NOW_ISO, createdAt: NOW_ISO,
   }];
-  // Schema v92 (ADR-0088, no bump of its own): a sealed packet is a graph node so the spans it was
-  // carried to and the decision its divergence forced are navigable from it.
   raw.exchangePackets = [{
     id: 'exchange-packet-link-fixture', packetId: 'a'.repeat(64), direction: 'inbound', status: 'ingested',
     recipientAltitudeKey: 'manager', recipientClass: 'names', originLabel: 'Fixture workspace',
@@ -602,6 +599,20 @@ test('every registered link type survives schema normalization/reload and resolv
     attestation: { items: 0, openCritical: 0, oldestOpenDays: null, valueAtStake: [] },
     withheldCount: 0, signature: { algo: 'sha256', keyed: false, value: 'd'.repeat(64) },
     createdAt: NOW_ISO, receivedAt: NOW_ISO,
+  }];
+  // Cadence (ADR-0087) nodes, so the exhaustive sweep covers main's newest module.
+  raw.cadenceForums = [{
+    id: 'cadence-forum-link-fixture', title: 'Fixture forum', status: 'active', cadence: 'weekly',
+    kind: 'operating-review', decisionCapacity: 6, altitudeKey: 'manager', chairSeatId: raw.people[0].id,
+    createdAt: NOW_ISO,
+  }];
+  raw.cadenceReadings = [{
+    id: 'cadence-reading-link-fixture', status: 'frozen', frozenOn: '2026-11-01', createdAt: NOW_ISO,
+  }];
+  // Carryover (main's ADR-0085 on the merged tree) node.
+  raw.carryoverRecords = [{
+    id: 'carryover-link-fixture', status: 'pending-settlement', pactId: 'p1',
+    resource: { effortDays: 3, currency: 'DKK', committedAmount: 1000 }, createdAt: NOW_ISO,
   }];
 
   const targetIdFor = (type) => {
@@ -757,18 +768,19 @@ test('every registered link type survives schema normalization/reload and resolv
       boardmemo: ['memo', resolved.id],
       catchballpact: ['pact', resolved.id],
       catchballround: ['round', resolved.id],
+      // Schema v91–v93 nodes address their own panels by query.
+      boardmemo: ['memo', resolved.id],
+      disclosuregrant: ['grant', resolved.id],
+      exchangepacket: ['packet', resolved.id],
+      cadenceforum: ['forum', resolved.id],
+      cadencereading: ['reading', resolved.id],
+      carryover: ['settlement', resolved.id],
       // Schema v93: a forum is addressed by query on the cadence terminal's
       // workbench panel; a frozen reading by query on its constraint panel.
       cadenceforum: ['forum', resolved.id],
       cadencereading: ['reading', resolved.id],
       // Schema v92: a bounded release is addressed by query on the Disclosure
       // Console's releases panel — the edge names the contract, not its content.
-      // Schema v90: a packet is addressed by query on the envelope's packets
-      // panel, so a carriage or reconciliation task can navigate back to the
-      // exact sealed envelope it came from — by row id, never by content.
-      exchangepacket: ['packet', resolved.id],
-      // Schema v92: a release is addressed by query on the Disclosure Console's
-      // releases panel, so a consent task can navigate back to the exact grant.
       disclosuregrant: ['grant', resolved.id],
     }[link.targetType];
     if (focusParam) {

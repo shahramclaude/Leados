@@ -113,6 +113,7 @@ test('1. seal settings normalize with safe defaults; no schema bump of its own',
   const normalized = normalizeState({ ...createEmptyState(NOW.toISOString()), settings: { sealEnabled: true } }, { now: NOW });
   assert.equal(normalized.state.settings.sealEnabled, true);
   assert.equal(normalized.state.schemaVersion, 93);
+  assert.equal(normalized.state.schemaVersion, 93);
 });
 
 /* ------------------------------------------------- 2-4. sealing behaviour */

@@ -15,6 +15,7 @@ import { createMissionActions } from './core/domain/missionActions.js';
 import { createAltitudeRouterActions } from './core/domain/altitudeRouterActions.js';
 import { createCatchballActions } from './core/domain/catchballActions.js';
 import { createCadenceActions } from './core/domain/cadenceActions.js';
+import { createCarryoverActions } from './core/domain/carryoverActions.js';
 // ADR-0083: the Concordance Terminal's API mixin — one more consumer of the
 // same post-commit spine, not a second command bus.
 import { createConcordanceActions } from './core/domain/concordanceActions.js';
@@ -19651,6 +19652,7 @@ export function createApi(store, options = {}) {
   Object.assign(api, createCatchballActions(store, { now: clock, idFactory: id }));
   // ADR-0087: the Operating Cadence Clock's reviewed commands.
   Object.assign(api, createCadenceActions(store, { now: clock, idFactory: id }));
+  Object.assign(api, createCarryoverActions(store, { now: clock, idFactory: id }));
   // ADR-0083: two-sided expectation rounds, sealed until both sides are in.
   Object.assign(api, createConcordanceActions(store, { now: clock, idFactory: id, createApi }));
   // ADR-0085: compose, verify, ingest. Every handler is declared in the gateway;

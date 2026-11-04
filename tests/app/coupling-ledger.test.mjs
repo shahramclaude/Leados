@@ -139,6 +139,10 @@ test('v77 -> v78 migrates additively and invents nothing', () => {
   assert.deepEqual(v78.couplingReviews, []);
   assert.deepEqual(v78.couplingMarkers, []);
   assert.equal(SCHEMA_VERSION, 93);
+  assert.equal(v78.schemaVersion, 93);
+  assert.deepEqual(v78.couplingReviews, []);
+  assert.deepEqual(v78.couplingMarkers, []);
+  assert.equal(SCHEMA_VERSION, 93);
   assert.equal(typeof MIGRATIONS[77], 'function');
   // The conventions exist and are clamped into declared bands.
   assert.equal(v78.settings.couplingBlockDays, 30);

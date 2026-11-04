@@ -691,7 +691,7 @@ test('signals carry rule ids, evidence and a route, and merge into Signals', () 
 });
 
 test('CSV scope #39 exports numeric telemetry with opaque codes and no free text', () => {
-  assert.equal(CSV_EXPORTS.length, 83);
+  assert.equal(CSV_EXPORTS.length, 84);
   const scope = CSV_EXPORTS.find((entry) => entry.key === 'capital');
   assert.ok(scope);
   assert.equal(scope.group, 'analytics');

@@ -524,7 +524,7 @@ describe('five-panel terminal, inclusive routes and working controls', () => {
 
 describe('CSV scope #57: aggregate-only, floors and no identifiers', () => {
   test('one reading exports counts, but no individual forecast, money, title, name, or IDs', () => {
-    assert.equal(CSV_EXPORTS.length, 83);
+    assert.equal(CSV_EXPORTS.length, 84);
     assert.ok(CSV_EXPORTS.some((e) => e.key === 'consequences' && e.filenameSlug === 'decision-consequences'));
     const s = fixture();
     s.consequenceReadings = [buildConsequenceReading(consequenceForDecision(s, 'd-root', NOW, s.settings), 2, NOW, 'private-reading-id')];

@@ -182,6 +182,7 @@ test('v76 -> v78 migrates additively and invents nothing', () => {
   const { raw: v77, applied } = migrate(clone(v76));
   assert.ok(applied.includes('76 → 77'));
   assert.equal(v77.schemaVersion, 93);
+  assert.equal(v77.schemaVersion, 93);
   assert.deepEqual(v77.reliabilityReadings, []);
   assert.deepEqual(v77.reliabilityMarkers, []);
   assert.deepEqual(v77.couplingReviews, []);

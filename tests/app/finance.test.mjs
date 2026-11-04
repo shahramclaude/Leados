@@ -340,7 +340,7 @@ test('FIN-01/02/04/05 fire on their conditions; demo baseline is silent', () => 
 /* -------------------------------------------------------------- CSV + rewind */
 
 test('CSV: finance scope is per-line and formula-safe; calibration gains commitment rows', () => {
-  assert.equal(CSV_EXPORTS.length, 83);
+  assert.equal(CSV_EXPORTS.length, 84);
   assert.ok(CSV_EXPORTS.some((s) => s.key === 'finance'));
   const { store, api } = harness();
   const bud = api.addBudget({ name: '=cmd|calc envelope', currency: 'USD', limit: 5000 });
@@ -422,7 +422,9 @@ test('UI: #/finance list + detail render, record-actual dialog never pre-fills, 
     let view = env.document.querySelector('#view');
     assert.ok(view.textContent.includes('Budget & finance'));
     assert.ok(view.textContent.includes('Platform team operating budget'));
-    assert.ok(view.textContent.includes('USD 37,640'), 'forecast = 7,640 + 6,000 actuals + 24,000 encumbered');
+    // 7,640 base + 6,000 known actuals + 24,000 committed + 18,000 on-call commitment
+    // seeded by the carryover demo (ADR-0085, main). A forecast is a sum, not a claim.
+    assert.ok(view.textContent.includes('USD 55,640'), 'forecast = 7,640 + 6,000 + 24,000 + 18,000 committed');
     env.window.eval(AXE_SRC);
     let axeRes = await env.window.axe.run(view, { rules: { 'color-contrast': { enabled: false } } });
     assert.deepEqual(Array.from(axeRes.violations).map((v) => v.id), [], 'zero axe violations on #/finance');

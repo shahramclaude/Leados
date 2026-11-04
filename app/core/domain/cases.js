@@ -348,12 +348,18 @@ export const LINK_ENTITY_TYPES = [
   // first-class nodes; nothing person-level is ever a cadence node.
   'cadenceforum',
   'cadencereading',
+
   // ADR-0085: a sealed inter-workspace packet. A first-class node so the spans
   // it was carried to, the reconciliation decision a divergence forced and the
   // review an attested exposure opened are navigable from the packet — and the
   // packet from them. The attested COPIES a packet imports are deliberately not
   // graph nodes: a foreign record is not this workspace's record.
   'exchangepacket',
+  // ADR-0085: the carryover settlement record is a first-class graph node, so
+  // the encumbered pact, the bet it settles, the leadership span it rolls up
+  // to and the released budget line it frees are all navigable from the
+  // record and back from them.
+  'carryover',
 ];
 
 /**
@@ -475,6 +481,7 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   // ADR-0084: Hoshin Kanri & Catchball Cascade collections.
   catchballpact: 'catchballPacts',
   catchballround: 'catchballRounds',
+  carryover: 'carryoverRecords',
   // ADR-0085: the packet ledger owns the packet node's IDs.
   exchangepacket: 'exchangePackets',
   // ADR-0083: keep the registry exhaustive with LINK_ENTITY_TYPES.
@@ -597,6 +604,11 @@ export const SYSTEM_GENERATED_LINK_RELATIONS = Object.freeze([
   // competent to close an item; `fit-gap` says which owning seat a forum's
   // membership is missing. Neither is ever asserted by hand.
   'queued-for', 'fit-gap',
+  // ADR-0085: emitted by the Carryover spine, not manually asserted.
+  // `carries-over` — the invalidated pact flows into the settlement terminal;
+  // `settles` — the record (or its decision) judges the bet's stop rule;
+  // `releases-resource` — the settled record returned encumbered authority.
+  'carries-over', 'settles', 'releases-resource',
 ]);
 
 export const LINK_RELATIONS = [
@@ -833,6 +845,7 @@ export const LINK_RELATIONS = [
   // agenda-fit gap names a seat a forum's membership is missing.
   'queued-for',
   'fit-gap',
+
   // ADR-0088 (the Federated Envoy). `carries` — an ingested packet is carried to
   // this leadership span, in the disclosure form that span may hold; `reconciles`
   // — this governed decision was opened because the two workspaces disagree about
@@ -840,6 +853,11 @@ export const LINK_RELATIONS = [
   // true; both are written only by RULE-ENV-01/02.
   'carries',
   'reconciles',
+  // ADR-0085: Hoshin Carryover Terminal provenance edges (see
+  // SYSTEM_GENERATED_LINK_RELATIONS).
+  'carries-over',
+  'settles',
+  'releases-resource',
 ];
 
 export const LINK_RELATION_LABELS = {
@@ -948,6 +966,9 @@ export const LINK_RELATION_LABELS = {
   'cascades-to': 'Cascades vertically into downstream pact or goal',
   'counters-upward': 'Bilateral Catchball counter-offer upward',
   'trades-off': 'Explicitly de-scopes commitment to free span capacity',
+  'carries-over': 'Invalidated pact flows into the settlement terminal',
+  'settles': 'Judges the bet against its stop rule',
+  'releases-resource': 'Settled record returned encumbered budget authority',
 };
 
 const Z_80_INTERVAL = 1.2815515655446004; // Standard normal 90th percentile (P10 / P90)
@@ -2289,6 +2310,20 @@ export function resolveLinkedEntity(state, entityType, entityId) {
           ? (rec.grade.outcome === 'held' ? 'Prediction held' : 'Prediction did not hold')
           : `Frozen ${rec.frozenOn}`,
         route: `#/cadence?panel=constraint&reading=${encodeURIComponent(rec.id)}`,
+        raw: rec,
+      };
+    }
+    case 'carryover': {
+      const rec = (state.carryoverRecords || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      // The frozen resource bundle is summarised, never itemised into the graph:
+      // an edge names the settlement, not the money of a span.
+      return {
+        type: 'carryover',
+        id: rec.id,
+        title: `Carryover settlement · ${rec.settlementReason ? String(rec.settlementReason).slice(0, 60) : rec.pactId}`,
+        status: `${rec.status} · ${rec.resource ? rec.resource.effortDays : 0} person-day(s)`,
+        route: `#/carryover?panel=settlements&settlement=${encodeURIComponent(rec.id)}`,
         raw: rec,
       };
     }
