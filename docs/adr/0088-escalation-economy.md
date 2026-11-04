@@ -1,9 +1,9 @@
-# ADR-0085 — The Escalation Economy: pricing the organisation's hidden market in passed-up problems
+# ADR-0088 — The Escalation Economy: pricing the organisation's hidden market in passed-up problems
 
-- **Status:** Accepted (Session 125, 2026-11-04)
-- **Schema:** v91 (additive `90 → 91`)
-- **Surface:** `#/escalation` (5 panels), CSV scope **#80** (`escalation-economy`)
-- **Rules:** `RULE-ESC-01..05` on the shared post-commit spine (65 rules / 65 contracts)
+- **Status:** Accepted (Session 128, 2026-11-04)
+- **Schema:** v94 (additive `93 → 94`)
+- **Surface:** `#/escalation` (5 panels), CSV scope **#83** (`escalation-economy`)
+- **Rules:** `RULE-ESC-01..05` on the shared post-commit spine (68 rules / 68 contracts)
 - **New collections:** `escalationRecords`, `escalationCommitments`, `escalationMarkers`
 - **New graph:** nodes `escalationrecord`, `escalationcommitment`; relations `originates-from`, `reconciles-authority` (vertical fan-out reuses `rolls-up-to`; the hop to the receiver reuses `escalates-to`)
 
@@ -98,5 +98,5 @@ All five are **marker-idempotent** and **pausable** via `escalationAutoPropagate
 - receiver-only settlement, sideways peer isolation, and origin scoping under a declared seat;
 - freeze → grade once → refuse re-grade → refuse below the floor;
 - marker idempotence on rescan, and full pause with an explicit scan still running;
-- CSV #80 and the brief leaking no person id, name, title, proposed action or note;
+- CSV #83 and the brief leaking no person id, name, title, proposed action or note;
 - all five panels rendering with a single `h1`.

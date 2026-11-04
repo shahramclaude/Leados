@@ -14,6 +14,10 @@ import { normalizeConflicts } from './conflict-schema.js';
 // ADR-0083: the Concordance Terminal. Rounds resolve BEFORE links so
 // `rolls-up-to`, `re-contracts` and `re-tests` edges validate on reload.
 import { normalizeConcordanceRounds, normalizeConcordanceMarkers, normalizeConcordanceSettings } from './domain/concordanceSchema.js';
+import { normalizeDisclosureGrants, normalizeDisclosureMarkers, normalizeDisclosureSettings } from './domain/disclosureSchema.js';
+// ADR-0085: the Board Room. Memos resolve BEFORE links so `summarizes-span`
+// and `escalates-from` provenance edges validate on reload.
+import { normalizeBoardMemos, normalizeBoardMarkers, normalizeBoardSettings } from './domain/boardSchema.js';
 import { normalizePropagationLineage } from './domain/automationLineage.js';
 import { normalizeImpactExecutionSnapshot } from './domain/impactExecution.js';
 import { normalizeStrategyBets, normalizeStrategyTags } from './domain/strategy.js';
@@ -141,7 +145,7 @@ import {
   normalizeCatchballMarkers,
   normalizeCatchballSettings,
 } from './domain/catchballSchema.js';
-// ADR-0085: the Escalation Economy — the disposition ledger, intervention-rate
+// ADR-0088: the Escalation Economy — the disposition ledger, intervention-rate
 // commitments, idempotency markers, and clamped conventions.
 import {
   normalizeEscalationRecords,
@@ -149,6 +153,16 @@ import {
   normalizeEscalationMarkers,
   normalizeEscalationSettings,
 } from './domain/escalationSchema.js';
+// ADR-0085: the Operating Cadence Clock's fail-closed normalizers and clamped
+// conventions. A forum, a sitting or a frozen reading that cannot be validated is
+// dropped with a warning rather than repaired into something a leader might act on.
+import {
+  normalizeCadenceForums,
+  normalizeCadenceSessions,
+  normalizeCadenceReadings,
+  normalizeCadenceMarkers,
+  normalizeCadenceSettings,
+} from './domain/cadenceSchema.js';
 import { addDays } from './time.js';
 import { validateWatchResponse } from './domain/watchResponse.js';
 import {
@@ -313,7 +327,28 @@ export {
 // older blob simply opens on the undeclared operator view. A version bump here
 // would have forced 78 test files to be rewritten for zero user benefit; the
 // honest choice is to add nothing to migrate.
-export const SCHEMA_VERSION = 91;
+export const SCHEMA_VERSION = 94;
+
+// v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
+// thresholds are declared before the first look.
+// v92 adds the Disclosure Compiler (ADR-0086, main): each screen declares its
+// posture, and detail is released only by a consented, expiring contract.
+// v93 adds the Operating Cadence Clock (`cadenceForums`, `cadenceSessions`,
+// `cadenceReadings`, `cadenceMarkers`, ADR-0087): the standing-forum calendar as a
+// finite decision machine — declared per-forum decision capacity and service
+// time, append-only sittings, and frozen readings of the queue that are graded
+// once afterwards. Purely additive: every utilisation, flow time, breach
+// probability and constraint is derived on read from the roster and the dated
+// records other modules already keep, so an upgraded workspace opens with an
+// EMPTY forum register that says no cadence has ever been declared, rather than
+// a fabricated meeting calendar. A forum is only ever created by a human.
+// v94 adds the Escalation Economy (`escalationRecords`, `escalationCommitments`,
+// `escalationMarkers`, ADR-0088): whether a decision moment was absorbed where it
+// arose or escalated upward, with the queue integrity of the receiving span, the
+// escalation yield, the context lost per rung and a graded intervention-rate
+// commitment. Purely additive: an upgraded workspace opens with an EMPTY ledger
+// that says no decision moment has been recorded, rather than a disposition
+// inferred from case titles. A decision moment is only ever logged by a human.
 
 // v83 adds the Succession Terminal (`successionReadings`, `successionMarkers`): a
 // frozen bench claim per workspace or per span — the probability that at least one
@@ -1373,7 +1408,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   catchballCellFloor: 3,
   catchballMaxFanout: 4,
   catchballAutoPropagate: true,
-  // ADR-0085: The Escalation Economy — declared conventions, all clamped. The
+  // ADR-0088: The Escalation Economy — declared conventions, all clamped. The
   // hourly rates are a DECLARED costing convention for the escalation tax,
   // never an audit of anyone's pay.
   escalationFloorN: 5,
@@ -1395,6 +1430,15 @@ export const DEFAULT_SETTINGS = Object.freeze({
   escalationRateExec: 160,
   escalationRateChief: 250,
   escalationAutoPropagate: true,
+  // ADR-0085: the Operating Cadence Clock — declared conventions, clamped on read.
+  // `cadenceUtilisationTargetPct` is the ρ the calendar is planned against; the
+  // planning factor and flow target are named conventions, never fitted.
+  cadenceFloorN: 5,
+  cadenceCellFloor: 3,
+  cadenceUtilisationTargetPct: 85,
+  cadencePlanningFactorPct: 130,
+  cadenceFlowTargetDays: 14,
+  cadenceAutoPropagate: true,
   // ADR-0083: The Concordance Terminal — declared conventions, all clamped.
   concordanceAgreementFloorPct: 60,
   concordanceCellFloor: 5,
@@ -1402,6 +1446,20 @@ export const DEFAULT_SETTINGS = Object.freeze({
   concordanceRetestDays: 21,
   concordanceReviewDays: 14,
   concordanceAutoPropagate: true,
+  // ADR-0086: the disclosure compiler's conventions. The cell floor is the
+  // small-cell floor the aggregate withholds below; a release may never run
+  // longer than 30 days or exceed the per-seat cap, whatever is declared here.
+  disclosureCellFloor: 5,
+  disclosureMaxDays: 30,
+  disclosureMaxActiveGrants: 6,
+  disclosureReviewDays: 14,
+  disclosureAutoPropagate: true,
+  // ADR-0085: the Board Room — declared conventions, all clamped.
+  boardCellFloor: 5,
+  boardEvidenceFloor: 4,
+  boardMaterialityPct: 10,
+  boardRecheckDays: 90,
+  boardAutoPropagate: true,
   seatMaterialityPp: 5,
   seatWindowDays: 90,
   seatMaxLinks: 24,
@@ -1676,15 +1734,32 @@ export const COLLECTIONS = [
   'catchballPacts',
   'catchballRounds',
   'catchballMarkers',
+  // ADR-0085: the Operating Cadence Clock. Declared standing forums, an
+  // append-only sitting log, frozen queue readings graded once afterwards, and
+  // rule-idempotency markers. No attendance record, no per-person record and no
+  // meeting transcript is stored: a forum is a server with a declared capacity,
+  // and the only history kept is what it closed.
+  'cadenceForums',
+  'cadenceSessions',
+  'cadenceReadings',
+  'cadenceMarkers',
   // ADR-0083: two-sided expectation rounds (one row per pair per cycle, sealed
   // until both sides are in) and the idempotency markers their three rules use.
   'expectationRounds',
   'concordanceMarkers',
-  // ADR-0085: the Escalation Economy — one row per decision moment (absorbed or
+  // ADR-0088: the Escalation Economy — one row per decision moment (absorbed or
   // escalated), Aghion–Tirole intervention-rate commitments, and rule markers.
   'escalationRecords',
   'escalationCommitments',
   'escalationMarkers',
+  // ADR-0086: disclosure release contracts (the only records that can widen a
+  // read) and the idempotency markers RULE-DSC-01..02 use.
+  'disclosureGrants',
+  'disclosureMarkers',
+  // ADR-0085: board disclosure memos (declared claims + frozen snapshots) and
+  // the idempotency markers their three rules use.
+  'boardMemos',
+  'boardMarkers',
   'links',
   'portfolio',
   'events',
@@ -2332,6 +2407,9 @@ export function normalizeSettings(raw) {
     ...normalizeAuthorityCalibrationSettings(s),
     ...normalizeRouterSettings(s),
     ...normalizeConcordanceSettings(s),
+    ...normalizeDisclosureSettings(s),
+    // ADR-0085: the Board Room's declared conventions.
+    ...normalizeBoardSettings(s),
     ...normalizeSealSettings(s),
     ...normalizeCatchballSettings(s),
     ...normalizeEscalationSettings(s),
@@ -6424,12 +6502,20 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.catchballPacts = normalizeCatchballPacts(raw.catchballPacts, warnings);
   state.catchballRounds = normalizeCatchballRounds(raw.catchballRounds, warnings);
   state.catchballMarkers = normalizeCatchballMarkers(raw.catchballMarkers);
+  // ADR-0085: the Operating Cadence Clock. A malformed forum, a sitting with no
+  // date and a reading with no frozen figure are all dropped with a warning;
+  // none is repaired into something a leader might act on.
+  state.cadenceForums = normalizeCadenceForums(raw.cadenceForums, warnings);
+  state.cadenceSessions = normalizeCadenceSessions(raw.cadenceSessions, warnings);
+  state.cadenceReadings = normalizeCadenceReadings(raw.cadenceReadings, warnings);
+  state.cadenceMarkers = normalizeCadenceMarkers(raw.cadenceMarkers);
+  state.settings = { ...state.settings, ...normalizeCadenceSettings({ ...DEFAULT_SETTINGS, ...(raw.settings || {}) }) };
   // ADR-0083: rounds resolve before links so `rolls-up-to`, `re-contracts` and
   // `re-tests` edges validate against real round ids. A malformed round is
   // dropped; a round claiming to be closed with one side is reopened.
   state.expectationRounds = normalizeConcordanceRounds(raw.expectationRounds, warnings);
   state.concordanceMarkers = normalizeConcordanceMarkers(raw.concordanceMarkers, warnings);
-  // ADR-0085: escalation records and commitments resolve before links so
+  // ADR-0088: escalation records and commitments resolve before links so
   // `escalates-to`, `originates-from`, `reconciles-authority` and `rolls-up-to`
   // edges validate against real ids. A row that contradicts its own disposition
   // (an escalation with no receiver, an absorption with one) is dropped, never
@@ -6437,6 +6523,16 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.escalationRecords = normalizeEscalationRecords(raw.escalationRecords, warnings);
   state.escalationCommitments = normalizeEscalationCommitments(raw.escalationCommitments, warnings);
   state.escalationMarkers = normalizeEscalationMarkers(raw.escalationMarkers);
+  // ADR-0086: grants resolve before links so `discloses-to`, `consented-by`,
+  // `authorizes` and `tracks-followup` edges validate against real grant ids.
+  // An expired grant loads as expired; it never loads as live authority.
+  state.disclosureGrants = normalizeDisclosureGrants(raw.disclosureGrants, warnings, { now, today: todayDay });
+  state.disclosureMarkers = normalizeDisclosureMarkers(raw.disclosureMarkers, warnings);
+  // ADR-0085: memos resolve before links so `summarizes-span`/`escalates-from`
+  // provenance edges validate against real memo ids. A memo claiming to be
+  // committed without a snapshot is reopened as a draft.
+  state.boardMemos = normalizeBoardMemos(raw.boardMemos, warnings);
+  state.boardMarkers = normalizeBoardMarkers(raw.boardMarkers, warnings);
   state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
 
   const events = asArray(raw, 'events', warnings).map((e, i) => ({
@@ -7135,38 +7231,77 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
-  // ADR-0085: additive 90 → 91. No existing decision moment is invented: an
+  // ADR-0088: additive 93 → 94. No existing decision moment is invented: an
   // older workspace simply has an empty escalation ledger, no commitments and
   // the declared conventions. Nothing here infers a disposition, a resolution,
   // an outcome or a cost from records that never logged one.
+  93: (v93) => ({
+    ...v93,
+    schemaVersion: 94,
+    escalationRecords: Array.isArray(v93.escalationRecords) ? v93.escalationRecords : [],
+    escalationCommitments: Array.isArray(v93.escalationCommitments) ? v93.escalationCommitments : [],
+    escalationMarkers: Array.isArray(v93.escalationMarkers) ? v93.escalationMarkers : [],
+    settings: isPlainObject(v93.settings)
+      ? {
+        ...v93.settings,
+        escalationFloorN: v93.settings.escalationFloorN ?? 5,
+        escalationCellFloor: v93.settings.escalationCellFloor ?? 5,
+        escalationWindowDays: v93.settings.escalationWindowDays ?? 90,
+        escalationYieldFloorPct: v93.settings.escalationYieldFloorPct ?? 20,
+        escalationRateRedPct: v93.settings.escalationRateRedPct ?? 60,
+        escalationUtilisationRedPct: v93.settings.escalationUtilisationRedPct ?? 85,
+        escalationServiceRatePerWeek: v93.settings.escalationServiceRatePerWeek ?? 8,
+        escalationServiceScv: v93.settings.escalationServiceScv ?? 1.25,
+        escalationContextLossPerRungPct: v93.settings.escalationContextLossPerRungPct ?? 15,
+        escalationReturnDays: v93.settings.escalationReturnDays ?? 10,
+        escalationReviewDays: v93.settings.escalationReviewDays ?? 14,
+        escalationHoursPerEscalation: v93.settings.escalationHoursPerEscalation ?? 2.5,
+        escalationCurrency: v93.settings.escalationCurrency ?? 'USD',
+        escalationRateFrontline: v93.settings.escalationRateFrontline ?? 40,
+        escalationRateManager: v93.settings.escalationRateManager ?? 65,
+        escalationRateDirector: v93.settings.escalationRateDirector ?? 100,
+        escalationRateExec: v93.settings.escalationRateExec ?? 160,
+        escalationRateChief: v93.settings.escalationRateChief ?? 250,
+        escalationAutoPropagate: v93.settings.escalationAutoPropagate !== false,
+      }
+      : { ...DEFAULT_SETTINGS },
+  }),
+  // ADR-0086: additive 91 → 92. No existing record is rewritten. An older
+  // workspace simply has an empty release ledger and the declared conventions;
+  // the compiler derives every posture from the module manifests, so no stored
+  // permission table has to be migrated.
+  91: (v91) => ({
+    ...v91,
+    schemaVersion: 92,
+    disclosureGrants: Array.isArray(v91.disclosureGrants) ? v91.disclosureGrants : [],
+    disclosureMarkers: Array.isArray(v91.disclosureMarkers) ? v91.disclosureMarkers : [],
+    settings: isPlainObject(v91.settings)
+      ? {
+        ...v91.settings,
+        disclosureCellFloor: v91.settings.disclosureCellFloor ?? 5,
+        disclosureMaxDays: v91.settings.disclosureMaxDays ?? 30,
+        disclosureMaxActiveGrants: v91.settings.disclosureMaxActiveGrants ?? 6,
+        disclosureReviewDays: v91.settings.disclosureReviewDays ?? 14,
+        disclosureAutoPropagate: v91.settings.disclosureAutoPropagate !== false,
+      }
+      : { ...DEFAULT_SETTINGS },
+  }),
+  // ADR-0086: additive 90 → 91. No existing record is rewritten: an older
+  // workspace simply has an empty memo ledger and the declared conventions.
+  // A memo is only ever created by a human opening one.
   90: (v90) => ({
     ...v90,
     schemaVersion: 91,
-    escalationRecords: Array.isArray(v90.escalationRecords) ? v90.escalationRecords : [],
-    escalationCommitments: Array.isArray(v90.escalationCommitments) ? v90.escalationCommitments : [],
-    escalationMarkers: Array.isArray(v90.escalationMarkers) ? v90.escalationMarkers : [],
+    boardMemos: Array.isArray(v90.boardMemos) ? v90.boardMemos : [],
+    boardMarkers: Array.isArray(v90.boardMarkers) ? v90.boardMarkers : [],
     settings: isPlainObject(v90.settings)
       ? {
         ...v90.settings,
-        escalationFloorN: v90.settings.escalationFloorN ?? 5,
-        escalationCellFloor: v90.settings.escalationCellFloor ?? 5,
-        escalationWindowDays: v90.settings.escalationWindowDays ?? 90,
-        escalationYieldFloorPct: v90.settings.escalationYieldFloorPct ?? 20,
-        escalationRateRedPct: v90.settings.escalationRateRedPct ?? 60,
-        escalationUtilisationRedPct: v90.settings.escalationUtilisationRedPct ?? 85,
-        escalationServiceRatePerWeek: v90.settings.escalationServiceRatePerWeek ?? 8,
-        escalationServiceScv: v90.settings.escalationServiceScv ?? 1.25,
-        escalationContextLossPerRungPct: v90.settings.escalationContextLossPerRungPct ?? 15,
-        escalationReturnDays: v90.settings.escalationReturnDays ?? 10,
-        escalationReviewDays: v90.settings.escalationReviewDays ?? 14,
-        escalationHoursPerEscalation: v90.settings.escalationHoursPerEscalation ?? 2.5,
-        escalationCurrency: v90.settings.escalationCurrency ?? 'USD',
-        escalationRateFrontline: v90.settings.escalationRateFrontline ?? 40,
-        escalationRateManager: v90.settings.escalationRateManager ?? 65,
-        escalationRateDirector: v90.settings.escalationRateDirector ?? 100,
-        escalationRateExec: v90.settings.escalationRateExec ?? 160,
-        escalationRateChief: v90.settings.escalationRateChief ?? 250,
-        escalationAutoPropagate: v90.settings.escalationAutoPropagate !== false,
+        boardCellFloor: v90.settings.boardCellFloor ?? 5,
+        boardEvidenceFloor: v90.settings.boardEvidenceFloor ?? 4,
+        boardMaterialityPct: v90.settings.boardMaterialityPct ?? 10,
+        boardRecheckDays: v90.settings.boardRecheckDays ?? 90,
+        boardAutoPropagate: v90.settings.boardAutoPropagate !== false,
       }
       : { ...DEFAULT_SETTINGS },
   }),
@@ -7211,6 +7346,30 @@ export const MIGRATIONS = {
         catchballCellFloor: v89.settings.catchballCellFloor ?? 3,
         catchballMaxFanout: v89.settings.catchballMaxFanout ?? 4,
         catchballAutoPropagate: v89.settings.catchballAutoPropagate !== false,
+      }
+      : { ...DEFAULT_SETTINGS },
+  }),
+  // ADR-0087: additive 92 → 93. The Operating Cadence Clock adds a forum
+  // register, a sitting log, frozen readings and idempotency markers. Nothing
+  // historical is invented: an upgraded workspace opens with NO forums, because
+  // a meeting calendar back-filled from records would claim a cadence the
+  // organisation never actually ran.
+  92: (v92) => ({
+    ...v92,
+    schemaVersion: 93,
+    cadenceForums: Array.isArray(v92.cadenceForums) ? v92.cadenceForums : [],
+    cadenceSessions: Array.isArray(v92.cadenceSessions) ? v92.cadenceSessions : [],
+    cadenceReadings: Array.isArray(v92.cadenceReadings) ? v92.cadenceReadings : [],
+    cadenceMarkers: Array.isArray(v92.cadenceMarkers) ? v92.cadenceMarkers : [],
+    settings: isPlainObject(v92.settings)
+      ? {
+        ...v92.settings,
+        cadenceFloorN: v92.settings.cadenceFloorN ?? 5,
+        cadenceCellFloor: v92.settings.cadenceCellFloor ?? 3,
+        cadenceUtilisationTargetPct: v92.settings.cadenceUtilisationTargetPct ?? 85,
+        cadencePlanningFactorPct: v92.settings.cadencePlanningFactorPct ?? 130,
+        cadenceFlowTargetDays: v92.settings.cadenceFlowTargetDays ?? 14,
+        cadenceAutoPropagate: v92.settings.cadenceAutoPropagate !== false,
       }
       : { ...DEFAULT_SETTINGS },
   }),

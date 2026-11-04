@@ -1,5 +1,5 @@
 /**
- * ADR-0085: the Escalation Economy — lifecycle, disclosure, arithmetic and
+ * ADR-0088: the Escalation Economy — lifecycle, disclosure, arithmetic and
  * cross-altitude roll-up.
  *
  * Deliberately asserts the MATH, not only the wiring: M/M/1 against its closed
@@ -78,15 +78,15 @@ const esc = (toSeatId = 'mgr', extra = {}) => ({
 
 /* ------------------------------------------------------- 1. schema & spine */
 
-test('v91 migration, fail-closed records, graph vocabulary and spine parity', () => {
-  assert.equal(SCHEMA_VERSION, 91);
-  const migrated = migrate({ schemaVersion: 90, settings: { leaderName: 'Keep' }, people: [] });
-  assert.deepEqual(migrated.applied, ['90 → 91']);
+test('v94 migration, fail-closed records, graph vocabulary and spine parity', () => {
+  assert.equal(SCHEMA_VERSION, 94);
+  const migrated = migrate({ schemaVersion: 93, settings: { leaderName: 'Keep' }, people: [] });
+  assert.deepEqual(migrated.applied, ['93 → 94']);
   assert.deepEqual(migrated.raw.escalationRecords, []);
   assert.deepEqual(migrated.raw.escalationCommitments, []);
   assert.equal(migrated.raw.settings.leaderName, 'Keep');
-  const afterCatchball = migrate({ schemaVersion: 89, catchballPacts: [{ id: 'keep-pact' }], settings: {} });
-  assert.deepEqual(afterCatchball.applied, ['89 → 90', '90 → 91']);
+  const afterCatchball = migrate({ schemaVersion: 92, catchballPacts: [{ id: 'keep-pact' }], settings: {} });
+  assert.deepEqual(afterCatchball.applied, ['92 → 93', '93 → 94']);
   assert.equal(afterCatchball.raw.catchballPacts[0].id, 'keep-pact');
 
   const warnings = [];
@@ -124,7 +124,12 @@ test('v91 migration, fail-closed records, graph vocabulary and spine parity', ()
   assert.ok(names.indexOf('escalationRule') < names.indexOf('seatRule'));
   assert.ok(names.indexOf('escalationRule') < names.indexOf('sealRule'));
   assert.equal(PROPAGATION_CONTRACTS.length, DEFAULT_POST_COMMIT_RULES.length);
-  assert.equal(CSV_EXPORTS.at(-1).key, 'escalation-economy');
+  // Same convention: relative order, with the reason printed. Being last is
+  // true TODAY and is not a contract the next session can honour.
+  const keys = CSV_EXPORTS.map((e) => e.key);
+  assert.ok(keys.indexOf('operating-cadence') < keys.indexOf('escalation-economy'),
+    'scope #83 is appended after main\'s #82');
+  assert.equal(keys.at(-1), 'escalation-economy');
 });
 
 /* --------------------------------------------- 2. cross-altitude roll-up */
@@ -503,7 +508,7 @@ test('automation is pausable and an explicit scan always runs', () => {
 
 /* ------------------------------------------------- 8. exports & disclosure */
 
-test('CSV scope #80 and the brief are aggregate-only: no person, name, title or note', () => {
+test('CSV scope #83 and the brief are aggregate-only: no person, name, title or note', () => {
   const { api, store } = harness();
   api.escalationLog(esc('mgr', { title: 'A very distinctive escalation title', note: 'A private note.', proposedAction: 'Do the distinctive thing' }));
   const rows = api.escalationCsvRows();

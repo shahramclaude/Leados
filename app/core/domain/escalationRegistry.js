@@ -1,6 +1,6 @@
 /**
  * app/core/domain/escalationRegistry.js — canonical vocabulary for the
- * Escalation Economy terminal (`#/escalation`, Schema v91, ADR-0085).
+ * Escalation Economy terminal (`#/escalation`, Schema v94, ADR-0088).
  *
  * THE GAP THIS CLOSES
  * -------------------

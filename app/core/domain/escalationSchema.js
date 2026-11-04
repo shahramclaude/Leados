@@ -1,6 +1,6 @@
 /**
  * app/core/domain/escalationSchema.js — fail-closed normalizers for the
- * Escalation Economy collections and conventions (Schema v91, ADR-0085).
+ * Escalation Economy collections and conventions (Schema v94, ADR-0088).
  *
  * Malformed rows are dropped with an explicit warning rather than coerced into
  * half-valid records; out-of-range settings clamp to declared bounds. Nothing

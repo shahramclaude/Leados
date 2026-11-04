@@ -1,4 +1,4 @@
-## §105. 2026-11-04 — Everyone routes the escalation; nobody prices it (Session 125, Schema v91, [ADR-0085](docs/adr/0085-escalation-economy.md))
+## §109. 2026-11-04 — Everyone routes the escalation; nobody prices it (Session 128, Schema v94, [ADR-0088](docs/adr/0088-escalation-economy.md))
 
 ### The question
 
@@ -31,6 +31,22 @@ Every vendor in this category answers *who gets paged next and how fast*. Does a
 - Cross-span (lateral) escalation arbitrated at the lowest common ancestor — the vertical ledger covers parent↔child only.
 - A counterfactual escalation-market simulation: re-solve a closed period under a different intervention-rate commitment and grade the simulated queue, tax and yield against what was recorded.
 - Authenticated identity + tenant boundary remains the standing limit on every one of these.
+## §108 — Session 126 domain hunt: everyone ships "role-based dashboards"; nobody compiles disclosure (fetched 2026-11-04, [ADR-0086](docs/adr/0086-disclosure-compiler.md))
+
+Search-result/snippet-level scan (2026-11-04; vendor claims are benchmarks, not independently validated capabilities):
+
+- **Microsoft Viva Glint / Viva Insights** — role-based manager and leader dashboards on a hierarchy, with **aggregation thresholds** and small-cell suppression so a manager cannot infer an individual from a team cut. The pattern worth stealing: a floor is a product feature, not a legal footnote.
+- **Workday / Visier / ChartHop** — hierarchy-derived security: an object is visible because the org chart says so, and reporting rolls up by node ownership. Visier documents aggregate cuts; Workday's security groups are the market default.
+- **OneTrust / BigID / Collibra (data-governance)** — **field-level classification** and purpose-based access: fields carry sensitivity classes and access is computed from policy × purpose, not from a hand-written per-screen rule. This is the closest analogue to the compiler's manifest and the reason the design is a table, not an adapter per screen.
+- **Google Zanzibar / OpenFGA / SpiceDB (authorization)** — relationship-based access control as a *graph* of typed relations, evaluated centrally. LeadOS already has the graph; this session makes the release ledger a first-class node in it.
+- **Statistical disclosure control (FCSM cell suppression; complementary suppression)** — the standard practice for publishing tables without disclosing small cells, including the complementary suppression this session implements so a hidden cell cannot be recovered by subtraction. Named and implemented rather than re-invented.
+- **Cloverpop / Loom / decision-log vendors** — decision governance and an audit trail of *who decided what, why, with what authority*. They govern the decision, not the disclosure of the evidence behind it.
+
+**The gap in the searched material:** every vendor above either (a) filters data by role, or (b) publishes aggregates with a privacy floor. None makes **disclosure itself a compiled, per-screen, per-altitude posture that a leader can read, request an exception to, and have the owning span consent to for a bounded window.** That is the shipped slice, and the leak oracle is what lets it be claimed rather than asserted.
+
+**Implemented [all altitudes]:** module manifests × compiler × leak oracle; aggregate posture replacing route refusals; complementary suppression; per-currency money; parity of rule contracts 64/64; consent-bound release contracts with expiry sweeps.
+**Planned [manager → CEO]:** temporal disclosure control (repeated-release differencing, decay), seat-scoped report reads for the analytic terminals, authenticated identity.
+**Rejected [all altitudes]:** differential-privacy claims (this is cell suppression and is labelled as such); a generic "roles & permissions" settings page (a table nobody reads); per-screen hand audits (the queue outgrows the capacity to drain it).
 
 ## 2026-11-03 — authority is a contract, not a forwarded message
 
@@ -6656,3 +6672,30 @@ An authenticated two-device seal (the current one is a UI guarantee); an instrum
 - Local Operating Seats remain auditable workspace declarations, not authenticated multi-user security; small-cell + complementary suppression prevents simple parent-minus-sibling subtraction on aggregate views, not differential privacy.
 - Fréchet joint delivery intervals bound unknown inter-span correlation honestly rather than inventing a copula where sample sizes are small; rates below `catchballFloorN = 5` are withheld as counts-only.
 - **Deliberately rejected:** unweighted `%` averaging across incommensurable KPIs; auto-accepting top-down goals without receiver consent; blaming frontline/manager execution when leading commitments held and the strategic hypothesis failed; person-level "alignment scores".
+
+## §107 — Session 125 domain hunt: meeting software counts the cost of the forum and never its capacity (fetched 2026-11-04, [ADR-0085](docs/adr/0087-operating-cadence-clock.md))
+
+**Method.** Web search over the 2026 meeting-agenda, board-governance and "governance cadence" software category, paired with queueing theory (Little 1961; Kingman 1961), Theory of Constraints (Goldratt 1984/1997) and Conway's law (Conway 1968). Vendor descriptions below are published 2026 product pages and independent category round-ups ([1](https://atlan.com/know/governance-council-meeting-cadence-best-practices/), [2](https://gitnux.org/best/agenda-meeting-software/), [3](https://www.concordp2c.com/7-best-board-management-software-platforms-for-running-effective-board-meetings-in-2026/), [4](https://croclub.com/tools/best-board-governance-software/), [5](https://www.guideflow.com/blog/board-meeting-software)) — not audited deployments, and every vendor-specific claim is marked `[UNVERIFIED]`. The implementation response is [ADR-0085](docs/adr/0087-operating-cadence-clock.md) / `#/cadence`.
+
+### What the 2026 market ships — and the one question nobody asks
+
+1. **"Governance cadence" is content advice, not a model.** The strongest 2026 playbook (Atlan's governance-council cadence guide) recommends *tiering* cadence — quarterly strategic, monthly operational, biweekly execution — and automating the metric collection that feeds it. It never states how many decisions a session must be able to close for the tiering to work, and never measures whether the arriving decision load fits the calendar it prescribes ([1](https://atlan.com/know/governance-council-meeting-cadence-best-practices/)).
+   - *Altitude impact (`manager` → `CEO`):* A quarterly review with 40 arriving directorate decisions and a 6-item capacity is a 6.7× oversubscribed server. Nothing in the category would tell you; the meeting "happens", the agenda overruns, and the residue is carried invisibly.
+   - *LeadOS response:* declared `decisionCapacity` and `serviceDays` per forum, demand measured in service-days by input class, and a utilisation ρ per forum per cycle with a **refused** flow time at ρ ≥ 1.
+2. **Agenda tools are document pipelines** (Lucid Meetings, Docket, Beenote, Boardable, MeetingKing — [2](https://gitnux.org/best/agenda-meeting-software/)). They own agenda approval, distribution, timeboxing, minutes and action follow-through, and several carry versioned edits and audit trails. None binds an agenda item to the **span that owns it** or tests whether the forum's membership can close it.
+   - *Altitude impact (`frontline`, `director`):* The classic failure — work owned by a manager is tabled at a director forum that the manager does not attend — appears in no tool as a finding, only in someone's memory after the fact.
+   - *LeadOS response:* a computable Conway test per forum (`mirrored`, `narrower-than-work`, `wider-than-work`, `disjoint`) and a `fit-gap` graph edge to each missing owning seat, so the fix is a navigable object on the spine.
+3. **Board portals are the deepest governance products and still stop at artefacts** (Diligent Boards, OnBoard, BoardEffect, BoardPro, Convene, Sherpany, Ideals — [3](https://www.concordp2c.com/7-best-board-management-software-platforms-for-running-effective-board-meetings-in-2026/), [4](https://croclub.com/tools/best-board-governance-software/), [5](https://www.guideflow.com/blog/board-meeting-software)). They ship packet distribution, voting, minutes, e-signature, granular permissions, audit logs and — in 2026 — AI minutes and "meeting analytics" that measure attendance and engagement.
+   - *Altitude impact (`VP / executive`, `CEO`):* Meeting analytics measure the cost side (hours × attendees) and the engagement side (who spoke). None of them produce the one figure a COO needs: *at this utilisation, how many days does a decision that enters this forum take to come out, and how many will never come out at all inside the horizon that item implies?*
+   - *LeadOS response:* Little/Kingman flow time per forum, a per-item **escape ladder** over the sitting forums (items certain to miss their own class horizon), and the count of escapes as a named constraint with a governed DACI decision attached.
+4. **Nobody prices the planning fallacy in the calendar itself.** Every tool lets a team write "weekly review, 60 minutes" and never compares the declared service time against the measured closures-per-sitting, so a forum can declare 3 days of service and deliver 5.4 for years (Kahneman & Tversky 1979; Flyvbjerg 2006).
+   - *LeadOS response:* `cadencePlanningFactorPct` (default 130) as a declared correction, the measured `closuresPerSitting` from logged sessions, and the gap printed as the planning-fallacy finding.
+5. **Speculation is never graded.** No meeting or governance product freezes a forecast about its own forum design and grades it later.
+   - *LeadOS response:* frozen readings with a prospective probability, graded **once**, Brier skill against the base rate, both withheld below `cadenceFloorN`.
+
+### Honest limits & rejections
+
+- The Kingman waiting-time formula is an approximation valid in heavy traffic; it is labelled as an approximation wherever the figure is printed, and for `ρ ≥ 1` no flow time is printed at all.
+- Local Operating Seats remain auditable workspace declarations, not authenticated multi-user security; small-cell withholding in CSV #80 is not differential privacy, and complementary suppression is applied only on the aggregate rows it can verify.
+- Vendor capability claims are read from 2026 public product pages and round-ups, **not** from a paid trial; treat them as `[UNVERIFIED]`.
+- **Deliberately rejected:** counting meeting hours as a proxy for governance quality; auto-rescheduling or auto-declaring forums from a ρ reading (that is a decision with an owner); a person-level "meeting effectiveness score"; rendering a finite flow time for an infeasible queue; reusing `load.js` person-day saturation or `supply.js` evidence starvation as a stand-in for forum capacity.

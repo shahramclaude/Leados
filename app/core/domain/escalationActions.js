@@ -1,6 +1,6 @@
 /**
  * app/core/domain/escalationActions.js — reviewed command & read mixin for the
- * Escalation Economy (`#/escalation`, Schema v91, ADR-0085).
+ * Escalation Economy (`#/escalation`, Schema v94, ADR-0088).
  *
  * Mounted on `api` in `app/actions.js` prior to `guardApi(api, store)` so every
  * method is mediated by the central ADR-0080 gateway

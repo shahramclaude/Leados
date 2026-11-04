@@ -149,7 +149,11 @@ test('standalone artifact exists and is a single inline HTML document', () => {
   // views/succession.js, and its panel wiring). The density bound below is what
   // still catches a duplication; this ceiling only tracks the module count.
   // Retention and Mission Control add four more source modules; density is checked below.
-  assert.ok(bytes < 7_100_000, `standalone file is unexpectedly large (${bytes} bytes)`);
+  // Raised in Schema v92: the Disclosure Compiler adds seven real modules (registry,
+  // schema, manifests, compiler, rules, actions, view) beside the Board Room's six
+  // and the Catchball cascade's own. The per-module density bound below is what
+  // still catches a duplicated bundle; this ceiling only tracks module count.
+  assert.ok(bytes < 7_600_000, `standalone file is unexpectedly large (${bytes} bytes)`);
   const declaredModules = Number((html.match(/content="[^"]*?(\d+) source modules/) || [])[1]);
   assert.ok(declaredModules > 100, `expected the build to declare its module count (got ${declaredModules})`);
   const bytesPerModule = Math.round(bytes / declaredModules);

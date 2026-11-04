@@ -1,6 +1,6 @@
 /**
  * app/core/domain/escalation.js — the Escalation Economy terminal
- * (`#/escalation`, Session 125, Schema v91, ADR-0085).
+ * (`#/escalation`, Session 128, Schema v94, ADR-0088).
  *
  * THE QUESTION THIS ANSWERS
  * -------------------------
@@ -714,7 +714,7 @@ export function escalationBriefText(report = {}) {
   return lines.join('\n');
 }
 
-/** CSV scope #80 — aggregate only: no person id, no seat name, no title, no note. */
+/** CSV scope #83 — aggregate only: no person id, no seat name, no title, no note. */
 export function escalationCsvRows(state = {}, { now = new Date(), settings = state.settings || {} } = {}) {
   const report = buildEscalationReport(state, { now, settings });
   const c = report.conventions;

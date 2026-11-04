@@ -1,7 +1,7 @@
 /**
  * app/core/domain/escalationRules.js — post-commit propagation & cross-altitude
- * roll-up rules for the Escalation Economy (`#/escalation`, Schema v91,
- * ADR-0085).
+ * roll-up rules for the Escalation Economy (`#/escalation`, Schema v94,
+ * ADR-0088).
  *
  * Registered on `DEFAULT_POST_COMMIT_RULES` immediately after `catchballRule`
  * and BEFORE `decisionTempoRule`, `attentionMarketRule`, `successionRule`,

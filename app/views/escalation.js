@@ -1,6 +1,6 @@
 /**
  * app/views/escalation.js — the Escalation Economy Terminal
- * (`#/escalation`, Session 125, Schema v91, ADR-0085).
+ * (`#/escalation`, Session 128, Schema v94, ADR-0088).
  *
  * Five role-tiered panels across all five organizational altitudes:
  *   1. Ledger (`ledger`): log one decision moment as absorbed or escalated,
@@ -141,7 +141,7 @@ export function renderEscalation(ctx) {
     }
     const csv = serializeCsv(rows);
     const ok = downloadText({ filename: `leados-escalation-economy-${dayKey(now)}.csv`, text: csv, mime: 'text/csv;charset=utf-8' });
-    toast(ok ? 'Aggregate-only CSV (#80) downloaded.' : 'Download unavailable.', ok ? 'good' : 'bad');
+    toast(ok ? 'Aggregate-only CSV (#83) downloaded.' : 'Download unavailable.', ok ? 'good' : 'bad');
   };
 
   const openLogModal = () => {
@@ -665,7 +665,7 @@ export function renderEscalation(ctx) {
       subtitle: 'Identity-free: no person id, no seat name, no escalation title, no proposed action and no note survives the boundary.',
       actions: [
         h('button', { class: 'btn btn-primary', type: 'button', onClick: downloadBrief, 'data-testid': 'escalation-download-brief' }, 'Download brief'),
-        h('button', { class: 'btn btn-ghost', type: 'button', onClick: downloadCsv, 'data-testid': 'escalation-download-csv' }, 'Download CSV (#80)'),
+        h('button', { class: 'btn btn-ghost', type: 'button', onClick: downloadCsv, 'data-testid': 'escalation-download-csv' }, 'Download CSV (#83)'),
       ],
       body: h('pre', { class: 'brief-pre', 'data-testid': 'escalation-brief' }, ctx.api.escalationBriefText()),
     }),
@@ -696,7 +696,7 @@ export function renderEscalation(ctx) {
 
   /* ------------------------------------------------------------------- render */
   const header = pageHeader({
-    eyebrow: `Schema v91 · ADR-0085 · RULE-ESC-01..05 · ${report.disclosure} disclosure`,
+    eyebrow: `Schema v94 · ADR-0088 · RULE-ESC-01..05 · ${report.disclosure} disclosure`,
     title: 'The Escalation Economy',
     subtitle: 'Every problem in an organisation is either absorbed where it arose or passed upward. This is the ledger, the queue, the yield and the price of that market — and the instrument that makes delegation credible.',
     actions: [

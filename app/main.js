@@ -17,6 +17,11 @@ import { dueMeetings } from './core/domain/oneonone.js';
 import { renderToday } from './views/today.js';
 import { renderMission } from './views/mission.js';
 import { scopedViewState, safeSeatContext } from './core/domain/viewScope.js';
+// ADR-0086: the Disclosure Compiler. Every route's posture is compiled once per
+// render; above a detail ceiling the shell serves the altitude-appropriate
+// aggregate instead of a refusal page.
+import { renderDisclosure, renderAggregatePosture } from './views/disclosure.js';
+import { compileDisclosure, moduleAggregate, disclosureAttentionFor } from './core/domain/disclosure.js';
 import { workspaceRouteVerdict } from './core/domain/accessGateway.js';
 import { runActionBundleRehearsal } from './ui/response-worker.js';
 import { renderIntake } from './views/intake.js';
@@ -24,14 +29,19 @@ import { renderIntake } from './views/intake.js';
 import { renderAltitudeRouter } from './views/altitudeRouter.js';
 import { routingAttentionCount } from './core/domain/altitudeRouter.js';
 import { renderCatchball } from './views/catchball.js';
+import { renderCadence } from './views/cadence.js';
 import { catchballAttentionCount } from './core/domain/catchball.js';
 // ADR-0085: the Escalation Economy — hierarchy priced as a market.
 import { renderEscalation } from './views/escalation.js';
 import { escalationAttentionCount } from './core/domain/escalation.js';
+import { cadenceAttentionCount } from './core/domain/cadence.js';
 // ADR-0083: the Concordance Terminal — the two-gauge problem behind every
 // performance review, measured pair by pair and rolled up the tree.
 import { renderConcordance } from './views/concordance.js';
+// ADR-0086: the Board Room — pre-registered disclosure at the chief altitude.
+import { renderBoard } from './views/board.js';
 import { concordanceAttentionCount } from './core/domain/concordance.js';
+import { boardAttentionCount } from './core/domain/board.js';
 import { renderResponses } from './views/responses.js';
 import { renderActionBundles } from './views/actionBundles.js';
 import { bundleAttentionCount } from './core/domain/actionBundles.js';
@@ -200,6 +210,10 @@ export const NAV = [
     // contracts against delivered outcomes — which spans reliably hold which
     // rights — at every altitude, without rating a person.
     { route: 'authority-calibration', label: 'Authority calibration', icon: '⚖', badge: 'authorityCalibration' },
+    // ADR-0084: the chief altitude's own charter — a disclosure pack whose
+    // claims were declared, and whose thresholds were fixed, BEFORE they were
+    // measured. Claim-first, then look; the mark is permanent.
+    { route: 'board', label: 'Board Room', icon: '▦', badge: 'board' },
     // ADR-0082: the Sealed Spine. One audit.seal event per committed
     // transaction, hash-chained from genesis, keyed by the vault passphrase
     // when unlocked, verified on demand, attested up the chain of command.
@@ -213,6 +227,10 @@ export const NAV = [
     // ADR-0081: classify a note into modules AND the owning altitude, then
     // roll a disclosure-safe signal up every level in one transaction.
     { route: 'routing', label: 'Altitude Router', icon: '⇅', badge: 'routing' },
+    // ADR-0086: the governance calendar itself. Every other screen asks what to
+    // decide; this one asks which standing forum is competent to decide it, when
+    // it next sits, and whether the queue can reach it inside its own horizon.
+    { route: 'cadence', label: 'Operating cadence', icon: '◷', badge: 'cadence' },
     { route: 'catchball', label: 'Strategy cascade', icon: '◇', badge: 'catchball' },
     // ADR-0085: does the decision belong where it is being taken, and what did
     // passing it upward buy? The whole chain of command, priced.
@@ -326,6 +344,10 @@ export const NAV = [
     { route: 'propagation', label: 'Propagation ledger', icon: '⇶', badge: 'propagation' },
     { route: 'settings', label: 'Settings & data', icon: '⚙' },
   ] },
+  { section: 'Governance', items: [
+    // ADR-0086: the boundary that explains itself, at every altitude.
+    { route: 'disclosure', label: 'Disclosure Console', icon: '◑', badge: 'disclosure' },
+  ] },
 ];
 
 const RENDERERS = {
@@ -336,7 +358,10 @@ const RENDERERS = {
   routing: (ctx) => renderAltitudeRouter(ctx),
   catchball: (ctx) => renderCatchball(ctx),
   escalation: (ctx) => renderEscalation(ctx),
+  cadence: (ctx) => renderCadence(ctx),
+  disclosure: (ctx) => renderDisclosure(ctx),
   concordance: (ctx) => renderConcordance(ctx),
+  board: (ctx) => renderBoard(ctx),
   responses: (ctx) => renderResponses(ctx),
   bundles: (ctx) => renderActionBundles(ctx),
   attribution: (ctx) => renderSettlement(ctx),
@@ -526,7 +551,20 @@ export function parseRoute(hash) {
     'who-decides': 'escalation', 'monkey': 'escalation', 'monkeys': 'escalation',
     'subsidiarity': 'escalation', 'intervention-rate': 'escalation', 'de-facto': 'escalation',
     'queue': 'escalation', 'absorption': 'escalation', 'escalation-yield': 'escalation',
+    // ADR-0087: the Operating Cadence Clock's aliases. None may shadow a shipped
+    // route: 'meetings' is free, 'calendar' is free, and 'review' is deliberately
+    // NOT claimed here because it would collide with the review screens.
+    'cadence': 'cadence', 'operating-cadence': 'cadence', 'forums': 'cadence',
+    'standing-forum': 'cadence', 'governance-calendar': 'cadence', 'meetings': 'cadence',
+    'operating-review': 'cadence', 'qbr': 'cadence', 'steerco': 'cadence',
+    'agenda': 'cadence', 'capacity-clock': 'cadence', 'little-law': 'cadence',
     'concordance': 'concordance', 'expectation-concordance': 'concordance',
+    // ADR-0086: the disclosure compiler's own aliases. `access` and `posture`
+    // were unused; `coverage` still belongs to Promise Solvency and is not taken.
+    'disclosure': 'disclosure', 'visibility': 'disclosure', 'access': 'disclosure',
+    'posture': 'disclosure', 'who-sees-what': 'disclosure', 'small-cell': 'disclosure',
+    'board': 'board', 'board-room': 'board', 'board-pack': 'board', 'board-line': 'board',
+    'disclosure': 'board', 'disclosure-memo': 'board', 'board-memo': 'board', 'chair': 'board',
     'two-gauges': 'concordance', 'expectations': 'concordance', 'standard': 'concordance',
     'gauge': 'concordance', 'definition-of-done': 'concordance', 'kappa': 'concordance',
     'routing': 'routing', 'altitude-router': 'routing', 'router': 'routing',
@@ -832,7 +870,15 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       routing: routingAttentionCount(state, at, state.settings),
       catchball: catchballAttentionCount(state, at, state.settings),
       escalation: escalationAttentionCount(state, at, state.settings),
+      cadence: cadenceAttentionCount(state, at, state.settings),
       concordance: concordanceAttentionCount(state, at, state.settings),
+      // ADR-0086: consent work waiting on this seat, plus a live release of this
+      // seat's that lapses within three days.
+      disclosure: disclosureAttentionFor(state, seatCtx?.seat || null, { now: at }),
+      // ADR-0084: drafts awaiting a commit, committed packs past the re-check
+      // window, and committed packs carrying a failing claim. Stored snapshots
+      // only — the badge never recomputes a module report.
+      board: boardAttentionCount(state, at, state.settings),
       // ADR-0082: the badge counts chain breaks only — a valid chain is not noise.
       seal: sealAttentionCount(state),
       // Schema v32: drafts written from case facts that still await a human.
@@ -1000,7 +1046,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
     };
   }
 
-  function renderNav(state, at, route, seatCtx = null) {
+  function renderNav(state, at, route, seatCtx = null, compiled = null) {
     const nav = document.getElementById('sidebar-nav');
     if (!nav) return;
     if (store.isLocked) {
@@ -1018,7 +1064,14 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
     // ADR-0076: role-tiered navigation. A frontline lead is not shown CEO-level
     // portfolio analytics; a CEO is not shown individual 1:1 content. The same
     // pure route verdict gates both the link and direct navigation.
-    const allowed = (item) => workspaceRouteVerdict(item.route, seat).allow;
+    // ADR-0086: the nav asks the same compiler the render gate asks. A screen in
+    // the aggregate posture is still open — it is marked so the leader knows the
+    // click lands on counts, not on detail, before they take it.
+    const verdictFor = (item) => workspaceRouteVerdict(item.route, seat, {
+      state, built: seatCtx?.built || null, now: at, settings: state.settings, compiled,
+    });
+    const allowed = (item) => verdictFor(item).allow;
+    const isAggregate = (item) => compiled?.entries?.[item.route]?.posture === 'aggregate';
     const hiddenN = enforced
       ? NAV.reduce((n, group) => n + group.items.filter((item) => !allowed(item)).length, 0)
       : 0;
@@ -1045,6 +1098,13 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
                 },
                 h('span', { class: 'nav-icon', 'aria-hidden': 'true' }, item.icon),
                 h('span', { class: 'nav-label' }, item.label),
+                isAggregate(item)
+                  ? h('span', {
+                    class: 'nav-posture',
+                    title: `Aggregate only at ${seat.label}: counts and rates, no item detail.`,
+                    'aria-label': 'aggregate only at this altitude',
+                  }, '◌')
+                  : null,
                 count ? h('span', { class: 'nav-count', 'aria-label': `${count} needing attention` }, String(count)) : null,
               );
             }),
@@ -1170,8 +1230,14 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       mount(view, h('div', { class: 'page' }, h('h1', { class: 'page-title' }, 'The operating boundary could not be resolved'), h('p', null, 'No records were projected. Reload to retry; the saved workspace has not been changed.'), h('pre', { class: 'error-detail' }, seatCtx.error)));
       return;
     }
-    const viewState = scopedViewState(store.state, seatCtx);
-    renderNav(viewState, at, route, seatCtx);
+    // ADR-0086: one compile per render. Navigation, the route gate and the
+    // screen itself all read the same posture table, so they cannot disagree.
+    const enforced = Boolean(seatCtx?.seat && !seatCtx.seat.fullAccess);
+    const compiled = enforced
+      ? compileDisclosure(store.state, seatCtx.seat, seatCtx.built, { now: at, settings: store.state.settings })
+      : null;
+    const viewState = scopedViewState(store.state, seatCtx, { now: at, settings: store.state.settings });
+    renderNav(viewState, at, route, seatCtx, compiled);
     renderTopbar(viewState, at, seatCtx);
     ctx = buildContext(route, segments, query, viewState, seatCtx);
     const topbarActions = document.querySelector('.topbar-actions');
@@ -1205,13 +1271,32 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
     // typed URL, a stale link) to a route outside the seat's window, and prints
     // the reason. The undeclared operator view passes through unchanged.
     if (seatCtx?.seat && !seatCtx.seat.fullAccess) {
-      const verdict = workspaceRouteVerdict(route, seatCtx.seat);
+      const verdict = workspaceRouteVerdict(route, seatCtx.seat, {
+        state: store.state, built: seatCtx.built, now: at, settings: store.state.settings, compiled,
+      });
       if (!verdict.allow) {
         mount(view, renderAccessDenied(seatCtx.seat, route, verdict));
         const heading = view.querySelector('h1');
         if (heading) heading.setAttribute('tabindex', '-1');
         lastRenderedRoute = route;
         document.title = 'Withheld at this altitude · LeadOS';
+        return;
+      }
+      // ADR-0086: above the detail ceiling the module still opens — as the read
+      // the level above actually acts on. No dead end, no fake records.
+      if (verdict.posture === 'aggregate') {
+        const entry = compiled?.entries?.[route] || null;
+        try {
+          const aggregate = moduleAggregate(store.state, entry?.route || route, seatCtx.seat, seatCtx.built, { now: at, settings: store.state.settings });
+          mount(view, renderAggregatePosture(ctx, entry, aggregate));
+          const heading = view.querySelector('h1');
+          if (heading) heading.setAttribute('tabindex', '-1');
+          if (heading && routeChanged && !document.activeElement?.closest?.('#modal-root')) heading.focus({ preventScroll: true });
+          lastRenderedRoute = route;
+          document.title = `${entry?.label || route} — aggregate at ${seatCtx.seat.label} · LeadOS`;
+        } catch (error) {
+          renderError(error, route);
+        }
         return;
       }
     }
@@ -1255,8 +1340,11 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       mission: 'Mission Control',
       intake: 'Intake triage',
       routing: 'Altitude Router — natural-language intake classified into modules and the correct organizational altitude, with disclosure-safe roll-up to every leadership level',
+      board: 'Board Room — the disclosure pack as a measurement problem: claims and thresholds pre-registered before the first look, verdicts decided by the conservative end of each interval, two-module cross-examination, exact span decomposition, and a permanent post-hoc mark on any threshold moved after looking',
       catchball: 'Hoshin Kanri & Catchball Cascade — negotiated strategy deployment',
       escalation: 'Escalation Economy — is this decided where the information is? Absorbed-or-escalated ledger, M/M/1 queue integrity per span, escalation yield, Shannon context loss per rung, Aghion & Tirole de facto centralisation against a graded intervention-rate commitment, and the Oncken & Wass monkey ledger',
+      cadence: 'Operating Cadence Clock — your standing forums read as a finite decision machine: what each is competent to close, the demand converging on it, when it next sits, and which items cannot land inside their own horizon',
+      disclosure: 'Disclosure Console — every screen states the posture it holds at this altitude, every withheld cell states why, and detail is released only by a consented, expiring, span-bounded contract',
       concordance: 'Expectation Concordance — “meets expectations” treated as a measurement instrument: two sealed sides, six dimensions, weighted κ / AC1 / PABAK / Bland–Altman agreement, a governed re-contracting decision on divergence and a typed roll-up to every leadership span',
       responses: 'Response studio — rehearse and adopt a coordinated leadership response',
       bundles: 'Action bundles — review, adopt and safely withdraw coordinated work',
