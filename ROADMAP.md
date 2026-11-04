@@ -1,3 +1,26 @@
+## 2026-11-04 — Session 122: the review's instrument, audited (Schema v89, [ADR-0082](docs/adr/0082-expectation-concordance.md), `#/concordance`, RULE-ECN-01..03, CSV #78)
+
+**The gap this closes.** LeadOS could audit the *reliability of a leader's ratings over time* (ADR-0069) and the *authority of a span over an action class* (ADR-0079), but not the oldest defect in performance management: two people using different gauges for the same word. "Meets expectations" is six expectations, and nothing in the category — or in this workspace — measured whether the two people in the room meant the same thing by it. This session ships that measurement.
+
+**Implemented, tagged by altitude**
+
+- **[frontline]** `#/concordance` — one round per leader → report pair; both sides answer six declared dimensions independently; nothing is revealed until both are in; a sealed side cannot be revised; a closed round is evidence. Pair detail, both gauges, the gap per dimension and a deterministic conversation script (no model, no inference).
+- **[manager]** Sealed-round queue (what is waiting on whom), per-pair κ trends across cycles, and one generated agenda line placed on the pair's most recent 1:1 by `RULE-ECN-02`.
+- **[director]** Span rates with exact partitioning, the org-wide **dimension profile** (which word diverges, in which direction, in how many pairs), and small-cell withholding below the declared floor. Other spans' two gauges are withheld — the leader's own pairs stay readable.
+- **[VP / executive]** Pairs-above-floor share with a Wilson 95% interval and a 10th–90th percentile range; one governed DACI re-contracting decision per pair per ISO week on divergence; typed `rolls-up-to` edges to every ancestor in the same transaction.
+- **[CEO / chief]** Identity-free brief and aggregate-only CSV #78. No person, pair, span name, note or individual rating survives the boundary.
+- **[all altitudes]** Closed loop: a second round after re-contracting is compared with breached-but-not-re-contracted pairs, printed as an **association** and refused below the cell floor. Additive `MIGRATIONS[88]`, fail-closed normalizers, 62/62 rule-contract parity, pausable auto-propagation with an always-available explicit scan.
+
+**Framework stack encoded:** MSA / gauge R&R (AIAG & VDA 2010); quadratic weighted κ (Cohen 1968); Gwet's AC1 (2008); PABAK (Byrt, Bishop & Carlin 1993); Bland–Altman bias and limits of agreement (1986); Landis & Koch (1977) bands *as a declared convention*; Wilson (1927) intervals; Hackman & Oldham (1976) role clarity, Locke & Latham (1990) goal specificity, Mager & Pipe (1970) "does the person know what is expected and when"; Leventhal (1980) / Bies & Moag (1986) / Colquitt et al. (2001) procedural and interactional justice, implemented as the seal, the symmetry rule and the refusal to print a figure that could be used against a person.
+
+**Deliberately rejected:** a 360-feedback surface (a distribution of opinions about a person); a single "alignment score" (hides the dimension-level finding that makes it actionable); storing both sides in one unsealed record (the second answer anchors on the first); auto-correcting an expectation from the divergence (that is the leader's and the report's decision); grading a future review outcome from six items (attractive, unbuildable honestly).
+
+**Next 1–3 ambitious targets (unchanged priority, now sharper)**
+
+- **Next 1 — [all altitudes] Authenticated identity + tenant boundary.** Server-side authorization on every read/write/export, explicit consent migration and independent review. This is the one honest limit that appears in every recent ADR, and the seal in this session makes it more visible: sealing prevents anchoring, not a determined reader with the backup file.
+- **Next 2 — [manager → CEO] Temporal disclosure and repeated-release differencing.** A pair whose κ is republished every cycle is a repeated release; the confidentiality tests (complementary suppression across cycles, split/merge, inactive users, phased access) have not been written.
+- **Next 3 — [frontline → director] Instrument v2 with a paired-work test.** Ask both sides to score the *same* recent piece of work against the sentence they agreed, so agreement is measured on an artifact and not only on a self-report.
+
 ## 2026-11-03 — Session 121: the note chooses the altitude (Schema v88, [ADR-0081](docs/adr/0081-altitude-router.md), `#/routing`, RULE-AR-01..03, CSV #77)
 
 ### Fresh 2026 competitive + domain hunt (fetched 2026-11-03; vendor claims are marketing, not independent benchmarks)

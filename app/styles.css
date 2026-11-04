@@ -2918,3 +2918,46 @@ tr.is-focused td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
 }
 .field-check input[type='checkbox'] { width: 18px; height: 18px; flex: none; }
 .field-check span { font-weight: 500; }
+
+/* ---------------------------------------------------------- Concordance */
+/* ADR-0082: two gauges, one word. Five pips per side; the gap is the reading. */
+.ec-gauge { display: inline-flex; gap: 4px; align-items: center; }
+.ec-pip {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 20px; height: 20px; border-radius: 5px; font-size: 0.68rem;
+  border: 1px solid var(--line, #dfe3ea); color: var(--muted, #5b677a); background: var(--surface, #fff);
+}
+.ec-pip-on { background: var(--accent, #2f6df6); border-color: var(--accent, #2f6df6); color: #fff; font-weight: 600; }
+.ec-gauge-member .ec-pip-on { background: #7a5af8; border-color: #7a5af8; }
+.ec-ladder-row {
+  display: grid; grid-template-columns: minmax(200px, 1.1fr) minmax(220px, 1.2fr) 90px;
+  gap: 12px; align-items: start; padding: 12px 0; border-bottom: 1px solid var(--line, #eef1f6);
+}
+.ec-ladder-row:last-child { border-bottom: 0; }
+.ec-ladder-q { display: flex; flex-direction: column; gap: 2px; }
+.ec-ladder-gauges { display: flex; gap: 18px; flex-wrap: wrap; }
+.ec-side { display: flex; flex-direction: column; gap: 4px; min-width: 96px; }
+.ec-side-label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted, #5b677a); }
+.ec-reading { grid-column: 1 / -1; margin: 4px 0 0; color: var(--muted, #5b677a); }
+.ec-fieldset { border: 1px solid var(--line, #dfe3ea); border-radius: 10px; padding: 10px 12px; margin: 0; }
+.ec-fieldset legend { font-weight: 600; padding: 0 4px; }
+.ec-scale { display: grid; gap: 6px; margin-top: 8px; }
+.ec-scale-option { display: flex; gap: 10px; align-items: center; padding: 6px 8px; border-radius: 8px; cursor: pointer; }
+.ec-scale-option:hover { background: var(--surface-2, #f7f9fc); }
+.ec-scale-option input { width: 18px; height: 18px; flex: none; }
+.ec-scale-num { font-variant-numeric: tabular-nums; font-weight: 600; min-width: 14px; }
+.ec-scale-option:focus-within { outline: 2px solid var(--accent, #2f6df6); outline-offset: 2px; }
+.ec-instrument { padding: 8px 0; border-bottom: 1px solid var(--line, #eef1f6); }
+.ec-anchors { margin: 6px 0 0 18px; padding: 0; font-size: 0.86rem; }
+.ec-signal { padding: 10px 0; border-bottom: 1px solid var(--line, #eef1f6); }
+.ec-signal:last-child { border-bottom: 0; }
+.ec-inline { flex-direction: row; align-items: center; gap: 10px; }
+.ec-brief {
+  max-height: 60vh; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere;
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 0.82rem; line-height: 1.55; padding: 14px;
+  border: 1px solid var(--line, #dfe3ea); border-radius: 10px; background: var(--surface-2, #f7f9fc);
+}
+@media (max-width: 720px) {
+  .ec-ladder-row { grid-template-columns: 1fr; }
+}

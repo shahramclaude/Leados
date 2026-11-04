@@ -227,6 +227,10 @@ export const ACTION_RIGHTS = Object.freeze({
   'freeze-board-summary': { minRank: 5, maxRank: 5, label: 'Freeze a board-ready summary' },
   'declare-seat': { minRank: 1, maxRank: 5, label: 'Declare the operating seat' },
   'route-intake': { minRank: 1, maxRank: 5, label: 'Route a natural-language situation note to modules and an altitude' },
+  // ADR-0082: an expectation round is a two-sided instrument. Every altitude
+  // that leads anyone may run one, including the chief — but the round is bound
+  // to a real reporting pair inside the declared span (checked by the action).
+  'close-expectation-round': { minRank: 1, maxRank: 5, label: 'Open, seal or withdraw a two-sided expectation round' },
   'coordinate-intervention': { minRank: 1, maxRank: 5, label: 'Rehearse and adopt a bounded cross-module intervention' },
   'test-assumption': { minRank: 3, maxRank: 5, label: 'Register a testable operating assumption' },
   'prepare-comms': { minRank: 3, maxRank: 5, label: 'Prepare a stakeholder communication' },

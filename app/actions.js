@@ -13,6 +13,9 @@ import { createMissionActions } from './core/domain/missionActions.js';
 // ADR-0081: the Altitude Router's API mixin (one more consumer of the same
 // addCase adoption seam, not a second command bus).
 import { createAltitudeRouterActions } from './core/domain/altitudeRouterActions.js';
+// ADR-0082: the Concordance Terminal's API mixin — one more consumer of the
+// same post-commit spine, not a second command bus.
+import { createConcordanceActions } from './core/domain/concordanceActions.js';
 import { guardApi } from './core/domain/accessGateway.js';
 import { analyzeMitigationRobustness, robustnessEvidenceKey, robustnessDecision, ROBUSTNESS_EVENT } from './core/domain/mitigationRobustness.js';
 import { DEFAULT_POST_COMMIT_RULES } from './core/domain/postCommit.js';
@@ -19554,6 +19557,8 @@ export function createApi(store, options = {}) {
   Object.assign(api, createMissionActions(store, { now: clock, idFactory: id, createApi }));
   // ADR-0081: the Altitude Router's reviewed commands.
   Object.assign(api, createAltitudeRouterActions(store, { now: clock, idFactory: id, createApi }));
+  // ADR-0082: two-sided expectation rounds, sealed until both sides are in.
+  Object.assign(api, createConcordanceActions(store, { now: clock, idFactory: id, createApi }));
   // ADR-0080: one fail-closed API boundary. The local operator is unchanged;
   // a declared seat gets only reviewed adapters, with rank and span checks.
   return guardApi(api, store);
