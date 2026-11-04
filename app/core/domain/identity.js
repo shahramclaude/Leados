@@ -1,6 +1,6 @@
 /**
  * app/core/domain/identity.js — the Attested Commit's pure engine
- * (Schema v91, ADR-0085).
+ * (Schema v93, ADR-0087).
  *
  * One question the Sealed Spine could not answer: WHO wrote this? Every seat
  * was a declared label. This module binds each transaction to a seat
@@ -515,7 +515,7 @@ export function identityCsvRows(state, { now = new Date(), settings = null } = {
 /**
  * A signed checkpoint document. Kept OUTSIDE the workspace it anchors, it
  * detects TRUNCATION of the tail — the one attack a self-referential hash
- * chain cannot see (assurance rung 3; see ADR-0085).
+ * chain cannot see (assurance rung 3; see ADR-0087).
  */
 export function buildIdentityCheckpoint(state, { now = new Date(), session = null } = {}) {
   const active = session || activeIdentitySession(now.getTime());

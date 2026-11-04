@@ -1,6 +1,6 @@
 /**
  * app/core/domain/identitySchema.js — fail-closed normalizers for the
- * Attested Commit (Schema v91, ADR-0085).
+ * Attested Commit (Schema v93, ADR-0087).
  *
  * What lives in the workspace, and what must never:
  *   - `seatIdentities` rows carry the PUBLIC half of a credential: seat id,

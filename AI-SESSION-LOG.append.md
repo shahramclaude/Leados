@@ -193,9 +193,9 @@ move: turn the VOI terminal into a **proper-scoring feedback loop** for the lead
 
 ---
 
-# Session 125 — The Attested Commit (append buffer)
+# Session 127 — The Attested Commit (append buffer)
 
-2026-11-04 · Schema v91 · ADR-0085 · `RULE-IDN-01..03` · IDN-01..03 · CSV #80 · 27/27 new tests · standalone 7,040,452 bytes / 389 modules.
+2026-11-04 · Schema v93 · ADR-0087 · `RULE-IDN-01..03` · IDN-01..03 · CSV #82 · 27/27 new tests · standalone 7,197,593 bytes / 402 modules (post-merge build).
 
 The workspace had answered *was this record altered?* (Session 122's sealed spine) and printed its own limit in every ADR since: *who wrote this record?* — seats were declared labels. `#/identity` derives one credential per seat from a passphrase (PBKDF2, memory-only key; the workspace stores only the salt, a 16-hex fingerprint and an HMAC verifier — asserted by test that the state JSON contains neither the passphrase nor key material) and signs every operational commit: `HMAC(key, "leados-seat-attest-v1|seat|keyId|revision|digest")`, the digest covering exactly the events the transaction appended before the attestation, with `sealRule` — registered absolutely last — covering the attestation in turn. Enrollment's own commit is the credential's first attested act.
 

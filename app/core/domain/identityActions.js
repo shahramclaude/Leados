@@ -1,6 +1,6 @@
 /**
  * app/core/domain/identityActions.js — API mixin for the Attested Commit
- * (Schema v91, ADR-0085). Mounted via `Object.assign(api, ...)` exactly like
+ * (Schema v93, ADR-0087). Mounted via `Object.assign(api, ...)` exactly like
  * `createConcordanceActions`; no second command bus.
  *
  * The write path is deliberately small: enroll (or rotate) a seat credential,

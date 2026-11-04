@@ -17,7 +17,11 @@ import { createCatchballActions } from './core/domain/catchballActions.js';
 // ADR-0083: the Concordance Terminal's API mixin — one more consumer of the
 // same post-commit spine, not a second command bus.
 import { createConcordanceActions } from './core/domain/concordanceActions.js';
-// ADR-0085: the Attested Commit's API mixin (seat credential sessions,
+import { createDisclosureActions } from './core/domain/disclosureActions.js';
+// ADR-0085: the Board Room's API mixin — one more consumer of the same
+// post-commit spine, not a second command bus.
+import { createBoardActions } from './core/domain/boardActions.js';
+// ADR-0087: the Attested Commit's API mixin (seat credential sessions,
 // verification, checkpoints) — same spine, same gateway.
 import { createIdentityActions } from './core/domain/identityActions.js';
 import { guardApi } from './core/domain/accessGateway.js';
@@ -19646,7 +19650,11 @@ export function createApi(store, options = {}) {
   Object.assign(api, createCatchballActions(store, { now: clock, idFactory: id }));
   // ADR-0083: two-sided expectation rounds, sealed until both sides are in.
   Object.assign(api, createConcordanceActions(store, { now: clock, idFactory: id, createApi }));
-  // ADR-0085: the Attested Commit — seat credential sessions and verification,
+  // ADR-0086: disclosure release contracts — the only records that can widen a read.
+  Object.assign(api, createDisclosureActions(store, { now: clock, idFactory: id, createApi }));
+  // ADR-0085: pre-registered board lines, committed with a frozen snapshot.
+  Object.assign(api, createBoardActions(store, { now: clock, idFactory: id }));
+  // ADR-0087: the Attested Commit — seat credential sessions and verification,
   // on the same gateway (attest-seat-identity / govern-attestation rights).
   Object.assign(api, createIdentityActions(store, { now: clock }));
   // ADR-0080: one fail-closed API boundary. The local operator is unchanged;

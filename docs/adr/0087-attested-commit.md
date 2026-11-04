@@ -1,4 +1,4 @@
-# ADR-0085: The Attested Commit — per-seat credential authorship over the sealed log (Session 125, Schema v91)
+# ADR-0087: The Attested Commit — per-seat credential authorship over the sealed log (Session 127, Schema v93)
 
 **Status:** Accepted, 2026-11-04. Supersedes no earlier decision; extends [ADR-0082 (the Sealed Spine)](./0082-sealed-spine.md) and honours the limit every ADR from [ADR-0076](./0076-operating-seat.md) onward has printed: *seats are local analytical lenses, not authenticated access controls.*
 
@@ -71,5 +71,5 @@ Attestation is the identity of the write itself, not automation: `shouldAttest` 
 - The log can now say **who declared authorship of what, verifiable with a key that never left their session**, and can say **"unattributed"** out loud when nobody did.
 - Verification is honest but not omnipotent: a credential whose key is gone verifies *structurally* only; a tampered window is `FAILED`; retention-truncated history is *evicted*, not clean.
 - **Not claimed:** third-party non-repudiation (the passphrase is the operator's, the HMAC is symmetric), authentication of a human being, a multi-user or tenant boundary, protection against whoever controls the browser (a keylogger defeats this, as it defeats every client-side secret), or security of an unencrypted workspace backup. HMAC is tamper-evident authorship **within** the local-first boundary; the honest claim is *accountable authorship*, not identity.
-- Aggregate-only CSV #80 (`seat-attestation`) and the identity-free certificate leak no seat id, name, fingerprint or MAC. Attestation rate below a 5-transaction floor is **blank**, never 0.
+- Aggregate-only CSV #82 (`seat-attestation`) and the identity-free certificate leak no seat id, name, fingerprint or MAC. Attestation rate below a 5-transaction floor is **blank**, never 0.
 - Browser walkthrough of the credential flow remains `[UNVERIFIED]`; the mechanical behaviour is covered by `tests/app/identity-ledger.test.mjs` (27/27), including the cross-module propagation example and the cross-altitude roll-up mandated by the build bar.

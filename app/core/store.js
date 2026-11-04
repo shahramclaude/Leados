@@ -34,7 +34,7 @@ import { runPostCommitRules } from './domain/postCommit.js';
 // derived from the vault passphrase at unlock/enable/change time — memory only.
 import { SEAL_EVENTS, SEAL_LIMITS } from './domain/sealRegistry.js';
 import { clearSealKey, deriveAndRegisterSealKey } from './domain/sealCrypto.js';
-// ADR-0085: the Attested Commit. Attestation/verification events are exempt
+// ADR-0087: the Attested Commit. Attestation/verification events are exempt
 // from the ordinary retention cap like seals (authorship anchors must not be
 // silently evicted), and the seat-credential session key is memory-only —
 // cleared at every lock site beside the seal key.
@@ -697,7 +697,7 @@ export function createStore(options = {}) {
   /**
    * ADR-0082: retention caps. Ordinary events cap at EVENT_CAP exactly as
    * before; `audit.seal` events are exempt (they are the chain itself) and
-   * carry their own, higher cap. ADR-0085 extends the same treatment to
+   * carry their own, higher cap. ADR-0087 extends the same treatment to
    * `identity.attested` / `identity.verified` (authorship anchors), with their
    * own cap. On workspaces that never seal or attest, the behaviour is
    * byte-for-byte the pre-0082 splice.

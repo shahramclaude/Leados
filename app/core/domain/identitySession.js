@@ -1,6 +1,6 @@
 /**
  * app/core/domain/identitySession.js — the seat-credential session registry
- * (Schema v91, ADR-0085).
+ * (Schema v93, ADR-0087).
  *
  * A leaf module on purpose: `store.js` clears sessions at its lock sites and
  * must not import the identity engine (or any domain module that reads the

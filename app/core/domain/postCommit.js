@@ -109,7 +109,12 @@ import { catchballRule } from './catchballRules.js';
 // same transaction, with no second workflow engine. Inert until a round closes;
 // an undeclared workspace is byte-for-byte unchanged.
 import { concordanceRule } from './concordanceRules.js';
-// ADR-0085: the Attested Commit. RULE-IDN-01 binds each commit to the unlocked
+import { disclosureRule } from './disclosureRules.js';
+// ADR-0084: the Board Room. Committed board lines fan DOWNWARD (a governed
+// decision plus an owned obligation on the span the failing reading points at)
+// and their provenance is written into the typed graph in the same transaction.
+import { boardRule } from './boardRules.js';
+// ADR-0087: the Attested Commit. RULE-IDN-01 binds each commit to the unlocked
 // seat credential; RULE-IDN-02 opens one governed authorship-boundary decision
 // per seat per ISO week under enforcement and fans it up every leadership
 // ancestor; RULE-IDN-03 records explicit verification verdicts. Runs BEFORE
@@ -495,7 +500,16 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   catchballRule,
   // ADR-0083: altitude as a dimension of the same engine, one rule set later.
   concordanceRule,
-  // ADR-0085: the Attested Commit (RULE-IDN-01..03). Attestation is the
+  // ADR-0086: the Disclosure Compiler's paperwork. Runs after every work-producing
+  // module so the consent task and the governed decision it opens describe the
+  // finished transaction; it grants nothing itself.
+  disclosureRule,
+  // ADR-0084: it reads the finished module reports (bench, promise book,
+  // authority ledger, concordance, culture, seal), so it sits after every module
+  // that produces one and before the market's final work-producing pass — the
+  // same position rule the concordance terminal follows.
+  boardRule,
+  // ADR-0087: the Attested Commit (RULE-IDN-01..03). Attestation is the
   // identity of the write itself, so its digest covers every event this
   // transaction appended before it — including the breach work RULE-IDN-02
   // opens — and the seal (absolutely last) covers the attestation in turn.

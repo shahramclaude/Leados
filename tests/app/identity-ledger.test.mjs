@@ -1,5 +1,5 @@
 /**
- * ADR-0085 — The Attested Commit (Schema v91).
+ * ADR-0087 — The Attested Commit (Schema v93).
  *
  * Proves, against the REAL store + REAL rule spine + REAL gateway:
  *  - enrollment stores only the PUBLIC half of a credential (salt, 16-hex
@@ -23,7 +23,7 @@
  *  - the gateway refuses unattested writes fail-closed under enforcement while
  *    boundary management (enroll/unlock/lock) stays reachable;
  *  - the attention-market ordering invariant and rule/contract parity survive;
- *  - aggregate-only CSV #80 and the identity-free certificate leak no seat id,
+ *  - aggregate-only CSV #82 and the identity-free certificate leak no seat id,
  *    name, fingerprint or MAC;
  *  - all five panels render axe-clean.
  */
@@ -117,11 +117,11 @@ function ruleIdnLinks(state) {
 /* ------------------------------------------------------------- 1. schema */
 
 test('schema v91 migrates additively; malformed credential rows are dropped, never repaired', () => {
-  assert.equal(SCHEMA_VERSION, 91);
+  assert.equal(SCHEMA_VERSION, 93);
   const old = { schemaVersion: 90, settings: { leaderName: 'Keep' }, cases: [{ id: 'keep' }] };
   const migrated = migrate(old);
-  assert.equal(migrated.raw.schemaVersion, 91);
-  assert.deepEqual(migrated.applied, ['90 → 91']);
+  assert.equal(migrated.raw.schemaVersion, 93);
+  assert.deepEqual(migrated.applied, ['90 → 91', '91 → 92', '92 → 93']);
   assert.deepEqual(migrated.raw.seatIdentities, []);
   assert.deepEqual(migrated.raw.identityMarkers, []);
   assert.equal(migrated.raw.settings.identityEnabled, false);
@@ -546,11 +546,11 @@ test('an unsigned checkpoint says so — structure only, anyone could have writt
 
 /* ------------------------------------------- 9. CSV, brief, attention */
 
-test('CSV #80 and the certificate carry counts only — no seat id, name, fingerprint or MAC', async () => {
+test('CSV #82 and the certificate carry counts only — no seat id, name, fingerprint or MAC', async () => {
   const { store, api } = boot();
   await enroll(api, 'mgr1');
   store.update(() => {}, { type: 'note.added', entity: 'note', entityId: 'n1', summary: 'work' });
-  assert.equal(CSV_EXPORTS.length, 80);
+  assert.equal(CSV_EXPORTS.length, 82);
   assert.ok(CSV_EXPORTS.some((s) => s.key === 'seat-attestation'));
   const out = exportWorkspaceCsv(store.state, 'seat-attestation', { now: NOW });
   assert.equal(out.ok, true, out.error);

@@ -5,9 +5,16 @@
  */
 import { COLLECTIONS, LINK_ENTITY_COLLECTIONS } from '../schema.js';
 import { activeSeat, buildSeats, canSee, projectForSeat } from './seat.js';
+import { grantedRecords } from './disclosure.js';
 
 const PUBLIC_PERSON_FIELDS = ['id', 'name', 'role', 'level', 'team', 'managerId', 'status'];
-export function scopedViewState(state, seatContext = null) {
+/**
+ * ADR-0086: the projection now takes one more input — the release ledger. A live,
+ * consented, span-bounded grant adds exactly those records (and nothing else) to
+ * the seat's read model, marked with the grant that released them. Without a
+ * grant this function is byte-for-byte the projection it was before.
+ */
+export function scopedViewState(state, seatContext = null, { now = new Date(), settings = null, granted = null } = {}) {
   if (!seatContext?.seat || seatContext.seat.fullAccess) return state;
   const { seat, built } = seatContext;
   const projection = seatContext.projection || projectForSeat(state, seat, built);
@@ -17,6 +24,14 @@ export function scopedViewState(state, seatContext = null) {
   out.meta = { ...state.meta };
   out.settings = { ...state.settings };
   for (const [key, rows] of Object.entries(projection.visible)) out[key] = rows;
+  // ADR-0086: records a live release opens, marked with the release id so a view
+  // (and the leak oracle) can tell granted detail from ordinary detail.
+  const released = granted || grantedRecords(state, seat, built, { now, settings });
+  for (const [key, rows] of released) {
+    if (!COLLECTIONS.includes(key)) continue;
+    const existing = new Set((out[key] || []).map((row) => row.id));
+    out[key] = [...(out[key] || []), ...rows.filter((row) => !existing.has(row.id))];
+  }
   if (seat.readOnly) {
     for (const key of COLLECTIONS) out[key] = [];
     return out;

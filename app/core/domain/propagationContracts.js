@@ -105,6 +105,8 @@ import { missionRule } from './missionRules.js';
 import { altitudeRouterRule } from './altitudeRouterRules.js';
 import { catchballRule } from './catchballRules.js';
 import { concordanceRule } from './concordanceRules.js';
+import { disclosureRule } from './disclosureRules.js';
+import { boardRule } from './boardRules.js';
 import { identityRule } from './identityRules.js';
 
 /**
@@ -571,12 +573,18 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     rule: altitudeRouterRule, module: 'altitudeRouterRules.js', purpose: 'RULE-AR-01 writes one routes-through edge, one discloses-to edge to the owning seat and one rolls-up-to edge per leadership ancestor (frontline → manager → director → executive) in the SAME atomic transaction as the adopted case; RULE-AR-02 opens one governed DACI re-routing decision per detected-altitude cell below the reliability floor per ISO week and fans it up every ancestor; RULE-AR-03 writes one advisory maturity marker. Marker-idempotent, pausable, and never auto-corrects a plan, setting or reporting line.', writes: ['altitudeRoutingMarkers', 'decisions', 'links'], emits: [], scansWorkspace: true,
   },
   {
+    rule: boardRule, module: 'boardRules.js', purpose: 'RULE-BRD-01 opens exactly ONE governed DACI decision per failing claim per committed memo revision, and — where the failing reading is attributable to a span — exactly ONE owned obligation delegated to that span\'s holder, so an enterprise finding becomes a named directorate obligation in the SAME atomic transaction; RULE-BRD-02 writes one typed summarizes-span edge from the memo to every span whose records produced its figures and one escalates-from edge per generated decision, so provenance is walkable in both directions; RULE-BRD-03 writes one advisory marker when the workspace freezes its first memo. The rules take the FROZEN snapshot as given: no claim is edited, no threshold changed, no verdict rewritten, and no person is rated. Marker-idempotent, pausable by boardAutoPropagate, and an explicit scan always runs.', writes: ['boardMarkers', 'decisions', 'delegations', 'links'], emits: [], scansWorkspace: true,
+  },
+  {
     rule: catchballRule,
     module: 'catchballRules.js',
     purpose: 'RULE-HK-01 writes idempotent Hoshin Catchball provenance (deploys-strategy, cascades-to, counters-upward, trades-off, funds) and one rolls-up-to edge per leadership ancestor in the reporting tree in the SAME atomic transaction; RULE-HK-02 opens one governed DACI decision + 1:1 prompt on Watermelon divergence and one upstream Double-Loop Strategy Review decision (exonerating execution) when leading adherence holds while lagging outcomes stall; RULE-HK-03 records calibration maturity markers and opens one governed review decision per altitude cell below the delivery hold floor.',
     writes: ['catchballMarkers', 'decisions', 'people', 'links'],
     emits: [],
     scansWorkspace: true,
+  },
+  {
+    rule: disclosureRule, module: 'disclosureRules.js', purpose: 'RULE-DSC-01 turns one recorded release request into ONE governed DACI decision (release / refuse-and-share-the-aggregate / narrow), ONE consent task addressed to the span leader whose records would be widened, and the typed edges that make it navigable (`authorizes` from the decision, `discloses-to` the requesting altitude, `tracks-followup` to the consent task). The rule grants nothing: only the span leader\'s consent creates authority, and only the compiler reads it. RULE-DSC-02 sweeps expiries — a lapsed window stops authorising reads, opens ONE review task on whether the released detail changed the decision, and reconciles edges to releases that no longer exist. Marker-idempotent, pausable by disclosureAutoPropagate, and an explicit scan always runs.', writes: ['disclosureGrants', 'disclosureMarkers', 'decisions', 'delegations', 'links'], emits: [], scansWorkspace: false,
   },
   {
     rule: identityRule,

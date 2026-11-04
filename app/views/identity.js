@@ -1,5 +1,5 @@
 /**
- * app/views/identity.js — the Attested Commit surface (ADR-0085, `#/identity`).
+ * app/views/identity.js — the Attested Commit surface (ADR-0087, `#/identity`).
  *
  * One screen that answers, for every altitude: WHO wrote this? It shows the
  * authorship boundary (enabled / enforced / session state), the attestation
