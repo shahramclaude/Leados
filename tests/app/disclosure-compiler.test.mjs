@@ -751,6 +751,7 @@ test('csv: the disclosure export is aggregate-only, seat-compiled and names noth
   const { disclosureReport, disclosureCsvRows } = await import('../../app/core/domain/disclosure.js');
   const spec = CSV_EXPORTS.find((s) => s.key === 'disclosure-posture');
   assert.ok(spec, 'the disclosure posture export is registered, not just an API method');
+  assert.ok(CSV_EXPORTS.some((s2) => s2.key === 'disclosure-posture'), 'the scope is registered');
   // Append-only registry: catchball #79, board #80, disclosure #81, operating
   // cadence #82. Asserting the ORDER is the contract; asserting disclosure is LAST
   // would break the moment a later session appends its own scope.

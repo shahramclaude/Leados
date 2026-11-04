@@ -27,6 +27,7 @@ import { createConcordanceActions } from './core/domain/concordanceActions.js';
 // ADR-0088: the Federated Envoy's API mixin — sealed inter-workspace packets,
 // verified and ingested on the same command bus as everything else.
 import { createEnvoyActions } from './core/domain/envoyActions.js';
+import { createOperatingModelActions } from './core/domain/operatingModelActions.js';
 import { createDisclosureActions } from './core/domain/disclosureActions.js';
 // ADR-0085: the Board Room's API mixin — one more consumer of the same
 // post-commit spine, not a second command bus.
@@ -917,7 +918,6 @@ function delegationValidation(data) {
   if (data.dueOn < data.delegatedOn) return { error: 'The due date cannot be before the delegation date.', field: 'dueOn' };
   return null;
 }
-
 
 /** Non-negative money/day field; blank means "not recorded", never zero-by-default. */
 function parseNonNegative(value, label, field) {
@@ -4982,7 +4982,6 @@ export function createApi(store, options = {}) {
       );
       return { ok: true };
     },
-
 
     /* ------------------------------------ budget & financial commitments (v24) */
 
@@ -12003,8 +12002,6 @@ export function createApi(store, options = {}) {
     },
   };
 
-
-
   /**
    * Validate and assemble a Stakeholder Influence Register record from form
    * input (Schema v25). Shared by addStakeholder and updateStakeholder.
@@ -12818,7 +12815,6 @@ export function createApi(store, options = {}) {
     return { ok: true, receipt: propagationReceiptById(store.state, id) };
   }
 
-
   /* ------------------------------------------------------------------ *
    * Schema v42 — Strategy Coherence Terminal.
    *
@@ -13086,7 +13082,6 @@ export function createApi(store, options = {}) {
     if (!Object.keys(patch).length) return fail('Nothing to change in the strategy policy.');
     return api.updateSettings(patch);
   }
-
 
   /* ------------------------------------------------------------------ *
    * Schema v43 — the After-Action Review & Learning Ledger.
@@ -13483,7 +13478,6 @@ export function createApi(store, options = {}) {
     if (!Object.keys(patch).length) return fail('Nothing to change in the learning policy.');
     return api.updateSettings(patch);
   }
-
 
   /* ----------------------------------------- Schema v62: performance recovery */
 
@@ -13985,8 +13979,6 @@ export function createApi(store, options = {}) {
     },
   });
 
-
-
   /* ------------------------------------------------ leader continuity drill */
 
   function parseDay(value, label) {
@@ -14223,7 +14215,6 @@ export function createApi(store, options = {}) {
     if (!Object.keys(patch).length) return fail('Nothing to change in the continuity policy.');
     return api.updateSettings(patch);
   }
-
 
   /* ------------------------------------------------ scorecard integrity */
 
@@ -14614,7 +14605,6 @@ export function createApi(store, options = {}) {
     updateContinuityPolicy,
   });
 
-
   /* ---------------------------------------- structural design (v53) */
 
   /**
@@ -14939,7 +14929,6 @@ export function createApi(store, options = {}) {
     scanOrgDesign,
     abandonOrgDesign,
   });
-
 
   /* ------------------------------------- information value (v54) */
 
@@ -19667,6 +19656,9 @@ export function createApi(store, options = {}) {
   // ADR-0085: compose, verify, ingest. Every handler is declared in the gateway;
   // an undeclared name still fails closed under a seat.
   Object.assign(api, createEnvoyActions(store, { now: clock, idFactory: id }));
+  // ADR-0084: the Operating Model. Declarations and priced portfolio items only;
+  // no attendance data, no person-level figure and no second command bus.
+  Object.assign(api, createOperatingModelActions(store, { now: clock, idFactory: id, createApi }));
   // ADR-0086: disclosure release contracts — the only records that can widen a read.
   Object.assign(api, createDisclosureActions(store, { now: clock, idFactory: id, createApi }));
   // ADR-0085: pre-registered board lines, committed with a frozen snapshot.

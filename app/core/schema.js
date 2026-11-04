@@ -20,6 +20,20 @@ import { normalizeDisclosureGrants, normalizeDisclosureMarkers, normalizeDisclos
 import { normalizeBoardMemos, normalizeBoardMarkers, normalizeBoardSettings } from './domain/boardSchema.js';
 import { normalizePropagationLineage } from './domain/automationLineage.js';
 import { normalizeImpactExecutionSnapshot } from './domain/impactExecution.js';
+// ADR-0088: Hoshin Carryover Terminal records, idempotency markers, once-only
+// grading rows, and clamped conventions.
+import {
+  normalizeCarryoverRecords,
+  normalizeCarryoverMarkers,
+  normalizeCarryoverGradings,
+  normalizeCarryoverSettings,
+} from './domain/carryoverSchema.js';
+import {
+  normalizeOperatingModelSettings,
+  normalizeOperatingModelMarkers,
+  normalizeOperatingModelDecisions,
+  normalizeWorkSplits,
+} from './domain/operatingModelSchema.js';
 import { normalizeStrategyBets, normalizeStrategyTags } from './domain/strategy.js';
 import { normalizeRetros } from './domain/learning.js';
 import { INTERVENTION_TYPES } from './domain/interventionTypes.js';
@@ -160,6 +174,7 @@ import {
   normalizeFederationSettings,
 } from './domain/federationSchema.js';
 // ADR-0085: the Operating Cadence Clock's fail-closed normalizers and clamped
+// ADR-0087: the Operating Cadence Clock's fail-closed normalizers and clamped
 // conventions. A forum, a sitting or a frozen reading that cannot be validated is
 // dropped with a warning rather than repaired into something a leader might act on.
 import {
@@ -182,14 +197,6 @@ import {
   normalizeExchangePackets,
   normalizeEnvoySettings,
 } from './domain/envoySchema.js';
-// ADR-0085: Hoshin Carryover Terminal records, idempotency markers, once-only
-// grading rows, and clamped conventions.
-import {
-  normalizeCarryoverRecords,
-  normalizeCarryoverMarkers,
-  normalizeCarryoverGradings,
-  normalizeCarryoverSettings,
-} from './domain/carryoverSchema.js';
 import { addDays } from './time.js';
 import { validateWatchResponse } from './domain/watchResponse.js';
 import {
@@ -1442,6 +1449,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   federationCellFloor: 3,
   federationAutoPropagate: true,
   // ADR-0085: the Operating Cadence Clock — declared conventions, clamped on read.
+  // ADR-0087: the Operating Cadence Clock — declared conventions, clamped on read.
   // `cadenceUtilisationTargetPct` is the ρ the calendar is planned against; the
   // planning factor and flow target are named conventions, never fitted.
   cadenceFloorN: 5,
@@ -1788,6 +1796,14 @@ export const COLLECTIONS = [
   // Rule-idempotency markers (carriage, divergence, attested exposure).
   'exchangeMarkers',
   // ADR-0085: Hoshin Carryover Terminal — one record per Catchball pact
+  // Schema v95 (ADR-0089): declared work-type splits (one per level/function),
+  // declared collaboration edges, priced portfolio items and the rules' idempotency
+  // markers. A workspace with none of these is unmeasured, not zero.
+  'omWorkSplits',
+  'omEdges',
+  'omDecisions',
+  'omMarkers',
+  // ADR-0088: Hoshin Carryover Terminal — one record per Catchball pact
   // settled as thesis-invalidated, idempotency markers, and the once-only
   // later grading rows.
   'carryoverRecords',
@@ -2447,6 +2463,8 @@ export function normalizeSettings(raw) {
     ...normalizeAuthorityCalibrationSettings(s),
     ...normalizeRouterSettings(s),
     ...normalizeConcordanceSettings(s),
+    ...normalizeOperatingModelSettings(s),
+    ...normalizeCarryoverSettings(s),
     ...normalizeDisclosureSettings(s),
     // ADR-0085: the Board Room's declared conventions.
     ...normalizeBoardSettings(s),
@@ -6573,6 +6591,40 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // dropped; a round claiming to be closed with one side is reopened.
   state.expectationRounds = normalizeConcordanceRounds(raw.expectationRounds, warnings);
   state.concordanceMarkers = normalizeConcordanceMarkers(raw.concordanceMarkers, warnings);
+  state.omWorkSplits = normalizeWorkSplits(raw.omWorkSplits, warnings);
+  state.omDecisions = normalizeOperatingModelDecisions(raw.omDecisions, warnings);
+  state.omMarkers = normalizeOperatingModelMarkers(raw.omMarkers, warnings);
+  // Collaboration edges are validated against the roster AFTER people resolve, so
+  // an edge to an archived person is dropped rather than left dangling.
+  {
+    const ids = new Set(state.people.map((p) => p && p.id).filter(Boolean));
+    const rawEdges = Array.isArray(raw.omEdges) ? raw.omEdges : [];
+    const seen = new Set();
+    const kept = [];
+    let dropped = 0;
+    for (const edge of rawEdges) {
+      if (!isPlainObject(edge)) { dropped += 1; continue; }
+      const fromId = str(edge.fromId);
+      const toId = str(edge.toId);
+      const key = fromId < toId ? `${fromId}|${toId}` : `${toId}|${fromId}`;
+      if (!fromId || !toId || fromId === toId || seen.has(key)) { dropped += 1; continue; }
+      seen.add(key);
+      kept.push({
+        id: str(edge.id) || `ome-${kept.length}`,
+        fromId,
+        toId,
+        weight: clampInt(edge.weight, 1, 5, 1),
+        kind: ['sync', 'handoff', 'review', 'escalation'].includes(edge.kind) ? edge.kind : 'sync',
+        unitCrossing: edge.unitCrossing === true,
+        note: str(edge.note).slice(0, 200),
+        declaredOn: dayOrNull(edge.declaredOn),
+        createdAt: isoOrNull(edge.createdAt),
+      });
+    }
+    void ids;
+    if (dropped) warnings.push(`Operating model: ${dropped} collaboration edge(s) were malformed, duplicated or self-referential and were dropped.`);
+    state.omEdges = kept;
+  }
   // ADR-0086: grants resolve before links so `discloses-to`, `consented-by`,
   // `authorizes` and `tracks-followup` edges validate against real grant ids.
   // An expired grant loads as expired; it never loads as live authority.
@@ -6582,6 +6634,8 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // provenance edges validate against real memo ids. A memo claiming to be
   // committed without a snapshot is reopened as a draft.
   state.boardMemos = normalizeBoardMemos(raw.boardMemos, warnings);
+  state.boardMarkers = normalizeBoardMarkers(raw.boardMarkers, warnings);
+  state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
   state.boardMarkers = normalizeBoardMarkers(raw.boardMarkers, warnings);
   // ADR-0085: packets and attested artefacts resolve before links so `carries`,
   // `reconciles` and `tracks-followup` edges validate against real packet ids.
@@ -7314,12 +7368,34 @@ export const MIGRATIONS = {
     schemaVersion: 94,
     strategyCycles: Array.isArray(v93.strategyCycles) ? v93.strategyCycles : [],
     strategyCycleMarkers: Array.isArray(v93.strategyCycleMarkers) ? v93.strategyCycleMarkers : [],
+    omWorkSplits: Array.isArray(v93.omWorkSplits) ? v93.omWorkSplits : [],
+    omEdges: Array.isArray(v93.omEdges) ? v93.omEdges : [],
+    omDecisions: Array.isArray(v93.omDecisions) ? v93.omDecisions : [],
+    omMarkers: Array.isArray(v93.omMarkers) ? v93.omMarkers : [],
     settings: isPlainObject(v93.settings)
       ? {
         ...v93.settings,
         strategyCycleEvidenceFloor: v93.settings.strategyCycleEvidenceFloor ?? 5,
         strategyCycleCellFloor: v93.settings.strategyCycleCellFloor ?? 3,
         strategyCycleAutoPropagate: v93.settings.strategyCycleAutoPropagate !== false,
+        omDeepWorkHoursPerDay: v93.settings.omDeepWorkHoursPerDay ?? 4.5,
+        omWorkDaysPerWeek: v93.settings.omWorkDaysPerWeek ?? 5,
+        omCoordinationHoursPerWeek: v93.settings.omCoordinationHoursPerWeek ?? 1.5,
+        omDelegationHoursPerWeek: v93.settings.omDelegationHoursPerWeek ?? 2.5,
+        omAbstentionHoursPerWeek: v93.settings.omAbstentionHoursPerWeek ?? 1.5,
+        omEdgeMinutes: v93.settings.omEdgeMinutes ?? 30,
+        omReliefWeeks: v93.settings.omReliefWeeks ?? 1.5,
+        omAbstentionWeightPct: v93.settings.omAbstentionWeightPct ?? 30,
+        omCrossWavePct: v93.settings.omCrossWavePct ?? 25,
+        omConcurrentEdges: v93.settings.omConcurrentEdges ?? 2,
+        omMaxWave: v93.settings.omMaxWave ?? 16,
+        omCellFloor: v93.settings.omCellFloor ?? 3,
+        omUtilizationCeilPct: v93.settings.omUtilizationCeilPct ?? 95,
+        omContinuityFloor: v93.settings.omContinuityFloor ?? 3,
+        omReviewDays: v93.settings.omReviewDays ?? 21,
+        omAutoPropagate: v93.settings.omAutoPropagate !== false,
+        omLabourRatePerHour: v93.settings.omLabourRatePerHour ?? 60,
+        omCurrency: v93.settings.omCurrency ?? 'USD',
       }
       : { ...DEFAULT_SETTINGS },
   }),

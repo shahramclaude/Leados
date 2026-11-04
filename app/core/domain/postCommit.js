@@ -119,6 +119,12 @@ import { carryoverRule } from './carryoverRules.js';
 // same transaction, with no second workflow engine. Inert until a round closes;
 // an undeclared workspace is byte-for-byte unchanged.
 import { concordanceRule } from './concordanceRules.js';
+// ADR-0084: the Operating Model. Reads the finished workspace (so every other
+// module's writes are already in it) and opens governed DESIGN decisions for
+// congested spans and fragile continuity — on this same spine, in the same
+// transaction, with no second workflow engine. Inert until a work-type split is
+// declared; an undeclared workspace is byte-for-byte unchanged.
+import { operatingModelRule } from './operatingModelRules.js';
 import { disclosureRule } from './disclosureRules.js';
 // ADR-0084: the Board Room. Committed board lines fan DOWNWARD (a governed
 // decision plus an owned obligation on the span the failing reading points at)
@@ -527,6 +533,10 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   carryoverRule,
   // ADR-0083: altitude as a dimension of the same engine, one rule set later.
   concordanceRule,
+  // Schema v90: the Operating Model runs before the seal so its design decisions,
+  // its vertical roll-up edges and its fragility marker are all covered by the
+  // same hash-chained seal as every other module's writes.
+  operatingModelRule,
   // ADR-0086: the Disclosure Compiler's paperwork. Runs after every work-producing
   // module so the consent task and the governed decision it opens describe the
   // finished transaction; it grants nothing itself.

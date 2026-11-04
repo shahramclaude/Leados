@@ -110,6 +110,7 @@ import { federationRule } from './federationRules.js';
 import { cadenceRule } from './cadenceRules.js';
 import { carryoverRule } from './carryoverRules.js';
 import { concordanceRule } from './concordanceRules.js';
+import { operatingModelRule } from './operatingModelRules.js';
 import { disclosureRule } from './disclosureRules.js';
 import { boardRule } from './boardRules.js';
 // ADR-0088: the Federated Envoy.
@@ -575,6 +576,10 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
   {
     rule: concordanceRule, module: 'concordanceRules.js', purpose: 'RULE-ECN-01 writes one rolls-up-to edge per leadership ancestor above the pair\'s leader for every closed two-sided expectation round, plus a re-tests edge when the round re-tests an earlier re-contracting decision; RULE-ECN-02 opens ONE governed DACI re-contracting decision per pair per ISO week when weighted κ sits below the declared floor or any dimension is two whole steps apart, and places ONE generated agenda line on the pair\'s most recent 1:1 so the conversation has a place to happen; RULE-ECN-03 writes one advisory maturity marker at the evidence floor. The subject of every write is a PAIR and an EXPECTATION: no person is rated, ranked or scored, no performance record is edited, and no expectation is changed without a human decision. Marker-idempotent, pausable by concordanceAutoPropagate, and an explicit scan always runs.', writes: ['concordanceMarkers', 'decisions', 'links', 'oneOnOnes'], emits: [], scansWorkspace: true,
   },
+
+  {
+    rule: operatingModelRule, module: 'operatingModelRules.js', purpose: 'RULE-OMD-01 opens ONE governed DACI design decision per congested span per ISO week, addressed to the nearest ancestor whose altitude can author the change, with the options being the levers the lever engine actually priced (never a hire first, and never a hire at all below the continuity floor); RULE-OMD-02 writes typed rolls-up-to edges from a congested span to every leadership ancestor in the SAME transaction and one relieves edge from the decision to the span it is about; RULE-OMD-03 writes one advisory fragility marker per distinct fragile set (a fingerprint, not the set, so the marker ledger is not a second unredacted copy) and opens at most ONE governed continuity decision per ISO week. The subject of every write is a POSITION DESIGN, a SPAN or a frozen reading: no person is rated, ranked, scored or compared, no reporting line is edited, no work is reassigned and no commitment is cut. Marker-idempotent, pausable by omAutoPropagate, and an explicit scan always runs.', writes: ['omMarkers', 'decisions', 'links'], emits: [], scansWorkspace: true,
+  },
   {
     rule: altitudeRouterRule, module: 'altitudeRouterRules.js', purpose: 'RULE-AR-01 writes one routes-through edge, one discloses-to edge to the owning seat and one rolls-up-to edge per leadership ancestor (frontline → manager → director → executive) in the SAME atomic transaction as the adopted case; RULE-AR-02 opens one governed DACI re-routing decision per detected-altitude cell below the reliability floor per ISO week and fans it up every ancestor; RULE-AR-03 writes one advisory maturity marker. Marker-idempotent, pausable, and never auto-corrects a plan, setting or reporting line.', writes: ['altitudeRoutingMarkers', 'decisions', 'links'], emits: [], scansWorkspace: true,
   },
@@ -619,6 +624,8 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     purpose: 'RULE-CAD-01 writes one idempotent `queued-for` edge from every reviewable open item to the single standing forum competent to close it (kind competence AND time-span of discretion AND class horizon), plus one `rolls-up-to` edge per leadership ancestor of the owning span, in the SAME atomic transaction; a sensitive source contributes a count and never an edge. RULE-CAD-02 opens exactly one governed DACI decision per ISO week when the named binding constraint is forum capacity, a competence gap or service time, owned at the seat that can relieve it and fanned up every ancestor. RULE-CAD-03 writes bounded `fit-gap` edges naming the owning seats a forum’s membership is missing. RULE-CAD-04 grades each due frozen reading exactly once and records one maturity marker when a forum’s sitting history reaches the evidence floor. Never rates a person, never invents a waiting time below the floor, never auto-declares a forum.',
     writes: ['links', 'decisions', 'cadenceReadings', 'cadenceMarkers'],
     emits: [], scansWorkspace: true,
+    emits: [],
+    scansWorkspace: true,
   },
   {
     rule: carryoverRule,

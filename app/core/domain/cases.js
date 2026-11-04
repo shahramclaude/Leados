@@ -861,6 +861,11 @@ export const LINK_RELATIONS = [
   // PAIR and an EXPECTATION, never a person's performance.
   're-contracts',
   're-tests',
+  // Schema v90 (ADR-0084): written only by RULE-OMD-01. A governed DESIGN
+  // decision was opened to relieve this position design. The subject is the
+  // design — the edge never asserts anything about the person holding it, and
+  // vertical fan-out reuses the existing `rolls-up-to` relation.
+  'relieves',
   // ADR-0085: an item is queued for the ONE forum competent to close it, and an
   // agenda-fit gap names a seat a forum's membership is missing.
   'queued-for',
@@ -892,6 +897,7 @@ export const LINK_RELATION_LABELS = {
   reconciles: 'Governed reconciliation opened by a renewal trigger or packet divergence',
   're-contracts': 'Re-contracting decision opened from this expectation',
   're-tests': 'Re-tests the standard this decision set',
+  relieves: 'Design decision opened to relieve this position',
   'calibrates-coupling': 'Audited against realised joint resolution timing',
   'measures-coupling': 'Shared premise behind a measured coupling',
   'cross-examines': 'Frozen round cross-examines this claim',
@@ -2287,6 +2293,22 @@ export function resolveLinkedEntity(state, entityType, entityId) {
         title: `Board memo · ${rec.cycle || 'unlabelled'} r${rec.revision}`,
         status: rec.status,
         route: `#/board?panel=memo&memo=${encodeURIComponent(rec.id)}`, raw: rec,
+      };
+    }
+    case 'carryover': {
+      const rec = (state.carryoverRecords || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      // The settlement record is a public graph node: the invalidated pact, the bet
+      // it judges and the released budget line are all navigable from it. It carries
+      // no person record and no free text by construction, so nothing is redacted.
+      return {
+        type: 'carryover', id: rec.id,
+        title: `Carryover settlement · ${rec.status || 'pending'}`,
+        status: rec.status,
+        // Honest known gap: the Carryover terminal addresses its ledger panels, not a
+        // single focused record, so the route names the panel rather than inventing a
+        // `record=` query param the view would ignore.
+        route: '#/carryover?panel=queue', raw: rec,
       };
     }
     case 'routingplan': {

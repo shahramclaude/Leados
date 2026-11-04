@@ -45,6 +45,7 @@ import { buildCadenceReport, cadenceCsvRows } from './domain/cadence.js';
 import { carryoverCsvRows } from './domain/carryover.js';
 // ADR-0083: the Concordance Terminal's aggregate-only rows.
 import { concordanceCsvRows } from './domain/concordance.js';
+import { operatingModelCsvRows } from './domain/operatingModel.js';
 // ADR-0086: the Disclosure Compiler's aggregate-only posture rows.
 import { disclosureReport, disclosureCsvRows } from './domain/disclosure.js';
 import { buildSeats, activeSeat } from './domain/seat.js';
@@ -941,6 +942,7 @@ export const CSV_EXPORTS = [
   // cells only — a count, a rate or a currency total. No record id, name, note,
   // rating or sentence can cross this export, and a withheld cell is BLANK.
   { key: 'disclosure-posture', label: 'Disclosure posture (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'disclosure-posture', description: 'One row per declared module at the exporting seat: posture (detail / aggregate / withheld), record class, floor and ceiling ranks, aggregate counts, withheld cell count and the currency-separated money total, plus the reason the boundary gave. NO record id, NO name, NO note, NO rating and NO free text from any record.' },
+
   // CSV scope #82 (Schema v93, ADR-0087). Aggregate-only operating-cadence
   // telemetry: one row per declared standing forum and one workspace row. No id,
   // no name, no forum free text, no attendance list and no item title.
@@ -963,6 +965,11 @@ export const CSV_EXPORTS = [
   // text; a suppressed cell is BLANK and a refused rate is BLANK, never zero.
   { key: 'programme-federation', label: 'Programme federation (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'programme-federation', description: 'One row per declared leadership edge in the active seat\u2019s span plus one workspace row: altitude, rank, measured state (connected / bypassed / stale / silent / top-of-tree), direct and bypass carriage counts, oldest carriage date and whether the row was suppressed. No span name, person name, record id or free text; suppressed and refused figures are BLANK rather than zero.' },
   { key: 'strategy-renewal', label: 'Strategy renewal (active-seat aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'strategy-renewal', description: 'Active-seat altitude and workspace learning rows only: active, carryover and overdue commitments, effort, in-window delivery reference with interval, evidence count and verdict. No pact IDs, bet IDs, titles, cohort identifiers, names or notes; refused and suppressed figures are BLANK rather than zero.' },
+  // CSV scope #83 (Schema v94, ADR-0089). Aggregate-only operating-model
+  // telemetry: one workspace row, one row per altitude, and one row per priced
+  // lever family. No person id, no name, no position title, no span label, no
+  // individual hour. Every refused figure is BLANK rather than zero.
+  { key: 'operating-model', label: 'Operating model (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'operating-model', description: 'One workspace row, one row per leadership altitude and one row per priced lever: positions modelled, committed and designed capacity hours, utilisation, hours spent below the position’s own altitude, routed-up hours, positions over the ceiling, spans below the continuity floor, declared edges, the cross-unit share, the declared cell floor and a verdict. NO person id, NO name, NO position or span title, NO individual hours and NO attendance data of any kind. Every refused figure is BLANK rather than zero.' },
 ];
 
 function personLookup(state) {
@@ -2156,7 +2163,6 @@ function buildScopeTable(state, scope, now) {
       });
       return { columns, rows };
     }
-
 
     case 'hiring': {
       const columns = [
@@ -5810,7 +5816,7 @@ function buildScopeTable(state, scope, now) {
       return { columns, rows };
     }
     case 'board-claims': {
-      // CSV scope #80 (Schema v91, ADR-0085). Aggregate-only.
+      // CSV scope #84 (Schema v95, ADR-0088). Aggregate-only.
       const rows = boardCsvRows(state, { now, settings: state.settings || {} });
       const columns = [
         { key: 'scope', header: 'scope' },
@@ -5921,6 +5927,38 @@ function buildScopeTable(state, scope, now) {
       const columns = ['row_kind', 'altitude', 'rank', 'active_pacts', 'carryover_pacts', 'overdue_pacts', 'effort_days',
         'delivery_reference_pct', 'delivery_interval_low_pct', 'delivery_interval_high_pct', 'settled_n', 'verdict']
         .map((key) => ({ key, header: key }));
+      return { columns, rows };
+    }
+    case 'operating-model': {
+      // CSV scope #83 (Schema v94, ADR-0089). Aggregate-only. A refused figure
+      // is BLANK, never 0. No person, name, title or individual hour can enter.
+      const rows = operatingModelCsvRows(state, { now, settings: state.settings || {} });
+      const columns = [
+        { key: 'scope', header: 'scope' },
+        { key: 'altitude', header: 'altitude' },
+        { key: 'positions', header: 'positions' },
+        { key: 'unmeasured', header: 'unmeasured' },
+        { key: 'capacity_h', header: 'capacity_h' },
+        { key: 'committed_h', header: 'committed_h' },
+        { key: 'utilisation_pct', header: 'utilisation_pct' },
+        { key: 'displaced_h', header: 'displaced_h' },
+        { key: 'displaced_pct', header: 'displaced_pct' },
+        { key: 'abstention_h', header: 'abstention_h' },
+        { key: 'over_ceiling_n', header: 'over_ceiling_n' },
+        { key: 'fragile_n', header: 'fragile_n' },
+        { key: 'edges_n', header: 'edges_n' },
+        { key: 'cross_unit_pct', header: 'cross_unit_pct' },
+        { key: 'cell_floor', header: 'cell_floor' },
+        { key: 'verdict', header: 'verdict' },
+      ];
+      return { columns, rows };
+    }
+    case 'carryover-settlement': {
+      // CSV scope #84 (Schema v95, ADR-0088). Aggregate-only: counts, the
+      // next-cycle released-capacity totals and altitude calibration cells.
+      // A refused rate is BLANK, never 0.
+      const rows = carryoverCsvRows(state, now);
+      const columns = ['row_kind', 'item', 'value'].map((key) => ({ key, header: key }));
       return { columns, rows };
     }
     case 'altitude-router': {

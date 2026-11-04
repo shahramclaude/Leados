@@ -39,6 +39,10 @@ import { renderStrategyCycle } from './views/strategyCycle.js';
 // ADR-0083: the Concordance Terminal — the two-gauge problem behind every
 // performance review, measured pair by pair and rolled up the tree.
 import { renderConcordance } from './views/concordance.js';
+// ADR-0084: the Operating Model — the position design, not the person in it.
+import { renderOperatingModel } from './views/operatingModel.js';
+import { operatingModelAttentionCount } from './core/domain/operatingModel.js';
+// ADR-0085: the Board Room — pre-registered disclosure at the chief altitude.
 // ADR-0086: the Board Room — pre-registered disclosure at the chief altitude.
 import { renderBoard } from './views/board.js';
 import { concordanceAttentionCount } from './core/domain/concordance.js';
@@ -260,6 +264,11 @@ export const NAV = [
     // question; this one says which altitude the work belongs to, what has
     // outlived its owner's time span, and what rolls up to whom.
     { route: 'chain', label: 'Command chain', icon: '⛬', badge: 'chain' },
+    // ADR-0084: the chain says which altitude a piece of work belongs to; the
+    // Operating Model measures the DESIGN of the position that holds it —
+    // displacement, routed work, the utilisation ceiling and the cheapest
+    // structural relief. Still no person scored.
+    { route: 'operating-model', label: 'Operating model', icon: '⧗', badge: 'operatingModel' },
     // Schema v83: the bench, certified rather than nominated. Every span's
     // coverage is a flow-feasibility proof over dated records, and the number the
     // chief carries has a printed lower bound and a printed refusal beside it.
@@ -379,6 +388,7 @@ const RENDERERS = {
   disclosure: (ctx) => renderDisclosure(ctx),
   carryover: (ctx) => renderCarryover(ctx),
   concordance: (ctx) => renderConcordance(ctx),
+  'operating-model': (ctx) => renderOperatingModel(ctx),
   board: (ctx) => renderBoard(ctx),
   envoy: (ctx) => renderEnvoy(ctx),
   federation: (ctx) => renderFederation(ctx),
@@ -601,6 +611,16 @@ export function parseRoute(hash) {
     'federated': 'envoy', 'exchange': 'envoy', 'inter-workspace': 'envoy',
     'attest': 'envoy', 'attestation-packet': 'envoy', 'merkle': 'envoy', 'handoff-pack': 'envoy',
     'cross-workspace': 'envoy', 'span-pack': 'envoy',
+    // ADR-0084: the Operating Model's own aliases. None may shadow an existing
+    // route — `chain` stays the Command Chain, `orgdesign` stays Structural
+    // design, `attention` stays the Attention Market and `load` stays the
+    // Cognitive Load Governor.
+    'operating-model': 'operating-model', 'operatingmodel': 'operating-model',
+    'operating-model-design': 'operating-model', 'position-design': 'operating-model',
+    'displacement': 'operating-model', 'utilization': 'operating-model',
+    'utilisation': 'operating-model', 'spans-of-control': 'operating-model',
+    'work-design': 'operating-model', 'lever-book': 'operating-model',
+    'labour-model': 'operating-model',
     'routing': 'routing', 'altitude-router': 'routing', 'router': 'routing',
     'auto-route': 'routing', 'where-does-this-go': 'routing', 'route-note': 'routing',
     'seat': 'seat', 'operating-seat': 'seat', 'altitude-lens': 'seat',
@@ -906,6 +926,9 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       cadence: cadenceAttentionCount(state, at, state.settings),
       carryover: carryoverAttentionCount(state, at),
       concordance: concordanceAttentionCount(state, at, state.settings),
+      // ADR-0084: the badge counts congested spans that have a PRICED lever, not
+      // every interesting reading. A reading is not a piece of work.
+      operatingModel: operatingModelAttentionCount(state, at, state.settings),
       // ADR-0086: consent work waiting on this seat, plus a live release of this
       // seat's that lapses within three days.
       disclosure: disclosureAttentionFor(state, seatCtx?.seat || null, { now: at }),
@@ -1393,6 +1416,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       reliability: 'Measurement reliability — how much of what you believe about your team survives its own measurement error?',
       supply: 'Evidence supply chain — which of your unanswered questions is starved, what is the binding constraint, and is capturing the missing evidence cheaper than waiting for it?',
       solvency: 'Promise solvency — every dated promise you have made, read as one liability book: what can your own delivery rate actually serve, what is the chance at least one breaks, and which single renegotiation moves the book?',
+      'operating-model': 'Operating model — the position design, not the person in it: hours spent below a position’s own altitude, work routed up because it is not trusted below, the utilisation ceiling measured against a declared week, and the cheapest structural relief priced by hours per unit of design cost',
       chain: 'Command chain — which altitude does this work belong to, what has outlived its owner’s time span, and what does the level above actually see without asking?',
       mandates: 'Decision Rights Exchange — bounded authority, explicit acceptance, capacity evidence, budget encumbrance and verified return through the reporting hierarchy',
       authorityCalibration: 'Authority Calibration Ledger — accepted mandate contracts graded against delivered outcomes: hold rate, Brier score and calibration skill by action class and receiver altitude, with no person rated or ranked',
