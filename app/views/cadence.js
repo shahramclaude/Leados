@@ -1,6 +1,6 @@
 /**
- * app/views/cadence.js — the Operating Cadence Clock (`#/cadence`, Schema v91,
- * ADR-0085).
+ * app/views/cadence.js — the Operating Cadence Clock (`#/cadence`, Schema v92,
+ * ADR-0086).
  *
  * Five role-tiered panels across the five organisational altitudes. The page is
  * organised around the one question the rest of the workspace never asks: *which
@@ -369,6 +369,23 @@ export function renderCadence(ctx) {
         action: h('button', { class: 'btn btn-primary', type: 'button', onClick: openDeclare }, 'Declare the first forum'),
         icon: '◷',
       }),
+      (() => {
+        const focusForumId = ctx.query?.get?.('forum') || null;
+        const focused = focusForumId ? forums.find((f) => f.id === focusForumId) : null;
+        if (!focused) return null;
+        return card({
+          title: `Focused forum · ${focused.title}`,
+          subtitle: 'Addressed from a typed graph edge. Everything below is derived on read from the register and the dated records — nothing on this card is stored.',
+          body: h('div', { class: 'stack-tight' },
+            banner({
+              tone: focused.flow.verdict === 'congested' ? 'bad' : focused.flow.verdict === 'critical' ? 'caution' : 'info',
+              title: `${focused.kindLabel} · ${FORUM_CADENCE_LABELS[focused.cadence] || focused.cadence} · ${focused.status}`,
+              body: `ρ ${fmt(focused.demand.rho)} · demand ${fmt(focused.demand.demandDays)}d against capacity ${fmt(focused.demand.capacityDays)}d · flow ${focused.flow.flowDays === null ? 'refused (no steady state)' : `${fmt(focused.flow.flowDays)}d`} · ${focused.itemN} item(s) · topology ${TOPOLOGY_PATTERN_LABELS[focused.fit.topology] || focused.fit.topology}.`,
+            }),
+            h('div', { class: 'muted small' }, focused.fit.topologyNote || ''),
+          ),
+        });
+      })(),
       forums.length ? card({
         title: 'The governance clock',
         subtitle: 'Every declared forum read as a single-server queue with a calendar. Waiting time is refused at ρ ≥ 1 because no steady state exists.',
@@ -500,7 +517,12 @@ export function renderCadence(ctx) {
   /* ------------------------------------------------------------ panel 3 */
 
   function constraintPanel() {
-    const latest = readings[0] || null;
+    // A graph edge may address one frozen reading (Schema v92 link contract): the
+    // focused reading is read first, and the panel says so rather than silently
+    // rendering whatever happens to be newest.
+    const focusReadingId = ctx.query?.get?.('reading') || null;
+    const focusedReading = focusReadingId ? readings.find((r) => r.id === focusReadingId) || null : null;
+    const latest = focusedReading || readings[0] || null;
     const graded = readings.filter((r) => r.grade);
     return [
       h('div', { class: 'grid grid-4' },
@@ -509,6 +531,17 @@ export function renderCadence(ctx) {
         stat({ label: 'Secondary constraints', value: String(secondary.length), tone: secondary.length ? 'caution' : 'good', hint: 'everything else that is wrong' }),
         stat({ label: 'Graded readings', value: String(graded.length), hint: `${readings.length} frozen` }),
       ),
+      focusedReading ? card({
+        title: `Focused frozen reading · ${focusedReading.frozenOn || focusedReading.id}`,
+        subtitle: 'Addressed from a typed link. A reading is frozen evidence: its conventions and figures are shown exactly as recorded, never re-derived.',
+        body: banner({
+          tone: focusedReading.grade ? 'good' : 'info',
+          title: focusedReading.grade
+            ? `Graded once: ${focusedReading.grade.outcome === 'held' ? 'the prediction held' : 'the prediction did not hold'}`
+            : 'Frozen, not yet graded',
+          body: `Engine ${focusedReading.engineVersion || '—'} · ${(focusedReading.forums || []).length} forum(s) in scope · utilisation target ${focusedReading.conventions?.cadenceUtilisationTargetPct ?? '—'}%${focusedReading.grade?.brier !== undefined ? ` · Brier ${focusedReading.grade.brier}` : ''}.`,
+        }),
+      }) : null,
       card({
         title: 'The binding constraint',
         subtitle: 'Theory of Constraints (Goldratt 1984/1997): name the ONE thing whose relief moves the most items, in a deterministic order stated on the page.',
@@ -710,7 +743,7 @@ export function renderCadence(ctx) {
     'div',
     { class: 'page' },
     pageHeader({
-      eyebrow: 'Schema v91 · ADR-0085 · RULE-CAD-01..04',
+      eyebrow: 'Schema v92 · ADR-0086 · RULE-CAD-01..04',
       title: 'Operating Cadence Clock',
       subtitle: 'Your standing forums, read as a finite decision machine: what each one is competent to close, how much demand is converging on it, when it next sits, and whether the work can land inside the horizon it demands.',
       actions: [

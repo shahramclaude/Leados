@@ -1,7 +1,7 @@
 /**
  * app/core/domain/cadenceRules.js — post-commit propagation & cross-altitude
- * roll-up rules for the Operating Cadence Clock (`#/cadence`, Schema v91,
- * ADR-0085).
+ * roll-up rules for the Operating Cadence Clock (`#/cadence`, Schema v92,
+ * ADR-0086).
  *
  * Registered on `DEFAULT_POST_COMMIT_RULES` immediately after `catchballRule`
  * and BEFORE `concordanceRule`, `attentionMarketRule`, `successionRule`,

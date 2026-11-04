@@ -1,4 +1,4 @@
-## 2026-11-04 — Session 125: The Operating Cadence Clock ([ADR-0085](docs/adr/0085-operating-cadence-clock.md), Schema v91, `#/cadence`, RULE-CAD-01..04, CSV #80)
+## 2026-11-04 — Session 126: The Operating Cadence Clock ([ADR-0086](docs/adr/0086-operating-cadence-clock.md), Schema v92, `#/cadence`, RULE-CAD-01..04, CSV #81)
 
 **The gap this closes.** LeadOS could say what work exists at every altitude and how much person-day capacity a span has, but it had no model of the **governance calendar itself** — the standing forums where decisions are actually closed. Every tool in the category counts the cost of meetings; none measures whether a forum can close the work it receives.
 
@@ -7,12 +7,37 @@
 - **Implemented [manager]:** 30-day view. Declare forums, record sittings (held/cancelled, closures bounded by declared capacity), and see the **Conway topology** of the forum's membership against the spans that own the arriving work, with a `fit-gap` edge per missing owning seat.
 - **Implemented [director]:** 90-day span roll-up with `unit` disclosure, secondary constraints beside the named one, and the planning-fallacy gap between declared and measured service time.
 - **Implemented [VP / executive]:** 180-day aggregate roll-up, ρ and flow with the **ρ ≥ 1 refusal** (an infeasible queue gets no flow number), and one governed DACI constraint decision per ISO week per signature, fanned up every ancestor — the congested forum becomes a board-reportable decision, not a red badge.
-- **Implemented [CEO]:** 365-day workspace view, frozen readings graded once with Brier skill (withheld below the floor), identity-free brief and aggregate-only CSV #80 (`operating-cadence`) with small cells blanked and the reason printed.
-- **Implemented [all altitudes]:** additive `MIGRATIONS[90]` (four collections, six clamped settings), fail-closed normalizers, 65/65 rule-contract parity with `cadenceRule` between Catchball and Concordance and `sealRule` still last, typed `queued-for` / `rolls-up-to` / `escalates-to` / `fit-gap` edges, a **feedback-artifact refusal** so cadence escalation decisions are never counted as cadence demand, and a pausable auto-propagation with an always-available explicit scan.
+- **Implemented [CEO]:** 365-day workspace view, frozen readings graded once with Brier skill (withheld below the floor), identity-free brief and aggregate-only CSV #81 (`operating-cadence`) with small cells blanked and the reason printed.
+- **Implemented [all altitudes]:** additive `MIGRATIONS[91]` (four collections, six clamped settings), fail-closed normalizers, 66/66 rule-contract parity with `cadenceRule` between Catchball and the Board Room and `sealRule` still last, typed `queued-for` / `rolls-up-to` / `escalates-to` / `fit-gap` edges, a **feedback-artifact refusal** so cadence escalation decisions are never counted as cadence demand, and a pausable auto-propagation with an always-available explicit scan.
 - **Next 1 — [all altitudes] Authenticated identity + tenant boundary.** Server-side authorization on every read/write/export; local seat tiering and local hash-chained seals remain single-browser workspace guarantees, not multi-user security.
 - **Next 2 — [director → CEO] Calendar simulation before commitment.** Feed a proposed forum interval/capacity into a what-if that replays the last four cycles of real arrivals and reports the projected escape count, so declaring a forum is a priced decision rather than a hopeful one.
 - **Next 3 — [manager → CEO] Cross-forum handoff queues.** Extend the escape ladder into an explicit hand-up queue at the lowest common ancestor when an item escapes every competent forum, so "escalate" becomes a typed object with a due date instead of an email.
 - **Rejected [all altitudes]:** counting meeting hours as a governance quality proxy; auto-rescheduling or auto-declaring forums from a ρ reading; a finite flow time for an infeasible queue; a person-level "meeting effectiveness score".
+
+## 2026-11-04 — Session 125: the disclosure memo as an instrument that can fail (Schema v91, [ADR-0085](docs/adr/0085-board-room.md), `#/board`, RULE-BRD-01..03, CSV #80)
+
+**The gap this closes.** `chainRegistry.js` gave the chief a `board` duty and `successionRegistry.js` a `board-line` relationship, but `#/board` rendered nothing: a promised surface with no implementation, which is worse than an absent one because it tells a reader the evidence exists. The workspace could compute enterprise figures (bench, promises, authority, concordance, health, seal) and had no honest way to put seven of them in front of a board without averaging them.
+
+**Implemented, tagged by altitude**
+
+- **[frontline]** Which claim of mine is failing, by how much, and what it costs — read-only; no memo may be committed from this rank.
+- **[manager]** The span partition for any attributable claim, with the parts reconciled against the claim's own denominator and the arithmetic printed rather than summarised.
+- **[director]** Named span rows, the worst row identified, and the delegation that a failing span actually receives (opened by `RULE-BRD-01` in the same transaction, capped at `min(60, boardRecheckDays)` days).
+- **[VP / executive]** Cross-module discrepancies with both numbers and a route to the module that owns the other half; the settling-sample arithmetic; the refusal count.
+- **[CEO / chief]** Pre-registration and commit: thresholds declared before the first recorded look, a content fingerprint per look, verdicts decided by the conservative end of a Wilson interval, a deterministic identity-free memorandum, attestation state, and aggregate-only CSV #80. `commit-board-memo` is rank 5–5.
+- **[all altitudes]** Refusals, withholding, inconclusiveness and staleness are printed states with reasons; a refused figure is blank in every export and never zero; post-hoc threshold movement is permanent (`revisedAfterLook`); additive `MIGRATIONS[89]`, fail-closed normalizers, 65/65 rule-contract parity, pausable auto-propagation with an always-available explicit scan.
+
+**Analytic content encoded.** Wilson (1927) score intervals with the conservative-end decision rule; the settling-sample inversion (`boardRequiredSample`), including the deliberate `null` for a claim exactly on its threshold; the DACI decision-rights model applied to a failing claim rather than to a person; disclosure-class enforcement (ADR-0075/0080) at the enterprise altitude; falsifiability as a UI constraint (Kerr 1998 on HARKing as the failure mode being designed out).
+
+**Deliberately rejected:** a composite "board readiness score"; reporting a point estimate with a confidence note; a live dashboard rendered at memo-view time (the pack must not change after it is read); auto-correcting a failing claim; a new graph node (the memo's relationships are the existing `rolls-up-to` span edges).
+
+**Cross-altitude proof shipped this session.** One committed memo with a failing claim produces, in a single atomic transaction: one governed DACI decision at the chief altitude, one delegation to the failing span's holder, and typed `rolls-up-to` edges to every leadership ancestor — asserted in `tests/app/board-room.test.mjs`.
+
+**Next 1–3 ambitious targets**
+
+- **Next 1 — [all altitudes] Authenticated identity + tenant boundary.** Still the one honest limit named in every recent ADR; a chief-only commit rule enforced against a *declared* seat is not authentication.
+- **Next 2 — [director → CEO] Temporal disclosure of the memo itself.** A pack republished every quarter is a repeated release; complementary suppression across quarters, split/merge and phased-access tests have not been written.
+- **Next 3 — [manager → VP] Claim-level instrument validation.** Seven claims and their default thresholds are a chosen instrument; the next step is outcome-grading each claim's threshold against decisions the workspace later made, so the instrument is calibrated rather than merely declared.
 
 ## 2026-11-04 — Session 124: Hoshin Kanri & Catchball Cascade ([ADR-0084](docs/adr/0084-hoshin-catchball-cascade.md), Schema v90, `#/catchball`, RULE-HK-01..03, CSV #79)
 
@@ -99,18 +124,6 @@
 ### Deliberately rejected
 
 A second NLP engine or rule spine; auto-adopting a case with no human confirmation; a generic role-themed dashboard duplicated five times; inferring altitude from sentiment, messages or keystrokes; calling suppression "anonymous" or "differentially private"; inventing a director/VP/CEO rung the roster does not contain.
-## 2026-11-03 — PR #84 closed as superseded: pay-transparency candidates preserved
-
-**Triage, not a session.** PR #84 ("Session 74 — pay architecture & equity terminal", `#/pay`, Schema v51, ADR-0039, opened 2026-10-29) was never merged. PR #85 merged the next day (2026-10-30) and took the same Schema v51 and the same ADR-0039 for the Merit & Pay-Equity Terminal (`#/merit`, `comp.js`) recorded below as Session 74. Main has since moved to Schema v87 / ADR-0080 (152 commits past #84's base); 67 of #84's 74 files conflict, including the whole test suite and the standalone artifact. It is closed as superseded, not merged. The head commit (`0d49e56`, branch `arena/9fc32624-leados`) remains reachable via `refs/pull/84/head` for reference.
-
-**Candidates preserved from #84** — none of this exists in the shipped `#/merit` (`comp.js` has no quartile, joint-assessment or remediation machinery). A future session picking these up builds on `comp.js` under a new schema version and ADR number, not on the dead branch:
-
-1. **Pay-quartile reporting (Directive (EU) 2023/970).** The share of each declared comparison group in each quarter of the pay distribution, per currency cohort, under the existing small-cell suppression — the Directive's reporting mechanic rather than a vendor dashboard.
-2. **Joint pay assessment trigger + owned workflow.** A category gap of at least 5% unexplained by the recorded controls flags a joint pay assessment; the flag must open an owned, documented decision with attestations (e.g. "a gender-neutral job-evaluation study was completed" — recorded, never performed by the app), following the RULE-COMP-02 mechanism-not-individual pattern. The 5% figure is the Directive's; it is not a management convention.
-3. **Remediation priced by re-fit, never by arithmetic.** #84's `remediationOptions` re-fits the adjusted gap model on the projected pay of each candidate correction and refuses to publish a projection when the corrected cohort cannot be re-fitted — a correction's effect is the model's, not `gap − lift`. The same discipline applies forward: re-run the gap model on a projected merit allocation to catch a matrix that quietly re-widens the gap.
-
-**Design constraint that closed the merge path:** #84 ran its contrast on a declared closed group vocabulary (Group A / Group B); the accepted [ADR-0039](docs/adr/0039-merit-and-pay-equity-terminal.md) deliberately stores no protected characteristic and decomposes on hire origin or reporting line. The Directive's subject is sex-disaggregated pay data, so a future pay-transparency session must resolve that tension explicitly — an amended ADR with a declared, consented comparison dimension — not silently reverse the privacy stance, and not ship a second pay-equity domain beside `#/merit`.
-
 ## 2026-11-03 — Session 120: Mission Control ([ADR-0080](docs/adr/0080-mission-control.md), Schema v87, `#/mission`, RULE-MIS-01)
 
 - **Implemented [frontline → CEO]:** Mission Control — five genuinely different operating loops (week/month/quarter/half-year/year), evidence-first triage, hierarchy drill-up/down, reviewed cross-module interventions, and altitude handoffs. Reuses the Command Chain, Operating Seat, Action Bundles and post-commit spine; no second workflow engine.
@@ -140,14 +153,6 @@ A second NLP engine or rule spine; auto-adopting a case with no human confirmati
 - **Next 2 — [all altitudes] Authenticated identity + tenant boundary.** The local seat is a declaration, not a security boundary. Server-side authorization on every read/write/export, with explicit consent migration and independent review, remains the prerequisite for multi-user use.
 - **Next 3 — [director → CEO] Authority calibration ledger.** Shipped in Session 119 (Schema v85, ADR-0079, `#/authority-calibration`). See Session 119 entry above.
 - **Rejected [all altitudes]:** a generic approval checkbox; sideways peer transfers; inferring capacity or actual spend; autonomous spending; claiming production RBAC from a browser-local seat.
-
-## 2026-11-02 — integrity before enterprise claims
-
-- **Implemented [frontline → executive]:** reconcile rule-owned vertical links on eligible events/explicit scans, preserving unrelated links and auditing removals. Scope helper denies cross-span detail and aggregate-only actions.
-- **Planned [all altitudes]:** authenticated server-side identity, tenant isolation and authorization on every read/write/export; migrate data only with explicit consent and independent security review. Local seat selection is not a substitute.
-- **Planned [manager → CEO]:** confidentiality thresholds and complementary suppression across hierarchy, filters and time, including differencing attacks and reorganisation tests.
-- **Planned [all altitudes]:** bounded, observable reconciliation backlog with explicit progress and performance testing at scale.
-- **Rejected [all altitudes]:** claim production RBAC or predictive individual risk from a self-declared browser seat; neither identity nor calibration is established.
 
 ## 2026-11-02 — Session 117: the Succession Terminal — the bench as a certificate ([ADR-0077](docs/adr/0077-succession-terminal.md), Schema v83, `#/succession`, RULE-SUC-01..05, SUC-01..08, CSV #73)
 
@@ -336,15 +341,6 @@ A second NLP engine or rule spine; auto-adopting a case with no human confirmati
 4. **Headless Chromium + assistive-technology CI lane:** complement automated JSDOM/`axe-core` suites with real-browser Playwright + screen-reader smoke checks on both hosted ES modules and `file://` `LeadOS-standalone.html`.
 
 **Deliberately rejected:** individual employee attribution scores or rankings; claiming observational attribution proves randomized causality in confounded loops; implicit cross-currency conversion; treating unspent commitments as actual spend; mutating untouched bundle targets before explicit settlement.
-
----
-
-## 2026-11-01 — Decision units, next steps
-
-- **Implemented:** mixed-currency capacity allocation and release ranking refusal; rule-created capacity decision discloses the reason; mixed-currency CD3 scope preset withheld; hiring exposure grouped by currency and scenario handoff guarded.
-- **Planned:** inspect prior generated trade-offs for stale unsafe options; workspace-wide audit of monetary comparisons and currencies; user-approved dated FX evidence and stress ranges; real-browser keyboard and assistive-technology verification.
-- **Deliberately rejected:** implicit 1:1 FX (false precision); automatically rewriting historical decisions (destroys audit context); a new standalone dashboard instead of guarding existing decision paths.
-- **Gap:** no universal currency type or FX framework; other ranking/simulation paths and all unreviewed modules **[UNVERIFIED]**.
 
 ---
 
@@ -3764,3 +3760,32 @@ managers who have actually killed a study on the strength of an EVSI number.
 1. **Succession as a measured quantity.** `#/readiness` collects self-assessed ratings; the chain now knows every span, its subtree and its altitude. Nothing computes whether a span's loss leaves work with no altitude to hold it. Build the bench figure from the tree and item ages, not from ratings — the evidence already exists (RESEARCH §98).
 2. **Multi-altitude demo depth.** The demo roster is two levels, so three rungs are empty (honest, and it *shows* the refusal — but it under-exercises the roll-up). Seed a three-level roster with a director whose two managers carry different work mixes, so the composition guard and the standardised comparison fire on demo data.
 3. **Time-span calibration from the record** (carried from Session 110's ρ theme): the horizon table is a declaration. The workspace now stores, per item, the day it crossed a horizon and the day it was actually decided. That is a measurable distribution of *real* discretion, and nothing yet reads it back against the declared table.
+## 2026-11-03 — PR #84 closed as superseded: pay-transparency candidates preserved
+
+**Triage, not a session.** PR #84 ("Session 74 — pay architecture & equity terminal", `#/pay`, Schema v51, ADR-0039, opened 2026-10-29) was never merged. PR #85 merged the next day (2026-10-30) and took the same Schema v51 and the same ADR-0039 for the Merit & Pay-Equity Terminal (`#/merit`, `comp.js`) recorded below as Session 74. Main has since moved to Schema v87 / ADR-0080 (152 commits past #84's base); 67 of #84's 74 files conflict, including the whole test suite and the standalone artifact. It is closed as superseded, not merged. The head commit (`0d49e56`, branch `arena/9fc32624-leados`) remains reachable via `refs/pull/84/head` for reference.
+
+**Candidates preserved from #84** — none of this exists in the shipped `#/merit` (`comp.js` has no quartile, joint-assessment or remediation machinery). A future session picking these up builds on `comp.js` under a new schema version and ADR number, not on the dead branch:
+
+1. **Pay-quartile reporting (Directive (EU) 2023/970).** The share of each declared comparison group in each quarter of the pay distribution, per currency cohort, under the existing small-cell suppression — the Directive's reporting mechanic rather than a vendor dashboard.
+2. **Joint pay assessment trigger + owned workflow.** A category gap of at least 5% unexplained by the recorded controls flags a joint pay assessment; the flag must open an owned, documented decision with attestations (e.g. "a gender-neutral job-evaluation study was completed" — recorded, never performed by the app), following the RULE-COMP-02 mechanism-not-individual pattern. The 5% figure is the Directive's; it is not a management convention.
+3. **Remediation priced by re-fit, never by arithmetic.** #84's `remediationOptions` re-fits the adjusted gap model on the projected pay of each candidate correction and refuses to publish a projection when the corrected cohort cannot be re-fitted — a correction's effect is the model's, not `gap − lift`. The same discipline applies forward: re-run the gap model on a projected merit allocation to catch a matrix that quietly re-widens the gap.
+
+**Design constraint that closed the merge path:** #84 ran its contrast on a declared closed group vocabulary (Group A / Group B); the accepted [ADR-0039](docs/adr/0039-merit-and-pay-equity-terminal.md) deliberately stores no protected characteristic and decomposes on hire origin or reporting line. The Directive's subject is sex-disaggregated pay data, so a future pay-transparency session must resolve that tension explicitly — an amended ADR with a declared, consented comparison dimension — not silently reverse the privacy stance, and not ship a second pay-equity domain beside `#/merit`.
+
+## 2026-11-02 — integrity before enterprise claims
+
+- **Implemented [frontline → executive]:** reconcile rule-owned vertical links on eligible events/explicit scans, preserving unrelated links and auditing removals. Scope helper denies cross-span detail and aggregate-only actions.
+- **Planned [all altitudes]:** authenticated server-side identity, tenant isolation and authorization on every read/write/export; migrate data only with explicit consent and independent security review. Local seat selection is not a substitute.
+- **Planned [manager → CEO]:** confidentiality thresholds and complementary suppression across hierarchy, filters and time, including differencing attacks and reorganisation tests.
+- **Planned [all altitudes]:** bounded, observable reconciliation backlog with explicit progress and performance testing at scale.
+- **Rejected [all altitudes]:** claim production RBAC or predictive individual risk from a self-declared browser seat; neither identity nor calibration is established.
+
+## 2026-11-01 — Decision units, next steps
+
+- **Implemented:** mixed-currency capacity allocation and release ranking refusal; rule-created capacity decision discloses the reason; mixed-currency CD3 scope preset withheld; hiring exposure grouped by currency and scenario handoff guarded.
+- **Planned:** inspect prior generated trade-offs for stale unsafe options; workspace-wide audit of monetary comparisons and currencies; user-approved dated FX evidence and stress ranges; real-browser keyboard and assistive-technology verification.
+- **Deliberately rejected:** implicit 1:1 FX (false precision); automatically rewriting historical decisions (destroys audit context); a new standalone dashboard instead of guarding existing decision paths.
+- **Gap:** no universal currency type or FX framework; other ranking/simulation paths and all unreviewed modules **[UNVERIFIED]**.
+
+---
+

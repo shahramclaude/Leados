@@ -334,7 +334,13 @@ export const LINK_ENTITY_TYPES = [
   // from them. The subject is a PAIR and a DIMENSION; a person's answers are the
   // instrument's readings, never a rating.
   'concordance',
-  // ADR-0085: the Operating Cadence Clock. A forum and a frozen queue reading are
+  // ADR-0085: one board disclosure memo. A first-class node so the governed
+  // decisions it opened, the obligations it delegated to a span and every span
+  // whose records produced its figures are navigable from the memo — and the
+  // memo from them. It carries counts, verdicts and conventions; no person's
+  // private record is ever an endpoint.
+  'boardmemo',
+  // ADR-0086: the Operating Cadence Clock. A forum and a frozen queue reading are
   // first-class nodes; nothing person-level is ever a cadence node.
   'cadenceforum',
   'cadencereading',
@@ -461,7 +467,9 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   catchballround: 'catchballRounds',
   // ADR-0083: keep the registry exhaustive with LINK_ENTITY_TYPES.
   concordance: 'expectationRounds',
-  // ADR-0085: the Operating Cadence Clock. A forum is a first-class graph node so
+  // ADR-0084: keep the registry exhaustive with LINK_ENTITY_TYPES.
+  boardmemo: 'boardMemos',
+  // ADR-0086: the Operating Cadence Clock. A forum is a first-class graph node
   // every queued item, escalated constraint and agenda-fit gap is navigable FROM
   // the forum that is supposed to close it; a frozen reading is a node so the
   // queue it predicted can be read back against what actually closed.
@@ -2167,9 +2175,23 @@ export function resolveLinkedEntity(state, entityType, entityId) {
       // The two sides' answers are deliberately NOT projected into the shared
       // graph: an edge may point at a round, never at what one person selected.
       return {
-        type: 'concordance', id: rec.id, title: `Expectation round · ${rec.cycle}`,
+        type: 'concordance',
+        id: rec.id,
+        title: `Expectation round · ${rec.cycle || String(rec.openedAt || rec.createdAt || '').slice(0, 10) || 'undated'}`,
         status: rec.status === 'closed' ? 'Closed · both sides in' : rec.status === 'withdrawn' ? 'Withdrawn' : 'Open · sealed',
         route: `#/concordance?panel=rounds&round=${encodeURIComponent(rec.id)}`, raw: rec,
+      };
+    }
+    case 'boardmemo': {
+      const rec = (state.boardMemos || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      // Claims, thresholds and verdicts are the node's public content; the memo
+      // carries no person record by construction, so nothing needs redacting.
+      return {
+        type: 'boardmemo', id: rec.id,
+        title: `Board memo · ${rec.cycle || 'unlabelled'} r${rec.revision}`,
+        status: rec.status,
+        route: `#/board?panel=memo&memo=${encodeURIComponent(rec.id)}`, raw: rec,
       };
     }
     case 'routingplan': {

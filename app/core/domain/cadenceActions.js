@@ -1,6 +1,6 @@
 /**
  * app/core/domain/cadenceActions.js — reviewed command & read mixin for the
- * Operating Cadence Clock (`#/cadence`, Schema v91, ADR-0085).
+ * Operating Cadence Clock (`#/cadence`, Schema v92, ADR-0086).
  *
  * Mounted on `api` in `app/actions.js` prior to `guardApi(api, store)` so every
  * method is mediated by the central ADR-0080 gateway (`API_RIGHTS['run-cadence']`

@@ -1,5 +1,5 @@
 /**
- * tests/app/operating-cadence.test.mjs — ADR-0085, Schema v91.
+ * tests/app/operating-cadence.test.mjs — ADR-0086, Schema v92.
  *
  * The session's concrete self-test. In ONE atomic transaction it proves:
  *   - a case filed in the workspace is attributed to the ONE standing forum
@@ -94,10 +94,10 @@ const weeklyForum = (extra = {}) => ({
 
 /* ------------------------------------------------------------------ schema */
 
-test('v90 → v91 migration is additive, and no forum is ever invented', () => {
-  assert.equal(SCHEMA_VERSION, 91);
+test('v91 → v92 migration is additive, and no forum is ever invented', () => {
+  assert.equal(SCHEMA_VERSION, 92);
   const migrated = migrate({ schemaVersion: 90, settings: { leaderName: 'Keep' }, people: [] });
-  assert.deepEqual(migrated.applied, ['90 → 91']);
+  assert.deepEqual(migrated.applied, ['90 → 91', '91 → 92']);
   assert.deepEqual(migrated.raw.cadenceForums, []);
   assert.deepEqual(migrated.raw.cadenceSessions, []);
   assert.deepEqual(migrated.raw.cadenceReadings, []);
@@ -105,7 +105,7 @@ test('v90 → v91 migration is additive, and no forum is ever invented', () => {
   assert.equal(migrated.raw.settings.leaderName, 'Keep');
   assert.equal(migrated.raw.settings.cadenceUtilisationTargetPct, 85);
   // A workspace that already has cadence data keeps it untouched.
-  const kept = migrate({ schemaVersion: 90, cadenceForums: [{ id: 'existing' }], settings: {} });
+  const kept = migrate({ schemaVersion: 91, cadenceForums: [{ id: 'existing' }], settings: {} });
   assert.equal(kept.raw.cadenceForums[0].id, 'existing');
   // Fail-closed normalizers: a forum with no chair, an unknown kind, or an unknown
   // cadence is dropped with a warning rather than guessed at.
@@ -142,7 +142,7 @@ test('graph vocabulary and spine parity are exhaustive', () => {
   assert.ok(contract.writes.includes('links'));
   assert.ok(contract.writes.includes('decisions'));
   assert.equal(CSV_EXPORTS.at(-1).key, 'operating-cadence');
-  assert.equal(CSV_EXPORTS.length, 80);
+  assert.equal(CSV_EXPORTS.length, 81);
 });
 
 /* ------------------------------------- the concrete self-test: one transaction */

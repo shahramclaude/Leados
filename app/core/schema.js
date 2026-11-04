@@ -14,6 +14,9 @@ import { normalizeConflicts } from './conflict-schema.js';
 // ADR-0083: the Concordance Terminal. Rounds resolve BEFORE links so
 // `rolls-up-to`, `re-contracts` and `re-tests` edges validate on reload.
 import { normalizeConcordanceRounds, normalizeConcordanceMarkers, normalizeConcordanceSettings } from './domain/concordanceSchema.js';
+// ADR-0085: the Board Room. Memos resolve BEFORE links so `summarizes-span`
+// and `escalates-from` provenance edges validate on reload.
+import { normalizeBoardMemos, normalizeBoardMarkers, normalizeBoardSettings } from './domain/boardSchema.js';
 import { normalizePropagationLineage } from './domain/automationLineage.js';
 import { normalizeImpactExecutionSnapshot } from './domain/impactExecution.js';
 import { normalizeStrategyBets, normalizeStrategyTags } from './domain/strategy.js';
@@ -315,10 +318,12 @@ export {
 // older blob simply opens on the undeclared operator view. A version bump here
 // would have forced 78 test files to be rewritten for zero user benefit; the
 // honest choice is to add nothing to migrate.
-export const SCHEMA_VERSION = 91;
+export const SCHEMA_VERSION = 92;
 
-// v91 adds the Operating Cadence Clock (`cadenceForums`, `cadenceSessions`,
-// `cadenceReadings`, `cadenceMarkers`, ADR-0085): the standing-forum calendar as a
+// v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
+// thresholds are declared before the first look.
+// v92 adds the Operating Cadence Clock (`cadenceForums`, `cadenceSessions`,
+// `cadenceReadings`, `cadenceMarkers`, ADR-0086): the standing-forum calendar as a
 // finite decision machine — declared per-forum decision capacity and service
 // time, append-only sittings, and frozen readings of the queue that are graded
 // once afterwards. Purely additive: every utilisation, flow time, breach
@@ -1401,6 +1406,12 @@ export const DEFAULT_SETTINGS = Object.freeze({
   concordanceRetestDays: 21,
   concordanceReviewDays: 14,
   concordanceAutoPropagate: true,
+  // ADR-0085: the Board Room — declared conventions, all clamped.
+  boardCellFloor: 5,
+  boardEvidenceFloor: 4,
+  boardMaterialityPct: 10,
+  boardRecheckDays: 90,
+  boardAutoPropagate: true,
   seatMaterialityPp: 5,
   seatWindowDays: 90,
   seatMaxLinks: 24,
@@ -1688,6 +1699,10 @@ export const COLLECTIONS = [
   // until both sides are in) and the idempotency markers their three rules use.
   'expectationRounds',
   'concordanceMarkers',
+  // ADR-0085: board disclosure memos (declared claims + frozen snapshots) and
+  // the idempotency markers their three rules use.
+  'boardMemos',
+  'boardMarkers',
   'links',
   'portfolio',
   'events',
@@ -2335,6 +2350,8 @@ export function normalizeSettings(raw) {
     ...normalizeAuthorityCalibrationSettings(s),
     ...normalizeRouterSettings(s),
     ...normalizeConcordanceSettings(s),
+    // ADR-0085: the Board Room's declared conventions.
+    ...normalizeBoardSettings(s),
     ...normalizeSealSettings(s),
     ...normalizeCatchballSettings(s),
   };
@@ -6439,6 +6456,11 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // dropped; a round claiming to be closed with one side is reopened.
   state.expectationRounds = normalizeConcordanceRounds(raw.expectationRounds, warnings);
   state.concordanceMarkers = normalizeConcordanceMarkers(raw.concordanceMarkers, warnings);
+  // ADR-0085: memos resolve before links so `summarizes-span`/`escalates-from`
+  // provenance edges validate against real memo ids. A memo claiming to be
+  // committed without a snapshot is reopened as a draft.
+  state.boardMemos = normalizeBoardMemos(raw.boardMemos, warnings);
+  state.boardMarkers = normalizeBoardMarkers(raw.boardMarkers, warnings);
   state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
 
   const events = asArray(raw, 'events', warnings).map((e, i) => ({
@@ -7137,6 +7159,25 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  // ADR-0085: additive 90 → 91. No existing record is rewritten: an older
+  // workspace simply has an empty memo ledger and the declared conventions.
+  // A memo is only ever created by a human opening one.
+  90: (v90) => ({
+    ...v90,
+    schemaVersion: 91,
+    boardMemos: Array.isArray(v90.boardMemos) ? v90.boardMemos : [],
+    boardMarkers: Array.isArray(v90.boardMarkers) ? v90.boardMarkers : [],
+    settings: isPlainObject(v90.settings)
+      ? {
+        ...v90.settings,
+        boardCellFloor: v90.settings.boardCellFloor ?? 5,
+        boardEvidenceFloor: v90.settings.boardEvidenceFloor ?? 4,
+        boardMaterialityPct: v90.settings.boardMaterialityPct ?? 10,
+        boardRecheckDays: v90.settings.boardRecheckDays ?? 90,
+        boardAutoPropagate: v90.settings.boardAutoPropagate !== false,
+      }
+      : { ...DEFAULT_SETTINGS },
+  }),
   // ADR-0083: additive 88 → 89. No existing record is rewritten: an older
   // workspace simply has an empty round ledger and the declared conventions.
   // A round is only ever created by a human opening one.
@@ -7181,27 +7222,27 @@ export const MIGRATIONS = {
       }
       : { ...DEFAULT_SETTINGS },
   }),
-  // ADR-0085: additive 90 → 91. The Operating Cadence Clock adds a forum
+  // ADR-0086: additive 91 → 92. The Operating Cadence Clock adds a forum
   // register, a sitting log, frozen readings and idempotency markers. Nothing
   // historical is invented: an upgraded workspace opens with NO forums, because
   // a meeting calendar back-filled from records would claim a cadence the
   // organisation never actually ran.
-  90: (v90) => ({
-    ...v90,
-    schemaVersion: 91,
-    cadenceForums: Array.isArray(v90.cadenceForums) ? v90.cadenceForums : [],
-    cadenceSessions: Array.isArray(v90.cadenceSessions) ? v90.cadenceSessions : [],
-    cadenceReadings: Array.isArray(v90.cadenceReadings) ? v90.cadenceReadings : [],
-    cadenceMarkers: Array.isArray(v90.cadenceMarkers) ? v90.cadenceMarkers : [],
-    settings: isPlainObject(v90.settings)
+  91: (v91) => ({
+    ...v91,
+    schemaVersion: 92,
+    cadenceForums: Array.isArray(v91.cadenceForums) ? v91.cadenceForums : [],
+    cadenceSessions: Array.isArray(v91.cadenceSessions) ? v91.cadenceSessions : [],
+    cadenceReadings: Array.isArray(v91.cadenceReadings) ? v91.cadenceReadings : [],
+    cadenceMarkers: Array.isArray(v91.cadenceMarkers) ? v91.cadenceMarkers : [],
+    settings: isPlainObject(v91.settings)
       ? {
-        ...v90.settings,
-        cadenceFloorN: v90.settings.cadenceFloorN ?? 5,
-        cadenceCellFloor: v90.settings.cadenceCellFloor ?? 3,
-        cadenceUtilisationTargetPct: v90.settings.cadenceUtilisationTargetPct ?? 85,
-        cadencePlanningFactorPct: v90.settings.cadencePlanningFactorPct ?? 130,
-        cadenceFlowTargetDays: v90.settings.cadenceFlowTargetDays ?? 14,
-        cadenceAutoPropagate: v90.settings.cadenceAutoPropagate !== false,
+        ...v91.settings,
+        cadenceFloorN: v91.settings.cadenceFloorN ?? 5,
+        cadenceCellFloor: v91.settings.cadenceCellFloor ?? 3,
+        cadenceUtilisationTargetPct: v91.settings.cadenceUtilisationTargetPct ?? 85,
+        cadencePlanningFactorPct: v91.settings.cadencePlanningFactorPct ?? 130,
+        cadenceFlowTargetDays: v91.settings.cadenceFlowTargetDays ?? 14,
+        cadenceAutoPropagate: v91.settings.cadenceAutoPropagate !== false,
       }
       : { ...DEFAULT_SETTINGS },
   }),

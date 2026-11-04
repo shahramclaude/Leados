@@ -1,6 +1,6 @@
 /**
  * app/core/domain/cadenceRegistry.js — canonical vocabulary for the Operating
- * Cadence Clock (`#/cadence`, Schema v91, ADR-0085).
+ * Cadence Clock (`#/cadence`, Schema v92, ADR-0086).
  *
  * Leaf registry importing only `chainRegistry.js`, so `schema.js`,
  * `cadenceSchema.js`, `cadence.js`, `cadenceRules.js`, `csv.js` and

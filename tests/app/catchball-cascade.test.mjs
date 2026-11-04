@@ -48,14 +48,14 @@ const proposal = (toSeatId = 'lead1', extra = {}) => ({ title: 'Improve the deli
 
 // Schema and graph are additive; imported rows cannot silently become accepted pacts.
 test('v88 migration, record validation, graph vocabulary and spine parity', () => {
-  assert.equal(SCHEMA_VERSION, 91);
+  assert.equal(SCHEMA_VERSION, 92);
   const migrated = migrate({ schemaVersion: 88, settings: { leaderName: 'Keep' }, people: [] });
-  assert.deepEqual(migrated.applied, ['88 → 89', '89 → 90', '90 → 91']);
+  assert.deepEqual(migrated.applied, ['88 → 89', '89 → 90', '90 → 91', '91 → 92']);
   assert.deepEqual(migrated.raw.catchballPacts, []);
   assert.deepEqual(migrated.raw.catchballRounds, []);
   assert.equal(migrated.raw.settings.leaderName, 'Keep');
   const afterConcordance = migrate({ schemaVersion: 89, expectationRounds: [{ id: 'existing-round' }], settings: {} });
-  assert.deepEqual(afterConcordance.applied, ['89 → 90', '90 → 91']);
+  assert.deepEqual(afterConcordance.applied, ['89 → 90', '90 → 91', '91 → 92']);
   assert.equal(afterConcordance.raw.expectationRounds[0].id, 'existing-round');
   assert.deepEqual(afterConcordance.raw.catchballPacts, []);
   const warnings = [];
@@ -69,14 +69,18 @@ test('v88 migration, record validation, graph vocabulary and spine parity', () =
   }
   const names = DEFAULT_POST_COMMIT_RULES.map((rule) => rule.name);
   assert.equal(names.indexOf('catchballRule'), names.indexOf('altitudeRouterRule') + 1);
-  // ADR-0085: the cadence rule runs immediately after the cascade and before the
+  // ADR-0086: the cadence rule runs immediately after the cascade and before the
   // market, so a constraint decision it opens is priced in the same transaction.
   assert.equal(names.indexOf('cadenceRule'), names.indexOf('catchballRule') + 1);
   assert.ok(names.indexOf('catchballRule') < names.indexOf('attentionMarketRule'));
   assert.equal(PROPAGATION_CONTRACTS.length, DEFAULT_POST_COMMIT_RULES.length);
-  // ADR-0085 appended its own aggregate scope after this one; the ordinal guard
-  // below is what stops a mid-array insertion from silently shifting history.
-  assert.ok(CSV_EXPORTS.some((s) => s.key === 'catchball-cascade'));
+  // The registry is append-only and numbering follows position: CSV #79 is the
+  // Catchball cascade, #80 the Board Room (Session 125) and #81 the Operating
+  // Cadence Clock (Session 126). Asserting the ORDER is the contract; asserting
+  // one of them is LAST would break the moment a later session appends its own.
+  assert.ok(CSV_EXPORTS.some((scope) => scope.key === 'catchball-cascade'));
+  assert.ok(CSV_EXPORTS.findIndex((scope) => scope.key === 'catchball-cascade') < CSV_EXPORTS.findIndex((scope) => scope.key === 'board-claims'));
+  assert.ok(CSV_EXPORTS.findIndex((scope) => scope.key === 'board-claims') < CSV_EXPORTS.findIndex((scope) => scope.key === 'operating-cadence'));
   assert.equal(CSV_EXPORTS.at(-1).key, 'operating-cadence');
 });
 

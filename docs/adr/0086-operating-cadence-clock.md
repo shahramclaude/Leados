@@ -1,9 +1,9 @@
-# ADR-0085: The Operating Cadence Clock — the standing-forum calendar as a queueing system, with declared service time, competence routing, and a planning-fallacy correction (`#/cadence`)
+# ADR-0086: The Operating Cadence Clock — the standing-forum calendar as a queueing system, with declared service time, competence routing, and a planning-fallacy correction (`#/cadence`)
 
 - **Status:** Accepted
 - **Date:** 2026-11-04
-- **Session:** 125 (Schema v91)
-- **Related:** [ADR-0008](./0008-post-commit-rules-hook.md), [ADR-0075](./0075-command-chain.md), [ADR-0076](./0076-operating-seat.md), [ADR-0080](./0080-mission-control.md), [ADR-0081](./0081-altitude-router.md), [ADR-0082](./0082-sealed-spine.md), [ADR-0084](./0084-hoshin-catchball-cascade.md), [RESEARCH §107](../../RESEARCH.md)
+- **Session:** 126 (Schema v92)
+- **Related:** [ADR-0008](./0008-post-commit-rules-hook.md), [ADR-0085](./0085-board-room.md), [ADR-0075](./0075-command-chain.md), [ADR-0076](./0076-operating-seat.md), [ADR-0080](./0080-mission-control.md), [ADR-0081](./0081-altitude-router.md), [ADR-0082](./0082-sealed-spine.md), [ADR-0084](./0084-hoshin-catchball-cascade.md), [RESEARCH §107](../../RESEARCH.md)
 
 ## 1. Context
 
@@ -18,7 +18,7 @@ LeadOS could say **what** work exists at every altitude (`harvestWork`, the five
 
 ## 2. Decision
 
-Ship the **Operating Cadence Clock (`#/cadence`)** on Schema v91 as an integrated domain + view + post-commit module family (`app/core/domain/cadence{Registry,Schema,Rules,Actions}.js`, `app/core/domain/cadence.js`, `app/views/cadence.js`): the standing-forum calendar modelled as a **single-server queue with declared service time, class-based intake and competence routing**, escalated onto the shared propagation spine.
+Ship the **Operating Cadence Clock (`#/cadence`)** on Schema v92 as an integrated domain + view + post-commit module family (`app/core/domain/cadence{Registry,Schema,Rules,Actions}.js`, `app/core/domain/cadence.js`, `app/views/cadence.js`): the standing-forum calendar modelled as a **single-server queue with declared service time, class-based intake and competence routing**, escalated onto the shared propagation spine.
 
 ### 2.1 Explicit named cross-domain frameworks
 
@@ -34,7 +34,7 @@ Ship the **Operating Cadence Clock (`#/cadence`)** on Schema v91 as an integrate
 
 ### 2.2 Cross-module & cross-altitude spine (`cadenceRule`, `RULE-CAD-01..04`)
 
-Registered on `DEFAULT_POST_COMMIT_RULES` **immediately after `catchballRule`** and before `concordanceRule`, `attentionMarketRule`, `seatRule` and `sealRule` — **65 rules / 65 contracts**, `sealRule` still last, so one seal covers every edge written here in the same atomic commit.
+Registered on `DEFAULT_POST_COMMIT_RULES` **immediately after `catchballRule`** and before `concordanceRule`, `boardRule`, `attentionMarketRule`, `seatRule` and `sealRule` — **66 rules / 66 contracts**, `sealRule` still last, so one seal covers every edge written here in the same atomic commit.
 
 - **`RULE-CAD-01` — queue provenance.** Each reviewable open item attributed to a competent forum gets exactly one idempotent `queued-for` edge to that forum, and one `rolls-up-to` edge per leadership ancestor of its owning span (rank-tiered disclosure note: `names` ≤ rank 2, `unit` = rank 3, `aggregate` above). A sensitive source (a performance concern) contributes **no edge at all** — routing a confidential people record into a governance graph is a disclosure failure.
 - **`RULE-CAD-02` — constraint escalation.** One governed DACI decision per **ISO week per signature** (`[CAD-SIG:type:forum:week]`, read from `question` + `rationale`, so a renamed title cannot defeat idempotence), with three concrete options derived from the constraint type, opened at the altitude that can relieve it and fanned up every ancestor. A congested forum therefore becomes a board-reportable decision, not a red badge.
@@ -56,7 +56,7 @@ Access is the existing deny-by-default gateway (`run-cadence` right, `SAFE_READS
 
 ### 2.4 Export boundary
 
-CSV scope **#80 `operating-cadence`**: 13 aggregate-only columns (`row_kind`, `altitude`, `horizon_days`, `cadence`, `forum_kind`, `items`, `demand_days`, `capacity_days`, `rho`, `flow_days`, `verdict`, `topology`, `closures_per_sitting`, `suppressed`). No person name, forum title, or item title crosses the boundary. Cells below `cadenceCellFloor` (default 3) are **blanked with the reason in `suppressed`**, never zeroed and never rounded into significance.
+CSV scope **#81 `operating-cadence`**: 13 aggregate-only columns (`row_kind`, `altitude`, `horizon_days`, `cadence`, `forum_kind`, `items`, `demand_days`, `capacity_days`, `rho`, `flow_days`, `verdict`, `topology`, `closures_per_sitting`, `suppressed`). No person name, forum title, or item title crosses the boundary. Cells below `cadenceCellFloor` (default 3) are **blanked with the reason in `suppressed`**, never zeroed and never rounded into significance.
 
 ## 3. Rejected alternatives
 
@@ -72,7 +72,7 @@ CSV scope **#80 `operating-cadence`**: 13 aggregate-only columns (`row_kind`, `a
 - Every claimed improvement can be **falsified later**: freeze a reading, grade it once, get a Brier skill or a refusal.
 - Congestion now produces **governed decisions** on the shared spine, sealed in the same transaction, instead of a dashboard warning.
 - Two failure modes are now impossible by construction: a forum that reports a finite flow time while its utilisation exceeds 1, and a cadence escalation that feeds itself.
-- Costs: one more migration entry (`90 → 91`), four collections, six clamped settings, one spine rule position, one CSV scope, and 88 test files' version pins swept.
+- Costs: one more migration entry (`91 → 92`), four collections, six clamped settings, one spine rule position, one CSV scope, and ~90 test files' version pins swept across two sweeps (v91 for main's Board Room, v92 for this session).
 
 ## 5. Honest limits
 

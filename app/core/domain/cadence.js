@@ -1,6 +1,6 @@
 /**
  * app/core/domain/cadence.js — the Operating Cadence Clock read model
- * (`#/cadence`, Schema v91, ADR-0085).
+ * (`#/cadence`, Schema v92, ADR-0086).
  *
  * THE QUESTION NO OTHER SCREEN ASKS
  * ---------------------------------

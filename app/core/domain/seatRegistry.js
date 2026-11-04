@@ -128,6 +128,10 @@ export const RECORD_POLICIES = Object.freeze({
   solvencyReadings: { classKey: 'enterprise', label: 'Frozen promise readings', route: '#/solvency' },
   orgDesigns: { classKey: 'enterprise', label: 'Structural designs', route: '#/orgdesign' },
   voiDecisions: { classKey: 'enterprise', label: 'Information-value frames', route: '#/voi' },
+  // ADR-0085: board memos are enterprise material. They carry claims, thresholds,
+  // verdicts and counts — never a person, a 1:1 or a rating — but they are the
+  // pack, and the pack is not handed below the executive floor.
+  boardMemos: { classKey: 'enterprise', label: 'Board disclosure memos', route: '#/board' },
 });
 
 /** Resolve a collection to its full, frozen policy (never undefined). */
@@ -181,6 +185,9 @@ const ENTERPRISE_ROUTES = Object.freeze([
   // function, while a frontline lead's horizon is the week.
   'merit', 'transition', 'parity', 'integrity', 'sceptic',
   'attribution', 'counterfactual', 'orgdesign', 'voi',
+  // ADR-0084: the board line is enterprise material. The executive altitude may
+  // READ it; committing and freezing the pack is the chief's own act right.
+  'board',
 ]);
 
 /** Which routes are simply not a frontline/manager question. */
@@ -228,6 +235,10 @@ export const ACTION_RIGHTS = Object.freeze({
   'finalize-merit-cycle': { minRank: 4, maxRank: 5, label: 'Finalize a merit cycle' },
   'approve-capital': { minRank: 4, maxRank: 5, label: 'Approve capital allocation' },
   'freeze-board-summary': { minRank: 5, maxRank: 5, label: 'Freeze a board-ready summary' },
+  // ADR-0085: the Board Room. Reading is enterprise-level (route floor rank 4);
+  // opening, declaring, looking and committing are the chief's act, and freezing
+  // the disclosed pack stays on its own rank-5 right above.
+  'declare-board-line': { minRank: 5, maxRank: 5, label: 'Open, declare and commit a board disclosure memo' },
   'declare-seat': { minRank: 1, maxRank: 5, label: 'Declare the operating seat' },
   'route-intake': { minRank: 1, maxRank: 5, label: 'Route a natural-language situation note to modules and an altitude' },
   // ADR-0083: an expectation round is a two-sided instrument. Every altitude
