@@ -39,7 +39,7 @@ Recorded in `RESEARCH.md §104` (fetched 2026-11-04): the 2026 performance-manag
 - `npx eslint .` → clean.
 - `node scripts/check-docs-links.mjs` → 617/617 internal links resolve (192 markdown files).
 - **Post-merge full suite (`node --test "tests/app/*.test.mjs"`): 2360/2360 pass, 0 fail — 137 suites, 41 min, EXIT=0.** This is the same command CI runs; it covers this branch and PR #136's Altitude Router side by side, including the updated tail-order assertions (seat at −2, seal at −1).
-- `npm run build:standalone` → written (post-merge rebuild numbers recorded in the follow-up commit); `node --test tests/app/standalone.test.mjs` → **7/7 pass** (pre-merge; standalone artifact is source-stamped, behaviour unchanged).
+- `npm run build:standalone` → **6,804,985 bytes · 370 source modules · schema v88 · source `3dcd435d`**; `node --test tests/app/standalone.test.mjs` → **7/7 pass** against that artifact.
 - **[UNVERIFIED]:** the combined `npm run verify:canonical` wrapper was not run to completion in-session (its jsdom/a11y phase times out in this container; its constituent checks — lint, boundary, links, and the targeted suites above — were run individually and are green). A real-browser assistive-technology walkthrough of `#/seal` remains `[UNVERIFIED]`, as in every session.
 
 ## Defects found and fixed in this session’s own code
@@ -90,6 +90,7 @@ While this branch was open, `main` merged **PR #136 — "Session 121, The Altitu
 - Feature commit `ddf9e39` (31 files, +2150/−121) pushed to `origin/arena/66ef986a-leados` (`* [new branch]`).
 - **Pull request [#137](https://github.com/shahramclaude/Leados/pull/137) opened and OPEN** against `main` (verified with `gh pr view 137 --json state` → `OPEN`).
 - Follow-up commit: rebuilt `LeadOS-standalone.html` against source `ddf9e39`, CHANGELOG Repository status, this sync line.
+- **PR #136 collision:** `origin/main` merged a parallel Session 121 (Altitude Router, ADR-0081, v88) from the same base. Un-shallowed the clone, merged `origin/main` (`3dcd435d`), renumbered this session to Session 122 / ADR-0082 / RESEARCH §104, updated six of #136's tail-order assertions to the merged contract, and re-verified: full canonical suite **2360/2360**, lint clean, boundary OK (371/121/23), links 624/624, standalone rebuilt against `3dcd435d` (schema v88, 7/7 portability).
 
 ## 2026-11-03 — Session 121: The Altitude Router (Schema v88, [ADR-0081](./docs/adr/0081-altitude-router.md), `#/routing`, RULE-AR-01..03, CSV #77)
 
