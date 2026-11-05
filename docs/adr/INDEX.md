@@ -117,3 +117,4 @@ Format: copy `0001-record-architecture-decisions.md`, number sequentially, statu
 - [ADR-0092: The Differencing Defender — a table can be safe while a SERIES of tables is not; the release is the unit of disclosure, proven by exact integer determinacy over the register, with a brute-force oracle and a planner that refuses rather than leaks](./0092-differencing-defender.md)
 
 - [0093 — Decision robustness without exporting private survey evidence](0093-decision-robustness-lab.md)
+- [ADR-0094: The Prospective Intervention Contract — a frozen pre-registered bet, one once-only Brier grade against a strictly-prior base rate, and hierarchy-native calibration roll-up on the shared spine (`#/prospective`, Schema v97)](./0094-prospective-intervention-contract.md)

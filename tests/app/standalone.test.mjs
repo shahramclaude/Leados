@@ -167,7 +167,14 @@ test('standalone artifact exists and is a single inline HTML document', () => {
   // 7,912,690 bytes / 458 modules — 17,276 bytes per module, DOWN from the
   // Session 131 density, which is the point: the density bound (24,000) is what
   // catches a module inlined twice; this absolute ceiling only catches a runaway.
-  assert.ok(bytes < 8_000_000, `standalone file is unexpectedly large (${bytes} bytes)`);
+  // Raised in Session 134 (Schema v97, ADR-0094): the Prospective Intervention
+  // Contract added six real modules (prospectiveRegistry, prospectiveSchema,
+  // prospective, prospectiveRules, prospectiveActions, views/prospective) plus
+  // the shell/CSV/graph/permission wiring. Measured build: 7,996,525 bytes /
+  // 466 modules = 17,160 bytes per module, DOWN again from Session 132's
+  // 17,276. The density bound (24,000) is unchanged and is still the guard that
+  // catches a module inlined twice; this ceiling only tracks module count.
+  assert.ok(bytes < 8_200_000, `standalone file is unexpectedly large (${bytes} bytes)`);
   const declaredModules = Number((html.match(/content="[^"]*?(\d+) source modules/) || [])[1]);
   assert.ok(declaredModules > 100, `expected the build to declare its module count (got ${declaredModules})`);
   const bytesPerModule = Math.round(bytes / declaredModules);

@@ -22,6 +22,9 @@ import { createFederationActions } from './core/domain/federationActions.js';
 // ADR-0092: the Differencing Defender's API mixin — the publication register is a
 // command boundary like every other module's.
 import { createDifferencingActions } from './core/domain/differencingActions.js';
+// ADR-0094: pre-register, grade and govern a frozen prospective contract on the
+// same access gateway and the same post-commit rule spine as every other module.
+import { createProspectiveActions } from './core/domain/prospectiveActions.js';
 import { createCadenceActions } from './core/domain/cadenceActions.js';
 import { createCarryoverActions } from './core/domain/carryoverActions.js';
 
@@ -19669,6 +19672,10 @@ export function createApi(store, options = {}) {
   Object.assign(api, createFederationActions(store, { now: clock, idFactory: id }));
   // ADR-0092: plan, publish, withdraw, scan — and the scoped register read.
   Object.assign(api, createDifferencingActions(store, { now: clock, idFactory: id }));
+  // ADR-0094: the only writes are DECLARE, SCAN and SET-CONVENTIONS. Everything
+  // that follows a declaration — governed decision, owned task, typed edges and
+  // the vertical roll-up — is produced by the shared rules in one transaction.
+  Object.assign(api, createProspectiveActions(store, { now: clock, idFactory: id }));
   // ADR-0087: the Operating Cadence Clock's reviewed commands.
   Object.assign(api, createCadenceActions(store, { now: clock, idFactory: id }));
   Object.assign(api, createCarryoverActions(store, { now: clock, idFactory: id }));

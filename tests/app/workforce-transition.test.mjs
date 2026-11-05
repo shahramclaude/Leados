@@ -277,7 +277,7 @@ function factsFor(store, program) {
 /* ------------------------------------------------------------- migration */
 
 test('v51 → v52 is additive: no programme, candidate or target is invented', () => {
-  assert.equal(SCHEMA_VERSION, 96);
+  assert.equal(SCHEMA_VERSION, 97);
   const v51 = {
     schemaVersion: 51,
     settings: { teamName: 'Existing team' },
@@ -286,9 +286,9 @@ test('v51 → v52 is additive: no programme, candidate or target is invented', (
     compBands: [],
   };
   const migrated = migrate(v51);
-  assert.equal(migrated.raw.schemaVersion, 96);
-  assert.equal(migrated.applied.at(-1), '95 → 96');
-  assert.equal(migrated.raw.schemaVersion, 96);
+  assert.equal(migrated.raw.schemaVersion, 97);
+  assert.equal(migrated.applied.at(-1), '96 → 97');
+  assert.equal(migrated.raw.schemaVersion, 97);
   assert.deepEqual(migrated.raw.transitionPrograms, []);
   const { state, warnings } = normalizeState(migrated.raw, { now: NOW });
   assert.equal(state.transitionPrograms.length, 0);
@@ -704,7 +704,7 @@ test('finalisation freezes the prediction, opens a dated review, and a departure
 /* -------------------------------------------------------------- reporting */
 
 test('CSV scope #46 carries counts and ratios, never a name, identifier, group code or probability', () => {
-  assert.equal(CSV_EXPORTS.length, 91);
+  assert.equal(CSV_EXPORTS.length, 92);
   const scope = CSV_EXPORTS.find((row) => row.key === 'transition');
   assert.ok(scope);
   const state = buildDemoState(NOW);

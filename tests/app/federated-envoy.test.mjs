@@ -123,9 +123,9 @@ const withKey = (fn) => {
 /* ------------------------------------------------------------------ schema */
 
 test('additive with no schema bump: collections, graph vocabulary, spine and exports', () => {
-  assert.equal(SCHEMA_VERSION, 96, 'ADR-0088 added no bump of its own; ADR-0090 is the current additive version');
+  assert.equal(SCHEMA_VERSION, 97, 'ADR-0088 added no bump of its own; ADR-0090 is the current additive version');
   const migrated = migrate({ schemaVersion: 92, settings: { leaderName: 'Keep me' }, people: [] });
-  assert.deepEqual(migrated.applied, ['92 → 93', '93 → 94', '94 → 95', '95 → 96']);
+  assert.deepEqual(migrated.applied, ['92 → 93', '93 → 94', '94 → 95', '95 → 96', '96 → 97']);
   assert.equal(migrated.raw.settings.leaderName, 'Keep me');
   const empty = createEmptyState(NOW.toISOString());
   for (const key of ['exchangePackets', 'exchangeArtefacts', 'exchangeMarkers']) {

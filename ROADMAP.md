@@ -1,3 +1,26 @@
+## 2026-11-05 — Pre-registered leadership bets (Session 134, Schema v97, ADR-0094)
+
+### Implemented
+- **[frontline → chief]** `#/prospective` Prospective Intervention Contract ([ADR-0094](docs/adr/0094-prospective-intervention-contract.md)): a declared probability, threshold, horizon **and exact cohort of record ids** are frozen BEFORE the governed work exists. Four observable instruments read only dated records other modules own (`cases`, `delegations`, `decisions`, `people`/`oneOnOnes`); the ledger writes into none of them. CSV #92 `prospective-contracts` is aggregate-only and refusal-honest.
+- **[all five altitudes, one instrument / five different jobs]** `RULE-PIC-01..04` on the **same shared post-commit spine**: one declaration atomically produces one governed DACI decision, one owned dated outcome task, one `pre-registers` edge, one `tracks-followup` edge and one `rolls-up-to` edge **per leadership ancestor**. A due cohort is graded exactly ONCE with Brier `(p−y)²` against its cell's strictly-prior base rate; an unobservable cohort is refused loudly with owned reconciliation work; a miscalibrated or overdue cell opens at most one governed finding per ISO week. Marker-idempotent, bounded and pausable; an explicit scan always runs.
+- **[frontline / manager]** Own contracts and frozen cohorts; pooled calibration rates withheld below director rank with a printed reason, so a frontline lead is never buried in enterprise analytics.
+- **[director]** Altitude × instrument calibration cells with Wilson 95% intervals, complementary suppression and the four clamped conventions (rank-gated).
+- **[VP / CEO]** Brier skill against the strictly-prior reference, the governed findings owned at their altitude, and an identity-free upward certificate that never names a person, a title or a cohort id.
+- **[all altitudes]** Additive `MIGRATIONS[96]` (`96 → 97`), three fail-closed collections, five clamped settings, two new graph node types and two system-generated relations, declared `declare-prospective` API right, `detailCeiling: 0` record policies and an adaptive disclosure manifest row.
+
+### Next ambitious slices
+1. **[director → chief] Planned:** multi-action robust allocation with explicit capacity constraints, heterogeneous populations and sensitivity to effectiveness ranges (not one fixed causal assumption) — now that a pre-registered cohort exists to grade it out of sample.
+2. **[all altitudes] Planned:** authenticated server/tenant boundaries and consented migration; browser seat selection is still not enterprise access control.
+3. **[director → chief] Planned:** route every terminal's local small-cell rule through the differencing register, so prospective releases are audited as one integer system across dates.
+
+### Deliberately rejected
+- **[all altitudes]** Retrospective "were we right?" dashboards — the population can be re-selected after the outcome is known, so the number is unfalsifiable.
+- **[all altitudes]** Grading people, rating spans, or reading sentiment/effort/keystroke telemetry — the instrument is the team's own dated work record, not surveillance.
+- **[all altitudes]** Auto-adjusting a declared probability, auto-closing a human decision, asserting causality, or printing zero for a refused cell — each would make the ledger less honest than silence.
+- **[all altitudes]** A second command bus or per-module/per-role glue for hierarchy — altitude stays a dimension of the existing seat scope, rule fan-out and disclosure compiler.
+
+**Benchmark:** no surveyed decision-intelligence, people-analytics or org-chart platform was shown to combine a frozen probabilistic cohort, Brier proper scoring against a strictly-prior base rate, and hierarchy-native roll-up in one zero-build workspace. This is a gap claim from public snippets, **not** verified vendor capability or a market-first claim.
+
 ## 2026-11-05 — Evidence-to-action robustness slice
 
 ### Implemented
