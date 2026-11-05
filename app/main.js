@@ -66,8 +66,10 @@ import { boardAttentionCount } from './core/domain/board.js';
 import { renderEnvoy } from './views/envoy.js';
 // ADR-0090: the Programme Federation Reading — which declared edges actually carry work.
 import { renderFederation } from './views/federation.js';
+import { renderFreezeLine } from './views/freezeLine.js';
 import { envoyAttentionCount } from './core/domain/envoy.js';
 import { federationAttentionCount } from './core/domain/federation.js';
+import { freezeLineAttentionCount } from './core/domain/freezeLine.js';
 // ADR-0092: the Differencing Defender — a withheld aggregate cell is only
 // withheld if it cannot be recovered, and a SERIES of safe tables is not a safe
 // publication. Exact integer determinacy across releases, seats and modules.
@@ -271,6 +273,10 @@ export const NAV = [
     // ADR-0090: which declared leadership edges are measurably connected — a
     // reading of the hierarchy's information system, never of its people.
     { route: 'federation', label: 'Federation', icon: '⨝', badge: 'federation' },
+    // ADR-0099: continuity of measured carriage ACROSS each reorganisation
+    // freeze line — and the timing guard that keeps a withheld cell from
+    // disclosing when it was withheld.
+    { route: 'freeze-line', label: 'Freeze line', icon: '🧭', badge: 'freeze-line' },
     // ADR-0092: publication integrity — what the aggregates this span publishes
     // actually disclose once a reader subtracts them.
     { route: 'differencing', label: 'Differencing', icon: '⊖', badge: 'differencing' },
@@ -447,6 +453,7 @@ const RENDERERS = {
   board: (ctx) => renderBoard(ctx),
   envoy: (ctx) => renderEnvoy(ctx),
   federation: (ctx) => renderFederation(ctx),
+  'freeze-line': (ctx) => renderFreezeLine(ctx),
   differencing: (ctx) => renderDifferencing(ctx),
   prospective: (ctx) => renderProspective(ctx),
   'robust-allocation': (ctx) => renderRobustAllocation(ctx),
@@ -682,6 +689,9 @@ export function parseRoute(hash) {
     // shipped link. Federation-only aliases are used instead.
     'federation': 'federation', 'programme-federation': 'federation', 'connectivity': 'federation',
     'carriage': 'federation', 'silent-edges': 'federation', 'programme-coverage': 'federation',
+    // ADR-0099: the freeze-line continuity audit.
+    'freeze-line': 'freeze-line', 'freezeline': 'freeze-line', 'freeze': 'freeze-line',
+    'continuity': 'freeze-line', 'reorg-comparability': 'freeze-line', 'freeze-line-continuity': 'freeze-line',
     // ADR-0092: the publication register. None of these shadows a shipped route.
     'differencing': 'differencing', 'differences': 'differencing', 'publication': 'differencing',
     'publication-register': 'differencing', 'small-cell-series': 'differencing', 'releases': 'differencing',
@@ -1043,6 +1053,8 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       envoy: envoyAttentionCount(state, { now: at, settings: state.settings }),
       // ADR-0090: declared edges measured silent or bypassed, plus open carriage findings.
       federation: federationAttentionCount(state, { now: at, settings: state.settings }),
+      // ADR-0099: degraded freeze lines, legacy timing leaks and open findings.
+      'freeze-line': freezeLineAttentionCount(state, { now: at, settings: state.settings }),
       // ADR-0092: a module that publishes a determined surface, plus open findings.
       differencing: differencesAttentionCount(state, { now: at, settings: state.settings }),
       // ADR-0094: due or overdue frozen contracts plus open governed findings.
@@ -1547,6 +1559,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       concordance: 'Expectation Concordance — “meets expectations” treated as a measurement instrument: two sealed sides, six dimensions, weighted κ / AC1 / PABAK / Bland–Altman agreement, a governed re-contracting decision on divergence and a typed roll-up to every leadership span',
       envoy: 'Sealed exchange — how a span’s pack leaves its own browser: projected at the receiving altitude’s disclosure class, committed with a per-item SHA-256 and a Merkle root, signed keyed when the vault is unlocked, verified by the receiver before a single field is stored, ingested idempotently, and turned into a governed reconciliation decision when two workspaces disagree',
       federation: 'Programme federation — which declared leadership edges actually carry work, measured from dated artefacts other modules already wrote: connected, bypassed, stale or silent, with a Wilson-bounded coverage rate that is withheld below the span floor and small cells suppressed',
+      'freeze-line': 'Freeze-line continuity — every committed or reverted structural design is a dated boundary in the reporting tree; this screen measures dated carriage on BOTH sides of each line (the same artefacts federation counts), classifies every edge held / lost / gained / still-silent aggregated by altitude with Wilson intervals and complementary suppression, refuses a verdict below the declared edge floor, states whether pre-freeze readings are still comparable, and runs a timing guard so a suppressed row never discloses when it was withheld; a degraded line opens one governed decision per ISO week at the span that can author the change, with roll-up edges to every leadership ancestor in the same atomic transaction',
       prospective: 'Prospective contracts — a probability, threshold, horizon and exact cohort of record ids are frozen BEFORE the governed work exists; one governed DACI decision, one owned outcome task and one roll-up edge per leadership ancestor are written in the same atomic transaction; the cohort is graded once out of sample with a Brier proper score against a strictly-prior base rate, an unobservable cohort is refused rather than scored as a miss, and pooled rates are withheld below the declared cell floor and below director rank',
       'robust-allocation': 'Robust allocation — a multi-action, capacity-constrained integer allocation is solved EXACTLY under Bertsimas–Sim budgeted uncertainty over declared effect ranges, printing the Wald maximin and Savage minimax-regret plans, the price of the equity floor, the single range whose stress flips the recommendation and the regret its resolution releases; adopting it writes one governed DACI decision, one owned delivery task per funded line and one roll-up edge per leadership ancestor in the same atomic transaction, and a linked pre-registered contract that misses its threshold opens a governed re-allocation decision; an over-cap or infeasible plan is refused rather than approximated, money is never pooled across currencies, and the pooled falsified share is withheld below the declared cell floor and below director rank',
       clearing: 'Internal Clearinghouse — sealed multi-tranche span bids are cleared exactly across budget and shared capacity under nominal, Gamma-robust and minimax-regret regimes; each funded span receives its exact Clarke pivot hurdle, the frozen commitment opens governed delivery work and same-currency encumbrance on the shared post-commit spine, and one-time out-of-sample settlement grades the mechanism without rating a person or exposing a sibling bid',

@@ -119,9 +119,9 @@ const linkRows = (state, sourceType, relation = null) => (state.links || []).fil
 /* ------------------------------------------------------------------ schema */
 
 test('Schema v97 migrates additively: empty ledgers, declared conventions, nothing inferred', () => {
-  assert.equal(SCHEMA_VERSION, 100);
+  assert.equal(SCHEMA_VERSION, 101);
   const migrated = migrate({ schemaVersion: 95, settings: { leaderName: 'Keep this' }, cases: [{ id: 'x' }] });
-  assert.deepEqual(migrated.applied, ['95 → 96', '96 → 97', '97 → 98', '98 → 99', '99 → 100']);
+  assert.deepEqual(migrated.applied, ['95 → 96', '96 → 97', '97 → 98', '98 → 99', '99 → 100', '100 → 101']);
   assert.equal(migrated.raw.schemaVersion, 100);
   assert.deepEqual(migrated.raw.prospectiveContracts, []);
   assert.deepEqual(migrated.raw.prospectiveGrades, []);

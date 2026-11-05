@@ -458,7 +458,7 @@ test('v75 -> v78 migrates additively and invents nothing', () => {
   assert.deepEqual(v77.reliabilityMarkers, []);
   assert.deepEqual(v77.couplingReviews, []);
   assert.deepEqual(v77.couplingMarkers, []);
-  assert.equal(SCHEMA_VERSION, 100);
+  assert.equal(SCHEMA_VERSION, 101);
 });
 
 test('a marker captured on or after its outcome is demoted, never trusted', () => {

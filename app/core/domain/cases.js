@@ -391,6 +391,11 @@ export const LINK_ENTITY_TYPES = [
   // and every ancestor it rolled up to are `person` endpoints, exactly as the
   // command chain and the board room already express them.
   'federationassessment',
+  // ADR-0099 (Schema v101): a frozen freeze-line continuity reading. It
+  // carries counts, verdicts and structural dates only — never a person's name,
+  // a span's carriage date or a free-text note — so the line above a span can be
+  // navigated from the reading and the reading from it.
+  'freezereading',
   // ADR-0094 (Schema v97): a frozen pre-registration and its once-only grade
   // are two distinct first-class graph nodes. Keeping the claim separate from
   // the observation is the entire pre-registration discipline: the grade can
@@ -539,6 +544,8 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   carryover: 'carryoverRecords',
   // ADR-0090: the federation assessment ledger owns the reading node's IDs.
   federationassessment: 'federationAssessments',
+  // ADR-0099: the freeze-line reading ledger owns the continuity node's IDs.
+  freezereading: 'freezeReadings',
   // ADR-0092: the publication register owns the release node's IDs. A proof node
   // has no collection of its own: it is a decision, and the map deliberately does
   // not alias it to `decisions`, so an ID collision cannot resurrect a proof as a
@@ -639,6 +646,12 @@ export const SYSTEM_GENERATED_LINK_RELATIONS = Object.freeze([
   // Schema v82: written only by RULE-CHN-01..05.
   'escalates-to',
   'rolls-up-to',
+  // ADR-0099: written only by RULE-FRZ-01. `freezes` records that a continuity
+  // reading freezes the reporting tree as it stood before a structural design
+  // crossed; `re-projects` records that a pre-freeze reading is re-projected by
+  // the line in AGGREGATE only. Neither edits any measured record.
+  'freezes',
+  're-projects',
   // Schema v89 (ADR-0083): written only by RULE-ECN-01/02. `re-contracts` says
   // which expectation a governed re-contracting decision was opened from;
   // `re-tests` says which later round tests the standard that decision set.
@@ -729,6 +742,9 @@ export const LINK_RELATIONS = [
   // ADR-0098: clearing round provenance, discovered on the shared spine.
   'clears-bid',
   'prices-externality',
+  // ADR-0099: freeze-line provenance, written only by RULE-FRZ-01.
+  'freezes',
+  're-projects',
   'develops',
   'consumes-capacity',
   'funds',
@@ -1123,6 +1139,8 @@ export const LINK_RELATION_LABELS = {
   'recalibrates-belief': 'Certified reading of a declared probability',
   'escalates-to': 'Escalated to the altitude whose span can decide it',
   'rolls-up-to': 'Rolls up to the altitude above',
+  'freezes': 'Freezes the reporting tree as it stood before this structural change',
+  're-projects': 'Re-projected in aggregate across this freeze line',
   'routes-through': 'Adopted from this reviewed altitude-routing plan',
   'discloses-to': 'Disclosure-safe view at this leadership altitude',
   'grades-routing': 'Graded evidence in a governed re-routing question',
@@ -2597,6 +2615,31 @@ export function resolveLinkedEntity(state, entityType, entityId) {
           frozenOn: rec.frozenOn,
           windowDays: rec.windowDays,
           summary: rec.summary,
+        },
+      };
+    }
+    case 'freezereading': {
+      const rec = (state.freezeReadings || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      // The shared graph carries the reading's verdict, the structural line
+      // date and the two aggregate windows — never a span list, a carriage
+      // date or a person. The scoped report is the reader.
+      return {
+        type: 'freezereading',
+        id: rec.id,
+        title: `Freeze-line reading · ${rec.lineOn} · ${rec.kind}`,
+        status: `verdict ${rec.verdict} · ${rec.before?.refused ? 'refused' : `${rec.before?.coveragePct}%`} → ${rec.after?.refused ? 'refused' : `${rec.after?.coveragePct}%`}`,
+        route: `#/freeze-line?reading=${encodeURIComponent(rec.id)}`,
+        raw: {
+          id: rec.id,
+          designId: rec.designId,
+          kind: rec.kind,
+          lineOn: rec.lineOn,
+          frozenOn: rec.frozenOn,
+          verdict: rec.verdict,
+          deltaPctPoints: rec.deltaPctPoints,
+          before: rec.before,
+          after: rec.after,
         },
       };
     }

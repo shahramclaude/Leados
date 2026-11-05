@@ -250,7 +250,7 @@ function buildEvidenceFixture() {
 
 describe('Schema v66 & normalizers', () => {
   test('the workspace is additive at 66 and the 65→66 migration carries both collections', () => {
-    assert.equal(SCHEMA_VERSION, 100);
+    assert.equal(SCHEMA_VERSION, 101);
     const empty = createEmptyState(NOW_ISO);
     assert.ok(Array.isArray(empty.evidenceReviews));
     assert.ok(Array.isArray(empty.evidenceMarkers));

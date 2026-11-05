@@ -398,7 +398,7 @@ test('the tag payload refuses retired bets, closed records and non-numeric effor
 /* --------------------------------------------------------------- 4. schema */
 
 test('Schema v42 adds empty strategy collections and additive migration invents nothing', () => {
-  assert.equal(SCHEMA_VERSION, 100);
+  assert.equal(SCHEMA_VERSION, 101);
   const empty = createEmptyState(NOW.toISOString());
   assert.deepEqual(empty.strategyBets, []);
   assert.deepEqual(empty.strategyTags, []);

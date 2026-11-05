@@ -10,7 +10,7 @@
 
 ### Next ambitious slices
 1. **[all altitudes] Planned:** authenticated server/tenant boundaries and consented migration; browser seat selection is still not enterprise access control (the standing top item).
-2. **[director → chief] Planned:** reorganisation comparability across a freeze line — the residual timing channel (`lastCarriageOn` on suppressed federation rows).
+2. **[director → chief] DONE (Session 139, ADR-0099, Schema v101):** reorganisation comparability across a freeze line — `#/freeze-line` measures dated carriage on both sides of every committed/reverted design and prints a governed held/degraded/refused verdict; the residual timing channel (`lastCarriageOn` on suppressed federation rows) is closed in view, snapshots and CSV, with RULE-FRZ-03 redacting legacy snapshots.
 3. **[director → chief] Planned:** widen the certified regime with a stronger bound (e.g. Lagrangian surrogate over budget+hours dualized, or the Signed-Budget compact counterpart) with the node budget still enforced — never a silent heuristic — and grade a revision's falsified-parent lineage against its successor's premise, once revision chains have real history.
 
 ### Deliberately rejected
@@ -30,7 +30,7 @@
 
 ### Next ambitious slices
 1. **[all altitudes] Planned:** authenticated server/tenant boundaries and consented migration; browser seat selection is still not enterprise access control (the standing top item).
-2. **[director → chief] Planned:** reorganisation comparability across a freeze line — the residual timing channel (`lastCarriageOn` on suppressed federation rows).
+2. **[director → chief] DONE (Session 139, ADR-0099, Schema v101):** reorganisation comparability across a freeze line — `#/freeze-line` measures dated carriage on both sides of every committed/reverted design and prints a governed held/degraded/refused verdict; the residual timing channel (`lastCarriageOn` on suppressed federation rows) is closed in view, snapshots and CSV, with RULE-FRZ-03 redacting legacy snapshots.
 3. **[all altitudes] Planned:** attribute cadence forums by `chairSeatId`/`attendeeIds` in span attribution (declared people keys only today).
 
 ### Deliberately rejected
@@ -133,7 +133,7 @@ This section is the session-scoped execution view of [NORTH_STAR.md](NORTH_STAR.
 ### In Progress
 
 - **[all altitudes]** Authenticated identity and tenant isolation. The five altitudes are a declared local seat, not authentication; server-side authorization on every read/write/export is still open. Evidence: `AI-SESSION-LOG.md` Session 128 "Honest limits"; `ROADMAP.md` 2026-11-02 entry.
-- **[director → CEO]** Reorganisation comparability across a freeze line, and the residual timing channel: a federation freeze line still prints `lastCarriageOn` for suppressed rows, which discloses *when* a suppressed span last carried work. The temporal half of differencing itself is now closed (Session 132, see Implemented) — repeated releases are audited as one integer system over a dated register.
+- **[director → CEO]** ~~Reorganisation comparability across a freeze line~~ **DONE (Session 139, ADR-0099, `#/freeze-line`)**; the residual timing channel is closed too — suppressed rows print no carriage date anywhere (view, snapshots, CSV #95) and RULE-FRZ-03 redacts legacy snapshots. The temporal half of differencing was already closed (Session 132) — repeated releases are audited as one integer system over a dated register.
 - **[all altitudes]** Routing every terminal's own local small-cell rule through the differencing register. Session 132 governs any release published through `publishAggregate`, but `#/escalation`, `#/measurement`, `#/cadence`, `#/concordance` and `#/survival` still apply their own per-table floor directly — `[UNVERIFIED]` individually, and a release they print does not enter the register.
 - **[manager → CEO]** A two-workspace key rendezvous that preserves the local-first promise, the honest prerequisite for keyed Federated Envoy mode at scale. Evidence: Session 128 "Next up".
 - **[all altitudes]** Full canonical verification and real-browser/assistive-technology walkthroughs. Automated jsdom/axe checks pass; real-browser AT behaviour remains `[UNVERIFIED]`. Evidence: Session 118/128 verification sections.
@@ -163,7 +163,7 @@ This section is the session-scoped execution view of [NORTH_STAR.md](NORTH_STAR.
 
 **Frameworks encoded.** Statistical disclosure control: the minimum-2 rule per published marginal, complementary suppression, box-bounded integer determinacy, and the "total vs detail" trade made explicit; exact integer arithmetic rather than heuristics.
 
-**Honest limits.** This closes the VERTICAL axis. Temporal/repeated-release differencing and reorganisation comparability remain In Progress; the federation release line also still prints `lastCarriageOn` for suppressed rows (a timing disclosure). Extremum statistics (`oldestDays` is a max) are outside the additive model and are documented, not claimed safe. Other modules' local small-cell rules (`#/escalation`, `#/measurement`, `#/cadence`, `#/concordance`, `#/survival`) are not routed through this guard yet — `[UNVERIFIED]` individually.
+**Honest limits.** This closes the VERTICAL axis. Reorganisation comparability across a freeze line is DONE (Session 139, ADR-0099); the `lastCarriageOn` timing disclosure on suppressed rows is closed in view, snapshots and CSV. Extremum statistics (`oldestDays` is a max) are outside the additive model and are documented, not claimed safe. Other modules' local small-cell rules (`#/escalation`, `#/measurement`, `#/cadence`, `#/concordance`, `#/survival`) are not routed through this guard yet — `[UNVERIFIED]` individually.
 
 **Next.** (1) Route the other modules' suppression through the same guard. (2) Temporal differencing over a repeated-release line. (3) Authenticated identity / tenant boundary (still the top [all altitudes] item).
 

@@ -59,7 +59,7 @@ function bootDocument() {
 }
 
 test('schema v87 migrates additively and refuses malformed brief bodies', () => {
-  assert.equal(SCHEMA_VERSION, 100);
+  assert.equal(SCHEMA_VERSION, 101);
   const old = { schemaVersion: 86, settings: { leaderName: 'Keep' }, cases: [{ id: 'keep' }], retentionPlans: [{ id: 'retained' }] };
   const migrated = migrate(old);
   assert.equal(migrated.raw.schemaVersion, 100);

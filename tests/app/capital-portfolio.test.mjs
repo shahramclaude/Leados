@@ -416,7 +416,7 @@ test('the trust ladder only claims what the evidence supports', () => {
 /* --------------------------------------------------------- 8. schema v38 */
 
 test('Schema v38 adds portfolios and checkpoints additively', () => {
-  assert.equal(SCHEMA_VERSION, 100);
+  assert.equal(SCHEMA_VERSION, 101);
   assert.equal(DEFAULT_SETTINGS.capitalEffortBudget, 12);
   assert.equal(DEFAULT_SETTINGS.capitalAutoPropagate, true);
   const empty = createEmptyState(NOW.toISOString());
@@ -424,7 +424,7 @@ test('Schema v38 adds portfolios and checkpoints additively', () => {
   assert.deepEqual(empty.dynamicsCheckpoints, []);
   const migrated = migrate({ schemaVersion: 37, settings: {}, people: [], portfolio: [] });
   assert.equal(migrated.raw.schemaVersion, 100);
-  assert.equal(migrated.applied.at(-1), '99 → 100');
+  assert.equal(migrated.applied.at(-1), '100 → 101');
   assert.deepEqual(migrated.raw.capitalPolicies, []);
   assert.deepEqual(migrated.raw.dynamicsCheckpoints, []);
   const state = normalizeState(migrated.raw, { now: NOW }).state;
