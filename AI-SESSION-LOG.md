@@ -57,7 +57,9 @@ A frontline approval assigned to a subordinate worker creates a case, a `decides
 
 ## Sync
 
-Commit/push/PR not yet attempted at the time this entry was written. Actual results will be appended after the commands return; no sync success is assumed.
+- Feature commit `04a25ca` was successfully pushed to `origin/arena/6f47b075-leados` (git push exit 0; remote confirmed new branch).
+- Pull request successfully opened: https://github.com/shahramclaude/Leados/pull/157 (base `main`, head `arena/6f47b075-leados`). Not merged.
+- This sync receipt is a follow-up documentation commit. Full canonical regression is still running; only the completed checks above are claimed as passes.
 
 ---
 
