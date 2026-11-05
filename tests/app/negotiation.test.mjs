@@ -502,7 +502,7 @@ test('negotiations CSV scope exports analytical rows honestly and survives round
 /* ------------------------------------------------------------------ schema */
 
 test('Schema v23: v22 workspaces migrate additively and negotiation records repair, never invent', () => {
-  assert.equal(SCHEMA_VERSION, 104);
+  assert.equal(SCHEMA_VERSION, 105);
   const v22 = {
     schemaVersion: 22,
     people: [{ id: 'p1', name: 'Ada', status: 'active', startDate: '2025-01-01' }],
@@ -511,7 +511,7 @@ test('Schema v23: v22 workspaces migrate additively and negotiation records repa
   const snapshot = JSON.stringify(v22);
   const migrated = migrate(v22);
   assert.equal(JSON.stringify(v22), snapshot, 'migration never mutates its input');
-  assert.deepEqual(migrated.applied.at(-1), '103 → 104');
+  assert.deepEqual(migrated.applied.at(-1), '103 → 104', '104 → 105');
   assert.ok(migrated.applied.includes('22 → 23'), 'v23 negotiation step still in the additive chain');
   const { state, warnings } = normalizeState(migrated.raw, { now: NOW });
   assert.deepEqual(state.negotiations, [], 'a v22 workspace simply starts with no negotiations');

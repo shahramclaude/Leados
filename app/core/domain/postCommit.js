@@ -118,6 +118,7 @@ import { freezeLineRule } from './freezeLineRules.js';
 import { spanCalibrationRule } from './spanCalibrationRules.js';
 import { reputationalCapitalRule } from './reputationalCapitalRules.js';
 import { hindsightRule } from './hindsightRules.js';
+import { epistemicRule } from './epistemicRules.js';
 import { valueStreamRule } from './valueStreamRules.js';
 import { carryoverRule } from './carryoverRules.js';
 // ADR-0085: the Operating Cadence Clock. Reads the finished queue after the
@@ -656,6 +657,16 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // rolls up the hierarchy in the SAME transaction. It never edits a decision,
   // never rates a person and never re-scores a lock.
   hindsightRule,
+  // ADR-0103: the Epistemic Ledger (RULE-EPI-01..05). It reads the record every
+  // module above has already written — including the hindsight locks, so a
+  // decision with a bad outcome is harvestable in the same transaction that
+  // recorded it — harvests the signals nobody has read, escalates the ageing
+  // ones, expires the unanswered ones and grades frozen beliefs. It runs before
+  // the attention market so the work it opens is priced identically, and before
+  // the Operating Seat so every unknown and every finding rolls up the hierarchy
+  // in the SAME transaction. It never rates a person and never edits a record it
+  // did not create.
+  epistemicRule,
   // ADR-0087: the Attested Commit (RULE-IDN-01..03). Attestation is the
   // identity of the write itself, so its digest covers every event this
   // transaction appended before it — including the breach work RULE-IDN-02

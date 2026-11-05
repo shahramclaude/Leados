@@ -3154,3 +3154,24 @@ tr.is-focused td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
 .field-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
 .field-grid .field-hint { font-size: 12px; color: var(--muted); line-height: 1.35; }
 .field-grid .input { width: 100%; }
+
+/* ADR-0103: the Epistemic Ledger. The view is a reading surface, not a form: a
+   question at the top, the finding under it, and the refusal printed where a
+   number would otherwise be guessed. Nothing here hides content behind colour
+   alone — every state carries a word as well as a hue. */
+.epistemic-view { display: flex; flex-direction: column; gap: 18px; }
+.brief-block {
+  border-left: 3px solid var(--accent, #6b8afd);
+  background: var(--surface-2, rgba(255, 255, 255, 0.04));
+  border-radius: 0 8px 8px 0;
+  padding: 12px 14px;
+}
+.brief-block + .brief-block { margin-top: 6px; }
+.brief-block h3, .brief-block h4 { margin: 0 0 6px; font-size: 13px; letter-spacing: 0.02em; text-transform: uppercase; color: var(--muted); }
+.brief-block p { margin: 0; line-height: 1.5; }
+.epistemic-view .refusal { border-left-color: #d9a441; }
+.epistemic-view .stale-flag { color: #d9a441; font-weight: 600; }
+@media (max-width: 640px) {
+  .brief-block { padding: 10px 12px; }
+  .epistemic-view { gap: 14px; }
+}

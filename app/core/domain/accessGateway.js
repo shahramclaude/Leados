@@ -102,6 +102,13 @@ const groups = [
   // The reads are seat-scoped SAFE_READS below.
   ['record-decision-lock', 'hindsightLock hindsightScan'],
   ['govern-hindsight', 'hindsightSetConventions'],
+  // ADR-0103: the Epistemic Ledger. Declaring, answering, dismissing and
+  // freezing a belief are declared commands at every altitude (capability and
+  // span are checked in the action); the conventions that move every unknown and
+  // every kappa are director+ and additionally require a full-access seat. The
+  // reads are seat-scoped SAFE_READS below.
+  ['record-epistemic-unknown', 'epistemicDeclare epistemicAnswer epistemicDismiss epistemicObserve epistemicScan'],
+  ['govern-epistemic', 'epistemicSetConventions'],
   // ADR-0092: the Differencing Defender. Publishing is an act every altitude
   // performs, so the command right is open at every rank (the action enforces the
   // span and the arithmetic decides what may be published); the conventions that
@@ -147,6 +154,7 @@ const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boardCsvRo
 'spanCalibrationAttentionCount', 'spanCalibrationBriefText', 'spanCalibrationConventions', 'spanCalibrationCsvRows', 'spanCalibrationReport', 'spanCalibrationSettings', 'spanCalibrationSignals',
 'reputationAttentionCount', 'reputationBriefText', 'reputationConventions', 'reputationCounterfactual', 'reputationCsvRows', 'reputationPriceAsk', 'reputationReport', 'reputationSignals',
 'hindsightAttentionCount', 'hindsightBriefText', 'hindsightConventions', 'hindsightCsvRows', 'hindsightReport', 'hindsightSettings',
+'epistemicAttentionCount', 'epistemicBriefText', 'epistemicConventions', 'epistemicCsvRows', 'epistemicPreview', 'epistemicReport', 'epistemicSettings',
 'prospectiveAttentionCount', 'prospectiveBriefText', 'prospectiveCsvRows', 'prospectiveRead', 'robustAllocationAttentionCount', 'robustAllocationBriefText', 'robustAllocationCsvRows', 'robustAllocationRead', 'clearingAttentionCount', 'clearingBriefText', 'clearingCsvRows', 'clearingRead', 'clearingSolvePreview', 'identityAttentionCount', 'identityBriefText', 'identityCompareCheckpoint', 'identityCsvRows', 'identityRead', 'identityVerify', 'mandateBriefText', 'mandateRead', 'missionArchive', 'missionBriefText', 'missionCommit', 'missionCreateIntervention', 'missionFreezeBrief', 'missionHandoffText', 'missionOpenCase', 'missionRead', 'missionScan', 'missionWithdraw', 'operatingModelAttentionCount', 'operatingModelBriefText', 'operatingModelCsvRows', 'operatingModelNorms', 'operatingModelRead', 'operatingModelWorkTypes', 'previewMandate', 'routingAnalyze', 'routingAttentionCount', 'routingBriefText', 'routingCalibration', 'routingCsvRows', 'routingRead', 'saveMissionPreview', 'sealBriefText', 'sealRead', 'sealVerify', 'seatBriefText', 'seatRead', 'setActiveSeat', 'strategyCycleBriefText', 'strategyCycleCsvRows', 'strategyCycleRead', 'valueStreamBriefText', 'valueStreamCsvRows', 'valueStreamRead', 'valueStreamReallocationPreview']);
 const refusal = (reason) => ({ ok: false, code: 'scope-refusal', error: reason, field: 'scope' });
 

@@ -99,6 +99,16 @@ export const RECORD_POLICIES = Object.freeze({
   // record TYPES, ids and dates; no fact content, no title and no person ever.
   decisionLocks: { classKey: 'unit', label: 'Frozen decision information sets', route: '#/hindsight?panel=locks' },
   decisionLockMarkers: { classKey: 'unit', label: 'Hindsight idempotency markers', route: '#/hindsight' },
+  // ADR-0103: an unknown is a statement about a RECORD that nobody has read. Its
+  // stored content is a generated class-and-date title plus a pointer; no note,
+  // no free text and no person's name is ever stored on it, so it is classed with
+  // the units it rolls up from rather than with individual detail. A declared
+  // unknown is the one row a human authored, and it is authored at the seat that
+  // owns it and visible nowhere else.
+  epistemicUnknowns: { classKey: 'unit', label: 'Unread and declared unknowns', route: '#/epistemic?panel=unknowns' },
+  epistemicObservations: { classKey: 'unit', label: 'Frozen belief observations', route: '#/epistemic?panel=calibration' },
+  epistemicGrades: { classKey: 'unit', label: 'Once-only belief grades', route: '#/epistemic?panel=calibration' },
+  epistemicMarkers: { classKey: 'unit', label: 'Epistemic idempotency markers', route: '#/epistemic' },
   // ADR-0086: a disclosure release is a bounded authority contract, so it is
   // readable at every altitude that can hold one — and its ledger is exactly
   // what makes the widening auditable afterwards.
@@ -375,6 +385,14 @@ export const ACTION_RIGHTS = Object.freeze({
   // director+ and the handler additionally requires a full-access seat.
   'record-decision-lock': { minRank: 1, maxRank: 5, label: 'Freeze a decision’s information set or run an explicit process audit' },
   'govern-hindsight': { minRank: 4, maxRank: 5, label: 'Re-declare the process-audit conventions' },
+  // ADR-0103: recording an unknown, answering one, dismissing one with a reason
+  // and freezing a belief are every altitude's business — the ledger is built
+  // from what a span actually did and did not read. Re-declaring the harvest
+  // window, the escalation age, the expiry and the four floors moves every
+  // unknown, every cell and every kappa in the workspace at once, so it is
+  // director+ AND the handler requires a full-access seat.
+  'record-epistemic-unknown': { minRank: 1, maxRank: 5, label: 'Record, answer, dismiss or freeze a belief in the epistemic ledger' },
+  'govern-epistemic': { minRank: 4, maxRank: 5, label: 'Re-declare the epistemic-ledger conventions' },
   // ADR-0084: authoring the operating model is an org-design act — it declares
   // how every position at a level spends its week and prices structural change.
   // The same right that edits a reporting line authors the model of the lines.

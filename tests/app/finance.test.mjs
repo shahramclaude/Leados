@@ -159,7 +159,7 @@ test('commitmentCalibration: counts-only below n=5, dimensionless pooling across
 /* ------------------------------------------------------------- schema v24 */
 
 test('schema v24: migration is additive; normalisation keeps amounts, clears dead pointers', () => {
-  assert.equal(SCHEMA_VERSION, 104);
+  assert.equal(SCHEMA_VERSION, 105);
   const migrated = migrate({ schemaVersion: 23, settings: {}, cases: [{ id: 'keep-me' }] });
   assert.equal(migrated.raw.schemaVersion, 104);
   assert.deepEqual(migrated.raw.budgets, [], 'no envelope is invented for older workspaces');
@@ -340,7 +340,7 @@ test('FIN-01/02/04/05 fire on their conditions; demo baseline is silent', () => 
 /* -------------------------------------------------------------- CSV + rewind */
 
 test('CSV: finance scope is per-line and formula-safe; calibration gains commitment rows', () => {
-  assert.equal(CSV_EXPORTS.length, 98);
+  assert.equal(CSV_EXPORTS.length, 99);
   assert.ok(CSV_EXPORTS.some((s) => s.key === 'finance'));
   const { store, api } = harness();
   const bud = api.addBudget({ name: '=cmd|calc envelope', currency: 'USD', limit: 5000 });

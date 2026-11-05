@@ -423,6 +423,12 @@ export const LINK_ENTITY_TYPES = [
   // ADR-0098: the frozen Internal Clearinghouse round. The shared graph
   // resolver projects only structural counts, dates, Gamma and status.
   'clearinground',
+  // ADR-0103 (Schema v105): a harvested or declared unknown. It carries a
+  // class, a lifecycle state, the harvest/evidence dates and a pointer to the
+  // ONE record it was read from — never a copy of that record's content, never
+  // a person's name and never a note. This is what makes a MISSED signal
+  // navigable above the span that missed it.
+  'unknown',
   // ADR-0085's `carryover` node and ADR-0088's `escalationrecord` /
   // `escalationcommitment` nodes are declared above, each exactly once. A second
   // copy of a type here is not harmless bookkeeping: it breaks the
@@ -558,6 +564,8 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   freezereading: 'freezeReadings',
   // ADR-0102: the decision-lock ledger owns the lock node's IDs.
   hindsightlock: 'decisionLocks',
+  // ADR-0103: the epistemic ledger owns the unknown node's IDs.
+  unknown: 'epistemicUnknowns',
   // ADR-0100: a frozen calibration reading (the adoption ledger is its own node
   // only through the event log; an adoption is a declaration, not a work item).
   spanreading: 'spanReadings',
@@ -2642,6 +2650,31 @@ export function resolveLinkedEntity(state, entityType, entityId) {
           frozenOn: rec.frozenOn,
           windowDays: rec.windowDays,
           summary: rec.summary,
+        },
+      };
+    }
+    case 'unknown': {
+      const rec = (state.epistemicUnknowns || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      // The shared graph carries the unknown's class, lifecycle state, dates and
+      // the id of the ONE record it was harvested from — never that record's
+      // title, content or the person behind it. The scoped report is the reader.
+      return {
+        type: 'unknown',
+        id: rec.id,
+        title: `Unknown · ${rec.className} signal harvested ${rec.harvestedOn}`,
+        status: rec.state === 'unopened' ? 'Unopened — nobody has read it' : rec.state === 'expired' ? 'Expired without an answer' : rec.state,
+        route: `#/epistemic?panel=unknowns&unknown=${encodeURIComponent(rec.id)}`,
+        raw: {
+          id: rec.id,
+          className: rec.className,
+          origin: rec.origin,
+          state: rec.state,
+          harvestedOn: rec.harvestedOn,
+          evidencesOn: rec.evidencesOn,
+          expiresOn: rec.expiresOn,
+          sourceType: rec.sourceType,
+          sourceId: rec.sourceId,
         },
       };
     }

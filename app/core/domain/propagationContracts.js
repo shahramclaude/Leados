@@ -119,6 +119,7 @@ import { freezeLineRule } from './freezeLineRules.js';
 import { spanCalibrationRule } from './spanCalibrationRules.js';
 import { reputationalCapitalRule } from './reputationalCapitalRules.js';
 import { hindsightRule } from './hindsightRules.js';
+import { epistemicRule } from './epistemicRules.js';
 import { cadenceRule } from './cadenceRules.js';
 import { carryoverRule } from './carryoverRules.js';
 
@@ -674,6 +675,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'hindsightRules.js',
     purpose: 'RULE-HND-01 freezes one information set per decision: the records the shared link spine had ALREADY tied to it on or before the decision date (each link carries `createdOn`, so a retrospective lock reconstructs the same set exactly), plus the decision record\'s own quality bar as it stood then. The lock becomes a graph node with one `locks` edge to the decision, up to twenty `consults` edges to the facts it rested on, and one `rolls-up-to` edge per leadership ancestor of the owning span, in the SAME atomic transaction. RULE-HND-02 opens exactly ONE governed process review, ever, for a decision whose frozen process was thin and whose recorded outcome was nevertheless good — the successful mistake nobody reviews. RULE-HND-03 opens one governed decision when a lock consulted less than the declared share of the facts already on the record at decision time, naming the missed COUNT and never the missing content. RULE-HND-04 opens at most one bounded review prompt per lock per ISO week when a decision passes its own review date plus the declared grace ungraded. The module never edits a decision, never rewrites a lock, never infers relevance, never charges a decision for a fact that arrived after it, never rates or names a person, and never closes a human decision. Marker-idempotent, pausable by hindsightAutoPropagate, and an explicit scan always runs.',
     writes: ['decisionLocks', 'decisionLockMarkers', 'decisions', 'links'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: epistemicRule,
+    module: 'epistemicRules.js',
+    purpose: 'RULE-EPI-01 harvests every signal the record ALREADY holds — an unclosed constructive-feedback follow-up, an ageing risk case, a stalled performance conversation, a breached premise, an at-risk or overdue goal, an overdue delegation, a decision with a bad outcome, work absorbed without review, and the opportunity signals (a finished goal nobody recognised, a closed case no lesson was drawn from, ninety days without a named contribution) — into ONE unknown per source record, with an id hashed from that record so a rescan cannot duplicate it. Each unknown becomes a graph node with one `rests-on` edge to the record it was read from (a pointer, never a copy) and one `rolls-up-to` edge per leadership ancestor of the owning span, in the SAME atomic transaction: the transaction that notices a missed signal also makes the MISSED signal visible above the span that missed it. RULE-EPI-02 opens exactly ONE governed decision per unopened danger/defect unknown that has passed the declared escalation age, naming the record, the age and the two honest routes. RULE-EPI-03 marks a harvested unknown `expired` when its declared evidence-bound expiry passes with no human answer and opens at most ONE bounded prompt per unknown per ISO week — expiry is never recorded as resolution. RULE-EPI-04 opens at most ONE calibration review per span per ISO week where the span\'s pooled belief-versus-record kappa over-predicts good outcomes above the declared band; under-confidence is deliberately NOT escalated, because its owner is the span itself. RULE-EPI-05 grades a frozen belief observation exactly ONCE against the record\'s own resolved outcomes. The module never asks for a sentiment score, never infers that something is wrong from a title, never closes an unknown because time passed, never rates, ranks or names a person, and never edits another module\'s record. Marker-idempotent, bounded, pausable by epistemicAutoPropagate, and an explicit scan always runs.',
+    writes: ['epistemicUnknowns', 'epistemicObservations', 'epistemicGrades', 'epistemicMarkers', 'decisions', 'links'],
     emits: [],
     scansWorkspace: true,
   },

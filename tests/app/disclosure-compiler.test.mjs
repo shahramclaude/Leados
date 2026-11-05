@@ -95,6 +95,10 @@ const RENDERER_ROUTES = [
   // fact ids, so they never enter a declared-seat projection), and declares a
   // manifest row like every other terminal.
   'hindsight',
+  // ADR-0103: the Epistemic Ledger owns a scoped report adapter (raw unknowns
+  // carry record ids and answers, which never enter a projection) and declares a
+  // manifest row like every other terminal.
+  'epistemic',
 ];
 
 /** Sentinel-bearing roster: every person, span and private note is traceable. */
@@ -191,7 +195,7 @@ function seatsOrThrow(state) {
 /* --------------------------------------------------------------- 1. schema */
 
 test('schema v90 migrates additively and refuses malformed or stale grants', () => {
-  assert.equal(SCHEMA_VERSION, 104);
+  assert.equal(SCHEMA_VERSION, 105);
   const old = { schemaVersion: 89, settings: { leaderName: 'Keep' }, cases: [{ id: 'keep' }], disclosureGrants: [{ id: 'existing' }] };
   const migrated = migrate(old);
   assert.equal(migrated.raw.schemaVersion, SCHEMA_VERSION);

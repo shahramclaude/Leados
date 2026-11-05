@@ -79,14 +79,14 @@ const esc = (toSeatId = 'mgr', extra = {}) => ({
 /* ------------------------------------------------------- 1. schema & spine */
 
 test('v94 migration, fail-closed records, graph vocabulary and spine parity', () => {
-  assert.equal(SCHEMA_VERSION, 104);
+  assert.equal(SCHEMA_VERSION, 105);
   const migrated = migrate({ schemaVersion: 93, settings: { leaderName: 'Keep' }, people: [] });
-  assert.deepEqual(migrated.applied, ['93 → 94', '94 → 95', '95 → 96', '96 → 97', '97 → 98', '98 → 99', '99 → 100', '100 → 101', '101 → 102', '102 → 103', '103 → 104']);
+  assert.deepEqual(migrated.applied, ['93 → 94', '94 → 95', '95 → 96', '96 → 97', '97 → 98', '98 → 99', '99 → 100', '100 → 101', '101 → 102', '102 → 103', '103 → 104', '104 → 105']);
   assert.deepEqual(migrated.raw.escalationRecords, []);
   assert.deepEqual(migrated.raw.escalationCommitments, []);
   assert.equal(migrated.raw.settings.leaderName, 'Keep');
   const afterCatchball = migrate({ schemaVersion: 92, catchballPacts: [{ id: 'keep-pact' }], settings: {} });
-  assert.deepEqual(afterCatchball.applied, ['92 → 93', '93 → 94', '94 → 95', '95 → 96', '96 → 97', '97 → 98', '98 → 99', '99 → 100', '100 → 101', '101 → 102', '102 → 103', '103 → 104']);
+  assert.deepEqual(afterCatchball.applied, ['92 → 93', '93 → 94', '94 → 95', '95 → 96', '96 → 97', '97 → 98', '98 → 99', '99 → 100', '100 → 101', '101 → 102', '102 → 103', '103 → 104', '104 → 105']);
   assert.equal(afterCatchball.raw.catchballPacts[0].id, 'keep-pact');
 
   const warnings = [];
