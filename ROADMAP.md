@@ -1,3 +1,12 @@
+## 2026-11-05 — Router trust gap, next investments
+
+- **Implemented [frontline → manager]**: consistent subtree scope for Router calibration, badge, brief, CSV and API; earlier-day-only Brier baseline and explicit evidence floor.
+- **Implemented [director → CEO]**: refuse Router item and aggregate outputs until release-history disclosure checks are integrated, rather than exposing raw detail or asserting that thresholding alone is safe. Existing typed ancestor links remain; this is not a new roll-up mechanism.
+- **Planned [manager → CEO]**: connect Router aggregate releases to the shared disclosure manifests and temporal differencing register, including complementary suppression, shared export/read policies, regression attacks and useful senior roll-ups.
+- **Planned [all]**: authenticated server-enforced, org-aware row/field permissions with tenant isolation, audited exports, historical hierarchy and independent security review; local seats cannot provide this.
+- **Planned [frontline → CEO]**: measured routing accuracy using independently reviewed outcomes and a real-time baseline that is available at the decision date, with drift monitoring and human recourse.
+- **Rejected [all]**: a new flashy dashboard while existing scoped read surfaces mix in peer-span statistics; threshold-only publication cannot rule out differencing.
+
 ## 2026-11-05 — The Calibrated Allocator (Session 137, Schema v99, ADR-0097)
 
 ### Implemented
