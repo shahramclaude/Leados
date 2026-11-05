@@ -428,22 +428,36 @@ export function routingCalibration(state = {}, { now = new Date(), settings = nu
   const baseRate = graded.length ? totalCorrect / graded.length : null;
 
   // Out-of-sample Brier: each row is forecast by the STRICTLY-PRIOR correct
-  // rate of its own detected-altitude cell (never by itself), so no leakage.
+  // rate of its own detected-altitude cell and the pooled baseline. Grades
+  // on the same day are simultaneous: none may forecast another.
   const running = new Map();
   let brierModel = 0; let brierBase = 0; let forecastN = 0;
+  let priorTotal = 0; let priorCorrect = 0;
+  let pendingDay = null; let dayRows = [];
+  const flushDay = () => {
+    for (const row of dayRows) {
+      const prior = running.get(row.key) || { n: 0, correct: 0 };
+      running.set(row.key, { n: prior.n + 1, correct: prior.correct + row.outcome });
+      priorTotal += 1; priorCorrect += row.outcome;
+    }
+    dayRows = [];
+  };
   let rankErrorSum = 0; let underRouted = 0; let overRouted = 0; let overrideHelped = 0; let overrides = 0;
   const confusion = [];
   for (const p of graded) {
+    const day = String(p.gradedOn).slice(0, 10);
+    if (pendingDay !== null && pendingDay !== day) flushDay();
+    pendingDay = day;
     const key = p.detectedAltitudeKey || 'refused';
     const prior = running.get(key) || { n: 0, correct: 0 };
-    const pModel = prior.n ? (prior.correct + 1) / (prior.n + 2) : 0.5; // Jeffreys-smoothed prior
+    const pModel = prior.n ? (prior.correct + 1) / (prior.n + 2) : 0.5; // Laplace-smoothed prior
     const outcome = p.correct === true ? 1 : 0;
     if (prior.n > 0) {
       brierModel += (pModel - outcome) ** 2;
-      brierBase += ((baseRate ?? 0.5) - outcome) ** 2;
+      brierBase += ((priorCorrect / priorTotal) - outcome) ** 2;
       forecastN += 1;
     }
-    running.set(key, { n: prior.n + 1, correct: prior.correct + outcome });
+    dayRows.push({ key, outcome });
     const detectedRank = altitudeRank(p.detectedAltitudeKey) || 0;
     const gradedRank = altitudeRank(p.gradedAltitudeKey) || 0;
     if (detectedRank && gradedRank) {
@@ -499,7 +513,7 @@ export function routingCalibration(state = {}, { now = new Date(), settings = nu
     ok: true, engineVersion: ROUTER_VERSION, analyzedAt: now.toISOString(),
     conventions: conv, gradedN: graded.length, confirmedN: plans.filter((p) => p.status === 'confirmed').length,
     analyzedN: plans.filter((p) => p.status === 'analyzed').length,
-    overallCorrectN: totalCorrect, overallRatePct: graded.length ? round((totalCorrect / graded.length) * 100, 1) : null,
+    overallCorrectN: totalCorrect, overallRatePct: graded.length >= conv.calibrationFloorN ? round((totalCorrect / graded.length) * 100, 1) : null,
     brierSkillPct: skill, forecastN, baseRatePct: baseRate === null ? null : round(baseRate * 100, 1),
     meanRankError: graded.length ? round(rankErrorSum / graded.length, 2) : null,
     underRouted, overRouted, overrides, overrideHelped,
@@ -514,40 +528,40 @@ export function routingCalibration(state = {}, { now = new Date(), settings = nu
 /** Altitude-filtered read model. A declared seat only sees its own subtree. */
 export function routingRead(state = {}, { now = new Date(), settings = null, seatId = null } = {}) {
   const conv = routingConventions(settings || state?.settings || {});
-  const calibration = routingCalibration(state, { now, settings });
   const built = buildSeats(state, { now, settings });
   const seat = seatId ? (built.byId.get(seatId) || activeSeat(built)) : activeSeat(built);
   const scoped = Boolean(seat && !seat.fullAccess);
   const visible = (plan) => !scoped || plan.ownerSeatId === seat.id || seat.scope?.has(plan.ownerSeatId);
   const all = Array.isArray(state.altitudeRoutingPlans) ? state.altitudeRoutingPlans : [];
-  const plans = all.filter(visible).map((p) => ({
-    ...p,
-    // Above the director rank, item detail (the raw note, evidence terms and
-    // module titles) is withheld: the unit of analysis is the span (§0.3).
-    detailWithheld: scoped && seat.rank >= 3,
-  }));
+  // Unknown seats must never inherit the operator's scope. Senior roll-up
+  // figures are withheld until this module is integrated with release-history
+  // disclosure control; merely stripping names does not prevent differencing.
+  const detailWithheld = scoped && (seat.rank >= 3 || seat.readOnly);
+  const visiblePlans = seat?.readOnly ? [] : all.filter(visible);
+  const plans = detailWithheld ? [] : visiblePlans;
+  const calibration = detailWithheld ? null : routingCalibration(
+    { ...state, altitudeRoutingPlans: visiblePlans }, { now, settings });
+
   return {
     ok: true, engineVersion: ROUTER_VERSION, now: now.toISOString(),
     conventions: conv, calibration, seat: seat ? { id: seat.id, rank: seat.rank, label: seat.label, fullAccess: Boolean(seat.fullAccess) } : null,
-    scoped, altitudes: ROUTING_ALTITUDES, plans,
+    scoped, detailWithheld, altitudes: ROUTING_ALTITUDES, plans,
     pending: plans.filter((p) => p.status === 'analyzed'),
     confirmed: plans.filter((p) => p.status === 'confirmed'),
     graded: plans.filter((p) => p.status === 'confirmed' && p.gradedOn),
-    attentionN: plans.filter((p) => p.status === 'analyzed').length + calibration.signals.filter((s) => s.level === 'high').length,
+    attentionN: detailWithheld ? 0 : plans.filter((p) => p.status === 'analyzed').length + calibration.signals.filter((s) => s.level === 'high').length,
     disclosure: ROUTER_DISCLOSURE,
   };
 }
 
 export function routingAttentionCount(state = {}, now = new Date(), settings = null) {
-  const plans = Array.isArray(state.altitudeRoutingPlans) ? state.altitudeRoutingPlans : [];
-  const pending = plans.filter((p) => p.status === 'analyzed').length;
-  const breaches = routingCalibration(state, { now, settings }).signals.filter((s) => s.level === 'high').length;
-  return pending + breaches;
+  return routingRead(state, { now, settings }).attentionN;
 }
 
 /** Identity-free, aggregate-only Markdown. No note text, ids, names or titles. */
 export function routingBriefText(state = {}, { now = new Date(), settings = null } = {}) {
   const r = routingRead(state, { now, settings });
+  if (r.detailWithheld) return "# Altitude Router — disclosure withheld\n\nAggregate publication is withheld at this seat until release-history disclosure checks are integrated. Seats are not authentication.";
   const c = r.calibration;
   const lines = [
     '# Altitude Router — routing integrity brief',
@@ -560,8 +574,8 @@ export function routingBriefText(state = {}, { now = new Date(), settings = null
     'altitude — not an audit opinion and not a prediction of outcomes.',
     '',
     `Plans: ${r.plans.length} total · ${r.pending.length} awaiting a human · ${r.confirmed.length} confirmed · ${r.graded.length} graded.`,
-    `Graded trials: ${c.gradedN}. Overall agreement: ${c.overallRatePct === null ? 'refused (<5 graded)' : `${c.overallRatePct}%`}.`,
-    `Out-of-sample Brier skill vs pooled base rate: ${c.brierSkillPct === null ? 'refused' : `${c.brierSkillPct}%`} over ${c.forecastN} strictly-prior forecasts.`,
+    `Graded trials: ${c.gradedN}. Overall agreement: ${c.overallRatePct === null ? 'refused (below evidence floor)' : `${c.overallRatePct}%`}.`,
+    `Out-of-sample Brier skill vs strictly-prior pooled base rate: ${c.brierSkillPct === null ? 'refused' : `${c.brierSkillPct}%`} over ${c.forecastN} strictly-prior forecasts.`,
     `Mean absolute altitude error: ${c.meanRankError === null ? 'refused' : `${c.meanRankError} ranks`} · under-routed ${c.underRouted} · over-routed ${c.overRouted}.`,
     `Human overrides: ${c.overrides} · overrides that corrected a wrong inference: ${c.overrideHelped}${c.overrideLiftPct === null ? '' : ` (${c.overrideLiftPct}%)`}.`,
     '',
@@ -587,8 +601,9 @@ export function routingBriefText(state = {}, { now = new Date(), settings = null
 
 /** Aggregate-only CSV rows. No ids, names, titles, note text or evidence. */
 export function routingCsvRows(state = {}, { now = new Date(), settings = null } = {}) {
-  const c = routingCalibration(state, { now, settings });
   const r = routingRead(state, { now, settings });
+  if (r.detailWithheld) return [{ scope: 'withheld', verdict: 'Router aggregate withheld pending release-history disclosure checks' }];
+  const c = r.calibration;
   const rows = [];
   for (const cell of c.cells) {
     rows.push({

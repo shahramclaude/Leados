@@ -12,7 +12,7 @@ import { activeSeat, buildSeats, canAct } from './seat.js';
 import { ALTITUDE_KEYS, altitudeRank } from './chainRegistry.js';
 import {
   analyzeRouting, resolveSeatPath, routingCaseInput, routerPlanRecord, routingRead,
-  routingCalibration, routingBriefText, routingCsvRows, routingAttentionCount,
+  routingBriefText, routingCsvRows, routingAttentionCount,
 } from './altitudeRouter.js';
 import { normalizeRouterPlans, normalizeRouterSettings } from './altitudeRouterSchema.js';
 import { ROUTER_EVENTS, ROUTER_LIMITS } from './altitudeRouterRegistry.js';
@@ -141,7 +141,7 @@ export function createAltitudeRouterActions(store, { now, idFactory, createApi }
         row.updatedAt = stamp;
       }, { type: ROUTER_EVENTS.GRADED, entity: 'routingplan', entityId: plan.id,
         summary: `Routing plan graded: judged ${correctAltitudeKey}; engine ${correct ? 'held' : 'did not hold'}` });
-      return saved({ planId, correct, overrideCorrect, calibration: routingCalibration(store.state, { now: clock(), settings: settings() }) });
+      return saved({ planId, correct, overrideCorrect, calibration: routingRead(store.state, { now: clock(), settings: settings() }).calibration });
     },
 
     /** Explicit scan always runs, even when automatic propagation is paused. */
@@ -160,8 +160,8 @@ export function createAltitudeRouterActions(store, { now, idFactory, createApi }
       return saved({ report: routingRead(store.state, { now: clock(), settings: settings() }) });
     },
 
-    routingRead(seatId = null) { return routingRead(store.state, { now: clock(), settings: settings(), seatId }); },
-    routingCalibration() { return routingCalibration(store.state, { now: clock(), settings: settings() }); },
+    routingRead() { return routingRead(store.state, { now: clock(), settings: settings() }); },
+    routingCalibration() { return routingRead(store.state, { now: clock(), settings: settings() }).calibration; },
     routingBriefText() { return { ok: true, text: routingBriefText(store.state, { now: clock(), settings: settings() }) }; },
     routingCsvRows() { return { ok: true, rows: routingCsvRows(store.state, { now: clock(), settings: settings() }) }; },
     routingAttentionCount() { return routingAttentionCount(store.state, clock(), settings()); },

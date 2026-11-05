@@ -37,7 +37,11 @@ export function renderAltitudeRouter(ctx) {
   const plans = report.plans;
   const pending = report.pending;
   const scoped = report.scoped;
-  const detailWithheld = scoped && report.seat && report.seat.rank >= 3;
+  const detailWithheld = report.detailWithheld;
+
+  function withheldPanel() {
+    return banner({ tone: 'info', title: 'Routing roll-up withheld', body: 'Individual plans and aggregate calibration are withheld at this altitude until release-history disclosure checks are integrated. Plan and grade from the owning frontline or manager seat; existing case propagation and hierarchy links remain intact. Seats are local workflow declarations, not authentication.' });
+  }
 
   /* -------------------------------------------------------------- actions */
   const savePlan = (text, previewNode) => {
@@ -114,6 +118,7 @@ export function renderAltitudeRouter(ctx) {
 
   /* ---------------------------------------------------------------- plan */
   function planPanel() {
+    if (detailWithheld) return withheldPanel();
     const note = h('textarea', { id: 'ar-note', class: 'input', rows: '7', maxlength: String(ROUTER_LIMITS.noteChars),
       'aria-label': 'Paste a situation note in plain language', placeholder: 'e.g. "The night shift handover was missed twice this week; Ari and Bo are covering the station without a checklist."' });
     const region = h('div', { id: 'ar-preview', class: 'stack', role: 'region', 'aria-label': 'Live routing preview', 'aria-live': 'polite' });
@@ -167,6 +172,7 @@ export function renderAltitudeRouter(ctx) {
 
   /* -------------------------------------------------------------- ladder */
   function ladderPanel() {
+    if (detailWithheld) return withheldPanel();
     const plan = pending[0] || plans.find((p) => p.status === 'confirmed') || null;
     const path = plan ? plan.seatPath : [];
     const rows = path.map((p, i) => ({
@@ -203,6 +209,7 @@ export function renderAltitudeRouter(ctx) {
 
   /* -------------------------------------------------------------- ledger */
   function ledgerPanel() {
+    if (detailWithheld) return withheldPanel();
     const rows = plans.map((p) => ({ ...p,
       detected: altLabel(p.detectedAltitudeKey), confirmed: altLabel(p.confirmedAltitudeKey),
       graded: altLabel(p.gradedAltitudeKey), statusLabel: p.status }));
@@ -235,6 +242,7 @@ export function renderAltitudeRouter(ctx) {
 
   /* --------------------------------------------------------- calibration */
   function calibrationPanel() {
+    if (detailWithheld) return withheldPanel();
     const floorNInput = h('input', { id: 'ar-floor-n', class: 'input', type: 'number', min: '3', max: '20', value: String(conv.calibrationFloorN), 'aria-label': 'Evidence floor (graded plans)' });
     const floorPctInput = h('input', { id: 'ar-floor-pct', class: 'input', type: 'number', min: '50', max: '95', value: String(conv.reliabilityFloorPct), 'aria-label': 'Reliability floor percent' });
     const evidenceInput = h('input', { id: 'ar-evidence', class: 'input', type: 'number', min: '1', max: '10', step: '0.5', value: String(conv.evidenceFloor), 'aria-label': 'Altitude cue evidence floor' });
@@ -252,7 +260,7 @@ export function renderAltitudeRouter(ctx) {
       h('div', { class: 'stat-grid' },
         stat({ label: 'Graded trials', value: String(calibration.gradedN), hint: `${calibration.confirmedN} confirmed` }),
         stat({ label: 'Overall agreement', value: pct(calibration.overallRatePct), hint: calibration.overallRatePct === null ? `below ${conv.calibrationFloorN} graded` : 'engine vs retrospective human grade' }),
-        stat({ label: 'Brier skill (out of sample)', value: pct(calibration.brierSkillPct), hint: `${calibration.forecastN} strictly-prior forecasts vs pooled base rate` }),
+        stat({ label: 'Brier skill (out of sample)', value: pct(calibration.brierSkillPct), hint: `${calibration.forecastN} strictly-prior forecasts vs strictly-prior pooled base rate` }),
         stat({ label: 'Mean altitude error', value: calibration.meanRankError === null ? 'refused' : `${calibration.meanRankError} ranks`, hint: `under ${calibration.underRouted} · over ${calibration.overRouted}` }),
         stat({ label: 'Human overrides', value: String(calibration.overrides), hint: `${calibration.overrideHelped} corrected a wrong inference` }),
         stat({ label: 'Override lift', value: pct(calibration.overrideLiftPct), hint: 'share of overrides that helped' }),
@@ -288,6 +296,7 @@ export function renderAltitudeRouter(ctx) {
 
   /* --------------------------------------------------------------- brief */
   function briefPanel() {
+    if (detailWithheld) return withheldPanel();
     const brief = routingBriefText(ctx.state, { now });
     return h('div', { class: 'stack' },
       banner({ tone: 'info', title: 'Identity-free by construction', body: 'The brief contains counts and rates only. No situation note, name, case title, id, evidence term or module route label is included.' }),
@@ -314,10 +323,10 @@ export function renderAltitudeRouter(ctx) {
   const header = pageHeader({
     eyebrow: 'Schema v88 · ADR-0081 · RULE-AR-01..03',
     title: 'The Altitude Router',
-    subtitle: 'Say what happened once. LeadOS decides which modules own it, which altitude must act, and pushes a disclosure-safe signal up every level of the org — then grades whether it routed correctly.',
+    subtitle: 'Say what happened once. LeadOS decides which modules own it, which altitude must act, and writes typed roll-up links to leadership ancestors — then grades whether it routed correctly.',
     actions: [
       h('button', { class: 'btn btn-ghost', type: 'button', onClick: runScan }, 'Run scan'),
-      h('button', { class: 'btn btn-primary', type: 'button', onClick: () => go(ctx, 'plan') }, 'New situation note'),
+      h('button', { class: 'btn btn-primary', type: 'button', onClick: () => go(ctx, 'plan'), ...(detailWithheld ? { disabled: true, title: 'Routing plans are withheld at this altitude.' } : {}) }, 'New situation note'),
     ],
   });
 
@@ -331,8 +340,8 @@ export function renderAltitudeRouter(ctx) {
     tabs({ items: [
       { key: 'plan', label: 'Plan & explain' },
       { key: 'ladder', label: 'Altitude ladder' },
-      { key: 'ledger', label: 'Routing ledger', count: plans.length },
-      { key: 'calibration', label: 'Calibration', count: calibration.signals.filter((s) => s.level === 'high').length || undefined },
+      { key: 'ledger', label: 'Routing ledger', count: detailWithheld ? undefined : plans.length },
+      { key: 'calibration', label: 'Calibration', count: detailWithheld ? undefined : (calibration.signals.filter((s) => s.level === 'high').length || undefined) },
       { key: 'brief', label: 'Brief' },
     ], active: panel, onSelect: (key) => go(ctx, key), ariaLabel: 'Altitude Router sections' }),
     h('div', { class: 'stack' }, content),

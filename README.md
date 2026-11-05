@@ -1,3 +1,9 @@
+## 2026-11-05 — Router scope and calibration integrity
+
+The Altitude Router now computes its read model, badge, brief and CSV from the active seat's reporting subtree, rather than combining a scoped ledger with workspace-wide calibration. The API no longer accepts a caller-selected seat for this read. Director-and-above router detail **and aggregate calibration are temporarily withheld**, including router brief/CSV and in-router plan entry, pending release-history disclosure control; the existing case-to-module propagation and ancestor links are unchanged. The undeclared local operator retains the full workspace view. This is a deliberate functionality reduction, not multi-user security: a user controlling this browser or backup can access the data, and other surfaces have not been comprehensively audited.
+
+Brier skill compares both forecasts against strictly earlier **days** of graded outcomes; same-day outcomes cannot predict one another. Overall agreement is refused below its configured evidence floor. These retrospective human grades do not validate an individual or establish causal impact.
+
 ## 2026-11-05 — The Freeze-Line Continuity Audit: was the org still connected across the reorg? (Session 139, Schema v101, [ADR-0099](./docs/adr/0099-freeze-line-continuity-audit.md), `#/freeze-line`, RULE-FRZ-01..03, CSV #95)
 
 ## 2026-11-05 — Reviewed routing integrity

@@ -275,8 +275,8 @@ test('five graded plans produce Wilson + Brier skill and ONE governed re-routing
   assert.equal(report.gradedN, 5);
   assert.equal(report.overallCorrectN, 2);
   assert.equal(report.overallRatePct, 40);
-  assert.ok(report.brierSkillPct !== null, 'Brier skill is printed out of sample');
-  assert.ok(report.forecastN >= 3, 'strictly-prior forecasts only');
+  assert.equal(report.brierSkillPct, null, 'same-day grades do not forecast one another');
+  assert.equal(report.forecastN, 0, 'day-level timestamps cannot establish within-day ordering');
   assert.equal(report.meanRankError, 1.8, '3 × (4−1) / 5 ranks of ordinal error');
   assert.equal(report.underRouted, 3);
   const cell = report.cells.find((c) => c.key === 'frontline');
@@ -415,4 +415,71 @@ test('oversized ladders are refused instead of silently losing senior roll-ups',
   assert.equal(result.ok, false);
   assert.match(result.error, /eight-seat limit/);
   assert.equal(store.state.altitudeRoutingPlans.length, 0);
+});
+
+
+test('router scope is consistent across calibration, brief, CSV, badge and API; senior detail fails closed', () => {
+  const state = fixture({ activeSeatId: 'lead1' });
+  const make = (id, owner, correct, status = 'confirmed') => ({ id, ownerSeatId: owner,
+    sourceText: `secret-${id}`, status, detectedAltitudeKey: 'frontline', confirmedAltitudeKey: 'frontline',
+    gradedAltitudeKey: 'frontline', gradedOn: '2026-10-01', correct, altitudeConfidence: 0.8 });
+  state.altitudeRoutingPlans = [make('own', 'lead1', true), make('peer-secret', 'lead2', false),
+    make('peer-pending', 'lead2', false, 'analyzed')];
+  const read = routingRead(state, { now: NOW });
+  assert.equal(read.plans.length, 1);
+  assert.equal(read.calibration.gradedN, 1);
+  assert.equal(read.calibration.overallRatePct, null);
+  assert.equal(routingAttentionCount(state, NOW), 0);
+  assert.equal(routingCsvRows(state, { now: NOW }).at(-1).graded_n, 1);
+  assert.match(routingBriefText(state, { now: NOW }), /Graded trials: 1/);
+  assert.ok(!JSON.stringify(read).includes('peer-secret'));
+  const { api } = boot(state);
+  assert.equal(api.routingRead('dir1').seat.id, 'lead1', 'caller cannot choose another seat through API');
+  assert.equal(api.routingCalibration().gradedN, 0, 'invalid synthetic records are dropped on store load');
+  state.settings.activeSeatId = 'dir1';
+  const director = routingRead(state, { now: NOW });
+  assert.equal(director.detailWithheld, true);
+  assert.deepEqual(director.plans, []);
+  assert.equal(director.calibration, null);
+  assert.ok(!JSON.stringify(director).includes('secret-'));
+  assert.deepEqual(routingCsvRows(state, { now: NOW }), [{ scope: 'withheld', verdict: 'Router aggregate withheld pending release-history disclosure checks' }]);
+  assert.match(exportWorkspaceCsv(state, 'altitude-router', { now: NOW }).csv, /withheld/);
+  assert.match(routingBriefText(state, { now: NOW }), /withheld/i);
+  state.settings.activeSeatId = 'deleted-seat';
+  const unresolved = routingRead(state, { now: NOW });
+  assert.equal(unresolved.detailWithheld, true);
+  assert.deepEqual(unresolved.plans, []);
+});
+
+test('Brier skill uses only earlier calendar days for both model and baseline', () => {
+  const state = fixture();
+  const row = (id, day, correct) => ({ id, status: 'confirmed', ownerSeatId: 'lead1',
+    detectedAltitudeKey: 'frontline', gradedAltitudeKey: 'frontline', gradedOn: day,
+    correct, altitudeConfidence: 0.8 });
+  state.altitudeRoutingPlans = [row('a', '2026-10-01', true), row('b', '2026-10-02', false),
+    row('c', '2026-10-02', true), row('d', '2026-10-03', false)];
+  const result = routingCalibration(state, { now: NOW });
+  assert.equal(result.forecastN, 3);
+  // Model errors: (2/3)^2, (1/3)^2, (3/5)^2. Baseline: 1, 0, (2/3)^2.
+  assert.equal(result.brierSkillPct, 36.6);
+  const swapped = { ...state, altitudeRoutingPlans: state.altitudeRoutingPlans.map((p) => p.id === 'b' ? { ...p, id: 'z' } : p) };
+  assert.equal(routingCalibration(swapped, { now: NOW }).brierSkillPct, result.brierSkillPct);
+});
+
+test('director router panels render an explicit refusal rather than hidden-record counts', () => {
+  const dom = bootDocument();
+  const { store, api } = boot();
+  const saved = api.routingSaveDraft(FRONTLINE_NOTE);
+  assert.equal(saved.ok, true);
+  assert.equal(api.routingConfirm(saved.plan.id, { confirmedAltitudeKey: 'frontline' }).ok, true);
+  store.update((draft) => { draft.settings.activeSeatId = 'dir1'; },
+    { type: 'settings.updated', entity: 'workspace', entityId: '', summary: 'Switch seat' });
+  for (const panel of ['plan', 'ladder', 'ledger', 'calibration', 'brief']) {
+    const node = renderAltitudeRouter({ state: store.state, api, now: NOW,
+      query: new URLSearchParams(`panel=${panel}`), navigate: () => {}, refresh: () => {}, warnings: [] });
+    assert.match(node.textContent, /Routing roll-up withheld/);
+    assert.doesNotMatch(node.textContent, /Ari Klein|deadline slipped/);
+    assert.equal(node.querySelector('button[title="Routing plans are withheld at this altitude."]').disabled, true);
+  }
+  dom.window.close();
 });
