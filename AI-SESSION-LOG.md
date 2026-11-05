@@ -1175,3 +1175,40 @@ Named vendors and takeaways are recorded in `RESEARCH.md §101`: Workday (approv
 - Commit `ac57f58` pushed to `origin/arena/847734d3-leados`.
 - Pull request opened: **https://github.com/shahramclaude/Leados/pull/131** (base `main`).
 - Full canonical suite was still running at PR open; its final result is recorded below once complete.
+
+---
+
+# 2026-11-05 — Registered Terminal Publication (ADR-0096; no schema bump)
+
+## Repository identity and sync baseline
+
+`git remote -v` → `https://github.com/shahramclaude/Leados.git` (fetch + push); branch `arena/a8bef4c5-leados` clean at base `62be57d` (Merge PR #159). Identity **PASS**. `npm ci --no-audit --no-fund` installed declared dev dependencies; no runtime/dependency change.
+
+## Blunt audit
+
+The canonical app is the zero-build static ES-module app under `app/`. Targeted reads covered `disclosureManifests.js`, `differencing.js`/`differencingActions.js` (`planRelease`, `buildDifferencesReport`), `disclosure.js` (`moduleAggregate`, `spanOf`), `seat.js` (`recordPeople`/`PEOPLE_KEYS`), the five target views and their registries, and the differencing/disclosure test suites. **Full-repo line-by-line audit NOT performed; uninspected surfaces are [UNVERIFIED].** Finding: `#/escalation`, `#/measurement`, `#/cadence`, `#/concordance`, `#/survival` printed per-table floors directly and never entered the ADR-0092 register — the roadmap's standing in-progress item. `#/escalation` and `#/cadence` had no disclosure manifest at all.
+
+## Shipped
+
+- **New:** `app/views/publicationPanel.js` — shared "Publication register" panel (Plan / Publish / published-today) mounted on all five terminals; `tests/app/terminal-publication.test.mjs` (5/5); `docs/adr/0096-registered-terminal-publication.md`.
+- **Modified:** `disclosureManifests.js` (new `escalation` + `cadence` manifests, unit-class, adapter-scoped, detailCeiling 5); the five views + `escalationRegistry`/`cadenceRegistry`/`concordanceRegistry` panel lists; `tests/app/disclosure-compiler.test.mjs` (`RENDERER_ROUTES` kept 1:1); ROADMAP/README/CHANGELOG/ADR-INDEX.
+- No schema bump, no new rules, no new collections — the register and spine already existed; this session routed five more terminals into them.
+
+## Verification (actual results)
+
+- `node --test tests/app/terminal-publication.test.mjs`: **5/5 PASS**.
+- `disclosure-compiler` + `differencing`: **52/52 PASS**.
+- `npm run lint`: **PASS**. `npm run check:boundary`: **PASS** (474 app ES modules, 140 suites, 0 leaks).
+- Module suites (escalation/concordance/cadence/survival/measurement + new): 166 pass, **2 fail — verified PRE-EXISTING on base commit via `git stash`** (`operating-cadence` spine-parity count, `measurement` "sound commit" count); not regressions.
+- Full `node --test tests/app/*.test.mjs` did not finish within the 30-min window (pre-existing full-suite behavior noted in earlier sessions).
+- `npm run build:standalone` + `check:links`: see sync section below.
+
+## Known gaps (honest)
+
+- Cadence span attribution follows declared people keys (`ownerId` on sessions); `chairSeatId`/`attendeeIds` are not people keys — noted in ADR-0096 and roadmap.
+- Local seat selection remains a workflow declaration, not authentication (standing top roadmap item).
+- Real-browser assistive-technology walkthrough remains [UNVERIFIED]; automated axe-core in jsdom is what ran.
+
+## Sync
+
+Commit + push to `origin/arena/a8bef4c5-leados` — result recorded in the final changelog below.

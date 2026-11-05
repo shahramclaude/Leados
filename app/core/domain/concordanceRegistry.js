@@ -50,7 +50,7 @@ export const CONCORDANCE_LIMITS = Object.freeze({
   ancestors: 8,      // max leadership ancestors in one roll-up path
 });
 
-export const CONCORDANCE_PANELS = Object.freeze(['rounds', 'rollup', 'signals', 'conventions', 'brief']);
+export const CONCORDANCE_PANELS = Object.freeze(['rounds', 'rollup', 'signals', 'conventions', 'brief', 'publication']);
 
 /**
  * The instrument. Six dimensions, each an ordinal 1–5 description of HOW MUCH

@@ -737,7 +737,9 @@ export function renderCadence(ctx) {
         ? constraintPanel()
         : panel === 'fit'
           ? fitPanel()
-          : briefPanel();
+          : panel === 'publication'
+            ? [publicationPanel(ctx, 'cadence')]
+            : briefPanel();
 
   return h(
     'div',

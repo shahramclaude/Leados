@@ -1,3 +1,10 @@
+## Changelog — 2026-11-05 · Session 136: Registered Terminal Publication (ADR-0096, no schema bump)
+
+- **Five terminals now enter the differencing register** (`#/escalation`, `#/measurement`, `#/cadence`, `#/concordance`, `#/survival`): `#/escalation` and `#/cadence` declare disclosure manifests; all five mount a shared **Publication register** panel with **Plan** (what would publishing determine, against every registered release?) and **Publish** (one dated release per module per day per seat; same-day repeats refused by construction). Their own per-table floors are unchanged — the register only adds suppression, and a determined value is reported as a coordinate and a proof, never as the number.
+- **Why:** ADR-0092 audits a *series* of releases as one integer system; these five terminals printed per-table floors directly, so subtracting two of their tables across days, seats or altitudes was never audited.
+- **Regression upkeep:** `RENDERER_ROUTES` kept 1:1 with the manifest catalogue; standalone rebuilt; focused suite `tests/app/terminal-publication.test.mjs` (5/5), disclosure-compiler + differencing 52/52, lint/boundary/links pass. Two suite failures (`operating-cadence`, `measurement`) verified pre-existing on the base commit.
+- See [ADR-0096](docs/adr/0096-registered-terminal-publication.md) and the `ROADMAP.md` Session 136 entry.
+
 ## Changelog — 2026-11-05 · Session 135: Robust Allocation Terminal (ADR-0095, Schema v98)
 
 - **`#/robust-allocation`** (Desk / Plans / Solve / Roll-up / Certificate): declare a multi-action, capacity-constrained allocation under effect ranges; solve it exactly; review the Wald maximin and Savage minimax-regret plans, the price of the equity floor, the stress switches and the regret a range's resolution releases; adopt it; copy an identity-free upward brief and aggregate-only CSV #93.

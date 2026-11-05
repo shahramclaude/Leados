@@ -45,6 +45,7 @@ import {
   RESOLUTIONS,
   VERDICT_LABELS,
 } from '../core/domain/escalationRegistry.js';
+import { publicationPanel } from './publicationPanel.js';
 
 const panelFor = (query) => {
   const p = query?.get?.('panel');
