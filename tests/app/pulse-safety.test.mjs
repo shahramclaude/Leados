@@ -97,3 +97,42 @@ test('settings, import normalization and reporting agree on a minimum privacy fl
   const { state, warnings } = normalizeState(raw, { now: NOW });
   assert.equal(state.settings.pulseMinResponses, 3); assert.ok(warnings.some((w) => w.includes('privacy floor')));
 });
+
+test('participation bounds do not mistake repeated or overlapping submissions for distinct active people', async () => {
+  const { participation } = await import('../../app/core/domain/pulse.js');
+  const state = stateWithScores(varied);
+  state.people = [1, 2, 3].map((i) => ({ id: `p${i}`, status: 'active' }));
+  state.people.push({ id: 'old', status: 'archived' });
+  state.pulses = [
+    { date: '2026-10-22', anonymity: 'named', personId: 'p1' },
+    { date: '2026-10-22', anonymity: 'named', personId: 'p1' },
+    { date: '2026-10-22', anonymity: 'named', personId: 'old' },
+    { date: '2026-10-22', anonymity: 'named', personId: null },
+    { date: '2026-10-22', anonymity: 'anonymous' },
+  ];
+  const part = participation(state, NOW);
+  assert.equal(part.knownResponders, 1);
+  assert.equal(part.coverageFloorPct, 33);
+  assert.equal(part.coverageCeilingPct, 100);
+  state.pulses = state.pulses.slice(0, 1);
+  assert.equal(participation(state, NOW).coverageCeilingPct, 34, 'upper bound rounds outward');
+  state.pulses = [{ date: '2026-10-22', anonymity: 'anonymous' }];
+  assert.equal(participation(state, NOW).coverageFloorPct, 0);
+  state.people = [];
+  assert.equal(participation(state, NOW).coverageFloorPct, null);
+  assert.equal(participation(state, NOW).coverageCeilingPct, null);
+});
+
+test('pulse findings describe complete submissions without asserting anonymity or predicting resignations', () => {
+  const state = stateWithScores([1, 2, 3, 1, 2].map((v) => ({ safety: v, clarity: v, workload: v, growth: v })));
+  state.people.push({ id: 'p1', name: 'A', status: 'active', startDate: '2026-01-01', createdAt: '2026-01-01T00:00Z' });
+  state.pulses[0].anonymity = 'named'; state.pulses[0].personId = 'p1';
+  const findings = buildInsights(state, NOW).findings;
+  for (const id of ['PULSE-03', 'PULSE-04']) {
+    const finding = findings.find((f) => f.ruleId === id);
+    assert.ok(finding, id);
+    assert.equal(finding.confidence, 'medium');
+    assert.match(finding.evidence[0], /named or anonymous/);
+    assert.match(finding.detail, /not (represent|a prediction)/);
+  }
+});

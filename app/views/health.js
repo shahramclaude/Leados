@@ -166,14 +166,14 @@ export function renderHealth(ctx) {
       }),
       card({
         title: 'Participation',
-        subtitle: 'A floor, not a headcount.',
+        subtitle: 'A conditional range, not a verified headcount.',
         body: h(
           'div',
           null,
           stat({ label: 'Team size', value: part.activePeople }),
           stat({ label: 'Responses', value: part.responses, hint: `${part.anonymousResponses} anonymous · ${part.knownResponders} named` }),
-          stat({ label: 'Coverage (floor)', value: `${part.coverageFloorPct}%`, hint: 'anonymous responses cannot be attributed to a person' }),
-          h('p', { class: 'muted tiny' }, 'Named responses are shown as named because the responder chose that. Nothing is inferred from an anonymous submission.'),
+          stat({ label: 'Possible coverage', value: part.coverageFloorPct === null ? 'Unavailable' : `${part.coverageFloorPct}–${part.coverageCeilingPct}%`, hint: 'Bounds assume named identities are truthful; rounded outward.' }),
+          h('p', { class: 'muted tiny' }, 'Named identities are self-declared, not authenticated. Anonymous submissions may be duplicates or overlap named submissions; the upper bound assumes distinct active respondents. No active roster means no coverage denominator.'),
         ),
       }),
     ),

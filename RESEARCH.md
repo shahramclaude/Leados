@@ -1,3 +1,10 @@
+## 2026-11-05 — Participation and disclosure integrity
+
+- **Microsoft Viva Glint [manager → executive]**: [hierarchy analysis](https://learn.microsoft.com/en-us/viva/glint/reports/vivaglint-advanced) describes full-tree vs direct-report roll-ups and a minimum group size, with a default of five for its R helper. A threshold reduces exposure, not a formal guarantee; it does not prove unique people in LeadOS.
+- **Visier Workforce Context [manager → CEO]**: [vendor description](https://www.visier.com/workforce-intelligence/) describes historical org context and identity-based permissions applied when answers are computed. Vendor claims not independently audited here. LeadOS's browser seat is not equivalent security.
+- **Workday / Peakon, Leapsome, Qualtrics, One Model and ChartHop [manager → executive]**: [market inventory](https://www.thrivesparrow.com/blog/best-people-analytics-software) describes listening, performance, scenario planning and org planning capabilities; vendor-comparison claims [UNVERIFIED]. An AI-native Visier agent is described in the vendor source above.
+- **Implemented [frontline, manager]**: conditional participation bounds and uncertainty-aware insight wording. **Planned [all]**: verified survey identity without exposing responses and cross-release disclosure review. **Rejected [all]**: calling response-count thresholds k-anonymity or an observed score an attrition forecast.
+
 ## §111 — Session 132 domain hunt: official statistics has known the temporal differencing attack for fifty years; no leadership product has ever implemented it (fetched 2026-11-05, [ADR-0092](docs/adr/0092-differencing-defender.md))
 
 ### The question

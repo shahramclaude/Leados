@@ -1,3 +1,12 @@
+## 2026-11-05 — Pulse integrity gap analysis
+
+- **Implemented [frontline, manager]**: conditional, outward-rounded participation bounds; separate missing denominator; descriptive pulse findings without invented attrition prediction. Named IDs are declarations, not authentication.
+- **Planned [all altitudes]**: authenticated, tenant-isolated survey collection with verifiable one-person-one-response and independently reviewed privacy controls; do not treat today's local seat as an access boundary.
+- **Planned [manager → CEO]**: integrate pulse aggregate releases into a shared cross-window disclosure ledger only after defining membership, consent, release history, and differencing protections; pulse data must not be propagated as identified case links.
+- **Rejected [all]**: use raw anonymous submission counts as unique people or train individual attrition predictions from this local pulse — uniqueness, consent, and calibration are absent.
+
+Benchmark gap: Visier describes permissions applied at query time and historical organizational context; LeadOS has declared local seats, not authenticated server-side enforcement. Microsoft Viva Glint documents minimum group sizes; LeadOS currently counts responses, cannot prove distinct respondents, and must not call its floor k-anonymity. Existing cross-module and seat rules are real but pulse-to-executive roll-up is not implemented in this change. [UNVERIFIED] Full-app role coverage, all release channels and real-browser accessibility.
+
 ## Bootstrap doctrine roadmap — 2026-11-04 (binding scope for all sessions)
 
 This section is the session-scoped execution view of [NORTH_STAR.md](NORTH_STAR.md). It does not restate the doctrine. Every item is tagged with the organizational altitude(s) it serves. The historical session outcomes below are retained verbatim; new work is planned against these four buckets.
