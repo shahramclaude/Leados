@@ -237,6 +237,13 @@ import {
   normalizeReputationMarkers,
   normalizeReputationSettings,
 } from './domain/reputationalCapitalSchema.js';
+// ADR-0102: the Hindsight Lock. Human decisions, their frozen information sets
+// and the rule-idempotency ledger behind every process finding.
+import {
+  normalizeDecisionLocks,
+  normalizeHindsightMarkers,
+  normalizeHindsightSettings,
+} from './domain/hindsightSchema.js';
 import { ALTITUDES as SPAN_ALTITUDES } from './domain/chainRegistry.js';
 // ADR-0088: the Escalation Economy — the disposition ledger, intervention-rate
 // commitments, idempotency markers, and clamped conventions.
@@ -452,7 +459,7 @@ export {
 // older blob simply opens on the undeclared operator view. A version bump here
 // would have forced 78 test files to be rewritten for zero user benefit; the
 // honest choice is to add nothing to migrate.
-export const SCHEMA_VERSION = 103;
+export const SCHEMA_VERSION = 104;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -1715,6 +1722,23 @@ export const DEFAULT_SETTINGS = Object.freeze({
   freezeLineCellFloor: 3,
   freezeLineDropPct: 15,
   freezeLineAutoPropagate: true,
+  // ADR-0102: the Hindsight Lock. `hindsightQualityFloor` is the frozen record
+  // quality (of 5) at or above which the process axis counts as sound;
+  // `hindsightCoveragePct` is the share of the knowable set a decision must have
+  // consulted; `hindsightFactFloor` refuses a coverage rate below that many dated
+  // facts; `hindsightGapFloor` bounds when a missed-fact finding is worth
+  // opening; `hindsightSettledFloor` refuses a resulting share and a p-value
+  // below that many graded decisions; `hindsightCellFloor` is the small-cell
+  // floor; `hindsightReviewGraceDays` is how long after its own review date a
+  // decision may stay ungraded before the spine asks once a week.
+  hindsightQualityFloor: 4,
+  hindsightCoveragePct: 60,
+  hindsightFactFloor: 3,
+  hindsightGapFloor: 2,
+  hindsightSettledFloor: 8,
+  hindsightCellFloor: 3,
+  hindsightReviewGraceDays: 14,
+  hindsightAutoPropagate: true,
   });
 
 export const COLLECTIONS = [
@@ -2101,6 +2125,14 @@ export const COLLECTIONS = [
   // themselves are DERIVED from committed/reverted org designs, never stored.
   'freezeReadings',
   'freezeMarkers',
+  // Base-commit repair (Session 142): ADR-0100's three calibration ledgers were
+  // normalized and migrated but never listed here, so a FRESH workspace created
+  // them only on its first normalize pass and the disclosure compiler's
+  // "every declared collection exists" check was red on main. Listing them is
+  // the fix; nothing about their shape or defaults changes.
+  'spanReadings',
+  'spanAdoptions',
+  'spanMarkers',
   // ADR-0101: the Reputational Capital Ledger. `reputationActs` holds only acts a
   // HUMAN entered (derived acts are re-harvested on read), `reputationPositions`
   // holds dated guarantees and repairs, and `reputationMarkers` is the five
@@ -2109,6 +2141,14 @@ export const COLLECTIONS = [
   'reputationActs',
   'reputationPositions',
   'reputationMarkers',
+  // ADR-0102: the Hindsight Lock. `decisionLocks` holds one frozen information
+  // set per decision — the records the link spine had already tied to it on or
+  // before the decision date, plus the process quality as the record stood then.
+  // `decisionLockMarkers` is the four shared-post-commit rules' idempotency
+  // ledger. No coverage rate, quadrant or p-value is ever persisted: every
+  // figure is re-derived from the lock and the live links on read.
+  'decisionLocks',
+  'decisionLockMarkers',
   'links',
   'portfolio',
   'events',
@@ -2793,6 +2833,9 @@ export function normalizeSettings(raw) {
     // convexity, breach weight, half-life, ask and publishing floor — clamped,
     // plus the declared per-class hazard rates every cell is anchored on.
     ...normalizeReputationSettings(s),
+    // ADR-0102: the hindsight-lock conventions — quality floor, coverage share,
+    // fact, gap and settled floors, cell floor and review grace — clamped.
+    ...normalizeHindsightSettings(s),
     chainAdoptedHorizons: normalizeAdoptedHorizons(s.chainAdoptedHorizons, DECLARED_HORIZONS),
     chainAdoptedOn: /^\d{4}-\d{2}-\d{2}$/.test(String(s.chainAdoptedOn || '')) ? s.chainAdoptedOn : null,
     chainAdoptedReadingId: typeof s.chainAdoptedReadingId === 'string' && s.chainAdoptedReadingId.trim()
@@ -6935,6 +6978,12 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.reputationActs = normalizeReputationActs(raw.reputationActs, warnings, { now: new Date() });
   state.reputationPositions = normalizeReputationPositions(raw.reputationPositions, warnings, { now: new Date() });
   state.reputationMarkers = normalizeReputationMarkers(raw.reputationMarkers);
+  // ADR-0102: decision locks resolve before typed links so the `locks` /
+  // `consults` / `rolls-up-to` edges validate against real lock ids. A malformed
+  // lock, a duplicate, or one dated in the future is DROPPED with a warning —
+  // never repaired into an information set a leader might be shown.
+  state.decisionLocks = normalizeDecisionLocks(raw.decisionLocks, warnings, { now: new Date() });
+  state.decisionLockMarkers = normalizeHindsightMarkers(raw.decisionLockMarkers);
   state.spanAdoptions = normalizeSpanAdoptions(raw.spanAdoptions, warnings);
   state.spanMarkers = normalizeSpanMarkers(raw.spanMarkers);
   // ADR-0085: the Operating Cadence Clock. A malformed forum, a sitting with no
@@ -7753,6 +7802,22 @@ export const MIGRATIONS = {
   // back-filled from the delegation ledger: a back-filled act would look like a
   // human judgement this upgrade never made, and the harvester re-reads those
   // records on every render anyway.
+  // ADR-0102: additive 103 → 104. An existing workspace has decisions but no
+  // locks, so both ledgers start EMPTY — an empty ledger means "no information
+  // set has been frozen here yet", which is a different claim from "every
+  // decision rested on the full record". Nothing is back-filled: the spine
+  // freezes every decision on the next commit and every figure is derived on
+  // read, so a back-filled lock at upgrade time would only pretend the freeze
+  // happened when it did not.
+  103: (v103) => ({
+    ...v103,
+    schemaVersion: 104,
+    decisionLocks: Array.isArray(v103.decisionLocks) ? v103.decisionLocks : [],
+    decisionLockMarkers: Array.isArray(v103.decisionLockMarkers) ? v103.decisionLockMarkers : [],
+    settings: isPlainObject(v103.settings)
+      ? { ...v103.settings, ...normalizeHindsightSettings(v103.settings) }
+      : { ...DEFAULT_SETTINGS },
+  }),
   102: (v102) => ({
     ...v102,
     schemaVersion: 103,

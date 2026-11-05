@@ -87,9 +87,9 @@ const carryoverInput = (extra = {}) => ({
 });
 
 test('v93 migration is additive; malformed contracts fail closed and graph/spine/CSV vocabulary is declared', () => {
-  assert.equal(SCHEMA_VERSION, 103);
+  assert.equal(SCHEMA_VERSION, 104);
   const migrated = migrate({ schemaVersion: 92, settings: { leaderName: 'Keep' }, catchballPacts: [{ id: 'existing' }] });
-  assert.deepEqual(migrated.applied, ['92 → 93', '93 → 94', '94 → 95', '95 → 96', '96 → 97', '97 → 98', '98 → 99', '99 → 100', '100 → 101', '101 → 102', '102 → 103']);
+  assert.deepEqual(migrated.applied, ['92 → 93', '93 → 94', '94 → 95', '95 → 96', '96 → 97', '97 → 98', '98 → 99', '99 → 100', '100 → 101', '101 → 102', '102 → 103', '103 → 104']);
   assert.equal(migrated.raw.settings.leaderName, 'Keep');
   assert.equal(migrated.raw.catchballPacts[0].id, 'existing');
   assert.deepEqual(migrated.raw.valueStreamContracts, []);

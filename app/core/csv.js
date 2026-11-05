@@ -60,6 +60,7 @@ import { buildClearingReport, clearingCsvRows } from './domain/clearing.js';
 import { buildFreezeLineReport, freezeLineCsvRows } from './domain/freezeLine.js';
 import { buildSpanCalibrationReport, spanCalibrationCsvRows } from './domain/spanCalibration.js';
 import { buildReputationReport, reputationCsvRows } from './domain/reputationalCapital.js';
+import { buildHindsightReport, hindsightCsvRows } from './domain/hindsight.js';
 import { buildCadenceReport, cadenceCsvRows } from './domain/cadence.js';
 import { carryoverCsvRows } from './domain/carryover.js';
 import { valueStreamCsvRows } from './domain/valueStream.js';
@@ -1017,6 +1018,13 @@ export const CSV_EXPORTS = [
   // one row per act class, one per class × verdict band and one per engagement
   // tier plus the direction row. NO person id, act id, source id or note.
   { key: 'reputation', label: 'Reputational capital (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'reputation', description: 'One row per act class (weighted kept and breached counts, pooled kept share with its Wilson interval, declared hazard anchor, span count, verdict band counts), one row per class × verdict band and one per engagement tier, plus a direction row. NO person, act id, source id or note. A cell below the publishing floor and a refused rate are BLANK rather than zero.' },
+  // CSV scope #98 (Schema v104, ADR-0102). Aggregate-only process audit: one
+  // summary row, one row per altitude × quadrant cell (suppressed cells BLANK),
+  // one row per quadrant, the resulting share with its Wilson interval, the
+  // exact association test, and one row per declared process requirement. NO
+  // decision title, decision id, lock id, person, span id, fact id or date of
+  // any individual fact.
+  { key: 'hindsight', label: 'Decision process audit (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'hindsight', description: 'One summary row (locks, open, decided-and-ungraded, graded, overdue, retrospective), one row per altitude × quadrant cell, one row per quadrant, the resulting share (the share of good outcomes that came out of a thin process) with its Wilson interval, the exact two-sided association test with its refusal, and one row per declared decision requirement. NO decision title, NO decision id, NO lock id, NO person, NO span id, NO fact id and NO date of any individual fact. A refused rate and a suppressed cell are BLANK rather than zero.' },
   { key: 'differencing-register', label: 'Publication register (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'differencing-register', description: 'One row per published module plus one workspace row: release counts, provably-safe / protected / determined counts, withheld-cell and equation counts, the last publication date and the two stationarity statistics. NO span label, NO span id, NO person, NO record title, NO amount, and NO recovered value \u2014 a determined value is disclosed as a coordinate on the screen, never exported as a figure. A refused rate is BLANK rather than zero.' },
   { key: 'strategy-renewal', label: 'Strategy renewal (active-seat aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'strategy-renewal', description: 'Active-seat altitude and workspace learning rows only: active, carryover and overdue commitments, effort, in-window delivery reference with interval, evidence count and verdict. No pact IDs, bet IDs, titles, cohort identifiers, names or notes; refused and suppressed figures are BLANK rather than zero.' },
   // CSV scope #83 (Schema v94, ADR-0089). Aggregate-only operating-model
@@ -6024,6 +6032,19 @@ function buildScopeTable(state, scope, now) {
         'committed_capacity_days', 'overdue_n', 'mix_imbalanced_n', 'pivotal_n', 'pivotal_cleared_n',
         'hurdle_hold_pct', 'interval_low_pct', 'interval_high_pct', 'mean_brier', 'brier_skill_pct',
         'refused', 'reason'].map((key) => ({ key, header: key }));
+      return { columns, rows };
+    }
+    case 'hindsight': {
+      // CSV scope #98 (Schema v104, ADR-0102). Aggregate-only and refusal-honest:
+      // a refused rate and a suppressed cell export BLANK, never zero, and no
+      // decision, lock, person or fact id is emitted.
+      const report = buildHindsightReport(state, { now, settings: state.settings || {} });
+      const rows = hindsightCsvRows(report);
+      const columns = ['row_kind', 'scope', 'locks_n', 'open_n', 'ungraded_n', 'graded_n', 'overdue_n',
+        'retrospective_n', 'measured_n', 'earned_n', 'resulted_n', 'variance_n', 'fixable_n', 'unmeasured_n',
+        'thin_n', 'thick_n', 'share_pct', 'interval_low_pct', 'interval_high_pct', 'p_value',
+        'expected_resulted_n', 'met_n', 'missing_n', 'suppressed']
+        .map((key) => ({ key, header: key }));
       return { columns, rows };
     }
     case 'reputation': {

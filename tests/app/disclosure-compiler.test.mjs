@@ -91,6 +91,10 @@ const RENDERER_ROUTES = [
   'span-calibration',
   // ADR-0101: the Reputational Capital Ledger has its own manifest row.
   'reputation',
+  // ADR-0102: the Hindsight Lock owns a scoped report adapter (raw locks carry
+  // fact ids, so they never enter a declared-seat projection), and declares a
+  // manifest row like every other terminal.
+  'hindsight',
 ];
 
 /** Sentinel-bearing roster: every person, span and private note is traceable. */
@@ -187,7 +191,7 @@ function seatsOrThrow(state) {
 /* --------------------------------------------------------------- 1. schema */
 
 test('schema v90 migrates additively and refuses malformed or stale grants', () => {
-  assert.equal(SCHEMA_VERSION, 103);
+  assert.equal(SCHEMA_VERSION, 104);
   const old = { schemaVersion: 89, settings: { leaderName: 'Keep' }, cases: [{ id: 'keep' }], disclosureGrants: [{ id: 'existing' }] };
   const migrated = migrate(old);
   assert.equal(migrated.raw.schemaVersion, SCHEMA_VERSION);
@@ -441,7 +445,15 @@ test('a release request crosses modules in one transaction and only the span lea
   assert.match(decision.question, /consent belongs to the span/i);
   const consentTask = store.state.delegations.find((d) => d.personId === 'mgr1');
   assert.ok(consentTask, 'the consent task is addressed to the span leader, not the requester');
-  const relations = store.state.links.filter((l) => l.sourceType === 'disclosuregrant' || l.targetType === 'disclosuregrant').map((l) => l.relation).sort();
+  // ADR-0102 (Session 142) note: the consent decision RULE-DSC-01 opens is itself
+  // a decision, so RULE-HND-01 freezes its information set and writes a
+  // `consults` provenance edge from the new hindsightlock node to this grant.
+  // That is the audit pointing at the record, not a change to the grant's own
+  // provenance — which is what this assertion is about.
+  const relations = store.state.links
+    .filter((l) => l.sourceType === 'disclosuregrant' || l.targetType === 'disclosuregrant')
+    .filter((l) => !String(l.ruleId || '').startsWith('RULE-HND'))
+    .map((l) => l.relation).sort();
   assert.deepEqual(relations, ['authorizes', 'discloses-to', 'tracks-followup']);
 
   // The requester cannot consent to their own request.

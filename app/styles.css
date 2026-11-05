@@ -3147,3 +3147,10 @@ tr.is-focused td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
   .strategy-cycle-view .form-actions { width: 100%; }
   .strategy-cycle-view .form-actions .btn { flex: 1 1 auto; }
 }
+
+/* ADR-0102: the Hindsight Lock. The conventions editor is a labelled grid; every
+   control keeps a visible label and hint so the panel stays axe-clean at any
+   width. */
+.field-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+.field-grid .field-hint { font-size: 12px; color: var(--muted); line-height: 1.35; }
+.field-grid .input { width: 100%; }

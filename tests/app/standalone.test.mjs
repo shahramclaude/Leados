@@ -182,7 +182,13 @@ test('standalone artifact exists and is a single inline HTML document', () => {
   // bytes per module, DOWN again from Session 134's 17,160. The density bound
   // (24,000) is unchanged and still catches a module inlined twice; this ceiling
   // only tracks module count.
-  assert.ok(bytes < 8_400_000, `standalone file is unexpectedly large (${bytes} bytes)`);
+  // Session 142 (ADR-0102) added six modules (hindsightRegistry, hindsightSchema,
+  // hindsight, hindsightRules, hindsightActions, views/hindsight) plus the
+  // shell/CSV/graph/permission wiring. Measured build: 8,517,555 bytes / 504
+  // modules = 16,900 bytes per module, DOWN again from Session 135's 17,102.
+  // The ceiling only tracks module count; the density bound below is what
+  // catches a module being inlined twice.
+  assert.ok(bytes < 8_700_000, `standalone file is unexpectedly large (${bytes} bytes)`);
   const declaredModules = Number((html.match(/content="[^"]*?(\d+) source modules/) || [])[1]);
   assert.ok(declaredModules > 100, `expected the build to declare its module count (got ${declaredModules})`);
   const bytesPerModule = Math.round(bytes / declaredModules);

@@ -68,7 +68,9 @@ import { renderEnvoy } from './views/envoy.js';
 import { renderFederation } from './views/federation.js';
 import { renderFreezeLine } from './views/freezeLine.js';
 import { renderReputation } from './views/reputation.js';
+import { renderHindsight } from './views/hindsight.js';
 import { reputationAttentionCount } from './core/domain/reputationalCapital.js';
+import { hindsightAttentionCount } from './core/domain/hindsight.js';
 import { renderSpanCalibration } from './views/spanCalibration.js';
 import { envoyAttentionCount } from './core/domain/envoy.js';
 import { federationAttentionCount } from './core/domain/federation.js';
@@ -287,6 +289,11 @@ export const NAV = [
     // ADR-0101: what it costs to be believed. Priced from acts other modules
     // already dated; refused where the record cannot support a number.
     { route: 'reputation', label: 'Reputational capital', icon: '⟠', badge: 'reputation' },
+    // ADR-0102: what you knew when you decided. The information set is frozen at
+    // the moment of the call, so the workspace can separate a win it earned from
+    // a win it got away with — and can never grade a decision on a fact that
+    // arrived afterwards.
+    { route: 'hindsight', label: 'Hindsight lock', icon: '⧖', badge: 'hindsight' },
     // ADR-0092: publication integrity — what the aggregates this span publishes
     // actually disclose once a reader subtracts them.
     { route: 'differencing', label: 'Differencing', icon: '⊖', badge: 'differencing' },
@@ -465,6 +472,7 @@ const RENDERERS = {
   federation: (ctx) => renderFederation(ctx),
   'freeze-line': (ctx) => renderFreezeLine(ctx),
   reputation: (ctx) => renderReputation(ctx),
+  hindsight: (ctx) => renderHindsight(ctx),
   'span-calibration': (ctx) => renderSpanCalibration(ctx),
   differencing: (ctx) => renderDifferencing(ctx),
   prospective: (ctx) => renderProspective(ctx),
@@ -710,6 +718,10 @@ export function parseRoute(hash) {
     'discretion': 'span-calibration', 'time-span': 'span-calibration', 'ladder-calibration': 'span-calibration',
     'discretion-calibrator': 'span-calibration', 'span-calibrator': 'span-calibration',
     // ADR-0101
+    // ADR-0102: the Hindsight Lock.
+    'hindsight': 'hindsight', 'decision-audit': 'hindsight', 'process-audit': 'hindsight',
+    'decision-lock': 'hindsight', 'lock': 'hindsight', 'resulting': 'hindsight',
+    'information-set': 'hindsight', 'luck': 'hindsight', 'were-we-right': 'hindsight', 'hindsight-lock': 'hindsight',
     'reputation': 'reputation', 'reputational-capital': 'reputation', 'trust': 'reputation',
     'guarantee': 'reputation', 'guarantees': 'reputation', 'repair': 'reputation',
     'collateral': 'reputation', 'credibility-capital': 'reputation',
@@ -1079,6 +1091,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       // ADR-0100: falsified rungs plus due-but-ungraded readings.
       'span-calibration': spanCalibrationAttentionCount(state, { now: at, settings: state.settings }),
       reputation: reputationAttentionCount(state, { now: at, settings: state.settings }),
+      hindsight: hindsightAttentionCount(state, { now: at, settings: state.settings }),
       // ADR-0092: a module that publishes a determined surface, plus open findings.
       differencing: differencesAttentionCount(state, { now: at, settings: state.settings }),
       // ADR-0094: due or overdue frozen contracts plus open governed findings.
@@ -1584,6 +1597,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       envoy: 'Sealed exchange — how a span’s pack leaves its own browser: projected at the receiving altitude’s disclosure class, committed with a per-item SHA-256 and a Merkle root, signed keyed when the vault is unlocked, verified by the receiver before a single field is stored, ingested idempotently, and turned into a governed reconciliation decision when two workspaces disagree',
       federation: 'Programme federation — which declared leadership edges actually carry work, measured from dated artefacts other modules already wrote: connected, bypassed, stale or silent, with a Wilson-bounded coverage rate that is withheld below the span floor and small cells suppressed',
       'freeze-line': 'Freeze-line continuity — every committed or reverted structural design is a dated boundary in the reporting tree; this screen measures dated carriage on BOTH sides of each line (the same artefacts federation counts), classifies every edge held / lost / gained / still-silent aggregated by altitude with Wilson intervals and complementary suppression, refuses a verdict below the declared edge floor, states whether pre-freeze readings are still comparable, and runs a timing guard so a suppressed row never discloses when it was withheld; a degraded line opens one governed decision per ISO week at the span that can author the change, with roll-up edges to every leadership ancestor in the same atomic transaction',
+      hindsight: 'The Hindsight Lock — what you knew when you decided. Every decision gets ONE frozen information set, written once in the same transaction that records the call: the records the shared typed-link spine had already tied to it on or before the decision date (each link carries its own createdOn, so even a retrospective freeze reconstructs the same set exactly), plus the decision record’s own five-requirement quality bar as it stood then. Later the module partitions every fact the decision is now understood to rest on by DATE ALONE into known / knowable-but-unconsulted / arrived-later — unioned with undated, which is excluded and printed — and prints coverage as a Wilson (1927) score interval, REFUSED below the declared fact floor. Each graded decision lands in one of four quadrants (earned / resulted / variance / fixable) read from the FROZEN process claim and the live information set, or in an explicit unmeasured state; at workspace scale it prints the resulting share (good outcomes that came out of a thin process) with its interval and tests process × outcome with Fisher’s exact test, two-sided, by exact hypergeometric enumeration, refused below the declared settled floor — association, never causation. RULE-HND-01..04 on the SHARED post-commit spine freeze the set and register it as a graph node (locks / up to twenty consults / one rolls-up-to per leadership ancestor in the SAME atomic transaction), open exactly ONE process review, ever, for a successful mistake, one decision when knowable facts were left unconsulted, and one bounded prompt per lock per ISO week for a decision past its grace that was never graded. No survivor is rated, no decision edited, no lock rewritten, no relevance inferred and no fact charged to a decision it postdated. CSV #98 aggregate-only, refusal-honest (BLANK never zero, no ids). Benchmark: decision-intelligence suites store decisions and outcomes, people-analytics suites expose as-of reporting for the ROSTER, and decision-quality training sells the 2×2 on a whiteboard; no surveyed product freezes a decision’s information set at the moment of the call, prints what was knowable and unconsulted, or separates luck from skill on the organisation’s own dated record. Gap claim from public snippets, not a market-first claim. Honest limits: relevance is exactly what the typed-link spine says, so an unlinked fact is never charged; the association test is not causal; local seats remain workflow declarations, not authentication; real-browser AT walkthrough [UNVERIFIED].',
       'span-calibration': 'Discretion calibration — the leadership ladder (7/30/90/180/365 days) is a declaration; this screen measures it against the workspace’s own decision history: Kaplan–Meier survival per altitude with right-censoring for work still open, Greenwood variance and a log–log band, the survival estimate at each declared span tested against the declared coverage promise, a test-inverted interval for the span the record implies, refusals below the decided floor / censoring ceiling / interval-width ceiling / follow-up limit, weighted PAVA pooling where measured rungs cross, an exact partition of every open item that would change rung on the measured ladder, and a dated append-only human adoption that re-prices every escalation clock — the engine never moves a horizon, never reads an individual-sensitive source, and never names a person',
       prospective: 'Prospective contracts — a probability, threshold, horizon and exact cohort of record ids are frozen BEFORE the governed work exists; one governed DACI decision, one owned outcome task and one roll-up edge per leadership ancestor are written in the same atomic transaction; the cohort is graded once out of sample with a Brier proper score against a strictly-prior base rate, an unobservable cohort is refused rather than scored as a miss, and pooled rates are withheld below the declared cell floor and below director rank',
       'robust-allocation': 'Robust allocation — a multi-action, capacity-constrained integer allocation is solved EXACTLY under Bertsimas–Sim budgeted uncertainty over declared effect ranges, printing the Wald maximin and Savage minimax-regret plans, the price of the equity floor, the single range whose stress flips the recommendation and the regret its resolution releases; adopting it writes one governed DACI decision, one owned delivery task per funded line and one roll-up edge per leadership ancestor in the same atomic transaction, and a linked pre-registered contract that misses its threshold opens a governed re-allocation decision; an over-cap or infeasible plan is refused rather than approximated, money is never pooled across currencies, and the pooled falsified share is withheld below the declared cell floor and below director rank',

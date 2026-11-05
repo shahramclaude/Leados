@@ -148,6 +148,12 @@ export const MODULE_MANIFESTS = Object.freeze({
   // peer's reputational record by widening a filter. Per-span rows below the
   // publishing floor are blanked with a complementary cell, and the export carries
   // no person, act or source id.
+  // ADR-0102: the Hindsight Lock owns a scoped report adapter. Raw locks carry
+  // record IDS of the facts a decision rested on, so they never enter a declared
+  // seat projection; the terminal itself applies hierarchy scope, a fact floor
+  // below which coverage is REFUSED, a settled floor below which no resulting
+  // share or p-value is printed, and complementary suppression on the roll-up.
+  hindsight: row('hindsight', 'Decision process audit', ['decisionLocks', 'decisionLockMarkers'], { mode: A, classKey: 'unit', adapterScoped: true, detailCeiling: 5, dates: ['decisionOn', 'frozenOn'], statuses: ['status'], note: 'The hindsight adapter freezes, per decision, the records the link spine had already tied to it on or before the decision date, and publishes counts (known, knowable-and-unconsulted, arrived-later, undated), a Wilson-bounded coverage rate refused below the declared fact floor, the four quadrants plus an explicit unmeasured state, the resulting share and an exact association test refused below the settled floor. It never projects a decision title, a decision or lock id, a person, a span id or the content of any fact, and a suppressed cell is BLANK rather than zero.' }),
   reputation: row('reputation', 'Reputational capital', ['reputationActs', 'reputationPositions'], { mode: A, classKey: 'individual', adapterScoped: true, detailCeiling: 5, dates: ['openedOn', 'dueOn', 'on'], statuses: ['status'], note: 'The reputation adapter prices what an act will cost to guarantee from the dated records the active seat can read. It publishes act-class cells, Wilson intervals, obstacle prices and verdicts only; per-span cells below the publishing floor are blank with a complementary cell, a refused cell prints its reason and never a zero, and no person name, act id, source id or note is ever projected.' }),
   // ADR-0092: the Differencing Defender. Adaptive: the report adapter recomputes
   // the active seat's own register scope, refuses a coverage rate below the
