@@ -90,6 +90,10 @@ export function createRobustAllocationActions(store, { now, idFactory }) {
           .find((c) => c && c.id === linkedContractId);
         if (!contract) return fail('The linked prospective contract does not exist.', 'linkedContractId');
       }
+      if (valid.declaration.supersedesId) {
+        const parent = ownPlan(valid.declaration.supersedesId, right.seat);
+        if (!parent.ok) return fail(parent.error, 'supersedesId');
+      }
       const plan = {
         id: idFactory('ral'),
         title: valid.declaration.title,
@@ -106,13 +110,17 @@ export function createRobustAllocationActions(store, { now, idFactory }) {
         segments: valid.declaration.segments,
         actions: valid.declaration.actions,
         linkedContractId,
+        supersedesId: valid.declaration.supersedesId || null,
         status: 'draft',
         adoptedOn: null,
         frozen: null,
         engineVersion: ROBUST_ALLOCATION_ENGINE_VERSION,
         createdAt: nowValue.toISOString(),
       };
-      const feasibility = solveRobustPlan(plan, { maxCombinations: conventions.robustAllocationMaxCombinations });
+      const feasibility = solveRobustPlan(plan, {
+        maxCombinations: conventions.robustAllocationMaxCombinations,
+        nodeBudget: conventions.robustAllocationNodeBudget,
+      });
       if (!feasibility.ok) return fail(feasibility.reason, 'actions');
       if ((Array.isArray(store.state.robustPlans) ? store.state.robustPlans : []).length >= ROBUST_ALLOCATION_LIMITS.plans) {
         return fail(`The plan ledger is full at ${ROBUST_ALLOCATION_LIMITS.plans} plans. Export the current brief before declaring another.`);
@@ -138,7 +146,10 @@ export function createRobustAllocationActions(store, { now, idFactory }) {
       const plan = found.plan;
       if (plan.status === 'adopted') return saved({ id: plan.id, existing: true, report: report(plan.id) });
       const conventions = robustAllocationConventions(store.state.settings || {});
-      const solution = solveRobustPlan(plan, { maxCombinations: conventions.robustAllocationMaxCombinations });
+      const solution = solveRobustPlan(plan, {
+        maxCombinations: conventions.robustAllocationMaxCombinations,
+        nodeBudget: conventions.robustAllocationNodeBudget,
+      });
       if (!solution.ok) return fail(solution.reason, 'actions');
       const frozen = {
         robustUnits: solution.robustUnits,
@@ -155,6 +166,7 @@ export function createRobustAllocationActions(store, { now, idFactory }) {
         stressSwitches: solution.stressSwitches,
         topExposureAction: solution.topExposureAction,
         regretRelease: solution.regretRelease,
+        certificate: solution.certificate || null,
       };
       const today = dayKey(clock());
       store.update((draft) => {
@@ -188,7 +200,7 @@ export function createRobustAllocationActions(store, { now, idFactory }) {
     },
 
     /** Director+ only: these conventions bound what every altitude below reads. */
-    robustAllocationSetConventions({ cellFloor = null, reviewDays = null, maxCombinations = null } = {}) {
+    robustAllocationSetConventions({ cellFloor = null, reviewDays = null, maxCombinations = null, nodeBudget = null } = {}) {
       const right = seatRight();
       if (!right.ok) return fail(right.error);
       if (right.seat.rank < 3) return fail('The allocation conventions are set at director rank and above; they bound what every altitude reads.');
@@ -196,6 +208,7 @@ export function createRobustAllocationActions(store, { now, idFactory }) {
         ...(cellFloor === null ? {} : { robustAllocationCellFloor: cellFloor }),
         ...(reviewDays === null ? {} : { robustAllocationReviewDays: reviewDays }),
         ...(maxCombinations === null ? {} : { robustAllocationMaxCombinations: maxCombinations }),
+        ...(nodeBudget === null ? {} : { robustAllocationNodeBudget: nodeBudget }),
       };
       const next = robustAllocationConventions({ ...store.state.settings, ...patch });
       const current = robustAllocationConventions(store.state.settings || {});
@@ -208,7 +221,7 @@ export function createRobustAllocationActions(store, { now, idFactory }) {
         type: ROBUST_ALLOCATION_EVENTS.CONVENTIONS,
         entity: 'settings',
         entityId: 'robustAllocation',
-        summary: `Robust allocation conventions set: cell floor ${next.robustAllocationCellFloor}, review ${next.robustAllocationReviewDays}d, solver bound ${next.robustAllocationMaxCombinations}`,
+        summary: `Robust allocation conventions set: cell floor ${next.robustAllocationCellFloor}, review ${next.robustAllocationReviewDays}d, enumeration bound ${next.robustAllocationMaxCombinations}, node budget ${next.robustAllocationNodeBudget}`,
       });
       return saved({ conventions: next, report: report() });
     },

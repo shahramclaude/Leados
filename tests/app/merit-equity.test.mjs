@@ -178,7 +178,7 @@ function seedCycle(api, fixtureValue = fixture(), overrides = {}) {
 /* ------------------------------------------------------------- migration */
 
 test('v50 → v51 is additive: no band, no cycle and no pay figure is invented', () => {
-  assert.equal(SCHEMA_VERSION, 98);
+  assert.equal(SCHEMA_VERSION, 99);
   const v50 = {
     schemaVersion: 50,
     settings: { teamName: 'Existing team' },
@@ -187,9 +187,9 @@ test('v50 → v51 is additive: no band, no cycle and no pay figure is invented',
     compBands: undefined,
   };
   const migrated = migrate(v50);
-  assert.equal(migrated.raw.schemaVersion, 98);
-  assert.equal(migrated.applied.at(-1), '97 → 98');
-  assert.equal(migrated.raw.schemaVersion, 98);
+  assert.equal(migrated.raw.schemaVersion, 99);
+  assert.equal(migrated.applied.at(-1), '98 → 99');
+  assert.equal(migrated.raw.schemaVersion, 99);
   assert.deepEqual(migrated.raw.compBands, []);
   assert.deepEqual(migrated.raw.meritCycles, []);
   const { state, warnings } = normalizeState(migrated.raw, { now: NOW });

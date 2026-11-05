@@ -5,7 +5,7 @@ import path from 'node:path';
 import { JSDOM, VirtualConsole } from 'jsdom';
 
 import { CSV_EXPORTS, escapeCsvCell, serializeCsv, parseCsv, exportWorkspaceCsv } from '../../app/core/csv.js';
-import { createEmptyState } from '../../app/core/schema.js';
+import { createEmptyState, SCHEMA_VERSION } from '../../app/core/schema.js';
 import { createStore, STORAGE_KEY } from '../../app/core/store.js';
 import { buildDemoState } from '../../app/core/demo.js';
 
@@ -285,7 +285,7 @@ test('store.exportCSV works when storage quota is full and refuses when a future
 
   // Future schema protection
   quotaBlocked = false;
-  storage.setItem(STORAGE_KEY, JSON.stringify({ schemaVersion: 99, people: [{ id: 'future', name: 'Future' }] }));
+  storage.setItem(STORAGE_KEY, JSON.stringify({ schemaVersion: SCHEMA_VERSION + 1, people: [{ id: 'future', name: 'Future' }] }));
   const futureStore = createStore({ storage, now: () => NOW });
   futureStore.load();
   assert.ok(futureStore.writeBlockReason);

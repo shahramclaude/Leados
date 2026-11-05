@@ -17,6 +17,7 @@ import { downloadText } from '../ui/download.js';
 import { pageHeader, card, stat, badge, banner, tabs, emptyState, table } from '../ui/components.js';
 import { serializeCsv } from '../core/csv.js';
 import { dayKey } from '../core/time.js';
+import { publicationPanel } from './publicationPanel.js';
 import { PROSPECTIVE_ALTITUDE_HORIZONS } from '../core/domain/prospectiveRegistry.js';
 
 const PANELS = [
@@ -380,6 +381,7 @@ function certificatePanel(ctx, report) {
       ),
     }),
     card({ title: 'Boundary statement', body: h('p', { class: 'muted' }, report.disclosure.premise) }),
+    publicationPanel(ctx, 'prospective'),
   );
 }
 

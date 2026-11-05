@@ -14,6 +14,8 @@
 import { addDays, dayKey, weekKey } from '../time.js';
 import { buildSeats, activeSeat } from './seat.js';
 import { robustAllocationConventions } from './robustAllocationSchema.js';
+import { bnbSolveRobustPlan } from './robustBranchBound.js';
+import { PROSPECTIVE_INSTRUMENT_BY_KEY } from './prospectiveRegistry.js';
 import {
   ROBUST_ALLOCATION_DISCLOSURE,
   ROBUST_ALLOCATION_ENGINE_VERSION,
@@ -216,13 +218,32 @@ function solveCore(feasible, hi, dev, gamma, scenarios) {
 }
 
 /**
- * Solve one plan exactly. Returns a refusal (ok:false) for an over-cap grid or
- * an infeasible constraint set — never an approximation or a silent zero.
+ * Solve one plan exactly. Returns a refusal (ok:false) for an over-cap grid,
+ * an exhausted node budget or an infeasible constraint set — never an
+ * approximation or a silent zero. ADR-0097: a grid above the enumeration bound
+ * is handed to the certified branch-and-bound (same printed values, provenance
+ * certificate attached) instead of being refused outright.
  */
-export function solveRobustPlan(plan, { maxCombinations = ROBUST_ALLOCATION_LIMITS.combinationsMax } = {}) {
+export function solveRobustPlan(plan, {
+  maxCombinations = ROBUST_ALLOCATION_LIMITS.combinationsMax,
+  nodeBudget = ROBUST_ALLOCATION_LIMITS.nodeBudgetDefault,
+} = {}) {
   const actions = plan.actions;
   const n = actions.length;
   const gamma = plan.gamma;
+  // The enumeration gate is the GRID size; past it, the certified
+  // branch-and-bound takes over with its own structural bounds.
+  let grid = 1;
+  for (const a of actions) {
+    grid *= (a.maxUnits + 1);
+    if (grid > maxCombinations) {
+      return bnbSolveRobustPlan(plan, {
+        maxNodes: nodeBudget,
+        scenariosMax: ROBUST_ALLOCATION_LIMITS.scenariosMax,
+        unitsSumMax: ROBUST_ALLOCATION_LIMITS.unitsSumMax,
+      });
+    }
+  }
   const enumRes = enumerateFeasible(plan, { maxCombinations });
   if (!enumRes.ok) return enumRes;
   const feasible = enumRes.allocations;
@@ -301,6 +322,13 @@ export function solveRobustPlan(plan, { maxCombinations = ROBUST_ALLOCATION_LIMI
     topExposureAction: topIdx >= 0 ? actions[topIdx].key : null,
     regretRelease,
     exposure,
+    certificate: {
+      engine: 'enumeration',
+      nodes: feasible.length,
+      pruned: 0,
+      budget: maxCombinations,
+      certified: true,
+    },
   };
 }
 
@@ -347,6 +375,123 @@ export function planState(state, plan, { today, reviewDays }) {
   return 'adopted';
 }
 
+/** Is `maybeAncestor` the same node as `descendant` or one of its chain parents? */
+export function isSameOrAncestor(built, maybeAncestor, descendant) {
+  if (!maybeAncestor || !descendant) return false;
+  if (maybeAncestor === descendant) return true;
+  let cursor = built?.chain?.nodes?.get(descendant)?.parentId || null;
+  let guard = 0;
+  while (cursor && guard < 64) {
+    if (cursor === maybeAncestor) return true;
+    cursor = built?.chain?.nodes?.get(cursor)?.parentId || null;
+    guard += 1;
+  }
+  return false;
+}
+
+/** Does a plan scoped at `scopeSeatId` cover a cell graded beneath it? Peer spans never qualify. */
+export function planCoversCell(built, plan, cell) {
+  for (const cellSeatId of cell.scopeSeatIds || []) {
+    if (isSameOrAncestor(built, plan.scopeSeatId, cellSeatId)) return true;
+  }
+  return false;
+}
+
+/**
+ * ADR-0097 — Evidence-calibrated ranges. Settled prospective grades are
+ * clustered by (altitude × instrument) cell and read back against the plans
+ * whose actions declare the same instrument as their premise evidence. The
+ * module NEVER adjusts a declared range: it publishes the graded record per
+ * cell (count, reach rate, Wilson 95% interval) and flags TENSION when the
+ * graded record contradicts the premises a scoped plan rests on; moving the
+ * number is a human act (a new declared revision).
+ * Cells below the declared floor are refused, small cells are complementarily
+ * suppressed, and pooled rates are withheld below director rank — the same
+ * disclosure ladder as the allocation roll-up.
+ */
+export function buildCalibrationCells(source, { seat, conventions, plans, built: builtSeats = null }) {
+  const grades = (Array.isArray(source.prospectiveGrades) ? source.prospectiveGrades : []).filter(Boolean);
+  const contracts = new Map((Array.isArray(source.prospectiveContracts) ? source.prospectiveContracts : []).filter(Boolean).map((c) => [c.id, c]));
+  const inScope = (contract) => {
+    if (!contract) return false;
+    if (seat.fullAccess) return true;
+    return contract.scopeSeatId === seat.id || (contract.scopeSeatId && seat.scope.has(contract.scopeSeatId));
+  };
+  const byKey = new Map();
+  for (const grade of grades) {
+    const contract = contracts.get(grade.contractId);
+    if (!contract || !inScope(contract) || !PROSPECTIVE_INSTRUMENT_BY_KEY[grade.instrumentKey]) continue;
+    const altitudeKey = contract.altitudeKey || 'unknown';
+    const key = `${altitudeKey}|${grade.instrumentKey}`;
+    if (!byKey.has(key)) byKey.set(key, { altitudeKey, instrumentKey: grade.instrumentKey, gradedN: 0, reachedN: 0, falsifiedN: 0, scopeSeatIds: new Set() });
+    const cell = byKey.get(key);
+    cell.gradedN += 1;
+    if (grade.outcome === 1) cell.reachedN += 1;
+    if (grade.outcome === 0) cell.falsifiedN += 1;
+    if (contract.scopeSeatId) cell.scopeSeatIds.add(contract.scopeSeatId);
+  }
+  // How many scoped plans rest on each cell via a declared evidence instrument.
+  // Coverage is the plan's span over the cell's declared seat (evidence rolls
+  // up the subtree); without a chain the join degrades to altitude equality.
+  const planCounts = new Map();
+  for (const plan of plans || []) {
+    if (!plan) continue;
+    const keys = new Set((plan.actions || []).map((a) => a && a.evidenceInstrumentKey).filter(Boolean));
+    if (!keys.size) continue;
+    for (const [cellKey, cellRaw] of byKey) {
+      if (!keys.has(cellRaw.instrumentKey)) continue;
+      const covered = builtSeats
+        ? [...(cellRaw.scopeSeatIds || [])].some((id) => isSameOrAncestor(builtSeats, plan.scopeSeatId, id))
+        : (plan.altitudeKey || 'unknown') === cellRaw.altitudeKey;
+      if (covered) planCounts.set(cellKey, (planCounts.get(cellKey) || 0) + 1);
+    }
+  }
+  const floor = conventions.robustAllocationCellFloor;
+  const cells = [...byKey.values()].map((cell) => {
+    const key = `${cell.altitudeKey}|${cell.instrumentKey}`;
+    const wilson = wilsonInterval(cell.reachedN, cell.gradedN);
+    const refused = seat.rank < 3 || cell.gradedN < floor || wilson.refused;
+    const tension = !refused && cell.falsifiedN > cell.reachedN;
+    return {
+      key,
+      altitudeKey: cell.altitudeKey,
+      instrumentKey: cell.instrumentKey,
+      instrumentLabel: PROSPECTIVE_INSTRUMENT_BY_KEY[cell.instrumentKey]?.label || cell.instrumentKey,
+      gradedN: cell.gradedN,
+      reachedN: cell.reachedN,
+      falsifiedN: cell.falsifiedN,
+      scopeSeatIds: [...(cell.scopeSeatIds || [])],
+      plansN: planCounts.get(key) || 0,
+      reachedPct: refused ? null : wilson.pct,
+      lowPct: refused ? null : wilson.lowPct,
+      highPct: refused ? null : wilson.highPct,
+      refused,
+      suppressed: false,
+      tension,
+      reason: refused
+        ? (seat.rank < 3 ? 'Withheld below director rank; counts only.' : `Below the ${floor}-grade cell floor.`)
+        : '',
+    };
+  }).sort((a, b) => String(a.key).localeCompare(String(b.key)));
+  // Complementary suppression: a sub-floor cell blanks the smallest surviving
+  // sibling cell so its rate cannot be recovered against a total.
+  const small = cells.filter((c) => c.gradedN > 0 && c.gradedN < floor);
+  if (small.length) {
+    const survivor = cells.filter((c) => !(c.gradedN < floor) && !c.refused && !c.suppressed)
+      .sort((a, b) => a.gradedN - b.gradedN)[0];
+    if (survivor) {
+      survivor.suppressed = true;
+      survivor.refused = true;
+      survivor.tension = false;
+      survivor.reachedPct = null;
+      survivor.lowPct = null;
+      survivor.highPct = null;
+      survivor.reason = 'Complementary suppression: a sibling cell is below the floor, so this cell is blanked beside it.';
+    }
+  }
+  return cells;
+}
+
 /** The one read model. Every panel, the brief, the CSV and the badge read this. */
 export function buildRobustAllocationReport(state, { now = new Date(), settings = null, planId = null } = {}) {
   const source = state || {};
@@ -377,6 +522,8 @@ export function buildRobustAllocationReport(state, { now = new Date(), settings 
     robustWorstCase: plan.frozen ? plan.frozen.robustWorstCase : null,
   })).sort((a, b) => String(b.declaredOn).localeCompare(String(a.declaredOn)) || String(a.id).localeCompare(String(b.id)));
 
+  const calibrationCells = buildCalibrationCells(source, { seat, conventions, plans, built });
+
   // Solve only the selected plan (default: most recent). Drafts solve live;
   // adopted plans read their frozen vector so the governed work is never
   // re-derived from a changed assumption.
@@ -385,8 +532,11 @@ export function buildRobustAllocationReport(state, { now = new Date(), settings 
   let selectedDetail = null;
   if (selected) {
     solution = selected.status === 'adopted' && selected.frozen
-      ? { ok: true, ...selected.frozen, gamma: selected.gamma, frozen: true }
-      : solveRobustPlan(selected, { maxCombinations: conventions.robustAllocationMaxCombinations });
+      ? { ok: true, ...selected.frozen, gamma: selected.gamma, frozen: true, certificate: selected.frozen.certificate || null }
+      : solveRobustPlan(selected, {
+        maxCombinations: conventions.robustAllocationMaxCombinations,
+        nodeBudget: conventions.robustAllocationNodeBudget,
+      });
     selectedDetail = {
       id: selected.id,
       title: detailAllowed ? selected.title : '',
@@ -396,11 +546,37 @@ export function buildRobustAllocationReport(state, { now = new Date(), settings 
       hoursCap: selected.hoursCap,
       gamma: selected.gamma,
       segments: selected.segments,
-      actions: selected.actions,
+      actions: selected.actions.map((action) => {
+        if (!action.evidenceInstrumentKey) return action;
+        // The graded record read for a declared range: the NEAREST cell of the
+        // same instrument at same altitude or directly beneath the plan's
+        // span (evidence rolls up the subtree; a peer span never qualifies).
+        const candidates = calibrationCells
+          .filter((c) => !c.suppressed && c.instrumentKey === action.evidenceInstrumentKey && planCoversCell(built, selected, c));
+        const cell = candidates.length
+          ? candidates.sort((a, b) => b.gradedN - a.gradedN)[0]
+          : null;
+        const evidence = !cell
+          ? { instrumentKey: action.evidenceInstrumentKey, gradedN: 0, refused: false, reason: '', tension: false }
+          : {
+            instrumentKey: action.evidenceInstrumentKey,
+            instrumentLabel: cell.instrumentLabel,
+            evidenceAltitude: cell.altitudeKey,
+            gradedN: cell.gradedN,
+            reachedPct: cell.reachedPct,
+            lowPct: cell.lowPct,
+            highPct: cell.highPct,
+            refused: cell.refused,
+            reason: cell.reason,
+            tension: cell.tension,
+          };
+        return { ...action, evidence };
+      }),
       status: selected.status,
       state: planState(source, selected, { today, reviewDays: conventions.robustAllocationReviewDays }),
       linkedContractId: selected.linkedContractId,
       linkedGrade: gradeForContract(source, selected.linkedContractId),
+      supersedesId: selected.supersedesId || null,
     };
   }
 
@@ -456,8 +632,8 @@ export function buildRobustAllocationReport(state, { now = new Date(), settings 
   const coverageRefused = seat.rank < 3 || adoptedAll.length < conventions.robustAllocationCellFloor || coverage.refused;
 
   const openDecisions = (Array.isArray(source.decisions) ? source.decisions : [])
-    .filter((d) => d && d.outcome === 'pending' && /RULE-RAL-0[234]/.test(String(d.rationale || '')))
-    .map((d) => ({ id: d.id, title: d.title, reviewOn: d.reviewOn || null, ruleId: (String(d.rationale).match(/RULE-RAL-0[234]/) || [''])[0] }));
+    .filter((d) => d && d.outcome === 'pending' && /RULE-RAL-0[2-5]/.test(String(d.rationale || '')))
+    .map((d) => ({ id: d.id, title: d.title, reviewOn: d.reviewOn || null, ruleId: (String(d.rationale).match(/RULE-RAL-0[2-5]/) || [''])[0] }));
 
   const summary = {
     plans: plans.length,
@@ -489,6 +665,12 @@ export function buildRobustAllocationReport(state, { now = new Date(), settings 
     selectedDetail,
     solution,
     byAltitude,
+    calibration: {
+      cells: calibrationCells,
+      gradedN: calibrationCells.reduce((sum, c) => sum + c.gradedN, 0),
+      publishedN: calibrationCells.filter((c) => !c.refused && !c.suppressed).length,
+      tensionN: calibrationCells.filter((c) => c.tension).length,
+    },
     coverage: {
       ...coverage,
       refused: coverageRefused,
@@ -529,9 +711,19 @@ export function robustAllocationBriefText(report) {
       ? published.map((a) => `- ${a.altitudeKey}: ${a.adoptedN} adopted, ${a.fundedLinesN} funded lines, ${a.committedHours} hours, falsified ${a.falsifiedPct}% (95% ${a.lowPct}–${a.highPct}%).`).join('\n')
       : '- No altitude row reached the declared evidence floor.',
     '',
+    '## Evidence calibration (graded pre-registered bets by altitude × instrument cell)',
+    '',
+    ...(report.calibration && report.calibration.gradedN
+      ? [
+        `- ${report.calibration.gradedN} graded contract(s) in scope across ${report.calibration.cells.length} cell(s); ${report.calibration.tensionN} cell(s) in premise–evidence tension.`,
+        ...report.calibration.cells.filter((c) => !c.refused && !c.suppressed && c.plansN > 0)
+          .map((c) => `- ${c.altitudeKey} × ${c.instrumentLabel}: ${c.reachedN}/${c.gradedN} reached (${c.reachedPct}%, 95% ${c.lowPct}–${c.highPct}%), supporting ${c.plansN} plan(s)${c.tension ? ' — TENSION' : ''}.`),
+      ]
+      : ['- No graded prospective evidence is in scope yet.']),
+    '',
     '## Conventions and limits',
     '',
-    `- Cell floor ${conventions.robustAllocationCellFloor}; review window ${conventions.robustAllocationReviewDays} day(s); exact-solver bound ${conventions.robustAllocationMaxCombinations} combinations.`,
+    `- Cell floor ${conventions.robustAllocationCellFloor}; review window ${conventions.robustAllocationReviewDays} day(s); enumeration bound ${conventions.robustAllocationMaxCombinations} combinations; certified branch-and-bound node budget ${conventions.robustAllocationNodeBudget}.`,
     `- ${report.disclosure.premise}`,
     `- ${report.disclosure.uncertainty}`,
     `- ${report.disclosure.equity}`,
@@ -584,6 +776,6 @@ export function robustAllocationAttentionCount(state, { now = new Date(), settin
     if (today > addDays(plan.horizonOn, conventions.robustAllocationReviewDays)) attention += 1;
   }
   const findings = (Array.isArray(source.decisions) ? source.decisions : [])
-    .filter((d) => d && d.outcome === 'pending' && /RULE-RAL-0[234]/.test(String(d.rationale || ''))).length;
+    .filter((d) => d && d.outcome === 'pending' && /RULE-RAL-0[2-5]/.test(String(d.rationale || ''))).length;
   return Math.min(99, attention + findings);
 }

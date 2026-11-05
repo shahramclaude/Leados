@@ -86,13 +86,13 @@ function adoptedBundleWorkspace({ bundleReviewOn = null } = {}) {
 }
 
 test('Schema v74 → v75 migration is additive, empty, idempotent, and fail-closed on malformed imports', () => {
-  assert.equal(SCHEMA_VERSION, 98);
+  assert.equal(SCHEMA_VERSION, 99);
   const old = createEmptyState();
   old.schemaVersion = 74;
   delete old.settlements;
   const migrated = migrate(old);
-  assert.deepEqual(migrated.applied, ['74 → 75', '75 → 76', '76 → 77', '77 → 78', '78 → 79', '79 → 80', '80 → 81', '81 → 82', '82 → 83', '83 → 84', '84 → 85', '85 → 86', '86 → 87', '87 → 88', '88 → 89', '89 → 90', '90 → 91', '91 → 92', '92 → 93', '93 → 94', '94 → 95', '95 → 96', '96 → 97', '97 → 98']);
-  assert.deepEqual(migrated.applied, ['74 → 75', '75 → 76', '76 → 77', '77 → 78', '78 → 79', '79 → 80', '80 → 81', '81 → 82', '82 → 83', '83 → 84', '84 → 85', '85 → 86', '86 → 87', '87 → 88', '88 → 89', '89 → 90', '90 → 91', '91 → 92', '92 → 93', '93 → 94', '94 → 95', '95 → 96', '96 → 97', '97 → 98']);
+  assert.deepEqual(migrated.applied, ['74 → 75', '75 → 76', '76 → 77', '77 → 78', '78 → 79', '79 → 80', '80 → 81', '81 → 82', '82 → 83', '83 → 84', '84 → 85', '85 → 86', '86 → 87', '87 → 88', '88 → 89', '89 → 90', '90 → 91', '91 → 92', '92 → 93', '93 → 94', '94 → 95', '95 → 96', '96 → 97', '97 → 98', '98 → 99']);
+  assert.deepEqual(migrated.applied, ['74 → 75', '75 → 76', '76 → 77', '77 → 78', '78 → 79', '79 → 80', '80 → 81', '81 → 82', '82 → 83', '83 → 84', '84 → 85', '85 → 86', '86 → 87', '87 → 88', '88 → 89', '89 → 90', '90 → 91', '91 → 92', '92 → 93', '93 → 94', '94 → 95', '95 → 96', '96 → 97', '97 → 98', '98 → 99']);
   assert.deepEqual(migrated.raw.settlements, []);
   assert.deepEqual(migrate(migrated.raw).applied, []);
 

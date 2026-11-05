@@ -140,10 +140,10 @@ function declaration(overrides = {}) {
 /* ------------------------------------------------------------------ schema */
 
 test('Schema v98 migrates additively: empty ledgers, declared conventions, nothing inferred', () => {
-  assert.equal(SCHEMA_VERSION, 98);
+  assert.equal(SCHEMA_VERSION, 99);
   const migrated = migrate({ schemaVersion: 96, settings: { leaderName: 'Keep this' }, cases: [{ id: 'x' }] });
-  assert.deepEqual(migrated.applied, ['96 → 97', '97 → 98']);
-  assert.equal(migrated.raw.schemaVersion, 98);
+  assert.deepEqual(migrated.applied, ['96 → 97', '97 → 98', '98 → 99']);
+  assert.equal(migrated.raw.schemaVersion, 99);
   assert.deepEqual(migrated.raw.robustPlans, []);
   assert.deepEqual(migrated.raw.robustMarkers, []);
   assert.equal(migrated.raw.settings.leaderName, 'Keep this');
@@ -258,16 +258,27 @@ test('sensitivity names a stress switch and value of information releases exact 
   for (const key of s.stressSwitches) assert.ok(plan.actions.some((a) => a.key === key));
 });
 
-test('an over-cap grid and an infeasible floor are REFUSED, never approximated', () => {
+test('an over-cap grid falls to the certified branch-and-bound; out-of-regime and infeasible plans are REFUSED, never approximated', () => {
   const big = {
     id: 'b', declaredOn: '2026-11-04', horizonOn: '2026-11-18',
     budgetCap: 100000, hoursCap: 100000, gamma: 3,
     segments: [{ key: 'a', label: 'A', size: 1000, floorCoverage: 0 }],
-    actions: Array.from({ length: 6 }, (_, i) => ({ key: `a${i}`, label: `A${i}`, segmentKey: 'a', unitCost: 1, unitHours: 1, unitCoverage: 1, effectLo: 1, effectHi: 5, maxUnits: 8 })),
+    actions: Array.from({ length: 5 }, (_, i) => ({ key: `a${i}`, label: `A${i}`, segmentKey: 'a', unitCost: 1, unitHours: 1, unitCoverage: 1, effectLo: 1, effectHi: 5, maxUnits: 8 })),
   };
+  // ADR-0097: a 9^5 = 59,049 grid no longer refuses — the certified
+  // branch-and-bound proves the same values the enumerator proves.
   const over = solveRobustPlan(big, { maxCombinations: 50000 });
-  assert.equal(over.ok, false);
-  assert.match(over.reason, /exceeds the exact-solver bound/);
+  assert.equal(over.ok, true);
+  assert.equal(over.certificate.engine, 'branch-and-bound');
+  assert.equal(over.certificate.certified, true);
+  assert.ok(over.certificate.nodes > 0 && over.certificate.nodes <= 250000);
+  const truth = solveRobustPlan(big, { maxCombinations: 10000000 });
+  for (const key of ['robustUnits', 'robustWorstCase', 'minimaxUnits', 'minimaxMaxRegret', 'optimisticUnits', 'optimisticWorstCase', 'priceOfFairness', 'regretRelease']) {
+    assert.deepEqual(over[key], truth[key], `branch-and-bound matches enumeration on ${key}`);
+  }
+  // An exhausted node budget refuses the whole solve, never approximates.
+  const starved = solveRobustPlan(big, { maxCombinations: 50000, nodeBudget: 25000 });
+  if (!starved.ok) assert.match(starved.reason, /node budget/);
   const infeasible = {
     id: 'i', declaredOn: '2026-11-04', horizonOn: '2026-11-18',
     budgetCap: 5, hoursCap: 100, gamma: 0,
@@ -279,6 +290,11 @@ test('an over-cap grid and an infeasible floor are REFUSED, never approximated',
   assert.match(inf.reason, /No feasible allocation/);
   // The enumerator itself respects the bound before doing any work.
   assert.equal(enumerateFeasible(big, { maxCombinations: 50000 }).ok, false);
+  // Beyond the certified regime (unit sum above 40 — reachable at 6×8), the refusal stands.
+  const huge = { ...big, actions: [...big.actions, { key: 'a6', label: 'A6', segmentKey: 'a', unitCost: 1, unitHours: 1, unitCoverage: 1, effectLo: 1, effectHi: 5, maxUnits: 8 }] };
+  const out = solveRobustPlan(huge, { maxCombinations: 100, nodeBudget: 2000000 });
+  assert.equal(out.ok, false);
+  assert.match(out.reason, /unit sum|scenario|refus/i);
 });
 
 test('Wilson interval and the hash helper are deterministic and refusal-honest', () => {
@@ -436,8 +452,8 @@ test('permissions: declared rights, rank windows, refuse-unknown and director+ c
   assert.equal(unresolved.api.robustAllocationDeclare(declaration()).ok, false);
 });
 
-test('the four rule ids, the graph vocabulary and the propagation contract are all declared', () => {
-  assert.deepEqual(Object.values(ROBUST_ALLOCATION_RULE_IDS), ['RULE-RAL-01', 'RULE-RAL-02', 'RULE-RAL-03', 'RULE-RAL-04']);
+test('the five rule ids, the graph vocabulary and the propagation contract are all declared', () => {
+  assert.deepEqual(Object.values(ROBUST_ALLOCATION_RULE_IDS), ['RULE-RAL-01', 'RULE-RAL-02', 'RULE-RAL-03', 'RULE-RAL-04', 'RULE-RAL-05']);
   assert.ok(LINK_ENTITY_TYPES.includes('robustplan'));
   assert.equal(LINK_ENTITY_COLLECTIONS.robustplan, 'robustPlans');
   // The types ↔ collections invariant the registry is audited against.
@@ -457,7 +473,7 @@ test('the four rule ids, the graph vocabulary and the propagation contract are a
 
 /* ---------------------------------------------------- disclosure / leak oracle */
 
-test('the brief, the CSV and all five renderer panels carry no name, title, plan id or amount', () => {
+test('the brief, the CSV and all six renderer panels carry no name, title, plan id or amount', () => {
   const dom = new JSDOM('<!doctype html><html><body><div id="modal-root"></div><div id="toast-root"></div></body></html>', { url: 'https://leados.test/' });
   globalThis.window = dom.window;
   globalThis.document = dom.window.document;
@@ -489,7 +505,7 @@ test('the brief, the CSV and all five renderer panels carry no name, title, plan
     const copy = clone(state);
     copy.settings.activeSeatId = seatId;
     const report = buildRobustAllocationReport(copy, { now: NOW, planId });
-    for (const panel of ['desk', 'plans', 'solve', 'rollup', 'certificate']) {
+    for (const panel of ['desk', 'plans', 'solve', 'calibration', 'rollup', 'certificate']) {
       const node = renderRobustAllocation({
         state: copy,
         now: NOW,
@@ -511,7 +527,7 @@ test('the brief, the CSV and all five renderer panels carry no name, title, plan
       const html = node.outerHTML;
       leaked(html, { allowTitle: report.detailAllowed });
       if (!report.detailAllowed) assert.ok(!html.includes(TITLE), `${panel} at ${seatId} never lifts a local title upward`);
-      assert.equal(node.querySelectorAll('[role="tab"]').length, 5, 'five keyboard-reachable panel tabs');
+      assert.equal(node.querySelectorAll('[role="tab"]').length, 6, 'six keyboard-reachable panel tabs');
       assert.ok(node.querySelector('h1') || node.querySelector('h2'), `${panel} has semantic headings`);
     }
   }
