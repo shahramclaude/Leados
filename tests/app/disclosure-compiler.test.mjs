@@ -73,7 +73,7 @@ const RENDERER_ROUTES = [
   'envoy', 'federation', 'strategy-cycle',
   // ADR-0092: the Differencing Defender is a renderer route with its own manifest
   // and its own scoped adapter, so the catalogue and the shell stay 1:1.
-  'differencing',
+  'differencing', 'decision-robustness',
 ];
 
 /** Sentinel-bearing roster: every person, span and private note is traceable. */

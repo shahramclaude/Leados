@@ -94,6 +94,7 @@ export const MODULE_MANIFESTS = Object.freeze({
   cases: row('cases', 'Operational cases', ['cases'], { mode: A, dates: ['openedOn'], dues: ['reviewOn'], severities: ['fmea.severity', 'severity'], statuses: ['status'] }),
   case: row('case', 'Case detail', ['cases'], { mode: A, parent: 'cases' }),
   decisions: row('decisions', 'Decisions', ['decisions'], { mode: A, dates: ['date'], dues: ['reviewOn'], statuses: ['outcome'], open: ['pending', 'open'] }),
+  'decision-robustness': row('decision-robustness', 'Decision robustness lab', [], { mode: A, classKey: 'authority', adapterScoped: true, detailCeiling: 5, note: 'Hypothetical inputs only; no pulse reads. The owner picker uses the projected roster and the ordinary case command enforces span rights.' }),
   health: row('health', 'Team health', ['pulses'], { mode: A, classKey: 'unit', dates: ['date'], note: 'Pulse aggregates keep their own anonymity floor; that floor is never lowered by this console.' }),
   capacity: row('capacity', 'Capacity', ['delegations', 'cases'], { mode: A, dates: ['delegatedOn', 'openedOn'], dues: ['dueOn', 'reviewOn'] }),
   load: row('load', 'Coupled load', WORK, { mode: A, dates: ['openedOn', 'delegatedOn', 'date'] }),

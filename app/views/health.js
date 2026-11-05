@@ -123,6 +123,7 @@ export function renderHealth(ctx) {
       title: 'Team health & pulse',
       subtitle: `Anonymous by default. Aggregates need ${state.settings.pulseMinResponses} responses before anything is shown.`,
       actions: [
+        h('a', { class: 'btn btn-ghost', href: '#/decision-robustness' }, 'Stress-test a decision'),
         h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => openSettingsDialog(ctx) }, 'Thresholds'),
         h('button', { class: 'btn btn-primary', type: 'button', onClick: () => openPulseDialog(ctx) }, 'Record a response'),
       ],
