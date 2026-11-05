@@ -133,6 +133,13 @@ export const MODULE_MANIFESTS = Object.freeze({
   // release floor, and never carries a withheld VALUE into the read model — a
   // screen that printed one would become the disclosure it warns about.
   differencing: row('differencing', 'Differencing defender', ['differenceReleases'], { mode: A, classKey: 'unit', adapterScoped: true, detailCeiling: 5, dates: ['releasedOn'], statuses: ['verdict'], note: 'The publication register is audited as one integer system across releases, seats and modules. A determined value is reported as a coordinate and a proof, never as the number; a declared seat reads its own publications only.' }),
+  // ADR-0094: the Prospective Intervention Contract. Adaptive, because the
+  // report adapter recomputes the active seat's own subtree, withholds pooled
+  // rates below the declared cell floor and below director rank, and publishes
+  // only counts, dates and state names. Raw contract rows carry a frozen cohort
+  // of RECORD IDS and a title, so `detailCeiling: 0` keeps them out of
+  // declared-seat view state entirely: the scoped report is the only reader.
+  prospective: row('prospective', 'Prospective contracts', ['prospectiveContracts', 'prospectiveGrades', 'prospectiveMarkers'], { mode: A, classKey: 'unit', adapterScoped: true, detailCeiling: 0, dates: ['declaredOn', 'horizonOn'], statuses: ['instrumentKey'], note: 'A bet is frozen before the work and graded once from the workspace’s own dated records. The adapter applies subtree scope, withholds pooled rates below the declared cell floor and below director rank, complementary-suppresses small calibration cells, and never projects a cohort id, a title, a name or an amount. A refused rate is BLANK, never zero.' }),
   // ADR-0089: the report adapter recomputes the active seat's scoped cohort,
   // redacts pact details at high altitude and suppresses small cells. Raw cycle
   // and marker rows are never projected into declared-seat view state.

@@ -45,6 +45,10 @@ import { buildFederationReport, federationCsvRows } from './domain/federation.js
 // AUDIT of the register, never the register's cell geometry and never a value the
 // workspace withheld — an export that carried either would be the disclosure.
 import { buildDifferencesReport, differencesCsvRows } from './domain/differencing.js';
+// ADR-0094: the prospective ledger's aggregate-only export. It carries cells,
+// altitude pools and one workspace row — never a cohort id, a contract id, a
+// title, a person or an amount. A refused figure is BLANK, never zero.
+import { buildProspectiveReport, prospectiveCsvRows } from './domain/prospective.js';
 import { buildCadenceReport, cadenceCsvRows } from './domain/cadence.js';
 import { carryoverCsvRows } from './domain/carryover.js';
 import { valueStreamCsvRows } from './domain/valueStream.js';
@@ -977,6 +981,10 @@ export const CSV_EXPORTS = [
   // workspace row. No span name, no person name, no record id, no channel free
   // text; a suppressed cell is BLANK and a refused rate is BLANK, never zero.
   { key: 'programme-federation', label: 'Programme federation (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'programme-federation', description: 'One row per declared leadership edge in the active seat\u2019s span plus one workspace row: altitude, rank, measured state (connected / bypassed / stale / silent / top-of-tree), direct and bypass carriage counts, oldest carriage date and whether the row was suppressed. No span name, person name, record id or free text; suppressed and refused figures are BLANK rather than zero.' },
+  // CSV scope #92 (Schema v97, ADR-0094). Aggregate-only prospective telemetry:
+  // one row per published calibration cell, one per altitude pool, one workspace
+  // row. No contract id, no cohort id, no title, no name, no amount.
+  { key: 'prospective-contracts', label: 'Prospective contracts (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'prospective-contracts', description: 'One row per calibration cell (altitude by instrument), one per altitude pool and one workspace row: declared, graded and reached counts, observed rate, mean Brier, strictly-prior reference Brier, Brier skill and Wilson 95% bounds. NO contract id, NO cohort id, NO title, NO person, NO amount and NO free text. Any refused or suppressed figure is BLANK rather than zero.' },
   { key: 'differencing-register', label: 'Publication register (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'differencing-register', description: 'One row per published module plus one workspace row: release counts, provably-safe / protected / determined counts, withheld-cell and equation counts, the last publication date and the two stationarity statistics. NO span label, NO span id, NO person, NO record title, NO amount, and NO recovered value \u2014 a determined value is disclosed as a coordinate on the screen, never exported as a figure. A refused rate is BLANK rather than zero.' },
   { key: 'strategy-renewal', label: 'Strategy renewal (active-seat aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'strategy-renewal', description: 'Active-seat altitude and workspace learning rows only: active, carryover and overdue commitments, effort, in-window delivery reference with interval, evidence count and verdict. No pact IDs, bet IDs, titles, cohort identifiers, names or notes; refused and suppressed figures are BLANK rather than zero.' },
   // CSV scope #83 (Schema v94, ADR-0089). Aggregate-only operating-model
@@ -5948,6 +5956,18 @@ function buildScopeTable(state, scope, now) {
       const report = buildFederationReport(state, { now });
       const rows = federationCsvRows(report);
       const columns = ['row_kind', 'altitude', 'rank', 'state', 'evidence_n', 'direct_n', 'bypass_n', 'last_carriage_on', 'days_since', 'suppressed']
+        .map((key) => ({ key, header: key }));
+      return { columns, rows };
+    }
+    case 'prospective-contracts': {
+      // CSV scope #92 (Schema v97, ADR-0094). Aggregate-only and refusal-honest:
+      // an unobservable cohort, a sub-floor cell and a pooled rate withheld
+      // below director rank are BLANK, never zero.
+      const report = buildProspectiveReport(state, { now, settings: state.settings || {} });
+      const rows = prospectiveCsvRows(report);
+      const columns = ['row_kind', 'altitude', 'rank', 'instrument', 'contracts_n', 'graded_n', 'reached_n',
+        'observed_pct', 'mean_brier', 'mean_reference_brier', 'skill_pct',
+        'interval_low_pct', 'interval_high_pct', 'refused', 'reason']
         .map((key) => ({ key, header: key }));
       return { columns, rows };
     }

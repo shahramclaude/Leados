@@ -73,6 +73,10 @@ import { federationAttentionCount } from './core/domain/federation.js';
 // publication. Exact integer determinacy across releases, seats and modules.
 import { renderDifferencing } from './views/differencing.js';
 import { differencesAttentionCount } from './core/domain/differencing.js';
+// ADR-0094: freeze a bet before the work, grade it once from dated records, and
+// roll the calibration signal up every level of the same chain of command.
+import { renderProspective } from './views/prospective.js';
+import { prospectiveAttentionCount } from './core/domain/prospective.js';
 import { renderResponses } from './views/responses.js';
 import { renderActionBundles } from './views/actionBundles.js';
 import { bundleAttentionCount } from './core/domain/actionBundles.js';
@@ -262,6 +266,8 @@ export const NAV = [
     // ADR-0092: publication integrity — what the aggregates this span publishes
     // actually disclose once a reader subtracts them.
     { route: 'differencing', label: 'Differencing', icon: '⊖', badge: 'differencing' },
+    // ADR-0094: pre-registered leadership bets, graded out of sample.
+    { route: 'prospective', label: 'Prospective contracts', icon: '⌛', badge: 'prospective' },
     { route: 'identity', label: 'Attested commits', icon: '🔑', badge: 'identity' },
     { route: 'today', label: 'Today', icon: '◎' },
     { route: 'responses', label: 'Response studio', icon: '⌁', badge: 'responses' },
@@ -430,6 +436,7 @@ const RENDERERS = {
   envoy: (ctx) => renderEnvoy(ctx),
   federation: (ctx) => renderFederation(ctx),
   differencing: (ctx) => renderDifferencing(ctx),
+  prospective: (ctx) => renderProspective(ctx),
   responses: (ctx) => renderResponses(ctx),
   bundles: (ctx) => renderActionBundles(ctx),
   attribution: (ctx) => renderSettlement(ctx),
@@ -665,6 +672,11 @@ export function parseRoute(hash) {
     'differencing': 'differencing', 'differences': 'differencing', 'publication': 'differencing',
     'publication-register': 'differencing', 'small-cell-series': 'differencing', 'releases': 'differencing',
     'inference': 'differencing', 'disclosure-series': 'differencing',
+    // ADR-0094: none of these shadows a shipped route. 'forecast' and
+    // 'calibration' already belong to other terminals and are NOT claimed.
+    'prospective': 'prospective', 'pre-registration': 'prospective', 'prospective-contracts': 'prospective',
+    'frozen-bets': 'prospective', 'brier': 'prospective', 'brier-ledger': 'prospective',
+    'prediction-registry': 'prospective', 'intervention-contract': 'prospective',
     // ADR-0090 supersedes the envoy alias that used to own 'federation': the
     // bare word now means the measured reading, and the packet screen keeps its
     // own name and its own aliases. No shipped link is broken: 'federated',
@@ -1010,6 +1022,8 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       federation: federationAttentionCount(state, { now: at, settings: state.settings }),
       // ADR-0092: a module that publishes a determined surface, plus open findings.
       differencing: differencesAttentionCount(state, { now: at, settings: state.settings }),
+      // ADR-0094: due or overdue frozen contracts plus open governed findings.
+      prospective: prospectiveAttentionCount(state, { now: at, settings: state.settings }),
       // ADR-0082: the badge counts chain breaks only — a valid chain is not noise.
       seal: sealAttentionCount(state),
       identity: identityAttentionCount(state, { now: at, settings: state.settings }),
@@ -1488,6 +1502,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       concordance: 'Expectation Concordance — “meets expectations” treated as a measurement instrument: two sealed sides, six dimensions, weighted κ / AC1 / PABAK / Bland–Altman agreement, a governed re-contracting decision on divergence and a typed roll-up to every leadership span',
       envoy: 'Sealed exchange — how a span’s pack leaves its own browser: projected at the receiving altitude’s disclosure class, committed with a per-item SHA-256 and a Merkle root, signed keyed when the vault is unlocked, verified by the receiver before a single field is stored, ingested idempotently, and turned into a governed reconciliation decision when two workspaces disagree',
       federation: 'Programme federation — which declared leadership edges actually carry work, measured from dated artefacts other modules already wrote: connected, bypassed, stale or silent, with a Wilson-bounded coverage rate that is withheld below the span floor and small cells suppressed',
+      prospective: 'Prospective contracts — a probability, threshold, horizon and exact cohort of record ids are frozen BEFORE the governed work exists; one governed DACI decision, one owned outcome task and one roll-up edge per leadership ancestor are written in the same atomic transaction; the cohort is graded once out of sample with a Brier proper score against a strictly-prior base rate, an unobservable cohort is refused rather than scored as a miss, and pooled rates are withheld below the declared cell floor and below director rank',
       differencing: 'Differencing defender — a table can be safe while a series of tables is not: every published aggregate audited as one exact integer system across releases, seats and modules, the cheapest suppression pattern that determines nothing chosen before publication, and a publication refused when no pattern can make it safe',
       responses: 'Response studio — rehearse and adopt a coordinated leadership response',
       bundles: 'Action bundles — review, adopt and safely withdraw coordinated work',

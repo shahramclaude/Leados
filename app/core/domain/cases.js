@@ -391,6 +391,13 @@ export const LINK_ENTITY_TYPES = [
   // and every ancestor it rolled up to are `person` endpoints, exactly as the
   // command chain and the board room already express them.
   'federationassessment',
+  // ADR-0094 (Schema v97): a frozen pre-registration and its once-only grade
+  // are two distinct first-class graph nodes. Keeping the claim separate from
+  // the observation is the entire pre-registration discipline: the grade can
+  // never be confused with the bet it tests. Neither node projects a title, a
+  // cohort id, a person name or an amount through the general resolver.
+  'prospectivecontract',
+  'prospectivegrade',
   // ADR-0085's `carryover` node and ADR-0088's `escalationrecord` /
   // `escalationcommitment` nodes are declared above, each exactly once. A second
   // copy of a type here is not harmless bookkeeping: it breaks the
@@ -545,6 +552,9 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   // queue it predicted can be read back against what actually closed.
   cadenceforum: 'cadenceForums',
   cadencereading: 'cadenceReadings',
+  // ADR-0094: keep the registry exhaustive with LINK_ENTITY_TYPES.
+  prospectivecontract: 'prospectiveContracts',
+  prospectivegrade: 'prospectiveGrades',
 });
 
 export const FORBIDDEN_LINK_TYPES = ['conflict', 'pulse'];
@@ -651,6 +661,12 @@ export const SYSTEM_GENERATED_LINK_RELATIONS = Object.freeze([
   // protected release removed. Neither is ever asserted by hand.
   'proves-release',
   'protects-release',
+  // ADR-0094: written only by RULE-PIC-01/02/03. `pre-registers` keeps the
+  // frozen numeric claim separate from the governed operational work;
+  // `grades-outcome` says which once-only Brier grade judged the frozen cohort.
+  // Both are discovered provenance, never a manual claim about causality.
+  'pre-registers',
+  'grades-outcome',
   // ADR-0084: emitted by the Catchball spine, not manually asserted.
   'deploys-strategy', 'cascades-to', 'counters-upward', 'trades-off',
   // ADR-0089: cycle-to-cohort provenance is emitted only by RULE-SCR-01.
@@ -691,6 +707,10 @@ export const LINK_RELATIONS = [
   'coaches',
   'escalates-from',
   'tracks-followup',
+  // ADR-0094: a frozen bet pre-registers the governed work; a once-only grade
+  // points back at the frozen claim it tested. Neither is a causal assertion.
+  'pre-registers',
+  'grades-outcome',
   'develops',
   'consumes-capacity',
   'funds',
@@ -980,6 +1000,8 @@ export const LINK_RELATIONS = [
 export const LINK_RELATION_LABELS = {
   carries: 'Carried to this leadership span as a sealed packet',
   reconnects: 'Measured carriage resumed on this span\u2019s declared edge above it',
+  'pre-registers': 'Froze a bet before this governed work was approved',
+  'grades-outcome': 'Graded this frozen cohort once, out of sample',
   'proves-release': 'Took part in the exact differencing proof over this publication',
   'protects-release': 'Explains the figure this publication withheld to stay unrecoverable',
   'audits-cascade': 'Frozen cycle audits this typed strategy-to-delivery cascade',
@@ -2627,6 +2649,48 @@ export function resolveLinkedEntity(state, entityType, entityId) {
         route: `#/escalation?panel=authority&commitment=${encodeURIComponent(rec.id)}`,
         raw: rec,
         raw: rec,
+      };
+    }
+    case 'prospectivecontract': {
+      const rec = (state.prospectiveContracts || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      // The shared graph carries counts, dates and state names only. No title,
+      // no cohort id, no person, no free text and no amount is projected here.
+      return {
+        type: 'prospectivecontract',
+        id: rec.id,
+        title: `Frozen pre-registration · ${rec.instrumentKey} · ${rec.declaredOn}`,
+        status: `${rec.cohortN} frozen record(s) · declared ${rec.probabilityPct}% · horizon ${rec.horizonOn}`,
+        route: `#/prospective?panel=contracts&contract=${encodeURIComponent(rec.id)}`,
+        raw: {
+          id: rec.id,
+          instrumentKey: rec.instrumentKey,
+          altitudeKey: rec.altitudeKey,
+          declaredOn: rec.declaredOn,
+          horizonOn: rec.horizonOn,
+          cohortN: rec.cohortN,
+        },
+      };
+    }
+    case 'prospectivegrade': {
+      const rec = (state.prospectiveGrades || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      return {
+        type: 'prospectivegrade',
+        id: rec.id,
+        title: `Once-only grade · ${rec.instrumentKey} · ${rec.gradedOn}`,
+        status: `${rec.reachedN}/${rec.observedN} reached · Brier ${rec.brier}`,
+        route: `#/prospective?panel=calibration`,
+        raw: {
+          id: rec.id,
+          contractId: rec.contractId,
+          instrumentKey: rec.instrumentKey,
+          altitudeKey: rec.altitudeKey,
+          gradedOn: rec.gradedOn,
+          observedN: rec.observedN,
+          reachedN: rec.reachedN,
+          brier: rec.brier,
+        },
       };
     }
     default:

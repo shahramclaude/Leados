@@ -100,6 +100,8 @@ import { seatRule } from './seatRules.js';
 import { sealRule } from './sealRules.js';
 // ADR-0092: the Differencing Defender declares its contract like every other rule.
 import { differencingRule } from './differencingRules.js';
+// ADR-0094: the Prospective Intervention Contract.
+import { prospectiveRule } from './prospectiveRules.js';
 import { successionRule } from './successionRules.js';
 import { mandateRule } from './mandateRules.js';
 import { authorityCalibrationRule } from './authorityCalibrationRules.js';
@@ -691,6 +693,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'differencingRules.js',
     purpose: 'Registers a published aggregate as a graph node with vertical roll-up edges, opens one governed publication-integrity decision per module per ISO week when exact integer arithmetic determines a withheld value, records what a protected release removed with one owned explanation, and opens one publication-rhythm decision when a module\'s published totals are not a stationary series.',
     writes: ['links', 'decisions', 'delegations', 'differenceMarkers'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: prospectiveRule,
+    module: 'prospectiveRules.js',
+    purpose: 'RULE-PIC-01 freezes a pre-registered bet as a graph node with one governed DACI decision, one owned outcome task, a typed `pre-registers` edge and a vertical `rolls-up-to` edge for every leadership ancestor in the same atomic write; RULE-PIC-02 grades each due cohort exactly ONCE from dated records other modules own (Brier proper scoring against a strictly-prior base rate), refuses unobservable cohorts loudly with one owned reconciliation task, and fans the grade up the same tree; RULE-PIC-03 opens at most one governed calibration decision per altitude-by-instrument cell per ISO week when Brier skill falls below the declared floor; RULE-PIC-04 opens one outcome-integrity decision per ISO week for overdue ungraded contracts. Never adjusts a declared probability, never closes a human decision, never rates a person and never asserts causality.',
+    writes: ['links', 'decisions', 'delegations', 'prospectiveGrades', 'prospectiveMarkers'],
     emits: [],
     scansWorkspace: true,
   },

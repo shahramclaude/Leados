@@ -123,6 +123,12 @@ export const RECORD_POLICIES = Object.freeze({
   // stored rows carry span ids, counts and dates — never a name, title or note —
   // and a declared seat receives only the scoped report, never the raw ledger.
   federationAssessments: { classKey: 'unit', detailCeiling: 0, label: 'Frozen federation readings (report only)', route: '#/federation' },
+  // ADR-0094: a frozen contract holds a cohort of RECORD IDS and a title; a
+  // grade holds only counts, dates and a proper score. The raw ledgers are
+  // never projected into declared-seat view state — only the scoped report is.
+  prospectiveContracts: { classKey: 'unit', detailCeiling: 0, label: 'Frozen pre-registrations (report only)', route: '#/prospective' },
+  prospectiveGrades: { classKey: 'unit', detailCeiling: 0, label: 'Once-only Brier grades (report only)', route: '#/prospective' },
+  prospectiveMarkers: { classKey: 'unit', detailCeiling: 0, label: 'Prospective rule markers', route: '#/prospective' },
   federationMarkers: { classKey: 'unit', detailCeiling: 0, label: 'Federation rule markers', route: '#/federation' },
   // ADR-0092: the publication register is published material and therefore span
   // material: a release belongs to the seat that made it. Stored rows carry span
@@ -349,6 +355,11 @@ export const ACTION_RIGHTS = Object.freeze({
   // run an explicit scan. Setting the WINDOW and the FLOORS is director-and-above
   // (checked in the action), because those numbers bound what everyone below reads.
   'govern-federation': { minRank: 1, maxRank: 5, label: 'Freeze or scan a scoped programme federation reading' },
+  // ADR-0094: every altitude that leads anyone may pre-register one bet about
+  // its own work, and every altitude may explicitly grade a due cohort. Setting
+  // the evidence/cell/skill conventions is director+ (enforced in the action),
+  // because those numbers bound what every altitude below reads.
+  'declare-prospective': { minRank: 1, maxRank: 5, label: 'Pre-register, grade or govern a prospective intervention contract' },
   // ADR-0088: recording whether a decision moment was absorbed or escalated is
   // every leader's business, at every altitude — that is the whole point of the
   // module. Declaring a binding intervention-rate commitment is a manager-and-

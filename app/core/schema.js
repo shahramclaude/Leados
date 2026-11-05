@@ -180,6 +180,15 @@ import {
   normalizeFederationMarkers,
   normalizeFederationSettings,
 } from './domain/federationSchema.js';
+// ADR-0094: the Prospective Intervention Contract. Frozen pre-registrations,
+// immutable once-only grades and the rules' idempotency markers, plus the
+// clamped calibration conventions. A malformed row is dropped, never repaired.
+import {
+  normalizeProspectiveContracts,
+  normalizeProspectiveGrades,
+  normalizeProspectiveMarkers,
+  normalizeProspectiveSettings,
+} from './domain/prospectiveSchema.js';
 // ADR-0088: the Escalation Economy — the disposition ledger, intervention-rate
 // commitments, idempotency markers, and clamped conventions.
 import {
@@ -394,7 +403,7 @@ export {
 // older blob simply opens on the undeclared operator view. A version bump here
 // would have forced 78 test files to be rewritten for zero user benefit; the
 // honest choice is to add nothing to migrate.
-export const SCHEMA_VERSION = 96;
+export const SCHEMA_VERSION = 97;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -1598,6 +1607,17 @@ export const DEFAULT_SETTINGS = Object.freeze({
   seatWindowDays: 90,
   seatMaxLinks: 24,
   seatLedgerOpen: true,
+  // ADR-0094: the Prospective Intervention Contract. `prospectiveEvidenceFloor`
+  // is the cohort floor below which a grade is REFUSED; `prospectiveCellFloor`
+  // suppresses a calibration cell; `prospectiveSkillFloorPct` is the Brier-skill
+  // floor that opens a governed calibration decision; `prospectiveReviewDays`
+  // bounds the outcome-integrity window. All are clamped on read, never trusted
+  // from storage, and every one is a DECLARED convention, never fitted history.
+  prospectiveEvidenceFloor: 3,
+  prospectiveCellFloor: 4,
+  prospectiveSkillFloorPct: 10,
+  prospectiveReviewDays: 14,
+  prospectiveAutoPropagate: true,
   });
 
 export const COLLECTIONS = [
@@ -1956,6 +1976,16 @@ export const COLLECTIONS = [
   // rules' idempotency markers.
   'seatIdentities',
   'identityMarkers',
+  // ADR-0094 / Schema v97: the Prospective Intervention Contract.
+  // `prospectiveContracts` freezes the declared probability, threshold, horizon
+  // AND the exact cohort of record ids BEFORE the governed work exists.
+  // `prospectiveGrades` is an append-only, once-only Brier grade re-derived
+  // out of sample from the dated records other modules own. `prospectiveMarkers`
+  // is the four shared-post-commit rules' idempotency ledger. No score, rate,
+  // interval, name or narrative is persisted: all of it is derived on read.
+  'prospectiveContracts',
+  'prospectiveGrades',
+  'prospectiveMarkers',
   'links',
   'portfolio',
   'events',
@@ -2620,6 +2650,7 @@ export function normalizeSettings(raw) {
     ...normalizeIdentitySettings(s),
     ...normalizeCarryoverSettings(s),
     ...normalizeCadenceSettings(s),
+    ...normalizeProspectiveSettings(s),
   };
 }
 
@@ -6723,6 +6754,14 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // against real release ids. A malformed release is dropped, never repaired.
   state.differenceReleases = normalizeReleases(raw.differenceReleases, warnings);
   state.differenceMarkers = normalizeDifferencingMarkers(raw.differenceMarkers);
+  // ADR-0094: contracts, once-only grades and rule markers resolve before the
+  // typed links so `pre-registers`, `grades-outcome`, `tracks-followup` and
+  // `rolls-up-to` edges validate against real ids. A malformed contract, a
+  // duplicate grade and an inconsistent marker are DROPPED with a warning;
+  // nothing is repaired into a reading a leader might act on.
+  state.prospectiveContracts = normalizeProspectiveContracts(raw.prospectiveContracts, warnings);
+  state.prospectiveGrades = normalizeProspectiveGrades(raw.prospectiveGrades, warnings);
+  state.prospectiveMarkers = normalizeProspectiveMarkers(raw.prospectiveMarkers);
   // ADR-0085: the Operating Cadence Clock. A malformed forum, a sitting with no
   // ADR-0088: carryover records resolve after pacts so `carries-over` and
   // ADR-0089: resolve peer contracts and immutable receipts before typed links.
@@ -7522,6 +7561,29 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  // ADR-0094: additive 96 → 97. An existing workspace has NOT pre-registered
+  // anything, so all three ledgers start empty — an empty ledger means "no bet
+  // has been frozen here yet", which is a different (and honest) claim from
+  // "a bet was frozen and missed". No probability, cohort, outcome or score is
+  // inferred from pre-existing cases, delegations, decisions or 1:1s. Every
+  // value below is a declared convention with a printed default.
+  96: (v96) => ({
+    ...v96,
+    schemaVersion: 97,
+    prospectiveContracts: Array.isArray(v96.prospectiveContracts) ? v96.prospectiveContracts : [],
+    prospectiveGrades: Array.isArray(v96.prospectiveGrades) ? v96.prospectiveGrades : [],
+    prospectiveMarkers: Array.isArray(v96.prospectiveMarkers) ? v96.prospectiveMarkers : [],
+    settings: isPlainObject(v96.settings)
+      ? {
+        ...v96.settings,
+        prospectiveEvidenceFloor: v96.settings.prospectiveEvidenceFloor ?? 3,
+        prospectiveCellFloor: v96.settings.prospectiveCellFloor ?? 4,
+        prospectiveSkillFloorPct: v96.settings.prospectiveSkillFloorPct ?? 10,
+        prospectiveReviewDays: v96.settings.prospectiveReviewDays ?? 14,
+        prospectiveAutoPropagate: v96.settings.prospectiveAutoPropagate !== false,
+      }
+      : { ...DEFAULT_SETTINGS },
+  }),
   // ADR-0092: additive 95 → 96. No publication is invented for an existing
   // workspace and no aggregate is retro-audited into the register: an empty
   // register means "nothing has been published from here yet", which is not the

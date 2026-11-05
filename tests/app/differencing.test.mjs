@@ -711,11 +711,11 @@ test('publishing requires a declared seat and its own span', () => {
 /* ------------------------------------------------------- schema versioning */
 
 test('schema v96 migrates additively and invents no publication history', () => {
-  assert.equal(SCHEMA_VERSION, 96);
+  assert.equal(SCHEMA_VERSION, 97);
   const old = { ...createEmptyState(NOW.toISOString()), schemaVersion: 95 };
   const migrated = migrate(old);
-  assert.deepEqual(migrated.applied, ['95 → 96']);
-  assert.equal(migrated.raw.schemaVersion, 96);
+  assert.deepEqual(migrated.applied, ['95 → 96', '96 → 97']);
+  assert.equal(migrated.raw.schemaVersion, 97);
   assert.deepEqual(migrated.raw.differenceReleases, [], 'an empty register means "not published yet", never "nothing unsafe was published"');
   assert.deepEqual(migrated.raw.differenceMarkers, []);
   assert.equal(migrated.raw.settings.differencesCellFloor, 3);
