@@ -147,9 +147,11 @@ function posturePanel(ctx, report) {
   }
   return h('div', { class: 'stack' }, ...aggs.slice(0, 10).map((agg) => card({
     title: `${agg.label}`,
-    subtitle: agg.spanTotal === null
+    subtitle: `${agg.spanTotal === null
       ? `Total withheld: fewer than ${agg.floorN} records in this span.`
-      : `${agg.spanTotal} record(s) · ${agg.totals.open ?? '—'} open · ${agg.totals.overdue ?? '—'} overdue · oldest ${agg.totals.oldestDays ?? 'unknown'}d · ${money(agg.totals.money)}`,
+      : `${agg.spanTotal} record(s) · ${agg.totals.open ?? '—'} open · ${agg.totals.overdue ?? '—'} overdue · oldest ${agg.totals.oldestDays ?? 'unknown'}d · ${money(agg.totals.money)}`}${agg.withheldCells
+      ? ` · ${agg.withheldCells} cell(s) withheld, ${agg.guard?.recoverableN ?? 0} recoverable by subtraction`
+      : ''}`,
     actions: [h('button', { class: 'btn btn-small', type: 'button', onClick: () => { ctx.navigate(`#/${agg.route}`); } }, 'Open the aggregate')],
     body: h('div', { class: 'stack-sm' },
       ...agg.spans.map((span) => (span.withhold

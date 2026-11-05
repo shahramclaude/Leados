@@ -113,3 +113,4 @@ Format: copy `0001-record-architecture-decisions.md`, number sequentially, statu
 - [ADR-0089: The Hoshin Carryover Terminal — a thesis-invalidated pact settles its bet: stop rule judged, encumbered person-days and budget released into the next allocation cycle, and the prediction graded once (`#/carryover`)](./0089-hoshin-carryover-terminal.md)
 - [ADR-0088: Hoshin Carryover Terminal — a thesis-invalidated pact settles its bet: stop rule judged, encumbered resources released, and the next allocation cycle actually sees them (`#/carryover`)](./0088-hoshin-carryover.md)
 - [ADR-0089: Value Stream Exchange — lateral supplier–customer SLAs, real CPM, and reviewed invalidated-thesis capital carryover (`#/valuestream`)](./0089-value-stream-exchange.md)
+- [ADR-0091: The Subtraction Test — a withheld cell is only withheld if it cannot be recovered, and the check is exact integer arithmetic over every printed total](./0091-aggregate-determinacy.md)
