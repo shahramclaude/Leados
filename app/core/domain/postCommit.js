@@ -115,6 +115,7 @@ import { federationRule } from './federationRules.js';
 // governed decisions it opens are priced in the SAME atomic transaction.
 // Inert unless a reading is frozen, a line is crossed or an explicit scan runs.
 import { freezeLineRule } from './freezeLineRules.js';
+import { spanCalibrationRule } from './spanCalibrationRules.js';
 import { valueStreamRule } from './valueStreamRules.js';
 import { carryoverRule } from './carryoverRules.js';
 // ADR-0085: the Operating Cadence Clock. Reads the finished queue after the
@@ -633,6 +634,12 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // registration, degraded-line decisions, timing-guard redaction work and one
   // `rolls-up-to` edge per leadership ancestor, all in the same transaction.
   freezeLineRule,
+  // ADR-0100: the Discretion Calibrator (RULE-SPC-01..04). It reads the record
+  // every module above has already written, so it runs after them; registration,
+  // the falsified-rung decision, the staleness/drift decision and the once-only
+  // grade all happen before the attention market prices the work they open, and
+  // before the Operating Seat rolls it up the hierarchy in the same transaction.
+  spanCalibrationRule,
   // ADR-0087: the Attested Commit (RULE-IDN-01..03). Attestation is the
   // identity of the write itself, so its digest covers every event this
   // transaction appended before it — including the breach work RULE-IDN-02

@@ -136,6 +136,12 @@ export const MODULE_MANIFESTS = Object.freeze({
   // org designs; raw reading and marker rows are never projected into
   // declared-seat view state.
   'freeze-line': row('freeze-line', 'Freeze-line continuity', ['freezeReadings'], { mode: A, classKey: 'unit', adapterScoped: true, detailCeiling: 5, dates: ['frozenOn', 'lineOn'], note: 'The freeze-line adapter measures continuity across each crossed freeze line inside the active seat\u2019s span: before/after connected shares with Wilson intervals, a verdict refused below the declared edge floor, small altitude cells blanked with a complementary cell, and no carriage date on any suppressed row. No person, span name or per-span detail is ever named.' }),
+  // ADR-0100: the Discretion Calibrator. The adapter measures the ladder from the
+  // whole workspace's record but publishes only rung-level counts, intervals and
+  // verdicts — no item, no person, no span detail above the cell floor. It is
+  // adapter-scoped for exactly that reason: a seat that sees one span of the
+  // workspace would otherwise be reading its peers' decision latencies.
+  'span-calibration': row('span-calibration', 'Discretion calibration', ['spanReadings', 'spanAdoptions'], { mode: A, classKey: 'unit', adapterScoped: true, detailCeiling: 5, dates: ['frozenOn'], note: 'The calibration adapter measures the leadership ladder from the workspace\u2019s own decision record and publishes rung-level survival estimates, test-inverted intervals and verdicts only. Per-span cells below the declared floor are blank with a complementary cell; no person, item title, record text or individual item date is ever projected, and individual-sensitive sources are excluded by name.' }),
   // ADR-0092: the Differencing Defender. Adaptive: the report adapter recomputes
   // the active seat's own register scope, refuses a coverage rate below the
   // release floor, and never carries a withheld VALUE into the read model — a

@@ -214,6 +214,18 @@ import {
   normalizeFreezeMarkers,
   normalizeFreezeLineSettings,
 } from './domain/freezeLineSchema.js';
+// ADR-0100: the Discretion Calibrator. Frozen calibration readings, the
+// append-only ladder-adoption ledger and rule markers resolve before typed links,
+// and a malformed reading is dropped rather than repaired into a verdict a leader
+// might adopt.
+import {
+  normalizeSpanReadings,
+  normalizeSpanAdoptions,
+  normalizeSpanMarkers,
+  normalizeSpanCalibrationSettings,
+  normalizeAdoptedHorizons,
+} from './domain/spanCalibrationSchema.js';
+import { ALTITUDES as SPAN_ALTITUDES } from './domain/chainRegistry.js';
 // ADR-0088: the Escalation Economy — the disposition ledger, intervention-rate
 // commitments, idempotency markers, and clamped conventions.
 import {
@@ -428,7 +440,7 @@ export {
 // older blob simply opens on the undeclared operator view. A version bump here
 // would have forced 78 test files to be rewritten for zero user benefit; the
 // honest choice is to add nothing to migrate.
-export const SCHEMA_VERSION = 101;
+export const SCHEMA_VERSION = 102;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -1408,6 +1420,25 @@ export const DEFAULT_SETTINGS = Object.freeze({
   chainMaterialityPp: 5,
   chainWindowDays: 365,
   chainReviewHorizonDays: 60,
+  // ADR-0100: the Discretion Calibrator's conventions. `chainAdoptedHorizons` is
+  // the one place a human-adopted ladder lives: null means the declared table is
+  // in force. The rest are the coverage promise, the floors that refuse a rung,
+  // the interval width that makes a verdict meaningless, and the bands an
+  // adoption may move a span within.
+  spanCalibrationCoveragePct: 85,
+  spanCalibrationDecidedFloor: 8,
+  spanCalibrationCensoringPct: 60,
+  spanCalibrationRiskFloor: 3,
+  spanCalibrationCellFloor: 3,
+  spanCalibrationMaxWidthPct: 45,
+  spanCalibrationReviewDays: 90,
+  spanCalibrationAdoptMinPct: 25,
+  spanCalibrationAdoptMaxPct: 400,
+  spanCalibrationBandPct: 90,
+  spanCalibrationAutoPropagate: true,
+  chainAdoptedHorizons: null,
+  chainAdoptedOn: null,
+  chainAdoptedReadingId: null,
   chainMaxTasks: 3,
   chainReadingCap: 16,
   chainMaxDepth: 7,
@@ -2286,6 +2317,12 @@ function calendarDayOrNull(v) {
  * Normalize settings, coercing and clamping every field so downstream code can
  * treat them as trusted numbers.
  */
+/** The declared ladder, as the settings normalizer needs it. */
+const DECLARED_HORIZONS = Object.freeze(SPAN_ALTITUDES.reduce((acc, altitude) => {
+  acc[altitude.key] = altitude.horizonDays;
+  return acc;
+}, {}));
+
 export function normalizeSettings(raw) {
   const s = isPlainObject(raw) ? raw : {};
   const d = DEFAULT_SETTINGS;
@@ -2728,6 +2765,15 @@ export function normalizeSettings(raw) {
     // ADR-0099: the freeze-line window, edge floor, cell floor and drop
     // threshold, clamped.
     ...normalizeFreezeLineSettings(s),
+    // ADR-0100: the calibration conventions, and the adopted ladder — clamped to
+    // the declared table's own band and forced strictly increasing, so a
+    // hand-edited settings object cannot run a ladder downhill.
+    ...normalizeSpanCalibrationSettings(s),
+    chainAdoptedHorizons: normalizeAdoptedHorizons(s.chainAdoptedHorizons, DECLARED_HORIZONS),
+    chainAdoptedOn: /^\d{4}-\d{2}-\d{2}$/.test(String(s.chainAdoptedOn || '')) ? s.chainAdoptedOn : null,
+    chainAdoptedReadingId: typeof s.chainAdoptedReadingId === 'string' && s.chainAdoptedReadingId.trim()
+      ? s.chainAdoptedReadingId.trim().slice(0, 80)
+      : null,
   };
 }
 
@@ -6857,6 +6903,13 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // warning; nothing is repaired into a verdict.
   state.freezeReadings = normalizeFreezeReadings(raw.freezeReadings, warnings, { now: new Date() });
   state.freezeMarkers = normalizeFreezeMarkers(raw.freezeMarkers);
+  // ADR-0100: calibration readings, the ladder-adoption ledger and rule markers
+  // resolve before typed links so `calibrates` / `rolls-up-to` edges validate
+  // against real ids. A malformed reading or undated adoption is DROPPED with a
+  // warning; nothing is repaired into a ladder a leader might route on.
+  state.spanReadings = normalizeSpanReadings(raw.spanReadings, warnings, { now: new Date() });
+  state.spanAdoptions = normalizeSpanAdoptions(raw.spanAdoptions, warnings);
+  state.spanMarkers = normalizeSpanMarkers(raw.spanMarkers);
   // ADR-0085: the Operating Cadence Clock. A malformed forum, a sitting with no
   // ADR-0088: carryover records resolve after pacts so `carries-over` and
   // ADR-0089: resolve peer contracts and immutable receipts before typed links.
@@ -7661,6 +7714,37 @@ export const MIGRATIONS = {
   // is DETECTED on read as a freeze line, and the frozen reading ledger starts
   // empty, which honestly means "no continuity reading has been frozen yet".
   // Existing settings are preserved and the new keys get declared defaults.
+  // ADR-0100: additive 101 → 102. An existing workspace has not calibrated a
+  // ladder, so all three ledgers start empty — an empty ledger means "nobody has
+  // measured the ladder here yet", a different claim from "the ladder is right".
+  // No adoption is invented: `chainAdoptedHorizons` is null, which is the declared
+  // table, so every existing escalation clock reads exactly as it did on v101.
+  101: (v101) => ({
+    ...v101,
+    schemaVersion: 102,
+    spanReadings: Array.isArray(v101.spanReadings) ? v101.spanReadings : [],
+    spanAdoptions: Array.isArray(v101.spanAdoptions) ? v101.spanAdoptions : [],
+    spanMarkers: Array.isArray(v101.spanMarkers) ? v101.spanMarkers : [],
+    settings: isPlainObject(v101.settings)
+      ? {
+        ...v101.settings,
+        spanCalibrationCoveragePct: v101.settings.spanCalibrationCoveragePct ?? 85,
+        spanCalibrationDecidedFloor: v101.settings.spanCalibrationDecidedFloor ?? 8,
+        spanCalibrationCensoringPct: v101.settings.spanCalibrationCensoringPct ?? 60,
+        spanCalibrationRiskFloor: v101.settings.spanCalibrationRiskFloor ?? 3,
+        spanCalibrationCellFloor: v101.settings.spanCalibrationCellFloor ?? 3,
+        spanCalibrationMaxWidthPct: v101.settings.spanCalibrationMaxWidthPct ?? 45,
+        spanCalibrationReviewDays: v101.settings.spanCalibrationReviewDays ?? 90,
+        spanCalibrationAdoptMinPct: v101.settings.spanCalibrationAdoptMinPct ?? 25,
+        spanCalibrationAdoptMaxPct: v101.settings.spanCalibrationAdoptMaxPct ?? 400,
+        spanCalibrationBandPct: v101.settings.spanCalibrationBandPct ?? 90,
+        spanCalibrationAutoPropagate: v101.settings.spanCalibrationAutoPropagate !== false,
+        chainAdoptedHorizons: v101.settings.chainAdoptedHorizons ?? null,
+        chainAdoptedOn: v101.settings.chainAdoptedOn ?? null,
+        chainAdoptedReadingId: v101.settings.chainAdoptedReadingId ?? null,
+      }
+      : { ...DEFAULT_SETTINGS },
+  }),
   100: (v100) => ({
     ...v100,
     schemaVersion: 101,
