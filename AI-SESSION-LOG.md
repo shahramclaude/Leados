@@ -1,3 +1,49 @@
+# 2026-11-05 — Robust Allocation Terminal (ADR-0095; Schema v98, additive 97 → 98)
+
+## Repository identity and sync baseline
+
+First tool operation: `git remote -v`, `git status`, `git log --oneline`. Origin was `https://github.com/shahramclaude/Leados.git` (fetch + push); branch `arena/28c2a7c8-leados` was clean at base `53b10f6` (Merge PR #158). Identity **PASS**; no stop condition. No branch switch, no dependency or runtime network change; `npm ci --no-audit --no-fund` installed the declared dev dependencies so lint/tests could run.
+
+## Blunt audit and coverage
+
+The canonical app is the zero-build static ES-module app under `app/` (the Next.js `src/` tree is legacy/quarantined). Targeted semantic reads covered `package.json`, `app/core/schema.js` (version, collections, settings, normalizers, MIGRATIONS), `app/core/store.js` write path, `app/core/domain/postCommit.js` and `propagationContracts.js` (spine order + contract parity), `seat.js`/`seatRegistry.js`/`accessGateway.js`/`chainRegistry.js` (five-altitude seats, rights, rank windows, fail-closed gateway), `cases.js` (graph vocabulary, resolver, relations), `disclosureManifests.js`, `app/main.js` (NAV/renderers/aliases/badges/descriptions), `app/actions.js` (createApi mounts + guardApi), `app/core/csv.js`, the full Prospective module (ADR-0094) as the freshest pattern template, the UI component/dom/download contracts, and the relevant regression fixtures. **The entire repository was NOT read source-file by source-file.** Most of the ~300 domain modules, the full real-browser UI flow, and every legacy tree remain **[UNVERIFIED]**. Broad find/grep output is inventory, not an audit.
+
+- **Working and directly exercised:** the transactional store, the generalized atomic post-commit spine (one rule + one contract added), five-altitude declared seats with subtree scope, the typed-link graph + resolver, the disclosure compiler postures and leak oracle, aggregate-only CSV, the standalone offline build, and the Prospective Intervention Contract this module links to.
+- **Role tiering DOES exist and is real** (rank 1–5 seats, ACTION_RIGHTS rank windows, RECORD_POLICIES detail ceilings, SAFE_READS, disclosure-class postures, altitude playbooks). It is enforced as a local workspace declaration, **not** authenticated multi-user security — the standing honest limit.
+- **Shallow/missing before this session:** the roadmap's #1 item — multi-action robust allocation with capacity constraints, heterogeneous populations and effectiveness-range sensitivity — was unbuilt. The Allocation Governor (explore/exploit UCB1), the Policy Portfolio and the two-action Decision Robustness Lab existed, but nothing solved a multi-action integer allocation under budgeted uncertainty, priced an equity floor, or graded the allocation out of sample. That is what shipped. No stub, fake data or placeholder was introduced; the module reads only records other modules own.
+
+## Research converted into code
+
+Three fresh web searches: 2026 decision-intelligence platforms + robust optimisation (Gurobi Summit, GLAM GenAI+Gurobi); Bertsimas–Sim budgeted uncertainty / minimax-regret / capacity-constrained applications (PLOS ONE 2026, MDPI Mathematics 2026, the Signed Budget Uncertainty enumeration result); 2026 people-analytics workforce capacity/scenario tools (Visier, Workday, Orgvue, ChartHop). Named sources and altitude tags are in `RESEARCH.md` (Session 135) and ADR-0095. Selected gap: **the decision itself** — exact robust optimisation made governable inside the leadership workspace, joined to the frozen-cohort out-of-sample grading ADR-0094 already owns. The safe alternative (a point-forecast scenario dashboard) was explicitly rejected. No market-first or verified-vendor-efficacy claim: all vendor capability claims are search snippets, **[UNVERIFIED]**.
+
+## Shipped
+
+- **`#/robust-allocation`** — five panels (Desk / Plans / Solve / Roll-up / Certificate), an accessible dynamic declare dialog (segments + actions editors), rank-gated conventions, identity-free Markdown brief and aggregate-only CSV #93. Five altitude-specific playbooks with Jaques time-span horizons.
+- **Exact solver** — Bertsimas–Sim `Γ` budgeted uncertainty over declared effect ranges; feasible integer-grid + `C(n, Γ)` scenario enumeration; Wald maximin, Savage minimax regret against the per-scenario oracle, the optimistic plan and its worst case, the price of the equity floor, one-at-a-time stress switches and exact regret release (VoI). Deterministic tie-breaks; over-cap and infeasible plans REFUSED.
+- **Schema v98** — additive `MIGRATIONS[97]`; two collections (`robustPlans`, `robustMarkers`), four clamped settings, fail-closed normalizers that drop a malformed plan and an adopted plan with no frozen solution. An upgraded workspace opens with no invented allocation.
+- **RULE-RAL-01..04** on the shared spine before market/succession/seat/seal: one adoption atomically writes one governed DACI decision, one owned delivery task per funded line, `allocates`/`consumes-capacity`/`rests-on` provenance and one `rolls-up-to` edge per leadership ancestor; a falsified/overdue/ungraded premise opens one bounded governed finding per plan per ISO week. Marker-idempotent, bounded, pausable; explicit scan always runs.
+- **Disclosure** — one graph node type (`robustplan`) reusing existing relations, identity-free resolver, `detailCeiling: 0` record policies, adaptive manifest row, `declare-robust-allocation` right (rank 1–5) with director+ conventions, four safe reads; pooled falsified share withheld below the cell floor and below director rank, Wilson 95% + complementary suppression, money never pooled, BLANK-not-zero CSV.
+- **`tests/app/robust-allocation.test.mjs`** (19/19): real createApi → createStore → shared rule → persisted state propagation; hand-verified exact solver values; price of fairness 12; regret release 10; over-cap/infeasible refusals; frontline→manager→director→VP roll-up; peer-span isolation; falsified/overdue/ungraded findings with ISO-week idempotency; reload with zero repair warnings; rank/permission gates; graph-registry invariants; four-altitude leak oracle over brief/CSV/all five panels; CSV #93; fail-closed API boundary.
+
+## Verification (actual results)
+
+- `npm run lint`: **PASS**.
+- `npm run check:boundary`: **PASS** — 473 app ES modules, 139 test suites, 23 documentation checks, 0 leaks.
+- `npm run check:links`: **PASS** (re-run after ADR-0095 + INDEX link added).
+- `tests/app/robust-allocation.test.mjs`: **19/19 PASS**.
+- `tests/app/core.test.mjs` (15/15), `csv.test.mjs` (5/5), `board-room.test.mjs` (45/45, rule count 78), `disclosure-compiler.test.mjs` (21/21, route inventory + leak oracle): **PASS**.
+- `npm run build:standalone` + `verify:standalone`: **PASS** — 8,072,085 bytes / 472 modules / schema v98, density 17,102 < 24,000 bound; 7/7 standalone tests.
+- Tripwire sweep across 100 test files: schema-version assertions → 98, migration chains → `97 → 98`, CSV-scope assertions → 93, shared-spine tripwire → 78, RENDERER_ROUTES + graph registries exhaustive.
+- Full `npm test` in one process overruns this sandbox's time budget (per prior sessions); the documented per-file procedure was used. Full real-browser assistive-technology walkthrough remains **[UNVERIFIED]** (automated panel rendering + leak oracle is what ran).
+
+## Honest limits
+
+Local seats are auditable declarations, not authentication. A solved allocation is a decision under declared assumptions — never a causal forecast, never a person rating. The exact solver is bounded (≤6 actions, ≤8 units, ≤50,000 combinations) and REFUSES larger problems rather than approximating. Effect ranges are declared assumptions, not measurements. Small-cell suppression is not differential privacy; this module's repeated per-altitude roll-up releases are not yet governed by the differencing register (ADR-0092). The module reads only records other modules own and writes none of them. The full repository was not read line by line; everything outside the surfaces listed above is **[UNVERIFIED]**.
+
+## Sync
+
+Pending: commit, push to `origin/arena/28c2a7c8-leados`, open pull request (result recorded below once complete).
+
 # 2026-11-05 — Prospective Intervention Contract (ADR-0094; Schema v97, additive 96 → 97)
 
 ## Repository identity and sync baseline

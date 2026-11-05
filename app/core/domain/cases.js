@@ -398,6 +398,13 @@ export const LINK_ENTITY_TYPES = [
   // cohort id, a person name or an amount through the general resolver.
   'prospectivecontract',
   'prospectivegrade',
+  // ADR-0095 (Schema v98): an adopted robust allocation is a first-class graph
+  // node. It carries counts, hours, dates and state names only — never a plan
+  // title, a person name or a currency amount — so the funded lines it opened
+  // and every ancestor it rolled up to are navigable from the plan, and the plan
+  // from them. The decision and delivery tasks it opens are `decision` and
+  // `delegation` endpoints, exactly as the prospective contract expresses them.
+  'robustplan',
   // ADR-0085's `carryover` node and ADR-0088's `escalationrecord` /
   // `escalationcommitment` nodes are declared above, each exactly once. A second
   // copy of a type here is not harmless bookkeeping: it breaks the
@@ -555,6 +562,8 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   // ADR-0094: keep the registry exhaustive with LINK_ENTITY_TYPES.
   prospectivecontract: 'prospectiveContracts',
   prospectivegrade: 'prospectiveGrades',
+  // ADR-0095: keep the registry exhaustive with LINK_ENTITY_TYPES.
+  robustplan: 'robustPlans',
 });
 
 export const FORBIDDEN_LINK_TYPES = ['conflict', 'pulse'];
@@ -2690,6 +2699,28 @@ export function resolveLinkedEntity(state, entityType, entityId) {
           observedN: rec.observedN,
           reachedN: rec.reachedN,
           brier: rec.brier,
+        },
+      };
+    }
+    case 'robustplan': {
+      const rec = (state.robustPlans || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      // The shared graph carries counts, hours, dates and state names only. No
+      // title, no person, no free text and no currency amount is projected here.
+      return {
+        type: 'robustplan',
+        id: rec.id,
+        title: `Robust allocation · Γ=${rec.gamma} · ${rec.declaredOn}`,
+        status: `${rec.actions.length} action(s) · ${rec.status} · horizon ${rec.horizonOn}`,
+        route: `#/robust-allocation?panel=solve&plan=${encodeURIComponent(rec.id)}`,
+        raw: {
+          id: rec.id,
+          altitudeKey: rec.altitudeKey,
+          declaredOn: rec.declaredOn,
+          horizonOn: rec.horizonOn,
+          gamma: rec.gamma,
+          status: rec.status,
+          actionsN: rec.actions.length,
         },
       };
     }

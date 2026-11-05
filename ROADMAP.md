@@ -1,3 +1,26 @@
+## 2026-11-05 — Robust multi-action allocation under uncertainty (Session 135, Schema v98, ADR-0095)
+
+### Implemented
+- **[frontline → chief]** `#/robust-allocation` Robust Allocation Terminal ([ADR-0095](docs/adr/0095-robust-allocation-terminal.md)): a multi-action, capacity-constrained INTEGER allocation solved EXACTLY under Bertsimas–Sim budgeted uncertainty over declared effect ranges. Prints the Wald maximin and Savage minimax-regret plans, the optimistic plan and its worst case, the price of the equity floor, a one-at-a-time stress table and the exact regret released by resolving the top range. CSV #93 `robust-allocation` is aggregate-only and refusal-honest; money is never pooled across currencies.
+- **[all five altitudes, one solver / five different jobs]** `RULE-RAL-01..04` on the **same shared post-commit spine**: one adoption atomically produces one governed DACI decision, one owned delivery task per funded line, `allocates`/`consumes-capacity`/`rests-on` provenance and one `rolls-up-to` edge **per leadership ancestor**. A linked prospective contract that misses its threshold opens one governed re-allocation decision per plan per ISO week; an overdue line or ungraded premise opens its own bounded finding. Marker-idempotent, bounded, pausable; an explicit scan always runs.
+- **[frontline / manager]** Own plans, the exact robust/regret lines and the stress that flips them; pooled rates withheld below director rank with a printed reason.
+- **[director]** Per-altitude roll-up with the falsified share, Wilson 95% intervals, complementary suppression and the rank-gated cell/review/solver conventions; the price of fairness made explicit.
+- **[VP / CEO]** Aggregate altitude rows, the governed findings owned at their altitude, and an identity-free upward certificate that never names a person, a plan or an amount.
+- **[all altitudes]** Additive `MIGRATIONS[97]` (`97 → 98`), two fail-closed collections, four clamped settings, one new graph node type reusing existing relations, declared `declare-robust-allocation` API right, `detailCeiling: 0` record policies and an adaptive disclosure manifest row.
+
+### Next ambitious slices
+1. **[all altitudes] Planned:** authenticated server/tenant boundaries and consented migration; browser seat selection is still not enterprise access control (the standing top item).
+2. **[director → chief] Planned:** route this module's repeated per-altitude roll-up releases through the differencing register (ADR-0092), so a series of allocation aggregates is audited as one integer system across dates.
+3. **[manager → chief] Planned:** a bounded branch-and-bound (or an offline exact-solver export) for problems larger than the declared 50,000-combination bound — never a silent heuristic — plus learning declared effect ranges from settled prospective grades without asserting causality.
+
+### Deliberately rejected
+- **[all altitudes]** A point-forecast scenario dashboard — it maximises the forecast and the error and prints no guarantee, no equity price and no regret.
+- **[all altitudes]** Embedding a native/heuristic MIP solver — breaks the zero-build local-first promise or prints an approximate "robust" plan, the exact dishonesty this terminal avoids.
+- **[all altitudes]** Auto-adopting the optimal plan, auto-re-solving on falsification, rating a person, asserting causality, pooling money across currencies, or printing zero for a refused cell.
+- **[all altitudes]** A second command bus or per-role glue for hierarchy — altitude stays a dimension of the existing seat scope, rule fan-out and disclosure compiler.
+
+**Benchmark:** no surveyed OR solver (Gurobi/OR-Tools) or people-analytics platform (Visier/Workday/Orgvue/ChartHop) was shown to combine an exact robust integer allocation, a priced equity floor, governed hierarchy-native adoption and frozen-cohort out-of-sample falsification in one zero-build leadership workspace. This is a gap claim from public snippets, **not** verified vendor capability or a market-first claim.
+
 ## 2026-11-05 — Pre-registered leadership bets (Session 134, Schema v97, ADR-0094)
 
 ### Implemented

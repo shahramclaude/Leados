@@ -49,6 +49,11 @@ import { buildDifferencesReport, differencesCsvRows } from './domain/differencin
 // altitude pools and one workspace row — never a cohort id, a contract id, a
 // title, a person or an amount. A refused figure is BLANK, never zero.
 import { buildProspectiveReport, prospectiveCsvRows } from './domain/prospective.js';
+// ADR-0095: the robust allocation ledger's aggregate-only export. It carries
+// altitude rows and one workspace row — never a plan id, a title, a person or a
+// currency amount. Money is never pooled across currencies; a refused figure is
+// BLANK, never zero.
+import { buildRobustAllocationReport, robustAllocationCsvRows } from './domain/robustAllocation.js';
 import { buildCadenceReport, cadenceCsvRows } from './domain/cadence.js';
 import { carryoverCsvRows } from './domain/carryover.js';
 import { valueStreamCsvRows } from './domain/valueStream.js';
@@ -985,6 +990,10 @@ export const CSV_EXPORTS = [
   // one row per published calibration cell, one per altitude pool, one workspace
   // row. No contract id, no cohort id, no title, no name, no amount.
   { key: 'prospective-contracts', label: 'Prospective contracts (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'prospective-contracts', description: 'One row per calibration cell (altitude by instrument), one per altitude pool and one workspace row: declared, graded and reached counts, observed rate, mean Brier, strictly-prior reference Brier, Brier skill and Wilson 95% bounds. NO contract id, NO cohort id, NO title, NO person, NO amount and NO free text. Any refused or suppressed figure is BLANK rather than zero.' },
+  // CSV scope #93 (Schema v98, ADR-0095). Aggregate-only robust allocation
+  // telemetry: one row per altitude, one workspace row. No plan id, no title, no
+  // name, no currency amount; money is never pooled across currencies.
+  { key: 'robust-allocation', label: 'Robust allocation (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'robust-allocation', description: 'One row per leadership altitude and one workspace row: plan, adopted, funded-line, falsified, overdue and ungraded counts, committed leadership hours, the falsified share and Wilson 95% bounds. NO plan id, NO title, NO person, NO currency amount and NO free text. Money is never pooled across currencies. Any refused or suppressed figure is BLANK rather than zero.' },
   { key: 'differencing-register', label: 'Publication register (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'differencing-register', description: 'One row per published module plus one workspace row: release counts, provably-safe / protected / determined counts, withheld-cell and equation counts, the last publication date and the two stationarity statistics. NO span label, NO span id, NO person, NO record title, NO amount, and NO recovered value \u2014 a determined value is disclosed as a coordinate on the screen, never exported as a figure. A refused rate is BLANK rather than zero.' },
   { key: 'strategy-renewal', label: 'Strategy renewal (active-seat aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'strategy-renewal', description: 'Active-seat altitude and workspace learning rows only: active, carryover and overdue commitments, effort, in-window delivery reference with interval, evidence count and verdict. No pact IDs, bet IDs, titles, cohort identifiers, names or notes; refused and suppressed figures are BLANK rather than zero.' },
   // CSV scope #83 (Schema v94, ADR-0089). Aggregate-only operating-model
@@ -5968,6 +5977,18 @@ function buildScopeTable(state, scope, now) {
       const columns = ['row_kind', 'altitude', 'rank', 'instrument', 'contracts_n', 'graded_n', 'reached_n',
         'observed_pct', 'mean_brier', 'mean_reference_brier', 'skill_pct',
         'interval_low_pct', 'interval_high_pct', 'refused', 'reason']
+        .map((key) => ({ key, header: key }));
+      return { columns, rows };
+    }
+    case 'robust-allocation': {
+      // CSV scope #93 (Schema v98, ADR-0095). Aggregate-only and refusal-honest:
+      // a sub-floor altitude row and a pooled rate withheld below director rank
+      // are BLANK, never zero. No currency amount is exported or pooled.
+      const report = buildRobustAllocationReport(state, { now, settings: state.settings || {} });
+      const rows = robustAllocationCsvRows(report);
+      const columns = ['row_kind', 'altitude', 'rank', 'plans_n', 'adopted_n', 'funded_lines_n',
+        'committed_hours', 'falsified_n', 'overdue_n', 'ungraded_n',
+        'falsified_pct', 'interval_low_pct', 'interval_high_pct', 'refused', 'reason']
         .map((key) => ({ key, header: key }));
       return { columns, rows };
     }

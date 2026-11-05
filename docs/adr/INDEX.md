@@ -118,3 +118,4 @@ Format: copy `0001-record-architecture-decisions.md`, number sequentially, statu
 
 - [0093 — Decision robustness without exporting private survey evidence](0093-decision-robustness-lab.md)
 - [ADR-0094: The Prospective Intervention Contract — a frozen pre-registered bet, one once-only Brier grade against a strictly-prior base rate, and hierarchy-native calibration roll-up on the shared spine (`#/prospective`, Schema v97)](./0094-prospective-intervention-contract.md)
+- [ADR-0095: The Robust Allocation Terminal — a multi-action, capacity-constrained integer allocation solved exactly under Bertsimas–Sim budgeted uncertainty, printing the Wald maximin and Savage minimax-regret plans, the price of the equity floor and the regret a range's resolution releases, with governed adoption and out-of-sample falsification on the shared spine (`#/robust-allocation`, Schema v98)](./0095-robust-allocation-terminal.md)

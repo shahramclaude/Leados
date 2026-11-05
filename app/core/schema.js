@@ -189,6 +189,14 @@ import {
   normalizeProspectiveMarkers,
   normalizeProspectiveSettings,
 } from './domain/prospectiveSchema.js';
+// ADR-0095: the Robust Allocation Terminal. Declared plans (with a frozen
+// solution at adoption) and the rules' idempotency markers, plus the clamped
+// conventions. A malformed row is dropped, never repaired.
+import {
+  normalizeRobustPlans,
+  normalizeRobustMarkers,
+  normalizeRobustAllocationSettings,
+} from './domain/robustAllocationSchema.js';
 // ADR-0088: the Escalation Economy — the disposition ledger, intervention-rate
 // commitments, idempotency markers, and clamped conventions.
 import {
@@ -403,7 +411,7 @@ export {
 // older blob simply opens on the undeclared operator view. A version bump here
 // would have forced 78 test files to be rewritten for zero user benefit; the
 // honest choice is to add nothing to migrate.
-export const SCHEMA_VERSION = 97;
+export const SCHEMA_VERSION = 98;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -1618,6 +1626,15 @@ export const DEFAULT_SETTINGS = Object.freeze({
   prospectiveSkillFloorPct: 10,
   prospectiveReviewDays: 14,
   prospectiveAutoPropagate: true,
+  // ADR-0095: the Robust Allocation Terminal. `robustAllocationCellFloor`
+  // suppresses a roll-up altitude row; `robustAllocationReviewDays` bounds the
+  // delivery/evidence-integrity window; `robustAllocationMaxCombinations` is the
+  // exact-solver grid bound (an over-cap plan is refused, never approximated).
+  // All are clamped on read and every one is a DECLARED convention.
+  robustAllocationCellFloor: 4,
+  robustAllocationReviewDays: 14,
+  robustAllocationAutoPropagate: true,
+  robustAllocationMaxCombinations: 50000,
   });
 
 export const COLLECTIONS = [
@@ -1986,6 +2003,13 @@ export const COLLECTIONS = [
   'prospectiveContracts',
   'prospectiveGrades',
   'prospectiveMarkers',
+  // ADR-0095 / Schema v98: the Robust Allocation Terminal. `robustPlans` holds
+  // declared plans (ranges, constraints, and the frozen solved vector at
+  // adoption); `robustMarkers` is the four shared-post-commit rules' idempotency
+  // ledger. No solution, rate or interval is persisted for a draft: all of it is
+  // derived exactly on read.
+  'robustPlans',
+  'robustMarkers',
   'links',
   'portfolio',
   'events',
@@ -2651,6 +2675,7 @@ export function normalizeSettings(raw) {
     ...normalizeCarryoverSettings(s),
     ...normalizeCadenceSettings(s),
     ...normalizeProspectiveSettings(s),
+    ...normalizeRobustAllocationSettings(s),
   };
 }
 
@@ -6762,6 +6787,13 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.prospectiveContracts = normalizeProspectiveContracts(raw.prospectiveContracts, warnings);
   state.prospectiveGrades = normalizeProspectiveGrades(raw.prospectiveGrades, warnings);
   state.prospectiveMarkers = normalizeProspectiveMarkers(raw.prospectiveMarkers);
+  // ADR-0095: plans and rule markers resolve before the typed links so
+  // `allocates`, `consumes-capacity`, `rests-on` and `rolls-up-to` edges validate
+  // against real ids. A malformed plan (or an adopted plan with no frozen
+  // solution) is DROPPED with a warning; nothing is repaired into a commitment a
+  // leader might act on.
+  state.robustPlans = normalizeRobustPlans(raw.robustPlans, warnings);
+  state.robustMarkers = normalizeRobustMarkers(raw.robustMarkers);
   // ADR-0085: the Operating Cadence Clock. A malformed forum, a sitting with no
   // ADR-0088: carryover records resolve after pacts so `carries-over` and
   // ADR-0089: resolve peer contracts and immutable receipts before typed links.
@@ -7561,6 +7593,27 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  // ADR-0095: additive 97 → 98. An existing workspace has NOT modelled a robust
+  // allocation, so both ledgers start empty — an empty ledger means "no
+  // allocation has been declared here yet", a different (and honest) claim from
+  // "an allocation was solved and funded nothing". No effect range, segment
+  // size, solution or commitment is inferred from pre-existing records. Every
+  // value below is a declared convention with a printed default.
+  97: (v97) => ({
+    ...v97,
+    schemaVersion: 98,
+    robustPlans: Array.isArray(v97.robustPlans) ? v97.robustPlans : [],
+    robustMarkers: Array.isArray(v97.robustMarkers) ? v97.robustMarkers : [],
+    settings: isPlainObject(v97.settings)
+      ? {
+        ...v97.settings,
+        robustAllocationCellFloor: v97.settings.robustAllocationCellFloor ?? 4,
+        robustAllocationReviewDays: v97.settings.robustAllocationReviewDays ?? 14,
+        robustAllocationAutoPropagate: v97.settings.robustAllocationAutoPropagate !== false,
+        robustAllocationMaxCombinations: v97.settings.robustAllocationMaxCombinations ?? 50000,
+      }
+      : { ...DEFAULT_SETTINGS },
+  }),
   // ADR-0094: additive 96 → 97. An existing workspace has NOT pre-registered
   // anything, so all three ledgers start empty — an empty ledger means "no bet
   // has been frozen here yet", which is a different (and honest) claim from

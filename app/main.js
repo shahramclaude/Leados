@@ -77,6 +77,10 @@ import { differencesAttentionCount } from './core/domain/differencing.js';
 // roll the calibration signal up every level of the same chain of command.
 import { renderProspective } from './views/prospective.js';
 import { prospectiveAttentionCount } from './core/domain/prospective.js';
+// ADR-0095: solve a multi-action allocation under declared effect ranges, price
+// the equity floor, and roll the funded commitment up the same chain of command.
+import { renderRobustAllocation } from './views/robustAllocation.js';
+import { robustAllocationAttentionCount } from './core/domain/robustAllocation.js';
 import { renderResponses } from './views/responses.js';
 import { renderActionBundles } from './views/actionBundles.js';
 import { bundleAttentionCount } from './core/domain/actionBundles.js';
@@ -268,6 +272,8 @@ export const NAV = [
     { route: 'differencing', label: 'Differencing', icon: '⊖', badge: 'differencing' },
     // ADR-0094: pre-registered leadership bets, graded out of sample.
     { route: 'prospective', label: 'Prospective contracts', icon: '⌛', badge: 'prospective' },
+    // ADR-0095: robust multi-action allocation under declared effect ranges.
+    { route: 'robust-allocation', label: 'Robust allocation', icon: '⚖', badge: 'robust-allocation' },
     { route: 'identity', label: 'Attested commits', icon: '🔑', badge: 'identity' },
     { route: 'today', label: 'Today', icon: '◎' },
     { route: 'responses', label: 'Response studio', icon: '⌁', badge: 'responses' },
@@ -437,6 +443,7 @@ const RENDERERS = {
   federation: (ctx) => renderFederation(ctx),
   differencing: (ctx) => renderDifferencing(ctx),
   prospective: (ctx) => renderProspective(ctx),
+  'robust-allocation': (ctx) => renderRobustAllocation(ctx),
   responses: (ctx) => renderResponses(ctx),
   bundles: (ctx) => renderActionBundles(ctx),
   attribution: (ctx) => renderSettlement(ctx),
@@ -677,6 +684,12 @@ export function parseRoute(hash) {
     'prospective': 'prospective', 'pre-registration': 'prospective', 'prospective-contracts': 'prospective',
     'frozen-bets': 'prospective', 'brier': 'prospective', 'brier-ledger': 'prospective',
     'prediction-registry': 'prospective', 'intervention-contract': 'prospective',
+    // ADR-0095: none of these shadows a shipped route. 'allocation' belongs to
+    // the Allocation Governor (explore/exploit) and is deliberately NOT claimed.
+    'robust-allocation': 'robust-allocation', 'robust-portfolio': 'robust-allocation',
+    'minimax-regret': 'robust-allocation', 'maximin': 'robust-allocation',
+    'capacity-allocation': 'robust-allocation', 'equity-floor': 'robust-allocation',
+    'bertsimas-sim': 'robust-allocation',
     // ADR-0090 supersedes the envoy alias that used to own 'federation': the
     // bare word now means the measured reading, and the packet screen keeps its
     // own name and its own aliases. No shipped link is broken: 'federated',
@@ -1024,6 +1037,8 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       differencing: differencesAttentionCount(state, { now: at, settings: state.settings }),
       // ADR-0094: due or overdue frozen contracts plus open governed findings.
       prospective: prospectiveAttentionCount(state, { now: at, settings: state.settings }),
+      // ADR-0095: falsified, overdue or ungraded premises plus open governed findings.
+      'robust-allocation': robustAllocationAttentionCount(state, { now: at, settings: state.settings }),
       // ADR-0082: the badge counts chain breaks only — a valid chain is not noise.
       seal: sealAttentionCount(state),
       identity: identityAttentionCount(state, { now: at, settings: state.settings }),
@@ -1503,6 +1518,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       envoy: 'Sealed exchange — how a span’s pack leaves its own browser: projected at the receiving altitude’s disclosure class, committed with a per-item SHA-256 and a Merkle root, signed keyed when the vault is unlocked, verified by the receiver before a single field is stored, ingested idempotently, and turned into a governed reconciliation decision when two workspaces disagree',
       federation: 'Programme federation — which declared leadership edges actually carry work, measured from dated artefacts other modules already wrote: connected, bypassed, stale or silent, with a Wilson-bounded coverage rate that is withheld below the span floor and small cells suppressed',
       prospective: 'Prospective contracts — a probability, threshold, horizon and exact cohort of record ids are frozen BEFORE the governed work exists; one governed DACI decision, one owned outcome task and one roll-up edge per leadership ancestor are written in the same atomic transaction; the cohort is graded once out of sample with a Brier proper score against a strictly-prior base rate, an unobservable cohort is refused rather than scored as a miss, and pooled rates are withheld below the declared cell floor and below director rank',
+      'robust-allocation': 'Robust allocation — a multi-action, capacity-constrained integer allocation is solved EXACTLY under Bertsimas–Sim budgeted uncertainty over declared effect ranges, printing the Wald maximin and Savage minimax-regret plans, the price of the equity floor, the single range whose stress flips the recommendation and the regret its resolution releases; adopting it writes one governed DACI decision, one owned delivery task per funded line and one roll-up edge per leadership ancestor in the same atomic transaction, and a linked pre-registered contract that misses its threshold opens a governed re-allocation decision; an over-cap or infeasible plan is refused rather than approximated, money is never pooled across currencies, and the pooled falsified share is withheld below the declared cell floor and below director rank',
       differencing: 'Differencing defender — a table can be safe while a series of tables is not: every published aggregate audited as one exact integer system across releases, seats and modules, the cheapest suppression pattern that determines nothing chosen before publication, and a publication refused when no pattern can make it safe',
       responses: 'Response studio — rehearse and adopt a coordinated leadership response',
       bundles: 'Action bundles — review, adopt and safely withdraw coordinated work',

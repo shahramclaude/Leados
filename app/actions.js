@@ -25,6 +25,7 @@ import { createDifferencingActions } from './core/domain/differencingActions.js'
 // ADR-0094: pre-register, grade and govern a frozen prospective contract on the
 // same access gateway and the same post-commit rule spine as every other module.
 import { createProspectiveActions } from './core/domain/prospectiveActions.js';
+import { createRobustAllocationActions } from './core/domain/robustAllocationActions.js';
 import { createCadenceActions } from './core/domain/cadenceActions.js';
 import { createCarryoverActions } from './core/domain/carryoverActions.js';
 
@@ -19676,6 +19677,10 @@ export function createApi(store, options = {}) {
   // that follows a declaration — governed decision, owned task, typed edges and
   // the vertical roll-up — is produced by the shared rules in one transaction.
   Object.assign(api, createProspectiveActions(store, { now: clock, idFactory: id }));
+  // ADR-0095: the Robust Allocation Terminal. The governed decision, the owned
+  // delivery tasks, the typed provenance and the vertical roll-up are produced
+  // by RULE-RAL-01 on the shared spine, not here.
+  Object.assign(api, createRobustAllocationActions(store, { now: clock, idFactory: id }));
   // ADR-0087: the Operating Cadence Clock's reviewed commands.
   Object.assign(api, createCadenceActions(store, { now: clock, idFactory: id }));
   Object.assign(api, createCarryoverActions(store, { now: clock, idFactory: id }));
