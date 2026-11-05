@@ -72,7 +72,7 @@
  *    reporting line.
  */
 
-export const ROBUST_ALLOCATION_ENGINE_VERSION = 'robust-allocation-v1';
+export const ROBUST_ALLOCATION_ENGINE_VERSION = 'robust-allocation-v2';
 
 export const ROBUST_ALLOCATION_LIMITS = Object.freeze({
   plans: 120,
@@ -81,9 +81,21 @@ export const ROBUST_ALLOCATION_LIMITS = Object.freeze({
   segmentsMax: 6,
   unitsMax: 8,
   // The exact-enumeration bound. A plan whose feasible grid exceeds this is
-  // REFUSED with a printed reason (reduce units or actions), never approximated.
+  // solved by the certified branch-and-bound (same printed values), never
+  // approximated; outside the branch-and-bound's own structural bounds it is
+  // still REFUSED with a printed reason.
   combinationsMax: 50000,
   combinationsMin: 1000,
+  // ADR-0097: the certified branch-and-bound regime. One shared node budget
+  // covers every sub-solve (oracles, maximin, minimax, fairness, stress,
+  // regret release); exhaustion refuses the whole solve. The unit sum is the
+  // structural bound that keeps the bound arithmetic honest.
+  nodeBudgetDefault: 250000,
+  nodeBudgetMin: 25000,
+  nodeBudgetMax: 2000000,
+  // Reachable bound: 6 actions × 8 units is 48, so 40 is a REAL refusal line,
+  // not dead code — a 6×8 over-cap instance is refused, never approximated.
+  unitsSumMax: 40,
   // C(6,3)=20 is the largest scenario count for n<=6; the cap is a guard, not a
   // refusal the declared regime can reach.
   scenariosMax: 24,
@@ -108,6 +120,7 @@ export const ROBUST_ALLOCATION_DEFAULTS = Object.freeze({
   robustAllocationReviewDays: 14,
   robustAllocationAutoPropagate: true,
   robustAllocationMaxCombinations: 50000,
+  robustAllocationNodeBudget: 250000,
 });
 
 export const ROBUST_ALLOCATION_RULE_IDS = Object.freeze({
@@ -115,6 +128,7 @@ export const ROBUST_ALLOCATION_RULE_IDS = Object.freeze({
   falsified: 'RULE-RAL-02',
   overdue: 'RULE-RAL-03',
   ungraded: 'RULE-RAL-04',
+  tension: 'RULE-RAL-05',
 });
 
 export const ROBUST_ALLOCATION_EVENTS = Object.freeze({
@@ -127,7 +141,7 @@ export const ROBUST_ALLOCATION_EVENTS = Object.freeze({
 export const ROBUST_ALLOCATION_TRIGGER_PREFIX = 'robustAllocation.';
 
 export const ROBUST_ALLOCATION_MARKER_KINDS = Object.freeze([
-  'declared', 'adopted', 'falsified', 'overdue', 'ungraded', 'conventions',
+  'declared', 'adopted', 'falsified', 'overdue', 'ungraded', 'conventions', 'premise-tension',
 ]);
 
 /** Default planning horizon by declaring altitude (Jaques time-span). */
@@ -190,7 +204,8 @@ export const ROBUST_ALLOCATION_PLAYBOOK = Object.freeze({
 export const ROBUST_ALLOCATION_DISCLOSURE = Object.freeze({
   premise: 'An allocation is solved under declared effect ranges and hard capacity, budget and equity constraints. It is a decision under assumptions, not a forecast of what will happen and never a rating of a person.',
   uncertainty: 'Bertsimas–Sim budgeted uncertainty: at most Γ of the effect ranges sit at their worst end at once. Γ=0 is the optimistic point forecast; Γ=n is the full box. The worst case is the exact adversary choice, not a sample.',
-  solver: 'The robust integer problem is solved exactly by enumerating the feasible integer grid and the C(n, Γ) scenario problems. A grid above the declared combination bound is REFUSED with a printed reason, never approximated or silently truncated.',
+  solver: 'The robust integer problem is solved exactly — by enumerating the feasible integer grid and the C(n, Γ) scenario problems inside the declared enumeration bound, and above it by a certified branch-and-bound with exact rational relaxation bounds and a shared node budget (the printed certificate names the engine and the nodes explored). An exhausted budget or an out-of-regime instance is REFUSED with a printed reason, never approximated or silently truncated.',
+  calibration: 'Settled prospective grades (ADR-0094) are read back by altitude × instrument cell against the plans whose actions declare that instrument as premise evidence. The engine publishes the graded record and flags premise–evidence TENSION; it never moves a declared range itself — adopting a revised range is a human act that freezes a new plan revision.',
   equity: 'A per-segment equity floor is a hard constraint. The worst-case value it costs versus the unconstrained plan is the printed price of fairness; an infeasible floor is refused, not relaxed.',
   rollup: 'An adopted plan is a graph node fanned out to every leadership ancestor in the SAME atomic transaction. The upward form carries counts, hours, dates and state names — never a title, a plan id, a person name or a currency amount.',
   engine: 'The engine opens governed decisions and owned dated work and writes typed provenance. It never auto-adopts a plan, never closes a human decision, never sends a message and never changes a reporting line.',

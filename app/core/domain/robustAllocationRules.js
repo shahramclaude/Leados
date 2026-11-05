@@ -27,7 +27,7 @@
 import { addDays, dayKey } from '../time.js';
 import { ensureEntityLink } from './automation.js';
 import { buildSeats } from './seat.js';
-import { planState, robustHash, robustWeekKey } from './robustAllocation.js';
+import { buildCalibrationCells, planCoversCell, planState, robustHash, robustWeekKey, wilsonInterval } from './robustAllocation.js';
 import { robustAllocationConventions } from './robustAllocationSchema.js';
 import {
   ROBUST_ALLOCATION_EVENTS,
@@ -361,6 +361,63 @@ function ungradedRule(draft, ctx, built, out, conventions) {
   return opened;
 }
 
+/* ------------------------------------------- RULE-RAL-05: premise–evidence tension
+ * A settled prospective grade belongs to the prospective module; this rule
+ * READS it and answers the question ADR-0094 deliberately left open: is the
+ * graded record in an altitude × instrument cell systematically contradicting
+ * the effect ranges a scoped plan resting on that instrument declares? When a
+ * cell at or above the evidence floor is more falsified than reached, ONE
+ * governed decision per cell per ISO week is opened — carrying counts, a
+ * Wilson interval and a bounded choice set, never a cohort id — and the
+ * declared range itself is NEVER moved by the engine. A revision is a human
+ * act that freezes a new plan.
+ */
+function tensionRule(draft, ctx, built, out, conventions) {
+  const week = robustWeekKey(ctx.now);
+  const omniscientSeat = { id: 'leader', fullAccess: true, scope: new Set(), rank: 5 };
+  const plans = Array.isArray(draft.robustPlans) ? draft.robustPlans : [];
+  const cells = buildCalibrationCells(draft, { seat: omniscientSeat, conventions, plans, built });
+  let opened = 0;
+  for (const cell of cells) {
+    if (opened >= ROBUST_ALLOCATION_LIMITS.decisionsPerScan) break;
+    if (!cell.tension || cell.refused || cell.suppressed) continue;
+    const anchors = plans
+      .filter((p) => p && (p.actions || []).some((a) => a && a.evidenceInstrumentKey === cell.instrumentKey)
+        && planCoversCell(built, p, cell)
+        && inScanScope(draft, ctx, built, p))
+      .sort((a, b) => String(b.declaredOn).localeCompare(String(a.declaredOn)));
+    if (!anchors.length) continue;
+    const anchor = anchors[0];
+    const id = markerId('premise-tension', `${cell.altitudeKey}|${cell.instrumentKey}|${week}`);
+    if (markersOf(draft).some((row) => row?.id === id)) continue;
+    const wilson = wilsonInterval(cell.reachedN, cell.gradedN);
+    const decision = pushDecision(draft, ctx, {
+      title: `Premise–evidence tension: the ${cell.instrumentLabel} record contradicts the declared ranges at ${cell.altitudeKey}`,
+      question: [
+        `In the ${cell.altitudeKey} × ${cell.instrumentLabel} cell, ${cell.gradedN} pre-registered contract(s) have graded: ${cell.reachedN} reached the frozen threshold and ${cell.falsifiedN} missed it (${wilson.refused ? 'rate refused' : `reach rate ${wilson.pct}%, Wilson 95% ${wilson.lowPct}–${wilson.highPct}%`}).`,
+        `${anchors.length} scoped plan(s) declare this instrument as their premise evidence. The graded record contradicts the premises those ranges rest on — but the engine will NOT move a declared range, and a tension is not a causal claim and not a rating of a person.`,
+        'Decide whether to declare a revised plan (a new frozen revision), to keep the current ranges with a written reason, or to record why the graded evidence does not transport to these plans.',
+      ].join(' '),
+      driver: 'Robust allocation evidence calibration',
+      approver: 'Director-or-above span owner',
+      rationale: `[${ROBUST_ALLOCATION_RULE_IDS.tension}] One governed premise–evidence tension decision per cell per ISO week when the graded prospective record is more falsified than reached at or above the declared floor. Counts and intervals only; no cohort id and no declared range is adjusted.`,
+      reviewOn: addDays(dayKey(ctx.now), 14),
+    });
+    if (!decision) continue;
+    addLink(draft, ctx, 'robustplan', anchor.id, 'decision', decision.id, 'allocates', ROBUST_ALLOCATION_RULE_IDS.tension,
+      'A governed premise–evidence tension decision for plans resting on this instrument in this altitude cell.');
+    const vertical = fanOut(draft, ctx, built, anchor, ROBUST_ALLOCATION_RULE_IDS.tension, 'A premise–evidence tension finding');
+    addMarker(draft, ctx, {
+      id, kind: 'premise-tension', planId: anchor.id, decisionId: decision.id, weekKey: week,
+      note: `Cell ${cell.altitudeKey} × ${cell.instrumentKey}: ${cell.falsifiedN} falsified vs ${cell.reachedN} reached over ${cell.gradedN} graded; one governed decision and ${vertical} vertical edge(s).`,
+    });
+    opened += 1;
+    note(ctx, out, ROBUST_ALLOCATION_RULE_IDS.tension, 'created', 'decision', decision.id,
+      `Opened one governed premise–evidence tension decision for the ${cell.altitudeKey} × ${cell.instrumentKey} cell.`);
+  }
+  return opened;
+}
+
 export function robustAllocationRule(draft, ctx = {}) {
   const event = ctx.event || null;
   if (!draft || !event || typeof event.type !== 'string') return [];
@@ -382,6 +439,7 @@ export function robustAllocationRule(draft, ctx = {}) {
     falsifiedRule(draft, runCtx, built, out, conventions);
     overdueRule(draft, runCtx, built, out, conventions);
     ungradedRule(draft, runCtx, built, out, conventions);
+    tensionRule(draft, runCtx, built, out, conventions);
   }
   return out;
 }

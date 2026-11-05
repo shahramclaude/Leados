@@ -9,12 +9,16 @@
  * never repaired into something a leader might act on.
  */
 import { ALTITUDE_KEYS } from './chainRegistry.js';
+import { PROSPECTIVE_INSTRUMENT_KEYS } from './prospectiveRegistry.js';
 import {
   ROBUST_ALLOCATION_DEFAULTS,
   ROBUST_ALLOCATION_ENGINE_VERSION,
   ROBUST_ALLOCATION_LIMITS,
   ROBUST_ALLOCATION_MARKER_KINDS,
 } from './robustAllocationRegistry.js';
+
+const INSTRUMENT_KEYS = new Set(PROSPECTIVE_INSTRUMENT_KEYS);
+const CERT_ENGINES = new Set(['enumeration', 'branch-and-bound']);
 
 const ISO_DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 const ALTITUDES = new Set(ALTITUDE_KEYS);
@@ -54,6 +58,7 @@ export function normalizeRobustAllocationSettings(raw = {}) {
     robustAllocationReviewDays: boundedInt(source.robustAllocationReviewDays, L.reviewDaysMin, L.reviewDaysMax, ROBUST_ALLOCATION_DEFAULTS.robustAllocationReviewDays),
     robustAllocationAutoPropagate: source.robustAllocationAutoPropagate !== false,
     robustAllocationMaxCombinations: boundedInt(source.robustAllocationMaxCombinations, L.combinationsMin, L.combinationsMax, ROBUST_ALLOCATION_DEFAULTS.robustAllocationMaxCombinations),
+    robustAllocationNodeBudget: boundedInt(source.robustAllocationNodeBudget, L.nodeBudgetMin, L.nodeBudgetMax, ROBUST_ALLOCATION_DEFAULTS.robustAllocationNodeBudget),
   };
 }
 
@@ -89,7 +94,12 @@ function normalizeAction(raw, segmentKeys) {
   const maxUnits = boundedInt(raw.maxUnits, 1, L.unitsMax, 0);
   if (unitCost < 0 || unitHours < 0 || unitCoverage < 1 || effectLo < 0 || effectHi < 0 || maxUnits < 1) return null;
   if (effectHi < effectLo) return null;
-  return { key, label, segmentKey, unitCost, unitHours, unitCoverage, effectLo, effectHi, maxUnits };
+  // ADR-0097: an action MAY declare which prospective instrument grades its
+  // premise evidence. Unknown instruments fail closed to null evidence.
+  const evidenceInstrumentKey = INSTRUMENT_KEYS.has(text(raw.evidenceInstrumentKey, 40))
+    ? text(raw.evidenceInstrumentKey, 40)
+    : null;
+  return { key, label, segmentKey, unitCost, unitHours, unitCoverage, effectLo, effectHi, maxUnits, evidenceInstrumentKey };
 }
 
 /** Validate a declaration input. Returns either a clean declaration or a refusal. */
@@ -133,6 +143,10 @@ export function validateRobustAllocationDeclaration(input = {}) {
     const act = normalizeAction(raw, segmentKeys);
     if (!act) return { ok: false, error: 'Each action needs a key, a label, a declared segment, non-negative cost/hours, coverage ≥ 1, an effect range with hi ≥ lo, and maxUnits ≥ 1.', field: 'actions' };
     if (actionKeys.has(act.key)) return { ok: false, error: `Duplicate action key "${act.key}".`, field: 'actions' };
+    const declaredInstrument = text(raw && raw.evidenceInstrumentKey, 40);
+    if (declaredInstrument && !INSTRUMENT_KEYS.has(declaredInstrument)) {
+      return { ok: false, error: `"${declaredInstrument}" is not one of the four declared observable instruments; leave it blank or choose honestly.`, field: 'actions' };
+    }
     actionKeys.add(act.key);
     actions.push(act);
   }
@@ -148,7 +162,26 @@ export function validateRobustAllocationDeclaration(input = {}) {
   }
   return {
     ok: true,
-    declaration: { title, outcomeLabel, currency, budgetCap, hoursCap, horizonDays, gamma, segments, actions },
+    declaration: {
+      title, outcomeLabel, currency, budgetCap, hoursCap, horizonDays, gamma, segments, actions,
+      supersedesId: idOrNull(source.supersedesId),
+    },
+  };
+}
+
+function normalizeCertificate(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    // A v98-era frozen solution was solved by the enumerator by construction.
+    return { engine: 'enumeration', nodes: null, pruned: null, budget: null, certified: true };
+  }
+  const engine = CERT_ENGINES.has(text(raw.engine, 40)) ? text(raw.engine, 40) : null;
+  if (!engine) return { engine: 'enumeration', nodes: null, pruned: null, budget: null, certified: true };
+  return {
+    engine,
+    nodes: raw.nodes === null ? null : boundedInt(raw.nodes, 0, Number.MAX_SAFE_INTEGER, 0),
+    pruned: raw.pruned === null ? null : boundedInt(raw.pruned, 0, Number.MAX_SAFE_INTEGER, 0),
+    budget: raw.budget === null ? null : boundedInt(raw.budget, 0, Number.MAX_SAFE_INTEGER, 0),
+    certified: raw.certified !== false,
   };
 }
 
@@ -171,6 +204,7 @@ function normalizeFrozen(raw, actionCount) {
     stressSwitches: Array.isArray(raw.stressSwitches) ? raw.stressSwitches.filter((k) => typeof k === 'string').slice(0, ROBUST_ALLOCATION_LIMITS.actionsMax) : [],
     topExposureAction: idOrNull(raw.topExposureAction, 40),
     regretRelease: boundedInt(raw.regretRelease, 0, Number.MAX_SAFE_INTEGER, 0),
+    certificate: normalizeCertificate(raw.certificate),
   };
 }
 
@@ -221,6 +255,7 @@ export function normalizeRobustPlan(raw) {
     segments,
     actions,
     linkedContractId: idOrNull(raw.linkedContractId),
+    supersedesId: idOrNull(raw.supersedesId),
     status,
     adoptedOn: validDay(raw.adoptedOn),
     frozen,

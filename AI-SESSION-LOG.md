@@ -1,3 +1,45 @@
+# 2026-11-05 — The Calibrated Allocator (ADR-0097; Schema v99, additive 98 → 99)
+
+## Repository identity and sync baseline
+
+First tool operation: `git remote -v`, `git status`, `git log --oneline`. Origin was `https://github.com/shahramclaude/Leados.git` (fetch + push); branch `arena/c3b4fa36-leados` clean at base `cf97c49` (Merge PR #160). Identity **PASS**. No branch switch, no dependency or runtime network change; `npm ci --no-audit --no-fund` installed the declared dev dependencies so lint/tests could run.
+
+## Blunt audit and coverage
+
+Targeted semantic reads covered `app/core/domain/robustAllocation*.js` (engine, schema, rules, actions, registry), `prospective*.js` (registry/schema/read model), `differencing*` (register API), `postCommit.js` + `propagationContracts.js` (spine order + parity), `seat.js`/`chainRegistry.js` (seats/span), `disclosureManifests.js`, `app/views/{robustAllocation,prospective,publicationPanel}.js`, `app/core/schema.js` (v98, MIGRATIONS), `app/core/csv.js` scope #93, and the regression fixtures. **The entire repository was NOT re-read source-file by source-file; uninspected surfaces remain [UNVERIFIED].**
+
+Findings: (1) role tiering is real (rank 1–5 seats, rights, ceilings) as a workspace declaration, not authentication — standing limit; (2) the roadmap's two named frontier items for the newest modules were unbuilt — exact solving past the enumeration wall, and graded evidence read back against declared ranges; (3) **two tests failed on the BASE commit** (verified last session via stash): `operating-cadence` spine adjacency predated ADR-0088's `carryoverRule` insertion (`63 !== 62`), and `measurement` "sound commit" counted other modules' bounded, marker-idempotent scan remediation of stale demo data as this module's ceremony.
+
+## Research converted into code
+
+Three fresh searches: exact branch-and-bound for Γ-robust integer problems (Bertsimas–de Moor–den Hertog–Donnini 2026 *Signed Budget Uncertainty*; the 2026 arXiv group-envelope paper's "fixed-threshold branch-and-bound, accepting only optimizer-certified optimality or infeasibility" — adopted verbatim as the refusal contract); 2026 decision-management closed loops (Aera's decision memory; DecisionBrain, IBM DOC — record + recommend, none shown to feed out-of-sample graded bets back into a robust allocator's premise review); 2026 people-analytics calibration (ChartHop 9-box grid, Visier/orgvue scenario canvases — calibration of PEOPLE or plans, never of declared effect ranges against frozen thresholds). Named sources and altitude tags: `RESEARCH.md` Session 137. Vendor capability claims are snippets, **[UNVERIFIED]**.
+
+## Shipped
+
+- **Certified branch-and-bound** (`app/core/domain/robustBranchBound.js`): exact rational bounds (integer cross-multiplication; fractional remainders ceiled so bounds never sit under the fractional optimum), strict pruning with tie-exploration (identical unique total-order optimum as the enumerator), one shared node budget across oracles/maximin/minimax/fairness/stress/regret-release, structural bounds (unit sum ≤ 40 — reachable, so a real refusal line; scenarios ≤ 24), budget exhaustion refuses the whole solve. A provenance `certificate` is frozen at adoption and printed on Solve.
+- **Closed-loop evidence calibration**: `evidenceInstrumentKey` on actions (fail-closed), `supersedesId` on plans (human-declared revisions), `buildCalibrationCells` (altitude × instrument, Wilson 95%, floor + complementary suppression + director-rank gate, subtree-correct coverage, peers never qualify), per-action graded readings beside the declared range, a sixth **Calibration** panel, and **RULE-RAL-05** premise–evidence tension findings — one governed DACI decision per cell per ISO week, identity-free, roll-up per ancestor, marker-idempotent. The engine never moves a declared range.
+- **Registered publication**: `#/robust-allocation` and `#/prospective` mount the ADR-0096 publication panel — their roll-up aggregates now enter the ADR-0092 register as dated, audited releases (Sessions 134/135 named limit closed; CSV #93 unchanged).
+- **Schema v99** additive `MIGRATIONS[98]` (one setting; no new collection; legacy frozen adoptions read back an honest `enumeration` certificate).
+- **Hygiene**: the two pre-existing base-commit test failures repaired truthfully (order contract updated to strategyCycle → carryover → cadence; sound-commit baseline moved past the declaration's own spine run + a no-new-reference assertion). The csv future-schema tripwire moved to `SCHEMA_VERSION + 1`.
+
+## Verification (actual results)
+
+- `npm run lint`: **PASS**. `npm run check:boundary`: **PASS** — 475 app ES modules, 141 test suites, 23 doc checks, 0 leaks. `npm run check:links`: **PASS** (820 links / 215 files).
+- `tests/app/calibrated-allocation.test.mjs`: **9/9** (schema v99 + fail-closed fields; seeded 24-fixture bnb≡enum equivalence incl. refusal parity; over-cap 9⁵=59,049 adoption through the real API with frozen certificate + full RULE-RAL-01 fan-out; starved-budget and structural refusals; calibration cells incl. floor/complementary/rank gate/tension; evidence annotation + revision freeze; RULE-RAL-05 weekly idempotency + roll-up + identity-freedom; brief leak checks; axe on calibration + register-mounted certificate panels at four altitudes).
+- `tests/app/robust-allocation.test.mjs` **19/19**; prospective/core/csv **35+15+5**; board-room/disclosure-compiler/terminal-publication/differencing **102/102**; escalation/carryover/strategy-cycle/early-warning/coupling/attention-market **138/138**; operating-cadence **17/17**; measurement **27/27** (both previously red on base).
+- `npm run build:standalone` + `verify:standalone`: **PASS** — 8,099,982 bytes / 474 modules / schema v99.
+- Full single-process `npm test` still overruns the sandbox window (standing); the documented per-file procedure was used. Real-browser assistive-technology walkthrough remains **[UNVERIFIED]** (axe-core in jsdom is what ran).
+
+## Honest limits
+
+B&B is exact only inside its declared regime and refuses outside it; no asymptotic claim. A cell reading is graded frozen-threshold evidence — not causality, never a person rating; transport to a different population is the reader's judgement, hence tension-not-adjustment. Suppression is small-cell withholding, not differential privacy. RULE-RAL-05 runs on explicit scan like its siblings. Local seats remain declarations, not authentication (standing top roadmap item). The full repo was not re-read line by line.
+
+## Sync
+
+Commit + push to `origin/arena/c3b4fa36-leados` and PR — actual results recorded in the final changelog below.
+
+---
+
 # 2026-11-05 — Robust Allocation Terminal (ADR-0095; Schema v98, additive 97 → 98)
 
 ## Repository identity and sync baseline

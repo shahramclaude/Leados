@@ -411,7 +411,7 @@ export {
 // older blob simply opens on the undeclared operator view. A version bump here
 // would have forced 78 test files to be rewritten for zero user benefit; the
 // honest choice is to add nothing to migrate.
-export const SCHEMA_VERSION = 98;
+export const SCHEMA_VERSION = 99;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -7593,6 +7593,24 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  // ADR-0097: additive 98 → 99. No new collection: a plan MAY now carry
+  // `supersedesId` (a human-declared revision), an action MAY carry
+  // `evidenceInstrumentKey` (which prospective instrument grades its premise),
+  // and a frozen solution MAY carry its provenance certificate; every field is
+  // optional and fail-closed, so nothing is invented for an existing workspace
+  // and no v98-era adoption changes meaning (its legacy certificate reads
+  // engine 'enumeration', certified by construction). The only new setting is
+  // the declared branch-and-bound node budget, with a printed default.
+  98: (v98) => ({
+    ...v98,
+    schemaVersion: 99,
+    settings: isPlainObject(v98.settings)
+      ? {
+        ...v98.settings,
+        robustAllocationNodeBudget: v98.settings.robustAllocationNodeBudget ?? 250000,
+      }
+      : { ...DEFAULT_SETTINGS },
+  }),
   // ADR-0095: additive 97 → 98. An existing workspace has NOT modelled a robust
   // allocation, so both ledgers start empty — an empty ledger means "no
   // allocation has been declared here yet", a different (and honest) claim from

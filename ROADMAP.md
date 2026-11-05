@@ -1,3 +1,26 @@
+## 2026-11-05 — The Calibrated Allocator (Session 137, Schema v99, ADR-0097)
+
+### Implemented
+- **[frontline → chief]** Certified exact branch-and-bound past the enumeration wall (`app/core/domain/robustBranchBound.js`): integer-cross-multiplication bounds, ceiled fractional remainders, strict pruning with tie-exploration, one shared node budget (director+ convention, clamped 25k–2M), provenance certificate frozen at adoption. Over-cap plans (e.g. 9⁵ = 59,049 combinations) now solve and ADOPT with full RULE-RAL-01 fan-out; unit-sum > 40 or budget exhaustion refuses. Field-for-field equivalence with the enumerator proven by a seeded fixture sweep.
+- **[frontline → chief]** Closed-loop evidence calibration: actions declare the prospective instrument that grades their premise; settled ADR-0094 grades read back by altitude × instrument cell (Wilson 95%, floor, complementary suppression, director-rank gate, subtree-correct coverage); per-action graded readings on Solve; a **revision** (`supersedesId`) freezes a new plan — the engine never adjusts a declared range.
+- **[director → chief, on the shared spine]** **RULE-RAL-05**: one governed premise–evidence tension decision per cell per ISO week when the graded record is more falsified than reached at or above floor and a scoped plan rests on the instrument; identity-free, roll-up per ancestor, marker-idempotent.
+- **[all altitudes]** `#/robust-allocation` and `#/prospective` mount the ADR-0096 publication panel — their roll-up aggregates now enter the ADR-0092 differencing register (Sessions 134/135's named limit closed; no new CSV scope).
+- **[hygiene]** Two tests red on the base commit repaired truthfully (cadence spine order post-ADR-0088; measurement sound-commit baseline + no-new-reference assertion); csv future-schema tripwire→`SCHEMA_VERSION + 1`.
+- **Evidence:** `tests/app/calibrated-allocation.test.mjs` (9/9), updated `tests/app/robust-allocation.test.mjs` (19/19), `docs/adr/0097-calibrated-allocator.md`.
+
+### Next ambitious slices
+1. **[all altitudes] Planned:** authenticated server/tenant boundaries and consented migration; browser seat selection is still not enterprise access control (the standing top item).
+2. **[director → chief] Planned:** reorganisation comparability across a freeze line — the residual timing channel (`lastCarriageOn` on suppressed federation rows).
+3. **[director → chief] Planned:** widen the certified regime with a stronger bound (e.g. Lagrangian surrogate over budget+hours dualized, or the Signed-Budget compact counterpart) with the node budget still enforced — never a silent heuristic — and grade a revision's falsified-parent lineage against its successor's premise, once revision chains have real history.
+
+### Deliberately rejected
+- **[all altitudes]** Auto-adjusting declared ranges from the graded record ("the model learned") — ADR-0094 forbids the engine moving a frozen claim; a revision is a human declaration.
+- **[all altitudes]** Approximate/heuristic solving past the node budget — the refusal IS the honest output; an uncertified "robust" plan is the dishonesty this terminal exists to prevent.
+- **[all altitudes]** A new CSV scope for calibration — the register (ADR-0092/0096) is the governed release channel; the brief carries the identity-free block instead.
+- **[all altitudes]** Peer-span evidence pooling — a plan reads cells at its own altitude or below it; sideways reads stay refused.
+
+**Benchmark:** certified-exact Γ-robust branch-and-bound with a printed optimality certificate (the 2026 arXiv group-envelope contract: "optimizer-certified optimality or infeasibility") joined with closed-loop decision memory (Aera-class) inside a hierarchy-native, disclosure-governed workspace — no surveyed people-analytics or DI platform was shown to do both. Gap claim from public snippets, not verified vendor capability.
+
 ## 2026-11-05 — Registered terminal publication (Session 136, no schema bump, ADR-0096)
 
 ### Implemented

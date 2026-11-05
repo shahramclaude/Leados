@@ -17,12 +17,15 @@ import { downloadText } from '../ui/download.js';
 import { pageHeader, card, stat, badge, banner, tabs, emptyState, table } from '../ui/components.js';
 import { serializeCsv } from '../core/csv.js';
 import { dayKey } from '../core/time.js';
+import { publicationPanel } from './publicationPanel.js';
 import { ROBUST_ALLOCATION_ALTITUDE_HORIZONS, ROBUST_ALLOCATION_LIMITS } from '../core/domain/robustAllocationRegistry.js';
+import { PROSPECTIVE_INSTRUMENTS } from '../core/domain/prospectiveRegistry.js';
 
 const PANELS = [
   { key: 'desk', label: 'Desk' },
   { key: 'plans', label: 'Plans' },
   { key: 'solve', label: 'Solve' },
+  { key: 'calibration', label: 'Calibration' },
   { key: 'rollup', label: 'Roll-up' },
   { key: 'certificate', label: 'Certificate' },
 ];
@@ -103,15 +106,20 @@ function actionRow(act = {}, segments = []) {
   const lo = h('input', { class: 'input', type: 'number', min: '0', step: '1', value: String(act.effectLo ?? ''), placeholder: 'effect lo', 'aria-label': 'Effect lower bound' });
   const hi = h('input', { class: 'input', type: 'number', min: '0', step: '1', value: String(act.effectHi ?? ''), placeholder: 'effect hi', 'aria-label': 'Effect upper bound' });
   const maxUnits = h('input', { class: 'input', type: 'number', min: '1', max: String(ROBUST_ALLOCATION_LIMITS.unitsMax), step: '1', value: String(act.maxUnits ?? 3), placeholder: 'max units', 'aria-label': 'Maximum units' });
+  const evidence = h('select', { class: 'input', 'aria-label': 'Premise evidence instrument (optional)' },
+    h('option', { value: '' }, 'No evidence instrument declared'),
+    ...PROSPECTIVE_INSTRUMENTS.map((i) => h('option', { value: i.key, ...(i.key === act.evidenceInstrumentKey ? { selected: true } : {}) }, `${i.label} — graded by prospective contracts`)));
   const row = h('div', { class: 'ral-action-row' },
     h('div', { class: 'grid grid-3' }, key, label, seg),
     h('div', { class: 'grid grid-3' }, cost, hours, coverage),
     h('div', { class: 'grid grid-3' }, lo, hi, maxUnits),
+    h('label', { class: 'field' }, h('span', null, 'Which pre-registered instrument grades this range? (optional)'), evidence),
     h('button', { class: 'btn btn-small btn-ghost', type: 'button', 'aria-label': 'Remove action', onClick: () => row.remove() }, 'Remove action'));
   row._read = () => ({
     key: key.value, label: label.value, segmentKey: seg.value,
     unitCost: Number(cost.value), unitHours: Number(hours.value), unitCoverage: Number(coverage.value),
     effectLo: Number(lo.value), effectHi: Number(hi.value), maxUnits: Number(maxUnits.value),
+    evidenceInstrumentKey: evidence.value || null,
   });
   row._refreshSegments = (nextSegments) => {
     const current = seg.value;
@@ -120,15 +128,16 @@ function actionRow(act = {}, segments = []) {
   return row;
 }
 
-function openDeclareDialog(ctx, report) {
-  const title = h('input', { class: 'input', type: 'text', maxLength: '120', placeholder: 'One short line naming the allocation', 'aria-label': 'Name the allocation' });
-  const outcomeLabel = h('input', { class: 'input', type: 'text', maxLength: '80', placeholder: 'e.g. on-time completions', 'aria-label': 'Outcome unit' });
-  const currency = h('input', { class: 'input', type: 'text', maxLength: '3', value: 'EUR', placeholder: 'EUR', 'aria-label': 'Currency code' });
-  const budgetCap = h('input', { class: 'input', type: 'number', min: '0', step: '1', value: '1000', 'aria-label': 'Budget cap' });
-  const hoursCap = h('input', { class: 'input', type: 'number', min: '0', step: '1', value: '40', 'aria-label': 'Leadership hours cap' });
+function openDeclareDialog(ctx, report, prefill = null) {
+  const title = h('input', { class: 'input', type: 'text', maxLength: '120', value: prefill?.title || '', placeholder: 'One short line naming the allocation', 'aria-label': 'Name the allocation' });
+  const outcomeLabel = h('input', { class: 'input', type: 'text', maxLength: '80', value: prefill?.outcomeLabel || '', placeholder: 'e.g. on-time completions', 'aria-label': 'Outcome unit' });
+  const currency = h('input', { class: 'input', type: 'text', maxLength: '3', value: prefill?.currency || 'EUR', placeholder: 'EUR', 'aria-label': 'Currency code' });
+  const budgetCap = h('input', { class: 'input', type: 'number', min: '0', step: '1', value: String(prefill?.budgetCap ?? 1000), 'aria-label': 'Budget cap' });
+  const hoursCap = h('input', { class: 'input', type: 'number', min: '0', step: '1', value: String(prefill?.hoursCap ?? 40), 'aria-label': 'Leadership hours cap' });
   const defaultHorizon = ROBUST_ALLOCATION_ALTITUDE_HORIZONS[report.seat.altitudeKey] || 30;
   const horizonDays = h('input', { class: 'input', type: 'number', min: '7', max: '365', step: '1', value: String(defaultHorizon), 'aria-label': 'Horizon in days' });
-  const gamma = h('input', { class: 'input', type: 'number', min: '0', max: String(ROBUST_ALLOCATION_LIMITS.actionsMax), step: '1', value: '1', 'aria-label': 'Uncertainty budget gamma' });
+  const gamma = h('input', { class: 'input', type: 'number', min: '0', max: String(ROBUST_ALLOCATION_LIMITS.actionsMax), step: '1', value: String(prefill ? prefill.gamma : 1), 'aria-label': 'Uncertainty budget gamma' });
+  const supersedesId = prefill?.id || null;
 
   const segContainer = h('div', { class: 'stack' });
   const actContainer = h('div', { class: 'stack' });
@@ -142,13 +151,22 @@ function openDeclareDialog(ctx, report) {
   segContainer.addEventListener('input', refreshActionSegments);
 
   // One honest empty row each to start; the leader declares the ranges.
-  addSeg({ key: 'seg-a', label: '', size: '', floorCoverage: 0 });
-  addAct({});
+  // A revision pre-fills the whole declaration from the plan it supersedes —
+  // the HUMAN edits the ranges; the engine never moves them.
+  if (prefill) {
+    segContainer.replaceChildren();
+    actContainer.replaceChildren();
+    for (const seg of prefill.segments) addSeg(seg);
+    for (const act of prefill.actions) addAct(act);
+  } else {
+    addSeg({ key: 'seg-a', label: '', size: '', floorCoverage: 0 });
+    addAct({});
+  }
 
   const contracts = (ctx.api.prospectiveRead?.().rows || []).filter((r) => r && r.id);
   const linked = h('select', { class: 'input', 'aria-label': 'Linked prospective contract (optional)' },
     h('option', { value: '' }, 'None — no pre-registered premise linked'),
-    ...contracts.map((c) => h('option', { value: c.id }, `${c.instrumentLabel} · ${c.declaredOn}`)));
+    ...contracts.map((c) => h('option', { value: c.id, ...(c.id === prefill?.linkedContractId ? { selected: true } : {}) }, `${c.instrumentLabel} · ${c.declaredOn}`)));
 
   const status = h('p', { class: 'muted small', role: 'status', 'aria-live': 'polite' });
   const submit = h('button', { type: 'submit', class: 'btn btn-primary' }, 'Declare draft');
@@ -169,6 +187,7 @@ function openDeclareDialog(ctx, report) {
         segments: readSegments(),
         actions: [...actContainer.children].map((r) => r._read()),
         linkedContractId: linked.value || null,
+        supersedesId,
       });
       if (!result.ok) {
         status.textContent = result.error;
@@ -181,7 +200,8 @@ function openDeclareDialog(ctx, report) {
       ctx.refresh();
     },
   },
-    banner({ tone: 'info', title: 'Declare ranges, not point forecasts', body: 'Each intervention has an effect range [lo, hi]. Γ is how many ranges may sit at their worst end at once. The solver prints the best worst case (Wald) and the smallest largest regret (Savage), and refuses an infeasible or over-cap plan instead of approximating.' }),
+    banner({ tone: 'info', title: 'Declare ranges, not point forecasts', body: 'Each intervention has an effect range [lo, hi]. Γ is how many ranges may sit at their worst end at once. The solver prints the best worst case (Wald) and the smallest largest regret (Savage), and refuses an infeasible or over-cap plan instead of approximating. A grid above the enumeration bound is solved by the certified branch-and-bound, with its node certificate printed.' }),
+    supersedesId ? banner({ tone: 'warn', title: 'This is a revision', body: 'It supersedes an existing plan and becomes a new frozen declaration; the earlier plan and its adopted solution are never edited.' }) : null,
     h('label', { class: 'field' }, h('span', null, 'Name'), title),
     h('div', { class: 'grid grid-2' },
       h('label', { class: 'field' }, h('span', null, 'Outcome unit'), outcomeLabel),
@@ -207,7 +227,7 @@ function openDeclareDialog(ctx, report) {
   );
 
   const dialog = openModal({
-    title: 'Declare a robust allocation',
+    title: supersedesId ? 'Declare a revised allocation' : 'Declare a robust allocation',
     description: 'The ranges and constraints are assumptions you declare. The solution is exact integer arithmetic, never a sampled forecast.',
     body,
     footer: [h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => dialog.close() }, 'Cancel')],
@@ -219,7 +239,8 @@ function openConventionDialog(ctx, report, key) {
   const config = {
     cellFloor: { label: 'Roll-up cell floor', min: 2, max: 20, value: report.conventions.robustAllocationCellFloor },
     reviewDays: { label: 'Review window (days)', min: 1, max: 90, value: report.conventions.robustAllocationReviewDays },
-    maxCombinations: { label: 'Exact-solver bound (combinations)', min: 1000, max: 50000, value: report.conventions.robustAllocationMaxCombinations },
+    maxCombinations: { label: 'Enumeration bound (combinations)', min: 1000, max: 50000, value: report.conventions.robustAllocationMaxCombinations },
+    nodeBudget: { label: 'Branch-and-bound node budget', min: ROBUST_ALLOCATION_LIMITS.nodeBudgetMin, max: ROBUST_ALLOCATION_LIMITS.nodeBudgetMax, value: report.conventions.robustAllocationNodeBudget },
   }[key];
   const input = h('input', { class: 'input', type: 'number', min: String(config.min), max: String(config.max), step: '1', value: String(config.value), 'aria-label': config.label });
   const dialog = openModal({
@@ -251,18 +272,23 @@ function deskPanel(ctx, report) {
       class: 'btn', type: 'button',
       onClick: () => {
         const result = ctx.api.robustAllocationScan();
-        if (notify(result, 'Scanned adopted allocations for falsified, overdue and ungraded premises.')) ctx.refresh();
+        if (notify(result, 'Scanned adopted allocations for falsified, overdue, ungraded and evidence-tensioned premises.')) ctx.refresh();
       },
     }, 'Scan premises'),
   ];
   const conventionButtons = seat.rank >= 3 ? card({
     title: 'Conventions (director+)',
     subtitle: 'These bound what every altitude below reads.',
-    body: h('div', { class: 'grid grid-3' },
+    body: h('div', { class: 'grid grid-4' },
       h('button', { class: 'btn btn-small', type: 'button', onClick: () => openConventionDialog(ctx, report, 'cellFloor') }, `Cell floor: ${report.conventions.robustAllocationCellFloor}`),
       h('button', { class: 'btn btn-small', type: 'button', onClick: () => openConventionDialog(ctx, report, 'reviewDays') }, `Review: ${report.conventions.robustAllocationReviewDays}d`),
-      h('button', { class: 'btn btn-small', type: 'button', onClick: () => openConventionDialog(ctx, report, 'maxCombinations') }, `Solver bound: ${report.conventions.robustAllocationMaxCombinations}`)),
+      h('button', { class: 'btn btn-small', type: 'button', onClick: () => openConventionDialog(ctx, report, 'maxCombinations') }, `Enumeration: ${report.conventions.robustAllocationMaxCombinations}`),
+      h('button', { class: 'btn btn-small', type: 'button', onClick: () => openConventionDialog(ctx, report, 'nodeBudget') }, `Node budget: ${report.conventions.robustAllocationNodeBudget}`)),
   }) : null;
+  const revisionButton = report.selectedDetail && report.detailAllowed ? h('button', {
+    class: 'btn', type: 'button',
+    onClick: () => openDeclareDialog(ctx, report, report.selectedDetail),
+  }, 'Declare revision of selected plan') : null;
   return h('div', { class: 'stack' },
     card({
       title: playbook.title,
@@ -271,13 +297,18 @@ function deskPanel(ctx, report) {
         h('p', null, h('strong', null, 'See: '), playbook.see),
         h('p', null, h('strong', null, 'Act: '), playbook.act),
         h('p', null, h('strong', null, 'Hand up: '), playbook.hand),
-        h('div', { class: 'form-actions' }, ...actions)),
+        h('div', { class: 'form-actions' }, ...actions, revisionButton)),
     }),
     h('div', { class: 'grid grid-4' },
       stat({ label: 'Plans', value: summary.plans }),
       stat({ label: 'Adopted', value: summary.adopted, tone: 'good' }),
       stat({ label: 'Falsified', value: summary.falsified, tone: summary.falsified ? 'bad' : '' }),
       stat({ label: 'Open findings', value: summary.openFindings, tone: summary.openFindings ? 'warn' : '' })),
+    report.calibration ? h('div', { class: 'grid grid-4' },
+      stat({ label: 'Graded evidence', value: report.calibration.gradedN, hint: 'settled pre-registered contracts in scope' }),
+      stat({ label: 'Calibration cells', value: report.calibration.cells.length, hint: 'altitude × instrument' }),
+      stat({ label: 'Premise tension', value: report.calibration.tensionN, tone: report.calibration.tensionN ? 'bad' : '', hint: 'graded record more falsified than reached' }),
+      stat({ label: 'Published cells', value: report.calibration.publishedN, hint: 'above floor and rank' })) : null,
     conventionButtons,
     ...report.withheld.map((w) => banner({ tone: 'warn', title: `${w.n} figure(s) withheld`, body: w.reason })),
     card({ title: 'What this screen is', body: h('p', { class: 'muted' }, report.premise) }),
@@ -339,6 +370,20 @@ function solvePanel(ctx, report) {
     { label: 'Intervention', render: (a) => a.label },
     { label: 'Segment', render: (a) => detail.segments.find((s) => s.key === a.segmentKey)?.label || a.segmentKey },
     { label: 'Range [lo, hi]', render: (a) => `[${a.effectLo}, ${a.effectHi}]` },
+    {
+      label: 'Premise evidence',
+      render: (a) => {
+        const ev = a.evidence;
+        if (!ev || !ev.instrumentKey) return h('span', { class: 'muted' }, '—');
+        if (ev.refused) return badge('withheld', 'neutral', ev.reason || 'Below the declared floor or rank.');
+        if (!ev.gradedN) return badge('not graded yet', 'neutral', 'No settled prospective contract grades this cell yet.');
+        return badge(
+          ev.tension ? `tension · ${ev.reachedPct}% reached` : `${ev.reachedPct}% reached (95% ${ev.lowPct}–${ev.highPct}%)`,
+          ev.tension ? 'bad' : 'good',
+          `${ev.instrumentLabel || ev.instrumentKey} cell at this altitude, ${ev.gradedN} graded contract(s). The engine never adjusts the declared range; a revision is a human act.`,
+        );
+      },
+    },
     { label: 'Robust units', render: (a) => h('strong', null, String(sol.robustUnits[detail.actions.indexOf(a)])) },
     { label: 'Regret units', render: (a) => String(sol.minimaxUnits[detail.actions.indexOf(a)]) },
     { label: 'Optimistic units', render: (a) => String(sol.optimisticUnits[detail.actions.indexOf(a)]) },
@@ -362,7 +407,12 @@ function solvePanel(ctx, report) {
       stat({ label: 'Committed hours', value: sol.committedHours }),
       stat({ label: 'Committed budget', value: `${sol.committedBudget} ${detail.currency}` }),
       stat({ label: 'Optimist\u2019s worst case', value: sol.optimisticWorstCase, tone: 'warn', hint: 'The point-forecast plan under the same adversary' })),
-    card({ title: 'Funded lines', subtitle: `Exact integer solution over ${blank(sol.feasibleN)} feasible allocations and ${blank(sol.scenariosN)} scenario problems.${sol.frozen ? ' Frozen at adoption.' : ' Solved live.'}`, body: table({ columns: lineColumns, rows: detail.actions, caption: 'Allocated units per intervention' }) }),
+    sol.certificate ? h('div', { class: 'grid grid-4' },
+      stat({ label: 'Engine', value: sol.certificate.engine === 'branch-and-bound' ? 'branch-and-bound' : 'enumeration', hint: 'which exact solver proved this solution' }),
+      stat({ label: 'Nodes', value: sol.certificate.nodes === null ? '—' : sol.certificate.nodes, hint: sol.certificate.engine === 'enumeration' ? 'feasible integer allocations visited' : 'search nodes explored' }),
+      stat({ label: 'Pruned', value: sol.certificate.pruned === null ? '—' : sol.certificate.pruned, hint: 'subtrees ruled out by a proven bound' }),
+      stat({ label: 'Certified', value: sol.certificate.certified ? badge('exact', 'good', 'Proven optimal over the declared feasible region; never approximated.') : badge('uncertified', 'bad'), hint: 'exactness provenance' })) : null,
+    card({ title: 'Funded lines', subtitle: `Exact integer solution over ${blank(sol.feasibleN)} feasible allocations and ${blank(sol.scenariosN)} scenario problems.${sol.frozen ? ' Frozen at adoption.' : ' Solved live.'}${sol.certificate && sol.certificate.engine === 'branch-and-bound' ? ' Solved beyond the enumeration bound by the certified branch-and-bound.' : ''}`, body: table({ columns: lineColumns, rows: detail.actions, caption: 'Allocated units per intervention' }) }),
     card({ title: 'Segments and equity floors', body: table({ columns: segColumns, rows: detail.segments, caption: 'Segment coverage under the robust plan' }) }),
     card({
       title: 'Sensitivity and value of information',
@@ -379,6 +429,48 @@ function solvePanel(ctx, report) {
       title: detail.linkedGrade.outcome === 1 ? 'Linked premise reached its threshold' : 'Linked premise was falsified',
       body: `The pre-registered contract graded outcome ${detail.linkedGrade.outcome} (observed ${blank(detail.linkedGrade.observedPct)}%). A missed threshold opens a governed re-allocation decision; it is not a causal claim.`,
     }) : null,
+  );
+}
+
+function calibrationPanel(ctx, report) {
+  const calibration = report.calibration || { cells: [], gradedN: 0, tensionN: 0, publishedN: 0 };
+  const columns = [
+    { label: 'Altitude', render: (c) => badge(c.altitudeKey, 'neutral') },
+    { label: 'Instrument', render: (c) => c.instrumentLabel },
+    { label: 'Graded', render: (c) => String(c.gradedN) },
+    { label: 'Reached', render: (c) => String(c.reachedN) },
+    { label: 'Plans resting on it', render: (c) => String(c.plansN) },
+    {
+      label: 'Reach rate (95%)',
+      render: (c) => (c.refused || c.suppressed
+        ? badge('withheld', 'neutral', c.reason)
+        : `${c.reachedPct}% (${c.lowPct}–${c.highPct}%)`),
+    },
+    { label: 'Reading', render: (c) => (c.tension ? badge('TENSION', 'bad', 'The graded record is more falsified than reached; a governed premise–evidence decision is owed.') : (c.refused ? badge('withheld', 'neutral') : badge('supported', 'good'))) },
+  ];
+  const cellsTable = calibration.cells.length
+    ? table({ columns, rows: calibration.cells, caption: 'Graded prospective evidence by altitude and instrument cell' })
+    : emptyState({ title: 'No graded evidence yet', body: 'Calibration reads settled Prospective Intervention Contracts (ADR-0094). When graded contracts exist in cells where a plan declares evidence, the record appears here — never adjusted by the engine.' });
+  return h('div', { class: 'stack' },
+    banner({
+      tone: calibration.tensionN ? 'bad' : 'info',
+      title: calibration.tensionN
+        ? `${calibration.tensionN} cell(s) in premise–evidence tension`
+        : `${calibration.gradedN} graded contract(s) in scope, no active tension`,
+      body: 'A cell in TENSION means the graded, pre-registered record contradicts the declared effect ranges resting on that instrument. LeadOS never moves a declared range itself: the honest act is a human-declared revision, which freezes a new plan. This is evidence, not causality, and never a rating of a person.',
+    }),
+    card({
+      title: 'Evidence calibration by cell',
+      subtitle: `Cell floor ${report.conventions.robustAllocationCellFloor}; pooled rates withheld below director rank; complementary suppression beside a sub-floor cell.`,
+      body: cellsTable,
+    }),
+    card({
+      title: 'What calibration never does',
+      body: h('ul', { class: 'stack' },
+        h('li', { class: 'muted' }, 'Never rewrites, nudges or “learns” a declared effect range — a revision is a new frozen plan declared by a leader.'),
+        h('li', { class: 'muted' }, 'Never names a cohort, a contract id, a person or a plan title in a published cell — counts and intervals only.'),
+        h('li', { class: 'muted' }, 'Never treats a graded reach rate as a causal effect of a plan; the contract froze a threshold, not a mechanism.')),
+    }),
   );
 }
 
@@ -430,6 +522,7 @@ function certificatePanel(ctx, report) {
       body: h('ul', { class: 'stack' },
         ...Object.values(report.disclosure).map((line) => h('li', { class: 'muted' }, line))),
     }),
+    publicationPanel(ctx, 'robust-allocation'),
   );
 }
 
@@ -444,6 +537,7 @@ export function renderRobustAllocation(ctx) {
     desk: () => deskPanel(ctx, report),
     plans: () => plansPanel(ctx, report),
     solve: () => solvePanel(ctx, report),
+    calibration: () => calibrationPanel(ctx, report),
     rollup: () => rollupPanel(ctx, report),
     certificate: () => certificatePanel(ctx, report),
   }[panel]();

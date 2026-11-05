@@ -114,7 +114,7 @@ function card(overrides = {}) {
 /* ===================================================== 1. Schema v47 */
 
 test('schema v47: additive migration never fabricates a scorecard or a prediction', () => {
-  assert.equal(SCHEMA_VERSION, 98);
+  assert.equal(SCHEMA_VERSION, 99);
   const v46 = {
     schemaVersion: 46,
     settings: { ...DEFAULT_SETTINGS },
@@ -122,8 +122,8 @@ test('schema v47: additive migration never fabricates a scorecard or a predictio
   };
   const migrated = migrate(v46);
   assert.ok(migrated.applied.includes('46 → 47'));
-  assert.equal(migrated.raw.schemaVersion, 98);
-  assert.equal(migrated.raw.schemaVersion, 98);
+  assert.equal(migrated.raw.schemaVersion, 99);
+  assert.equal(migrated.raw.schemaVersion, 99);
   assert.deepEqual(migrated.raw.scorecards, [], 'an older workspace starts with an empty lab');
   assert.equal(migrated.raw.settings.measurementMetricCostPct, 2);
   assert.equal(migrated.raw.settings.measurementAutoPropagate, true);
@@ -499,16 +499,23 @@ test('rule spine: a sound commit creates no ceremony at all', () => {
   const store = createStore({ storage: memStorage(), now: () => NOW });
   store.seedDemo(buildDemoState(NOW));
   const api = createApi(store, { now: () => NOW });
-  const before = { decisions: store.state.decisions.length, delegations: store.state.delegations.length };
+  // The shared spine's scan-rules legitimately remediate STALE demo data on the
+  // first commit after seeding (early-warning budget, coupling hand-off chains,
+  // un-checked commitments). Those writes are other modules' bounded, marker-
+  // idempotent work — not this lab's ceremony. Baseline AFTER the declaration's
+  // own spine run: a SOUND scorecard commit must add nothing measurement-owned.
   const created = api.createScorecard({
     title: 'One honest metric',
     tasks: [{ name: 'Customer-confirmed resolution', kind: 'measured', weightPct: 100, trueValue: 90, effortCost: 40, gamingEase: 0, noisePct: 0, ratchetPct: 0 }],
     stakesPct: 0, professionalismPct: 0, riskAversionPct: 0, detectionPct: 100,
   });
+  const before = { decisions: store.state.decisions.length, delegations: store.state.delegations.length };
   const res = api.commitScorecard(created.id, {});
   assert.equal(res.ok, true);
   assert.equal(store.state.decisions.length, before.decisions, 'a sound scorecard opens no decision');
   assert.equal(store.state.delegations.length, before.delegations, 'and no busywork');
+  const newText = JSON.stringify(store.state.decisions.slice(before.decisions)) + JSON.stringify(store.state.delegations.slice(before.delegations));
+  assert.ok(!newText.includes(created.id), 'no new record references the committed scorecard at all');
 });
 
 test('rule spine: a falsified observation opens one calibration decision and one pre-filled review — a hit opens nothing', () => {

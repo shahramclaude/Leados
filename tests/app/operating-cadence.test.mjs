@@ -95,9 +95,9 @@ const weeklyForum = (extra = {}) => ({
 /* ------------------------------------------------------------------ schema */
 
 test('v92 → v93 migration is additive, and no forum is ever invented', () => {
-  assert.equal(SCHEMA_VERSION, 98);
+  assert.equal(SCHEMA_VERSION, 99);
   const migrated = migrate({ schemaVersion: 90, settings: { leaderName: 'Keep' }, people: [] });
-  assert.deepEqual(migrated.applied, ['90 → 91', '91 → 92', '92 → 93', '93 → 94', '94 → 95', '95 → 96', '96 → 97', '97 → 98']);
+  assert.deepEqual(migrated.applied, ['90 → 91', '91 → 92', '92 → 93', '93 → 94', '94 → 95', '95 → 96', '96 → 97', '97 → 98', '98 → 99']);
   assert.deepEqual(migrated.raw.cadenceForums, []);
   assert.deepEqual(migrated.raw.cadenceSessions, []);
   assert.deepEqual(migrated.raw.cadenceReadings, []);
@@ -131,7 +131,10 @@ test('graph vocabulary and spine parity are exhaustive', () => {
     assert.ok(SYSTEM_GENERATED_LINK_RELATIONS.includes(relation), `${relation} is written by the spine, never by hand`);
   }
   const names = DEFAULT_POST_COMMIT_RULES.map((rule) => rule.name);
-  assert.equal(names.indexOf('cadenceRule'), names.indexOf('strategyCycleRule') + 1);
+  // ADR-0088 inserted carryoverRule between strategyCycleRule (whose invalidations
+  // it settles) and cadenceRule; the contract is the ORDER, not this file's age.
+  assert.ok(names.indexOf('strategyCycleRule') < names.indexOf('carryoverRule'), 'the renewal bridge invalidates before carryover settles');
+  assert.ok(names.indexOf('carryoverRule') < names.indexOf('cadenceRule'), 'carryover settles before the cadence clock routes');
   assert.ok(names.indexOf('cadenceRule') < names.indexOf('attentionMarketRule'));
   assert.ok(names.indexOf('cadenceRule') < names.indexOf('seatRule'));
   assert.equal(names.at(-1), 'sealRule', 'the seal must remain absolutely last');
