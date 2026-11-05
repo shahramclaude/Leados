@@ -42,7 +42,9 @@ Local seats are auditable declarations, not authentication. A solved allocation 
 
 ## Sync
 
-Pending: commit, push to `origin/arena/28c2a7c8-leados`, open pull request (result recorded below once complete).
+- Commit `d1d2025` pushed to `origin/arena/28c2a7c8-leados` (new branch on origin): **PASS**.
+- Pull request opened: **https://github.com/shahramclaude/Leados/pull/159** (base `main`, head `arena/28c2a7c8-leados`, state **OPEN**): **PASS**.
+- Live preview served on `0.0.0.0:5173`; `/` returns 200 with the `leados-robust-allocation` meta and `#/robust-allocation` links; the new view/domain/rules modules return 200. Real-browser assistive-technology walkthrough remains **[UNVERIFIED]** (automated panel rendering + four-altitude leak oracle is what ran).
 
 # 2026-11-05 — Prospective Intervention Contract (ADR-0094; Schema v97, additive 96 → 97)
 
