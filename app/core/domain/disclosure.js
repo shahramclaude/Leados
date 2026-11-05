@@ -19,7 +19,10 @@
  *              records: counts, open load, overdue load, severity load, money by
  *              currency and a per-child-span breakdown — with small cells
  *              withheld, complementary suppression applied, and no sentence,
- *              name or note carried upward.
+ *              name or note carried upward. Since ADR-0091 the complementary
+ *              choice is decided by exact integer determinacy over the published
+ *              totals, so a withheld cell is either unrecoverable or its total is
+ *              withheld too.
  *   withheld   below the class floor, or undeclared. With a printed reason.
  *
  * Three properties are load-bearing and each is asserted in
@@ -54,6 +57,9 @@ import {
   GRANT_INELIGIBLE_CLASSES,
 } from './disclosureRegistry.js';
 import { normalizeDisclosureGrants, normalizeDisclosureSettings } from './disclosureSchema.js';
+// ADR-0091: a withheld cell is only withheld if it cannot be recovered by
+// subtracting the printed figures. The decision is exact integer arithmetic.
+import { auditAggregateSuppression, planAggregateSuppression } from './aggregateDeterminacy.js';
 
 /** Collections the aggregate falls back to when a screen has no ledger of its own. */
 const WORK_COLLECTIONS = Object.freeze(['cases', 'decisions', 'delegations', 'goals']);
@@ -350,26 +356,79 @@ export function moduleAggregate(state, manifestOrRoute, seat, built, { now = new
     }
   }
 
-  // Small cells and complementary suppression.
+  // Small cells, then EXACT determinacy (ADR-0091).
+  //
+  // The old rule hid one further cell only when at least two cells survived the
+  // floor. With one sub-floor cell and one printed cell it hid nothing, and the
+  // published total handed the withheld figure back: 7 - 6 = 1, 57 - 48 = 9.
+  // The decision is now made against the published surface itself — every
+  // printed cell, every printed total and the integer box each withheld cell
+  // must live in — so the table is either genuinely safe or its total is
+  // withheld. See `aggregateDeterminacy.js`.
+  const floorBlocksAll = totals.rows < floorN;
+  const plan = planAggregateSuppression({
+    cells: [...buckets.values()].map((b) => ({ key: b.nodeId, count: b.count, open: b.open, overdue: b.overdue })),
+    // A count total below the floor is withheld, and the caller withholds the
+    // derived loads with it, so no total remains for a reader to subtract.
+    totals: floorBlocksAll ? { count: null, open: null, overdue: null } : { count: totals.rows, open: totals.open, overdue: totals.overdue },
+    floor: floorN,
+  });
+  const suppressSet = new Set(plan.suppress);
+  const mandatorySet = new Set(plan.mandatory);
   const spans = [...buckets.values()]
-    .map((b) => ({ ...b, withhold: b.count < floorN, withholdReason: b.count < floorN ? `Only ${b.count} record(s) in this span against an evidence floor of ${floorN}; a span total that small identifies the people in it, so the cell is withheld rather than printed.` : null }))
+    .map((b) => {
+      const withhold = suppressSet.has(b.nodeId);
+      return {
+        ...b,
+        withhold,
+        withholdReason: !withhold
+          ? null
+          : mandatorySet.has(b.nodeId)
+            ? `Only ${b.count} record(s) in this span against an evidence floor of ${floorN}; a span total that small identifies the people in it, so the cell is withheld rather than printed.`
+            : `Withheld for complementary suppression: printing it beside the other cells would let a reader subtract them from the published total and recover a withheld cell exactly.`,
+      };
+    })
     .sort((a, b) => b.count - a.count || String(a.label).localeCompare(String(b.label)));
-  const visible = spans.filter((b) => !b.withhold);
-  const suppressed = spans.filter((b) => b.withhold);
-  let complementary = false;
-  if (suppressed.length && visible.length > 1) {
-    // Classic complementary suppression: hide the smallest surviving cell too,
-    // so a reader cannot recover the hidden one by subtracting the rest.
-    visible[visible.length - 1].withhold = true;
-    visible[visible.length - 1].withholdReason = `Withheld for complementary suppression: subtracting the printed cells from the span total would otherwise recover the ${suppressed.length} cell(s) hidden below the floor of ${floorN}.`;
-    complementary = true;
-  }
-  const totalWithheld = totals.rows < floorN;
+  const complementary = plan.added.length > 0;
+  const countWithheld = floorBlocksAll || plan.withholdTotals.includes('count');
+  const totalWithheld = countWithheld;
+  const withheldOpen = plan.withholdTotals.includes('open');
+  const withheldOverdue = plan.withholdTotals.includes('overdue');
+  // PROOF, NOT ASSURANCE. The planner decides; this re-audits exactly the
+  // figures that will be printed, from the rows as they now stand. If the two
+  // ever disagree the screen prints the disagreement instead of hiding it.
+  const printedMeasures = countWithheld
+    ? []
+    : [
+      ['count', true],
+      ['open', !withheldOpen],
+      ['overdue', !withheldOverdue],
+    ].filter(([, printed]) => printed).map(([measure]) => measure);
+  const proof = auditAggregateSuppression({
+    cells: [...buckets.values()].map((b) => ({ key: b.nodeId, count: b.count, open: b.open, overdue: b.overdue, why: mandatorySet.has(b.nodeId) ? 'floor' : 'complementary' })),
+    totals: {
+      count: countWithheld ? null : totals.rows,
+      open: countWithheld || withheldOpen ? null : totals.open,
+      overdue: countWithheld || withheldOverdue ? null : totals.overdue,
+    },
+    withheld: [...suppressSet],
+    floor: floorN,
+    measures: printedMeasures,
+  });
+  const guardLine = !suppressSet.size
+    ? 'Nothing in this table is withheld, so there is nothing to recover.'
+    : !printedMeasures.length
+      ? 'Determinacy: every total in this table is withheld, so there is nothing to subtract from and no withheld cell is recoverable.'
+      : proof.recoverableN === 0
+        ? `Determinacy: exact integer check over every printed total (${proof.checkedMeasures.join(', ') || 'none'}) — no withheld cell is recoverable by subtraction.`
+        : `Determinacy: ${proof.recoverableN} withheld cell(s) are still recoverable from a printed total in this table. The console states this rather than calling the table safe.`;
   const notes = [];
   if (skippedOutsideSpan) notes.push(`${skippedOutsideSpan} record(s) outside this seat's span are not counted here at all — an aggregate that includes peers is a sideways leak with extra steps.`);
   if (totals.undated) notes.push(`${totals.undated} record(s) carry no readable date; their age is unknown rather than zero.`);
   if (complementary) notes.push('One further cell was withheld so the cells hidden below the floor cannot be recovered by subtraction.');
-  if (totalWithheld) notes.push(`The span total (${totals.rows}) is itself below the floor of ${floorN} and is withheld; an empty-looking screen is not the same claim as "nothing happened".`);
+  for (const line of plan.notes) if (!notes.includes(line)) notes.push(line);
+  if (floorBlocksAll) notes.push(`The span total (${totals.rows}) is itself below the floor of ${floorN} and is withheld; an empty-looking screen is not the same claim as "nothing happened".`);
+  if (suppressSet.size) notes.push(guardLine);
   if (manifest.mode === DISCLOSURE_MODES.AGGREGATE) notes.push(`${manifest.label} is published here as an aggregate only: its own report reads are not yet seat-scoped (see ROADMAP).`);
 
   return {
@@ -382,10 +441,26 @@ export function moduleAggregate(state, manifestOrRoute, seat, built, { now = new
     spans,
     spanTotal: totalWithheld ? null : totals.rows,
     totalWithheld,
-    totals: totalWithheld ? { ...totals, rows: null, open: null, overdue: null, severitySum: null, money: {} } : totals,
+    totals: totalWithheld
+      ? { ...totals, rows: null, open: null, overdue: null, severitySum: null, money: {} }
+      : {
+        ...totals,
+        open: withheldOpen ? null : totals.open,
+        overdue: withheldOverdue ? null : totals.overdue,
+      },
     complementary,
     notes,
     withheldCells: spans.filter((b) => b.withhold).length,
+    // The verdict a screen can print as evidence, never as a claim.
+    guard: {
+      verdict: plan.verdict,
+      recoverableN: proof.recoverableN,
+      inconsistentN: proof.inconsistent.length,
+      informationLossPct: plan.informationLossPct,
+      checkedMeasures: proof.checkedMeasures,
+      withheldTotals: plan.withholdTotals,
+      line: guardLine,
+    },
   };
 }
 
@@ -441,6 +516,14 @@ export function disclosureBriefText(report, { at = null } = {}) {
     lines.push(`- ${agg.label}: ${agg.spanTotal} record(s), ${agg.totals.open ?? 'unknown'} open, ${agg.totals.overdue ?? 'unknown'} overdue, oldest ${agg.totals.oldestDays ?? 'unknown'}d${money ? `, ${money}` : ''}${agg.withheldCells ? `, ${agg.withheldCells} span cell(s) withheld` : ''}.`);
   }
   if (!report.aggregates.length) lines.push('- No module is in the aggregate posture at this seat.');
+  const withheldTables = report.aggregates.filter((agg) => agg.withheldCells > 0);
+  if (withheldTables.length) {
+    const stillOpen = withheldTables.filter((agg) => (agg.guard?.recoverableN || 0) > 0).length;
+    lines.push('');
+    lines.push(stillOpen
+      ? `Determinacy: ${stillOpen} table(s) still admit a recoverable withheld value — the total is withheld on those screens and the console says so.`
+      : `Determinacy: the ${withheldTables.length} table(s) with withheld cells were checked by exact integer arithmetic against every printed total; no withheld cell is recoverable by subtraction.`);
+  }
   lines.push('');
   lines.push('Every figure above is a count, a rate or a currency total. No note, name, rating or sentence crosses this line, and the workspace says so rather than implying it.');
   return lines.join('\n');

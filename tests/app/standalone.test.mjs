@@ -154,12 +154,13 @@ test('standalone artifact exists and is a single inline HTML document', () => {
   // The single-file build is 7,238,250 bytes across 401 source modules — 18,050 bytes per
   // module, still under the 24,000 density bound. The ceiling moves only because the module
   // count moved; density is what catches a module inlined twice.
-  assert.ok(bytes < 7_500_000, `standalone file is unexpectedly large (${bytes} bytes)`);
-  // Raised in Schema v92: the Disclosure Compiler adds seven real modules (registry,
-  // schema, manifests, compiler, rules, actions, view) beside the Board Room's six
-  // and the Catchball cascade's own. The per-module density bound below is what
-  // still catches a duplicated bundle; this ceiling only tracks module count.
-  assert.ok(bytes < 7_600_000, `standalone file is unexpectedly large (${bytes} bytes)`);
+  // Raised in Session 131: the artifact already exceeded BOTH ceilings on main
+  // (7,824,494 bytes / 451 modules at commit 9a050af), so `verify:standalone`
+  // was failing before this session touched anything. One ceiling now, sized
+  // from the measured build (7,830,962 bytes / 451 modules — 17,363 bytes per
+  // module against the unchanged 24,000 density bound, which is what still
+  // catches a module inlined twice).
+  assert.ok(bytes < 7_900_000, `standalone file is unexpectedly large (${bytes} bytes)`);
   const declaredModules = Number((html.match(/content="[^"]*?(\d+) source modules/) || [])[1]);
   assert.ok(declaredModules > 100, `expected the build to declare its module count (got ${declaredModules})`);
   const bytesPerModule = Math.round(bytes / declaredModules);
