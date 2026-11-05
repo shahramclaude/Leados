@@ -98,6 +98,8 @@ import { parityRule } from './parityRules.js';
 // other rule on the spine. It is inert unless a seat is explicitly declared.
 import { seatRule } from './seatRules.js';
 import { sealRule } from './sealRules.js';
+// ADR-0092: the Differencing Defender declares its contract like every other rule.
+import { differencingRule } from './differencingRules.js';
 import { successionRule } from './successionRules.js';
 import { mandateRule } from './mandateRules.js';
 import { authorityCalibrationRule } from './authorityCalibrationRules.js';
@@ -681,6 +683,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'seatRules.js',
     purpose: 'RULE-SEAT-01 fans one typed `rolls-up-to` edge per leadership ancestor for every open work item in the declarative SIGNAL_SOURCES registry, so a frontline case reaches manager, director, VP and chief spans in the same atomic transaction (idempotent by exact-edge uniqueness); RULE-SEAT-02 opens at most one auditable seat handover per seat per ISO week carrying the boundary disclosure; RULE-SEAT-03 records one explicit boundary audit naming how many records were withheld and why. Runs last so it reads the finished workspace. Never reads conflicts or pulses, never rates or names a person, never writes to a staged collection, and is INERT until a seat is explicitly declared (the undeclared operator view writes nothing). Sensitive individual records contribute to aggregate counts but are never identified by a typed roll-up edge.',
     writes: ['links', 'delegations', 'events'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: differencingRule,
+    module: 'differencingRules.js',
+    purpose: 'Registers a published aggregate as a graph node with vertical roll-up edges, opens one governed publication-integrity decision per module per ISO week when exact integer arithmetic determines a withheld value, records what a protected release removed with one owned explanation, and opens one publication-rhythm decision when a module\'s published totals are not a stationary series.',
+    writes: ['links', 'decisions', 'delegations', 'differenceMarkers'],
     emits: [],
     scansWorkspace: true,
   },

@@ -381,6 +381,12 @@ export function moduleAggregate(state, manifestOrRoute, seat, built, { now = new
       return {
         ...b,
         withhold,
+        // ADR-0092: WHY a cell is withheld is load-bearing for any consumer that
+        // reasons about it. A sub-floor cell proves the cell is small; a
+        // complementary cell proves only that it was printed-safe. Treating the
+        // second as the first over-constrains the arithmetic and produces a pin
+        // that does not exist — a false disclosure finding in the other direction.
+        why: !withhold ? null : (mandatorySet.has(b.nodeId) ? 'floor' : 'complementary'),
         withholdReason: !withhold
           ? null
           : mandatorySet.has(b.nodeId)

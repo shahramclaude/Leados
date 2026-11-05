@@ -157,6 +157,11 @@ import { envoyRule } from './envoyRules.js';
 // the seal, so ONE seal covers the attestation itself.
 import { identityRule } from './identityRules.js';
 import { sealRule } from './sealRules.js';
+// ADR-0092: the Differencing Defender. Registered after the disclosure compiler
+// (so a release records the posture it was published under) and before the seal,
+// because a publication is the single most auditable act a leader performs and
+// must be covered by the sealed spine in the same transaction.
+import { differencingRule } from './differencingRules.js';
 
 export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // Schema v58: user-authored agreements evaluate FIRST, against the record as
@@ -606,6 +611,14 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // transaction appended before it — including the breach work RULE-IDN-02
   // opens — and the seal (absolutely last) covers the attestation in turn.
   identityRule,
+  // ADR-0092: publication integrity (`RULE-DFR-01..04`). It PRODUCES work — a
+  // governed publication-integrity decision, a publication-rhythm decision and
+  // owned explanation tasks — so it must run before the market's final pass, and
+  // before the Operating Seat so that everything it opens rolls up the hierarchy
+  // in the SAME atomic transaction (the same placement rule ADR-0077 follows).
+  // A release resolves to its own module's records, so the register the decision
+  // rests on is complete by the time the reading is taken.
+  differencingRule,
   attentionMarketRule,
   // ADR-0077: the Succession Terminal (bench certification). Runs before the
   // Operating Seat because its certificate edges are provenance the seat's

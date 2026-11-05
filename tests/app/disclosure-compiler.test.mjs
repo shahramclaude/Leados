@@ -71,6 +71,9 @@ const RENDERER_ROUTES = [
   // ADR-0088: the Federated Envoy declares its own manifest row, so the
   // catalogue and the shell stay one route for one route.
   'envoy', 'federation', 'strategy-cycle',
+  // ADR-0092: the Differencing Defender is a renderer route with its own manifest
+  // and its own scoped adapter, so the catalogue and the shell stay 1:1.
+  'differencing',
 ];
 
 /** Sentinel-bearing roster: every person, span and private note is traceable. */
@@ -167,10 +170,10 @@ function seatsOrThrow(state) {
 /* --------------------------------------------------------------- 1. schema */
 
 test('schema v90 migrates additively and refuses malformed or stale grants', () => {
-  assert.equal(SCHEMA_VERSION, 95);
+  assert.equal(SCHEMA_VERSION, 96);
   const old = { schemaVersion: 89, settings: { leaderName: 'Keep' }, cases: [{ id: 'keep' }], disclosureGrants: [{ id: 'existing' }] };
   const migrated = migrate(old);
-  assert.equal(migrated.raw.schemaVersion, 95);
+  assert.equal(migrated.raw.schemaVersion, 96);
   assert.deepEqual(migrated.raw.disclosureMarkers, []);
   assert.equal(migrated.raw.cases[0].id, 'keep');
   assert.equal(migrated.raw.settings.disclosureCellFloor, 5);

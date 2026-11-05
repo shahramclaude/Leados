@@ -340,7 +340,6 @@ export const LINK_ENTITY_TYPES = [
   // from them. The subject is a PAIR and a DIMENSION; a person's answers are the
   // instrument's readings, never a rating.
   'concordance',
-  // ADR-0088: the carryover settlement record is a first-class graph node, so
   // ADR-0088: the Escalation Economy. One row per decision moment (absorbed
   // where it arose, or escalated upward) and one Aghion–Tirole intervention-
   // rate commitment. First-class nodes so the queue, the yield, the authority
@@ -349,7 +348,16 @@ export const LINK_ENTITY_TYPES = [
   // SPAN; no record here is a statement about a person.
   'escalationrecord',
   'escalationcommitment',
-  // ADR-0089: the carryover settlement record is a first-class graph node, so
+  // (A stale comment from an earlier carryover entry was left here, orphaned from
+  // the node it described; ADR-0092 removes it rather than letting the registry
+  // carry a duplicate type. `carryover` is declared once, below.)
+  // ADR-0092: a published aggregate is a first-class graph node. Its geometry is
+  // span ids, states and counts — never a span label, a person, a record title or
+  // an amount — so the seat it rolled up to and every leadership ancestor above it
+  // are navigable from the publication, and the publication from them. The proof a
+  // finding rests on is carried by the governed DECISION it opens, so no second
+  // node type is invented for it.
+  'differencingrelease',
   // ADR-0085: the carryover settlement record is a first-class graph node, so
   // the encumbered pact, the bet it settles, the leadership span it rolls up
   // to and the released budget line it frees are all navigable from the
@@ -383,11 +391,10 @@ export const LINK_ENTITY_TYPES = [
   // and every ancestor it rolled up to are `person` endpoints, exactly as the
   // command chain and the board room already express them.
   'federationassessment',
-  // ADR-0085: the carryover settlement record is a first-class graph node, so
-  // the encumbered pact, the bet it settles, the leadership span it rolls up
-  // to and the released budget line it frees are all navigable from the
-  // record and back from them.
-  'carryover',
+  // ADR-0085's `carryover` node and ADR-0088's `escalationrecord` /
+  // `escalationcommitment` nodes are declared above, each exactly once. A second
+  // copy of a type here is not harmless bookkeeping: it breaks the
+  // types-↔-collections invariant the registry is audited against.
 ];
 
 /**
@@ -515,6 +522,11 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   carryover: 'carryoverRecords',
   // ADR-0090: the federation assessment ledger owns the reading node's IDs.
   federationassessment: 'federationAssessments',
+  // ADR-0092: the publication register owns the release node's IDs. A proof node
+  // has no collection of its own: it is a decision, and the map deliberately does
+  // not alias it to `decisions`, so an ID collision cannot resurrect a proof as a
+  // decision.
+  differencingrelease: 'differenceReleases',
   // ADR-0085: the packet ledger owns the packet node's IDs.
   exchangepacket: 'exchangePackets',
   // ADR-0083: keep the registry exhaustive with LINK_ENTITY_TYPES.
@@ -633,6 +645,12 @@ export const SYSTEM_GENERATED_LINK_RELATIONS = Object.freeze([
   'reconciles',
   // ADR-0090: only RULE-FED-03 writes a reconnection; it is never a manual claim.
   'reconnects',
+  // ADR-0092: written only by RULE-DFR-02/03. `proves-release` says which
+  // registered releases took part in the exact proof that determined a withheld
+  // value; `protects-release` says which governed task explains a figure a
+  // protected release removed. Neither is ever asserted by hand.
+  'proves-release',
+  'protects-release',
   // ADR-0084: emitted by the Catchball spine, not manually asserted.
   'deploys-strategy', 'cascades-to', 'counters-upward', 'trades-off',
   // ADR-0089: cycle-to-cohort provenance is emitted only by RULE-SCR-01.
@@ -943,6 +961,11 @@ export const LINK_RELATIONS = [
   'carries-over',
   'settles',
   'releases-resource',
+  // ADR-0092: the publication-integrity proof edges (see
+  // SYSTEM_GENERATED_LINK_RELATIONS). Neither asserts that a value should have
+  // been withheld; both record which figures were involved.
+  'proves-release',
+  'protects-release',
   // ADR-0090: `reconnects` — measured carriage resumed on a declared edge that
   // once produced a silent-edge finding, written only by RULE-FED-03 from the
   // frozen assessment to the span below the edge. It records a MEASUREMENT, not
@@ -957,6 +980,8 @@ export const LINK_RELATIONS = [
 export const LINK_RELATION_LABELS = {
   carries: 'Carried to this leadership span as a sealed packet',
   reconnects: 'Measured carriage resumed on this span\u2019s declared edge above it',
+  'proves-release': 'Took part in the exact differencing proof over this publication',
+  'protects-release': 'Explains the figure this publication withheld to stay unrecoverable',
   'audits-cascade': 'Frozen cycle audits this typed strategy-to-delivery cascade',
   reconciles: 'Governed reconciliation opened by a renewal trigger or packet divergence',
   're-contracts': 'Re-contracting decision opened from this expectation',
@@ -2475,6 +2500,37 @@ export function resolveLinkedEntity(state, entityType, entityId) {
         status: `${rec.mechanism} · ${rec.recordedOn}`,
         route: `#/catchball?panel=calibration&round=${encodeURIComponent(rec.id)}`,
         raw: rec,
+      };
+    }
+    case 'differencingrelease': {
+      const rec = (state.differenceReleases || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      // The shared graph carries the release's own counts, states and dates and
+      // nothing else. The cell KEYS are span ids the reader can already see; no
+      // span label, no record title, no amount and no withheld value is projected
+      // through the general-purpose resolver. The scoped report is the reader.
+      const printedN = (rec.cells || []).filter((cell) => cell.state === 'printed').length;
+      return {
+        type: 'differencingrelease',
+        id: rec.id,
+        title: `Published aggregate · ${rec.route} · ${String(rec.releasedOn).slice(0, 10)}`,
+        status: `${rec.verdict} · ${printedN} printed of ${(rec.cells || []).length} cell(s)`,
+        route: `#/differencing?release=${encodeURIComponent(rec.id)}`,
+        raw: {
+          id: rec.id,
+          route: rec.route,
+          scopeSeatId: rec.scopeSeatId,
+          altitudeKey: rec.altitudeKey,
+          rank: rec.rank,
+          releasedOn: rec.releasedOn,
+          verdict: rec.verdict,
+          attemptN: rec.attemptN,
+          recoveredN: rec.recoveredN,
+          equationN: rec.equationN,
+          cellsN: (rec.cells || []).length,
+          printedN,
+          withheldTotals: rec.protection?.withheldTotals || [],
+        },
       };
     }
     case 'federationassessment': {

@@ -124,6 +124,12 @@ export const RECORD_POLICIES = Object.freeze({
   // and a declared seat receives only the scoped report, never the raw ledger.
   federationAssessments: { classKey: 'unit', detailCeiling: 0, label: 'Frozen federation readings (report only)', route: '#/federation' },
   federationMarkers: { classKey: 'unit', detailCeiling: 0, label: 'Federation rule markers', route: '#/federation' },
+  // ADR-0092: the publication register is published material and therefore span
+  // material: a release belongs to the seat that made it. Stored rows carry span
+  // ids, states, counts and dates — never a span name, person, title or amount —
+  // and a declared seat receives only the scoped report, never the raw ledger.
+  differenceReleases: { classKey: 'unit', detailCeiling: 0, label: 'Published aggregate register (report only)', route: '#/differencing' },
+  differenceMarkers: { classKey: 'unit', detailCeiling: 0, label: 'Publication-integrity rule markers', route: '#/differencing' },
   exchangePackets: { classKey: 'unit', label: 'Sealed exchange packets', route: '#/envoy' },
   exchangeArtefacts: { classKey: 'unit', label: 'Attested exchange copies', route: '#/envoy' },
   exchangeMarkers: { classKey: 'unit', label: 'Exchange idempotency markers', route: '#/envoy' },
@@ -330,6 +336,15 @@ export const ACTION_RIGHTS = Object.freeze({
   'negotiate-catchball': { minRank: 1, maxRank: 5, label: 'Propose, counter, accept or check in on a Hoshin Catchball pact' },
   // ADR-0089: each altitude freezes a scoped renewal reading and may explicitly scan it.
   'govern-strategy-cycle': { minRank: 1, maxRank: 5, label: 'Freeze or scan a scoped strategy renewal cycle' },
+  // ADR-0092: publishing an aggregate is an act every altitude performs — a
+  // frontline lead puts a table in a review deck and a chief puts one in a board
+  // pack. The right is therefore open at every rank; the ACTIONS enforce the span
+  // (your own seat only) and the arithmetic decides what may be published.
+  'publish-aggregate': { minRank: 1, maxRank: 5, label: 'Publish a module aggregate through the publication register' },
+  // The conventions that bound what everyone else may publish — the small-cell
+  // floor, the audit window and the drift floor — are a director+ act, on the
+  // same footing as the disclosure floor and the federation window.
+  'govern-differencing': { minRank: 3, maxRank: 5, label: 'Set the publication floor, audit window and drift conventions' },
   // ADR-0090: every altitude may freeze its own scoped federation reading and
   // run an explicit scan. Setting the WINDOW and the FLOORS is director-and-above
   // (checked in the action), because those numbers bound what everyone below reads.

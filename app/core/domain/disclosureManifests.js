@@ -127,6 +127,11 @@ export const MODULE_MANIFESTS = Object.freeze({
   // complementary cell and refuses a coverage rate below the span floor, so a
   // declared seat may open its own reading and cannot read a peer span's rows.
   federation: row('federation', 'Programme federation', ['federationAssessments'], { mode: A, classKey: 'unit', adapterScoped: true, detailCeiling: 5, dates: ['frozenOn'], note: 'The federation adapter measures carriage per declared leadership edge inside the active seat\u2019s span, blanks small cells with a complementary cell and withholds the coverage rate below the declared span floor. Raw assessment and marker rows are never projected into declared-seat view state, and no person is ever named.' }),
+  // ADR-0092: the Differencing Defender. Adaptive: the report adapter recomputes
+  // the active seat's own register scope, refuses a coverage rate below the
+  // release floor, and never carries a withheld VALUE into the read model — a
+  // screen that printed one would become the disclosure it warns about.
+  differencing: row('differencing', 'Differencing defender', ['differenceReleases'], { mode: A, classKey: 'unit', adapterScoped: true, detailCeiling: 5, dates: ['releasedOn'], statuses: ['verdict'], note: 'The publication register is audited as one integer system across releases, seats and modules. A determined value is reported as a coordinate and a proof, never as the number; a declared seat reads its own publications only.' }),
   // ADR-0089: the report adapter recomputes the active seat's scoped cohort,
   // redacts pact details at high altitude and suppresses small cells. Raw cycle
   // and marker rows are never projected into declared-seat view state.
