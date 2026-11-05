@@ -1,3 +1,66 @@
+# 2026-11-05 — Decision Robustness Lab (ADR-0093; schema v96 unchanged)
+
+## Repository identity and sync baseline
+
+First tool operation: `git remote get-url origin && git status --short --branch`. Origin was `https://github.com/shahramclaude/Leados.git`; branch `arena/6f47b075-leados` was clean. Subsequent `git fetch origin` succeeded; HEAD and origin/main had 0/0 divergence at base d89e024. No branch switch, no dependency or runtime network change.
+
+## Blunt audit and coverage
+
+Inventory: 4,333 tracked files at start, 461 files under app (including non-JS assets). Semantic inspection focused on the canonical manifest/package/entry, pulse domain/view/tests, case creation and lifecycle/propagation, transactional store, seat registry/projection/rules, disclosure/compiler, API gateway, DOM/download utilities and their regression fixtures. **The entire repository was NOT read source-file by source-file.** Legacy trees and uninspected modules remain **[UNVERIFIED]**; inventory and static checks do not count as a semantic audit.
+
+- Working and directly exercised: safe canonical commands, generalized case event propagation, five altitude seats and span restrictions, ancestor links, scoped roster/view projections, disclosure manifests, persistence/reload and portable build.
+- Existing limitation: local seat selection is not authenticated multi-user/server authorization. Private pulse identities cannot establish representative participation; viewScope withholds raw pulse records under a declared seat.
+- Shallow/missing: the pulse caveat stopped at reporting uncertainty; no explicit missing-evidence decision boundary connected that caveat to an approved action. A new score tile was rejected in favor of a model + stress tests + governed operational handoff.
+- Integration issue found during testing: the disclosure compiler's hand-maintained route inventory omitted the new route (102 manifests vs 101 expected routes). Updated that inventory; its full 21-test suite now passes, including the multi-altitude sentinel leak oracle.
+
+## Research converted into code
+
+Fresh snippet-level primary-source hunt: Culture Amp hierarchy reports and action plans; Visier/Viva Glint signal integration; Orgvue spans/layers and scenario planning; Aera what-if workspaces/decision tracking; Betterworks performance/OKR/360/succession. Secondary AI-native coaching watch: Valence, Risely, CoachHub, BetterUp and Hone. Sources, confidence limits and altitude tags are in RESEARCH.md. No claim of market-first novelty or independently verified vendor efficacy.
+
+## Shipped
+
+- `#/decision-robustness`: Manski conditional identification bounds, Savage minimax regret, strict dominance, endpoint loss table, cost-switch boundary, unrestricted-bound countercheck, five coverage scenarios and an explicitly non-probabilistic perfect-information regret ceiling.
+- Five altitude-specific questions and editable review defaults: frontline 7d, manager 14d, director 30d, exec 60d, chief 90d.
+- No automatic pulse input. Hypothetical coverage, losses and effectiveness are explicit; unknown values fail rather than become zero.
+- Independent human response/owner/plan/rationale → existing `api.addCase` → `caseCreatedRule` → DACI + task → `seatRule` ancestor fan-out. No second engine, no new collection or migration. A wait choice still creates an accountable dated review, not a silent dismissal.
+- Private JSON worksheet export/replay; malformed, oversized and future-version files refused; stored results ignored and recomputed. Numeric assumptions stay out of case records; user-entered free text still needs disclosure review.
+- Input invalidation, double-submit protection on the active form, explicit write-error/automation-rollback handling, download fallback, visible no-owner guidance, canonical disclosure manifest, nav + health entry points, rebuilt standalone distribution.
+
+## Concrete traced example
+
+Declared mean 2, distinct coverage 50%, missing-group mean 1–5, target 3, intervention cost 20, loss 100 per shortfall point, effectiveness 50% → group bounds 1.5–3.5; intervention max regret 20, wait max regret 55; model chooses intervene, with a tie at cost 37.5. All are **scenario** numbers, not employee evidence.
+
+A frontline approval assigned to a subordinate worker creates a case, a `decides` DACI link and a `mitigates` task link in the same command. `rolls-up-to` links reach frontline/manager/director/VP roster nodes; the synthetic chief receives the derived digest, not a fabricated person edge. Refresh creates no duplicate decision/task. Reload retains case and links. Private pulse sentinel IDs/comments never enter operational artifacts. Peer-owner and stale-seat attempts are refused.
+
+## Verification actually completed
+
+- `npm run lint`: PASS.
+- `npm run check:boundary`: PASS (461 app ES modules; 137 test suites; 23 documentation checks).
+- `npm run check:links`: PASS (805 links across 212 Markdown files at that run).
+- New suite: **11/11 PASS**, including 500 seeded scenarios against an independent dense regret oracle.
+- Combined new + pulse-safety + operating-seat suites: **39/39 PASS**.
+- Disclosure compiler suite after inventory update: **21/21 PASS**.
+- `npm run verify:standalone`: **7/7 PASS**, artifact rebuilt from final app source.
+- `node scripts/app-robustness-smoke.mjs`: **PASS** in real Chromium, zero WCAG A/AA violations including contrast, 390px viewport/content width match, actual approval/navigation, stored case/decision/task/ancestor links and reload. Desktop/mobile screenshots remain ignored scratch in `tmp/browser-evidence/robustness/`.
+- Broad `npm run verify:canonical`: started separately; **STILL RUNNING, NOT CLAIMED PASS** at this entry. Log `/home/user/robust-canonical.log`, Arena process `canonical-verification-3f4cba95`. This run started before the new test file was created; targeted reruns above cover the final new feature. Full regression completion remains **[UNVERIFIED]** until the process exits.
+
+## Known limits / next
+
+- Two actions, linear shortfall loss, fixed declared effectiveness. No causal fit, probability model, predictive attrition or constrained multi-action portfolio allocation.
+- Numeric worksheets are optional local files, not an immutable intervention evidence ledger. Only approved operational plan/rationale persists in the ordinary audit/case model.
+- No automatic notifications, spending, server auth or tenant isolation; no promise of anonymity. Practitioner usefulness across the five altitudes remains [UNVERIFIED].
+- Next: prospective intervention contracts with independent outcome grading; multi-action robust allocation/effectiveness intervals; authenticated server/tenant boundary.
+
+## Changed files
+
+`app/core/domain/decisionRobustness.js`, `app/views/decisionRobustness.js`, `app/core/domain/disclosureManifests.js`, `app/main.js`, `app/views/health.js`, `index.html`, `tests/app/decision-robustness.test.mjs`, `tests/app/disclosure-compiler.test.mjs`, `scripts/app-robustness-smoke.mjs`, `docs/adr/0093-decision-robustness-lab.md`, `docs/adr/INDEX.md`, `README.md`, `ROADMAP.md`, `RESEARCH.md`, `AI-SESSION-LOG.md`, `LeadOS-standalone.html`.
+
+## Sync
+
+Commit/push/PR not yet attempted at the time this entry was written. Actual results will be appended after the commands return; no sync success is assumed.
+
+---
+
 # 2026-11-05 — Pulse participation integrity
 
 Remote verified first: `https://github.com/shahramclaude/Leados.git`; branch `arena/4b15eb1c-leados`, initially clean. Audit was targeted, **not** a complete reading: 4,333 tracked files, canonical static `app/` plus legacy stack. Inspected pulse, health, insights, access gateway, post-commit spine and relevant tests. Working: local event-driven case links and five-level seat-derived roll-up (targeted tests pass). Shallow/unsafe: self-declared local seats are not authentication; pulse submissions can repeat, so counts cannot establish unique respondents; suppression does not guarantee anonymity. Missing: server authorization and authenticated survey participation; broad role/module coverage, browser accessibility and other paths [UNVERIFIED]. Incremental repair is viable; a rebuild was not attempted.

@@ -87,6 +87,7 @@ import { renderDelegations } from './views/delegations.js';
 import { renderGrowth } from './views/growth.js';
 import { renderReadiness } from './views/readiness.js';
 import { renderHealth } from './views/health.js';
+import { renderDecisionRobustness } from './views/decisionRobustness.js';
 import { renderConflicts, renderConflictDetail } from './views/conflicts.js';
 import { renderDecisions } from './views/decisions.js';
 import { renderRecognition } from './views/recognition.js';
@@ -287,6 +288,7 @@ export const NAV = [
     // judged, resources released into the next allocation cycle.
     { route: 'carryover', label: 'Carryover', icon: '⟳', badge: 'carryover' },
     { route: 'comms', label: 'Comms outbox', icon: '✉', badge: 'comms' },
+    { route: 'decision-robustness', label: 'Decision robustness', icon: '◇' },
     { route: 'insights', label: 'Signals', icon: '⚑', badge: 'signals' },
   ] },
   { section: 'People', items: [
@@ -456,6 +458,7 @@ const RENDERERS = {
   readiness: (ctx) => renderReadiness(ctx),
   measurement: (ctx) => renderMeasurement(ctx),
   health: (ctx) => renderHealth(ctx),
+  'decision-robustness': (ctx) => renderDecisionRobustness(ctx),
   capacity: (ctx) => renderCapacity(ctx),
   allocation: (ctx) => renderAllocation(ctx),
   load: (ctx) => renderLoad(ctx),

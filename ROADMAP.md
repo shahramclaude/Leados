@@ -1,3 +1,20 @@
+## 2026-11-05 — Evidence-to-action robustness slice
+
+### Implemented
+- **[frontline → chief]** Decision Robustness Lab: conditional non-response bounds, two-action minimax regret, unrestricted-bound comparison, coverage stress table, intervention cost-switch threshold and explicitly non-probabilistic information ceiling.
+- **[all five altitudes]** Scoped owner selection, distinct duties/review horizons, reviewed case → DACI + task → ancestor fan-out through the existing event engine; private evidence excluded.
+- **[all five altitudes]** Private numeric worksheet export/replay; fail-closed validation, stale-input invalidation and human model override with rationale.
+
+### Next ambitious slices
+1. **[manager → chief] Planned:** prospective intervention contracts that freeze declared assumptions separately from approved operational work, then grade observed outcomes without asserting causality or leaking survey cells.
+2. **[director → chief] Planned:** multi-action robust allocation with explicit capacity constraints, heterogeneous populations and sensitivity to effectiveness ranges, not one fixed causal assumption.
+3. **[all altitudes] Planned:** authenticated server/tenant boundaries and consented migration. Browser seat selection is still not enterprise access control.
+
+### Deliberately rejected
+- **[all altitudes]** Deriving verified participation from submissions — duplicate/overlapping anonymous submissions make that unsound.
+- **[frontline → chief]** Auto-escalating private pulse slices or exporting their model inputs into cases — operational roll-up is not permission to disclose survey evidence.
+- **[all altitudes]** Claiming a novel statistical method or market-first feature — this is explicit application of established partial-identification and robust-decision methods; product superiority is untested.
+
 ## 2026-11-05 — Pulse integrity gap analysis
 
 - **Implemented [frontline, manager]**: conditional, outward-rounded participation bounds; separate missing denominator; descriptive pulse findings without invented attrition prediction. Named IDs are declarations, not authentication.
