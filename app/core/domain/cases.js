@@ -756,6 +756,10 @@ export const LINK_RELATIONS = [
   // ADR-0100: a frozen calibration calibrates the ladder those spans are running
   // on. It is a measurement of a declaration, never of a person's work.
   'calibrates',
+  // ADR-0101: a reputational cell rests on the dated records its acts were read
+  // from. The edge carries provenance only — the act itself is re-derived from
+  // the source record on every render, never copied into a second ledger.
+  'rests-on',
   'develops',
   'consumes-capacity',
   'funds',

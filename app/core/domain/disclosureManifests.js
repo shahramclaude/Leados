@@ -142,6 +142,13 @@ export const MODULE_MANIFESTS = Object.freeze({
   // adapter-scoped for exactly that reason: a seat that sees one span of the
   // workspace would otherwise be reading its peers' decision latencies.
   'span-calibration': row('span-calibration', 'Discretion calibration', ['spanReadings', 'spanAdoptions'], { mode: A, classKey: 'unit', adapterScoped: true, detailCeiling: 5, dates: ['frozenOn'], note: 'The calibration adapter measures the leadership ladder from the workspace\u2019s own decision record and publishes rung-level survival estimates, test-inverted intervals and verdicts only. Per-span cells below the declared floor are blank with a complementary cell; no person, item title, record text or individual item date is ever projected, and individual-sensitive sources are excluded by name.' }),
+  // ADR-0101: the Reputational Capital Ledger. Adapter-scoped for a structural
+  // reason, not a cosmetic one: the adapter derives every cell from the acts of
+  // the spans INSIDE the active seat, so a director reading it cannot be handed a
+  // peer's reputational record by widening a filter. Per-span rows below the
+  // publishing floor are blanked with a complementary cell, and the export carries
+  // no person, act or source id.
+  reputation: row('reputation', 'Reputational capital', ['reputationActs', 'reputationPositions'], { mode: A, classKey: 'individual', adapterScoped: true, detailCeiling: 5, dates: ['openedOn', 'dueOn', 'on'], statuses: ['status'], note: 'The reputation adapter prices what an act will cost to guarantee from the dated records the active seat can read. It publishes act-class cells, Wilson intervals, obstacle prices and verdicts only; per-span cells below the publishing floor are blank with a complementary cell, a refused cell prints its reason and never a zero, and no person name, act id, source id or note is ever projected.' }),
   // ADR-0092: the Differencing Defender. Adaptive: the report adapter recomputes
   // the active seat's own register scope, refuses a coverage rate below the
   // release floor, and never carries a withheld VALUE into the read model — a

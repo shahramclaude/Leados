@@ -116,6 +116,7 @@ import { federationRule } from './federationRules.js';
 // Inert unless a reading is frozen, a line is crossed or an explicit scan runs.
 import { freezeLineRule } from './freezeLineRules.js';
 import { spanCalibrationRule } from './spanCalibrationRules.js';
+import { reputationalCapitalRule } from './reputationalCapitalRules.js';
 import { valueStreamRule } from './valueStreamRules.js';
 import { carryoverRule } from './carryoverRules.js';
 // ADR-0085: the Operating Cadence Clock. Reads the finished queue after the
@@ -640,6 +641,14 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // grade all happen before the attention market prices the work they open, and
   // before the Operating Seat rolls it up the hierarchy in the same transaction.
   spanCalibrationRule,
+  // ADR-0101: the Reputational Capital Ledger (RULE-RCL-01..05). It reads the
+  // acts every module above has already dated, so it runs after them: cell
+  // registration, the collateral decision on a drawn-down class, the guarantee
+  // and repair findings and the ledger's own once-only grade all happen before
+  // the attention market prices the work they open, and before the Operating Seat
+  // rolls them up the hierarchy in the same transaction. It writes no cell, no
+  // rate and no verdict: every figure is re-derived on read.
+  reputationalCapitalRule,
   // ADR-0087: the Attested Commit (RULE-IDN-01..03). Attestation is the
   // identity of the write itself, so its digest covers every event this
   // transaction appended before it — including the breach work RULE-IDN-02

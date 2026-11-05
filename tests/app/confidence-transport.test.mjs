@@ -475,14 +475,14 @@ describe('every adapter reads its ledger as documented', () => {
 
 describe('Schema v72 is additive and fail-closed', () => {
   test('the 71 → 72 migration adds two empty ledgers and invents nothing', () => {
-    assert.equal(SCHEMA_VERSION, 102);
+    assert.equal(SCHEMA_VERSION, 103);
     assert.equal(typeof MIGRATIONS[71], 'function');
     const raw = migrate({ schemaVersion: 71, settings: {}, people: [] });
-    assert.deepEqual(raw.applied, ['71 → 72', '72 → 73', '73 → 74', '74 → 75', '75 → 76', '76 → 77', '77 → 78', '78 → 79', '79 → 80', '80 → 81', '81 → 82', '82 → 83', '83 → 84', '84 → 85', '85 → 86', '86 → 87', '87 → 88', '88 → 89', '89 → 90', '90 → 91', '91 → 92', '92 → 93', '93 → 94', '94 → 95', '95 → 96', '96 → 97', '97 → 98', '98 → 99', '99 → 100', '100 → 101', '101 → 102']);
+    assert.deepEqual(raw.applied, ['71 → 72', '72 → 73', '73 → 74', '74 → 75', '75 → 76', '76 → 77', '77 → 78', '78 → 79', '79 → 80', '80 → 81', '81 → 82', '82 → 83', '83 → 84', '84 → 85', '85 → 86', '86 → 87', '87 → 88', '88 → 89', '89 → 90', '90 → 91', '91 → 92', '92 → 93', '93 → 94', '94 → 95', '95 → 96', '96 → 97', '97 → 98', '98 → 99', '99 → 100', '100 → 101', '101 → 102', '102 → 103']);
     assert.deepEqual(raw.raw.confidenceCertificates, []);
     assert.deepEqual(raw.raw.confidenceMarkers, []);
     const state = normalizeState({ schemaVersion: 71 }, { now: NOW }).state;
-    assert.equal(state.schemaVersion, 102);
+    assert.equal(state.schemaVersion, 103);
     assert.equal(state.settings.confidenceMinSamples, 24);
     assert.equal(state.settings.confidenceReviewDays, 42);
   });

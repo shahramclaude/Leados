@@ -1,3 +1,17 @@
+## 2026-11-05 — The reputational-pricing gap: structure and sentiment are measured, credibility is not (Session 141)
+
+Public snippets only; **no vendor capability below was audited**, and this is a **gap claim, not a market-first claim**.
+
+- **Orgvue, ChartHop** — span of control, layers, cost, planned vs actual structure. Answer: *how big is the org*. Do not answer *what an act costs to guarantee*.
+- **Culture Amp, Lattice** — engagement, eNPS, review cycles, goal tracking. Answer: *how do people say they feel*. A sentiment score is not a stake, and it is trivially gameable by the person being scored.
+- **Visier, Workday Illuminate** — as-of-date metric consistency across reorgs, workforce planning, emerging "AI insight" surfaces. Answer: *what changed, and what does the model suggest*. Neither prices a specific ask, and neither will refuse its own reading.
+- **Viva Insights** — collaboration telemetry. Answer: *who talks to whom*. Proximity is not credibility.
+- **Research frontier** — Doval & Smolin (2026) on calibrated mechanism design, and the 2025–26 dynamic-contract literature, ask precisely the question this module implements: what must a counter-party stake for a promise to be believed, and how does that stake decay and rebuild. **None of it ships in a product.**
+
+**What the gap actually is.** No surveyed product (a) prices a *specific* ask rather than a person, (b) reads a verdict off an interval so the reading can refuse itself, (c) anchors on a *declared* base rate it prints beside the record, or (d) freezes a claim at promise time and grades its own error after the fact. (b) and (d) are the two that matter: a scoring system that cannot refuse, and cannot be scored by its own past claims, is an opinion with a dashboard.
+
+**Literature actually implemented:** Wilson (1927) score interval; Kreps–Milgrom–Roberts–Wilson (1982) reputation as a repeated-game stock; Fudenberg–Tirole (1990) reputation repair as a costly observable signal; Gelman et al. (2008) weak priors that must lose to the data; Efron (2010) on priors that decide the answer; Grossman–Hart / Hart–Moore residual control as the tier ladder; Rubinstein/Sobel decay for the half-life. Prospect theory appears **only** in narrative copy — no parameter in the engine comes from it, and the ADR says so.
+
 ## 2026-11-05 — Role-aware reporting and honest evaluation (focused hunt)
 
 - **Culture Amp [manager → executive]** documents refusing small filter values even when their combination passes the minimum, to prevent adding/removing groups to reveal responses, and describes thresholds for shared reports and exports: [filter guidance](https://support.cultureamp.com/en/articles/7048607-filter-your-survey-results), [export guidance](https://support.cultureamp.com/en/articles/8438326-survey-export-options). This is vendor-documented behavior, not independently tested. LeadOS now refuses senior Router releases rather than promising comparable protection without a temporal disclosure review.
