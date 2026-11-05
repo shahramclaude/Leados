@@ -140,10 +140,10 @@ function declaration(overrides = {}) {
 /* ------------------------------------------------------------------ schema */
 
 test('Schema v98 migrates additively: empty ledgers, declared conventions, nothing inferred', () => {
-  assert.equal(SCHEMA_VERSION, 99);
+  assert.equal(SCHEMA_VERSION, 100);
   const migrated = migrate({ schemaVersion: 96, settings: { leaderName: 'Keep this' }, cases: [{ id: 'x' }] });
-  assert.deepEqual(migrated.applied, ['96 → 97', '97 → 98', '98 → 99']);
-  assert.equal(migrated.raw.schemaVersion, 99);
+  assert.deepEqual(migrated.applied, ['96 → 97', '97 → 98', '98 → 99', '99 → 100']);
+  assert.equal(migrated.raw.schemaVersion, 100);
   assert.deepEqual(migrated.raw.robustPlans, []);
   assert.deepEqual(migrated.raw.robustMarkers, []);
   assert.equal(migrated.raw.settings.leaderName, 'Keep this');
@@ -535,8 +535,8 @@ test('the brief, the CSV and all six renderer panels carry no name, title, plan 
   delete globalThis.document;
 });
 
-test('CSV scope #93 is aggregate-only, refusal-honest and refuses an unknown scope', () => {
-  assert.equal(CSV_EXPORTS.length, 93);
+test('CSV scope #93 (with #94 reserved for Clearinghouse) is aggregate-only, refusal-honest and refuses an unknown scope', () => {
+  assert.equal(CSV_EXPORTS.length, 94);
   const descriptor = CSV_EXPORTS.find((item) => item.key === 'robust-allocation');
   assert.ok(descriptor);
   assert.equal(descriptor.sensitive, false);

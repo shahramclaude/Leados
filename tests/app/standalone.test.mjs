@@ -182,7 +182,7 @@ test('standalone artifact exists and is a single inline HTML document', () => {
   // bytes per module, DOWN again from Session 134's 17,160. The density bound
   // (24,000) is unchanged and still catches a module inlined twice; this ceiling
   // only tracks module count.
-  assert.ok(bytes < 8_200_000, `standalone file is unexpectedly large (${bytes} bytes)`);
+  assert.ok(bytes < 8_400_000, `standalone file is unexpectedly large (${bytes} bytes)`);
   const declaredModules = Number((html.match(/content="[^"]*?(\d+) source modules/) || [])[1]);
   assert.ok(declaredModules > 100, `expected the build to declare its module count (got ${declaredModules})`);
   const bytesPerModule = Math.round(bytes / declaredModules);

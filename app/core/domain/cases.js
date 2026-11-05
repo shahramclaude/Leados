@@ -405,6 +405,9 @@ export const LINK_ENTITY_TYPES = [
   // from them. The decision and delivery tasks it opens are `decision` and
   // `delegation` endpoints, exactly as the prospective contract expresses them.
   'robustplan',
+  // ADR-0098: the frozen Internal Clearinghouse round. The shared graph
+  // resolver projects only structural counts, dates, Gamma and status.
+  'clearinground',
   // ADR-0085's `carryover` node and ADR-0088's `escalationrecord` /
   // `escalationcommitment` nodes are declared above, each exactly once. A second
   // copy of a type here is not harmless bookkeeping: it breaks the
@@ -548,7 +551,6 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   // ADR-0088: keep the registry exhaustive with LINK_ENTITY_TYPES.
   escalationrecord: 'escalationRecords',
   escalationcommitment: 'escalationCommitments',
-  carryover: 'carryoverRecords',
   // ADR-0086: keep the registry exhaustive with LINK_ENTITY_TYPES.
   disclosuregrant: 'disclosureGrants',
   // ADR-0084: keep the registry exhaustive with LINK_ENTITY_TYPES.
@@ -564,6 +566,7 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   prospectivegrade: 'prospectiveGrades',
   // ADR-0095: keep the registry exhaustive with LINK_ENTITY_TYPES.
   robustplan: 'robustPlans',
+  clearinground: 'clearingRounds',
 });
 
 export const FORBIDDEN_LINK_TYPES = ['conflict', 'pulse'];
@@ -676,6 +679,9 @@ export const SYSTEM_GENERATED_LINK_RELATIONS = Object.freeze([
   // Both are discovered provenance, never a manual claim about causality.
   'pre-registers',
   'grades-outcome',
+  // ADR-0098: only RULE-CLR-01/02 writes clearinghouse provenance edges.
+  'clears-bid',
+  'prices-externality',
   // ADR-0084: emitted by the Catchball spine, not manually asserted.
   'deploys-strategy', 'cascades-to', 'counters-upward', 'trades-off',
   // ADR-0089: cycle-to-cohort provenance is emitted only by RULE-SCR-01.
@@ -720,6 +726,9 @@ export const LINK_RELATIONS = [
   // points back at the frozen claim it tested. Neither is a causal assertion.
   'pre-registers',
   'grades-outcome',
+  // ADR-0098: clearing round provenance, discovered on the shared spine.
+  'clears-bid',
+  'prices-externality',
   'develops',
   'consumes-capacity',
   'funds',
@@ -1011,6 +1020,8 @@ export const LINK_RELATION_LABELS = {
   reconnects: 'Measured carriage resumed on this span\u2019s declared edge above it',
   'pre-registers': 'Froze a bet before this governed work was approved',
   'grades-outcome': 'Graded this frozen cohort once, out of sample',
+  'clears-bid': 'Cleared a sealed span bid in the internal resource market',
+  'prices-externality': 'Priced the sibling opportunity-cost hurdle',
   'proves-release': 'Took part in the exact differencing proof over this publication',
   'protects-release': 'Explains the figure this publication withheld to stay unrecoverable',
   'audits-cascade': 'Frozen cycle audits this typed strategy-to-delivery cascade',
@@ -2699,6 +2710,28 @@ export function resolveLinkedEntity(state, entityType, entityId) {
           observedN: rec.observedN,
           reachedN: rec.reachedN,
           brier: rec.brier,
+        },
+      };
+    }
+    case 'clearinground': {
+      const rec = (state.clearingRounds || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      // Identity-free graph projection: counts, dates, Gamma and state only.
+      return {
+        type: 'clearinground',
+        id: rec.id,
+        title: `Clearing round · ${rec.altitudeKey} · ${rec.openedOn}`,
+        status: `${rec.status} · ${rec.bids.length} bid(s) · Gamma ${rec.gamma}`,
+        route: `#/clearing?panel=rounds&round=${encodeURIComponent(rec.id)}`,
+        raw: {
+          id: rec.id,
+          openedOn: rec.openedOn,
+          horizonOn: rec.horizonOn,
+          altitudeKey: rec.altitudeKey,
+          rank: rec.rank,
+          gamma: rec.gamma,
+          status: rec.status,
+          bidsN: rec.bids.length,
         },
       };
     }

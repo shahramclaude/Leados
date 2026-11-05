@@ -104,6 +104,8 @@ import { differencingRule } from './differencingRules.js';
 import { prospectiveRule } from './prospectiveRules.js';
 // ADR-0095: the Robust Allocation Terminal.
 import { robustAllocationRule } from './robustAllocationRules.js';
+// ADR-0098: the Internal Clearinghouse rule suite.
+import { clearingRule } from './clearingRules.js';
 import { successionRule } from './successionRules.js';
 import { mandateRule } from './mandateRules.js';
 import { authorityCalibrationRule } from './authorityCalibrationRules.js';
@@ -711,6 +713,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'robustAllocationRules.js',
     purpose: 'RULE-RAL-01 freezes an adopted robust allocation as a graph node with one governed DACI decision, one owned delivery task per funded line, `allocates`/`consumes-capacity`/`rests-on` provenance and a vertical `rolls-up-to` edge for every leadership ancestor in the same atomic write; RULE-RAL-02 opens at most one governed re-allocation decision per plan per ISO week when a linked prospective contract grades below its pre-registered threshold; RULE-RAL-03 opens one delivery-integrity decision per plan per ISO week for a funded line that outlived the horizon; RULE-RAL-04 opens one evidence-integrity decision per plan per ISO week for a linked contract that was never graded; RULE-RAL-05 (ADR-0097) reads the graded prospective record by altitude × instrument cell and opens at most one governed premise–evidence tension decision per cell per ISO week — with counts and a Wilson interval only — when the settled record is more falsified than reached, while never adjusting a declared range itself. Never auto-adopts a plan, never closes a human decision, never rates a person, never asserts causality and never pools money across currencies.',
     writes: ['links', 'decisions', 'delegations', 'robustMarkers'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: clearingRule,
+    module: 'clearingRules.js',
+    purpose: 'RULE-CLR-01..05 turn a committed internal clearing round into one governed delivery decision, one owned delegation per funded span, same-currency encumbrance and typed provenance; settle deficits, overdue horizons, resource-mix bottlenecks and chronic altitude-cell misses into idempotent, blameless governed work. The rule never rates a person, never edits a bid or closes a human decision, and keeps the exact frozen solver certificate as the source of truth.',
+    writes: ['clearingMarkers', 'decisions', 'delegations', 'budgets', 'links'],
     emits: [],
     scansWorkspace: true,
   },

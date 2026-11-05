@@ -1,3 +1,9 @@
+## 2026-11-05 — The Hierarchical Clearinghouse: exact sealed resource clearing (Session 138, Schema v100, [ADR-0098](./docs/adr/0098-hierarchical-clearinghouse.md), `#/clearing`)
+
+LeadOS now includes an Internal Clearinghouse for scarce budget and shared capacity. Chairs declare a single-currency envelope; subordinate spans submit sealed 1–4 tier package schedules; the exact solver compares nominal, Γ-robust and minimax-regret economies, computes N+1 Clarke hurdles, shadow prices, resource-mix posture and a counted certificate, and commits only a certified solution. A minimum-viable tier never forces funding: the exact unfunded choice remains available.
+
+The committed round propagates atomically on the shared spine into governed delivery decisions, span-owned delegations, same-currency budget encumbrances, typed provenance and ancestor roll-ups. Once-only settlement grades realized delivery against the frozen hurdle, with Wilson bounds and prior-only Brier calibration. `#/clearing` is adapter-scoped: invited spans see only their own sealed package, upward readers receive identity-free roll-ups, and CSV #94 / the Markdown certificate are aggregate-only and differencing-safe. Migration `99 → 100` is additive and starts new workspaces with empty clearing ledgers.
+
 ## 2026-11-05 — The Calibrated Allocator: exact past the wall, and premises that answer to graded evidence (Session 137, Schema v99, [ADR-0097](./docs/adr/0097-calibrated-allocator.md), `#/robust-allocation`)
 
 Two changes, one property — the allocator now **scales** and **answers for its assumptions**:

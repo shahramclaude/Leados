@@ -178,7 +178,7 @@ function seedCycle(api, fixtureValue = fixture(), overrides = {}) {
 /* ------------------------------------------------------------- migration */
 
 test('v50 → v51 is additive: no band, no cycle and no pay figure is invented', () => {
-  assert.equal(SCHEMA_VERSION, 99);
+  assert.equal(SCHEMA_VERSION, 100);
   const v50 = {
     schemaVersion: 50,
     settings: { teamName: 'Existing team' },
@@ -187,9 +187,9 @@ test('v50 → v51 is additive: no band, no cycle and no pay figure is invented',
     compBands: undefined,
   };
   const migrated = migrate(v50);
-  assert.equal(migrated.raw.schemaVersion, 99);
-  assert.equal(migrated.applied.at(-1), '98 → 99');
-  assert.equal(migrated.raw.schemaVersion, 99);
+  assert.equal(migrated.raw.schemaVersion, 100);
+  assert.equal(migrated.applied.at(-1), '99 → 100');
+  assert.equal(migrated.raw.schemaVersion, 100);
   assert.deepEqual(migrated.raw.compBands, []);
   assert.deepEqual(migrated.raw.meritCycles, []);
   const { state, warnings } = normalizeState(migrated.raw, { now: NOW });
@@ -531,7 +531,7 @@ test('a departure resolves the frozen prediction and the model grades itself onl
 /* -------------------------------------------------------------- CSV & demo */
 
 test('CSV scope #45 carries ratios and counts and leaks no salary, name or label', () => {
-  assert.equal(CSV_EXPORTS.length, 93);
+  assert.equal(CSV_EXPORTS.length, 94);
   const scope = CSV_EXPORTS.find((row) => row.key === 'merit');
   assert.ok(scope);
   assert.match(scope.description, /NO salaries/);

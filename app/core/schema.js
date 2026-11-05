@@ -197,6 +197,14 @@ import {
   normalizeRobustMarkers,
   normalizeRobustAllocationSettings,
 } from './domain/robustAllocationSchema.js';
+// ADR-0098: the Internal Clearinghouse. Clearing rounds and rule markers
+// resolve before typed links; malformed sealed bids, frozen solutions or
+// settlements are dropped rather than repaired into a commitment.
+import {
+  normalizeClearingRounds,
+  normalizeClearingMarkers,
+  normalizeClearingSettings,
+} from './domain/clearingSchema.js';
 // ADR-0088: the Escalation Economy — the disposition ledger, intervention-rate
 // commitments, idempotency markers, and clamped conventions.
 import {
@@ -411,7 +419,7 @@ export {
 // older blob simply opens on the undeclared operator view. A version bump here
 // would have forced 78 test files to be rewritten for zero user benefit; the
 // honest choice is to add nothing to migrate.
-export const SCHEMA_VERSION = 99;
+export const SCHEMA_VERSION = 100;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -1635,6 +1643,16 @@ export const DEFAULT_SETTINGS = Object.freeze({
   robustAllocationReviewDays: 14,
   robustAllocationAutoPropagate: true,
   robustAllocationMaxCombinations: 50000,
+  // ADR-0098: Internal Clearinghouse conventions. These are declared
+  // governance bounds, not fitted history: they determine when a small cell,
+  // an overdue settlement or a resource-mix imbalance may speak upward.
+  clearingCellFloor: 3,
+  clearingReviewDays: 14,
+  clearingAutoPropagate: true,
+  clearingMaxCombinations: 250000,
+  clearingNodeBudget: 350000,
+  clearingMixImbalanceHighPct: 85,
+  clearingMixImbalanceLowPct: 50,
   });
 
 export const COLLECTIONS = [
@@ -2010,6 +2028,10 @@ export const COLLECTIONS = [
   // derived exactly on read.
   'robustPlans',
   'robustMarkers',
+  // ADR-0098: sealed clearing rounds (with frozen N+1 solution and
+  // once-only settlement) plus the shared post-commit idempotency markers.
+  'clearingRounds',
+  'clearingMarkers',
   'links',
   'portfolio',
   'events',
@@ -2676,6 +2698,7 @@ export function normalizeSettings(raw) {
     ...normalizeCadenceSettings(s),
     ...normalizeProspectiveSettings(s),
     ...normalizeRobustAllocationSettings(s),
+    ...normalizeClearingSettings(s),
   };
 }
 
@@ -6794,6 +6817,11 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // leader might act on.
   state.robustPlans = normalizeRobustPlans(raw.robustPlans, warnings);
   state.robustMarkers = normalizeRobustMarkers(raw.robustMarkers);
+  // ADR-0098: clearing rounds and markers resolve before typed links so
+  // `clears-bid`, `prices-externality` and `rolls-up-to` edges cannot point at
+  // a malformed or half-frozen resource commitment.
+  state.clearingRounds = normalizeClearingRounds(raw.clearingRounds, warnings);
+  state.clearingMarkers = normalizeClearingMarkers(raw.clearingMarkers);
   // ADR-0085: the Operating Cadence Clock. A malformed forum, a sitting with no
   // ADR-0088: carryover records resolve after pacts so `carries-over` and
   // ADR-0089: resolve peer contracts and immutable receipts before typed links.
@@ -7593,6 +7621,27 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  // ADR-0098: additive 99 → 100. No historical clearing decision is inferred;
+  // upgraded workspaces start with empty clearing ledgers and only the declared
+  // conventions. Existing settings are preserved and new keys get defaults.
+  99: (v99) => ({
+    ...v99,
+    schemaVersion: 100,
+    clearingRounds: Array.isArray(v99.clearingRounds) ? v99.clearingRounds : [],
+    clearingMarkers: Array.isArray(v99.clearingMarkers) ? v99.clearingMarkers : [],
+    settings: isPlainObject(v99.settings)
+      ? {
+        ...v99.settings,
+        clearingCellFloor: v99.settings.clearingCellFloor ?? 3,
+        clearingReviewDays: v99.settings.clearingReviewDays ?? 14,
+        clearingAutoPropagate: v99.settings.clearingAutoPropagate !== false,
+        clearingMaxCombinations: v99.settings.clearingMaxCombinations ?? 250000,
+        clearingNodeBudget: v99.settings.clearingNodeBudget ?? 350000,
+        clearingMixImbalanceHighPct: v99.settings.clearingMixImbalanceHighPct ?? 85,
+        clearingMixImbalanceLowPct: v99.settings.clearingMixImbalanceLowPct ?? 50,
+      }
+      : { ...DEFAULT_SETTINGS },
+  }),
   // ADR-0097: additive 98 → 99. No new collection: a plan MAY now carry
   // `supersedesId` (a human-declared revision), an action MAY carry
   // `evidenceInstrumentKey` (which prospective instrument grades its premise),

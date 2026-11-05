@@ -81,6 +81,10 @@ import { prospectiveAttentionCount } from './core/domain/prospective.js';
 // the equity floor, and roll the funded commitment up the same chain of command.
 import { renderRobustAllocation } from './views/robustAllocation.js';
 import { robustAllocationAttentionCount } from './core/domain/robustAllocation.js';
+// ADR-0098: the Hierarchical Clearinghouse — sealed multi-tranche resource
+// clearing, Clarke hurdle settlement and identity-free upward certificate.
+import { renderClearing } from './views/clearing.js';
+import { clearingAttentionCount } from './core/domain/clearing.js';
 import { renderResponses } from './views/responses.js';
 import { renderActionBundles } from './views/actionBundles.js';
 import { bundleAttentionCount } from './core/domain/actionBundles.js';
@@ -274,6 +278,8 @@ export const NAV = [
     { route: 'prospective', label: 'Prospective contracts', icon: '⌛', badge: 'prospective' },
     // ADR-0095: robust multi-action allocation under declared effect ranges.
     { route: 'robust-allocation', label: 'Robust allocation', icon: '⚖', badge: 'robust-allocation' },
+    // ADR-0098: one guarded route for the sealed internal resource market.
+    { route: 'clearing', label: 'Internal clearinghouse', icon: '⟁', badge: 'clearing' },
     { route: 'identity', label: 'Attested commits', icon: '🔑', badge: 'identity' },
     { route: 'today', label: 'Today', icon: '◎' },
     { route: 'responses', label: 'Response studio', icon: '⌁', badge: 'responses' },
@@ -444,6 +450,7 @@ const RENDERERS = {
   differencing: (ctx) => renderDifferencing(ctx),
   prospective: (ctx) => renderProspective(ctx),
   'robust-allocation': (ctx) => renderRobustAllocation(ctx),
+  clearing: (ctx) => renderClearing(ctx),
   responses: (ctx) => renderResponses(ctx),
   bundles: (ctx) => renderActionBundles(ctx),
   attribution: (ctx) => renderSettlement(ctx),
@@ -690,6 +697,9 @@ export function parseRoute(hash) {
     'minimax-regret': 'robust-allocation', 'maximin': 'robust-allocation',
     'capacity-allocation': 'robust-allocation', 'equity-floor': 'robust-allocation',
     'bertsimas-sim': 'robust-allocation',
+    // ADR-0098: the Internal Clearinghouse route and non-colliding aliases.
+    'clearing': 'clearing', 'clearinghouse': 'clearing', 'internal-clearinghouse': 'clearing',
+    'resource-market': 'clearing', 'sealed-bids': 'clearing', 'clarke-hurdle': 'clearing',
     // ADR-0090 supersedes the envoy alias that used to own 'federation': the
     // bare word now means the measured reading, and the packet screen keeps its
     // own name and its own aliases. No shipped link is broken: 'federated',
@@ -1039,6 +1049,9 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       prospective: prospectiveAttentionCount(state, { now: at, settings: state.settings }),
       // ADR-0095: falsified, overdue or ungraded premises plus open governed findings.
       'robust-allocation': robustAllocationAttentionCount(state, { now: at, settings: state.settings }),
+      // ADR-0098: overdue settlement, hurdle deficits, mix bottlenecks and an
+      // invited span's missing sealed bid are concrete attention, not telemetry.
+      clearing: clearingAttentionCount(state, { now: at, settings: state.settings }),
       // ADR-0082: the badge counts chain breaks only — a valid chain is not noise.
       seal: sealAttentionCount(state),
       identity: identityAttentionCount(state, { now: at, settings: state.settings }),
@@ -1445,6 +1458,23 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       }
       // ADR-0086: above the detail ceiling the module still opens — as the read
       // the level above actually acts on. No dead end, no fake records.
+      // ADR-0098: Clearing is an aggregate-only adapter with its own seal,
+      // altitude roll-up and differencing-safe certificate. Do not pass it
+      // through the generic collection aggregator (round rows have no people
+      // fields to scope); the adapter reads raw state only through clearingRead.
+      if (route === 'clearing' && verdict.posture === 'aggregate') {
+        try {
+          mount(view, renderClearing(ctx));
+          const heading = view.querySelector('h1');
+          if (heading) heading.setAttribute('tabindex', '-1');
+          if (heading && routeChanged && !document.activeElement?.closest?.('#modal-root')) heading.focus({ preventScroll: true });
+          lastRenderedRoute = route;
+          document.title = `Internal Clearinghouse — aggregate at ${seatCtx.seat.label} · LeadOS`;
+        } catch (error) {
+          renderError(error, route);
+        }
+        return;
+      }
       if (verdict.posture === 'aggregate') {
         const entry = compiled?.entries?.[route] || null;
         try {
@@ -1519,6 +1549,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       federation: 'Programme federation — which declared leadership edges actually carry work, measured from dated artefacts other modules already wrote: connected, bypassed, stale or silent, with a Wilson-bounded coverage rate that is withheld below the span floor and small cells suppressed',
       prospective: 'Prospective contracts — a probability, threshold, horizon and exact cohort of record ids are frozen BEFORE the governed work exists; one governed DACI decision, one owned outcome task and one roll-up edge per leadership ancestor are written in the same atomic transaction; the cohort is graded once out of sample with a Brier proper score against a strictly-prior base rate, an unobservable cohort is refused rather than scored as a miss, and pooled rates are withheld below the declared cell floor and below director rank',
       'robust-allocation': 'Robust allocation — a multi-action, capacity-constrained integer allocation is solved EXACTLY under Bertsimas–Sim budgeted uncertainty over declared effect ranges, printing the Wald maximin and Savage minimax-regret plans, the price of the equity floor, the single range whose stress flips the recommendation and the regret its resolution releases; adopting it writes one governed DACI decision, one owned delivery task per funded line and one roll-up edge per leadership ancestor in the same atomic transaction, and a linked pre-registered contract that misses its threshold opens a governed re-allocation decision; an over-cap or infeasible plan is refused rather than approximated, money is never pooled across currencies, and the pooled falsified share is withheld below the declared cell floor and below director rank',
+      clearing: 'Internal Clearinghouse — sealed multi-tranche span bids are cleared exactly across budget and shared capacity under nominal, Gamma-robust and minimax-regret regimes; each funded span receives its exact Clarke pivot hurdle, the frozen commitment opens governed delivery work and same-currency encumbrance on the shared post-commit spine, and one-time out-of-sample settlement grades the mechanism without rating a person or exposing a sibling bid',
       differencing: 'Differencing defender — a table can be safe while a series of tables is not: every published aggregate audited as one exact integer system across releases, seats and modules, the cheapest suppression pattern that determines nothing chosen before publication, and a publication refused when no pattern can make it safe',
       responses: 'Response studio — rehearse and adopt a coordinated leadership response',
       bundles: 'Action bundles — review, adopt and safely withdraw coordinated work',

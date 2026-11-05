@@ -156,18 +156,18 @@ const verdictOf = (evaluation, key) => evaluation.rows.find((row) => row.key ===
 /* ------------------------------------------------------------ schema/wiring */
 
 test('schema v91 (main) then v92/v93: board collections arrive additively', () => {
-  assert.equal(SCHEMA_VERSION, 99);
+  assert.equal(SCHEMA_VERSION, 100);
   assert.equal(typeof MIGRATIONS[90], 'function');
   const before = { ...createEmptyState(NOW.toISOString()), schemaVersion: 90 };
   delete before.boardMemos;
   delete before.boardMarkers;
   const migrated = migrate(before);
-  assert.deepEqual(migrated.applied, ['90 → 91', '91 → 92', '92 → 93', '93 → 94', '94 → 95', '95 → 96', '96 → 97', '97 → 98', '98 → 99'], 'each step additive');
-  assert.equal(migrated.raw.schemaVersion, 99);
+  assert.deepEqual(migrated.applied, ['90 → 91', '91 → 92', '92 → 93', '93 → 94', '94 → 95', '95 → 96', '96 → 97', '97 → 98', '98 → 99', '99 → 100'], 'each step additive');
+  assert.equal(migrated.raw.schemaVersion, 100);
   assert.deepEqual(migrated.raw.boardMemos, []);
   assert.deepEqual(migrated.raw.boardMarkers, []);
   const normalized = normalizeState(migrated.raw, { now: NOW }).state;
-  assert.equal(normalized.schemaVersion, 99);
+  assert.equal(normalized.schemaVersion, 100);
   assert.equal(normalized.settings.boardCellFloor, 5);
   assert.equal(normalized.settings.boardEvidenceFloor, 4);
   assert.equal(normalized.settings.boardMaterialityPct, 10);
@@ -209,7 +209,7 @@ test('the rule is on the shared spine, has an auditable contract, and cannot out
   // was failing before that session; ADR-0092 brought it to 76, ADR-0094
   // (RULE-PIC-01..04) to 77 and ADR-0095 (RULE-RAL-01..04, one rule on the shared
   // spine) brings it to 78.
-  assert.equal(DEFAULT_POST_COMMIT_RULES.length, 78, 'the shared spine includes cadence, Strategy Cycle (RULE-SCR), Envoy (RULE-ENV), Federation (RULE-FED), Differencing (RULE-DFR), the Prospective Contract (RULE-PIC) and the Robust Allocation Terminal (RULE-RAL)');
+  assert.equal(DEFAULT_POST_COMMIT_RULES.length, 79, 'the shared spine includes cadence, Strategy Cycle (RULE-SCR), Envoy (RULE-ENV), Federation (RULE-FED), Differencing (RULE-DFR), the Prospective Contract (RULE-PIC), the Robust Allocation Terminal (RULE-RAL) and the Internal Clearinghouse (RULE-CLR)');
   assert.ok(DEFAULT_POST_COMMIT_RULES.includes(boardRule));
   const contract = contractFor(boardRule);
   assert.ok(contract, 'boardRule has a declared contract');
@@ -247,7 +247,7 @@ test('the route exists, is enterprise material, and is reachable from the nav', 
 });
 
 test('CSV scope #80 exists and refuses to guess', () => {
-  assert.equal(CSV_EXPORTS.length, 93);
+  assert.equal(CSV_EXPORTS.length, 94);
   const scope = CSV_EXPORTS.find((s) => s.key === 'board-claims');
   assert.ok(scope);
   assert.equal(scope.sensitive, false);

@@ -181,13 +181,13 @@ test('v76 -> v78 migrates additively and invents nothing', () => {
   delete v76.reliabilityMarkers;
   const { raw: v77, applied } = migrate(clone(v76));
   assert.ok(applied.includes('76 → 77'));
-  assert.equal(v77.schemaVersion, 99);
-  assert.equal(v77.schemaVersion, 99);
+  assert.equal(v77.schemaVersion, 100);
+  assert.equal(v77.schemaVersion, 100);
   assert.deepEqual(v77.reliabilityReadings, []);
   assert.deepEqual(v77.reliabilityMarkers, []);
   assert.deepEqual(v77.couplingReviews, []);
   assert.deepEqual(v77.couplingMarkers, []);
-  assert.equal(SCHEMA_VERSION, 99);
+  assert.equal(SCHEMA_VERSION, 100);
 });
 
 test('a v75 workspace chains through both additive migrations', () => {

@@ -175,6 +175,9 @@ import { prospectiveRule } from './prospectiveRules.js';
 // SAME atomic transaction. Altitude is a dimension of this one spine, not a
 // second engine. Inert unless a plan is adopted or an explicit scan runs.
 import { robustAllocationRule } from './robustAllocationRules.js';
+// ADR-0098: the Internal Clearinghouse writes its governed delivery, hurdle,
+// overdue and mix work on this same atomic post-commit spine.
+import { clearingRule } from './clearingRules.js';
 
 export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // Schema v58: user-authored agreements evaluate FIRST, against the record as
@@ -645,6 +648,9 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // plan per ISO week. Marker-idempotent and pausable; runs before the market's
   // final work-producing pass so the decisions it opens are priced identically.
   robustAllocationRule,
+  // ADR-0098: RULE-CLR-01..05 runs before the attention market so the decisions
+  // and owned settlement work it opens are priced in the same transaction.
+  clearingRule,
   attentionMarketRule,
   // ADR-0077: the Succession Terminal (bench certification). Runs before the
   // Operating Seat because its certificate edges are provenance the seat's

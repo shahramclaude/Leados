@@ -26,6 +26,9 @@ import { createDifferencingActions } from './core/domain/differencingActions.js'
 // same access gateway and the same post-commit rule spine as every other module.
 import { createProspectiveActions } from './core/domain/prospectiveActions.js';
 import { createRobustAllocationActions } from './core/domain/robustAllocationActions.js';
+// ADR-0098: the Hierarchical Clearinghouse uses the same guarded command bus
+// and post-commit spine as every other terminal.
+import { createClearingActions } from './core/domain/clearingActions.js';
 import { createCadenceActions } from './core/domain/cadenceActions.js';
 import { createCarryoverActions } from './core/domain/carryoverActions.js';
 
@@ -19681,15 +19684,14 @@ export function createApi(store, options = {}) {
   // delivery tasks, the typed provenance and the vertical roll-up are produced
   // by RULE-RAL-01 on the shared spine, not here.
   Object.assign(api, createRobustAllocationActions(store, { now: clock, idFactory: id }));
+  // ADR-0098: sealed bids, exact clearing, one-time hurdle settlement and
+  // convention governance all pass through the shared access gateway.
+  Object.assign(api, createClearingActions(store, { now: clock, idFactory: id }));
   // ADR-0087: the Operating Cadence Clock's reviewed commands.
   Object.assign(api, createCadenceActions(store, { now: clock, idFactory: id }));
   Object.assign(api, createCarryoverActions(store, { now: clock, idFactory: id }));
-  // ADR-0089: carryover settlements share the same reviewed gateway.
   // ADR-0089: lateral value-stream commands and atomic stop-rule carryover.
   Object.assign(api, createValueStreamActions(store, { now: clock, idFactory: id }));
-  Object.assign(api, createCarryoverActions(store, { now: clock, idFactory: id }));
-  // ADR-0087: the Operating Cadence Clock's reviewed commands.
-  Object.assign(api, createCadenceActions(store, { now: clock, idFactory: id }));
   // ADR-0083: two-sided expectation rounds, sealed until both sides are in.
   Object.assign(api, createConcordanceActions(store, { now: clock, idFactory: id, createApi }));
   // ADR-0085: compose, verify, ingest. Every handler is declared in the gateway;
