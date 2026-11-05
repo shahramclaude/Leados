@@ -160,7 +160,14 @@ test('standalone artifact exists and is a single inline HTML document', () => {
   // from the measured build (7,830,962 bytes / 451 modules — 17,363 bytes per
   // module against the unchanged 24,000 density bound, which is what still
   // catches a module inlined twice).
-  assert.ok(bytes < 7_900_000, `standalone file is unexpectedly large (${bytes} bytes)`);
+  // Raised in Session 132 (Schema v96): the Differencing Defender added seven real
+  // modules (differencingRegistry.js, differencingDeterminacy.js,
+  // differencingSchema.js, differencing.js, differencingRules.js,
+  // differencingActions.js, views/differencing.js) and the build measured
+  // 7,912,690 bytes / 458 modules — 17,276 bytes per module, DOWN from the
+  // Session 131 density, which is the point: the density bound (24,000) is what
+  // catches a module inlined twice; this absolute ceiling only catches a runaway.
+  assert.ok(bytes < 8_000_000, `standalone file is unexpectedly large (${bytes} bytes)`);
   const declaredModules = Number((html.match(/content="[^"]*?(\d+) source modules/) || [])[1]);
   assert.ok(declaredModules > 100, `expected the build to declare its module count (got ${declaredModules})`);
   const bytesPerModule = Math.round(bytes / declaredModules);

@@ -157,9 +157,11 @@ const edgeKey = (report, seatId) => rowFor(report, seatId)?.state;
 /* ------------------------------------------------------------------ schema */
 
 test('Schema v95 migrates additively: empty ledgers, declared conventions, no inferred carriage', () => {
-  assert.equal(SCHEMA_VERSION, 95);
+  assert.equal(SCHEMA_VERSION, 96);
   const migrated = migrate({ schemaVersion: 94, settings: { leaderName: 'Keep this', federationWindowDays: 999 }, strategyCycles: [] });
-  assert.deepEqual(migrated.applied, ['94 → 95']);
+  // The chain now runs one further additive step; the federation migration itself
+  // is unchanged, which is what this suite is about.
+  assert.deepEqual(migrated.applied, ['94 → 95', '95 → 96']);
   assert.deepEqual(migrated.raw.federationAssessments, []);
   assert.deepEqual(migrated.raw.federationMarkers, []);
   assert.equal(migrated.raw.settings.leaderName, 'Keep this');

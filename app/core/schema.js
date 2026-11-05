@@ -118,6 +118,10 @@ import {
 // links, and every roll-up figure is derived live from the reporting tree and
 // the dated records. Nothing here needs a migration.
 import { normalizeSeatSettings } from './domain/seatSchema.js';
+// ADR-0092: the Differencing Defender. Releases and markers resolve BEFORE links
+// so `summarizes-span` / `proves-release` / `protects-release` edges validate on
+// reload. A malformed release is dropped rather than reasoned about.
+import { normalizeReleases, normalizeMarkers as normalizeDifferencingMarkers, normalizeDifferencesSettings } from './domain/differencingSchema.js';
 import { normalizeMissionBriefs, normalizeMissionSettings } from './domain/missionSchema.js';
 import {
   normalizeChainReadings,
@@ -390,7 +394,7 @@ export {
 // older blob simply opens on the undeclared operator view. A version bump here
 // would have forced 78 test files to be rewritten for zero user benefit; the
 // honest choice is to add nothing to migrate.
-export const SCHEMA_VERSION = 95;
+export const SCHEMA_VERSION = 96;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -1511,6 +1515,16 @@ export const DEFAULT_SETTINGS = Object.freeze({
   federationMinSpans: 5,
   federationCellFloor: 3,
   federationAutoPropagate: true,
+  // ADR-0092: the Differencing Defender. `differencesCellFloor` is the small-cell
+  // floor the publication planner suppresses against; `differencesWindowReleases`
+  // is how many prior releases of a module an audit reasons over;
+  // `differencesMinPoints` is the drift floor below which a trend is REFUSED
+  // rather than printed.
+  differencesCellFloor: 3,
+  differencesWindowReleases: 12,
+  differencesMinPoints: 8,
+  differencesAutoProtect: true,
+  differencesAutoPropagate: true,
   // ADR-0088: The Escalation Economy — declared conventions, all clamped. The
   // hourly rates are a DECLARED costing convention for the escalation tax,
   // never an audit of anyone's pay.
@@ -1930,6 +1944,13 @@ export const COLLECTIONS = [
   // measured reconnections). No measured channel is written by this module.
   'federationAssessments',
   'federationMarkers',
+  // ADR-0092: the Differencing Defender. `differenceReleases` is the immutable
+  // register of published aggregates (module, day, altitude, geometry — never a
+  // span name, person, title or amount); `differenceMarkers` is the rules'
+  // idempotency ledger (registration roll-up, determined-value decisions,
+  // protection tasks and publication-rhythm findings).
+  'differenceReleases',
+  'differenceMarkers',
   // ADR-0089: seat credential enrollments (PUBLIC halves only — salt, key
   // fingerprint and an HMAC verifier; never key material) and the identity
   // rules' idempotency markers.
@@ -6697,6 +6718,11 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // ids. A malformed assessment is dropped, never repaired.
   state.federationAssessments = normalizeFederationAssessments(raw.federationAssessments, warnings);
   state.federationMarkers = normalizeFederationMarkers(raw.federationMarkers);
+  // ADR-0092: releases and markers resolve before typed links so
+  // `summarizes-span`, `proves-release` and `protects-release` edges validate
+  // against real release ids. A malformed release is dropped, never repaired.
+  state.differenceReleases = normalizeReleases(raw.differenceReleases, warnings);
+  state.differenceMarkers = normalizeDifferencingMarkers(raw.differenceMarkers);
   // ADR-0085: the Operating Cadence Clock. A malformed forum, a sitting with no
   // ADR-0088: carryover records resolve after pacts so `carries-over` and
   // ADR-0089: resolve peer contracts and immutable receipts before typed links.
@@ -7496,6 +7522,27 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  // ADR-0092: additive 95 → 96. No publication is invented for an existing
+  // workspace and no aggregate is retro-audited into the register: an empty
+  // register means "nothing has been published from here yet", which is not the
+  // same claim as "nothing published was unsafe". Every value below is a
+  // convention with a printed default, never inferred history.
+  95: (v95) => ({
+    ...v95,
+    schemaVersion: 96,
+    differenceReleases: Array.isArray(v95.differenceReleases) ? v95.differenceReleases : [],
+    differenceMarkers: Array.isArray(v95.differenceMarkers) ? v95.differenceMarkers : [],
+    settings: isPlainObject(v95.settings)
+      ? {
+        ...v95.settings,
+        differencesCellFloor: v95.settings.differencesCellFloor ?? 3,
+        differencesWindowReleases: v95.settings.differencesWindowReleases ?? 12,
+        differencesMinPoints: v95.settings.differencesMinPoints ?? 8,
+        differencesAutoProtect: v95.settings.differencesAutoProtect !== false,
+        differencesAutoPropagate: v95.settings.differencesAutoPropagate !== false,
+      }
+      : { ...DEFAULT_SETTINGS },
+  }),
   // ADR-0090: additive 94 → 95. No carriage is inferred for an existing
   // workspace and no reporting line is touched: every pre-existing edge reads
   // as measured from the artefacts other modules already wrote, and the frozen

@@ -68,6 +68,11 @@ import { renderEnvoy } from './views/envoy.js';
 import { renderFederation } from './views/federation.js';
 import { envoyAttentionCount } from './core/domain/envoy.js';
 import { federationAttentionCount } from './core/domain/federation.js';
+// ADR-0092: the Differencing Defender — a withheld aggregate cell is only
+// withheld if it cannot be recovered, and a SERIES of safe tables is not a safe
+// publication. Exact integer determinacy across releases, seats and modules.
+import { renderDifferencing } from './views/differencing.js';
+import { differencesAttentionCount } from './core/domain/differencing.js';
 import { renderResponses } from './views/responses.js';
 import { renderActionBundles } from './views/actionBundles.js';
 import { bundleAttentionCount } from './core/domain/actionBundles.js';
@@ -253,6 +258,9 @@ export const NAV = [
     // ADR-0090: which declared leadership edges are measurably connected — a
     // reading of the hierarchy's information system, never of its people.
     { route: 'federation', label: 'Federation', icon: '⨝', badge: 'federation' },
+    // ADR-0092: publication integrity — what the aggregates this span publishes
+    // actually disclose once a reader subtracts them.
+    { route: 'differencing', label: 'Differencing', icon: '⊖', badge: 'differencing' },
     { route: 'identity', label: 'Attested commits', icon: '🔑', badge: 'identity' },
     { route: 'today', label: 'Today', icon: '◎' },
     { route: 'responses', label: 'Response studio', icon: '⌁', badge: 'responses' },
@@ -419,6 +427,7 @@ const RENDERERS = {
   board: (ctx) => renderBoard(ctx),
   envoy: (ctx) => renderEnvoy(ctx),
   federation: (ctx) => renderFederation(ctx),
+  differencing: (ctx) => renderDifferencing(ctx),
   responses: (ctx) => renderResponses(ctx),
   bundles: (ctx) => renderActionBundles(ctx),
   attribution: (ctx) => renderSettlement(ctx),
@@ -649,6 +658,10 @@ export function parseRoute(hash) {
     // shipped link. Federation-only aliases are used instead.
     'federation': 'federation', 'programme-federation': 'federation', 'connectivity': 'federation',
     'carriage': 'federation', 'silent-edges': 'federation', 'programme-coverage': 'federation',
+    // ADR-0092: the publication register. None of these shadows a shipped route.
+    'differencing': 'differencing', 'differences': 'differencing', 'publication': 'differencing',
+    'publication-register': 'differencing', 'small-cell-series': 'differencing', 'releases': 'differencing',
+    'inference': 'differencing', 'disclosure-series': 'differencing',
     // ADR-0090 supersedes the envoy alias that used to own 'federation': the
     // bare word now means the measured reading, and the packet screen keeps its
     // own name and its own aliases. No shipped link is broken: 'federated',
@@ -992,6 +1005,8 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       envoy: envoyAttentionCount(state, { now: at, settings: state.settings }),
       // ADR-0090: declared edges measured silent or bypassed, plus open carriage findings.
       federation: federationAttentionCount(state, { now: at, settings: state.settings }),
+      // ADR-0092: a module that publishes a determined surface, plus open findings.
+      differencing: differencesAttentionCount(state, { now: at, settings: state.settings }),
       // ADR-0082: the badge counts chain breaks only — a valid chain is not noise.
       seal: sealAttentionCount(state),
       identity: identityAttentionCount(state, { now: at, settings: state.settings }),
@@ -1470,6 +1485,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       concordance: 'Expectation Concordance — “meets expectations” treated as a measurement instrument: two sealed sides, six dimensions, weighted κ / AC1 / PABAK / Bland–Altman agreement, a governed re-contracting decision on divergence and a typed roll-up to every leadership span',
       envoy: 'Sealed exchange — how a span’s pack leaves its own browser: projected at the receiving altitude’s disclosure class, committed with a per-item SHA-256 and a Merkle root, signed keyed when the vault is unlocked, verified by the receiver before a single field is stored, ingested idempotently, and turned into a governed reconciliation decision when two workspaces disagree',
       federation: 'Programme federation — which declared leadership edges actually carry work, measured from dated artefacts other modules already wrote: connected, bypassed, stale or silent, with a Wilson-bounded coverage rate that is withheld below the span floor and small cells suppressed',
+      differencing: 'Differencing defender — a table can be safe while a series of tables is not: every published aggregate audited as one exact integer system across releases, seats and modules, the cheapest suppression pattern that determines nothing chosen before publication, and a publication refused when no pattern can make it safe',
       responses: 'Response studio — rehearse and adopt a coordinated leadership response',
       bundles: 'Action bundles — review, adopt and safely withdraw coordinated work',
       attribution: 'Outcome attribution — Earned Schedule, clearance bottlenecks and variance settlement',

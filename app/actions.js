@@ -19,6 +19,9 @@ import { createStrategyCycleActions } from './core/domain/strategyCycleActions.j
 // ADR-0090: the Programme Federation Reading's API mixin — one more consumer of
 // the same post-commit spine, not a second command bus.
 import { createFederationActions } from './core/domain/federationActions.js';
+// ADR-0092: the Differencing Defender's API mixin — the publication register is a
+// command boundary like every other module's.
+import { createDifferencingActions } from './core/domain/differencingActions.js';
 import { createCadenceActions } from './core/domain/cadenceActions.js';
 import { createCarryoverActions } from './core/domain/carryoverActions.js';
 
@@ -19664,6 +19667,8 @@ export function createApi(store, options = {}) {
   Object.assign(api, createStrategyCycleActions(store, { now: clock, idFactory: id }));
   // ADR-0090: freeze a measured federation reading, or scan the declared edges.
   Object.assign(api, createFederationActions(store, { now: clock, idFactory: id }));
+  // ADR-0092: plan, publish, withdraw, scan — and the scoped register read.
+  Object.assign(api, createDifferencingActions(store, { now: clock, idFactory: id }));
   // ADR-0087: the Operating Cadence Clock's reviewed commands.
   Object.assign(api, createCadenceActions(store, { now: clock, idFactory: id }));
   Object.assign(api, createCarryoverActions(store, { now: clock, idFactory: id }));

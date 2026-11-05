@@ -156,18 +156,18 @@ const verdictOf = (evaluation, key) => evaluation.rows.find((row) => row.key ===
 /* ------------------------------------------------------------ schema/wiring */
 
 test('schema v91 (main) then v92/v93: board collections arrive additively', () => {
-  assert.equal(SCHEMA_VERSION, 95);
+  assert.equal(SCHEMA_VERSION, 96);
   assert.equal(typeof MIGRATIONS[90], 'function');
   const before = { ...createEmptyState(NOW.toISOString()), schemaVersion: 90 };
   delete before.boardMemos;
   delete before.boardMarkers;
   const migrated = migrate(before);
-  assert.deepEqual(migrated.applied, ['90 → 91', '91 → 92', '92 → 93', '93 → 94', '94 → 95'], 'each step additive');
-  assert.equal(migrated.raw.schemaVersion, 95);
+  assert.deepEqual(migrated.applied, ['90 → 91', '91 → 92', '92 → 93', '93 → 94', '94 → 95', '95 → 96'], 'each step additive');
+  assert.equal(migrated.raw.schemaVersion, 96);
   assert.deepEqual(migrated.raw.boardMemos, []);
   assert.deepEqual(migrated.raw.boardMarkers, []);
   const normalized = normalizeState(migrated.raw, { now: NOW }).state;
-  assert.equal(normalized.schemaVersion, 95);
+  assert.equal(normalized.schemaVersion, 96);
   assert.equal(normalized.settings.boardCellFloor, 5);
   assert.equal(normalized.settings.boardEvidenceFloor, 4);
   assert.equal(normalized.settings.boardMaterialityPct, 10);
@@ -203,7 +203,11 @@ test('the graph vocabulary covers the memo: type, collection and both relations'
 
 test('the rule is on the shared spine, has an auditable contract, and cannot outrun the seal', () => {
   assert.equal(PROPAGATION_CONTRACTS.length, DEFAULT_POST_COMMIT_RULES.length, '1:1 rule/contract parity');
-  assert.equal(DEFAULT_POST_COMMIT_RULES.length, 71, 'the shared spine includes cadence, Strategy Cycle (RULE-SCR), Envoy (RULE-ENV) and Federation (RULE-FED)');
+  // This is a tripwire, not a contract: it makes any session that adds a rule
+  // state the new total deliberately. It read 71 on `main` while the spine was
+  // already at 75 (the count had drifted stale across ADR-0089/0090/0091), so it
+  // was failing before this session; ADR-0092 brings it to 76.
+  assert.equal(DEFAULT_POST_COMMIT_RULES.length, 76, 'the shared spine includes cadence, Strategy Cycle (RULE-SCR), Envoy (RULE-ENV), Federation (RULE-FED) and Differencing (RULE-DFR)');
   assert.ok(DEFAULT_POST_COMMIT_RULES.includes(boardRule));
   const contract = contractFor(boardRule);
   assert.ok(contract, 'boardRule has a declared contract');
@@ -241,7 +245,7 @@ test('the route exists, is enterprise material, and is reachable from the nav', 
 });
 
 test('CSV scope #80 exists and refuses to guess', () => {
-  assert.equal(CSV_EXPORTS.length, 90);
+  assert.equal(CSV_EXPORTS.length, 91);
   const scope = CSV_EXPORTS.find((s) => s.key === 'board-claims');
   assert.ok(scope);
   assert.equal(scope.sensitive, false);
