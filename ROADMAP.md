@@ -1,3 +1,25 @@
+## 2026-11-05 — Reputational capital: what an act costs to be believed (Session 141, Schema v103, ADR-0101)
+
+**Shipped.** `#/reputation` — a ledger that prices what an act costs to **guarantee** here, from records eight other modules already dated. Wilson (1927) score interval re-expressed in beta parameters over a **declared** per-class hazard, half-life decay, read off the interval (`solvent` / `encumbered` / `drawn-down` / `contested` / `expired` / `refused`), with every refusal printing its reason and never a zero. A bounded convex premium (`100 − (100−base)·e^−γ·max(0, ln(ask/stake))`) prices an ask larger than the stake across four engagement tiers (85/60/35/15) — Grossman–Hart residual control made operational. `RULE-RCL-01..05` on the shared spine (82 rules): `rests-on` provenance + one `rolls-up-to` per ancestor in the same transaction; one governed decision per span × class × ISO week; the ledger grades **its own frozen claim** once (`(claimP − y)²`). CSV #97, aggregate-only, identity-free, BLANK never zero.
+
+**Altitude coverage.**
+- *Frontline lead (rank 1)* — price an ask before making it; see its own cells and the exact count of kept acts each tier needs.
+- *Manager (rank 2–3)* — the pooled class table over the subtree; drawn-down classes surface as governed decisions owned at the span that can author the repair.
+- *Director / VP (rank 4)* — re-declare conventions (`govern-reputation`); read the direction of reputational capital across classes.
+- *CEO (rank 5)* — identity-free upward brief; the withdrawal-shock scenario (a class drawn to zero) priced against every open guarantee.
+
+**Open backlog (tagged by altitude).**
+- *All altitudes* — a **cross-class dependence** model: today each class prices independently, so a leader solvent on delivery and custody but drawn down on both under stress reads as two independent facts. A copula or a declared common-shock convention would let one guarantee rest on the joint event. **[PLANNED, largest gap.]**
+- *Manager+* — **guarantee portfolios**: price N simultaneous guarantees against one span's stake (currently each is priced alone, so three small asks look free when together they are not). **[PLANNED.]**
+- *Director+* — **hazard re-estimation with evidence**: the class hazard is declared today. Reading it back from settled guarantees (a proper empirical-Bayes update with a documented prior) would make the anchor accountable. **[PLANNED — deliberately not shipped: with fewer than ~30 settled guarantees per class any estimate would be the prior wearing a decimal point.]**
+- *All altitudes* — **real-browser AT walkthrough** of the five panels. **[UNVERIFIED today.]**
+
+**Deliberately rejected.**
+- A composite person-level trust score or any ranking — it manufactures favouritism and destroys the per-class audit trail. *Rejected permanently.*
+- Self-assessments or peer nominations as acts — cheap talk, gameable in a week. *Rejected.*
+- A posterior mean as the headline — the interval is the argument. *Rejected.*
+- Storing the derived cell — a stored copy is a second, drifting truth. *Rejected.*
+
 ## 2026-11-05 — Router trust gap, next investments
 
 - **Implemented [frontline → manager]**: consistent subtree scope for Router calibration, badge, brief, CSV and API; earlier-day-only Brier baseline and explicit evidence floor.

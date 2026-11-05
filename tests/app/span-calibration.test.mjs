@@ -195,9 +195,9 @@ function renderPanel(state, panel) {
 /* ------------------------------------------------------------------ */
 
 test('Schema v102 is additive: three empty ledgers, declared conventions, no ladder in force', () => {
-  assert.equal(SCHEMA_VERSION, 102);
+  assert.equal(SCHEMA_VERSION, 103);
   const migrated = migrate({ schemaVersion: 101, settings: { leaderName: 'Keep this' } });
-  assert.deepEqual(migrated.applied, ['101 → 102']);
+  assert.deepEqual(migrated.applied, ['101 → 102', '102 → 103']);
   assert.deepEqual(migrated.raw.spanReadings, []);
   assert.deepEqual(migrated.raw.spanAdoptions, []);
   assert.deepEqual(migrated.raw.spanMarkers, []);

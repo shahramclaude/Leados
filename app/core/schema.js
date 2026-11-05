@@ -225,6 +225,18 @@ import {
   normalizeSpanCalibrationSettings,
   normalizeAdoptedHorizons,
 } from './domain/spanCalibrationSchema.js';
+// ADR-0101: the Reputational Capital Ledger. Human-entered acts, dated positions
+// (guarantees and repairs) and the rules' idempotency markers resolve before
+// typed links so `rests-on` and `rolls-up-to` edges validate against real ids. A
+// stored DERIVED act is dropped here — it is re-harvested from its source record
+// on every read, and a stored copy would go stale while still spending capital
+// the source no longer supports.
+import {
+  normalizeReputationActs,
+  normalizeReputationPositions,
+  normalizeReputationMarkers,
+  normalizeReputationSettings,
+} from './domain/reputationalCapitalSchema.js';
 import { ALTITUDES as SPAN_ALTITUDES } from './domain/chainRegistry.js';
 // ADR-0088: the Escalation Economy — the disposition ledger, intervention-rate
 // commitments, idempotency markers, and clamped conventions.
@@ -440,7 +452,7 @@ export {
 // older blob simply opens on the undeclared operator view. A version bump here
 // would have forced 78 test files to be rewritten for zero user benefit; the
 // honest choice is to add nothing to migrate.
-export const SCHEMA_VERSION = 102;
+export const SCHEMA_VERSION = 103;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -2089,6 +2101,14 @@ export const COLLECTIONS = [
   // themselves are DERIVED from committed/reverted org designs, never stored.
   'freezeReadings',
   'freezeMarkers',
+  // ADR-0101: the Reputational Capital Ledger. `reputationActs` holds only acts a
+  // HUMAN entered (derived acts are re-harvested on read), `reputationPositions`
+  // holds dated guarantees and repairs, and `reputationMarkers` is the five
+  // shared-post-commit rules' idempotency ledger. No cell, rate, interval or
+  // verdict is ever persisted: every figure is re-derived from the record.
+  'reputationActs',
+  'reputationPositions',
+  'reputationMarkers',
   'links',
   'portfolio',
   'events',
@@ -2769,6 +2789,10 @@ export function normalizeSettings(raw) {
     // the declared table's own band and forced strictly increasing, so a
     // hand-edited settings object cannot run a ladder downhill.
     ...normalizeSpanCalibrationSettings(s),
+    // ADR-0101: the reputational-capital conventions — window, floors, premium
+    // convexity, breach weight, half-life, ask and publishing floor — clamped,
+    // plus the declared per-class hazard rates every cell is anchored on.
+    ...normalizeReputationSettings(s),
     chainAdoptedHorizons: normalizeAdoptedHorizons(s.chainAdoptedHorizons, DECLARED_HORIZONS),
     chainAdoptedOn: /^\d{4}-\d{2}-\d{2}$/.test(String(s.chainAdoptedOn || '')) ? s.chainAdoptedOn : null,
     chainAdoptedReadingId: typeof s.chainAdoptedReadingId === 'string' && s.chainAdoptedReadingId.trim()
@@ -6908,6 +6932,9 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // against real ids. A malformed reading or undated adoption is DROPPED with a
   // warning; nothing is repaired into a ladder a leader might route on.
   state.spanReadings = normalizeSpanReadings(raw.spanReadings, warnings, { now: new Date() });
+  state.reputationActs = normalizeReputationActs(raw.reputationActs, warnings, { now: new Date() });
+  state.reputationPositions = normalizeReputationPositions(raw.reputationPositions, warnings, { now: new Date() });
+  state.reputationMarkers = normalizeReputationMarkers(raw.reputationMarkers);
   state.spanAdoptions = normalizeSpanAdoptions(raw.spanAdoptions, warnings);
   state.spanMarkers = normalizeSpanMarkers(raw.spanMarkers);
   // ADR-0085: the Operating Cadence Clock. A malformed forum, a sitting with no
@@ -7719,6 +7746,23 @@ export const MIGRATIONS = {
   // measured the ladder here yet", a different claim from "the ladder is right".
   // No adoption is invented: `chainAdoptedHorizons` is null, which is the declared
   // table, so every existing escalation clock reads exactly as it did on v101.
+  // ADR-0101: additive 102 → 103. An existing workspace has not recorded a
+  // reputational act by hand and has not offered a guarantee, so all three
+  // ledgers start EMPTY — an empty ledger means "nobody has priced a promise here
+  // yet", a different claim from "everyone is solvent". `reputationActs` is NOT
+  // back-filled from the delegation ledger: a back-filled act would look like a
+  // human judgement this upgrade never made, and the harvester re-reads those
+  // records on every render anyway.
+  102: (v102) => ({
+    ...v102,
+    schemaVersion: 103,
+    reputationActs: Array.isArray(v102.reputationActs) ? v102.reputationActs : [],
+    reputationPositions: Array.isArray(v102.reputationPositions) ? v102.reputationPositions : [],
+    reputationMarkers: Array.isArray(v102.reputationMarkers) ? v102.reputationMarkers : [],
+    settings: isPlainObject(v102.settings)
+      ? { ...v102.settings, ...normalizeReputationSettings(v102.settings) }
+      : { ...DEFAULT_SETTINGS },
+  }),
   101: (v101) => ({
     ...v101,
     schemaVersion: 102,

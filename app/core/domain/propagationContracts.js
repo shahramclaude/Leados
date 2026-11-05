@@ -117,6 +117,7 @@ import { strategyCycleRule } from './strategyCycleRules.js';
 import { federationRule } from './federationRules.js';
 import { freezeLineRule } from './freezeLineRules.js';
 import { spanCalibrationRule } from './spanCalibrationRules.js';
+import { reputationalCapitalRule } from './reputationalCapitalRules.js';
 import { cadenceRule } from './cadenceRules.js';
 import { carryoverRule } from './carryoverRules.js';
 
@@ -658,6 +659,13 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'freezeLineRules.js',
     purpose: 'RULE-FRZ-01 registers a frozen freeze-line continuity reading as a graph node: one `freezes` edge to the committed/reverted org design, up to twelve `re-projects` edges to the pre-freeze federation assessments (aggregate only), and one `rolls-up-to` edge per leadership ancestor of the design owner\'s span — all in the SAME atomic transaction. RULE-FRZ-02 measures dated carriage on both sides of each freeze line (the same artefacts the federation rule reads) and opens at most ONE governed DACI decision per line per ISO week when the connected share of declared edges degrades beyond the declared threshold, owned at the span above the design owner and named by date and kind, never by a person. RULE-FRZ-03 audits frozen federation snapshots for suppressed rows still carrying a carriage date (a timing side channel on a withheld cell) and opens at most one redaction decision per snapshot per ISO week. The module never changes a reporting line, never closes a human decision, never re-projects per-span detail across a line, and never rates a person. Marker-idempotent, pausable by freezeLineAutoPropagate, and an explicit scan always runs.',
     writes: ['freezeMarkers', 'decisions', 'links'],
+  },
+  {
+    rule: reputationalCapitalRule,
+    module: 'reputationalCapitalRules.js',
+    purpose: 'RULE-RCL-01 registers every reputational cell the workspace can already evidence as a graph node: one `rests-on` edge per distinct dated source record it was read from (never a copy) and one `rolls-up-to` edge per leadership ancestor of the span, in the SAME atomic transaction. RULE-RCL-02 opens at most ONE governed DACI decision per span per act class per ISO week when the interval has fallen below the obstacle or the class is disputed, owned at the span above the person and naming the class, the interval and the two honest routes (bank a repair, move down the tier ladder). RULE-RCL-03 opens at most ONE governed decision per open guarantee per ISO week when its cell is not solvent: the engine never withdraws authority a human offered. RULE-RCL-04 closes a due repair once the acts it declared are actually banked, and otherwise opens one governed decision — never a silent expiry. RULE-RCL-05 grades a tagged guarantee exactly ONCE against the claim frozen at open time and prints the platform\'s own squared error, so the ledger answers to the same discipline it asks of leaders. The subject of every write is a PERSON-AS-COUNTER-PARTY, an ACT CLASS and a TIER: no person is rated, ranked or scored, no performance record is edited, no decision is closed, no reporting line changes and no message is sent. Marker-idempotent, pausable by reputationAutoPropagate, and an explicit scan always runs.',
+    writes: ['reputationMarkers', 'reputationPositions', 'decisions', 'links'],
+    emits: [], scansWorkspace: true,
     emits: [],
     scansWorkspace: true,
   },

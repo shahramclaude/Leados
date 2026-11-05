@@ -157,11 +157,11 @@ const edgeKey = (report, seatId) => rowFor(report, seatId)?.state;
 /* ------------------------------------------------------------------ schema */
 
 test('Schema v95 migrates additively: empty ledgers, declared conventions, no inferred carriage', () => {
-  assert.equal(SCHEMA_VERSION, 102);
+  assert.equal(SCHEMA_VERSION, 103);
   const migrated = migrate({ schemaVersion: 94, settings: { leaderName: 'Keep this', federationWindowDays: 999 }, strategyCycles: [] });
   // The chain now runs one further additive step for the Clearinghouse; the
   // federation migration itself is unchanged, which is what this suite is about.
-  assert.deepEqual(migrated.applied, ['94 → 95', '95 → 96', '96 → 97', '97 → 98', '98 → 99', '99 → 100', '100 → 101', '101 → 102']);
+  assert.deepEqual(migrated.applied, ['94 → 95', '95 → 96', '96 → 97', '97 → 98', '98 → 99', '99 → 100', '100 → 101', '101 → 102', '102 → 103']);
   assert.deepEqual(migrated.raw.federationAssessments, []);
   assert.deepEqual(migrated.raw.federationMarkers, []);
   assert.equal(migrated.raw.settings.leaderName, 'Keep this');

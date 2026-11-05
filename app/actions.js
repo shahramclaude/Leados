@@ -22,6 +22,7 @@ import { createStrategyCycleActions } from './core/domain/strategyCycleActions.j
 // the same post-commit spine, not a second command bus.
 import { createFederationActions } from './core/domain/federationActions.js';
 import { createFreezeLineActions } from './core/domain/freezeLineActions.js';
+import { createReputationActions } from './core/domain/reputationalCapitalActions.js';
 import { createSpanCalibrationActions } from './core/domain/spanCalibrationActions.js';
 // ADR-0092: the Differencing Defender's API mixin — the publication register is a
 // command boundary like every other module's.
@@ -19695,6 +19696,12 @@ export function createApi(store, options = {}) {
   // freeze lines and audit the timing guard. Line registration, degraded-line
   // decisions and redaction work are produced by RULE-FRZ-01..03 on the spine.
   Object.assign(api, createFreezeLineActions(store, { now: clock, idFactory: id }));
+  // ADR-0101: the Reputational Capital Ledger. Recording an act, opening or
+  // closing a dated guarantee/repair, and re-declaring the conventions are
+  // declared commands; every read is a seat-scoped SAFE_READ. Cell registration,
+  // the collateral decision and the ledger's own once-only grade are produced by
+  // RULE-RCL-01..05 on the same spine in the SAME atomic transaction.
+  Object.assign(api, createReputationActions(store, { now: clock, idFactory: id }));
   // ADR-0100: the Discretion Calibrator. Freezing measures the record and changes
   // nothing; only a dated, full-access adoption moves the ladder, and the spine
   // registers the reading, opens any falsified-rung decision and grades due

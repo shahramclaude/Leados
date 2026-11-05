@@ -87,6 +87,10 @@ const RENDERER_ROUTES = [
   'clearing',
   // ADR-0099: the Freeze-Line Continuity Audit has its own manifest row.
   'freeze-line',
+  // ADR-0100: the Discretion Calibrator has its own manifest row and scoped adapter.
+  'span-calibration',
+  // ADR-0101: the Reputational Capital Ledger has its own manifest row.
+  'reputation',
 ];
 
 /** Sentinel-bearing roster: every person, span and private note is traceable. */
@@ -183,7 +187,7 @@ function seatsOrThrow(state) {
 /* --------------------------------------------------------------- 1. schema */
 
 test('schema v90 migrates additively and refuses malformed or stale grants', () => {
-  assert.equal(SCHEMA_VERSION, 102);
+  assert.equal(SCHEMA_VERSION, 103);
   const old = { schemaVersion: 89, settings: { leaderName: 'Keep' }, cases: [{ id: 'keep' }], disclosureGrants: [{ id: 'existing' }] };
   const migrated = migrate(old);
   assert.equal(migrated.raw.schemaVersion, SCHEMA_VERSION);

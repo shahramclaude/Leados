@@ -85,6 +85,14 @@ export const RECORD_POLICIES = Object.freeze({
   spanReadings: { classKey: 'unit', label: 'Discretion calibration readings', route: '#/span-calibration' },
   spanAdoptions: { classKey: 'unit', label: 'Ladder adoption ledger', route: '#/span-calibration?panel=readings' },
   spanMarkers: { classKey: 'unit', label: 'Calibration idempotency markers', route: '#/span-calibration' },
+  // ADR-0101: a reputational cell is about a PERSON AS A COUNTER-PARTY, so it is
+  // classed with the individual detail it is derived from: only the people whose
+  // acts it reads, and the spans above them, may see it. The positions ledger is
+  // an authority record (a dated promise someone made) and reads at every altitude
+  // that can hold one. Markers carry ids only.
+  reputationActs: { classKey: 'individual', label: 'Hand-recorded reputational acts', route: '#/reputation?panel=acts' },
+  reputationPositions: { classKey: 'authority', label: 'Guarantee and repair positions', route: '#/reputation?panel=positions' },
+  reputationMarkers: { classKey: 'unit', label: 'Reputation idempotency markers', route: '#/reputation' },
   // ADR-0086: a disclosure release is a bounded authority contract, so it is
   // readable at every altitude that can hold one — and its ledger is exactly
   // what makes the widening auditable afterwards.
@@ -349,6 +357,12 @@ export const ACTION_RIGHTS = Object.freeze({
   // ADR-0082: verifying the sealed audit chain is every altitude's business —
   // it writes only an audit event, never a record.
   'audit-seal': { minRank: 1, maxRank: 5, label: 'Verify the sealed audit chain' },
+  // ADR-0101: the Reputational Capital Ledger. Recording an act and declaring a
+  // dated promise are acts every altitude performs; re-pricing the workspace's
+  // conventions is director+ because it moves every obstacle at once.
+  'record-reputation-act': { minRank: 1, maxRank: 5, label: 'Record a dated reputational act or run an explicit scan' },
+  'offer-reputation-guarantee': { minRank: 1, maxRank: 5, label: 'Offer or close a dated guarantee or repair' },
+  'govern-reputation': { minRank: 4, maxRank: 5, label: 'Re-declare the reputational-capital conventions' },
   // ADR-0084: authoring the operating model is an org-design act — it declares
   // how every position at a level spends its week and prices structural change.
   // The same right that edits a reporting line authors the model of the lines.

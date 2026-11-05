@@ -67,6 +67,8 @@ import { renderEnvoy } from './views/envoy.js';
 // ADR-0090: the Programme Federation Reading — which declared edges actually carry work.
 import { renderFederation } from './views/federation.js';
 import { renderFreezeLine } from './views/freezeLine.js';
+import { renderReputation } from './views/reputation.js';
+import { reputationAttentionCount } from './core/domain/reputationalCapital.js';
 import { renderSpanCalibration } from './views/spanCalibration.js';
 import { envoyAttentionCount } from './core/domain/envoy.js';
 import { federationAttentionCount } from './core/domain/federation.js';
@@ -282,6 +284,9 @@ export const NAV = [
     // ADR-0100: the ladder itself, measured against the record. Every escalation
     // clock in the product reads the table this screen calibrates.
     { route: 'span-calibration', label: 'Span calibration', icon: '⌇', badge: 'span-calibration' },
+    // ADR-0101: what it costs to be believed. Priced from acts other modules
+    // already dated; refused where the record cannot support a number.
+    { route: 'reputation', label: 'Reputational capital', icon: '⟠', badge: 'reputation' },
     // ADR-0092: publication integrity — what the aggregates this span publishes
     // actually disclose once a reader subtracts them.
     { route: 'differencing', label: 'Differencing', icon: '⊖', badge: 'differencing' },
@@ -459,6 +464,7 @@ const RENDERERS = {
   envoy: (ctx) => renderEnvoy(ctx),
   federation: (ctx) => renderFederation(ctx),
   'freeze-line': (ctx) => renderFreezeLine(ctx),
+  reputation: (ctx) => renderReputation(ctx),
   'span-calibration': (ctx) => renderSpanCalibration(ctx),
   differencing: (ctx) => renderDifferencing(ctx),
   prospective: (ctx) => renderProspective(ctx),
@@ -703,6 +709,10 @@ export function parseRoute(hash) {
     'span-calibration': 'span-calibration', 'spancalibration': 'span-calibration', 'spancal': 'span-calibration',
     'discretion': 'span-calibration', 'time-span': 'span-calibration', 'ladder-calibration': 'span-calibration',
     'discretion-calibrator': 'span-calibration', 'span-calibrator': 'span-calibration',
+    // ADR-0101
+    'reputation': 'reputation', 'reputational-capital': 'reputation', 'trust': 'reputation',
+    'guarantee': 'reputation', 'guarantees': 'reputation', 'repair': 'reputation',
+    'collateral': 'reputation', 'credibility-capital': 'reputation',
     // ADR-0092: the publication register. None of these shadows a shipped route.
     'differencing': 'differencing', 'differences': 'differencing', 'publication': 'differencing',
     'publication-register': 'differencing', 'small-cell-series': 'differencing', 'releases': 'differencing',
@@ -1068,6 +1078,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       'freeze-line': freezeLineAttentionCount(state, { now: at, settings: state.settings }),
       // ADR-0100: falsified rungs plus due-but-ungraded readings.
       'span-calibration': spanCalibrationAttentionCount(state, { now: at, settings: state.settings }),
+      reputation: reputationAttentionCount(state, { now: at, settings: state.settings }),
       // ADR-0092: a module that publishes a determined surface, plus open findings.
       differencing: differencesAttentionCount(state, { now: at, settings: state.settings }),
       // ADR-0094: due or overdue frozen contracts plus open governed findings.
