@@ -22,6 +22,7 @@ import {
   MEASUREMENT_FALSIFIER_MARGIN_PP,
   MEASUREMENT_MIN_SCORED,
 } from '../core/domain/measurement.js';
+import { publicationPanel } from './publicationPanel.js';
 
 const TONE_BY_BADGE = { sound: 'good', leaky: 'warn', distorted: 'bad' };
 
@@ -583,5 +584,6 @@ export function renderMeasurement(ctx) {
       ? card({ title: 'Retired scorecards', subtitle: 'Kept for provenance and review; retirement removes a card from active recommendations without deleting its record.', body: h('div', { class: 'stack-sm' }, ...retiredCards.map((row) => scorecardSection(row))) })
       : null,
     calibrationCard(report),
-    assumptionsCard(report));
+    assumptionsCard(report),
+    publicationPanel(ctx, 'measurement'));
 }

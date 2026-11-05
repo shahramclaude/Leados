@@ -79,6 +79,9 @@ const RENDERER_ROUTES = [
   // ADR-0095: the Robust Allocation Terminal has its own manifest row and scoped
   // adapter, so the catalogue and the shell stay one route for one route.
   'robust-allocation',
+  // ADR-0096: the Escalation Economy and the Operating Cadence Clock declare
+  // manifest rows so their published aggregates enter the differencing register.
+  'escalation', 'cadence',
 ];
 
 /** Sentinel-bearing roster: every person, span and private note is traceable. */

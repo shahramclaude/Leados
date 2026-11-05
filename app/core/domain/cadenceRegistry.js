@@ -317,6 +317,7 @@ export const CADENCE_PANELS = Object.freeze([
   'constraint',
   'fit',
   'brief',
+  'publication',
 ]);
 
 /* --------------------------------------------------------------- conventions */

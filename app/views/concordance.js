@@ -514,7 +514,7 @@ export function renderConcordance(ctx) {
       meta: h('span', { class: 'muted' }, `Updated ${formatDate(report.updatedOn)} · ${report.rollup.length} span(s) · ${report.pairs.length} pair(s)`),
     }),
     tabs({
-      items: CONCORDANCE_PANELS.map((key) => ({ key, label: { rounds: 'Rounds', rollup: 'Roll-up', signals: 'Signals', conventions: 'Conventions', brief: 'Brief' }[key] })),
+      items: CONCORDANCE_PANELS.map((key) => ({ key, label: { rounds: 'Rounds', rollup: 'Roll-up', signals: 'Signals', conventions: 'Conventions', brief: 'Brief', publication: 'Publication register' }[key] })),
       active: panel,
       onSelect: (key) => go(ctx, key),
       ariaLabel: 'Concordance sections',

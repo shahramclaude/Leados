@@ -631,6 +631,8 @@ export function renderSurvival(ctx) {
       ? readingsPanel(ctx, report)
       : panel === 'method'
         ? methodPanel(report)
+        : panel === 'publication'
+          ? publicationPanel(ctx, 'survival')
         : h('div', { class: 'view-stack' }, [
           ...[
             report.openItems.some((row) => row.reading.available && row.reading.probabilityPct < report.conventions.riskFloorPct)

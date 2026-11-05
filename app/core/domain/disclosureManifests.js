@@ -193,6 +193,13 @@ export const MODULE_MANIFESTS = Object.freeze({
   tempo: row('tempo', 'Decision tempo', ['tempoSchedules'], { classKey: 'portfolio' }),
   wargame: row('wargame', 'War game', ['warGames'], { classKey: 'portfolio' }),
   coupling: row('coupling', 'Coupled load', ['couplingMarkers'], { classKey: 'portfolio' }),
+  // ADR-0096: the Escalation Economy and the Operating Cadence Clock printed
+  // per-table small-cell floors directly and never entered the publication
+  // register (ADR-0092), so a SERIES of their tables was never audited across
+  // days, seats or altitudes. Both now declare a manifest so their aggregates
+  // can be planned and published into the differencing register.
+  escalation: row('escalation', 'Escalation economy', ['escalationRecords', 'escalationCommitments'], { mode: A, classKey: 'unit', adapterScoped: true, detailCeiling: 5, dates: ['loggedOn', 'createdAt'], dues: ['decidedOn', 'reviewOn'], statuses: ['status', 'disposition'], note: 'The escalation adapter publishes span counts of recorded decision moments and graded commitments; no person, seat name, title, proposed action or note. The register audits the release series as one integer system.' }),
+  cadence: row('cadence', 'Operating cadence', ['cadenceForums', 'cadenceSessions'], { mode: A, classKey: 'unit', adapterScoped: true, detailCeiling: 5, dates: ['createdAt', 'heldOn'], dues: ['nextOn'], statuses: ['status'], note: 'The cadence adapter publishes span counts of declared forums and held sittings; no chair name, attendee list, forum free text or item title. The register audits the release series as one integer system.' }),
 });
 
 /** Detail screens inherit their parent list's manifest. */

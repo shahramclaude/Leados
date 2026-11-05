@@ -1,3 +1,21 @@
+## 2026-11-05 — Registered terminal publication (Session 136, no schema bump, ADR-0096)
+
+### Implemented
+- **[all altitudes]** The five terminals that applied their own per-table floor directly — `#/escalation`, `#/measurement`, `#/cadence`, `#/concordance`, `#/survival` — now enter the ADR-0092 publication register. `#/escalation` and `#/cadence` declare disclosure manifests (unit-class, adapter-scoped, `detailCeiling: 5`); the other three already had them.
+- **[all altitudes]** A shared `app/views/publicationPanel.js` mounted on all five terminals (a "Publication register" tab; a card on the tabless measurement page) exposes **Plan** (what would publishing this module's aggregate determine, against every registered release?) and **Publish** (one dated release per module per day per seat; a second same-day publish refused by construction), plus a published-today indicator. The terminal's own floor is unchanged — the register only adds suppression; a determined value is a coordinate and a proof, never a number.
+- **Evidence:** `tests/app/terminal-publication.test.mjs` (5/5), `docs/adr/0096-registered-terminal-publication.md`.
+
+### Next ambitious slices
+1. **[all altitudes] Planned:** authenticated server/tenant boundaries and consented migration; browser seat selection is still not enterprise access control (the standing top item).
+2. **[director → chief] Planned:** reorganisation comparability across a freeze line — the residual timing channel (`lastCarriageOn` on suppressed federation rows).
+3. **[all altitudes] Planned:** attribute cadence forums by `chairSeatId`/`attendeeIds` in span attribution (declared people keys only today).
+
+### Deliberately rejected
+- **[all altitudes]** Auto-publishing on every render — the register would fill with same-pattern days and the same-day guard would refuse real publications.
+- **[all altitudes]** Adding `chairSeatId` to the global `PEOPLE_KEYS` — a workspace-wide attribution semantics change, deferred with a named limit instead.
+
+**Benchmark:** Visier applies permissions at query time; Workday/Orgvue audit report runs. No surveyed platform was shown to route a terminal's printed tables into an exact integer-determinacy register audited across days, seats and altitudes. Gap claim from public snippets, not verified vendor capability.
+
 ## 2026-11-05 — Robust multi-action allocation under uncertainty (Session 135, Schema v98, ADR-0095)
 
 ### Implemented

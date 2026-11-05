@@ -98,7 +98,7 @@ export const ESCALATION_RULE_IDS = Object.freeze({
   MONKEY_RETURN: 'RULE-ESC-05',
 });
 
-export const ESCALATION_PANELS = Object.freeze(['ledger', 'queue', 'yield', 'authority', 'brief']);
+export const ESCALATION_PANELS = Object.freeze(['ledger', 'queue', 'yield', 'authority', 'brief', 'publication']);
 
 export const VERDICTS = Object.freeze([
   'insufficient',
