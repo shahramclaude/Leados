@@ -115,6 +115,7 @@ import { catchballRule } from './catchballRules.js';
 import { strategyCycleRule } from './strategyCycleRules.js';
 // ADR-0090: the federation reading's three rules.
 import { federationRule } from './federationRules.js';
+import { freezeLineRule } from './freezeLineRules.js';
 import { cadenceRule } from './cadenceRules.js';
 import { carryoverRule } from './carryoverRules.js';
 
@@ -640,6 +641,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'federationRules.js',
     purpose: 'RULE-FED-01 writes one summarizes-span edge from a frozen federation assessment to the seat it assessed and one to every leadership ancestor above that seat in the SAME atomic transaction, plus one idempotent measurement marker — so the reading rolls up like any other record. RULE-FED-02 measures every declared child→parent edge from DATED CARRIAGE already written by other modules (envoy packet carriage, frozen renewal and cadence readings, accepted Catchball commitments, closed two-sided expectation rounds) and opens exactly ONE governed DACI decision per edge per ISO week when the edge is silent, bypassed or stale, owned at the span above the edge — naming the edge by altitude and typed id, never by a person. RULE-FED-03 records one reconnects edge and one marker when measured carriage resumes on an edge that once produced a silent-edge finding, and deliberately does NOT close the human decision. The module writes no measured channel, sends no message, changes no reporting line and rates no person. Marker-idempotent, pausable by federationAutoPropagate, and an explicit scan always runs.',
     writes: ['federationMarkers', 'decisions', 'links'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: freezeLineRule,
+    module: 'freezeLineRules.js',
+    purpose: 'RULE-FRZ-01 registers a frozen freeze-line continuity reading as a graph node: one `freezes` edge to the committed/reverted org design, up to twelve `re-projects` edges to the pre-freeze federation assessments (aggregate only), and one `rolls-up-to` edge per leadership ancestor of the design owner\'s span — all in the SAME atomic transaction. RULE-FRZ-02 measures dated carriage on both sides of each freeze line (the same artefacts the federation rule reads) and opens at most ONE governed DACI decision per line per ISO week when the connected share of declared edges degrades beyond the declared threshold, owned at the span above the design owner and named by date and kind, never by a person. RULE-FRZ-03 audits frozen federation snapshots for suppressed rows still carrying a carriage date (a timing side channel on a withheld cell) and opens at most one redaction decision per snapshot per ISO week. The module never changes a reporting line, never closes a human decision, never re-projects per-span detail across a line, and never rates a person. Marker-idempotent, pausable by freezeLineAutoPropagate, and an explicit scan always runs.',
+    writes: ['freezeMarkers', 'decisions', 'links'],
     emits: [],
     scansWorkspace: true,
   },

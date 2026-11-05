@@ -82,6 +82,11 @@ const RENDERER_ROUTES = [
   // ADR-0096: the Escalation Economy and the Operating Cadence Clock declare
   // manifest rows so their published aggregates enter the differencing register.
   'escalation', 'cadence',
+  // ADR-0098: the Internal Clearinghouse has its own manifest row (this entry
+  // was missing when the route landed, which the 1:1 catalogue assertion caught).
+  'clearing',
+  // ADR-0099: the Freeze-Line Continuity Audit has its own manifest row.
+  'freeze-line',
 ];
 
 /** Sentinel-bearing roster: every person, span and private note is traceable. */
@@ -178,10 +183,10 @@ function seatsOrThrow(state) {
 /* --------------------------------------------------------------- 1. schema */
 
 test('schema v90 migrates additively and refuses malformed or stale grants', () => {
-  assert.equal(SCHEMA_VERSION, 100);
+  assert.equal(SCHEMA_VERSION, 101);
   const old = { schemaVersion: 89, settings: { leaderName: 'Keep' }, cases: [{ id: 'keep' }], disclosureGrants: [{ id: 'existing' }] };
   const migrated = migrate(old);
-  assert.equal(migrated.raw.schemaVersion, 100);
+  assert.equal(migrated.raw.schemaVersion, SCHEMA_VERSION);
   assert.deepEqual(migrated.raw.disclosureMarkers, []);
   assert.equal(migrated.raw.cases[0].id, 'keep');
   assert.equal(migrated.raw.settings.disclosureCellFloor, 5);

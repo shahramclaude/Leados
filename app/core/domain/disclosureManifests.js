@@ -128,6 +128,14 @@ export const MODULE_MANIFESTS = Object.freeze({
   // complementary cell and refuses a coverage rate below the span floor, so a
   // declared seat may open its own reading and cannot read a peer span's rows.
   federation: row('federation', 'Programme federation', ['federationAssessments'], { mode: A, classKey: 'unit', adapterScoped: true, detailCeiling: 5, dates: ['frozenOn'], note: 'The federation adapter measures carriage per declared leadership edge inside the active seat\u2019s span, blanks small cells with a complementary cell and withholds the coverage rate below the declared span floor. Raw assessment and marker rows are never projected into declared-seat view state, and no person is ever named.' }),
+  // ADR-0099: the Freeze-Line Continuity Audit. The adapter measures continuity
+  // across each crossed freeze line inside the active seat's span, refuses a
+  // verdict below the declared edge floor, suppresses small altitude cells with
+  // a complementary cell, and NEVER prints a carriage date beside a suppressed
+  // row (the timing channel). Freeze lines are derived from committed/reverted
+  // org designs; raw reading and marker rows are never projected into
+  // declared-seat view state.
+  'freeze-line': row('freeze-line', 'Freeze-line continuity', ['freezeReadings'], { mode: A, classKey: 'unit', adapterScoped: true, detailCeiling: 5, dates: ['frozenOn', 'lineOn'], note: 'The freeze-line adapter measures continuity across each crossed freeze line inside the active seat\u2019s span: before/after connected shares with Wilson intervals, a verdict refused below the declared edge floor, small altitude cells blanked with a complementary cell, and no carriage date on any suppressed row. No person, span name or per-span detail is ever named.' }),
   // ADR-0092: the Differencing Defender. Adaptive: the report adapter recomputes
   // the active seat's own register scope, refuses a coverage rate below the
   // release floor, and never carries a withheld VALUE into the read model — a

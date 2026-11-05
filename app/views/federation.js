@@ -207,7 +207,9 @@ function edgesPanel(ctx, report) {
           stateBadge(row.state),
           row.suppressed ? 'suppressed' : String(row.directN),
           row.suppressed ? 'suppressed' : String(row.bypassN),
-          row.lastCarriageOn || 'never',
+          // ADR-0099: a suppressed row never shows a carriage date — "withheld",
+          // never a date and never a misleading "never".
+          row.suppressed ? 'withheld' : (row.lastCarriageOn || 'never'),
           row.meaning,
         ]),
       }),

@@ -190,29 +190,54 @@ export const FEDERATION_EXTRACTOR_KEYS = Object.freeze(Object.keys(EXTRACTORS));
 function extractEvents(state, { built }) {
   const events = [];
   const unplaced = [];
+  for (const raw of extractRawCarriage(state, { built })) {
+    const origin = leadershipOwnerOf(built, raw.fromSeatId);
+    if (!origin) {
+      unplaced.push({ channel: raw.channel, reason: 'The origin seat is not in the declared leadership tree.' });
+      continue;
+    }
+    const target = raw.toSeatId === LEADER_ID ? LEADER_ID : leadershipOwnerOf(built, raw.toSeatId);
+    if (!target) {
+      unplaced.push({ channel: raw.channel, reason: 'The receiving seat is not in the declared leadership tree.' });
+      continue;
+    }
+    events.push({
+      channel: raw.channel,
+      fromSeatId: origin,
+      toSeatId: target,
+      on: raw.on || null,
+    });
+  }
+  return { events, unplaced };
+}
+
+/**
+ * ADR-0099: the raw, unmapped carriage artefacts — one `{ channel, fromSeatId,
+ * toSeatId, on }` per dated artefact, with person ids still unmapped. The
+ * Freeze-Line Continuity Audit maps these through the reporting tree as it
+ * stood BEFORE a freeze line and as it stands AFTER it, so carriage can be
+ * measured on both sides of a reorganisation. Exported for reuse; the live
+ * measurement path above is unchanged.
+ */
+export function extractRawCarriage(state, { built } = {}) {
+  const out = [];
+  // Extractors that need a tree (cadence's nearest-ancestor mapping) get the
+  // CURRENT tree when the caller does not supply one; the freeze-line audit
+  // always passes the side-specific tree explicitly.
+  const effectiveBuilt = built || buildSeats(state, {});
   for (const channel of FEDERATION_CHANNELS) {
     const extractor = EXTRACTORS[channel.key];
     if (typeof extractor !== 'function') continue;
-    for (const raw of extractor(state, { built }) || []) {
-      const origin = leadershipOwnerOf(built, raw.fromSeatId);
-      if (!origin) {
-        unplaced.push({ channel: channel.key, reason: 'The origin seat is not in the declared leadership tree.' });
-        continue;
-      }
-      const target = raw.toSeatId === LEADER_ID ? LEADER_ID : leadershipOwnerOf(built, raw.toSeatId);
-      if (!target) {
-        unplaced.push({ channel: channel.key, reason: 'The receiving seat is not in the declared leadership tree.' });
-        continue;
-      }
-      events.push({
+    for (const raw of extractor(state, { built: effectiveBuilt }) || []) {
+      out.push({
         channel: channel.key,
-        fromSeatId: origin,
-        toSeatId: target,
+        fromSeatId: raw.fromSeatId || null,
+        toSeatId: raw.toSeatId || null,
         on: raw.on || null,
       });
     }
   }
-  return { events, unplaced };
+  return out;
 }
 
 /**
@@ -501,8 +526,12 @@ export function buildFederationReport(state = {}, { now = new Date(), settings =
       bypassN: row.suppressed ? null : row.bypassN,
       evidenceN: row.suppressed ? null : row.evidenceN,
       suppressed: row.suppressed,
-      lastCarriageOn: row.lastCarriageOn,
-      daysSince: row.daysSince,
+      // ADR-0099 timing channel: a withheld count must not disclose WHEN it was
+      // withheld. A suppressed row carries no carriage date — the state label
+      // (stale/silent) already says "inside or outside the window", which is the
+      // only timing fact the table may state.
+      lastCarriageOn: row.suppressed ? null : row.lastCarriageOn,
+      daysSince: row.suppressed ? null : row.daysSince,
       channels: row.suppressed
         ? []
         : row.channels.map((entry) => {
@@ -552,6 +581,13 @@ export function buildFederationReport(state = {}, { now = new Date(), settings =
     withheld.push({
       reason: `Small-cell suppression: ${rows.filter((row) => row.suppressed).length} row(s) blanked at the floor of ${cellFloor}, each with a complementary cell where the table had one to blank.`,
       n: rows.filter((row) => row.suppressed).length,
+    });
+    // ADR-0099: the timing half of the same suppression. Blanked rows carry no
+    // carriage dates either, so a reader cannot learn WHEN a suppressed span
+    // last carried work (temporal differencing of a withheld cell).
+    withheld.push({
+      reason: `Timing channel closed: ${rows.filter((row) => row.suppressed && row.lastCarriageOn).length} suppressed row(s) had their last-carriage date withheld alongside their counts — a date beside a blank is a disclosure of the blank.`,
+      n: rows.filter((row) => row.suppressed && row.lastCarriageOn).length,
     });
   }
   if (measurement.unplaced.length) {
@@ -628,6 +664,12 @@ export function buildFederationSnapshot(state, { id, now = new Date(), settings 
   const measurement = measureFederation(state, { now, settings });
   const seat = measurement.built.byId.get(report.seat.id) || activeSeat(measurement.built);
   const scope = seat.fullAccess ? measurement.rows : measurement.rows.filter((row) => (seat.scope instanceof Set ? seat.scope : new Set()).has(row.seatId));
+  // ADR-0099: suppression is applied AT FREEZE TIME and the stored snapshot
+  // itself carries no carriage date on a suppressed row. A frozen ledger that
+  // keeps the date beside the blank re-opens the timing channel every time the
+  // snapshot is exported or re-rendered; RULE-FRZ-03 audits legacy snapshots
+  // that still carry one.
+  const frozenRows = suppressRowCounts(scope.map((row) => ({ ...row })), report.conventions.cellFloor, scope);
   return {
     ok: true,
     assessment: {
@@ -643,19 +685,23 @@ export function buildFederationSnapshot(state, { id, now = new Date(), settings 
         ...report.summary,
         coverage: { ...report.coverage },
       },
-      rows: scope.map((row) => ({
+      rows: frozenRows.map((row) => ({
         seatId: row.seatId,
         parentId: row.parentId,
         altitudeKey: row.altitudeKey,
         rank: row.rank,
         state: row.state,
-        suppressed: false,
-        evidenceN: row.evidenceN,
-        directN: row.directN,
-        bypassN: row.bypassN,
-        lastCarriageOn: row.lastCarriageOn,
-        daysSince: row.daysSince,
-        channels: row.channels.map((entry) => ({ key: entry.key, n: entry.n, lastOn: entry.lastOn })),
+        suppressed: row.suppressed === true,
+        // ADR-0099: a stored suppressed row never carries a carriage date; the
+        // counts are blanked at freeze time and the timing with them.
+        evidenceN: row.suppressed ? null : row.evidenceN,
+        directN: row.suppressed ? null : row.directN,
+        bypassN: row.suppressed ? null : row.bypassN,
+        lastCarriageOn: row.suppressed ? null : row.lastCarriageOn,
+        daysSince: row.suppressed ? null : row.daysSince,
+        channels: row.suppressed
+          ? []
+          : row.channels.map((entry) => ({ key: entry.key, n: entry.n, lastOn: entry.lastOn })),
       })),
       createdAt: now.toISOString(),
     },
@@ -689,8 +735,10 @@ export function federationCsvRows(report) {
     evidence_n: row.suppressed ? '' : row.evidenceN,
     direct_n: row.suppressed ? '' : row.directN,
     bypass_n: row.suppressed ? '' : row.bypassN,
-    last_carriage_on: row.lastCarriageOn || '',
-    days_since: row.daysSince === null ? '' : row.daysSince,
+    // ADR-0099: a suppressed row exports no carriage date — the timing channel
+    // stays closed in the CSV exactly as in the screen.
+    last_carriage_on: row.suppressed ? '' : (row.lastCarriageOn || ''),
+    days_since: row.suppressed || row.daysSince === null ? '' : row.daysSince,
     suppressed: row.suppressed ? 'yes' : 'no',
   }));
   rows.push({

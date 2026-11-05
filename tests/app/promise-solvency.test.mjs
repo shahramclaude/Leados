@@ -116,13 +116,13 @@ function harness(initial) {
 /* ------------------------------------------------------------------ 1. schema */
 
 test('schema v80 is additive and invents no reading, marker or moved date', () => {
-  assert.equal(SCHEMA_VERSION, 100);
+  assert.equal(SCHEMA_VERSION, 101);
   const v79 = { ...createEmptyState(NOW.toISOString()), schemaVersion: 79 };
   delete v79.solvencyReadings;
   delete v79.solvencyMarkers;
   delete v79.solvencyRenegotiations;
   const migrated = migrate(v79);
-  assert.equal(migrated.applied.at(-1), '99 → 100');
+  assert.equal(migrated.applied.at(-1), '100 → 101');
   assert.deepEqual(migrated.raw.solvencyReadings, []);
   assert.deepEqual(migrated.raw.solvencyMarkers, []);
   assert.deepEqual(migrated.raw.solvencyRenegotiations, []);

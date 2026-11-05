@@ -19,6 +19,7 @@ import { createStrategyCycleActions } from './core/domain/strategyCycleActions.j
 // ADR-0090: the Programme Federation Reading's API mixin — one more consumer of
 // the same post-commit spine, not a second command bus.
 import { createFederationActions } from './core/domain/federationActions.js';
+import { createFreezeLineActions } from './core/domain/freezeLineActions.js';
 // ADR-0092: the Differencing Defender's API mixin — the publication register is a
 // command boundary like every other module's.
 import { createDifferencingActions } from './core/domain/differencingActions.js';
@@ -19674,6 +19675,10 @@ export function createApi(store, options = {}) {
   Object.assign(api, createStrategyCycleActions(store, { now: clock, idFactory: id }));
   // ADR-0090: freeze a measured federation reading, or scan the declared edges.
   Object.assign(api, createFederationActions(store, { now: clock, idFactory: id }));
+  // ADR-0099: freeze a freeze-line continuity reading, or scan the crossed
+  // freeze lines and audit the timing guard. Line registration, degraded-line
+  // decisions and redaction work are produced by RULE-FRZ-01..03 on the spine.
+  Object.assign(api, createFreezeLineActions(store, { now: clock, idFactory: id }));
   // ADR-0092: plan, publish, withdraw, scan — and the scoped register read.
   Object.assign(api, createDifferencingActions(store, { now: clock, idFactory: id }));
   // ADR-0094: the only writes are DECLARE, SCAN and SET-CONVENTIONS. Everything

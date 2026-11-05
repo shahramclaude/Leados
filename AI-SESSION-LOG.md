@@ -1,3 +1,7 @@
+## 2026-11-05 — The Freeze-Line Continuity Audit: comparability across a reorg, and the timing channel closed (Session 139, Schema v101, [ADR-0099](./docs/adr/0099-freeze-line-continuity-audit.md), `#/freeze-line`)
+
+Every committed/reverted structural design is now a dated freeze line, and `#/freeze-line` measures dated carriage on both sides of it from artefacts other modules already wrote — never a new data source — classifying every declared edge held/lost/gained/still-silent by altitude with Wilson intervals and complementary suppression, refusing below the edge floor, and printing one governed held/degraded/refused verdict per line. The ROADMAP's residual `lastCarriageOn` timing channel on suppressed federation rows is closed in view, frozen snapshots and CSV (blank, never zero), with RULE-FRZ-03 redacting legacy snapshots; RULE-FRZ-01/02 register lines and degraded-line decisions on the shared spine with ancestor roll-ups in one atomic transaction. Schema v101 additive `100 → 101`; CSV #95 aggregate-only and refusal-honest; safe reads and the `govern-federation` right registered in the access gateway; freeze-line suite 14/14, targeted suites + lint + boundary + links + standalone build/verify green (2026-11-05).
+
 # 2026-11-05 — The Calibrated Allocator (ADR-0097; Schema v99, additive 98 → 99)
 
 ## Repository identity and sync baseline

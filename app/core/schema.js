@@ -205,6 +205,15 @@ import {
   normalizeClearingMarkers,
   normalizeClearingSettings,
 } from './domain/clearingSchema.js';
+// ADR-0099: the Freeze-Line Continuity Audit. Frozen continuity readings and
+// rule markers resolve before typed links so `freezes`, `re-projects` and
+// `rolls-up-to` edges validate against real ids; a malformed reading is
+// dropped, never repaired into a verdict a leader might act on.
+import {
+  normalizeFreezeReadings,
+  normalizeFreezeMarkers,
+  normalizeFreezeLineSettings,
+} from './domain/freezeLineSchema.js';
 // ADR-0088: the Escalation Economy — the disposition ledger, intervention-rate
 // commitments, idempotency markers, and clamped conventions.
 import {
@@ -419,7 +428,7 @@ export {
 // older blob simply opens on the undeclared operator view. A version bump here
 // would have forced 78 test files to be rewritten for zero user benefit; the
 // honest choice is to add nothing to migrate.
-export const SCHEMA_VERSION = 100;
+export const SCHEMA_VERSION = 101;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -1653,6 +1662,16 @@ export const DEFAULT_SETTINGS = Object.freeze({
   clearingNodeBudget: 350000,
   clearingMixImbalanceHighPct: 85,
   clearingMixImbalanceLowPct: 50,
+  // ADR-0099: the Freeze-Line Continuity Audit. `freezeLineWindowDays` is the
+  // window measured on EACH side of a freeze line; `freezeLineMinEdges` is the
+  // edge floor below which a verdict is REFUSED; `freezeLineCellFloor` is the
+  // small-cell floor for altitude cells; `freezeLineDropPct` is the connected-
+  // share drop that makes a line `degraded`.
+  freezeLineWindowDays: 30,
+  freezeLineMinEdges: 3,
+  freezeLineCellFloor: 3,
+  freezeLineDropPct: 15,
+  freezeLineAutoPropagate: true,
   });
 
 export const COLLECTIONS = [
@@ -2032,6 +2051,13 @@ export const COLLECTIONS = [
   // once-only settlement) plus the shared post-commit idempotency markers.
   'clearingRounds',
   'clearingMarkers',
+  // ADR-0099: the Freeze-Line Continuity Audit. `freezeReadings` holds frozen,
+  // identity-reduced continuity readings across each crossed freeze line;
+  // `freezeMarkers` is the rule-idempotency ledger (line registration,
+  // degraded-line decisions, timing-guard redaction work). Freeze lines
+  // themselves are DERIVED from committed/reverted org designs, never stored.
+  'freezeReadings',
+  'freezeMarkers',
   'links',
   'portfolio',
   'events',
@@ -2699,6 +2725,9 @@ export function normalizeSettings(raw) {
     ...normalizeProspectiveSettings(s),
     ...normalizeRobustAllocationSettings(s),
     ...normalizeClearingSettings(s),
+    // ADR-0099: the freeze-line window, edge floor, cell floor and drop
+    // threshold, clamped.
+    ...normalizeFreezeLineSettings(s),
   };
 }
 
@@ -6822,6 +6851,12 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // a malformed or half-frozen resource commitment.
   state.clearingRounds = normalizeClearingRounds(raw.clearingRounds, warnings);
   state.clearingMarkers = normalizeClearingMarkers(raw.clearingMarkers);
+  // ADR-0099: continuity readings and markers resolve before typed links so
+  // `freezes` / `re-projects` / `rolls-up-to` edges validate against real
+  // reading ids. A malformed reading or duplicate marker is DROPPED with a
+  // warning; nothing is repaired into a verdict.
+  state.freezeReadings = normalizeFreezeReadings(raw.freezeReadings, warnings, { now: new Date() });
+  state.freezeMarkers = normalizeFreezeMarkers(raw.freezeMarkers);
   // ADR-0085: the Operating Cadence Clock. A malformed forum, a sitting with no
   // ADR-0088: carryover records resolve after pacts so `carries-over` and
   // ADR-0089: resolve peer contracts and immutable receipts before typed links.
@@ -7621,6 +7656,27 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  // ADR-0099: additive 100 → 101. No freeze line is inferred for an existing
+  // workspace and no continuity reading is back-filled: every committed design
+  // is DETECTED on read as a freeze line, and the frozen reading ledger starts
+  // empty, which honestly means "no continuity reading has been frozen yet".
+  // Existing settings are preserved and the new keys get declared defaults.
+  100: (v100) => ({
+    ...v100,
+    schemaVersion: 101,
+    freezeReadings: Array.isArray(v100.freezeReadings) ? v100.freezeReadings : [],
+    freezeMarkers: Array.isArray(v100.freezeMarkers) ? v100.freezeMarkers : [],
+    settings: isPlainObject(v100.settings)
+      ? {
+        ...v100.settings,
+        freezeLineWindowDays: v100.settings.freezeLineWindowDays ?? 30,
+        freezeLineMinEdges: v100.settings.freezeLineMinEdges ?? 3,
+        freezeLineCellFloor: v100.settings.freezeLineCellFloor ?? 3,
+        freezeLineDropPct: v100.settings.freezeLineDropPct ?? 15,
+        freezeLineAutoPropagate: v100.settings.freezeLineAutoPropagate !== false,
+      }
+      : { ...DEFAULT_SETTINGS },
+  }),
   // ADR-0098: additive 99 → 100. No historical clearing decision is inferred;
   // upgraded workspaces start with empty clearing ledgers and only the declared
   // conventions. Existing settings are preserved and new keys get defaults.

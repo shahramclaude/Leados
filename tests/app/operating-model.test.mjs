@@ -203,7 +203,7 @@ test('on a declared workspace the new rule does not inflate another terminal\u20
 /* ------------------------------------------------------------------ schema */
 
 test('schema v95: the migration is additive and an undeclared workspace is untouched', () => {
-  assert.equal(SCHEMA_VERSION, 100);
+  assert.equal(SCHEMA_VERSION, 101);
   for (const key of ['omWorkSplits', 'omEdges', 'omDecisions', 'omMarkers']) {
     assert.ok(COLLECTIONS.includes(key), `${key} must be a declared collection`);
   }

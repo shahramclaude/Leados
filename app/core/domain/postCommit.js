@@ -108,6 +108,13 @@ import { strategyCycleRule } from './strategyCycleRules.js';
 // ADR-0090 (Schema v95): the Programme Federation Reading's measured roll-up,
 // governed carriage findings and reconnection ledger.
 import { federationRule } from './federationRules.js';
+// ADR-0099 (Schema v101): the Freeze-Line Continuity Audit (RULE-FRZ-01..03).
+// Registered immediately after the federation rule — it measures the SAME
+// carriage artefacts that rule already read, across the freeze lines the org
+// design module crosses — and before the attention market's final pass, so the
+// governed decisions it opens are priced in the SAME atomic transaction.
+// Inert unless a reading is frozen, a line is crossed or an explicit scan runs.
+import { freezeLineRule } from './freezeLineRules.js';
 import { valueStreamRule } from './valueStreamRules.js';
 import { carryoverRule } from './carryoverRules.js';
 // ADR-0085: the Operating Cadence Clock. Reads the finished queue after the
@@ -622,6 +629,10 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // ledger and governed carriage decisions: no measured channel, no reporting
   // line and no decision a human opened is touched.
   federationRule,
+  // ADR-0099: the Freeze-Line Continuity Audit (RULE-FRZ-01..03). Line
+  // registration, degraded-line decisions, timing-guard redaction work and one
+  // `rolls-up-to` edge per leadership ancestor, all in the same transaction.
+  freezeLineRule,
   // ADR-0087: the Attested Commit (RULE-IDN-01..03). Attestation is the
   // identity of the write itself, so its digest covers every event this
   // transaction appended before it — including the breach work RULE-IDN-02

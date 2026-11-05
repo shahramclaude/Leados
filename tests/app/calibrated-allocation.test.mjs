@@ -147,12 +147,12 @@ function declaration(overrides = {}) {
 /* ------------------------------------------------------------- schema v99 */
 
 test('schema v99: additive 98 → 99, node-budget default, fail-closed evidence and certificate fields', () => {
-  assert.equal(SCHEMA_VERSION, 100);
+  assert.equal(SCHEMA_VERSION, 101);
   const v98 = normalize(tree());
   v98.schemaVersion = 98;
   delete v98.settings.robustAllocationNodeBudget;
   const migrated = migrate(clone(v98));
-  assert.deepEqual(migrated.applied, ['98 → 99', '99 → 100']);
+  assert.deepEqual(migrated.applied, ['98 → 99', '99 → 100', '100 → 101']);
   assert.equal(migrated.raw.settings.robustAllocationNodeBudget, 250000);
   // Evidence instrument: unknown keys fail closed to null; known keys persist.
   const plan = normalizeRobustPlan({

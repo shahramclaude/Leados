@@ -156,13 +156,13 @@ const verdictOf = (evaluation, key) => evaluation.rows.find((row) => row.key ===
 /* ------------------------------------------------------------ schema/wiring */
 
 test('schema v91 (main) then v92/v93: board collections arrive additively', () => {
-  assert.equal(SCHEMA_VERSION, 100);
+  assert.equal(SCHEMA_VERSION, 101);
   assert.equal(typeof MIGRATIONS[90], 'function');
   const before = { ...createEmptyState(NOW.toISOString()), schemaVersion: 90 };
   delete before.boardMemos;
   delete before.boardMarkers;
   const migrated = migrate(before);
-  assert.deepEqual(migrated.applied, ['90 → 91', '91 → 92', '92 → 93', '93 → 94', '94 → 95', '95 → 96', '96 → 97', '97 → 98', '98 → 99', '99 → 100'], 'each step additive');
+  assert.deepEqual(migrated.applied, ['90 → 91', '91 → 92', '92 → 93', '93 → 94', '94 → 95', '95 → 96', '96 → 97', '97 → 98', '98 → 99', '99 → 100', '100 → 101'], 'each step additive');
   assert.equal(migrated.raw.schemaVersion, 100);
   assert.deepEqual(migrated.raw.boardMemos, []);
   assert.deepEqual(migrated.raw.boardMarkers, []);
