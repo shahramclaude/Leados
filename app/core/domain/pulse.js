@@ -5,7 +5,7 @@
  *  1. An anonymous response never carries a personId (enforced again in the
  *     schema normaliser, so a hand-edited backup cannot leak identity).
  *  2. No aggregate is returned for a window with fewer than
- *     `settings.pulseMinResponses` responses. This is k-anonymity: with two
+ *     `settings.pulseMinResponses` responses. This is a response-count threshold, not k-anonymity: with two
  *     responses, each person can subtract their own answer and infer the other.
  *     "Suppressed" is a first-class result, not an empty state.
  */
@@ -145,19 +145,26 @@ export function comments(state, now, windowDays = PULSE_WINDOW_DAYS) {
     .sort((a, b) => (a.date < b.date ? 1 : -1));
 }
 
-/** How many active people answered, and how many answers cannot be attributed. */
+/**
+ * Participation bounds conditional on named identities being truthful. Anonymous
+ * records can repeat or overlap named records, so they cannot raise the lower
+ * bound. The upper bound assumes every submission could be a distinct active
+ * person. This is not authentication or proof of representativeness.
+ */
 export function participation(state, now) {
-  const active = state.people.filter((p) => p.status !== 'archived');
+  const activeIds = new Set(state.people.filter((p) => p.status !== 'archived' && p.id).map((p) => p.id));
   const responses = responsesInWindow(state, now);
-  const namedIds = new Set(responses.filter((r) => r.anonymity === 'named').map((r) => r.personId));
+  const namedIds = new Set(responses.filter((r) => r.anonymity === 'named' && activeIds.has(r.personId)).map((r) => r.personId));
   const anonymousCount = responses.filter((r) => r.anonymity !== 'named').length;
-  // Anonymous responses cannot be attributed, so participation is a floor.
+  const count = activeIds.size;
+  const upper = Math.min(count, responses.length);
   return {
-    activePeople: active.length,
+    activePeople: count,
     responses: responses.length,
     knownResponders: namedIds.size,
     anonymousResponses: anonymousCount,
-    coverageFloorPct: active.length ? round((Math.min(active.length, responses.length) / active.length) * 100) : 0,
+    coverageFloorPct: count ? Math.floor(namedIds.size * 100 / count) : null,
+    coverageCeilingPct: count ? Math.ceil(upper * 100 / count) : null,
   };
 }
 
