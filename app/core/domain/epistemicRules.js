@@ -435,6 +435,20 @@ function gradePass(draft, ctx, out, budget) {
   return gradedN;
 }
 
+/**
+ * Decisions THIS module opened are audit output, not operational work: locking
+ * one would make the hindsight audit measure the ledger's own findings, and every
+ * escalation would immediately spawn a second-order decision about the first.
+ * The provenance is the marker written in the same transaction the decision was.
+ */
+export function epistemicFindingIds(state = {}) {
+  const out = new Set();
+  for (const marker of Array.isArray(state.epistemicMarkers) ? state.epistemicMarkers : []) {
+    if (marker && marker.decisionId) out.add(marker.decisionId);
+  }
+  return out;
+}
+
 /* ------------------------------------------------------------------- rule */
 
 export function epistemicRule(draft, ctx = {}) {
@@ -455,7 +469,18 @@ export function epistemicRule(draft, ctx = {}) {
     idFactory: typeof ctx.idFactory === 'function' ? ctx.idFactory : ((prefix) => `${prefix}-${Date.now()}`),
   };
   const out = [];
-  const budget = { remaining: EPISTEMIC_LIMITS.findingsPerPass };
+  // An AUTOMATIC pass is bounded: the spine runs on every commit, and a module
+  // that opened six governed decisions on every unrelated write would bury the
+  // workspace. An EXPLICIT scan is the operator asking for the whole ledger, so
+  // it is bounded by the ledger's own size instead — otherwise a scan would take
+  // one pass per six findings and the same scan run twice would keep finding
+  // work, which reads as non-idempotence even though every marker is correct.
+  // (Hindsight refuses to lock these findings either way: audit output is not
+  // operational work. See RULE-HND-01 and `epistemicFindingIds`.)
+  const explicitScan = event.type === EPISTEMIC_EVENTS.SCAN;
+  const budget = {
+    remaining: explicitScan ? EPISTEMIC_LIMITS.unknowns : EPISTEMIC_LIMITS.findingsPerPass,
+  };
   harvestPass(draft, runCtx, out, conventions);
   escalatePass(draft, runCtx, out, conventions, budget);
   expirePass(draft, runCtx, out, conventions, budget);

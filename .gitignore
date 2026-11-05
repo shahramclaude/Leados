@@ -27,3 +27,10 @@ Thumbs.db
 *.log
 tmp/
 .tmp/
+
+# tests/app/server.test.mjs creates a pid-scoped symlink fixture beside the app to
+# prove the static server cannot serve a private file through an alias. An
+# interrupted run can leave it behind; it is a fixture, never source, and a stray
+# copy breaks `eslint .` on a dangling link.
+app/server-private-*.js
+tmp/server-private-*.json

@@ -35,7 +35,7 @@ import { CSV_EXPORTS, exportWorkspaceCsv } from '../../app/core/csv.js';
 import { createEmptyState, migrate, normalizeState, SCHEMA_VERSION } from '../../app/core/schema.js';
 import { createStore, STORAGE_KEY } from '../../app/core/store.js';
 import { manifestFor } from '../../app/core/domain/disclosureManifests.js';
-import { LINK_ENTITY_TYPES, LINK_RELATIONS } from '../../app/core/domain/cases.js';
+import { LINK_ENTITY_COLLECTIONS, LINK_ENTITY_TYPES, LINK_RELATIONS, resolveLinkedEntity } from '../../app/core/domain/cases.js';
 import { DEFAULT_POST_COMMIT_RULES } from '../../app/core/domain/postCommit.js';
 import { PROPAGATION_CONTRACTS } from '../../app/core/domain/propagationContracts.js';
 import {
@@ -442,6 +442,29 @@ test('the report scopes to the active seat, refuses below the floors, and suppre
   assert.equal(execView.seat.rank, 4);
   assert.equal(execView.seatRows.length, 0, 'above director rank the per-span rows are withheld');
   assert.ok(execView.altitudeRows.length >= 1, 'counts by altitude remain');
+});
+
+test('the lock is a navigable graph node that carries no fact content and no person', () => {
+  assert.ok(LINK_ENTITY_TYPES.includes('hindsightlock'), 'the node type is registered');
+  assert.equal(LINK_ENTITY_COLLECTIONS.hindsightlock, 'decisionLocks');
+  for (const relation of ['locks', 'consults']) assert.ok(LINK_RELATIONS.includes(relation), relation);
+
+  const state = thinScenario();
+  const { api, store } = harness(state);
+  assert.equal(api.setActiveSeat('mgr1').ok, true);
+  api.hindsightScan();
+  const lock = store.state.decisionLocks[0];
+  assert.ok(lock, 'the scan froze a lock');
+
+  const resolved = resolveLinkedEntity(store.state, 'hindsightlock', lock.id);
+  assert.ok(resolved, 'the node resolves');
+  assert.equal(resolved.type, 'hindsightlock');
+  assert.match(resolved.route, /^#\/hindsight\?panel=information&lock=/);
+  // Identity-free and content-free: the resolver exposes the dates and counts only.
+  for (const banned of ['FACT-SECRET', 'Mira Manager', 'mgr1']) {
+    assert.ok(!JSON.stringify(resolved).includes(banned), `the graph node must not carry ${banned}`);
+  }
+  assert.equal(resolved.raw.decisionId, lock.decisionId);
 });
 
 /* --------------------------------------------------------- permissions */

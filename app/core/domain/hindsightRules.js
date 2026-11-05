@@ -33,6 +33,7 @@
 import { addDays, dayKey, weekKey } from '../time.js';
 import { ensureEntityLink } from './automation.js';
 import { buildSeats, activeSeat } from './seat.js';
+import { epistemicFindingIds } from './epistemicRules.js';
 import { LEADER_ID } from './chain.js';
 import { auditLock, buildLockRecord } from './hindsight.js';
 import { hindsightConventions } from './hindsightSchema.js';
@@ -168,6 +169,16 @@ function lockPass(draft, ctx, out, conventions) {
       .filter((marker) => marker && marker.decisionId && ['resulted', 'gap', 'ungraded'].includes(marker.kind))
       .map((marker) => marker.decisionId),
   );
+  // And the same is true of every OTHER module's governed findings. A decision a
+  // rule opened to make a missed signal readable is not an operational decision:
+  // it has no information set to freeze, so locking it would produce a lock with
+  // zero consulted facts and a process score about a form the engine authored —
+  // noise that then becomes a subject for the next pass. Provenance is the
+  // marker the opening rule wrote in the same transaction as the decision.
+  for (const marker of markersOf(draft)) {
+    if (marker && marker.decisionId) ownDecisions.add(marker.decisionId);
+  }
+  for (const id of epistemicFindingIds(draft)) ownDecisions.add(id);
   let createdN = 0;
   const ordered = [...decisions].sort((a, b) => String(b?.date || '').localeCompare(String(a?.date || '')));
   for (const decision of ordered) {

@@ -611,6 +611,54 @@ test('the implied ledger measures the absence of arriving edges, and bounds a ze
 
 /* ----------------------------------------------------- seats and export */
 
+test('a governed finding is audit output: no module locks it, and the scan converges in one pass', () => {
+  // A rule-opened decision is not operational work. Before this guard, the
+  // hindsight lock scored every escalation the ledger opened — a lock with zero
+  // consulted facts and a process verdict on a form the engine itself authored —
+  // and each of those then became a subject for the next pass. On a real demo
+  // workspace that turned a rescan into 109 → 213 decisions and 77 → 6132 links,
+  // which is the difference between a ledger and a runaway.
+  const state = tree({
+    state: {
+      cases: [1, 2, 3, 4, 5, 6, 7, 8].map((n) => ({
+        id: `case${n}`, title: `Risk ${n}`, kind: 'risk', status: 'open', ownerId: 'lead1',
+        openedOn: `2026-0${n}-01`, fmea: { severity: 7, probability: 5, detectability: 4 },
+      })),
+    },
+  });
+  const { store, api } = harness(state);
+  assert.equal(api.setActiveSeat('mgr1').ok, true);
+
+  const first = store.state;
+  const escalations = first.epistemicUnknowns.filter((row) => row.className === 'danger');
+  assert.ok(escalations.length >= 8, 'eight ageing cases were harvested');
+  // ONE explicit scan escalates every ageing signal it found; it does not dribble
+  // six per pass and call the remainder "changed" on the next visit.
+  const decisionsAfterHarvest = first.decisions.length;
+  assert.ok(decisionsAfterHarvest >= escalations.length, 'each ageing signal opened its governed decision in the same pass');
+
+  const opened = first.decisions.map((row) => row.id);
+  const locksOnFindings = (first.decisionLocks || []).filter((lock) => opened.includes(lock.decisionId));
+  assert.equal(locksOnFindings.length, 0, 'no module freezes the information set of a governed finding');
+
+  // The markers are the provenance, and they are what the guard reads.
+  assert.ok(first.epistemicMarkers.filter((marker) => marker.decisionId).length >= escalations.length);
+
+  // And the whole workspace converges: the second scan changes nothing at all.
+  const snapshot = (s) => JSON.stringify({
+    decisions: s.decisions.length,
+    delegations: s.delegations.length,
+    links: s.links.length,
+    unknowns: s.epistemicUnknowns.length,
+    markers: s.epistemicMarkers.length,
+    locks: (s.decisionLocks || []).length,
+  });
+  const before = snapshot(store.state);
+  const rescan = api.epistemicScan();
+  assert.equal(rescan.ok, true);
+  assert.equal(snapshot(store.state), before, 'a rescan is idempotent across every module it touches');
+});
+
 test('the conventions are director+ AND full access; the reads are seat-scoped', () => {
   assert.equal(API_RIGHTS.epistemicDeclare, 'record-epistemic-unknown');
   assert.equal(API_RIGHTS.epistemicSetConventions, 'govern-epistemic');
