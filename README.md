@@ -1,5 +1,11 @@
 ## 2026-11-05 — The Freeze-Line Continuity Audit: was the org still connected across the reorg? (Session 139, Schema v101, [ADR-0099](./docs/adr/0099-freeze-line-continuity-audit.md), `#/freeze-line`, RULE-FRZ-01..03, CSV #95)
 
+## 2026-11-05 — Reviewed routing integrity
+
+A human altitude override previously changed the ledger label without changing the owner or vertical disclosure path. Confirmation now recomputes the actual seat and disclosure ladder in the case transaction, preserves the original classifier verdict for calibration, applies the existing reporting-span and stakes floors, and checks the local seat boundary against both paths. Unnamed notes start from the declared seat before applying those floors. Paths longer than eight seats now fail explicitly instead of silently losing senior links. Existing overlong plans are not repaired automatically.
+
+This is a local-first, single-operator analytical workspace. Seats are not authentication, and other screens/exports may expose workspace data. Do not use it as a multi-user confidentiality boundary.
+
 Open **`#/freeze-line`** (sidebar → **Freeze line**). Every committed or reverted reorganisation is a dated **freeze line** across the reporting tree; the screen measures, from the same dated artefacts `#/federation` already counts, whether each declared leadership edge carried work on **both sides** of the line, classifies every edge **held / lost / gained / still-silent** by altitude with Wilson intervals and complementary suppression, and prints one governed verdict per line — **held**, **degraded**, or **refused** below the declared edge floor. No surveyed product prints this comparability verdict across a reorg [UNVERIFIED vendor claims recorded in RESEARCH §112]. The standing timing-channel gap is closed in the same pass: suppressed rows print **no carriage date** in the view, in frozen snapshots or in CSV, and RULE-FRZ-03 opens one redaction decision for any legacy snapshot that still carries one. Schema v101 is additive (`100 → 101`); CSV #95 `freeze-line` is aggregate-only and refusal-honest (blank, never zero).
 
 ## 2026-11-05 — The Hierarchical Clearinghouse: exact sealed resource clearing (Session 138, Schema v100, [ADR-0098](./docs/adr/0098-hierarchical-clearinghouse.md), `#/clearing`)

@@ -9,9 +9,9 @@
  */
 import { dayKey } from '../time.js';
 import { activeSeat, buildSeats, canAct } from './seat.js';
-import { ALTITUDE_KEYS } from './chainRegistry.js';
+import { ALTITUDE_KEYS, altitudeRank } from './chainRegistry.js';
 import {
-  analyzeRouting, routingCaseInput, routerPlanRecord, routingRead,
+  analyzeRouting, resolveSeatPath, routingCaseInput, routerPlanRecord, routingRead,
   routingCalibration, routingBriefText, routingCsvRows, routingAttentionCount,
 } from './altitudeRouter.js';
 import { normalizeRouterPlans, normalizeRouterSettings } from './altitudeRouterSchema.js';
@@ -64,6 +64,7 @@ export function createAltitudeRouterActions(store, { now, idFactory, createApi }
       if (text.length > ROUTER_LIMITS.noteChars) return fail(`Keep the situation note under ${ROUTER_LIMITS.noteChars} characters.`, 'text');
       if (plans().length >= ROUTER_LIMITS.plans) return fail('The routing ledger is full. Export an archive before continuing; no plan was silently deleted.', 'routingPlans');
       const report = analyzeRouting(text, store.state, { now: clock(), settings: settings() });
+      if (report.resolved.ladderTruncated) return fail('The reporting path exceeds the supported eight-seat limit. No incomplete roll-up was saved.', 'scope');
       const record = { ...routerPlanRecord(report), id: idFactory('route'), createdAt: clock().toISOString(), updatedAt: clock().toISOString() };
       const warnings = [];
       const normalized = normalizeRouterPlans([record], warnings);
@@ -88,6 +89,10 @@ export function createAltitudeRouterActions(store, { now, idFactory, createApi }
         : input.confirmedAltitudeKey;
       if (!ALTITUDE_KEYS.includes(confirmedAltitudeKey)) return fail('Choose a valid organizational altitude.', 'confirmedAltitudeKey');
       const report = analyzeRouting(plan.sourceText || '', store.state, { now: clock(), settings: settings() });
+      const resolved = resolveSeatPath(store.state, { analysis: report.analysis,
+        altitude: { detectedRank: altitudeRank(confirmedAltitudeKey) }, now: clock(), settings: settings() });
+      if (resolved.ladderTruncated) return fail('The reporting path exceeds the supported eight-seat limit. No incomplete roll-up was written.', 'scope');
+      const resolvedGate = seatCheck({ ownerSeatId: resolved.ownerSeatId }); if (resolvedGate) return resolvedGate;
       const caseInput = routingCaseInput(report, {
         title: input.title, summary: input.summary, ownerId: input.ownerId,
         involvedPersonIds: input.involvedPersonIds, reviewOn: input.reviewOn,

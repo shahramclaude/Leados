@@ -55,7 +55,7 @@ export function renderAltitudeRouter(ctx) {
     const titleInput = h('input', { id: 'ar-confirm-title', class: 'input', type: 'text', maxlength: '180', value: '', placeholder: 'Optional case title (defaults to the classified title)', 'aria-label': 'Optional case title' });
     const body = h('div', { class: 'stack' },
       h('p', null, 'One confirmation writes the operational case, fans it out through every relevant module, and rolls the disclosure-safe signal up each leadership altitude in a single transaction. Nothing is decided on your behalf.'),
-      h('label', { class: 'field' }, h('span', null, 'Owning altitude'), altitudeSelect),
+      h('label', { class: 'field' }, h('span', null, 'Requested altitude (stakes and reporting-span floors still apply)'), altitudeSelect),
       h('label', { class: 'field' }, h('span', null, 'Case title'), titleInput),
       h('p', { class: 'muted' }, `Detected: ${altLabel(plan.detectedAltitudeKey)} · ${pct(Math.round(plan.altitudeConfidence * 100))} heuristic confidence · ${plan.seatPath.length} leadership altitude(s) in the ladder.`),
       plan.needsReview ? banner({ tone: 'warn', title: 'Human review required', body: plan.refusalReasons.join(' ') }) : null,
@@ -64,7 +64,7 @@ export function renderAltitudeRouter(ctx) {
       const input = { confirmedAltitudeKey: altitudeSelect.value };
       if (titleInput.value.trim()) input.title = titleInput.value.trim();
       const res = ctx.api.routingConfirm(plan.id, input);
-      toast(res.ok ? `Routed to ${altLabel(altitudeSelect.value)}. The case and its roll-up are committed.` : (res.error || 'Routing not confirmed.'), res.ok ? 'good' : 'bad');
+      toast(res.ok ? 'Case and roll-up committed. The ledger shows the actual owning seat and effective rank.' : (res.error || 'Routing not confirmed.'), res.ok ? 'good' : 'bad');
       if (res.ok) { closeAllModals(); go(ctx, 'ledger'); ctx.refresh(); }
     } }, 'Confirm route & create case');
     openModal({ title: 'Confirm the altitude route', description: 'Reviewed by a human before any record is written.', body, footer: [h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => closeAllModals() }, 'Cancel'), submit] });

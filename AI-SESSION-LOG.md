@@ -1258,3 +1258,13 @@ The canonical app is the zero-build static ES-module app under `app/`. Targeted 
 ## Sync
 
 Commit + push to `origin/arena/a8bef4c5-leados` — result recorded in the final changelog below.
+
+## 2026-11-05 — Routing override integrity
+
+Origin verified as https://github.com/shahramclaude/Leados.git; branch arena/539aeeba-leados. Targeted audit: the canonical app is local-first ES modules with a versioned local store, case-based post-commit propagation, chain and seat read models and an altitude router. Role tiering exists as local analytical lenses, not authenticated permissions; enterprise multi-user isolation is missing. Found and fixed a real defect: confirmed altitude changed only a label; original path still drove roll-up. Long paths silently truncated at eight. A full audit of all 4,383 tracked files was not completed; unrelated flows and regressions [UNVERIFIED]. No rebuild: the shared spine is usable incrementally.
+
+The fix recomputes the owner and path in the atomic case adoption, retains inferred classification for grading, applies local seat checks and floor constraints, refuses oversized paths, and clarifies requested versus effective altitude. Existing historical confirmations are not rewritten. The focused router suite tests cross-module and vertical effects, permissions, privacy and the new override and deep-path scenarios. Research and roadmap updated with sourced vendor patterns; claims of enterprise security or market-first status rejected.
+
+Sync result: see git remote branch / final session response; commit and push attempted after this log entry.
+
+Verification: `node --test tests/app/altitude-router.test.mjs` passed 13/13; targeted ESLint, canonical-boundary and documentation-link checks passed. Full `npm test` exceeded the 180-second command wait and was still running; its final result is [UNVERIFIED].

@@ -4104,3 +4104,11 @@ managers who have actually killed a study on the strength of an EVSI number.
 1. **Succession as a measured quantity.** `#/readiness` collects self-assessed ratings; the chain now knows every span, its subtree and its altitude. Nothing computes whether a span's loss leaves work with no altitude to hold it. Build the bench figure from the tree and item ages, not from ratings — the evidence already exists (RESEARCH §98).
 2. **Multi-altitude demo depth.** The demo roster is two levels, so three rungs are empty (honest, and it *shows* the refusal — but it under-exercises the roll-up). Seed a three-level roster with a director whose two managers carry different work mixes, so the composition guard and the standardised comparison fire on demo data.
 3. **Time-span calibration from the record** (carried from Session 110's ρ theme): the horizon table is a declaration. The workspace now stores, per item, the day it crossed a horizon and the day it was actually decided. That is a measurable distribution of *real* discretion, and nothing yet reads it back against the declared table.
+
+## 2026-11-05 — integrity-led hierarchy backlog
+
+- **Implemented [frontline → executive]:** reviewed altitude overrides now recompute the real disclosure path in the atomic case transaction; oversized paths fail explicitly.
+- **Planned [all]:** authenticated, server-enforced tenant and org-scoped authorization; remove reliance on browser-local seat declarations.
+- **Planned [frontline → CEO]:** versioned organizational history and unbounded/explicitly bounded hierarchy traversal with safe reconciliation of historical roll-ups.
+- **Planned [director → CEO]:** privacy-reviewed, compositional aggregate disclosure with inference and differencing tests across exports and screens.
+- **Rejected [all]:** an additional flashy analytical terminal before fixing a route whose human override did not actually route.
