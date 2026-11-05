@@ -1,3 +1,11 @@
+## Session 138 — The Hierarchical Clearinghouse (`#/clearing`, ADR-0098)
+
+The Internal Clearinghouse clears scarce budget and shared capacity across organizational spans without turning a resource bid into a person rating. A chair declares one currency, one horizon, two resource caps, a Gamma uncertainty budget and optional pre-registered hurdle expectation. Eligible subordinate spans submit sealed schedules of up to four discrete tiers, each with cost, shared person-days and a declared `[lo, hi]` value range. Tier zero is always the exact unfunded choice; minimum-viable markers constrain funded tiers rather than forcing participation.
+
+The exact combinatorial engine publishes nominal, Bertsimas–Sim robust and Savage minimax-regret regimes, N+1 VCG/Clarke pivot hurdles, proportional-haircut and equal-split benchmarks, Reallocation Alpha, Lagrangian shadow prices, integrality gap, HHI, marginal resource gains, Theory-of-Constraints mix posture and a counted enumeration/branch-and-bound certificate. A commit is refused when the certificate cannot be certified. `RULE-CLR-01..05` then propagate one governed decision, one delegation per funded span, same-currency encumbrances, typed edges, upward roll-ups, settlement-deficit reviews, overdue settlement work, mix escalations and identity-free altitude calibration on the shared post-commit spine.
+
+The route is aggregate-only for declared seats. Horizontal invited bidders see their own bid and outcome, not siblings; ancestors see structural labels and mechanism posture, not names, notes, round titles, amounts or allocations. Settlement is once-only and grades the frozen Clarke hurdle out of sample. CSV #94 and the certificate use small-cell and complementary suppression and are registered with the Differencing Defender. Schema v100 adds empty `clearingRounds` and `clearingMarkers` ledgers without inventing historical commitments.
+
 ## Session 135 — The Robust Allocation Terminal (`#/robust-allocation`, ADR-0095)
 
 - **Exact robust allocation.** Multi-action integer allocation under Bertsimas–Sim budgeted uncertainty `Γ` over declared effect ranges `[lo, hi]`. Feasible-grid + `C(n, Γ)` scenario enumeration, exact integer arithmetic, deterministic tie-breaks. An over-cap grid (>50,000 combinations) or infeasible constraint set is REFUSED with a printed reason, never approximated.

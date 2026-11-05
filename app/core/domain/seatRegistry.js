@@ -134,6 +134,10 @@ export const RECORD_POLICIES = Object.freeze({
   // rank-gated pooled rate, and never projects a title, a person or an amount.
   robustPlans: { classKey: 'unit', detailCeiling: 0, label: 'Robust allocation plans (report only)', route: '#/robust-allocation' },
   robustMarkers: { classKey: 'unit', detailCeiling: 0, label: 'Robust allocation rule markers', route: '#/robust-allocation' },
+  // ADR-0098: raw rounds carry sealed tiers, frozen externalities and
+  // settlements, so declared seats receive only the scoped Clearinghouse report.
+  clearingRounds: { classKey: 'unit', detailCeiling: 0, label: 'Internal clearing rounds (report only)', route: '#/clearing' },
+  clearingMarkers: { classKey: 'unit', detailCeiling: 0, label: 'Clearinghouse rule markers', route: '#/clearing' },
   federationMarkers: { classKey: 'unit', detailCeiling: 0, label: 'Federation rule markers', route: '#/federation' },
   // ADR-0092: the publication register is published material and therefore span
   // material: a release belongs to the seat that made it. Stored rows carry span
@@ -370,6 +374,12 @@ export const ACTION_RIGHTS = Object.freeze({
   // director+ (enforced in the action), because those numbers bound what every
   // altitude below reads.
   'declare-robust-allocation': { minRank: 1, maxRank: 5, label: 'Declare, adopt, scan or govern a robust allocation' },
+  // ADR-0098: open/withdraw/commit/settle are chairing acts; a subordinate
+  // span may submit only its own sealed package, and director+ governs the
+  // workspace conventions. The action adapter applies the finer span checks.
+  'chair-clearing-round': { minRank: 2, maxRank: 5, label: 'Open, commit or settle a hierarchical clearing round' },
+  'submit-clearing-bid': { minRank: 1, maxRank: 5, label: 'Submit a sealed multi-tranche clearing bid' },
+  'govern-clearing': { minRank: 3, maxRank: 5, label: 'Govern Clearinghouse floors, windows and solver bounds' },
   // ADR-0088: recording whether a decision moment was absorbed or escalated is
   // every leader's business, at every altitude — that is the whole point of the
   // module. Declaring a binding intervention-rate commitment is a manager-and-

@@ -475,7 +475,12 @@ export function buildFederationReport(state = {}, { now = new Date(), settings =
 
   // Executive view: no span is named by a person; a span is its altitude and
   // its position, and rows above the detail ceiling carry counts only.
-  const detail = seat.rank <= 3 && !seat.fullAccess;
+  const detail = seat.rank <= 2 && !seat.fullAccess;
+  const structuralLabel = (row) => {
+    const ordinal = rows.filter((candidate) => candidate.altitudeKey === row.altitudeKey)
+      .findIndex((candidate) => candidate.seatId === row.seatId) + 1;
+    return `${row.altitudeKey || 'unassigned'} span ${ordinal}`;
+  };
   const viewRows = rows
     .slice(0, FEDERATION_LIMITS.rows)
     .map((row, index) => ({
@@ -483,7 +488,11 @@ export function buildFederationReport(state = {}, { now = new Date(), settings =
       parentId: row.parentId,
       altitudeKey: row.altitudeKey,
       rank: row.rank,
-      label: detail ? `${row.shortLabel} · span ${index + 1}` : `${row.label} span`,
+      // Once a seat is above the local manager view, names are not a display
+      // primitive. Do not derive an executive label from `seat.label`: a
+      // hand-authored or legacy label can contain the responsible person's
+      // name even when the rest of the report is identity-reduced.
+      label: detail ? `${row.shortLabel} · span ${index + 1}` : structuralLabel(row),
       state: row.state,
       stateLabel: FEDERATION_STATE_META[row.state].label,
       meaning: FEDERATION_STATE_META[row.state].meaning,
@@ -507,15 +516,22 @@ export function buildFederationReport(state = {}, { now = new Date(), settings =
     .map((altitudeKey) => {
       const group = rows.filter((row) => row.altitudeKey === altitudeKey);
       const small = group.length > 0 && group.length < cellFloor;
+      // Row-level complementary suppression and altitude totals are one
+      // publication surface. If either a primary cell or its complement was
+      // blanked, printing the group's state counts would create a second route
+      // to the same hidden value (and would disagree with `rows`). Withhold the
+      // whole group instead of exposing a contradictory aggregate.
+      const rowSuppressed = group.some((row) => row.suppressed);
+      const suppressed = small || rowSuppressed;
       return {
         altitudeKey,
-        n: group.length,
-        connected: small ? null : group.filter((row) => row.state === 'direct').length,
-        bypassed: small ? null : group.filter((row) => row.state === 'bypass').length,
-        stale: small ? null : group.filter((row) => row.state === 'stale').length,
-        silent: small ? null : group.filter((row) => row.state === 'silent').length,
-        root: small ? null : group.filter((row) => row.state === 'root').length,
-        suppressed: small,
+        n: suppressed ? null : group.length,
+        connected: suppressed ? null : group.filter((row) => row.state === 'direct').length,
+        bypassed: suppressed ? null : group.filter((row) => row.state === 'bypass').length,
+        stale: suppressed ? null : group.filter((row) => row.state === 'stale').length,
+        silent: suppressed ? null : group.filter((row) => row.state === 'silent').length,
+        root: suppressed ? null : group.filter((row) => row.state === 'root').length,
+        suppressed,
       };
     });
 

@@ -178,10 +178,10 @@ function seatsOrThrow(state) {
 /* --------------------------------------------------------------- 1. schema */
 
 test('schema v90 migrates additively and refuses malformed or stale grants', () => {
-  assert.equal(SCHEMA_VERSION, 99);
+  assert.equal(SCHEMA_VERSION, 100);
   const old = { schemaVersion: 89, settings: { leaderName: 'Keep' }, cases: [{ id: 'keep' }], disclosureGrants: [{ id: 'existing' }] };
   const migrated = migrate(old);
-  assert.equal(migrated.raw.schemaVersion, 99);
+  assert.equal(migrated.raw.schemaVersion, 100);
   assert.deepEqual(migrated.raw.disclosureMarkers, []);
   assert.equal(migrated.raw.cases[0].id, 'keep');
   assert.equal(migrated.raw.settings.disclosureCellFloor, 5);

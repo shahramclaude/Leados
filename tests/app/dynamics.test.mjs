@@ -417,7 +417,7 @@ test('calibration scores against naive persistence and reports negative skill ho
 /* ------------------------------------------------- 6. schema v37 */
 
 test('Schema v37: additive migration adds the experiment ledger without inventing one', () => {
-  assert.equal(SCHEMA_VERSION, 99);
+  assert.equal(SCHEMA_VERSION, 100);
   assert.equal(DEFAULT_SETTINGS.dynamicsHorizonWeeks, 26);
   assert.equal(DEFAULT_SETTINGS.dynamicsTargetWipWeeks, 4);
   assert.equal(DEFAULT_SETTINGS.dynamicsPressureLagWeeks, 3);
@@ -428,11 +428,11 @@ test('Schema v37: additive migration adds the experiment ledger without inventin
   const empty = createEmptyState(NOW.toISOString());
   assert.deepEqual(empty.dynamicsExperiments, []);
   const migrated = migrate({ schemaVersion: 36, settings: {}, people: [], portfolio: [] });
-  assert.equal(migrated.raw.schemaVersion, 99);
-  assert.equal(migrated.applied.at(-1), '98 → 99');
+  assert.equal(migrated.raw.schemaVersion, 100);
+  assert.equal(migrated.applied.at(-1), '99 → 100');
   assert.deepEqual(migrated.raw.dynamicsExperiments, []);
   const state = normalizeState(migrated.raw, { now: NOW }).state;
-  assert.equal(state.schemaVersion, 99);
+  assert.equal(state.schemaVersion, 100);
   assert.deepEqual(state.dynamicsExperiments, []);
   assert.ok(LINK_ENTITY_TYPES.includes('dynamics'), 'a structural experiment is a first-class graph node');
   assert.ok(LINK_RELATIONS.includes('tracks-followup'));
