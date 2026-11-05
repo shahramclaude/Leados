@@ -493,7 +493,7 @@ test('analyzing a demo state never mutates it (pure read-side engine)', () => {
 /* ============================================== 6. CSV scope #31 */
 
 test('CSV scope #31 is data-minimised: counts/scores only, one row per person', () => {
-  assert.equal(CSV_EXPORTS.length, 92);
+  assert.equal(CSV_EXPORTS.length, 93);
   const descriptor = CSV_EXPORTS.find((s) => s.key === 'networkTopology');
   assert.ok(descriptor);
   assert.equal(descriptor.sensitive, false);

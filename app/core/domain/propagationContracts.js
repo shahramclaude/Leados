@@ -102,6 +102,8 @@ import { sealRule } from './sealRules.js';
 import { differencingRule } from './differencingRules.js';
 // ADR-0094: the Prospective Intervention Contract.
 import { prospectiveRule } from './prospectiveRules.js';
+// ADR-0095: the Robust Allocation Terminal.
+import { robustAllocationRule } from './robustAllocationRules.js';
 import { successionRule } from './successionRules.js';
 import { mandateRule } from './mandateRules.js';
 import { authorityCalibrationRule } from './authorityCalibrationRules.js';
@@ -701,6 +703,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'prospectiveRules.js',
     purpose: 'RULE-PIC-01 freezes a pre-registered bet as a graph node with one governed DACI decision, one owned outcome task, a typed `pre-registers` edge and a vertical `rolls-up-to` edge for every leadership ancestor in the same atomic write; RULE-PIC-02 grades each due cohort exactly ONCE from dated records other modules own (Brier proper scoring against a strictly-prior base rate), refuses unobservable cohorts loudly with one owned reconciliation task, and fans the grade up the same tree; RULE-PIC-03 opens at most one governed calibration decision per altitude-by-instrument cell per ISO week when Brier skill falls below the declared floor; RULE-PIC-04 opens one outcome-integrity decision per ISO week for overdue ungraded contracts. Never adjusts a declared probability, never closes a human decision, never rates a person and never asserts causality.',
     writes: ['links', 'decisions', 'delegations', 'prospectiveGrades', 'prospectiveMarkers'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: robustAllocationRule,
+    module: 'robustAllocationRules.js',
+    purpose: 'RULE-RAL-01 freezes an adopted robust allocation as a graph node with one governed DACI decision, one owned delivery task per funded line, `allocates`/`consumes-capacity`/`rests-on` provenance and a vertical `rolls-up-to` edge for every leadership ancestor in the same atomic write; RULE-RAL-02 opens at most one governed re-allocation decision per plan per ISO week when a linked prospective contract grades below its pre-registered threshold; RULE-RAL-03 opens one delivery-integrity decision per plan per ISO week for a funded line that outlived the horizon; RULE-RAL-04 opens one evidence-integrity decision per plan per ISO week for a linked contract that was never graded. Never auto-adopts a plan, never closes a human decision, never rates a person, never asserts causality and never pools money across currencies.',
+    writes: ['links', 'decisions', 'delegations', 'robustMarkers'],
     emits: [],
     scansWorkspace: true,
   },

@@ -129,6 +129,11 @@ export const RECORD_POLICIES = Object.freeze({
   prospectiveContracts: { classKey: 'unit', detailCeiling: 0, label: 'Frozen pre-registrations (report only)', route: '#/prospective' },
   prospectiveGrades: { classKey: 'unit', detailCeiling: 0, label: 'Once-only Brier grades (report only)', route: '#/prospective' },
   prospectiveMarkers: { classKey: 'unit', detailCeiling: 0, label: 'Prospective rule markers', route: '#/prospective' },
+  // ADR-0095: the Robust Allocation Terminal. Plans and markers are report-only;
+  // the scoped adapter applies subtree scope, small-cell suppression and a
+  // rank-gated pooled rate, and never projects a title, a person or an amount.
+  robustPlans: { classKey: 'unit', detailCeiling: 0, label: 'Robust allocation plans (report only)', route: '#/robust-allocation' },
+  robustMarkers: { classKey: 'unit', detailCeiling: 0, label: 'Robust allocation rule markers', route: '#/robust-allocation' },
   federationMarkers: { classKey: 'unit', detailCeiling: 0, label: 'Federation rule markers', route: '#/federation' },
   // ADR-0092: the publication register is published material and therefore span
   // material: a release belongs to the seat that made it. Stored rows carry span
@@ -360,6 +365,11 @@ export const ACTION_RIGHTS = Object.freeze({
   // the evidence/cell/skill conventions is director+ (enforced in the action),
   // because those numbers bound what every altitude below reads.
   'declare-prospective': { minRank: 1, maxRank: 5, label: 'Pre-register, grade or govern a prospective intervention contract' },
+  // ADR-0095: every altitude that leads anyone may model, adopt and scan an
+  // allocation for its own span. Setting the cell/review/solver conventions is
+  // director+ (enforced in the action), because those numbers bound what every
+  // altitude below reads.
+  'declare-robust-allocation': { minRank: 1, maxRank: 5, label: 'Declare, adopt, scan or govern a robust allocation' },
   // ADR-0088: recording whether a decision moment was absorbed or escalated is
   // every leader's business, at every altitude — that is the whole point of the
   // module. Declaring a binding intervention-rate commitment is a manager-and-

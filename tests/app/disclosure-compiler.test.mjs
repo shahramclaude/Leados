@@ -76,6 +76,9 @@ const RENDERER_ROUTES = [
   'differencing', 'decision-robustness',
   // ADR-0094: the Prospective Intervention Contract has its own manifest row.
   'prospective',
+  // ADR-0095: the Robust Allocation Terminal has its own manifest row and scoped
+  // adapter, so the catalogue and the shell stay one route for one route.
+  'robust-allocation',
 ];
 
 /** Sentinel-bearing roster: every person, span and private note is traceable. */
@@ -172,10 +175,10 @@ function seatsOrThrow(state) {
 /* --------------------------------------------------------------- 1. schema */
 
 test('schema v90 migrates additively and refuses malformed or stale grants', () => {
-  assert.equal(SCHEMA_VERSION, 97);
+  assert.equal(SCHEMA_VERSION, 98);
   const old = { schemaVersion: 89, settings: { leaderName: 'Keep' }, cases: [{ id: 'keep' }], disclosureGrants: [{ id: 'existing' }] };
   const migrated = migrate(old);
-  assert.equal(migrated.raw.schemaVersion, 97);
+  assert.equal(migrated.raw.schemaVersion, 98);
   assert.deepEqual(migrated.raw.disclosureMarkers, []);
   assert.equal(migrated.raw.cases[0].id, 'keep');
   assert.equal(migrated.raw.settings.disclosureCellFloor, 5);

@@ -174,6 +174,14 @@ test('standalone artifact exists and is a single inline HTML document', () => {
   // 466 modules = 17,160 bytes per module, DOWN again from Session 132's
   // 17,276. The density bound (24,000) is unchanged and is still the guard that
   // catches a module inlined twice; this ceiling only tracks module count.
+  // Raised in Session 135 (Schema v98, ADR-0095): the Robust Allocation Terminal
+  // added six real modules (robustAllocationRegistry, robustAllocationSchema,
+  // robustAllocation, robustAllocationRules, robustAllocationActions,
+  // views/robustAllocation) plus the shell/CSV/graph/permission wiring and the
+  // .grid-3/.grid-4 CSS. Measured build: 8,072,085 bytes / 472 modules = 17,102
+  // bytes per module, DOWN again from Session 134's 17,160. The density bound
+  // (24,000) is unchanged and still catches a module inlined twice; this ceiling
+  // only tracks module count.
   assert.ok(bytes < 8_200_000, `standalone file is unexpectedly large (${bytes} bytes)`);
   const declaredModules = Number((html.match(/content="[^"]*?(\d+) source modules/) || [])[1]);
   assert.ok(declaredModules > 100, `expected the build to declare its module count (got ${declaredModules})`);

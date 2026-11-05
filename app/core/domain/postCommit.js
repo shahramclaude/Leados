@@ -168,6 +168,13 @@ import { differencingRule } from './differencingRules.js';
 // provenance it opens are priced, certified and rolled up in the SAME atomic
 // transaction. Altitude is a dimension of this one spine, not a second engine.
 import { prospectiveRule } from './prospectiveRules.js';
+// ADR-0095: the Robust Allocation Terminal. Registered immediately after the
+// prospective contract and BEFORE the attention market, succession terminal and
+// operating seat, so the governed allocation decision, the owned delivery tasks
+// and the typed provenance it opens are priced, certified and rolled up in the
+// SAME atomic transaction. Altitude is a dimension of this one spine, not a
+// second engine. Inert unless a plan is adopted or an explicit scan runs.
+import { robustAllocationRule } from './robustAllocationRules.js';
 
 export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // Schema v58: user-authored agreements evaluate FIRST, against the record as
@@ -631,6 +638,13 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // other modules own; a miscalibrated or overdue cell opens exactly one bounded
   // governed finding per ISO week. All four are marker-idempotent and pausable.
   prospectiveRule,
+  // ADR-0095: RULE-RAL-01..04. An adopted robust allocation becomes a graph node
+  // with one governed DACI decision, one owned delivery task per funded line and
+  // one `rolls-up-to` edge per leadership ancestor; a scan turns a falsified,
+  // overdue or ungraded premise into exactly one bounded governed finding per
+  // plan per ISO week. Marker-idempotent and pausable; runs before the market's
+  // final work-producing pass so the decisions it opens are priced identically.
+  robustAllocationRule,
   attentionMarketRule,
   // ADR-0077: the Succession Terminal (bench certification). Runs before the
   // Operating Seat because its certificate edges are provenance the seat's

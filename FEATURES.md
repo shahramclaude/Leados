@@ -1,3 +1,14 @@
+## Session 135 — The Robust Allocation Terminal (`#/robust-allocation`, ADR-0095)
+
+- **Exact robust allocation.** Multi-action integer allocation under Bertsimas–Sim budgeted uncertainty `Γ` over declared effect ranges `[lo, hi]`. Feasible-grid + `C(n, Γ)` scenario enumeration, exact integer arithmetic, deterministic tie-breaks. An over-cap grid (>50,000 combinations) or infeasible constraint set is REFUSED with a printed reason, never approximated.
+- **Two plans, side by side.** Wald maximin (best worst case) and Savage minimax regret (smallest largest gap to the per-scenario oracle), plus the optimistic point-forecast plan and its worst case — so the price of optimism is a number.
+- **The price of fairness.** A per-segment Rawlsian equity floor is a hard constraint; the worst-case value it costs versus the unconstrained solve is printed. Per-segment Little saturation; one currency, never pooled.
+- **Sensitivity + value of information.** A one-at-a-time stress table names which single effect range flips the recommendation; ranges are ranked by worst-case exposure and the exact regret released by resolving the top one is computed.
+- **Governed adoption in one transaction.** RULE-RAL-01 writes one DACI decision, one owned delivery task per funded line, `allocates`/`consumes-capacity`/`rests-on` provenance and one `rolls-up-to` edge per leadership ancestor. The solution is frozen at adoption.
+- **Out-of-sample falsification.** RULE-RAL-02/03/04 open one bounded governed re-allocation / delivery-integrity / evidence-integrity decision per plan per ISO week when a linked prospective contract misses its threshold, a funded line outlives the horizon, or the premise is never graded.
+- **Five altitudes, five surfaces.** Desk / Plans / Solve / Roll-up / Certificate; one `disclosureManifests` row, two `RECORD_POLICIES` rows, aggregate-only CSV #93 `robust-allocation`, Wilson 95% + complementary suppression, pooled rate withheld below the cell floor and below director rank.
+- **Limits, printed in the product.** Not authentication, not a causal forecast, not a person rating; bounded solver; declared ranges are assumptions.
+
 ## Session 128 — The Federated Envoy (`#/envoy`, ADR-0088)
 
 - **Sealed packets between workspaces.** `leados.envoy.packet` v1: per-item SHA-256, Merkle root, identity bound to origin + recipient altitude + creation stamp, HMAC-SHA256 when the vault is unlocked (keyed **required** by default), plain mode printed as plain. Verification returns typed failures (`item-hash`, `merkle-root`, `packet-id`, `schema-ahead`, `signature`, `signature-required`, `altitude-mismatch`).
