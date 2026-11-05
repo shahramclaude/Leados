@@ -396,6 +396,11 @@ export const LINK_ENTITY_TYPES = [
   // title or a note — so the ladder's history is navigable from a rung and the
   // spans it calibrates are navigable from the reading.
   'spanreading',
+  // ADR-0102 (Schema v104): a frozen decision lock. It carries a date, a frozen
+  // process count and record TYPES only — never a decision title, a note, a
+  // person or the content of any fact it rests on — so the information set is
+  // navigable from the lock and the lock from the decision it audits.
+  'hindsightlock',
   // ADR-0099 (Schema v101): a frozen freeze-line continuity reading. It
   // carries counts, verdicts and structural dates only — never a person's name,
   // a span's carriage date or a free-text note — so the line above a span can be
@@ -551,6 +556,8 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   federationassessment: 'federationAssessments',
   // ADR-0099: the freeze-line reading ledger owns the continuity node's IDs.
   freezereading: 'freezeReadings',
+  // ADR-0102: the decision-lock ledger owns the lock node's IDs.
+  hindsightlock: 'decisionLocks',
   // ADR-0100: a frozen calibration reading (the adoption ledger is its own node
   // only through the event log; an adoption is a declaration, not a work item).
   spanreading: 'spanReadings',
@@ -753,6 +760,11 @@ export const LINK_RELATIONS = [
   // ADR-0099: freeze-line provenance, written only by RULE-FRZ-01.
   'freezes',
   're-projects',
+  // ADR-0102: a lock freezes the information set of the decision it audits, and
+  // consults each fact that set contained. Provenance only — no fact content is
+  // ever copied into the lock.
+  'locks',
+  'consults',
   // ADR-0100: a frozen calibration calibrates the ladder those spans are running
   // on. It is a measurement of a declaration, never of a person's work.
   'calibrates',
@@ -2630,6 +2642,28 @@ export function resolveLinkedEntity(state, entityType, entityId) {
           frozenOn: rec.frozenOn,
           windowDays: rec.windowDays,
           summary: rec.summary,
+        },
+      };
+    }
+    case 'hindsightlock': {
+      const rec = (state.decisionLocks || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      // The shared graph carries the lock's dates, its frozen process count and
+      // its consulted-record count — never the decision's title, the content of
+      // any fact, or a person. The scoped report is the reader.
+      return {
+        type: 'hindsightlock',
+        id: rec.id,
+        title: `Hindsight lock · decision of ${rec.decisionOn}`,
+        status: `${rec.consultedN} consulted fact(s) · process ${rec.qualityMet}/5`,
+        route: `#/hindsight?panel=information&lock=${encodeURIComponent(rec.id)}`,
+        raw: {
+          id: rec.id,
+          decisionId: rec.decisionId,
+          decisionOn: rec.decisionOn,
+          frozenOn: rec.frozenOn,
+          consultedN: rec.consultedN,
+          qualityMet: rec.qualityMet,
         },
       };
     }

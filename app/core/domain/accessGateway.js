@@ -96,6 +96,12 @@ const groups = [
   ['record-reputation-act', 'reputationRecordAct reputationScan'],
   ['offer-reputation-guarantee', 'reputationOpenPosition reputationClosePosition reputationWithdrawPosition'],
   ['govern-reputation', 'reputationSetConventions'],
+  // ADR-0102: the Hindsight Lock. Freezing an information set or scanning the
+  // audit is a declared command at every altitude; the conventions that define
+  // what counts as a sound process are director+ and checked in the action.
+  // The reads are seat-scoped SAFE_READS below.
+  ['record-decision-lock', 'hindsightLock hindsightScan'],
+  ['govern-hindsight', 'hindsightSetConventions'],
   // ADR-0092: the Differencing Defender. Publishing is an act every altitude
   // performs, so the command right is open at every rank (the action enforces the
   // span and the arithmetic decides what may be published); the conventions that
@@ -140,6 +146,7 @@ const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boardCsvRo
 'freezeLineAttentionCount', 'freezeLineBriefText', 'freezeLineConventions', 'freezeLineCsvRows', 'freezeLineReport',
 'spanCalibrationAttentionCount', 'spanCalibrationBriefText', 'spanCalibrationConventions', 'spanCalibrationCsvRows', 'spanCalibrationReport', 'spanCalibrationSettings', 'spanCalibrationSignals',
 'reputationAttentionCount', 'reputationBriefText', 'reputationConventions', 'reputationCounterfactual', 'reputationCsvRows', 'reputationPriceAsk', 'reputationReport', 'reputationSignals',
+'hindsightAttentionCount', 'hindsightBriefText', 'hindsightConventions', 'hindsightCsvRows', 'hindsightReport', 'hindsightSettings',
 'prospectiveAttentionCount', 'prospectiveBriefText', 'prospectiveCsvRows', 'prospectiveRead', 'robustAllocationAttentionCount', 'robustAllocationBriefText', 'robustAllocationCsvRows', 'robustAllocationRead', 'clearingAttentionCount', 'clearingBriefText', 'clearingCsvRows', 'clearingRead', 'clearingSolvePreview', 'identityAttentionCount', 'identityBriefText', 'identityCompareCheckpoint', 'identityCsvRows', 'identityRead', 'identityVerify', 'mandateBriefText', 'mandateRead', 'missionArchive', 'missionBriefText', 'missionCommit', 'missionCreateIntervention', 'missionFreezeBrief', 'missionHandoffText', 'missionOpenCase', 'missionRead', 'missionScan', 'missionWithdraw', 'operatingModelAttentionCount', 'operatingModelBriefText', 'operatingModelCsvRows', 'operatingModelNorms', 'operatingModelRead', 'operatingModelWorkTypes', 'previewMandate', 'routingAnalyze', 'routingAttentionCount', 'routingBriefText', 'routingCalibration', 'routingCsvRows', 'routingRead', 'saveMissionPreview', 'sealBriefText', 'sealRead', 'sealVerify', 'seatBriefText', 'seatRead', 'setActiveSeat', 'strategyCycleBriefText', 'strategyCycleCsvRows', 'strategyCycleRead', 'valueStreamBriefText', 'valueStreamCsvRows', 'valueStreamRead', 'valueStreamReallocationPreview']);
 const refusal = (reason) => ({ ok: false, code: 'scope-refusal', error: reason, field: 'scope' });
 

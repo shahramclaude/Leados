@@ -93,6 +93,12 @@ export const RECORD_POLICIES = Object.freeze({
   reputationActs: { classKey: 'individual', label: 'Hand-recorded reputational acts', route: '#/reputation?panel=acts' },
   reputationPositions: { classKey: 'authority', label: 'Guarantee and repair positions', route: '#/reputation?panel=positions' },
   reputationMarkers: { classKey: 'unit', label: 'Reputation idempotency markers', route: '#/reputation' },
+  // ADR-0102: a lock is a frozen information set about a DECISION, which is a
+  // workspace record — so it is classed with the units it rolls up from, not with
+  // the individual detail a decision may happen to touch. Its stored content is
+  // record TYPES, ids and dates; no fact content, no title and no person ever.
+  decisionLocks: { classKey: 'unit', label: 'Frozen decision information sets', route: '#/hindsight?panel=locks' },
+  decisionLockMarkers: { classKey: 'unit', label: 'Hindsight idempotency markers', route: '#/hindsight' },
   // ADR-0086: a disclosure release is a bounded authority contract, so it is
   // readable at every altitude that can hold one — and its ledger is exactly
   // what makes the widening auditable afterwards.
@@ -363,6 +369,12 @@ export const ACTION_RIGHTS = Object.freeze({
   'record-reputation-act': { minRank: 1, maxRank: 5, label: 'Record a dated reputational act or run an explicit scan' },
   'offer-reputation-guarantee': { minRank: 1, maxRank: 5, label: 'Offer or close a dated guarantee or repair' },
   'govern-reputation': { minRank: 4, maxRank: 5, label: 'Re-declare the reputational-capital conventions' },
+  // ADR-0102: freezing a decision's information set is every altitude's business —
+  // it is the only defensible way to re-open a decision record. Re-declaring what
+  // counts as a sound process moves every quadrant in the workspace, so it is
+  // director+ and the handler additionally requires a full-access seat.
+  'record-decision-lock': { minRank: 1, maxRank: 5, label: 'Freeze a decision’s information set or run an explicit process audit' },
+  'govern-hindsight': { minRank: 4, maxRank: 5, label: 'Re-declare the process-audit conventions' },
   // ADR-0084: authoring the operating model is an org-design act — it declares
   // how every position at a level spends its week and prices structural change.
   // The same right that edits a reporting line authors the model of the lines.

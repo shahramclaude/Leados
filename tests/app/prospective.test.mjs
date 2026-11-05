@@ -119,10 +119,10 @@ const linkRows = (state, sourceType, relation = null) => (state.links || []).fil
 /* ------------------------------------------------------------------ schema */
 
 test('Schema v97 migrates additively: empty ledgers, declared conventions, nothing inferred', () => {
-  assert.equal(SCHEMA_VERSION, 103);
+  assert.equal(SCHEMA_VERSION, 104);
   const migrated = migrate({ schemaVersion: 95, settings: { leaderName: 'Keep this' }, cases: [{ id: 'x' }] });
-  assert.deepEqual(migrated.applied, ['95 → 96', '96 → 97', '97 → 98', '98 → 99', '99 → 100', '100 → 101', '101 → 102', '102 → 103']);
-  assert.equal(migrated.raw.schemaVersion, 103);
+  assert.deepEqual(migrated.applied, ['95 → 96', '96 → 97', '97 → 98', '98 → 99', '99 → 100', '100 → 101', '101 → 102', '102 → 103', '103 → 104']);
+  assert.equal(migrated.raw.schemaVersion, 104);
   assert.deepEqual(migrated.raw.prospectiveContracts, []);
   assert.deepEqual(migrated.raw.prospectiveGrades, []);
   assert.deepEqual(migrated.raw.prospectiveMarkers, []);
@@ -493,7 +493,7 @@ test('the brief, the CSV and all five renderer panels carry no name, title, coho
 });
 
 test('CSV scope #92 is aggregate-only, refusal-honest and refuses an unknown scope', () => {
-  assert.equal(CSV_EXPORTS.length, 97);
+  assert.equal(CSV_EXPORTS.length, 98);
   const descriptor = CSV_EXPORTS.find((item) => item.key === 'prospective-contracts');
   assert.ok(descriptor);
   assert.equal(descriptor.sensitive, false);

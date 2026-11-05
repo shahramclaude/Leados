@@ -118,6 +118,7 @@ import { federationRule } from './federationRules.js';
 import { freezeLineRule } from './freezeLineRules.js';
 import { spanCalibrationRule } from './spanCalibrationRules.js';
 import { reputationalCapitalRule } from './reputationalCapitalRules.js';
+import { hindsightRule } from './hindsightRules.js';
 import { cadenceRule } from './cadenceRules.js';
 import { carryoverRule } from './carryoverRules.js';
 
@@ -665,7 +666,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'reputationalCapitalRules.js',
     purpose: 'RULE-RCL-01 registers every reputational cell the workspace can already evidence as a graph node: one `rests-on` edge per distinct dated source record it was read from (never a copy) and one `rolls-up-to` edge per leadership ancestor of the span, in the SAME atomic transaction. RULE-RCL-02 opens at most ONE governed DACI decision per span per act class per ISO week when the interval has fallen below the obstacle or the class is disputed, owned at the span above the person and naming the class, the interval and the two honest routes (bank a repair, move down the tier ladder). RULE-RCL-03 opens at most ONE governed decision per open guarantee per ISO week when its cell is not solvent: the engine never withdraws authority a human offered. RULE-RCL-04 closes a due repair once the acts it declared are actually banked, and otherwise opens one governed decision — never a silent expiry. RULE-RCL-05 grades a tagged guarantee exactly ONCE against the claim frozen at open time and prints the platform\'s own squared error, so the ledger answers to the same discipline it asks of leaders. The subject of every write is a PERSON-AS-COUNTER-PARTY, an ACT CLASS and a TIER: no person is rated, ranked or scored, no performance record is edited, no decision is closed, no reporting line changes and no message is sent. Marker-idempotent, pausable by reputationAutoPropagate, and an explicit scan always runs.',
     writes: ['reputationMarkers', 'reputationPositions', 'decisions', 'links'],
-    emits: [], scansWorkspace: true,
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: hindsightRule,
+    module: 'hindsightRules.js',
+    purpose: 'RULE-HND-01 freezes one information set per decision: the records the shared link spine had ALREADY tied to it on or before the decision date (each link carries `createdOn`, so a retrospective lock reconstructs the same set exactly), plus the decision record\'s own quality bar as it stood then. The lock becomes a graph node with one `locks` edge to the decision, up to twenty `consults` edges to the facts it rested on, and one `rolls-up-to` edge per leadership ancestor of the owning span, in the SAME atomic transaction. RULE-HND-02 opens exactly ONE governed process review, ever, for a decision whose frozen process was thin and whose recorded outcome was nevertheless good — the successful mistake nobody reviews. RULE-HND-03 opens one governed decision when a lock consulted less than the declared share of the facts already on the record at decision time, naming the missed COUNT and never the missing content. RULE-HND-04 opens at most one bounded review prompt per lock per ISO week when a decision passes its own review date plus the declared grace ungraded. The module never edits a decision, never rewrites a lock, never infers relevance, never charges a decision for a fact that arrived after it, never rates or names a person, and never closes a human decision. Marker-idempotent, pausable by hindsightAutoPropagate, and an explicit scan always runs.',
+    writes: ['decisionLocks', 'decisionLockMarkers', 'decisions', 'links'],
     emits: [],
     scansWorkspace: true,
   },

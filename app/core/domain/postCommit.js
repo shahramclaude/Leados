@@ -117,6 +117,7 @@ import { federationRule } from './federationRules.js';
 import { freezeLineRule } from './freezeLineRules.js';
 import { spanCalibrationRule } from './spanCalibrationRules.js';
 import { reputationalCapitalRule } from './reputationalCapitalRules.js';
+import { hindsightRule } from './hindsightRules.js';
 import { valueStreamRule } from './valueStreamRules.js';
 import { carryoverRule } from './carryoverRules.js';
 // ADR-0085: the Operating Cadence Clock. Reads the finished queue after the
@@ -649,6 +650,12 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // rolls them up the hierarchy in the same transaction. It writes no cell, no
   // rate and no verdict: every figure is re-derived on read.
   reputationalCapitalRule,
+  // ADR-0102: the Hindsight Lock (RULE-HND-01..04). It runs AFTER every rule
+  // that can write a typed link to a decision, so the information set it freezes
+  // includes those links, and before the Operating Seat so every finding it opens
+  // rolls up the hierarchy in the SAME transaction. It never edits a decision,
+  // never rates a person and never re-scores a lock.
+  hindsightRule,
   // ADR-0087: the Attested Commit (RULE-IDN-01..03). Attestation is the
   // identity of the write itself, so its digest covers every event this
   // transaction appended before it — including the breach work RULE-IDN-02

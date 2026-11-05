@@ -1,3 +1,13 @@
+## Session 142 — The Hindsight Lock (`#/hindsight`, ADR-0102)
+
+Every other screen can say whether a decision *worked*. This one says whether it was *knowing* — and refuses to confuse the two. When a decision is recorded, `RULE-HND-01` freezes its **information set** in the same transaction: the typed links that existed by that day, each resolved to its own record date. From then on the set is history, never recomputed, so the answer cannot drift as the workspace grows.
+
+Every currently-linked fact is partitioned against the frozen claim — **known** (linked when locked, dated on or before), **missed** (dated on or before, linked only afterwards: knowable and not consulted), **later** (dated after: printed, never charged), **undated** (excluded, never guessed). Coverage is `known / (known + missed)` with a Wilson 95% interval, **REFUSED** below three knowable facts because two of three is not a rate.
+
+Process (≥4 of the module's own five `decisionQuality` requirements) × information (≥60% coverage) × outcome gives four quadrants plus an honest fifth: **earned** (repeat the method), **resulted** (luck — the dangerous lesson), **variance** (do not abandon the method), **fixable** (the repeatable defect, named by requirement), **unmeasured** (the axis cannot be measured; the reason is printed and the decision leaves every rate). The resulting share is gated at `max(3, cell floor)`; the exact two-sided Fisher test is refused below eight settled decisions.
+
+`RULE-HND-02..04` open one governed process review for a successful mistake (**never twice**), one gap decision when two or more knowable facts went unconsulted, and one weekly ask for a decision that passed its own review date ungraded. Six panels (Desk / Locks / Information set / Luck / Roll-up / Method), CSV #98 aggregate-only with BLANK-never-zero suppression, seat-scoped reads, director+ conventions. **No score, no ranking, no person rating anywhere** — the unit of judgement is the decision.
+
 ## Session 138 — The Hierarchical Clearinghouse (`#/clearing`, ADR-0098)
 
 The Internal Clearinghouse clears scarce budget and shared capacity across organizational spans without turning a resource bid into a person rating. A chair declares one currency, one horizon, two resource caps, a Gamma uncertainty budget and optional pre-registered hurdle expectation. Eligible subordinate spans submit sealed schedules of up to four discrete tiers, each with cost, shared person-days and a declared `[lo, hi]` value range. Tier zero is always the exact unfunded choice; minimum-viable markers constrain funded tiers rather than forcing participation.

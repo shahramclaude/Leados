@@ -1,3 +1,26 @@
+## 2026-11-05 — The Hindsight Lock: were we right, or were we lucky? (Session 142, Schema v104, ADR-0102)
+
+**Shipped.** `#/hindsight` — the product could already say whether a decision *worked*; it now says whether it was *knowing*, and refuses to confuse the two. `RULE-HND-01` freezes the decision's **information set** in the transaction that records the decision (typed links with `createdOn` ≤ decision date, each resolved to its own record date), so the answer is history and cannot drift as the workspace grows. Every currently-linked fact is partitioned against that claim: **known** / **missed** (knowable, not consulted) / **later** (printed, never charged) / **undated** (excluded, never guessed). Coverage = `known / (known + missed)` with a Wilson (1927) 95% interval, **REFUSED** below three knowable facts. Process (≥4 of the module's own five `decisionQuality` requirements) × information (≥60%) × outcome gives `earned` / `resulted` / `variance` / `fixable` plus an honest `unmeasured` that prints its reason. Resulting share gated at `max(3, cell floor)`; the exact two-sided Fisher test refused below eight settled decisions; per-span cells below three suppressed. `RULE-HND-02..04` (83 rules on the shared spine) open one process review per successful mistake — **never twice** — one gap decision above two missed facts, and one weekly ask for a decision that passed its own review date ungraded. CSV #98, aggregate-only, identity-free, BLANK never zero.
+
+**Altitude coverage.**
+- *Frontline lead (rank 1)* — see which of its own decisions worked for the wrong reason, and the exact requirement that was missing. This is the only screen that tells a lead its good outcome was luck.
+- *Manager (rank 2–3)* — the resulting share over the subtree, with cells below three suppressed rather than printed; a `fixable` cluster shows which requirement keeps going missing.
+- *Director / VP (rank 4)* — re-declare conventions (`govern-hindsight`): quality floor, coverage bar, fact/gap/settled/cell floors and the review grace. Per-span rows are withheld here; counts by altitude survive.
+- *CEO (rank 5)* — an identity-free brief that prints its refusals instead of a number, safe to carry upward unchanged.
+
+**Open backlog (tagged by altitude).**
+- *All altitudes* — **`missed` is only visible if a later link was made.** A fact nobody ever linked cannot be found, so coverage measures the workspace's link hygiene as much as the decision. Recording "we looked at X" at decision time (an explicit consult action) would close it. **[PLANNED, largest gap — printed in the product.]**
+- *Manager+* — **decision-family hindsight**: a portfolio of related decisions (a programme, a hiring loop) judged as one information set, so a repeated miss is charged as a pattern rather than N isolated rows. **[PLANNED.]**
+- *Director+* — **pre-decision hand-off**: reuse a frozen lock as the starting brief for a *new* decision of the same type, so the workspace stops re-missing the same class of fact. **[PLANNED.]**
+- *All altitudes* — **real-browser AT walkthrough** of the six panels. **[UNVERIFIED today.]**
+
+**Deliberately rejected.**
+- A per-person "decision quality score" — the rating this product exists to refuse. *Rejected permanently.*
+- Recomputing coverage at read time — it would charge a decision for facts that arrived later. *Rejected.*
+- Treating an undated fact as known — it inflates coverage with the records whose date cannot be established. *Rejected.*
+- A single composite "hindsight index" — it would hide the refusals, which are the most informative output. *Rejected.*
+- Back-filling contemporaneous-looking locks for old decisions — a retrospective lock is marked `retrospective` and says so on the screen. *Rejected as silent history.*
+
 ## 2026-11-05 — Reputational capital: what an act costs to be believed (Session 141, Schema v103, ADR-0101)
 
 **Shipped.** `#/reputation` — a ledger that prices what an act costs to **guarantee** here, from records eight other modules already dated. Wilson (1927) score interval re-expressed in beta parameters over a **declared** per-class hazard, half-life decay, read off the interval (`solvent` / `encumbered` / `drawn-down` / `contested` / `expired` / `refused`), with every refusal printing its reason and never a zero. A bounded convex premium (`100 − (100−base)·e^−γ·max(0, ln(ask/stake))`) prices an ask larger than the stake across four engagement tiers (85/60/35/15) — Grossman–Hart residual control made operational. `RULE-RCL-01..05` on the shared spine (82 rules): `rests-on` provenance + one `rolls-up-to` per ancestor in the same transaction; one governed decision per span × class × ISO week; the ledger grades **its own frozen claim** once (`(claimP − y)²`). CSV #97, aggregate-only, identity-free, BLANK never zero.
