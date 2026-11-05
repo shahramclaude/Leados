@@ -1,3 +1,5 @@
+import { analyzeRouting, resolveSeatPath } from './core/domain/altitudeRouter.js';
+import { ALTITUDE_KEYS as ROUTING_ALTITUDE_KEYS, altitudeRank as routingAltitudeRank } from './core/domain/chainRegistry.js';
 /**
  * app/actions.js — every mutation in the application.
  *
@@ -65,7 +67,7 @@ import { analyzeMitigationRobustness, robustnessEvidenceKey, robustnessDecision,
 import { DEFAULT_POST_COMMIT_RULES } from './core/domain/postCommit.js';
 // ADR-0076: the Operating Seat — an enforced, altitude-aware access boundary
 // and a vertical roll-up derived live from the reporting tree (no new schema).
-import { seatReport, buildSeats } from './core/domain/seat.js';
+import { seatReport, buildSeats, activeSeat, canAct } from './core/domain/seat.js';
 import { SEAT_EVENTS, SEAT_PREMISE, UNDECLARED_SEAT } from './core/domain/seatRegistry.js';
 import { normalizeSeatId } from './core/domain/seatSchema.js';
 import { normalizeResponsePlans, RESPONSE_PLAN_CAP, validateResponseAssumptions } from './core/domain/responseSchema.js';
@@ -3751,8 +3753,17 @@ export function createApi(store, options = {}) {
         if (!plan || plan.status !== 'analyzed' || plan.fingerprint !== rp.fingerprint) {
           return fail('This routing plan is no longer pending, or the situation note or reporting tree changed since it was saved. Re-analyze before confirming.', 'routingPlan');
         }
-        if (typeof rp.confirmedAltitudeKey !== 'string' || !rp.confirmedAltitudeKey) return fail('Choose an organizational altitude.', 'confirmedAltitudeKey');
-        routingAdoption = { plan, confirmedAltitudeKey: rp.confirmedAltitudeKey };
+        if (!ROUTING_ALTITUDE_KEYS.includes(rp.confirmedAltitudeKey)) return fail('Choose an organizational altitude.', 'confirmedAltitudeKey');
+        const report = analyzeRouting(plan.sourceText || '', store.state, { now: new Date(stamp()), settings: store.state.settings || {} });
+        if (report.fingerprint !== plan.fingerprint || report.privacyBlocked) return fail('This routing plan is stale or confidential. Re-analyze before confirming.', 'routingPlan');
+        const resolved = resolveSeatPath(store.state, { analysis: report.analysis, altitude: { detectedRank: routingAltitudeRank(rp.confirmedAltitudeKey) }, now: new Date(stamp()), settings: store.state.settings || {} });
+        if (resolved.ladderTruncated) return fail('The reporting path exceeds the supported eight-seat limit. No incomplete roll-up was written.', 'scope');
+        const seat = activeSeat(resolved.built);
+        if (!seat.fullAccess && (!canAct('route-intake', seat).allow ||
+          [plan.ownerSeatId, resolved.ownerSeatId].some((id) => id !== seat.id && !seat.scope?.has(id)))) {
+          return fail('This route is outside your operating seat.', 'scope');
+        }
+        routingAdoption = { plan, confirmedAltitudeKey: rp.confirmedAltitudeKey, resolved };
       }
       let responseAdoption = null;
       if (data._responsePlan) {
@@ -3972,6 +3983,10 @@ export function createApi(store, options = {}) {
               row.status = 'confirmed';
               row.confirmedCaseId = caseRecord.id;
               row.confirmedAltitudeKey = routingAdoption.confirmedAltitudeKey;
+              row.ownerSeatId = routingAdoption.resolved.ownerSeatId;
+              row.ownerSeatLabel = routingAdoption.resolved.ownerSeatLabel;
+              row.effectiveRank = routingAdoption.resolved.effectiveRank;
+              row.seatPath = routingAdoption.resolved.seatPath.map(({ seatId, rank, altitudeKey, label, disclosure, horizonDays }) => ({ seatId, rank, altitudeKey, label, disclosure, horizonDays }));
               row.confirmedOn = today();
               row.updatedAt = stamp();
             }

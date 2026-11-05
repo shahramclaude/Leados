@@ -265,17 +265,17 @@ export function resolveSeatPath(state, { analysis, altitude, now = new Date(), s
   const built = buildSeats(state, { now, settings });
   const chain = built.chain;
   const people = (analysis?.entities?.people || []).map((p) => p.personId).filter(Boolean);
-  const ownerNodeId = people.length ? responsibleNodeId(chain, people) : LEADER_ID;
+  const operating = activeSeat(built);
+  const ownerNodeId = people.length ? responsibleNodeId(chain, people)
+    : (operating && !operating.fullAccess ? operating.id : LEADER_ID);
   const lcaRank = altitudeRank(chain.nodes.get(ownerNodeId)?.altitude) || 0;
   const stake = stakesFloor(analysis || {});
   const inferredRank = altitude.detectedRank || Math.min(5, Math.max(1, lcaRank || 1));
   const effectiveRank = Math.max(inferredRank, lcaRank, stake.floor);
   const escalated = escalationTarget(chain, ownerNodeId, effectiveRank);
-  const operating = activeSeat(built);
-  // With no named people, the declared operating seat is the honest owner;
-  // an undeclared workspace is owned at the enterprise root, never invented.
-  const ownerSeatId = people.length ? escalated.nodeId
-    : (operating && !operating.fullAccess ? operating.id : LEADER_ID);
+  // Start at the declared seat for an unnamed situation, then apply the same
+  // horizon and stakes floors. Never manufacture a seat the roster lacks.
+  const ownerSeatId = escalated.nodeId;
   const resolved = built.byId.get(ownerSeatId) || built.byId.get(LEADER_ID) || operating;
 
   const path = [];
@@ -305,6 +305,7 @@ export function resolveSeatPath(state, { analysis, altitude, now = new Date(), s
     effectiveRank, inferredRank, lcaRank, stakesFloorRank: stake.floor,
     stakesReasons: stake.reasons, peopleMatched: people,
     seatPath: path.slice(0, ROUTER_LIMITS.ladder),
+    ladderTruncated: path.length > ROUTER_LIMITS.ladder,
     disclosureText: ROUTER_DISCLOSURE,
   };
 }

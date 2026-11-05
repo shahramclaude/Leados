@@ -387,3 +387,32 @@ test('all five panels render axe-clean with semantic, keyboard-usable markup', a
   }
   dom.window.close();
 });
+
+test('human altitude override changes the actual atomic disclosure path, not only its label', () => {
+  const { store, api } = boot();
+  const saved = api.routingSaveDraft(FRONTLINE_NOTE);
+  const result = api.routingConfirm(saved.plan.id, { confirmedAltitudeKey: 'director' });
+  assert.equal(result.ok, true, result.error);
+  const plan = store.state.altitudeRoutingPlans.find((p) => p.id === saved.plan.id);
+  assert.equal(plan.detectedAltitudeKey, 'frontline');
+  assert.equal(plan.confirmedAltitudeKey, 'director');
+  assert.equal(plan.ownerSeatId, 'dir1');
+  assert.deepEqual(plan.seatPath.map((p) => p.seatId), ['dir1', 'vp1', 'leader']);
+  const links = store.state.links.filter((l) => l.ruleId === ROUTER_RULES.ROLLUP);
+  assert.ok(links.some((l) => l.relation === 'discloses-to' && l.targetId === 'dir1'));
+  assert.ok(links.some((l) => l.relation === 'rolls-up-to' && l.targetId === 'vp1'));
+  assert.ok(!links.some((l) => l.targetId === 'lead1' || l.targetId === 'mgr1'));
+  assert.ok(store.state.cases.some((c) => c.id === result.caseId));
+  assert.ok((store.lastPropagations || []).some((p) => p.ruleId !== ROUTER_RULES.ROLLUP));
+});
+
+test('oversized ladders are refused instead of silently losing senior roll-ups', () => {
+  const state = fixture();
+  for (let i = 0; i < 9; i++) state.people.push({ id: `extra${i}`, name: `Extra ${i}`, role: 'Lead', level: 'lead', managerId: i === 8 ? 'lead1' : `extra${i + 1}`, status: 'active' });
+  state.people.find((p) => p.id === 'ic1').managerId = 'extra0';
+  const { store, api } = boot(state);
+  const result = api.routingSaveDraft(FRONTLINE_NOTE);
+  assert.equal(result.ok, false);
+  assert.match(result.error, /eight-seat limit/);
+  assert.equal(store.state.altitudeRoutingPlans.length, 0);
+});
