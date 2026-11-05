@@ -20,6 +20,7 @@ import { createStrategyCycleActions } from './core/domain/strategyCycleActions.j
 // the same post-commit spine, not a second command bus.
 import { createFederationActions } from './core/domain/federationActions.js';
 import { createFreezeLineActions } from './core/domain/freezeLineActions.js';
+import { createSpanCalibrationActions } from './core/domain/spanCalibrationActions.js';
 // ADR-0092: the Differencing Defender's API mixin — the publication register is a
 // command boundary like every other module's.
 import { createDifferencingActions } from './core/domain/differencingActions.js';
@@ -19679,6 +19680,11 @@ export function createApi(store, options = {}) {
   // freeze lines and audit the timing guard. Line registration, degraded-line
   // decisions and redaction work are produced by RULE-FRZ-01..03 on the spine.
   Object.assign(api, createFreezeLineActions(store, { now: clock, idFactory: id }));
+  // ADR-0100: the Discretion Calibrator. Freezing measures the record and changes
+  // nothing; only a dated, full-access adoption moves the ladder, and the spine
+  // registers the reading, opens any falsified-rung decision and grades due
+  // readings in the SAME atomic transaction.
+  Object.assign(api, createSpanCalibrationActions(store, { now: clock, idFactory: id }));
   // ADR-0092: plan, publish, withdraw, scan — and the scoped register read.
   Object.assign(api, createDifferencingActions(store, { now: clock, idFactory: id }));
   // ADR-0094: the only writes are DECLARE, SCAN and SET-CONVENTIONS. Everything

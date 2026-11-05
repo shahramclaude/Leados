@@ -79,6 +79,12 @@ export const DEFAULT_RECORD_POLICY = Object.freeze({
 
 export const RECORD_POLICIES = Object.freeze({
   mandates: { classKey: 'authority', label: 'Decision-rights contracts', route: '#/mandates' },
+  // ADR-0100: a calibration reading is rung-level material — counts, intervals and
+  // verdicts, never a person or an item. The adoption ledger is the same class:
+  // it records a declaration about the ladder, not about anyone's work.
+  spanReadings: { classKey: 'unit', label: 'Discretion calibration readings', route: '#/span-calibration' },
+  spanAdoptions: { classKey: 'unit', label: 'Ladder adoption ledger', route: '#/span-calibration?panel=readings' },
+  spanMarkers: { classKey: 'unit', label: 'Calibration idempotency markers', route: '#/span-calibration' },
   // ADR-0086: a disclosure release is a bounded authority contract, so it is
   // readable at every altitude that can hold one — and its ledger is exactly
   // what makes the widening auditable afterwards.
@@ -364,6 +370,11 @@ export const ACTION_RIGHTS = Object.freeze({
   // run an explicit scan. Setting the WINDOW and the FLOORS is director-and-above
   // (checked in the action), because those numbers bound what everyone below reads.
   'govern-federation': { minRank: 1, maxRank: 5, label: 'Freeze or scan a scoped programme federation reading' },
+  // ADR-0100: every altitude may measure the ladder and grade a due reading —
+  // the measurement is identity-free. ADOPTING a ladder re-prices every span's
+  // escalation clock, so it is a workspace-leader declaration (enforced in the action).
+  'calibrate-span': { minRank: 1, maxRank: 5, label: 'Measure the leadership ladder against the record and grade a due reading' },
+  'adopt-ladder': { minRank: 1, maxRank: 5, label: 'Declare a calibrated leadership ladder in force, or restore the declared one' },
   // ADR-0094: every altitude that leads anyone may pre-register one bet about
   // its own work, and every altitude may explicitly grade a due cohort. Setting
   // the evidence/cell/skill conventions is director+ (enforced in the action),

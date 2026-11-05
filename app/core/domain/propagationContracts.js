@@ -116,6 +116,7 @@ import { strategyCycleRule } from './strategyCycleRules.js';
 // ADR-0090: the federation reading's three rules.
 import { federationRule } from './federationRules.js';
 import { freezeLineRule } from './freezeLineRules.js';
+import { spanCalibrationRule } from './spanCalibrationRules.js';
 import { cadenceRule } from './cadenceRules.js';
 import { carryoverRule } from './carryoverRules.js';
 
@@ -641,6 +642,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'federationRules.js',
     purpose: 'RULE-FED-01 writes one summarizes-span edge from a frozen federation assessment to the seat it assessed and one to every leadership ancestor above that seat in the SAME atomic transaction, plus one idempotent measurement marker — so the reading rolls up like any other record. RULE-FED-02 measures every declared child→parent edge from DATED CARRIAGE already written by other modules (envoy packet carriage, frozen renewal and cadence readings, accepted Catchball commitments, closed two-sided expectation rounds) and opens exactly ONE governed DACI decision per edge per ISO week when the edge is silent, bypassed or stale, owned at the span above the edge — naming the edge by altitude and typed id, never by a person. RULE-FED-03 records one reconnects edge and one marker when measured carriage resumes on an edge that once produced a silent-edge finding, and deliberately does NOT close the human decision. The module writes no measured channel, sends no message, changes no reporting line and rates no person. Marker-idempotent, pausable by federationAutoPropagate, and an explicit scan always runs.',
     writes: ['federationMarkers', 'decisions', 'links'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: spanCalibrationRule,
+    module: 'spanCalibrationRules.js',
+    purpose: 'RULE-SPC-01 registers a frozen discretion calibration as a graph node: one `calibrates` edge to the spans running the ladder and one `rolls-up-to` edge per leadership ancestor, in the SAME atomic transaction. RULE-SPC-02 measures each rung\'s survival at its declared span against the declared coverage promise and opens at most ONE governed DACI decision per falsified rung per ISO week, owned by the workspace leader and stating the interval and the two honest options — re-route the work or revise the span. RULE-SPC-03 opens one bounded review task per ISO week when the ladder has not been re-measured inside the declared review window, and one governed re-decision per ISO week when a calibrated ladder in force no longer matches the record. RULE-SPC-04 grades a due frozen reading ONCE, out of sample, on items opened after the freeze. The module never moves a horizon (adoption is a dated human command), never reads an individual-sensitive source, never rates or names a person and never edits the work it measures. Marker-idempotent, pausable by spanCalibrationAutoPropagate, and an explicit scan always runs.',
+    writes: ['spanMarkers', 'spanReadings', 'decisions', 'delegations', 'links'],
     emits: [],
     scansWorkspace: true,
   },

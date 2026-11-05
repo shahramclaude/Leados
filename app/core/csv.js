@@ -58,6 +58,7 @@ import { buildRobustAllocationReport, robustAllocationCsvRows } from './domain/r
 // allocations never enter the generic export path.
 import { buildClearingReport, clearingCsvRows } from './domain/clearing.js';
 import { buildFreezeLineReport, freezeLineCsvRows } from './domain/freezeLine.js';
+import { buildSpanCalibrationReport, spanCalibrationCsvRows } from './domain/spanCalibration.js';
 import { buildCadenceReport, cadenceCsvRows } from './domain/cadence.js';
 import { carryoverCsvRows } from './domain/carryover.js';
 import { valueStreamCsvRows } from './domain/valueStream.js';
@@ -1007,6 +1008,10 @@ export const CSV_EXPORTS = [
   // cell, one timing-guard row. NO reading id, NO design title, NO span id,
   // NO person, and NO carriage date — a suppressed row exports no date, ever.
   { key: 'freeze-line', label: 'Freeze-line continuity (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'freeze-line', description: 'One row per crossed freeze line (structural line date, kind, move count, before/after edge and connected counts, coverage and Wilson bounds, verdict, delta, pre-freeze assessment count), one row per altitude × continuity-class cell, and one timing-guard row. NO reading id, design title, span id, person, carriage date or free text. Suppressed and refused figures are BLANK rather than zero.' },
+  // CSV scope #96 (Schema v102, ADR-0100). Aggregate-only discretion calibration:
+  // one row per rung, one per proposed-rung counterfactual, one per span cell.
+  // NO reading id, node id, person, item title, record text or individual date.
+  { key: 'span-calibration', label: 'Discretion calibration (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'span-calibration', description: 'One row per altitude rung (declared span, decided and censored counts, censoring share, the measured span at the declared coverage with its test-inverted interval, survival at the declared span, verdict), one row per proposed-rung counterfactual and one per span roll-up cell. NO reading id, node id, person, item title, decision text or individual item date. Suppressed and refused figures are BLANK rather than zero.' },
   { key: 'differencing-register', label: 'Publication register (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'differencing-register', description: 'One row per published module plus one workspace row: release counts, provably-safe / protected / determined counts, withheld-cell and equation counts, the last publication date and the two stationarity statistics. NO span label, NO span id, NO person, NO record title, NO amount, and NO recovered value \u2014 a determined value is disclosed as a coordinate on the screen, never exported as a figure. A refused rate is BLANK rather than zero.' },
   { key: 'strategy-renewal', label: 'Strategy renewal (active-seat aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'strategy-renewal', description: 'Active-seat altitude and workspace learning rows only: active, carryover and overdue commitments, effort, in-window delivery reference with interval, evidence count and verdict. No pact IDs, bet IDs, titles, cohort identifiers, names or notes; refused and suppressed figures are BLANK rather than zero.' },
   // CSV scope #83 (Schema v94, ADR-0089). Aggregate-only operating-model
@@ -6014,6 +6019,19 @@ function buildScopeTable(state, scope, now) {
         'committed_capacity_days', 'overdue_n', 'mix_imbalanced_n', 'pivotal_n', 'pivotal_cleared_n',
         'hurdle_hold_pct', 'interval_low_pct', 'interval_high_pct', 'mean_brier', 'brier_skill_pct',
         'refused', 'reason'].map((key) => ({ key, header: key }));
+      return { columns, rows };
+    }
+    case 'span-calibration': {
+      // CSV scope #96 (Schema v102, ADR-0100). Aggregate-only and
+      // refusal-honest: a refused rung and a suppressed span cell export BLANK,
+      // never zero, and no individual item, person or record date is emitted.
+      const report = buildSpanCalibrationReport(state, { now, settings: state.settings || {} });
+      const rows = spanCalibrationCsvRows(report);
+      const columns = ['row_kind', 'altitude', 'altitude_rank', 'declared_days', 'declared_source',
+        'coverage_pct', 'decided_n', 'censored_n', 'censoring_pct', 'measured_days', 'pooled_measured_days',
+        'interval_low_days', 'interval_high_days', 'survival_at_declared_pct', 'survival_low_pct',
+        'survival_high_pct', 'verdict', 'withheld', 'n', 'change_n']
+        .map((key) => ({ key, header: key }));
       return { columns, rows };
     }
     case 'freeze-line': {

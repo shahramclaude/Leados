@@ -250,7 +250,7 @@ function buildEvidenceFixture() {
 
 describe('Schema v66 & normalizers', () => {
   test('the workspace is additive at 66 and the 65→66 migration carries both collections', () => {
-    assert.equal(SCHEMA_VERSION, 101);
+    assert.equal(SCHEMA_VERSION, 102);
     const empty = createEmptyState(NOW_ISO);
     assert.ok(Array.isArray(empty.evidenceReviews));
     assert.ok(Array.isArray(empty.evidenceMarkers));
@@ -259,8 +259,8 @@ describe('Schema v66 & normalizers', () => {
     delete v65.evidenceReviews;
     delete v65.evidenceMarkers;
     const migrated = migrate(JSON.parse(JSON.stringify(v65)));
-    assert.equal(migrated.raw.schemaVersion, 100);
-    assert.equal(migrated.raw.schemaVersion, 100);
+    assert.equal(migrated.raw.schemaVersion, 102);
+    assert.equal(migrated.raw.schemaVersion, 102);
     assert.ok(Array.isArray(migrated.raw.evidenceReviews));
     assert.ok(Array.isArray(migrated.raw.evidenceMarkers));
     assert.ok(migrated.applied.includes('65 → 66'));

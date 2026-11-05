@@ -391,6 +391,11 @@ export const LINK_ENTITY_TYPES = [
   // and every ancestor it rolled up to are `person` endpoints, exactly as the
   // command chain and the board room already express them.
   'federationassessment',
+  // ADR-0100 (Schema v102): a frozen discretion calibration. It carries rung
+  // verdicts, intervals, counts and dates only — never a person's name, an item
+  // title or a note — so the ladder's history is navigable from a rung and the
+  // spans it calibrates are navigable from the reading.
+  'spanreading',
   // ADR-0099 (Schema v101): a frozen freeze-line continuity reading. It
   // carries counts, verdicts and structural dates only — never a person's name,
   // a span's carriage date or a free-text note — so the line above a span can be
@@ -546,6 +551,9 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   federationassessment: 'federationAssessments',
   // ADR-0099: the freeze-line reading ledger owns the continuity node's IDs.
   freezereading: 'freezeReadings',
+  // ADR-0100: a frozen calibration reading (the adoption ledger is its own node
+  // only through the event log; an adoption is a declaration, not a work item).
+  spanreading: 'spanReadings',
   // ADR-0092: the publication register owns the release node's IDs. A proof node
   // has no collection of its own: it is a decision, and the map deliberately does
   // not alias it to `decisions`, so an ID collision cannot resurrect a proof as a
@@ -745,6 +753,9 @@ export const LINK_RELATIONS = [
   // ADR-0099: freeze-line provenance, written only by RULE-FRZ-01.
   'freezes',
   're-projects',
+  // ADR-0100: a frozen calibration calibrates the ladder those spans are running
+  // on. It is a measurement of a declaration, never of a person's work.
+  'calibrates',
   'develops',
   'consumes-capacity',
   'funds',

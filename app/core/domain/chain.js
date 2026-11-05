@@ -67,7 +67,7 @@ const LEADER_ID = 'leader';
 
 const isPlainObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
 
-function readPath(obj, path) {
+export function readPath(obj, path) {
   if (!path) return undefined;
   return String(path).split('.').reduce((acc, key) => (acc === null || acc === undefined ? acc : acc[key]), obj);
 }
@@ -453,7 +453,7 @@ function severityWeight(source, record) {
   return 1;
 }
 
-function peopleFrom(source, record, chain) {
+export function peopleFrom(source, record, chain) {
   const out = [];
   for (const spec of source.peoplePaths || []) {
     const value = readPath(record, spec.path);
@@ -466,13 +466,46 @@ function peopleFrom(source, record, chain) {
   return [...new Set(out)];
 }
 
+/**
+ * The ladder this workspace is actually running.
+ *
+ * `ALTITUDES` is the DECLARED ladder. The Discretion Calibrator (ADR-0100) can
+ * date a human adoption of a calibrated ladder, which lands in
+ * `settings.chainAdoptedHorizons` — one integer per altitude, already clamped and
+ * made monotone by the declaring action. Every horizon the chain reads goes
+ * through this function, so there is exactly one ladder in the product and no
+ * screen can quietly disagree about where a rung ends.
+ *
+ * With no adoption the declared table is returned untouched (same object), so
+ * behaviour is bit-identical for every workspace that never calibrated.
+ */
+export function ladderFor(settings = {}) {
+  const adopted = settings && typeof settings.chainAdoptedHorizons === 'object' && settings.chainAdoptedHorizons
+    ? settings.chainAdoptedHorizons
+    : null;
+  if (!adopted) return ALTITUDES;
+  let previous = 0;
+  return ALTITUDES.map((altitude) => {
+    const raw = Math.round(Number(adopted[altitude.key]));
+    const usable = Number.isFinite(raw) && raw > 0 ? Math.max(previous + 1, raw) : altitude.horizonDays;
+    previous = usable;
+    return Object.freeze({
+      ...altitude,
+      declaredHorizonDays: altitude.horizonDays,
+      horizonDays: usable,
+      horizonSource: 'calibrated',
+    });
+  });
+}
+
 /** The altitude an age places an item at: the first altitude whose span covers it. */
-export function altitudeForAge(ageDays) {
-  if (!Number.isFinite(ageDays)) return ALTITUDES[0];
-  for (const altitude of ALTITUDES) {
+export function altitudeForAge(ageDays, ladder = ALTITUDES) {
+  const table = Array.isArray(ladder) && ladder.length ? ladder : ALTITUDES;
+  if (!Number.isFinite(ageDays)) return table[0];
+  for (const altitude of table) {
     if (ageDays <= altitude.horizonDays) return altitude;
   }
-  return ALTITUDES[ALTITUDES.length - 1];
+  return table[table.length - 1];
 }
 
 /**
@@ -484,19 +517,23 @@ export function altitudeForAge(ageDays) {
  * counting missed rows would count the absences of a meeting that never got
  * scheduled in the first place.
  */
-export function harvestWork(state, chain, { now = new Date(), settings = null } = {}) {
-  const conventions = chainConventions(settings || state?.settings || {});
+export function harvestWork(state, chain, { now = new Date(), settings = null, includeClosed = false } = {}) {
+  const effective = settings || state?.settings || {};
+  const conventions = chainConventions(effective);
+  const ladder = ladderFor(effective);
   const cadenceDays = clampInt(state?.settings?.oneOnOneCadenceDays, 1, 90, 7);
   const nowDay = dayKey(now);
   const items = [];
 
-  const push = (source, record, openedOn, dueOn, people) => {
+  const push = (source, record, openedOn, dueOn, people, closedOn = null) => {
     const ageDays = daysBetween(openedOn, nowDay);
     if (ageDays === null) return;
+    const closed = closedOn ? daysBetween(openedOn, closedOn) : null;
+    if (closed !== null && closed < 0) return;
     const ownerNodeId = responsibleNodeId(chain, people);
     const ownerNode = chain.nodes.get(ownerNodeId);
     const ownerAltitude = ownerNode?.altitude || null;
-    const ageAltitude = altitudeForAge(ageDays);
+    const ageAltitude = altitudeForAge(ageDays, ladder);
     const requiredRank = Math.max(altitudeRank(ownerAltitude), ageAltitude.rank);
     const requiredAltitude = altitudeByRank(requiredRank) || ageAltitude;
     const overdueDays = dueOn ? daysBetween(dueOn, nowDay) : null;
@@ -512,6 +549,14 @@ export function harvestWork(state, chain, { now = new Date(), settings = null } 
       ageDays: Math.max(0, ageDays),
       dueOn: dueOn || null,
       overdueDays: overdueDays !== null && overdueDays > 0 ? overdueDays : 0,
+      // ADR-0100: the same harvester serves the calibration. A closed item also
+      // carries the day it was actually decided and the integer duration that
+      // day implies — the observation a survival curve is built from. Nothing
+      // else about the record is copied, so a calibration can never leak a note.
+      closed: closed !== null,
+      closedOn: closedOn && closed !== null ? closedOn : null,
+      durationDays: closed !== null ? closed : null,
+      censored: closed === null,
       people,
       ownerNodeId,
       ownerAltitude,
@@ -546,11 +591,24 @@ export function harvestWork(state, chain, { now = new Date(), settings = null } 
     const rows = Array.isArray(state?.[source.collection]) ? state[source.collection] : [];
     for (const record of rows) {
       if (!record || !record.id) continue;
-      if (!isOpenFor(source, record)) continue;
       const openedOn = dayKey(readPath(record, source.datePath)) || dayKey(record.createdAt);
       if (!openedOn) continue;
       const dueOn = source.duePath ? dayKey(readPath(record, source.duePath)) : null;
-      push(source, record, openedOn, dueOn, peopleFrom(source, record, chain));
+      const open = isOpenFor(source, record);
+      // ADR-0100: a closed record is only harvested when the caller asked for
+      // the whole history (the Discretion Calibrator does; nothing else does).
+      // Its closure date is the first recorded close path, read exactly as the
+      // chain reads a due date: no inference, no fallback to "when we noticed".
+      let closedOn = null;
+      if (!open && includeClosed) {
+        for (const path of source.closePaths || []) {
+          const value = dayKey(readPath(record, path));
+          if (value) { closedOn = value; break; }
+        }
+        if (!closedOn) continue;
+      }
+      if (!open && !includeClosed) continue;
+      push(source, record, openedOn, dueOn, peopleFrom(source, record, chain), closedOn);
     }
   }
 
@@ -879,12 +937,16 @@ export function survivalEstimate(state, { now = new Date(), settings = null, con
  * dependence between items; the independence product is printed beside it. An
  * item already past the threshold is counted as certain, not modelled.
  */
-export function escalationForecast(chain, items, nodeId, survival, { settings = null, conventions = null } = {}) {
+export function escalationForecast(chain, items, nodeId, survival, { settings = null, conventions = null, ladder = null } = {}) {
   const conv = conventions || chainConventions(settings || {});
+  // ADR-0100: the threshold this forecast quotes is the NEXT rung's horizon on
+  // the ladder the workspace is actually running (declared, or human-adopted
+  // from a calibration). One ladder, read here like everywhere else.
+  const table = Array.isArray(ladder) && ladder.length ? ladder : ladderFor(settings || {});
   const node = chain.nodes.get(nodeId);
   if (!node) return { refused: 'no such node', members: [], predictedAnyBreachPct: null };
   const nodeRank = altitudeRank(node.altitude);
-  const nextAltitude = altitudeByRank(nodeRank + 1);
+  const nextAltitude = table.find((altitude) => altitude.rank === nodeRank + 1) || altitudeByRank(nodeRank + 1);
   if (!nextAltitude) {
     return {
       refused: 'this is the highest altitude the ladder defines — there is no level above it to breach into',
@@ -1038,7 +1100,8 @@ export function chainReport(state = {}, now = new Date(), rawSettings = null) {
     };
   }).sort((a, b) => a.rank - b.rank || a.depth - b.depth || a.name.localeCompare(b.name));
 
-  const ladder = ALTITUDES.map((altitude) => {
+  const effectiveLadder = ladderFor(settings || {});
+  const ladder = effectiveLadder.map((altitude) => {
     const atAltitude = spans.filter((span) => span.rank === altitude.rank);
     const rollup = atAltitude.reduce((acc, span) => ({
       openN: acc.openN + span.dossier.openN,
@@ -1054,6 +1117,8 @@ export function chainReport(state = {}, now = new Date(), rawSettings = null) {
       shortLabel: altitude.shortLabel,
       unitLabel: altitude.unitLabel,
       horizonDays: altitude.horizonDays,
+      declaredHorizonDays: altitude.declaredHorizonDays ?? altitude.horizonDays,
+      horizonSource: altitude.horizonSource || 'declared',
       stance: altitude.stance,
       decisionForm: altitude.decisionForm,
       decisionQuestion: altitude.decisionQuestion,
@@ -1074,7 +1139,7 @@ export function chainReport(state = {}, now = new Date(), rawSettings = null) {
   const leaderId = LEADER_ID;
   const leaderDossier = dossiers.get(leaderId);
   const leaderDrift = altitudeDrift(chain, items, leaderId, { conventions });
-  const leaderForecast = escalationForecast(chain, items, leaderId, survival, { settings, conventions });
+  const leaderForecast = escalationForecast(chain, items, leaderId, survival, { settings, conventions, ladder: effectiveLadder });
 
   const escalationQueue = items
     .filter((item) => item.requiredRank > item.ownerRank)
@@ -1139,6 +1204,19 @@ export function chainReport(state = {}, now = new Date(), rawSettings = null) {
     totals,
     findings: chain.findings,
     ungradedDue,
+    // ADR-0100: which ladder produced every horizon on this page. A frozen
+    // reading must say which one it was taken against, or a later adoption
+    // silently rewrites what the reading claimed.
+    ladderMeta: {
+      source: effectiveLadder[0]?.horizonSource === 'calibrated' ? 'calibrated' : 'declared',
+      adoptedOn: (settings || state?.settings || {}).chainAdoptedOn || null,
+      adoptedReadingId: (settings || state?.settings || {}).chainAdoptedReadingId || null,
+      rungs: effectiveLadder.map((altitude) => ({
+        key: altitude.key,
+        horizonDays: altitude.horizonDays,
+        declaredHorizonDays: altitude.declaredHorizonDays ?? altitude.horizonDays,
+      })),
+    },
     readings: Array.isArray(state.chainReadings) ? state.chainReadings : [],
   };
 }
