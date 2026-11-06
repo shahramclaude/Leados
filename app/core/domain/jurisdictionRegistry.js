@@ -229,6 +229,7 @@ export const JUR_PANELS = Object.freeze([
   Object.freeze({ key: 'map', label: 'The map', note: 'Every cross-span objective: which branches hold it, and whether any one seat below the ancestor can resolve it whole.' }),
   Object.freeze({ key: 'hygiene', label: 'Pointer hygiene', note: 'Counted refusals for open work with no objective pointer or a dangling/dropped goal id — with span-scoped anchoring below the detail ceiling.' }),
   Object.freeze({ key: 'options', label: 'Governance options', note: 'Three priced routes per cluster — coalition, escalation, boundary redraw — with the arithmetic and every refusal printed.' }),
+  Object.freeze({ key: 'redraw', label: 'Boundary rehearsal', note: 'A dry run of a proposed reporting-line move: which cross-branch objectives collapse, which rolls-up-to edges move and which unsettled governed decisions go stale. Nothing is written.' }),
   Object.freeze({ key: 'grades', label: 'Forecast grades', note: 'Each governance route the ledger predicted, graded once against the dated decision a human actually made.' }),
   Object.freeze({ key: 'method', label: 'Method & refusals', note: 'Every declared convention, bound, framework and refusal this screen can print.' }),
 ]);

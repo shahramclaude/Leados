@@ -1,3 +1,30 @@
+## 2026-11-06 · Session 152: The Boundary-redraw rehearsal ([ADR-0112](./docs/adr/0112-boundary-redraw-rehearsal.md) · Schema v111 unchanged)
+
+- **New feature:** `#/jurisdiction?panel=redraw` — a director-and-above
+  dry run of a proposed reporting-line change (up to 3 moves). Re-runs the
+  ADR-0109 harvest → price pipeline on a cloned roster and diffs the two
+  books: `collapsed` / `created` / `changed` cross-branch clusters, a
+  before/after ledger with declared-unit break-even, edge-by-edge
+  `rolls-up-to` audience recomputation (findings + span readings), and
+  unsettled RULE-JUR-02 governed decisions flagged stale
+  (`gap-closed` / `lca-moved`); settled decisions never go stale.
+  Refused moves print verbatim (`cycle-move`, `noop-move`, `too-many-moves`,
+  …). **Writes nothing** — purity asserted by deep-equal in the suite.
+- **Enforcement:** declared non-full-access seats rehearse inside their own
+  `subtreeIds` with objective pointers as ordinals and out-of-span roll-up
+  targets masked; rank 1–2 declared seats and read-only/unresolved seats
+  refuse the form; the operator view is unenforced.
+- **Fixed on the same surface:** jurisdiction **Export aggregate CSV** called
+  `serializeCsv`/`downloadText` with wrong contracts (file could never save,
+  handler would throw) — now wired with a copyable fallback. ADR-0111 INDEX
+  row added; `docs/adr/INDEX.md` also carries ADR-0112.
+- **Tests:** `redraw-rehearsal` 16/16; `jurisdiction` 12/12;
+  `disclosure-compiler` 21/21 (LEAK ORACLE clean); lint PASS; boundary
+  547 modules / 156 suites / 0 leaks; links PASS (871 / 229).
+- **Known limits:** seats are workflow declarations, not authentication;
+  break-even is declared-unit model arithmetic, not money; full 156-suite
+  `npm test` and the real-browser walkthrough remain [UNVERIFIED].
+
 ## 2026-11-06 · Session 150: The event budget stops silently discarding work ([ADR-0110](./docs/adr/0110-derived-event-budget.md) · no schema bump)
 
 - **Fixed (P0 defect, all altitudes):** the shared spine's derived-event cap
