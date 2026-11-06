@@ -1,3 +1,20 @@
+## 2026-11-06 — The Boundary-redraw rehearsal (`#/jurisdiction?panel=redraw`, ADR-0112, Schema v111 unchanged)
+
+**Implemented [director / VP / CEO; frontline & manager excluded with a printed explanation].**
+A pure dry run of a proposed reporting-line change (up to 3 moves). Re-runs the
+real harvest → price pipeline on a cloned roster and diffs the two books:
+collapsed / created / moved cross-branch objectives; before/after ledger with a
+declared-unit break-even; edge-by-edge `rolls-up-to` audience recomputation
+(findings and span readings); unsettled RULE-JUR-02 governed decisions flagged
+stale (`gap-closed` / `lca-moved`) — settled decisions can never go stale.
+Refused moves print verbatim (`cycle-move`, `noop-move`, `too-many-moves`, …).
+Nothing is written, moved or accepted. Declared seats without full access
+rehearse inside their own span with objective pointers as ordinals and
+out-of-span roll-up targets masked; rank 1–2 declared seats refuse the form.
+Also fixed on the same surface: the jurisdiction **Export aggregate CSV**
+button's `serializeCsv`/`downloadText` contract mismatch (now works, copyable
+fallback).
+
 ## 2026-11-06 — Outcome Learning Loop (`#/mission?panel=learning`, ADR-0107, Schema v109)
 
 **Implemented [all altitudes].** Freeze a reviewed confidence at adoption; grade

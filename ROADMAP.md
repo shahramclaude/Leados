@@ -1,3 +1,61 @@
+## 2026-11-06 — The Boundary-redraw rehearsal (Session 152, Schema v111 unchanged, [ADR-0112](./docs/adr/0112-boundary-redraw-rehearsal.md), `#/jurisdiction?panel=redraw`)
+
+**Implemented [director / VP / CEO primary; frontline & manager excluded with a printed explanation].**
+Closed the #1 roadmap target carried since Sessions 149–151 (`Boundary-redraw
+rehearsal`) with no schema bump, no new rule and no new collection:
+
+- **[director (rank 3) / VP (rank 4) / CEO (rank 5) — primary]**
+  `#/jurisdiction?panel=redraw` is a DRY RUN of a proposed reporting-line
+  change (up to three moves: person → destination span, or the workspace
+  leader). The engine re-harvests every open case, call and funded item on a
+  cloned roster, re-prices every cross-branch objective through the real
+  ADR-0109 pipeline, and diffs the two books. It prints: clusters that
+  **collapse** (the gap closes), clusters that are **created** (the redraw
+  tears one open), clusters that merely **move** (LCA rung, coalition size,
+  escalation rungs, predicted route, verdict, coordination units), the
+  before/after ledger (cross-branch count, priced, refused, handoff pairs,
+  rungs, predicted-route units) with a declared-unit break-even, every
+  persisted `rolls-up-to` edge whose audience would change (withdrawn/added,
+  edge by edge, for findings AND span readings), and every unsettled
+  RULE-JUR-02 governed decision that would go stale (`gap-closed` when its
+  cluster collapses; `lca-moved` when its LCA changes rung). Settled
+  decisions can never go stale. **Nothing is written, moved, accepted or
+  emitted** — the live graph is untouched (asserted by deep-equal in the
+  suite). Refused moves are printed verbatim (`unknown-person`,
+  `unknown-manager`, `self-move`, `noop-move`, `cycle-move` — a person
+  cannot be re-parented under their own descendant, `duplicate-move`,
+  `too-many-moves`, `leader-move`).
+- **Declared seats without full access rehearse inside their own span.**
+  Objective pointers become ordinals and any roll-up target outside the
+  seat's `subtreeIds` is masked as "A span above your boundary"; sources and
+  destinations are limited to the seat's span plus the workspace leader as
+  destination. The undeclared operator view is unenforced. Rank 1–2 declared
+  seats see a printed explanation instead of the form; read-only/unresolved
+  seats are refused the form.
+- **Altitude coverage map (updated Session 152):**
+  - *Frontline (rank 1):* Active — unchanged this session (Pointer hygiene primary surface, Session 151); excluded from the rehearsal by design with a printed explanation.
+  - *Mid-manager (rank 2):* Active — unchanged this session (span-scoped hygiene + peer-handoff filter, Session 151); excluded from the rehearsal by design.
+  - *Director (rank 3):* Active — boundary-redraw rehearsal inside own span (Session 152); completeness bounds + suppressed cells (149/151).
+  - *VP / Executive (rank 4):* Active — function-wide boundary-redraw rehearsal with span-scoped enforcement for enforced seats; dark-work selection exposure (148/149/151/152).
+  - *CEO / C-suite (rank 5):* Active — whole-enterprise dry run of a reporting-line change before any accepted boundary decision; altitude table & board synthesis (148/149/151).
+- **Also fixed this session (reliability, same surface):** the jurisdiction
+  **Export aggregate CSV** button called `serializeCsv` with a single object
+  and `downloadText` with positional arguments — a file that could never
+  download and would throw in the click handler (the same defect class fixed
+  in `#/succession` earlier). Now uses the real contracts with a copyable
+  fallback. And ADR-0111's INDEX row was missing; added alongside ADR-0112.
+
+**Next targets, altitude-tagged.**
+- [exec / chief] **Cross-week jurisdiction drift**: a conformal trend over ISO
+  weeks of cross-branch share and median coalition size, refused below four
+  weeks, with the pooled rate beside the mean of unit rates.
+- [all altitudes] **Bounded epistemic backlog policy**: cap `RULE-EPI-02`
+  decisions opened per transaction per span per ISO week, with the remainder
+  deferred and printed.
+- [all altitudes] **Multi-span LCA repair in `chain.js`**: audit the ~80 other
+  callers of `lowestCommonAncestor`; fix the shared helper with a parity test.
+- [all altitudes] Access-registry polish carried forward from Session 148.
+
 ## 2026-11-06 — Objective-pointer hygiene & span-scoped mandate anchoring (Session 151, Schema v111, [ADR-0111](./docs/adr/0111-objective-pointer-hygiene.md))
 
 **Implemented [frontline / manager primary → director / VP / CEO roll-up].**

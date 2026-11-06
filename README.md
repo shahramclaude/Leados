@@ -1,3 +1,27 @@
+## 2026-11-06 — The Boundary-redraw rehearsal (Session 152, Schema v111 unchanged, [ADR-0112](./docs/adr/0112-boundary-redraw-rehearsal.md))
+
+`#/jurisdiction?panel=redraw` — a **dry run** of an organisational boundary
+change for Directors, VPs and the CEO, the pre-acceptance instrument behind
+the compiler's `redraw` governance route. Pick up to three reporting-line
+moves (person → destination span, or the workspace leader); LeadOS re-harvests
+every open case, call and funded item on a cloned roster, re-prices every
+cross-branch objective, and diffs the two books. You see which
+shared-objective gaps **collapse**, which **new** cross-branch objectives the
+redraw would tear open, which merely **move** (ancestor rung, coalition,
+rungs, predicted route, declared coordination units with a declared-unit
+break-even), which persisted `rolls-up-to` edges would change audience —
+edge by edge, for frozen findings and span readings — and which unsettled
+governed decisions would go stale (`gap-closed` / `lca-moved`). Refused moves
+are printed verbatim (a person cannot be re-parented under their own
+descendant). **Nothing is written, moved or accepted** — accepting an actual
+redraw remains a separate human decision. Declared seats without full access
+rehearse inside their own span with objective pointers as ordinals and
+out-of-span roll-up targets masked; rank 1–2 seats see an explanation, not
+the form. Also fixed on the same surface: the jurisdiction **Export aggregate
+CSV** button could never download (wrong `serializeCsv` / `downloadText`
+contracts — the same defect class fixed in `#/succession`); it now works with
+a copyable fallback.
+
 ## 2026-11-06 — Objective-pointer hygiene in the Jurisdiction Compiler (Session 151, Schema v111, [ADR-0111](./docs/adr/0111-objective-pointer-hygiene.md))
 
 `#/jurisdiction` now adds a fifth panel — **Pointer hygiene**

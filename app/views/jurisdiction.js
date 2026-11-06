@@ -2,13 +2,16 @@
  * app/views/jurisdiction.js — `#/jurisdiction`, the Jurisdiction Compiler
  * (ADR-0109, ADR-0111, Schema v111).
  *
- * Five panels, five questions, and a DIFFERENT answer at every altitude:
+ * Six panels, six questions, and a DIFFERENT answer at every altitude:
  *   Map      "Which of my objectives is another branch also working, and who
  *            could resolve the whole thing?"
  *   Hygiene  "Which open work records carry no objective pointer or name a
  *            dropped/deleted goal — and what can my span anchor right now?"
  *   Options  "What do the coalition, the escalation and the boundary redraw
  *            each cost — and which one does the record actually favour?"
+ *   Redraw   "If I re-parent this branch head, which cross-branch objectives
+ *            collapse, which rolls-up-to edges move, which governed decisions
+ *            go stale — and what did nothing?" (director-and-above; dry run)
  *   Grades   "Was the governance route this ledger predicted the one a human
  *            chose?"
  *   Method   "What is declared, clamped, named and refused?"
@@ -31,6 +34,9 @@ import {
 import {
   jurisdictionRead, jurCsvRows, JUR_CSV_COLUMNS, jurConventions,
 } from '../core/domain/jurisdiction.js';
+import {
+  rehearseBoundaryRedraw, redrawBrief, REDRAW_LIMITS,
+} from '../core/domain/redrawRehearsal.js';
 
 const PANELS = JUR_PANELS;
 const dash = (v) => (v === null || v === undefined || v === '' ? '—' : String(v));
@@ -439,6 +445,303 @@ function gradesPanel(ctx, read) {
     h('p', { class: 'tiny muted' }, 'A missing choice, a missing date or a postdated review is a STORED REFUSAL, never a miss. Nothing here rates a leader; the unit is one objective and one dated decision.'));
 }
 
+/* -------------------------------------------- boundaries as a premortem */
+
+const redrawPersonLabel = (p) => `${p.name || p.id}${p.role ? ` — ${p.role}` : ''}${p.team ? ` (${p.team})` : ''}`;
+
+function rehearsalStats(report) {
+  const d = report.deltas || {};
+  const sign = (v) => (v === null || v === undefined ? '—' : `${v >= 0 ? '+' : ''}${v}`);
+  return h('div', { class: 'grid-4' },
+    stat({ label: 'Cross-branch objectives', value: `${report.before.crossBranch} → ${report.after.crossBranch}`, hint: `Δ ${sign(d.crossBranch)} across the redraw` }),
+    stat({ label: 'Predicted coordination load', value: `${dash(report.before.recommendedUnits)} → ${dash(report.after.recommendedUnits)}`, hint: `Δ ${sign(d.recommendedUnits)} declared units, per pricing period` }),
+    stat({ label: 'One-off redraw cost', value: `${report.oneOffUnits} units`, hint: `${report.moves.length} move(s) × declared jurRedrawUnits` }),
+    stat({ label: 'Break-even', value: report.breakEvenPeriods === null ? '—' : `${report.breakEvenPeriods} period(s)`, hint: report.breakEvenPeriods === null ? 'Load does not fall — see note below' : 'On declared units, not money' }));
+}
+
+function changeTable({ caption, rows, emptyMessage, columns }) {
+  return table({ caption, emptyMessage, columns, rows });
+}
+
+/**
+ * A declared, enforced (non-full-access) seat rehearses inside its own span:
+ * objective pointers are replaced with ordinals and roll-up targets outside
+ * the seat's scope are named only as "a span above your boundary" — the same
+ * compiled-altitude ceiling the Map honours. The operator view prints real
+ * names. `scope === null` means unenforced (operator).
+ */
+export function redactRehearsalReport(report, scope) {
+  if (!scope) return report;
+  const ordinals = new Map();
+  const anon = (key) => {
+    const k = String(key || '');
+    if (!ordinals.has(k)) ordinals.set(k, `Objective ${ordinals.size + 1}`);
+    return ordinals.get(k);
+  };
+  const maskSpan = (id, name) => ((id === 'leader' || scope.has(String(id))) ? name : 'A span above your boundary');
+  const maskEdge = (id, name) => (scope.has(String(id)) || String(id) === 'leader' ? name : 'A span above your boundary');
+  const mapEdges = (row) => ({
+    ...row,
+    findingId: null,
+    governedDecisionId: null,
+    objective: anon(row.objectiveKey),
+    objectiveKey: null,
+    withdrawn: (row.withdrawn || []).map((n, i) => maskEdge((row.withdrawnIds || [])[i], n)),
+    added: (row.added || []).map((n, i) => maskEdge((row.addedIds || [])[i], n)),
+    withdrawnIds: [],
+    addedIds: [],
+  });
+  return {
+    ...report,
+    collapsed: report.collapsed.map((r) => ({ ...r, objectiveKey: null, objective: anon(r.objectiveKey), lcaBefore: maskSpan(r.lcaBeforeId, r.lcaBefore), lcaAfter: maskSpan(r.lcaAfterId, r.lcaAfter), lcaBeforeId: null, lcaAfterId: null })),
+    created: report.created.map((r) => ({ ...r, objectiveKey: null, objective: anon(r.objectiveKey), lcaAfter: maskSpan(r.lcaAfterId, r.lcaAfter), lcaBeforeId: null, lcaAfterId: null })),
+    changed: report.changed.map((r) => ({ ...r, objectiveKey: null, objective: anon(r.objectiveKey), lcaBefore: maskSpan(r.lcaBeforeId, r.lcaBefore), lcaAfter: maskSpan(r.lcaAfterId, r.lcaAfter), lcaBeforeId: null, lcaAfterId: null })),
+    rollups: {
+      ...report.rollups,
+      moved: report.rollups.moved.map(mapEdges),
+      readingMoves: report.rollups.readingMoves.map((r) => ({ ...r, nodeId: null, readingId: null, spanName: scope.has(String(r.nodeId)) ? r.spanName : 'A span above your boundary' })),
+    },
+    decisions: { ...report.decisions, stale: report.decisions.stale.map((d) => ({ ...d, decisionId: null, objective: anon(d.objectiveKey), objectiveKey: null, fromLca: maskSpan(d.fromLcaId, d.fromLca), toLca: maskSpan(d.toLcaId, d.toLca), fromLcaId: null, toLcaId: null })) },
+  };
+}
+
+function renderRehearsalResults(report, ctx) {
+  const frag = h('div', { class: 'stack' });
+  frag.appendChild(banner({
+    tone: report.ok ? 'good' : 'warn',
+    title: report.ok ? 'Rehearsal complete — nothing was written' : 'Rehearsal refused',
+    body: report.ok ? report.disclaimer : (report.reasonNote || 'No valid move was selected.'),
+  }));
+  if (!report.ok) {
+    if (report.refusedMoves?.length) {
+      frag.appendChild(table({
+        caption: 'Refused moves — printed, never silently dropped', emptyMessage: 'No refused moves.',
+        columns: [{ label: 'Person', render: (r) => dash(r.personName || r.personId || '—') }, { label: 'Destination', key: 'to' }, { label: 'Reason', key: 'reasonNote' }],
+        rows: report.refusedMoves,
+      }));
+    }
+    return frag;
+  }
+  if (report.refusedMoves?.length) {
+    frag.appendChild(banner({
+      tone: 'warn',
+      title: `${report.refusedMoves.length} move(s) were refused and were NOT applied`,
+      body: 'The rehearsal ran on the surviving moves only. Each refusal is printed below with its reason.',
+    }));
+    frag.appendChild(table({
+      caption: 'Refused moves', emptyMessage: 'None.',
+      columns: [{ label: 'Person', render: (r) => dash(r.personName || r.personId || '—') }, { label: 'Destination', key: 'to' }, { label: 'Reason', key: 'reasonNote' }],
+      rows: report.refusedMoves,
+    }));
+  }
+  frag.appendChild(card({
+    title: 'Proposed moves',
+    subtitle: 'Applied to a cloned roster only. The live workspace is untouched.',
+    body: table({
+      caption: 'Reporting lines the rehearsal moved', emptyMessage: 'No moves applied.',
+      columns: [
+        { label: 'Person', render: (r) => dash(r.personName || r.personId) },
+        { label: 'From', render: (r) => dash(r.fromManagerName || 'Workspace leader') },
+        { label: 'To', render: (r) => dash(r.toManagerName || 'Workspace leader') },
+      ],
+      rows: report.moves,
+    }),
+  }));
+  frag.appendChild(rehearsalStats(report));
+  frag.appendChild(h('p', { class: 'tiny muted' }, report.breakEvenNote));
+
+  const caps = changeTable({
+    caption: 'COLLAPSES — cross-branch objectives that would close under the redraw',
+    emptyMessage: 'No cross-branch objective would collapse.',
+    columns: [
+      { label: 'Objective', key: 'objective' },
+      { label: 'Branches before', key: 'branchesBefore' },
+      { label: 'Branches after', key: 'branchesAfter' },
+      { label: 'Predicted route after', render: (r) => dash(r.predictedAfter || 'single-span') },
+    ],
+    rows: report.collapsed,
+  });
+  frag.appendChild(caps);
+  if (report.collapsedN > report.collapsed.length) frag.appendChild(h('p', { class: 'tiny muted' }, `…and ${report.collapsedN - report.collapsed.length} more collapse(s) beyond the printed cap.`));
+
+  frag.appendChild(changeTable({
+    caption: 'CREATED — single-branch objectives the redraw would tear open',
+    emptyMessage: 'No new cross-branch objective would be created.',
+    columns: [
+      { label: 'Objective', key: 'objective' },
+      { label: 'Branches after', key: 'branchesAfter' },
+      { label: 'Ancestor after', render: (r) => `${dash(r.lcaAfter)} (rank ${dash(r.lcaAfterRank)})` },
+      { label: 'Predicted route after', render: (r) => dash(r.predictedAfter) },
+      { label: 'Verdict after', render: (r) => badge(r.verdictAfter || '—', r.verdictAfter === 'priced' ? 'good' : 'neutral') },
+    ],
+    rows: report.created,
+  }));
+  if (report.createdN > report.created.length) frag.appendChild(h('p', { class: 'tiny muted' }, `…and ${report.createdN - report.created.length} more created gap(s) beyond the printed cap.`));
+
+  frag.appendChild(changeTable({
+    caption: 'MOVED — still cross-branch, but the geometry changes',
+    emptyMessage: 'No surviving cross-branch objective changes LCA, coalition, rungs or route.',
+    columns: [
+      { label: 'Objective', key: 'objective' },
+      { label: 'Ancestor before', render: (r) => `${dash(r.lcaBefore)} (rank ${dash(r.lcaBeforeRank)})` },
+      { label: 'Ancestor after', render: (r) => `${dash(r.lcaAfter)} (rank ${dash(r.lcaAfterRank)})` },
+      { label: 'Branches', render: (r) => `${r.branchesBefore} → ${r.branchesAfter}` },
+      { label: 'Rungs', render: (r) => `${r.rungsBefore} → ${r.rungsAfter}` },
+      { label: 'Route', render: (r) => `${dash(r.predictedBefore)} → ${dash(r.predictedAfter)}` },
+      { label: 'Δ units', render: (r) => dash(r.deltaUnits) },
+    ],
+    rows: report.changed,
+  }));
+  if (report.changedN > report.changed.length) frag.appendChild(h('p', { class: 'tiny muted' }, `…and ${report.changedN - report.changed.length} more moved objective(s) beyond the printed cap.`));
+
+  frag.appendChild(card({
+    title: 'Persisted rolls-up-to edges that would move',
+    subtitle: 'The audience of each frozen finding (and each span reading) is recomputed on the hypothetical tree. An edge that no longer reaches the right seat is named, not silently rewritten.',
+    body: h('div', { class: 'stack' },
+      report.rollups.moved.length
+        ? table({
+          caption: 'Finding roll-ups whose audience would change', emptyMessage: 'None.',
+          columns: [
+            { label: 'Objective', key: 'objective' },
+            { label: 'Why', key: 'reason' },
+            { label: 'Withdraw', render: (r) => r.withdrawn.join(', ') || '—' },
+            { label: 'Add', render: (r) => r.added.join(', ') || '—' },
+          ],
+          rows: report.rollups.moved,
+        })
+        : h('p', { class: 'muted' }, 'No persisted finding roll-up would change audience.'),
+      h('p', { class: 'tiny muted' }, `Finding edges: ${report.rollups.withdrawnEdges} withdrawn · ${report.rollups.addedEdges} added. Span readings: ${report.rollups.readingWithdrawn} withdrawn · ${report.rollups.readingAdded} added across ${report.rollups.readingMoves.length} reading(s).`)),
+  }));
+
+  frag.appendChild(card({
+    title: 'Unsettled governed decisions that would go stale',
+    subtitle: 'A decision framed to an ancestor the redraw moves names the wrong seat — exactly the drift an agent exploits (Jensen & Meckling 1976). Stale is a prompt to re-frame, never a verdict.',
+    body: h('div', { class: 'stack' },
+      report.decisions.stale.length
+        ? table({
+          caption: 'Governed decisions to re-frame or withdraw BEFORE accepting the redraw', emptyMessage: 'None.',
+          columns: [
+            { label: 'Decision', key: 'title' },
+            { label: 'Objective', key: 'objective' },
+            { label: 'Why stale', key: 'reasonNote' },
+          ],
+          rows: report.decisions.stale,
+        })
+        : h('p', { class: 'muted' }, 'No unsettled governed decision would go stale.'),
+      h('p', { class: 'tiny muted' }, `${report.decisions.settledN} settled decision(s) cannot go stale · ${report.decisions.stillValidN} unsettled decision(s) remain valid at their current rung.`)),
+  }));
+
+  frag.appendChild(h('div', { class: 'row', style: 'gap:8px;flex-wrap:wrap;' },
+    h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => {
+      const text = redrawBrief(report);
+      const saved = downloadText({ filename: `leados-boundary-rehearsal-${String(ctx.now.toISOString()).slice(0, 10)}.txt`, text, mime: 'text/plain' });
+      if (saved) { toast('Rehearsal brief downloaded.', 'good'); return; }
+      const copy = h('textarea', { class: 'input', rows: 12, readonly: true }, text);
+      openModal({
+        title: 'Download blocked — copy the brief',
+        body: h('div', { class: 'stack' }, h('p', null, 'This browser refused the file download. The rehearsal brief is below; select and copy it.'), copy),
+        footer: [h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => closeAllModals() }, 'Close')],
+      });
+      copy.focus(); copy.select();
+    } }, 'Download rehearsal brief'),
+    h('p', { class: 'tiny muted', style: 'flex:1;min-width:200px;' }, 'Ephemeral by design: the report lives in this panel only. Nothing is persisted, so a rehearsal can never half-happen. Accepting an actual redraw is a separate, governed human decision.')));
+  return frag;
+}
+
+function redrawPanel(ctx, read) {
+  const seat = read.seat;
+  const rank = seat?.rank || 0;
+  const enforced = Boolean(seat && !seat.fullAccess);
+  const scope = enforced && seat.scope instanceof Set ? seat.scope : null;
+  const canRehearse = !seat || (!seat.readOnly && (seat.fullAccess || rank >= 3));
+  if (!canRehearse) {
+    return h('div', { class: 'stack' },
+      banner({
+        tone: 'info',
+        title: 'The boundary rehearsal is a director-and-above instrument',
+        body: 'Re-parenting a reporting line is an org-design act held at rank 3 and above (or by a full-access seat). Your seat reads the Jurisdiction map and pointer hygiene instead — the rehearsal names spans across the unit, which is above a rank 1–2 detail boundary.',
+      }),
+      card({ title: 'What it would show you', subtitle: 'So you know what to ask your director for.',
+        body: h('ul', { class: 'stack' },
+          h('li', null, 'Which cross-branch objectives would collapse — the shared-mandate gap closes.'),
+          h('li', null, 'Which single-branch objectives the redraw would tear open — new coordination load.'),
+          h('li', null, 'Which persisted rolls-up-to edges would change audience.'),
+          h('li', null, 'Which unsettled governed decisions would go stale and need re-framing first.')) }));
+  }
+
+  const peopleAll = (Array.isArray(ctx.state?.people) ? ctx.state.people : [])
+    .filter((p) => p && p.id && p.status !== 'archived');
+  const scopedPeople = scope ? peopleAll.filter((p) => scope.has(p.id)) : peopleAll;
+  const people = scopedPeople
+    .filter((p) => p.id !== seat?.nodeId)
+    .slice()
+    .sort((a, b) => String(a.name || a.id).localeCompare(String(b.name || b.id)));
+  /* Options are ELEMENTS: a DOM node can live in exactly one parent, so each
+     row must build its own copies or the earlier selects end up empty. */
+  const personOptions = () => [h('option', { value: '' }, '— no move —')]
+    .concat(people.slice(0, 400).map((p) => h('option', { value: p.id }, redrawPersonLabel(p))));
+  const leaderName = ctx.state?.settings?.leaderName || 'Workspace leader';
+  const managerOptions = () => [h('option', { value: '' }, '— destination —')]
+    .concat([h('option', { value: 'leader' }, `${leaderName} (workspace leader)`)])
+    .concat(people.slice(0, 400).map((p) => h('option', { value: p.id }, redrawPersonLabel(p))));
+
+  const moveRow = (n) => h('div', { class: 'row', style: 'gap:8px;align-items:center;flex-wrap:wrap;' },
+    h('label', { style: 'min-width:140px;', for: `redraw-person-${n}` }, `Move ${n} — person to re-parent`),
+    h('select', { id: `redraw-person-${n}`, class: 'input', 'aria-label': `Move ${n} person` }, ...personOptions()),
+    h('span', { class: 'tiny muted' }, '→'),
+    h('label', { style: 'min-width:120px;', for: `redraw-manager-${n}` }, 'Under'),
+    h('select', { id: `redraw-manager-${n}`, class: 'input', 'aria-label': `Move ${n} destination manager` }, ...managerOptions()));
+
+  const resultsHost = h('div', { class: 'stack', 'aria-live': 'polite' });
+  const formHost = h('div', { class: 'stack' });
+  const runRehearsal = () => {
+    const moves = [];
+    const incomplete = [];
+    for (let n = 1; n <= REDRAW_LIMITS.maxMoves; n += 1) {
+      const personEl = formHost.querySelector(`#redraw-person-${n}`);
+      const managerEl = formHost.querySelector(`#redraw-manager-${n}`);
+      const personId = String(personEl?.value || '').trim();
+      const newManagerId = String(managerEl?.value || '').trim();
+      if (!personId && !newManagerId) continue;
+      if (personId && !newManagerId) { incomplete.push({ personId, personName: null, to: '', reasonKey: 'unknown-manager', reasonNote: 'A person was chosen with no destination — the row is refused, not guessed.' }); continue; }
+      moves.push({ personId, newManagerId });
+    }
+    const raw = rehearseBoundaryRedraw(ctx.state, { moves, now: ctx.now, conventions: read.conventions });
+    if (incomplete.length) raw.refusedMoves = [...(raw.refusedMoves || []), ...incomplete];
+    resultsHost.replaceChildren(renderRehearsalResults(enforced ? redactRehearsalReport(raw, scope) : raw, ctx));
+  };
+
+  const moveReset = () => ctx.navigate('#/jurisdiction?panel=redraw');
+  formHost.append(
+    moveRow(1), moveRow(2), moveRow(3),
+    h('div', { class: 'row', style: 'gap:8px;flex-wrap:wrap;' },
+      h('button', { class: 'btn btn-primary', type: 'button', onClick: runRehearsal }, 'Rehearse (dry run)'),
+      h('button', { class: 'btn btn-ghost', type: 'button', onClick: moveReset }, 'Reset')),
+  );
+
+  return h('div', { class: 'stack' },
+    banner({
+      tone: 'info',
+      title: 'A premortem for an org-design change',
+      body: 'Pick up to three reporting lines and rehearse them against the live workspace. The engine re-harvests every open case, call and funded item on a cloned roster, re-prices every cross-branch objective, and diffs the two books — then names the rolls-up-to edges and unsettled governed decisions that would go stale. Nothing is written, moved or accepted.',
+    }),
+    card({
+      title: 'Proposed reporting-line moves',
+      subtitle: `Bounded to ${REDRAW_LIMITS.maxMoves} moves per rehearsal — a larger reorganisation is a programme of dependent changes, not one dry run.`,
+      body: formHost,
+    }),
+    resultsHost,
+    card({
+      title: 'How to read this honestly',
+      subtitle: 'Declared, printed, refusable.',
+      body: h('ul', { class: 'stack' },
+        h('li', null, 'Coordination units are DECLARED Coase/Williamson conventions (method panel), never money and never measured value.'),
+        h('li', null, 'Objective labels are opaque goal pointers, never titles; above the detail ceiling the rehearsal is not available to rank 1–2 seats.'),
+        h('li', null, 'A stale decision is a prompt to re-frame it at the new rung — the rehearsal never withdraws, accepts or re-opens anything.'),
+        h('li', null, 'Rolled-up audiences are recomputed exactly as RULE-JUR-01/02/04 would re-emit them, but the persisted edges are only NAMED here, not rewritten.'),
+        h('li', null, 'Frameworks: Coase (1937) / Williamson (1975) governance choice · Riker (1962) size principle · Ashby (1956) requisite variety · Jensen & Meckling (1976) residual control · Klein (1998) premortem.')) }));
+}
+
 function methodPanel(ctx, read) {
   const conventions = read.conventions || jurConventions({});
   const rows = Object.keys(JUR_CONVENTION_DEFAULTS).map((key) => ({
@@ -517,6 +820,7 @@ export function renderJurisdiction(ctx) {
     map: () => mapPanel(ctx, read, query),
     hygiene: () => hygienePanel(ctx, read),
     options: () => optionsPanel(ctx, read),
+    redraw: () => redrawPanel(ctx, read),
     grades: () => gradesPanel(ctx, read),
     method: () => methodPanel(ctx, read),
   };
@@ -530,9 +834,21 @@ export function renderJurisdiction(ctx) {
         onClick: () => act(ctx, () => ctx.api.jurScan(), 'Compiled cross-branch objectives, pointer hygiene, priced routes and rolled up span readings'), }, 'Compile now'),
       h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => openConventions(ctx) }, 'Conventions'),
       h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => {
-        const rows = jurCsvRows(ctx.state, { now: ctx.now, settings: ctx.state.settings || {} });
-        downloadText(`leados-jurisdiction-${ctx.now.toISOString().slice(0, 10)}.csv`,
-          serializeCsv({ columns: JUR_CSV_COLUMNS.map((key) => ({ key, header: key })), rows }), 'text/csv');
+        try {
+          const rows = jurCsvRows(ctx.state, { now: ctx.now, settings: ctx.state.settings || {} });
+          const text = serializeCsv(JUR_CSV_COLUMNS.map((key) => ({ key, header: key })), rows);
+          const saved = downloadText({ filename: `leados-jurisdiction-${ctx.now.toISOString().slice(0, 10)}.csv`, text, mime: 'text/csv' });
+          if (saved) { toast('Aggregate CSV downloaded.', 'good'); return; }
+          const copy = h('textarea', { class: 'input', rows: 10, readonly: true }, text);
+          openModal({
+            title: 'Download blocked — copy the CSV',
+            body: h('div', { class: 'stack' }, h('p', null, 'This browser refused the file download. The aggregate CSV is below; select and copy it.'), copy),
+            footer: [h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => closeAllModals() }, 'Close')],
+          });
+          copy.focus(); copy.select();
+        } catch (error) {
+          toast(`Could not build the CSV: ${String(error?.message || error)}`, 'bad');
+        }
       } }, 'Export aggregate CSV'),
     ],
     meta: h('div', null, kv('Generated', formatDate(ctx.now)), kv('Engine', read.book.engineVersion || 'jurisdiction-2026.11-v2'), kv('Conventions', 'declared, not fitted')),

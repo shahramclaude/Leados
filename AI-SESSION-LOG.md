@@ -1,3 +1,65 @@
+## 2026-11-06 — Session 152: The Boundary-redraw rehearsal (ADR-0112, Schema v111 unchanged)
+
+**What was built.** `#/jurisdiction?panel=redraw` — a pure, ephemeral dry run of
+a proposed reporting-line change (up to 3 moves) for Directors, VPs and the
+CEO, the missing pre-acceptance instrument behind the compiler's `redraw`
+governance route. The engine (`app/core/domain/redrawRehearsal.js`) clones the
+roster, re-runs the real ADR-0109 harvest → price pipeline on the clone, and
+diffs the two books: collapsed / created / moved cross-branch clusters; a
+before/after ledger with declared-unit break-even (one-off `jurRedrawUnits`
+per move vs units saved per period — printed as model arithmetic, never
+money); `rolls-up-to` edges recomputed on the hypothetical tree and named
+edge-by-edge as withdrawn/added for every frozen finding and span reading;
+unsettled RULE-JUR-02 governed decisions flagged stale (`gap-closed` when
+their cluster collapses, `lca-moved` when their LCA changes rung). Settled
+decisions can never go stale. Refused moves print verbatim
+(`unknown-person`, `unknown-manager`, `self-move`, `noop-move`, `cycle-move`,
+`duplicate-move`, `too-many-moves`, `leader-move`); a rehearsal with valid
+survivors runs on those and refuses the rest. **Writes nothing** — no
+records, no events, no graph edges; purity asserted by deep-equal.
+
+**Altitude(s) served.**
+- **Primary:** Director (rank 3, enforced-seat: own span only, objective keys
+  as ordinals, out-of-span roll-up targets masked) · VP/executive (rank 4) ·
+  CEO/C-suite (rank 5) · undeclared operator view (unenforced).
+- **Excluded by design:** rank 1–2 declared seats see a printed explanation,
+  not the form. Read-only/unresolved seats refused the form.
+- **Roll-up:** untouched — this is a simulation surface over the existing
+  roll-up; it changes no edges.
+
+**Reliability fixes on the same surface.** The jurisdiction **Export
+aggregate CSV** button called `serializeCsv` with a single object (expected
+two arguments) and `downloadText` with positional arguments (expected an
+options object) — the same silent-failure class fixed in `#/succession`
+earlier; now wired to the real contracts with a copyable fallback. ADR-0111
+was missing from `docs/adr/INDEX.md`; ADR-0112 added alongside it.
+
+**Verified.**
+- `tests/app/redraw-rehearsal.test.mjs`: **16/16 PASS** (validation refusals,
+  collapse/create/LCA-move diffs, edge-by-edge roll-up recomputation,
+  stale-decision semantics incl. settled-never-stale, dry-run purity
+  deep-equal, redacted declared-seat rendering, end-to-end click through the
+  Rehearse button, axe-clean panel, rank-1 gate, JUR_PANELS registration).
+- `tests/app/jurisdiction.test.mjs`: 12/12 PASS (unchanged behaviour).
+- `tests/app/disclosure-compiler.test.mjs`: 21/21 PASS — the LEAK ORACLE
+  (every route × four altitudes) is clean with the new panel.
+- `npm run lint`: PASS. `npm run check:boundary`: PASS — 547 app ES modules,
+  156 suites, 0 leaks. `npm run check:links`: PASS — 871 links / 229 files.
+- Demo-data probe: the seeded workspace yields a real 2-cluster book; a
+  one-move rehearsal on its roster completes and correctly reports no false
+  collapse (all figures declared-unit arithmetic).
+- Full 156-suite `npm test`: **not completed this session** ([UNVERIFIED]).
+
+**Unverified / flagged.**
+- Real-browser walkthrough remains [UNVERIFIED]; the click-through ran in
+  jsdom with axe-core only.
+- The rehearsal prices structure (Coase units, declared conventions); it says
+  nothing about competence, culture, budget legality or retention risk.
+- Declared rank≥3 seats rehearse inside their own `subtreeIds`; cross-unit
+  moves are refused by design (the ancestor's call).
+
+**Blockers.** None.
+
 ## 2026-11-06 — Session 151: Objective-pointer hygiene & span-scoped mandate anchoring (ADR-0111, Schema v111, no schema bump)
 
 **What was built.** Closed the top `[frontline / manager]` roadmap item in the

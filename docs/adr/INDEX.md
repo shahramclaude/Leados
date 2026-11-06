@@ -132,3 +132,5 @@ Format: copy `0001-record-architecture-decisions.md`, number sequentially, statu
 
 - [ADR-0109 — The Jurisdiction Compiler](./0109-jurisdiction-compiler.md) — Session 149, Schema v111, `#/jurisdiction`, RULE-JUR-01..04, CSV #103.
 - [ADR-0110 — Derived-event budget: production cap 64 → 256](./0110-derived-event-budget.md) — Session 150, no schema bump, `app/core/domain/postCommit.js`, P0 silent-rollback defect fix.
+- [ADR-0111 — Objective-pointer hygiene and span-scoped mandate anchoring](./0111-objective-pointer-hygiene.md) — Session 151, Schema v111, `#/jurisdiction?panel=hygiene`, no schema bump.
+- [ADR-0112 — The Boundary-redraw rehearsal: a dry run of an organisational boundary change](./0112-boundary-redraw-rehearsal.md) — Session 152, Schema v111 unchanged, `#/jurisdiction?panel=redraw`, director-and-above, writes nothing.
