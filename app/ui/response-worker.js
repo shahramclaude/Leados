@@ -38,3 +38,7 @@ export function runResponseRehearsal(state, draftId, input, now, options = {}) {
 export function runActionBundleRehearsal(state, bundleId, now, options = {}) {
   return runRehearsal({ kind: 'bundle', state, bundleId, now: now.toISOString() }, options);
 }
+
+export function runMissionCaptureRehearsal(state, captureId, now, options = {}) {
+  return runRehearsal({ kind: 'capture', state, captureId, now: now.toISOString() }, options);
+}

@@ -3,8 +3,31 @@ import { dayKey } from '../time.js';
 import { ensureEntityLink } from './automation.js';
 import { MISSION_EVENTS, MISSION_RULES } from './missionRegistry.js';
 import { displayBound } from './mission.js';
+import { buildSeats } from './seat.js';
+import { LEADER_ID } from './chain.js';
 
 export function missionRule(draft, ctx = {}) {
+  if (ctx.event?.type === MISSION_EVENTS.CAPTURE_ADOPTED && ctx.event.entity === 'missioncapture') {
+    const capture = (draft.missionCaptures || []).find((r) => r.id === ctx.event.entityId);
+    if (!capture || capture.status !== 'adopted' || !capture.caseId || !capture.bundleId) return [];
+    const effects = [];
+    const add = (targetType, targetId, relation, summary) => {
+      const result = ensureEntityLink(draft, { sourceType: 'missioncapture', sourceId: capture.id, targetType, targetId, relation,
+        ruleId: MISSION_RULES.ROLLUP, summary }, { idFactory: ctx.idFactory, todayStr: dayKey(ctx.now), nowIso: ctx.now.toISOString() });
+      if (result.created) effects.push({ ruleId: MISSION_RULES.ROLLUP, action: 'linked', targetType, targetId, summary });
+    };
+    add('case', capture.caseId, 'responds-to', 'The reviewed source case created in this capture transaction.');
+    add('bundle', capture.bundleId, 'coordinates', 'The atomic action bundle adopted with the source case.');
+    const built = buildSeats(draft, { now: ctx.now, settings: draft.settings });
+    let cursor = capture.ownerSeatId; const seen = new Set();
+    while (cursor && !seen.has(cursor) && seen.size < 16) {
+      seen.add(cursor);
+      if (cursor === LEADER_ID || built.byId.has(cursor)) add('person', cursor, 'rolls-up-to', 'Hierarchy provenance only. The source note and classifier evidence remain at the preparing seat.');
+      if (cursor === LEADER_ID) break;
+      cursor = built.chain.nodes.get(cursor)?.parentId || LEADER_ID;
+    }
+    return effects;
+  }
   if (ctx.event?.type !== MISSION_EVENTS.FROZEN || ctx.event.entity !== 'missionbrief') return [];
   const brief = (draft.missionBriefs || []).find((r) => r.id === ctx.event.entityId);
   if (!brief) return [];

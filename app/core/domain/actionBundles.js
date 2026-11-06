@@ -18,7 +18,7 @@ export function bundleSourceFingerprint(state, b) {
   const c = (state.cases || []).find((r) => r.id === b.sourceId);
   return fingerprint({ case: c || null, people: (state.people || []).filter((p) => b.commands.some((a) => a.ownerId === p.id)), budgets: (state.budgets || []).filter((r) => b.commands.some((a) => a.budgetId === r.id)) });
 }
-const EXCLUDED = new Set(['events', 'conflicts', 'pulses', 'candidates', 'intakeDrafts', 'responsePlans', 'actionBundles']);
+const EXCLUDED = new Set(['events', 'conflicts', 'pulses', 'candidates', 'intakeDrafts', 'responsePlans', 'actionBundles', 'missionCaptures']);
 export function operationalDiff(before, after) {
   return COLLECTIONS.filter((k) => !EXCLUDED.has(k)).flatMap((collection) => {
     const old = new Map((before[collection] || []).map((r) => [r.id, r]));
@@ -35,7 +35,8 @@ export function bundlePreview(before, after, ruleIds = []) {
 }
 
 /** Run validated production APIs against a staged store. No nested persistence or nested rule passes. */
-export function stageBundle(draft, helpers, commands, { now, idFactory, createApi, store, compensate = false, reason = '' }) {
+/** The same nested-write seam is shared by case+bundle capture adoption. */
+export function createStagedStore(draft, helpers, { now, store }) {
   const sourceEvents = [];
   const staged = {
     get state() { return draft; }, warnings: store.warnings, persistError: null, writeBlockReason: null,
@@ -49,6 +50,11 @@ export function stageBundle(draft, helpers, commands, { now, idFactory, createAp
       return draft;
     },
   };
+  return { staged, sourceEvents };
+}
+
+export function stageBundle(draft, helpers, commands, { now, idFactory, createApi, store, compensate = false, reason = '' }) {
+  const { staged, sourceEvents } = createStagedStore(draft, helpers, { now, store });
   const api = createApi(staged, { now: () => now, idFactory });
   const outputs = [];
   const deferredTargets = [];

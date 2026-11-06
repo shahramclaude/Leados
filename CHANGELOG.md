@@ -1,3 +1,18 @@
+## Changelog — 2026-11-06 · Session 145: Mission Command Flow (ADR-0105, Schema v107 · additive 106 → 107, `#/mission?panel=capture`)
+
+**What changed, and why.** The engines existed; the leadership loop did not. A note had to become a case, then a bundle, then a rehearsal, then an adoption — separate transactions with orphan/stale failure modes. Command Flow makes the whole response one reviewed, rehearsed, atomic write.
+
+- **One transaction, two callers.** `transactMissionCapture` runs in the disposable worker and live adoption. It reserves case/bundle ids, creates the case via `addCase`, stages closed-vocabulary commands via the existing adapters, delivers source events to the generalized spine, and refuses a live footprint that differs from the rehearsal. Any failure rolls back case, actions, receipt, events and edges.
+- **Cross-module + cross-altitude together.** `RULE-MIS-01` writes `responds-to` the case, `coordinates` the bundle and one `rolls-up-to` per leadership ancestor. Rule count remains 85; the existing mission contract is widened.
+- **Preparing-seat privacy.** Raw notes/evidence stay with `ownerSeatId`; generic projections zero `missionCaptures`; the case summary does not copy the note. Ancestors receive governed work and typed provenance.
+- **Altitude duties.** Frontline decision/checkpoint/coaching; manager adds premise; director adds stakeholder eligibility; VP/CEO add explicit budget. No invented recipients, no inferred spend, no auto-adopt, no person score.
+- **Optimistic concurrency + bounded compensation.** Revision/day/input/source/plan fingerprints gate adoption; withdrawal is untouched-only and retains the source case.
+- **Schema v107 additive.** Empty `missionCaptures` on upgrade; fail-closed normalizers; gateway/seatRegistry/viewScope/disclosure/cases resolver wiring; `createStagedStore` and `cleanBundlePreview` extracted for reuse.
+- **Access fix.** A person's upward `managerId` no longer denies a frontline lead their own profile.
+- **Verification.** New suite 9/9; targeted batch 90/90; lint/boundary/links green; standalone rebuilt. Full canonical suite running at changelog time; final result in AI-SESSION-LOG.md.
+
+**Honest limits.** Seats are workflow declarations, not authentication; classifier is heuristic; rehearsal is not a causal business forecast; real-browser AT walkthrough [UNVERIFIED].
+
 ## Changelog — 2026-11-06 · Session 144: The Diligence Ledger (ADR-0104, Schema v106 · additive 105 → 106, CSV #100, `#/diligence`)
 
 **What changed, and why (plain language).** A leadership team can only learn from a decision if it knows *what it knew when it decided*. Existing audit trails record the decision and its outcome; the Hindsight Lock records the links that were made; the Epistemic Ledger records what nobody opened. None recorded the act of **looking** — especially looking at a fact, judging it irrelevant, and deliberately not using it. That is the difference between a thin process and a considered one, and it was invisible. Session 144 makes it a first-class dated record and freezes the **knowable set** it was performed against, in the same atomic transaction as the decision.

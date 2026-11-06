@@ -131,7 +131,7 @@ function harness(raw = delegations(delegations(tree(), 'lead1', { n: 9 }), 'lead
 /* ------------------------------------------------------------------ schema */
 
 test('Schema v103 migrates additively: empty ledgers, declared conventions, nothing inferred', () => {
-  assert.equal(SCHEMA_VERSION, 106);
+  assert.equal(SCHEMA_VERSION, 107);
   const migrated = migrate({ schemaVersion: 102, settings: { leaderName: 'Keep this' } });
   assert.deepEqual(migrated.applied, ['102 → 103', '103 → 104', '104 → 105', '105 → 106']);
   assert.deepEqual(migrated.raw.reputationActs, []);
@@ -490,7 +490,7 @@ test('the CSV scope is aggregate-only and refusal-honest, and the brief carries 
 });
 
 test('the module is wired into schema, spine, contracts, gateway, route table, CSV register and the disclosure catalogue', () => {
-  assert.equal(SCHEMA_VERSION, 106);
+  assert.equal(SCHEMA_VERSION, 107);
   assert.ok(DEFAULT_POST_COMMIT_RULES.includes(reputationalCapitalRule), 'on the shared post-commit spine');
   const contract = contractFor(reputationalCapitalRule);
   assert.ok(contract, 'a registered propagation contract');

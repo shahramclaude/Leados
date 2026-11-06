@@ -174,7 +174,7 @@ function thinScenario() {
 /* ------------------------------------------------------------------ schema */
 
 test('Schema v104 migrates additively: empty lock ledgers, declared conventions, nothing back-filled', () => {
-  assert.equal(SCHEMA_VERSION, 106);
+  assert.equal(SCHEMA_VERSION, 107);
   const migrated = migrate({ schemaVersion: 103, settings: { leaderName: 'Keep this' } });
   assert.deepEqual(migrated.applied, ['103 → 104', '104 → 105', '105 → 106']);
   assert.deepEqual(migrated.raw.decisionLocks, []);

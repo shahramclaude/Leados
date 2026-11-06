@@ -62,7 +62,7 @@ const WORK = ['cases', 'decisions', 'delegations', 'goals'];
 export const MODULE_MANIFESTS = Object.freeze({
   /* ----------------------------------------------------- every-altitude core */
   today: row('today', 'Today', WORK, { mode: A, open: ['open', 'active', 'pending'], note: 'A seat always sees its own week.' }),
-  mission: row('mission', 'Mission Control', WORK, { mode: A, note: 'The seat’s operating loop; already scoped by ADR-0080.' }),
+  mission: row('mission', 'Mission Control', WORK, { mode: A, note: 'The seat’s operating loop. Command Flow notes are returned only to their preparing seat; ancestors receive governed work and typed provenance.' }),
   disclosure: row('disclosure', 'Disclosure Console', ['disclosureGrants'], { mode: A, classKey: 'authority', note: 'Where the boundary explains itself: coverage, posture, grants and the upward brief.' }),
   seat: row('seat', 'Altitude Lens', [], { mode: A, classKey: 'authority', note: 'Who is operating, and what the position may see.' }),
   settings: row('settings', 'Settings & data', [], { mode: A, classKey: 'authority', note: 'Operator settings stay readable; identity and floor changes keep their rank gate.' }),

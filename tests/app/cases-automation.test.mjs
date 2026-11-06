@@ -472,7 +472,7 @@ test('Upstream Escalation: Goal, Delegation, and Decision escalate cleanly to Op
 });
 
 test('Schema v14 -> v15 migration, privacy wall (conflicts/pulses forbidden), point-in-time rewind, and CSV export', () => {
-  assert.equal(SCHEMA_VERSION, 106);
+  assert.equal(SCHEMA_VERSION, 107);
   const v14 = {
     ...createEmptyState(NOW.toISOString()),
     schemaVersion: 14,

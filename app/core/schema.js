@@ -123,6 +123,7 @@ import { normalizeSeatSettings } from './domain/seatSchema.js';
 // reload. A malformed release is dropped rather than reasoned about.
 import { normalizeReleases, normalizeMarkers as normalizeDifferencingMarkers, normalizeDifferencesSettings } from './domain/differencingSchema.js';
 import { normalizeMissionBriefs, normalizeMissionSettings } from './domain/missionSchema.js';
+import { normalizeMissionCaptures } from './domain/missionCaptureSchema.js';
 import {
   normalizeChainReadings,
   normalizeChainMarkers,
@@ -477,7 +478,7 @@ export {
 // older blob simply opens on the undeclared operator view. A version bump here
 // would have forced 78 test files to be rewritten for zero user benefit; the
 // honest choice is to add nothing to migrate.
-export const SCHEMA_VERSION = 106;
+export const SCHEMA_VERSION = 107;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -2062,6 +2063,8 @@ export const COLLECTIONS = [
   'authorityCalibrationMarkers',
   // ADR-0080: immutable, identity-free mission brief snapshots.
   'missionBriefs',
+  // ADR-0105: a reviewed note-to-case-to-action plan; never an adopted record until its receipt exists.
+  'missionCaptures',
   // ADR-0081: reviewed routing plans (each row is also its later grade) and
   // rule-idempotency markers. Additive; no figure is inferred on migration.
   'altitudeRoutingPlans',
@@ -7009,6 +7012,7 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.mandates = normalizeMandates(raw.mandates, warnings);
   state.authorityCalibrationMarkers = normalizeAuthorityCalibrationMarkers(raw.authorityCalibrationMarkers, warnings);
   state.missionBriefs = normalizeMissionBriefs(raw.missionBriefs, warnings);
+  state.missionCaptures = normalizeMissionCaptures(raw.missionCaptures, state, warnings, { now: new Date(now) });
   // ADR-0081: routing plans/markers resolve before links so `routes-through`,
   // `discloses-to`, `grades-routing` and `rolls-up-to` edges validate against
   // real plan ids. A hostile or malformed plan is dropped, never repaired.
@@ -7925,6 +7929,9 @@ export const MIGRATIONS = {
   // the next commit, and every interval, band and grade is derived on read.
   // Inventing a frontier at upgrade time would pretend a look happened in the
   // past that the record cannot prove.
+  // ADR-0105: additive, empty on upgrade. No historical note is reclassified,
+  // and no existing case is pretending to have passed a human review it never had.
+  106: (v106) => ({ ...v106, schemaVersion: 107, missionCaptures: Array.isArray(v106.missionCaptures) ? v106.missionCaptures : [] }),
   105: (v105) => ({
     ...v105,
     schemaVersion: 106,
