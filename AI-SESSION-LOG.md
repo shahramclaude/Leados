@@ -1,3 +1,20 @@
+## 2026-11-06 — Session 154: Command Flow assumption editing blocked
+
+**Built:** no feature shipped; the experimental changes were discarded after the
+focused check failed twice. Target was a reviewed assumption statement carried
+through the existing atomic capture transaction, automation and hierarchy roll-up.
+**Altitude:** mid-manager primary, director and above roll-up; frontline's profile
+does not offer premise actions. **Verified:** the focused test first rejected a
+rank-1 premise as outside the profile; after changing the fixture to rank 2,
+rehearsal failed: `Manager may not “Register a testable operating assumption”.
+Its rank window is 3–5; this seat is rank 2.` **Blocker:** the rank-2 Mission
+profile offers `premise`, but the downstream authority window rejects it. Policy
+and implementation need alignment. **Unverified:** the discarded editing code,
+real-browser behaviour, other altitude permissions and unrelated modules. No
+full-repository audit or full suite was run. Seats are workflow declarations,
+not authentication. Next: resolve this authority mismatch, then implement the
+reviewed editing slice; decision options and delegation outcomes remain open.
+
 ## 2026-11-06 — Session 153: The 1:1 Agenda Provenance Ledger (ADR-0113, Schema v112)
 
 **What was built.** `#/agenda-ledger` — the first frontline-primary surface in six
