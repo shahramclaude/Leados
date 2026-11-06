@@ -1,3 +1,19 @@
+## 2026-11-06 — Command Flow assumption editing blocked (Session 154)
+
+**In Progress [mid-manager → director roll-up].** A manager needs to state the
+assumption behind a cross-team recovery plan and rehearse it before adopting
+work. The proposed assumption-editing slice was not shipped: Mission's rank-2
+profile offers `premise`, but the downstream authority check rejects registering
+an operating assumption at rank 2 (allowed ranks 3–5). The first focused test
+also established that rank 1 does not offer this action. Resolve the intended
+authority policy and align the shared profile and execution permissions before
+implementing and verifying the edit, including fingerprinting, safe rehearsal,
+and roll-up. Decision-option and delegation-outcome editing also remain open.
+
+**Altitude coverage map (Session 154):** unchanged from Session 153; no feature
+shipped. Frontline and mid-manager remain priorities after the director-and-above
+run in Sessions 148–152. The failed experiment was discarded.
+
 ## 2026-11-06 — The 1:1 agenda stops being an undifferentiated pile (Session 153, Schema v112, [ADR-0113](./docs/adr/0113-agenda-provenance-ledger.md), `#/agenda-ledger`)
 
 **Implemented [frontline / manager primary → director / VP / CEO roll-up].**
