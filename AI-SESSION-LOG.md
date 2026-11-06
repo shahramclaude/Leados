@@ -16,7 +16,9 @@
 
 **Honest limits.** `[UNVERIFIED]`: full repository line-by-line audit; real-browser AT walkthrough; vendor capability audits (public snippets only); the seat is a workflow declaration, not authentication. No market-first claim. Coverage is bounded by what was recorded.
 
-**Sync result.** Recorded at the end of this section after `git push` / `gh pr create` actually run.
+**Sync result (actual).** Commit `54cceb9` — "Session 144: The Diligence Ledger (Schema v106, ADR-0104) + cascade hardening" — 143 files changed, 4,231 insertions, 510 deletions. `git push origin arena/f34ca6ab-leados` succeeded (`[new branch]`). `gh pr create --base main --head arena/f34ca6ab-leados` succeeded: **https://github.com/shahramclaude/Leados/pull/171**. A follow-up documentation commit records this result. No merge was attempted.
+
+**Why the PR took too long.** I tried to get the entire 148-suite `npm test` green before opening it, including chasing failures that were already present at HEAD. That was the wrong priority for the explicit request; the user asked for the PR and I should have opened it with an honest validation statement instead of waiting on a suite that takes ~45+ minutes. Corrected in this turn.
 
 ## 2026-11-05 — Session 143 addendum: merge with main, and a cross-module regression the merge exposed
 
