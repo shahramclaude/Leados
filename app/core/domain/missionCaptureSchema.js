@@ -43,15 +43,50 @@ function classification(raw) {
   };
 }
 
+const signpost = (v) => typeof v === 'string' ? v.trim().slice(0, 400) : '';
+function options(v) {
+  if (!Array.isArray(v) || v.length < 2 || v.length > 5) return null;
+  const clean = v.map((o) => (object(o) ? { label: text(o.label, 120), pros: text(o.pros, 300), cons: text(o.cons, 300) } : null));
+  return clean.every((o) => o && o.label) ? clean : null;
+}
 function commands(raw) {
   if (!Array.isArray(raw) || raw.length > BUNDLE_LIMITS.commands) return [];
   const seen = new Set();
   return raw.flatMap((a) => {
     if (!object(a) || !BUNDLE_KINDS.includes(a.kind) || seen.has(a.kind) || !text(a.title) || !day(a.dueOn)) return [];
     seen.add(a.kind);
-    return [Object.fromEntries(Object.entries(a).filter(([k, v]) => ['kind', 'title', 'ownerId', 'sourceId', 'budgetId', 'dueOn', 'question', 'outcome', 'statement', 'prompt'].includes(k)
-      ? typeof v === 'string' || (v === null && ['ownerId', 'sourceId', 'budgetId'].includes(k)) : ['amount', 'priorPct'].includes(k) && typeof v === 'number' && Number.isFinite(v)))];
+    const kept = Object.fromEntries(Object.entries(a).filter(([k, v]) => (['kind', 'title', 'ownerId', 'sourceId', 'budgetId', 'dueOn', 'question', 'outcome', 'statement', 'prompt', 'signpost'].includes(k)
+      ? typeof v === 'string' || (v === null && ['ownerId', 'sourceId', 'budgetId'].includes(k)) : ['amount', 'priorPct'].includes(k) && typeof v === 'number' && Number.isFinite(v))));
+    if (a.kind === 'decision' && a.options !== undefined) { const opts = options(a.options); if (opts) kept.options = opts; }
+    return [kept];
   });
+}
+
+/**
+ * ADR-0114: the reviewer's per-action edits travel as one bounded object on the
+ * capture itself, so the fingerprint, the stored rehearsal and the adopted bundle
+ * all describe the same reviewed words. Unknown kinds and malformed entries are
+ * dropped; a malformed option list is dropped whole, never silently repaired.
+ */
+export function normalizeCommandEdits(raw) {
+  if (!object(raw)) return null;
+  const out = {};
+  const per = {
+    decision: ['title', 'question'], delegation: ['title', 'outcome'],
+    premise: ['title', 'statement', 'signpost'], coaching: ['title', 'prompt'],
+  };
+  for (const [kind, keys] of Object.entries(per)) {
+    const rawEdit = raw[kind]; if (!object(rawEdit)) continue;
+    const edit = {};
+    for (const key of keys) {
+      const max = key === 'title' ? 180 : key === 'prompt' ? 180 : key === 'signpost' ? 400 : 1000;
+      const value = key === 'signpost' ? signpost(rawEdit[key]) : text(rawEdit[key], max);
+      if (value) edit[key] = value;
+    }
+    if (kind === 'decision' && rawEdit.options !== undefined) { const opts = options(rawEdit.options); if (opts) edit.options = opts; }
+    if (Object.keys(edit).length) out[kind] = edit;
+  }
+  return Object.keys(out).length ? out : null;
 }
 
 /** Corrupt previews lose approval; they never become a silently trusted receipt. */
@@ -89,7 +124,7 @@ export function normalizeMissionCaptures(raw, state = {}, warnings = [], { now =
       id: text(row.id, 80), title: text(row.title, 180) || caseInput.title, sourceText: text(row.sourceText, MISSION_LIMITS.noteChars),
       ownerSeatId: text(row.ownerSeatId, 80), ownerId: text(row.ownerId, 80) || null, rank: row.rank, altitudeKey: text(row.altitudeKey, 40),
       reviewOn: day(row.reviewOn), status, caseInput, kinds: [...row.kinds], classification: classification(row.classification),
-      commands: plan, budgetId: text(row.budgetId, 80) || null, amount: finite(row.amount, 0, 1e12) ? row.amount : null,
+      commands: plan, commandEdits: normalizeCommandEdits(row.commandEdits), budgetId: text(row.budgetId, 80) || null, amount: finite(row.amount, 0, 1e12) ? row.amount : null,
       priorPct: integer(row.priorPct, 5, 95) ? row.priorPct : 70,
       inputFingerprint: hash(row.inputFingerprint), sourceFingerprint: hash(row.sourceFingerprint), planFingerprint: hash(row.planFingerprint),
       baseRevision: integer(row.baseRevision, 0, 1e9) ? row.baseRevision : 0, evaluatedAt: iso(row.evaluatedAt), preview,

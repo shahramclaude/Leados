@@ -3214,6 +3214,16 @@ tr.is-focused td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
 .flow-rollup-step small { display: block; color: var(--muted); font-size: 11px; margin-top: 4px; }
 .flow-command-list { display: flex; flex-direction: column; gap: 9px; }
 .flow-command-list li { display: flex; align-items: baseline; gap: 10px; font-size: 13px; }
+.flow-command-detail { display: block; color: var(--muted); font-size: 11px; margin-top: 2px; overflow-wrap: anywhere; }
+.flow-command-edits { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin: 0 0 14px; background: var(--panel-2); }
+.flow-command-edits legend { font-weight: 650; font-size: 12px; padding: 0 6px; }
+.flow-command-edit { display: flex; flex-direction: column; gap: 10px; padding: 10px 0; border-top: 1px solid var(--line); }
+.flow-command-edit:first-of-type { border-top: 0; padding-top: 4px; }
+.flow-command-edit-kind { margin: 0; font-size: 12px; }
+.flow-options { display: flex; flex-direction: column; gap: 6px; }
+.flow-option-head { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1fr) auto; gap: 8px; font-size: 11px; color: var(--muted); padding-inline: 2px; }
+.flow-option-row { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+@media (max-width: 720px) { .flow-option-head { display: none; } .flow-option-row { grid-template-columns: 1fr; } }
 .flow-relations { display: flex; flex-wrap: wrap; gap: 6px; }
 .flow-history { display: flex; flex-direction: column; gap: 6px; }
 .flow-history-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; text-align: left; padding: 12px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2); color: var(--ink); cursor: pointer; font: inherit; }

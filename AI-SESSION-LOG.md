@@ -1,3 +1,59 @@
+## 2026-11-06 — Session 155: Reviewed command editing — the words are read before the button is pressed
+
+**What was built.** Command Flow now lets the reviewer edit every proposed action's
+exact words *before* rehearsal: the decision's name, question and 2–5 named options
+(with pros/cons), the delegation's name and expected outcome, the premise's name,
+statement and falsifiable signpost, and the coaching subject/prompt. Edits travel as
+one fail-closed `commandEdits` object on the capture (ADR-0114), are applied on top of
+the proposal, and then pass through the unchanged `validateBundleCommands` → adapters →
+rehearsal → adoption chain — an edit replaces words, never constraints. The input
+fingerprint covers the edits, so editing after a rehearsal blocks adoption until
+re-rehearsed; an option list with an unnamed option is refused, never silently
+defaulted; the approval card prints each command's reviewed words and option labels.
+
+**The Session 154 blocker, closed by name.** The rank-2 Mission profile had offered
+`premise` since ADR-0105 while the shared `test-assumption` right read `minRank: 3`.
+The right now reads `2–5`; frontline (rank 1) is refused in both the profile and the
+right, unchanged. No capture-specific exception; no new right.
+
+**Altitude(s) served.** Primary: frontline lead (rank 1 — decision/delegation/coaching
+edits) and mid-manager (rank 2 — the same plus the premise-bearing loop, end to end).
+Director / VP / CEO use the identical surface and the same shared right. Roll-up
+unchanged: ancestors receive adopted work through the existing spine.
+
+**Defects found and fixed by the new tests.** `normalizeActionBundles` stripped
+`signpost` and decision `options`, so the stored fingerprint could never match the
+rehearsed one — commit refused everything (the Session 154 failure mode, root-caused).
+`normalizeMissionCaptures` had the same gap. `actionBundleSchema` now round-trips both;
+exact-rollback equality is preserved by keeping empty-string keys only where they
+already existed.
+
+**Verified (focused pass only).** New `command-flow-edit` **10/10** (authority alignment,
+verbatim adoption, frontline coaching edit, fingerprint invalidation, fail-closed
+options, normalization round-trips); `mission-command-flow` **9/9**; `action-bundles`
+**19/19** after standalone rebuild (the one pre-existing failure was the stale inline
+worker bundle); `standalone` + `mission-control` **17/17**; `npm run lint` PASS;
+`npm run check:boundary` PASS; `npm run check:links` PASS. jsdom + axe-core ran on the
+rendered panel (empty options editor included) — **no violations**. Full canonical
+suite **not run**. Real-browser/assistive-technology walkthrough **[UNVERIFIED]**.
+
+**Honest limits.** Edits live on the preparing seat's capture record (existing
+disclosure model). Length bounds only (title 180 / words 1000 / signpost 400 / prompt
+180). No rich text. Seats are workflow declarations, not authentication.
+
+**Changed files.** New: `tests/app/command-flow-edit.test.mjs`,
+`docs/adr/0114-reviewed-command-editing.md`. Modified: `app/core/domain/seatRegistry.js`
+(authority alignment), `actionBundleRegistry.js` (options/signpost validation +
+execution), `actionBundleSchema.js` (round-trip), `missionCaptureSchema.js`
+(`commandEdits` normalization + round-trip), `missionCapture.js` (fingerprint + edit
+merge), `missionCaptureActions.js` (edit intake + altitude refusal), `app/ui/command-flow.js`
+(per-action editors, approval detail), `app/styles.css`, `LeadOS-standalone.html`
+(rebuilt, schema v112), `docs/adr/INDEX.md`, `ROADMAP.md`, `README.md`, `CHANGELOG.md`,
+`AI-SESSION-LOG.md`.
+
+**Next up.** [manager → director] **Cross-span capture merge** on ADR-0113's lineage
+edges — the largest remaining Command Flow UX gap after this ship.
+
 ## 2026-11-06 — Session 154: Command Flow assumption editing blocked
 
 **Built:** no feature shipped; the experimental changes were discarded after the

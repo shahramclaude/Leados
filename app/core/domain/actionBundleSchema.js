@@ -40,8 +40,17 @@ export function normalizeActionBundles(raw, state, now, warnings = []) {
     const preview = cleanBundlePreview(item.preview);
     if (['rehearsed', 'committed'].includes(status) && !preview) { status = 'draft'; warnings.push('Action bundles: an unverifiable preview was returned to draft.'); }
     if (status === 'committed' && (!iso(item.committedAt) || !Array.isArray(item.outputs))) { status = 'draft'; warnings.push('Action bundles: an incomplete adoption receipt was returned to draft.'); }
-    const commands = item.commands.map((a) => Object.fromEntries(Object.entries(a).filter(([k, v]) => ['kind', 'title', 'ownerId', 'sourceId', 'budgetId', 'dueOn', 'question', 'outcome', 'statement', 'prompt'].includes(k)
-      ? typeof v === 'string' || (v === null && ['ownerId', 'sourceId', 'budgetId'].includes(k)) : ['amount', 'priorPct'].includes(k) && Number.isFinite(v))));
+    const commands = item.commands.map((a) => {
+      const kept = Object.fromEntries(Object.entries(a).filter(([k, v]) => ['kind', 'title', 'ownerId', 'sourceId', 'budgetId', 'dueOn', 'question', 'outcome', 'statement', 'prompt', 'signpost'].includes(k)
+        ? typeof v === 'string' || (v === null && ['ownerId', 'sourceId', 'budgetId'].includes(k)) : ['amount', 'priorPct'].includes(k) && Number.isFinite(v)));
+      // ADR-0114: a decision's reviewed option list round-trips intact, or the
+      // stored fingerprint could never match the rehearsed one.
+      if (a.kind === 'decision' && Array.isArray(a.options)) {
+        const clean = a.options.map((o) => (o && typeof o === 'object' && !Array.isArray(o) ? { label: text(o.label, 120), pros: text(o.pros, 300), cons: text(o.cons, 300) } : null)).filter((o) => o && o.label);
+        if (clean.length >= 2 && clean.length <= 5) kept.options = clean;
+      }
+      return kept;
+    });
     const outputs = (Array.isArray(item.outputs) ? item.outputs : []).slice(0, BUNDLE_LIMITS.targets).flatMap((o) => object(o) && BUNDLE_KINDS.includes(o.kind) && text(o.id) && hash(o.fingerprint) && text(o.type || o.kind, 40)
       ? [{ type: text(o.type || o.kind, 40), collection: text(o.collection || BUNDLE_ADAPTERS[o.kind]?.collection || '', 40), id: text(o.id, 80), kind: o.kind, fingerprint: o.fingerprint, ...(o.prompt ? { prompt: text(o.prompt, 180) } : {}), ...(o.budgetId ? { budgetId: text(o.budgetId, 80) } : {}) }] : []);
     if (item.status === 'committed' && outputs.length !== (item.outputs || []).length) { status = 'draft'; warnings.push('Action bundles: a malformed compensation target was refused.'); }

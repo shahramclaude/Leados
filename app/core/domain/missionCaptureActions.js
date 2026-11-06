@@ -5,7 +5,7 @@ import { activeSeat, buildSeats, canAct } from './seat.js';
 import { buildMission } from './mission.js';
 import { fingerprint } from './actionBundles.js';
 import { cleanBundlePreview } from './actionBundleSchema.js';
-import { normalizeMissionCaptures } from './missionCaptureSchema.js';
+import { normalizeMissionCaptures, normalizeCommandEdits } from './missionCaptureSchema.js';
 import { analyzeCapture, captureInputFingerprint, captureReceiptText, captureSourceFingerprint, capturesForSeat, prepareCapturePlan, transactMissionCapture } from './missionCapture.js';
 import { MISSION_EVENTS, MISSION_LIMITS } from './missionRegistry.js';
 
@@ -49,10 +49,21 @@ export function createMissionCaptureActions(store, { now, idFactory, createApi }
     if (kinds.includes('budget') && (!m.budgets.some((b) => b.id === budgetId) || !Number.isFinite(amount) || amount <= 0 || amount > 1e12)) return fail('Choose an eligible envelope and enter a positive commitment amount. An extracted loss is not approved spend.', 'amount');
     const priorPct = Number(input.priorPct ?? existing?.priorPct ?? 70);
     if (!Number.isInteger(priorPct) || priorPct < 5 || priorPct > 95) return fail('An assumption prior must be a whole percentage from 5 to 95.', 'priorPct');
+    // ADR-0114: per-action reviewer edits. The sent value is the complete set for
+    // this round (null clears); when absent entirely (API callers), the stored set
+    // is retained. An unnamed decision option is refused rather than silently defaulted.
+    if (input.commandEdits?.decision?.options !== undefined) {
+      const opts = Array.isArray(input.commandEdits.decision.options) ? input.commandEdits.decision.options : [];
+      const clean = opts.map((o) => ({ label: String(o?.label ?? '').trim(), pros: String(o?.pros ?? '').trim(), cons: String(o?.cons ?? '').trim() }));
+      if (clean.length < 2 || clean.length > 5) return fail('A decision needs 2–5 options.', 'options');
+      if (clean.some((o) => !o.label)) return fail('Name every decision option; an unnamed option is not a choice.', 'options');
+    }
+    const commandEdits = normalizeCommandEdits(input.commandEdits !== undefined ? input.commandEdits : existing?.commandEdits ?? null);
+    if (commandEdits && Object.keys(commandEdits).some((k) => !m.profile.commands.includes(k))) return fail('An edited action is outside this altitude’s operating duties.', 'commandEdits');
     const row = {
       id: existing?.id || idFactory('capture'), title, sourceText: text.trim(), ownerId, ownerSeatId: m.seat.id,
       rank: m.seat.rank, altitudeKey: m.seat.altitudeKey, reviewOn, status: 'draft', caseInput, kinds: [...kinds],
-      classification: analyzed.classification, commands: [], budgetId, amount, priorPct,
+      classification: analyzed.classification, commands: [], budgetId, amount, priorPct, commandEdits,
       inputFingerprint: '', sourceFingerprint: '', planFingerprint: '', baseRevision: store.state.meta.revision,
       evaluatedAt: null, preview: null, caseId: existing?.caseId || null, bundleId: existing?.bundleId || null,
       createdAt: existing?.createdAt || clock().toISOString(), updatedAt: clock().toISOString(), adoptedAt: existing?.adoptedAt || null,

@@ -1,3 +1,27 @@
+## 2026-11-06 — Command Flow, word by word (Session 155, Schema v112 unchanged, [ADR-0114](./docs/adr/0114-reviewed-command-editing.md), `#/mission?panel=capture`)
+
+The largest Command Flow UX gap is closed: before a response is rehearsed, the
+person approving it now reads — and can change — **every proposed action's
+exact words**. The decision's name, question and **2–5 named options** with
+pros and cons; the delegation's name and expected outcome; the premise's name,
+statement and the **falsifiable signpost** that will grade it (RAND
+assumption-based planning); the coaching subject/prompt. An option list with an
+unnamed option is refused, never silently replaced; edits are fingerprinted
+with the rest of the proposal, so touching a word after a rehearsal blocks
+adoption until it is re-rehearsed; the approval card prints the exact words
+(and option labels) that adoption will freeze. The decision is still never
+chosen for you.
+
+Also closed: the authority contradiction Session 154 hit. The rank-2 Mission
+profile had offered `premise` since ADR-0105 ("manager adds premise") while
+the shared `test-assumption` right read rank 3–5. The right now reads **2–5** —
+frontline (rank 1) is refused in both places, unchanged. No new right; the
+capture path uses the same shared engine as everything else.
+
+**Honest limits:** edits live on the preparing seat's capture record; bounded
+lengths only; real-browser/assistive-technology walkthrough remains
+**[UNVERIFIED]** (jsdom + axe-core ran clean on the rendered editor).
+
 ## 2026-11-06 — The Boundary-redraw rehearsal (Session 152, Schema v111 unchanged, [ADR-0112](./docs/adr/0112-boundary-redraw-rehearsal.md))
 
 `#/jurisdiction?panel=redraw` — a **dry run** of an organisational boundary
@@ -176,7 +200,7 @@ The shared copy-on-write automation savepoint now respects a deleted top-level f
 
 **The same transaction rehearsed and live.** `transactMissionCapture` is called by the disposable worker and by live adoption. It reserves the case/bundle ids, creates the case through the existing `addCase` API, stages the closed-vocabulary bundle through the existing adapters, delivers every source event to the generalized post-commit spine, and refuses if the live footprint differs from the rehearsal. Any command, rule, target or fingerprint failure rolls back everything. `RULE-MIS-01` writes `responds-to`, `coordinates` and one `rolls-up-to` per leadership ancestor — cross-module propagation and cross-altitude roll-up in the same commit, with no second hierarchy engine.
 
-**Role-tiered, not a generic form.** Frontline: decision, owned checkpoint, coaching prompt. Manager: adds a testable premise. Director: adds stakeholder-brief eligibility (still refused until real stakeholders exist). VP/CEO: adds an explicit budget commitment against an eligible envelope. The classifier is the existing local weighted-lexicon/NegEx engine; its percentage is a shrunk heuristic score, **not** a calibrated probability. Budget amounts are never inferred from extracted loss text. Confidential conflict language is refused before any write.
+**Role-tiered, not a generic form.** Every proposed action's words are editable before rehearsal (Session 155). Frontline: decision, owned checkpoint, coaching prompt. Manager: adds a testable premise. Director: adds stakeholder-brief eligibility (still refused until real stakeholders exist). VP/CEO: adds an explicit budget commitment against an eligible envelope. The classifier is the existing local weighted-lexicon/NegEx engine; its percentage is a shrunk heuristic score, **not** a calibrated probability. Budget amounts are never inferred from extracted loss text. Confidential conflict language is refused before any write.
 
 **Privacy by construction.** The raw note and evidence stay with the preparing seat. Ancestors receive governed work and typed provenance, not the note; the case summary does not copy it. Generic projections zero `missionCaptures`; gateway and mixin both enforce ownership. Individual detail stops above rank 2. Seats remain workflow declarations, **not authentication**.
 
