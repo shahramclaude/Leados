@@ -74,6 +74,7 @@ export const MODULE_MANIFESTS = Object.freeze({
 
   /* ------------------------------------------------------- frontline duties */
   oneonones: row('oneonones', '1:1s', ['oneOnOnes'], { mode: A, dates: ['date'], statuses: ['status'], note: 'Notes are individual detail: full at the manager altitude, counts above it.' }),
+  'agenda-ledger': row('agenda-ledger', '1:1 agenda ledger', ['agendaEntries', 'agendaMarkers'], { mode: A, classKey: 'individual', adapterScoped: true, dates: ['filedOn'], statuses: ['status'], note: 'Which prompts stand on a span’s waiting lists and who owes each one, which prompts the leader filed as a commitment, and whether a filed prompt was actually raised. A prompt is individual detail: it is named at rank 1–2 and above rank 2 the ledger prints counts, shares, Wilson intervals and refusals only. A withheld rate is BLANK with its refusal printed, never zero.' }),
   feedback: row('feedback', 'Feedback', ['feedback'], { mode: A, dates: ['date', 'observedOn'], note: 'Free-text observations are never rolled up — only their count.' }),
   conflicts: row('conflicts', 'Conflict resolution', ['conflicts'], { mode: A, dates: ['openedOn'], dues: ['resolveBy'], severities: ['severity'] }),
   conflict: row('conflict', 'Conflict detail', ['conflicts'], { mode: A, parent: 'conflicts' }),

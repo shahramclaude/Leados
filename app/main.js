@@ -75,6 +75,10 @@ import { renderDiligence } from './views/diligence.js';
 import { renderFit } from './views/fit.js';
 // ADR-0109: when connected work crosses spans, which seat can resolve it whole?
 import { renderJurisdiction } from './views/jurisdiction.js';
+// ADR-0113: what stands on a 1:1 waiting list, who owes each prompt, and whether
+// a filed promise was actually raised. Frontline-first; rolls up identity-free.
+import { renderAgenda } from './views/agenda.js';
+import { agendaAttentionCount } from './core/domain/agendaProvenance.js';
 import { reputationAttentionCount } from './core/domain/reputationalCapital.js';
 import { hindsightAttentionCount } from './core/domain/hindsight.js';
 import { epistemicAttentionCount } from './core/domain/epistemic.js';
@@ -373,6 +377,10 @@ export const NAV = [
     { route: 'people', label: 'People', icon: '◍' },
     { route: 'onboarding', label: 'Onboarding & transitions', icon: '◈' },
     { route: 'oneonones', label: '1:1s', icon: '❯', badge: 'due' },
+    // ADR-0113: the 1:1 agenda provenance ledger. A lead's queue is mostly
+    // software-written prompts; this is where the lead can see who each line
+    // actually belongs to before the forty minutes that matter.
+    { route: 'agenda-ledger', label: '1:1 agenda ledger', icon: '☰', badge: 'agenda' },
     { route: 'feedback', label: 'Feedback', icon: '✎' },
     { route: 'reviews', label: 'Performance reviews', icon: '▤' },
     // Schema v89: the instrument behind the review. Two people, one word, six
@@ -501,6 +509,7 @@ const RENDERERS = {
   diligence: (ctx) => renderDiligence(ctx),
   fit: (ctx) => renderFit(ctx),
   jurisdiction: (ctx) => renderJurisdiction(ctx),
+  'agenda-ledger': (ctx) => renderAgenda(ctx),
   'span-calibration': (ctx) => renderSpanCalibration(ctx),
   differencing: (ctx) => renderDifferencing(ctx),
   prospective: (ctx) => renderProspective(ctx),
@@ -716,7 +725,7 @@ export function parseRoute(hash) {
     'cadence': 'cadence', 'operating-cadence': 'cadence', 'forums': 'cadence',
     'standing-forum': 'cadence', 'governance-calendar': 'cadence', 'meetings': 'cadence',
     'operating-review': 'cadence', 'qbr': 'cadence', 'steerco': 'cadence',
-    'agenda': 'cadence', 'capacity-clock': 'cadence', 'little-law': 'cadence',
+    'capacity-clock': 'cadence', 'little-law': 'cadence',
     'carryover': 'carryover', 'hoshin-carryover': 'carryover', 'settlement': 'carryover',
     'stop-rule': 'carryover', 'thesis-invalidation': 'carryover',
     'concordance': 'concordance', 'expectation-concordance': 'concordance',
@@ -1135,6 +1144,8 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       fit: fitAttentionCount(state, at, state.settings),
       // ADR-0109: priced cross-branch objectives with no governed decision open.
       jurisdiction: jurAttentionCount(state, at, state.settings),
+      // ADR-0113: stale filed lines plus lists sitting at the 12-prompt cap.
+      agenda: agendaAttentionCount(state, { now: at }),
       // ADR-0092: a module that publishes a determined surface, plus open findings.
       differencing: differencesAttentionCount(state, { now: at, settings: state.settings }),
       // ADR-0094: due or overdue frozen contracts plus open governed findings.
@@ -1690,6 +1701,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       delegations: 'Delegation',
       settings: 'Settings',
       prep: '1:1 prep sheet',
+      'agenda-ledger': '1:1 agenda ledger',
     };
     return labels[route] || 'LeadOS';
   }

@@ -1,3 +1,88 @@
+## 2026-11-06 — Session 153: The 1:1 Agenda Provenance Ledger (ADR-0113, Schema v112)
+
+**What was built.** `#/agenda-ledger` — the first frontline-primary surface in six
+sessions, closing the roadmap's oldest standing frontline gap
+(`capture-to-1:1 agenda`, carried `[PLANNED]` since Session 106).
+
+The finding, from the record: fourteen-plus rules push prompts onto
+`talkingPoints`, the same list a person's own topics live in, and every one of
+those prompts is the *leader's* agenda written into the *report's* waiting list.
+Four consequences, all visible in the shipped code: the person's own topic is
+indistinguishable from machine text; the prompt the lead owes is the first thing
+`normalizeTalkingPoints` evicts at the 12-cap; a structural duty (a load-shed
+marker, a horizon classification) is filed on a person who owes nothing and reads
+as a performance conversation; and nothing recorded the difference between a
+prompt that was queued and a prompt the lead actually put on a printed agenda.
+
+**Shipped:**
+
+1. **38 declared prompt families** (`agendaProvenanceRegistry.js`), each with the
+   owning rule, the marker grammar that writes it, the named framework and
+   **who owes it** (`self` / `above` / `both` / `unclassified`). An unrecognised
+   marker is `unknown-marker` and counted as unclassified — never credited to the
+   person. A parity test makes a new prompt writer without a family a test failure.
+2. **Queue read** (`personQueue`, `buildAgendaLedger`): provenance counts per
+   person and per span, cap headroom, and **the exact line the 12-cap is about to
+   evict**.
+3. **Build-the-agenda plan**: their topics → what the leader owes them (oldest
+   first) → bilateral → unclassified → the leader's own span duties, **last and
+   visibly separated** with a printed instruction.
+4. **A filed line** (`agendaEntries`, append-only): one atomic write, one typed
+   `prepares-for` edge, a withdrawn-with-reason state, never an edit or delete.
+5. **Derived receipts** (`entryStatus`): `raised` only from a *held* 1:1 on/after
+   the filing that covered the exact prompt; a missing 1:1 is `open`/`stale`,
+   never a miss; a skipped meeting is not a fair chance. The engine writes no
+   receipt.
+6. **Two refusal-honest span measures**: queue pressure and receipt rate (Wilson
+   1927 bounds, receipt rate **refused below its declared floor**).
+7. **Identity-free roll-up**: named rows only inside the detail boundary; rank ≥ 4
+   gets counts, shares and refusals; the brief is never built from a prompt, so it
+   cannot leak one.
+8. **Prep-sheet card** on `#/prep/:id` — the screen that actually gets printed —
+   above the engine's suggested agenda.
+
+**Altitude(s) served.**
+- **Primary:** frontline lead (rank 1) and mid-manager (rank 2) — the queue read,
+  the build plan, filing/withdrawal inside their own span, the printed card.
+- **Roll-up:** director (rank 3, unit cells), VP (rank 4) and CEO (rank 5, the
+  identity-free brief that is structurally incapable of carrying a prompt).
+
+**Five real defects found and fixed by the new tests.**
+(1) `store.update()` returns the new **state**, not a result object; an
+`if (!result.ok) return result` guard in the new actions therefore returned the
+state for every command instead of its result. Fixed in all four commands and
+`ok` is now set last in the result builder. (2) The route slug `agenda` was
+already an alias for `#/cadence`, so the new terminal silently rendered the
+Operating Cadence Clock; the route is `#/agenda-ledger`. (3) An unnamed
+table-header column failed axe (`empty-table-header`). (4) The view read its rank
+from `ctx.seatContext` (absent on a scoped render) instead of the scoped read's
+own rank, so a full-access operator view was wrongly counted-only. (5) The
+prep-sheet card initially occupied the `.prep-list-ordered[0]` slot the topic
+picker owns; `decision-growth-prep.test.mjs` caught it and the printed list now
+has its own `.prep-provenance-list` class.
+
+**Verified.**
+- `tests/app/agenda-provenance.test.mjs`: **11/11 PASS**; `tests/app/agenda-render.test.mjs`: **1/1 PASS** (all six panels, a real click-to-file, axe clean).
+- `tests/app/prep.test.mjs`: 13/13 PASS. `tests/app/decision-growth-prep.test.mjs`:
+  4/4 PASS. `tests/app/cases-automation.test.mjs`: 7/7 PASS.
+- `tests/app/disclosure-compiler.test.mjs`: **21/21 PASS** — the leak oracle is
+  clean with `agenda` registered as a renderer route.
+- `npm run lint`: PASS. `npm run check:boundary`: PASS — 552 modules, 157 suites,
+  0 leaks.
+- Full 158-suite `npm test`: **not completed this session** `[UNVERIFIED]`.
+
+**Unverified / flagged.**
+- Real-browser assistive-technology walkthrough remains `[UNVERIFIED]`; axe ran in
+  jsdom only.
+- Prefix-matched bare prompts (`Case support (`, `Case learning (`,
+  `Mitigation review`, `Growth plan`) mean a human typing that exact prefix is
+  classified as engine work. The safe direction was chosen deliberately.
+- A conversation that covered a filed prompt but was logged with neither
+  `resolvedTopics` nor a discussed agenda line reads as not raised.
+- Seats remain local workflow declarations, not authentication.
+
+**Blockers.** None.
+
 ## 2026-11-06 — Session 152: The Boundary-redraw rehearsal (ADR-0112, Schema v111 unchanged)
 
 **What was built.** `#/jurisdiction?panel=redraw` — a pure, ephemeral dry run of

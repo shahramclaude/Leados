@@ -134,6 +134,11 @@ export const RECORD_POLICIES = Object.freeze({
   missionCaptures: { classKey: 'unit', detailCeiling: 0, label: 'Seat-private capture plans (scoped adapter only)', route: '#/mission?panel=capture' },
   // Individual detail. Names, notes and ratings live here.
   oneOnOnes: { classKey: 'individual', label: '1:1 conversations', route: '#/oneonones' },
+  // ADR-0113: a filed agenda line names one person and one prompt, so it IS
+  // individual detail — the same class as the 1:1 it prepares. Above rank 2 the
+  // ledger prints counts and rates only, never a prompt.
+  agendaEntries: { classKey: 'individual', label: 'Filed 1:1 agenda lines', route: '#/agenda-ledger?panel=filed' },
+  agendaMarkers: { classKey: 'individual', label: 'Agenda ledger rule markers', route: '#/agenda-ledger' },
   feedback: { classKey: 'individual', label: 'Feedback', route: '#/feedback' },
   conflicts: { classKey: 'individual', label: 'Conflict records', route: '#/conflicts' },
   reviews: { classKey: 'individual', label: 'Performance reviews', route: '#/reviews' },
@@ -431,6 +436,10 @@ export const ACTION_RIGHTS = Object.freeze({
   // boundary in the workspace is director+ and the handler additionally requires
   // the full-access root seat, exactly as the other convention rights do.
   'record-jurisdiction': { minRank: 1, maxRank: 5, label: 'Scan the jurisdiction compiler or read one span’s cross-branch governance' },
+  // ADR-0113: filing and withdrawing a 1:1 agenda line is the leader's own
+  // preparation act, open at every altitude that holds a 1:1 — and the action
+  // handlers additionally enforce the seat's own detail boundary.
+  'prepare-agenda': { minRank: 1, maxRank: 5, label: 'File or withdraw a 1:1 agenda line inside your own span' },
   'govern-jurisdiction': { minRank: 4, maxRank: 5, label: 'Re-declare the jurisdiction conventions' },
   // ADR-0107: scoring one adopted response is every leader's business;
   // re-declaring the floors that price EVERY response is director+ and the

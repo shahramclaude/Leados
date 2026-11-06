@@ -289,6 +289,15 @@ import {
   normalizeJurReadings,
   normalizeJurSettings,
 } from './domain/jurisdictionSchema.js';
+// ADR-0113 (Schema v112): the 1:1 agenda provenance ledger. Only the lines a
+// human FILED are stored; every status, share and interval is re-derived on read
+// from the person record and the 1:1 the human already logged.
+import {
+  AGENDA_SETTINGS_DEFAULTS,
+  normalizeAgendaEntries,
+  normalizeAgendaMarkers,
+  normalizeAgendaSettings,
+} from './domain/agendaProvenanceSchema.js';
 import { ALTITUDES as SPAN_ALTITUDES } from './domain/chainRegistry.js';
 // ADR-0088: the Escalation Economy — the disposition ledger, intervention-rate
 // commitments, idempotency markers, and clamped conventions.
@@ -504,7 +513,7 @@ export {
 // older blob simply opens on the undeclared operator view. A version bump here
 // would have forced 78 test files to be rewritten for zero user benefit; the
 // honest choice is to add nothing to migrate.
-export const SCHEMA_VERSION = 111;
+export const SCHEMA_VERSION = 112;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -1839,6 +1848,10 @@ export const DEFAULT_SETTINGS = Object.freeze({
   ...OUTCOME_SETTINGS_DEFAULTS,
   ...FIT_SETTINGS_DEFAULTS,
   ...JUR_SETTINGS_DEFAULTS,
+  // ADR-0113: the 1:1 agenda provenance ledger's declared conventions — the
+  // receipt floor below which no rate prints, and the age at which an unfiled-
+  // but-still-open filed line reads as stale. Printed, never fitted.
+  ...AGENDA_SETTINGS_DEFAULTS,
 });
 
 export const COLLECTIONS = [
@@ -2296,6 +2309,14 @@ export const COLLECTIONS = [
   'jurFindings',
   'jurReadings',
   'jurMarkers',
+  // ADR-0113 (Schema v112): the 1:1 agenda provenance ledger. `agendaEntries`
+  // holds ONLY the lines a human filed ("I will raise this prompt with this
+  // person"), copied verbatim so the commitment survives the waiting list being
+  // truncated; `agendaMarkers` is the rules' idempotency ledger. The status of
+  // every filed line, the queue's provenance counts and the receipt rate are
+  // re-derived on read from the person record and the logged 1:1.
+  'agendaEntries',
+  'agendaMarkers',
 
 ];
 
@@ -2992,6 +3013,7 @@ export function normalizeSettings(raw) {
     // floor, class floor, dark ceiling, forecast horizon, review horizon and
     // stale horizon — clamped and printed, never fitted from the record.
     ...normalizeDiligenceSettings(s),
+    ...normalizeAgendaSettings(s),
     chainAdoptedHorizons: normalizeAdoptedHorizons(s.chainAdoptedHorizons, DECLARED_HORIZONS),
     chainAdoptedOn: /^\d{4}-\d{2}-\d{2}$/.test(String(s.chainAdoptedOn || '')) ? s.chainAdoptedOn : null,
     chainAdoptedReadingId: typeof s.chainAdoptedReadingId === 'string' && s.chainAdoptedReadingId.trim()
@@ -7198,6 +7220,12 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.jurFindings = normalizeJurFindings(raw.jurFindings, warnings);
   state.jurReadings = normalizeJurReadings(raw.jurReadings, warnings);
   state.jurMarkers = normalizeJurMarkers(raw.jurMarkers);
+  // ADR-0113: the 1:1 agenda provenance ledger resolves before typed links —
+  // a `prepares-for` edge from a filed line must validate against a real entry
+  // id. A filing without a prompt, a person or a valid day is DROPPED with a
+  // warning, never repaired into a promise a leader might believe they made.
+  state.agendaEntries = normalizeAgendaEntries(raw.agendaEntries, warnings);
+  state.agendaMarkers = normalizeAgendaMarkers(raw.agendaMarkers, warnings);
   state.diligenceChecklists = normalizeDiligenceChecklists(raw.diligenceChecklists, warnings);
   state.diligenceConsults = normalizeDiligenceConsults(raw.diligenceConsults, warnings, { now: new Date() });
   state.diligenceGrades = normalizeDiligenceGrades(raw.diligenceGrades);
@@ -8056,6 +8084,22 @@ export const MIGRATIONS = {
     jurMarkers: Array.isArray(v110.jurMarkers) ? v110.jurMarkers : [],
     settings: isPlainObject(v110.settings)
       ? { ...v110.settings, ...normalizeJurSettings(v110.settings) }
+      : { ...DEFAULT_SETTINGS },
+  }),
+  // ADR-0113: additive 111 → 112. An existing workspace is full of prompts it
+  // never classified and has never filed one by hand, so both ledgers start
+  // EMPTY — "nothing has been committed to an agenda here yet", which is a
+  // different claim from "every prompt was raised". Nothing is back-filled:
+  // provenance is DERIVED on read from the declared family table, and a receipt
+  // is derived from a 1:1 the human logged before this upgrade. Inventing a
+  // filing at upgrade time would record a promise no one made.
+  111: (v111) => ({
+    ...v111,
+    schemaVersion: 112,
+    agendaEntries: Array.isArray(v111.agendaEntries) ? v111.agendaEntries : [],
+    agendaMarkers: Array.isArray(v111.agendaMarkers) ? v111.agendaMarkers : [],
+    settings: isPlainObject(v111.settings)
+      ? { ...v111.settings, ...normalizeAgendaSettings(v111.settings) }
       : { ...DEFAULT_SETTINGS },
   }),
   // ADR-0099: additive 100 → 101. No freeze line is inferred for an existing

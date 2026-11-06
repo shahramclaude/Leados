@@ -270,6 +270,9 @@ export const LINK_ENTITY_TYPES = [
   // Schema v73: a response receipt and its privacy-safe intake pointer.
   'response',
   'bundle',
+  // ADR-0113: a filed 1:1 agenda line. First-class so the promise a leader made
+  // to raise a specific prompt is navigable from the person and back.
+  'agendaentry',
   'intake',
   // ADR-0107: a frozen outcome expectation is independently navigable from
   // every module the adopted response touched and from each ancestor span.
@@ -555,6 +558,9 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   certificate: 'confidenceCertificates',
   response: 'responsePlans',
   bundle: 'actionBundles',
+  // ADR-0113: a filed 1:1 agenda line is a first-class graph node so the promise
+  // is navigable from the person it was filed for and back.
+  agendaentry: 'agendaEntries',
   outcomecontract: 'outcomeContracts',
   intake: 'intakeDrafts',
   settlement: 'settlements',
@@ -836,6 +842,10 @@ export const LINK_RELATIONS = [
   // from. The edge carries provenance only — the act itself is re-derived from
   // the source record on every render, never copied into a second ledger.
   'rests-on',
+  // ADR-0113: a filed agenda line prepares the 1:1 it is filed for. It is the
+  // lineage edge from a human commitment back to the person, written in the same
+  // atomic transaction as the filing; it never reads or rewrites the prompt.
+  'prepares-for',
   'develops',
   'consumes-capacity',
   'funds',
@@ -1695,6 +1705,13 @@ export function resolveLinkedEntity(state, entityType, entityId) {
     case 'bundle': {
       const rec = (state.actionBundles || []).find((b) => b.id === entityId);
       return rec ? { type: 'bundle', id: rec.id, title: rec.name, status: rec.status, route: `#/bundles?bundle=${encodeURIComponent(rec.id)}`, raw: rec } : null;
+    }
+    case 'agendaentry': {
+      const rec = (state.agendaEntries || []).find((e) => e.id === entityId);
+      // ADR-0113: a graph label carries the filing, never the conversation. No
+      // person name, no prompt text and no 1:1 detail ride a generic label.
+      return rec ? { type: 'agendaentry', id: rec.id, title: 'Filed 1:1 agenda line', status: rec.status,
+        route: `#/agenda-ledger?panel=filed&entry=${encodeURIComponent(rec.id)}`, raw: rec } : null;
     }
     case 'outcomecontract': {
       const rec = (state.outcomeContracts || []).find((c) => c.id === entityId);

@@ -152,21 +152,21 @@ function harness(state) {
 /* ------------------------------------------------------------------ schema */
 
 test('Schema v106 migrates additively: empty ledgers, declared conventions, nothing back-filled', () => {
-  assert.equal(SCHEMA_VERSION, 111);
+  assert.equal(SCHEMA_VERSION, 112);
   const base = createEmptyState(NOW_ISO);
   const legacy = { ...base, schemaVersion: 105 };
   for (const key of ['diligenceChecklists', 'diligenceConsults', 'diligenceGrades', 'diligenceMarkers']) delete legacy[key];
   legacy.settings = { ...base.settings };
   delete legacy.settings.diligenceKnowableFloor;
   const migrated = migrate(legacy);
-  assert.equal(migrated.raw.schemaVersion, 111);
+  assert.equal(migrated.raw.schemaVersion, 112);
   assert.deepEqual(migrated.raw.diligenceChecklists, []);
   assert.deepEqual(migrated.raw.diligenceConsults, []);
   assert.deepEqual(migrated.raw.diligenceGrades, []);
   assert.deepEqual(migrated.raw.diligenceMarkers, []);
   assert.equal(migrated.raw.settings.diligenceKnowableFloor, 8, 'the declared default, not a fitted value');
   assert.equal(migrated.raw.settings.diligenceGradeClaimFloor, 3);
-  assert.ok(migrated.applied.includes('105 → 106')); assert.equal(migrated.applied.at(-1), '110 → 111');
+  assert.ok(migrated.applied.includes('105 → 106')); assert.equal(migrated.applied.at(-1), '111 → 112');
   assert.deepEqual(migrate(migrated.raw).applied, [], 'idempotent');
   const normalized = normalizeState(migrated.raw, { now: NOW }).state;
   assert.deepEqual(normalized.diligenceChecklists, []);
@@ -176,7 +176,7 @@ test('Schema v106 migrates additively: empty ledgers, declared conventions, noth
 /* --------------------------------------------------------------- wiring */
 
 test('the Diligence Ledger is registered on the shared spine, the manifest, rights, graph and CSV', () => {
-  assert.equal(DEFAULT_POST_COMMIT_RULES.length, 89);
+  assert.equal(DEFAULT_POST_COMMIT_RULES.length, 90);
   assert.equal(PROPAGATION_CONTRACTS.length, DEFAULT_POST_COMMIT_RULES.length);
   assert.ok(DEFAULT_POST_COMMIT_RULES.includes(diligenceRule));
   const contract = contractFor(diligenceRule);

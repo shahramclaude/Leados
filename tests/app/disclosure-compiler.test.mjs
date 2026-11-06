@@ -106,6 +106,12 @@ const RENDERER_ROUTES = [
   // ADR-0109: the Jurisdiction Compiler declares its own manifest row, so the
   // catalogue and the shell stay one route for one route.
   'jurisdiction',
+  // ADR-0113: the 1:1 Agenda Ledger declares its own manifest row (individual
+  // class, adapter-scoped) so the catalogue and the shell stay 1:1 and the leak
+  // oracle exercises a prompt-bearing route at every altitude. (Deliberately
+  // NOT `agenda`, which is an existing alias for `cadence` — taking that slug
+  // silently rewrote the route to the wrong renderer.)
+  'agenda-ledger',
 ];
 
 /** Sentinel-bearing roster: every person, span and private note is traceable. */
@@ -202,7 +208,7 @@ function seatsOrThrow(state) {
 /* --------------------------------------------------------------- 1. schema */
 
 test('schema v90 migrates additively and refuses malformed or stale grants', () => {
-  assert.equal(SCHEMA_VERSION, 111);
+  assert.equal(SCHEMA_VERSION, 112);
   const old = { schemaVersion: 89, settings: { leaderName: 'Keep' }, cases: [{ id: 'keep' }], disclosureGrants: [{ id: 'existing' }] };
   const migrated = migrate(old);
   assert.equal(migrated.raw.schemaVersion, SCHEMA_VERSION);

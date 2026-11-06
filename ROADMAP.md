@@ -1,3 +1,78 @@
+## 2026-11-06 — The 1:1 agenda stops being an undifferentiated pile (Session 153, Schema v112, [ADR-0113](./docs/adr/0113-agenda-provenance-ledger.md), `#/agenda-ledger`)
+
+**Implemented [frontline / manager primary → director / VP / CEO roll-up].**
+Sessions 148–152 were five consecutive director-and-above instruments, and the
+coverage map said so. This session returns to the altitude that holds more 1:1
+conversations than any other, with the item the roadmap had carried as a
+`[PLANNED]` largest-UX-gap item since Session 106
+(`Frontline → manager — capture-to-1:1 agenda`).
+
+- **[frontline (rank 1) & mid-manager (rank 2) — primary]** `#/agenda-ledger` classifies
+  every prompt on a person's waiting list against **38 declared prompt families**
+  into who owes it: `self` (owed to them), `above` (a demand on the leader's own
+  span), `both`, or honestly `unclassified`. It names the one line the 12-prompt
+  cap is about to evict, and it lets the lead **file** the exact prompt they will
+  raise — one atomic write, one `prepares-for` edge, append-only withdrawal with
+  a reason. **Receipts are derived, never ticked**: `raised` only when a *held*
+  1:1 on/after the filing covered the exact prompt; a missing 1:1 is `open` /
+  `stale`, never a miss; a skipped meeting is not a fair chance. The card is
+  mounted on the **printable prep sheet** (`#/prep/:id`), above the engine's
+  suggested agenda.
+- **[director (rank 3) / VP (rank 4) / CEO (rank 5) — automatic roll-up]** Above
+  the rank-2 detail ceiling the ledger prints **counts, shares and refusals
+  only** — never a prompt. Two refusal-honest measures roll up: **queue pressure**
+  (engine-authored share, Wilson 1927 bounds) and **receipt rate** (raised ÷ filed
+  lines that had a fair chance), the latter **refused below its declared floor**.
+  `agendaBriefText` is identity-free *by construction*: it is never built from a
+  prompt string, so no prompt, person or conversation detail can travel upward.
+- **No new rule on the spine, deliberately.** Provenance is a pure function of the
+  declared table and the record; a receipt is a pure function of the 1:1 the human
+  already logged. A 90th post-commit rule would have added an event cascade to a
+  read model and bought nothing. What *is* atomic is the filing: record + typed
+  edge + event in one transaction.
+- **Declared, never fitted.** Conventions (`agendaReceiptFloor` 5, bounds 3–40;
+  `agendaStaleAfterDays` 21, bounds 3–120; auto-propagate) are clamped, printed,
+  and re-declarable only by a director+ full-access seat.
+- **Altitude coverage map (updated Session 153):**
+  - *Frontline (rank 1):* Active — the queue provenance read, the build-the-agenda
+    plan, filing and withdrawal on their own span, and the prep-sheet card (Session 153). This is the first session since 151 to ship a primary frontline surface.
+  - *Mid-manager (rank 2):* Active — span-wide queue provenance and per-person
+    queue pressure across directly-held teams; the same filing and receipt surface (Session 153).
+  - *Director (rank 3):* Active — unit-level queue pressure and receipt cells, small-cell-suppressed; conventions re-declarable (Session 153); unchanged from 149/151/152 elsewhere.
+  - *VP / Executive (rank 4):* Active — identity-free function-wide agenda discipline beside the existing dark-work, boundary-pricing and redraw surfaces (Sessions 148–152).
+  - *CEO / C-suite (rank 5):* Active — the identity-free upward brief carries counts, shares and every refusal, and is structurally incapable of carrying a prompt (Session 153).
+
+**Also fixed this session (five real defects found by the new tests).**
+The route slug `agenda` was already an alias for `#/cadence`, so the new terminal
+was silently rendered as the Operating Cadence Clock — the route is
+`#/agenda-ledger`. An unnamed table-header column failed axe
+(`empty-table-header`). And the nav entry read its rank from `ctx.seatContext`
+(absent on a scoped render) instead of the scoped read's own rank, so a
+full-access operator view was wrongly counted-only.
+`store.update()` returns the new **state**, never a result object — an
+`if (!result.ok) return result` guard in the new actions silently returned the
+state instead of the command result, so every write reported success-shaped
+`undefined`. Fixed in all four commands, with `ok` now set **last** in the result
+builder so a payload field can never overwrite the success flag. And the
+provenance card on the prep sheet initially occupied the `.prep-list-ordered[0]`
+slot that the topic picker owns, which `decision-growth-prep.test.mjs` caught;
+the printed list now carries its own `.prep-provenance-list` class.
+
+**Next targets, altitude-tagged.**
+- [frontline / manager] **Reviewed command editing inside Command Flow** — edit each
+  proposed decision option, delegation outcome and premise statement before
+  rehearsal, not only kind/owner/date. Still `[PLANNED, largest UX gap]`.
+- [manager → director] **Cross-span capture merge** — two leads describing the same
+  constraint should propose one LCA-owned case with a dedupe fingerprint and human
+  confirmation. Now buildable on ADR-0113's lineage edges.
+- [all altitudes] **Bounded epistemic backlog policy**: cap `RULE-EPI-02`
+  decisions opened per transaction per span per ISO week, with the remainder
+  deferred and printed.
+- [exec / chief] **Cross-week jurisdiction drift**: a conformal trend over ISO
+  weeks of cross-branch share and median coalition size, refused below four weeks.
+- [all altitudes] **Multi-span LCA repair in `chain.js`**: audit the callers of
+  `lowestCommonAncestor`; fix the shared helper with a parity test.
+
 ## 2026-11-06 — The Boundary-redraw rehearsal (Session 152, Schema v111 unchanged, [ADR-0112](./docs/adr/0112-boundary-redraw-rehearsal.md), `#/jurisdiction?panel=redraw`)
 
 **Implemented [director / VP / CEO primary; frontline & manager excluded with a printed explanation].**
