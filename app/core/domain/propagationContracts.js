@@ -44,6 +44,8 @@ import { caseCreatedRule } from './caseLifecycle.js';
 import { responseRule } from './responseRules.js';
 import { actionBundleRule } from './actionBundleRules.js';
 import { executionRule } from './executionRules.js';
+// ADR-0107: the Outcome Learning Loop (87th rule / 87th contract).
+import { outcomeRule } from './outcomeRules.js';
 import { forecastIntegrityRule } from './forecastIntegrity.js';
 import { resilienceRule } from './resilience.js';
 import { decisionTempoRule } from './decisionTempo.js';
@@ -158,6 +160,9 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
   },
   {
     rule: executionRule, module: 'executionRules.js', purpose: 'RULE-EXE-01: registry-subscribed source events re-derive each adopted bundle from dated terminal evidence, write rests-on proof pointers and one rolls-up-to edge per leadership ancestor, and close only the engine-authored review checkpoint when the human-resolved case and every action agree. Missing, returned, cancelled and deleted records are never counted as delivered. Pausable; explicit scans always run.', writes: ['actionBundles', 'delegations', 'links', 'events'], emits: [], scansWorkspace: true,
+  },
+  {
+    rule: outcomeRule, module: 'outcomeRules.js', purpose: 'RULE-OLN-01..04: keeps the 87th contract on the shared spine. FREEZE one immutable expectation per adopted bundle with typed rests-on pointers to every touched module and one rolls-up-to edge per leadership ancestor; GRADE exactly once from CLOSED terminal evidence plus a dated human outcome (Brier / fidelity / lateness / direction-first quadrant), refusing hindsight forecasts; open at most one governed stale-window review and one governed recalibration review per span per ISO week when pooled confidence is material. Root-event gated, marker-idempotent, pausable by outcomeAutoLearn; explicit scans always run. Never rates a person, auto-closes a human decision or overwrites a declared forecast.', writes: ['outcomeContracts', 'outcomeGrades', 'outcomeMarkers', 'decisions', 'links', 'events'], emits: [], scansWorkspace: true,
   },
   {
     rule: caseCreatedRule,

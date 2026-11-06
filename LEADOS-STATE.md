@@ -1,3 +1,31 @@
+**Snapshot:** 2026-11-06 (Session 147, Schema v109, additive `108 → 109`,
+[ADR-0107](./docs/adr/0107-outcome-learning-loop.md), `#/mission?panel=learning`,
+RULE-OLN-01..04, CSV #101, 87 rules / 87 contracts). The Outcome Learning Loop
+freezes what the organisation expected when it adopted a coordinated response,
+grades that expectation exactly once from dated terminal evidence and a human
+decision review, and rolls a suppressed, identity-free reading up every
+leadership ancestor on the SAME generalized post-commit spine — not a second
+hierarchy engine. Brier (1950) proper scoring against the strictly-prior 0.5
+base, Wilson (1927) intervals, one-sided split-conformal (Vovk et al., 2005)
+delay bounds with `k > n` refusal, reference-class outside view (Kahneman &
+Tversky 1979 / Flyvbjerg 2006) shrunk toward Beta(1,1), and PDCA/Deming
+earned/lucky/variance/fixable quadrants. A missing forecast, undated or
+postdated review is a stored refusal, BLANK in CSV, never zero. Stored scores
+are re-derived from frozen inputs on every normalize, so a hand-edited grade is
+dropped. `record-outcome-learning` rank 1–5; `govern-outcome-learning` rank 4–5
+AND full enterprise access; reads are gateway allow-listed. Decision Tempo
+prints the published outside view beside the declared forecast. Schema v109
+adds three empty ledgers and declared clamped settings; nothing is back-filled.
+Verification: `tests/app/outcome-learning.test.mjs` 16/16 and a 14-file targeted suite
+265/265 (EXIT=0); lint, canonical boundary and docs-links green; standalone rebuilt v109.
+Stale tripwires swept (107 version assertions, 92 migration chains + 18 tail assertions,
+35 CSV counts, rule count 87).
+Honest limits: local seats are declarations, not authentication; suppression is
+not differential privacy; conformal coverage assumes exchangeability; grades
+are associations, not causal forecasts or person ratings; full `npm test` and
+real-browser AT walkthrough **[UNVERIFIED]** in this session unless explicitly
+reported green in `AI-SESSION-LOG.md`. Earlier snapshots follow.
+
 ## 2026-11-06 — Current state (Session 146)
 
 Canonical local-first zero-build app: `index.html` → `app/main.js`; `src/**` quarantined. Schema **v108** (additive 107 → 108). Post-commit spine **86 rules / 86 propagation contracts**. Newest surface **`#/mission?panel=execution`**, newest ADR **0106**, newest suites **`execution-loop` (8/8)** + **`workspace-navigation` (3/3)**. Branch `arena/b02c70bb-leados`; origin `https://github.com/shahramclaude/Leados.git`.

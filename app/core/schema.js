@@ -123,6 +123,13 @@ import { normalizeSeatSettings } from './domain/seatSchema.js';
 // reload. A malformed release is dropped rather than reasoned about.
 import { normalizeReleases, normalizeMarkers as normalizeDifferencingMarkers, normalizeDifferencesSettings } from './domain/differencingSchema.js';
 import { normalizeMissionBriefs, normalizeMissionSettings } from './domain/missionSchema.js';
+import { LEADER_ID } from './domain/chain.js';
+// ADR-0107: the Outcome Learning Loop (Schema v109, additive). Fail-closed
+// normalizers hold ONLY frozen declarations; every score is re-derived on read.
+import {
+  normalizeOutcomeSettings, OUTCOME_SETTINGS_DEFAULTS,
+  normalizeOutcomeContracts, normalizeOutcomeGrades, normalizeOutcomeMarkers,
+} from './domain/outcomeSchema.js';
 import { normalizeMissionCaptures } from './domain/missionCaptureSchema.js';
 import {
   normalizeChainReadings,
@@ -478,7 +485,7 @@ export {
 // older blob simply opens on the undeclared operator view. A version bump here
 // would have forced 78 test files to be rewritten for zero user benefit; the
 // honest choice is to add nothing to migrate.
-export const SCHEMA_VERSION = 108;
+export const SCHEMA_VERSION = 109;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -2240,6 +2247,12 @@ export const COLLECTIONS = [
   'links',
   'portfolio',
   'events',
+  // ADR-0107 (Schema v109): frozen expectations, once-only grades and bounded
+  // governance markers. Purely additive; all three start EMPTY on upgrade.
+  'outcomeContracts',
+  'outcomeGrades',
+  'outcomeMarkers',
+
 ];
 
 /** Stable empty state. `now` is an ISO string so the result is a pure value. */
@@ -2887,6 +2900,7 @@ export function normalizeSettings(raw) {
     // id is dropped to the undeclared operator view, never coerced into a seat.
     ...normalizeSeatSettings(s),
     ...normalizeMissionSettings(s),
+    ...normalizeOutcomeSettings(s),
     ...normalizeMandateSettings(s),
     ...normalizeAuthorityCalibrationSettings(s),
     ...normalizeRouterSettings(s),
@@ -4995,6 +5009,11 @@ const FORECAST_SOURCE_COLLECTIONS = Object.freeze({
   portfolio: 'portfolio',
   budget: 'budgets',
   negotiation: 'negotiations',
+  // ADR-0107: declared, clamped conventions for the Outcome Learning Loop.
+  // Every one is printed in-product and refused below its own floor; none is
+  // fitted from the workspace's own outcomes.
+  ...OUTCOME_SETTINGS_DEFAULTS,
+
 });
 
 function normalizeForecastChallenges(raw, state, todayDay, now, warnings) {
@@ -5480,6 +5499,11 @@ function entityIdSetsForLinks(state) {
     const rows = collection && Array.isArray(state[collection]) ? state[collection] : [];
     idSets[entityType] = new Set(rows.map((row) => row?.id).filter((id) => typeof id === 'string' && id));
   }
+  // ADR-0107: the enterprise root seat is a virtual node in the reporting
+  // tree. Execution, Mission and Outcome rules legitimately write typed
+  // `rolls-up-to` edges to it; treating it as a broken person pointer produced
+  // repair warnings on every reload and blocked a second rehearsal.
+  if (idSets.person) idSets.person.add(LEADER_ID);
   return idSets;
 }
 
@@ -7100,6 +7124,13 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // decision, its decision date or its freeze date, and a "ruled-out" consult
   // without a reason, are DROPPED with a warning — never repaired into a claim
   // that somebody looked when the record cannot prove it.
+  // ADR-0107: frozen expectations, once-only grades and markers resolve BEFORE
+  // typed links so `rests-on`, `grades-outcome` and `rolls-up-to` edges
+  // validate against real ids. A malformed contract, a grade without its
+  // outcome value or a duplicate marker is DROPPED with a warning.
+  state.outcomeContracts = normalizeOutcomeContracts(raw.outcomeContracts, warnings);
+  state.outcomeGrades = normalizeOutcomeGrades(raw.outcomeGrades, warnings);
+  state.outcomeMarkers = normalizeOutcomeMarkers(raw.outcomeMarkers);
   state.diligenceChecklists = normalizeDiligenceChecklists(raw.diligenceChecklists, warnings);
   state.diligenceConsults = normalizeDiligenceConsults(raw.diligenceConsults, warnings, { now: new Date() });
   state.diligenceGrades = normalizeDiligenceGrades(raw.diligenceGrades);
@@ -7905,6 +7936,23 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  // ADR-0107: additive 108 → 109. An existing workspace has adopted bundles
+  // but NO frozen expectation, so all three ledgers start EMPTY — "no response
+  // has been pre-registered here yet", which is a different claim from "every
+  // past response was unforecast". Nothing is back-filled: RULE-OLN-01 freezes
+  // each adopted bundle on the next root commit or explicit scan, and every
+  // score, interval and outside view is derived on read. Inventing a forecast
+  // at upgrade time would be hindsight dressed as foresight.
+  108: (v108) => ({
+    ...v108,
+    schemaVersion: 109,
+    outcomeContracts: Array.isArray(v108.outcomeContracts) ? v108.outcomeContracts : [],
+    outcomeGrades: Array.isArray(v108.outcomeGrades) ? v108.outcomeGrades : [],
+    outcomeMarkers: Array.isArray(v108.outcomeMarkers) ? v108.outcomeMarkers : [],
+    settings: isPlainObject(v108.settings)
+      ? { ...v108.settings, ...normalizeOutcomeSettings(v108.settings) }
+      : { ...DEFAULT_SETTINGS },
+  }),
   // ADR-0099: additive 100 → 101. No freeze line is inferred for an existing
   // workspace and no continuity reading is back-filled: every committed design
   // is DETECTED on read as a freeze line, and the frozen reading ledger starts

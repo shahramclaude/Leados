@@ -121,6 +121,31 @@ function timingCurve(timing) {
 
 /* ------------------------------------------------------------------- tabs */
 
+/** ADR-0107: the workspace's own graded responses are the outside view for a
+ * NEW call. A refused reading is printed as a refusal, never a small number. */
+function outsideViewCard(report) {
+  const o = report.outsideView;
+  if (o?.status !== 'published') {
+    return card({ title: 'Outside view from our own settled responses',
+      subtitle: 'ADR-0107 · reference-class forecasting, not an LLM forecast',
+      body: banner({ tone: 'info', title: 'Outside view refused',
+        body: o?.reason || 'No graded responses are in the record yet. Adopt a reviewed response in Command Flow and grade it from dated evidence.',
+        actions: [h('a', { class: 'btn btn-small btn-ghost', href: '#/mission?panel=learning' }, 'Outcome learning →')] }) });
+  }
+  return card({ title: 'Outside view from our own settled responses',
+    subtitle: 'ADR-0107 · shrunk reference class beside each declared forecast; never a replacement for one',
+    actions: [badge(`${o.direction} · ${o.gapPp} pp`, o.material ? 'caution' : 'neutral')],
+    body: h('div', { class: 'stack-sm' },
+      h('div', { class: 'stat-grid' },
+        stat({ label: 'Outside view', value: `${o.pct}%`, hint: `95% Wilson ${o.loPct}–${o.hiPct}%` }),
+        stat({ label: 'Declared', value: `${o.declaredPct}%`, hint: 'Mean of frozen forecasts' }),
+        stat({ label: 'Realised', value: `${o.observedPct}%`, hint: `${o.n} graded loop(s)` }),
+        stat({ label: 'Pooled skill', value: o.pooled?.status === 'published' ? String(o.pooled.skill ?? 'undefined') : 'refused', hint: `Shrunk toward 50% by k=${o.shrinkK}` })),
+      h('p', { class: 'small muted' }, o.method),
+      h('p', { class: 'tiny muted' }, 'An open decision that carries its own forecast is flagged in the model tab when it sits materially outside this band. The option value, cost of delay and CD3 are never recomputed from the outside view.'),
+      h('a', { class: 'btn btn-small btn-ghost', href: '#/mission?panel=learning' }, 'Read the learning ledger →')) });
+}
+
 function overviewTab(ctx, report) {
   const perCurrency = report.totals.byCurrency;
   const rows = report.rows.map((row) => ({ ...row, className: row.debtDays > 0 ? 'tempo-row-debt' : '' }));
@@ -176,6 +201,7 @@ function overviewTab(ctx, report) {
           title: 'No decision debt recorded',
           body: 'Every open decision is inside its type guardrail. Guardrails are workspace conventions, not standards: adjust them in Calibration if they do not match how this team works.',
         }),
+    outsideViewCard(report),
     card({ title: 'Cost-of-delay queue', subtitle: 'Ranked by CD3 = cost of delay ÷ decision duration. A rank, never a currency amount.', body: queue }),
     card({
       title: 'How the queue is priced',
@@ -242,6 +268,11 @@ function timingTab(ctx, report) {
       stat({ label: 'Optimal wait', value: timing.canPriceInformation ? `${timing.bestPlan.day} days` : '—', hint: timing.canPriceInformation ? `Net ${money(timing.currency, timing.gainFromBestPlan)} better than deciding now` : 'Record the edge and uncertainty' }),
       stat({ label: 'Information horizon', value: timing.informationHorizonDays === null ? '—' : `${timing.informationHorizonDays} days`, hint: 'After this day, information is worth less than the wait' }),
     ),
+    timing.outsideView?.material
+      ? banner({ tone: 'caution', title: 'Declared confidence sits outside our own reference class',
+        body: `This decision declares ${timing.outsideView.declaredPct}%; ${timing.outsideView.n} graded response(s) give an outside view of ${timing.outsideView.pct}% (95% Wilson ${timing.outsideView.loPct}–${timing.outsideView.hiPct}%), a ${timing.outsideView.gapPp} pp gap above the declared materiality floor. The option value below is unchanged: an outside view is a question to the leader, not an automatic repricing.`,
+        actions: [h('a', { class: 'btn btn-small btn-ghost', href: '#/mission?panel=learning' }, 'Read the ledger →')] })
+      : null,
     card({ title: 'Delay curve', subtitle: `Half-life ${timing.halfLifeDays} days · erosion window ${timing.windowWeeks} weeks · ${timing.infoPlanDays ? `${timing.infoPlanDays}-day evidence plan` : 'no evidence plan recorded'}`, body: timingCurve(timing) }),
     card({ title: 'Scenario table — “what if I wait?”', subtitle: 'Every row is the same closed-form model at a different horizon; nothing is a simulation draw.', body: scenarios }),
     card({

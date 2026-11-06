@@ -85,7 +85,10 @@ export function createMissionActions(store, { now, idFactory, createApi }) {
       const proposed = proposal.commands.filter((c) => kinds.includes(c.kind));
       if (kinds.includes('budget') && !m.budgets.some((b) => b.id === input.budgetId)) return fail('Choose a budget envelope owned by this operating span.', 'budgetId');
       if (kinds.includes('budget') && !proposed.some((c) => c.kind === 'budget')) proposed.push({ kind: 'budget', title: 'Reviewed mission commitment', sourceId: source.id });
+      const pct = Number(input.priorPct);
+      const reviewedPrior = Number.isFinite(pct) && pct >= 5 && pct <= 95 ? pct : null;
       const commands = proposed.map((c) => ({ ...c, ownerId, dueOn,
+        ...(reviewedPrior !== null && ['decision', 'premise'].includes(c.kind) ? { priorPct: reviewedPrior } : {}),
         ...(c.kind === 'budget' ? { budgetId: input.budgetId || '', amount: Number(input.amount) } : {}) }));
       const valid = validateBundleCommands(commands, store.state, now());
       if (!valid.ok) return valid;

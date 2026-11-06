@@ -64,6 +64,10 @@ import {
   computePertImpact,
   linksForEntity,
 } from './cases.js';
+// ADR-0107: the Outcome Learning Loop's pooled outside view. Only this
+// dependency-free statistics module is imported here (schema.js imports the
+// tempo engine, so pulling the domain graph in would be a module cycle).
+import { outsideViewFromGrades } from './outcomePrior.js';
 
 /* ------------------------------------------------------------------ */
 /* Constants and vocabulary                                             */
@@ -755,7 +759,7 @@ function scheduleForDecision(state, decisionId) {
  * When the leader has not recorded an edge and an uncertainty, the module
  * refuses to invent them and returns verdict `needs-economics`.
  */
-export function evaluateDecisionTiming({ decision, valuation, schedule = null, now = new Date(), settings = {} } = {}) {
+export function evaluateDecisionTiming({ decision, valuation, schedule = null, now = new Date(), settings = {}, outsideView = null } = {}) {
   const today = dayKey(now);
   const classified = classifyDecisionType(decision, valuation, settings);
   const guardrailDays = guardrailDaysFor(classified.type, settings);
@@ -856,7 +860,17 @@ export function evaluateDecisionTiming({ decision, valuation, schedule = null, n
       };
     });
 
+  // ADR-0107: an OUTSIDE VIEW is printed beside a declared forecast; it never
+  // overwrites one, never changes the option price and is absent entirely when
+  // the workspace's own graded loops cannot carry the declared floors.
+  const declaredPct = Number(decision?.forecastProbability);
+  const outside = outsideView?.status === 'published' && Number.isFinite(declaredPct) && declaredPct >= 5 && declaredPct <= 95
+    ? { pct: outsideView.pct, loPct: outsideView.loPct, hiPct: outsideView.hiPct, n: outsideView.n,
+        declaredPct, gapPp: round(declaredPct - outsideView.pct, 1),
+        material: Math.abs(declaredPct - outsideView.pct) >= (outsideView.conventions?.materialityPp ?? 15) }
+    : null;
   return {
+    ...(outside ? { outsideView: outside } : {}),
     engineVersion: TEMPO_ENGINE_VERSION,
     decisionId: decision?.id || null,
     title: decision?.title || '',
@@ -943,12 +957,15 @@ export function buildTempoReport(state = {}, { now = new Date(), settings = null
 function buildTempoReportUncached(state = {}, now = new Date(), settings = null) {
   const today = dayKey(now);
   const s = settings || state.settings || {};
+  // ADR-0107: the workspace's own one-shot grades are the reference class for
+  // the price of a NEW decision. Refused below the declared floor.
+  const outsideView = outsideViewFromGrades(state.outcomeGrades || [], s);
   const rows = [];
   for (const decision of state.decisions || []) {
     if (!decision || decision.chosen) continue;
     const valuation = decisionValueTerms(state, decision);
     const schedule = scheduleForDecision(state, decision.id);
-    const timing = evaluateDecisionTiming({ decision, valuation, schedule, now, settings: s });
+    const timing = evaluateDecisionTiming({ decision, valuation, schedule, now, settings: s, outsideView });
     const cd3 = decisionCd3({ ratePerWeek: timing.ratePerWeek, infoPlanDays: timing.infoPlanDays, amount: timing.amount });
     const overGuardrailDays = Math.max(0, timing.ageDays - timing.guardrailDays);
     rows.push({
@@ -983,6 +1000,7 @@ function buildTempoReportUncached(state = {}, now = new Date(), settings = null)
   const schedules = state.tempoSchedules || [];
   const report = {
     engineVersion: TEMPO_ENGINE_VERSION,
+    outsideView,
     generatedOn: today,
     rows,
     latency,
@@ -1067,6 +1085,19 @@ export function tempoBrief(report) {
       lines: rows.length
         ? rows.map((r) => `${r.label}: ${r.band.n} settled call(s), median ${r.band.medianDays} days, p80 ${r.band.p80Days} days against a ${r.guardrailDays}-day guardrail${r.breach ? ' — BREACH' : ''}.`)
         : [`No decision type has ${TEMPO_MIN_SAMPLES} measured latencies yet, so no latency band is reported. ${report.latency.unmeasured} settled decision(s) are unmeasured.`],
+    });
+  }
+  // ADR-0107: only a PUBLISHED outside view enters the board brief. A refused
+  // one is named in the tempo terminal, never smuggled into the board pack as a
+  // small-sample point estimate.
+  if (report?.outsideView?.status === 'published') {
+    const o = report.outsideView;
+    sections.push({
+      heading: 'Outside view from our own settled responses',
+      lines: [
+        `${o.n} graded response(s): declared confidence ${o.declaredPct}%, realised ${o.observedPct}%, shrunk outside view ${o.pct}% (95% Wilson ${o.loPct}-${o.hiPct}%). Direction: ${o.direction}, ${o.gapPp} pp.`,
+        'This is a reference class beside each leader’s own forecast, not a replacement for it and not a causal claim about the next decision.',
+      ],
     });
   }
   sections.push({

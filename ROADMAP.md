@@ -1,3 +1,51 @@
+## 2026-11-06 — Outcome Learning Loop shipped; next targets (Session 147, Schema v109, [ADR-0107](./docs/adr/0107-outcome-learning-loop.md))
+
+**Gap decision.** The inventory already had adoption, execution closure,
+decision tempo, diligence, calibration, succession, board briefs and five
+altitude lenses. The missing primitive was a **belief → outcome** join owned by
+the organisation itself: no market snippet verified a zero-re-entry, multi-altitude
+roll-up of pre-registered forecasts graded once out of sample. The safe/easy
+option (another dashboard tab over existing decision reviews) was **rejected**
+because it would measure activity, not calibrated judgement. The bolder viable
+option — a frozen expectation per adopted response on the shared spine, with
+once-only grading, conformal delay bounds, a published outside view and
+role-tiered suppression — is shipped.
+
+**Shipped [all altitudes].** `RULE-OLN-01..04`; schema v109 additive with three
+empty ledgers and declared conventions; 87 rules / 87 auditable contracts;
+`outcomecontract` first-class graph node; CSV scope #101; Mission Control
+`#/mission?panel=learning`; Decision Tempo published outside view; gateway
+rights `record-outcome-learning` (rank 1–5) and `govern-outcome-learning`
+(rank 4–5 + full access); Command Flow confidence frozen at adoption.
+
+**Concrete cross-module + cross-altitude proof [frontline → CEO].** One adoption
+writes `pre-registers` / `rests-on` edges to case, decision, delegation and
+coaching plus `rolls-up-to` edges to lead → manager → director → VP → chief in
+the same atomic transaction. Closing the loop grades once and opens a governed
+recalibration ask at the altitude that owns the gap. See
+`tests/app/outcome-learning.test.mjs` (16/16).
+
+**Altitude coverage.** Frontline: own loop detail, receipt, earned/lucky/
+variance/fixable quadrant. Manager: span stale loops and pooled delay bound.
+Director: identity-free intervals with every refusal named, small cells
+suppressed. VP: portfolio calibration gap and the price of waiting printed beside
+the declared forecast. CEO/C-suite: board-ready, identity-free brief with
+refusals — never a person score.
+
+**Planned (most ambitious first).** (1) [Frontline → CEO] Authenticated,
+server-enforced org hierarchy and scoped persistence — browser seats are not an
+access boundary. (2) [Director → CEO] NL intake that auto-classifies an unlogged
+"we looked at X" consultation AND its altitude, then routes to the correct
+ledger with zero re-entry. (3) [VP → CEO] Capacity-aware delegation simulation
+joined to succession/360 evidence and a board-ready scenario pack. (4)
+[All] Independently audited disclosure against differencing and small-cohort
+leakage, plus prospective validation of aggregate forecasts against baselines.
+
+**Deliberately rejected [all].** Individual calibration scores or flight-risk
+predictions without calibration, consent and governance; auto-editing anyone's
+forecast; treating browser-selectable seats as enterprise authorization; a
+second hierarchy engine; back-filling forecasts into historical responses.
+
 ## 2026-11-06 — Reliability and governance priority
 
 - **Implemented [all altitudes]:** fix deleted-field resurrection in shared automation savepoints; regression tests exercise both transaction strategies and rule failure isolation.

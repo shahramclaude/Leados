@@ -1,3 +1,37 @@
+## Changelog — 2026-11-06 · Session 147: The Outcome Learning Loop (ADR-0107, Schema v109 · additive `108 → 109`)
+
+**What changed, and why.** Adoption and execution closure were atomic; the
+*belief* behind them was not. A leader could not tell whether the organisation's
+own declared confidence was earned. ADR-0107 freezes one expectation per adopted
+response and grades it once out of sample, on the same spine that already rolls
+work up the hierarchy.
+
+- **Four rules on the shared spine.** `RULE-OLN-01` freezes a reviewed
+  Command Flow confidence (5–95) with a horizon and typed provenance;
+  `RULE-OLN-02` grades once from closed execution plus a dated human decision
+  review; `RULE-OLN-03/04` open one governed stale/bias review per span per ISO
+  week. Pausable; explicit scan always runs.
+- **Cross-module + cross-altitude in ONE write.** `pre-registers` / `rests-on`
+  edges to case, decision, delegation, coaching, premise, budget, comms; one
+  `rolls-up-to` per ancestor. `outcomecontract` is a resolvable graph node.
+- **Statistics with refusals.** Brier (1950), Wilson (1927), split-conformal
+  (Vovk et al., 2005) with `k > n` refusal, reference-class outside view
+  (Kahneman/Tversky, Flyvbjerg) shrunk toward Laplace/Beta(1,1), PDCA
+  earned/lucky/variance/fixable quadrants. Stored scores are re-derived on
+  normalize; a forged Brier is dropped with a warning.
+- **Role-tiered surfaces.** Mission Control Learning panel with five
+  altitude-specific questions; Decision Tempo outside-view card and material-gap
+  banner; CSV scope #101 aggregate-only with BLANK refusals; frontline receipt
+  detail withheld above manager rank.
+- **Permissions & schema.** `record-outcome-learning` rank 1–5,
+  `govern-outcome-learning` rank 4–5 + full access, allow-listed safe reads,
+  three additive empty ledgers, declared clamped conventions, no back-fill.
+- **Integrity fix.** The virtual enterprise-root seat is now a valid link
+  target, removing bogus repair warnings that blocked a second rehearsal.
+- **Verification.** New `tests/app/outcome-learning.test.mjs` 16/16;
+  tripwire sweep across the test tree (v109, 87 rules, 101 CSV scopes, full
+  migration chain). See `AI-SESSION-LOG.md` for the honest full-suite status.
+
 ## Changelog — 2026-11-06 · Session 146: Evidence-based execution closure + role-first navigation (ADR-0106, Schema v108 · additive 107 → 108, `#/mission?panel=execution`)
 
 **What changed, and why.** Adoption was atomic but closure was manual and invisible above the span. `RULE-EXE-01` now derives execution from dated terminal evidence and reconciles it on the shared spine; the sidebar leads with altitude duties instead of a 150-link catalogue.

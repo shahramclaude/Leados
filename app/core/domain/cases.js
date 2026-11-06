@@ -271,6 +271,9 @@ export const LINK_ENTITY_TYPES = [
   'response',
   'bundle',
   'intake',
+  // ADR-0107: a frozen outcome expectation is independently navigable from
+  // every module the adopted response touched and from each ancestor span.
+  'outcomecontract',
   // Schema v75: a frozen or settled loop attribution receipt.
   'settlement',
   // Schema v76: a frozen counterfactual policy evaluation is navigable from the
@@ -532,6 +535,7 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   certificate: 'confidenceCertificates',
   response: 'responsePlans',
   bundle: 'actionBundles',
+  outcomecontract: 'outcomeContracts',
   intake: 'intakeDrafts',
   settlement: 'settlements',
   // Schema v76: a frozen counterfactual policy evaluation is a first-class node
@@ -1639,6 +1643,12 @@ export function resolveLinkedEntity(state, entityType, entityId) {
     case 'bundle': {
       const rec = (state.actionBundles || []).find((b) => b.id === entityId);
       return rec ? { type: 'bundle', id: rec.id, title: rec.name, status: rec.status, route: `#/bundles?bundle=${encodeURIComponent(rec.id)}`, raw: rec } : null;
+    }
+    case 'outcomecontract': {
+      const rec = (state.outcomeContracts || []).find((c) => c.id === entityId);
+      // A graph label never carries a case title, note, person or proof pointer.
+      return rec ? { type: 'outcomecontract', id: rec.id, title: 'Frozen response expectation', status: rec.status,
+        route: `#/mission?panel=learning&contract=${encodeURIComponent(rec.id)}`, raw: rec } : null;
     }
     case 'settlement': {
       const rec = (state.settlements || []).find((s) => s && s.id === entityId);

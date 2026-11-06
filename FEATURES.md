@@ -1,3 +1,24 @@
+## 2026-11-06 — Outcome Learning Loop (`#/mission?panel=learning`, ADR-0107, Schema v109)
+
+**Implemented [all altitudes].** Freeze a reviewed confidence at adoption; grade
+it exactly once when terminal evidence closes the loop; Brier skill, Wilson
+intervals, conformal delay bounds and an outside view with declared refusals;
+typed cross-module provenance and a four-rung `rolls-up-to` roll-up in the same
+atomic transaction; identity-free upward briefs with small-cell suppression;
+Mission Control Learning panel, Decision Tempo outside view and CSV scope #101;
+`record-outcome-learning` rank 1–5, `govern-outcome-learning` rank 4–5 +
+full access.
+
+**Planned [frontline → CEO].** Authenticated server-enforced hierarchy and
+scoped persistence; NL intake that classifies an unlogged consultation AND its
+altitude; capacity-aware delegation simulation joined to succession/360
+evidence; independent disclosure audit and prospective forecast validation.
+
+**Deliberately rejected [all].** Individual calibration/flight-risk scores
+without calibration, consent and governance; back-filled historical forecasts;
+auto-editing a human's forecast; a second hierarchy engine; suppression claims
+of differential privacy.
+
 ## 2026-11-06 — Session 145: Mission Command Flow (`#/mission?panel=capture`, ADR-0105, Schema v107)
 
 **Question answered:** can a leader describe a situation once and adopt the whole coordinated response — case, actions and hierarchy provenance — as one reviewed, rehearsed, atomic transaction?

@@ -1,3 +1,29 @@
+## 2026-11-06 — Evidence closes the loop, and now the loop grades the belief (Session 147, Schema v109, [ADR-0107](./docs/adr/0107-outcome-learning-loop.md))
+
+LeadOS now remembers **what you expected before you acted**. Mission Control →
+**Learning** (`#/mission?panel=learning`) freezes the reviewed Command Flow
+confidence when a coordinated response is adopted, grades it exactly once when
+dated terminal evidence and a human decision review close the loop, and rolls a
+suppressed, identity-free view up every leadership rung — frontline → manager →
+director → VP → CEO — on the same event-driven spine that already propagates
+cases, decisions, delegations, budgets and coaching.
+
+Statistics are declared, never invented: Brier proper score against a
+strictly-prior 0.5 base, Wilson intervals, a one-sided split-conformal delay
+bound that refuses an unidentifiable coverage level, and a reference-class
+outside view shrunk toward 50% and refused on a thin record. A good outcome on
+thin delivery is printed as **lucky**, not earned. A missing forecast or a
+postdated review is a stored **refusal**, never a zero. Decision Tempo prints
+the published outside view beside your declared forecast; CSV scope #101
+exports aggregates only. `record-outcome-learning` works at every rank;
+`govern-outcome-learning` needs director+ and full enterprise access.
+
+Everything remains local-first, zero-build, keyboard-native and fail-closed on
+corrupt data. Honest limits: local seats are not authentication, suppression is
+not differential privacy, grades are associations rather than causal claims,
+and a real-browser accessibility walkthrough is [UNVERIFIED]. See
+`AI-SESSION-LOG.md` for the actual verification record.
+
 ## 2026-11-06 — Transactional savepoint integrity
 
 The shared copy-on-write automation savepoint now respects a deleted top-level field on subsequent reads, preventing accidental resurrection at commit. Targeted tests cover eager/lazy parity, reassignment, successful event subscribers and failed-rule rollback. Existing frontline case propagation and hierarchy roll-up fixture passes. This is a reliability fix, not a new analytics module; local seats are not authenticated access control. Full suite and browser accessibility [UNVERIFIED].

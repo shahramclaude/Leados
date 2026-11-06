@@ -411,6 +411,11 @@ export const ACTION_RIGHTS = Object.freeze({
   // at once, so it is rank 4-5 AND the handler requires a full-access seat.
   'record-diligence-consult': { minRank: 1, maxRank: 5, label: 'Record a consultation, pre-register a process forecast or scan the diligence ledger' },
   'govern-diligence': { minRank: 4, maxRank: 5, label: 'Re-declare the diligence-ledger conventions' },
+  // ADR-0107: scoring one adopted response is every leader's business;
+  // re-declaring the floors that price EVERY response is director+ and the
+  // handler additionally requires the full-access root seat.
+  'record-outcome-learning': { minRank: 1, maxRank: 5, label: 'Scan the outcome-learning ledger or pre-register one reviewed probability' },
+  'govern-outcome-learning': { minRank: 4, maxRank: 5, label: 'Re-declare the outcome-learning conventions' },
   // ADR-0084: authoring the operating model is an org-design act — it declares
   // how every position at a level spends its week and prices structural change.
   // The same right that edits a reporting line authors the model of the lines.

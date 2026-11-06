@@ -202,10 +202,10 @@ function makeFrame(api, options = {}) {
 /* --------------------------------------------------------------- migration */
 
 test('v53 → v54 is additive: no frame, state or payoff is invented', () => {
-  assert.equal(SCHEMA_VERSION, 108);
+  assert.equal(SCHEMA_VERSION, 109);
   const applied = migrate({ schemaVersion: 53, people: [{ id: 'p1', name: 'Someone' }] });
-  assert.equal(applied.raw.schemaVersion, 108);
-  assert.deepEqual(applied.applied, ['53 → 54', '54 → 55', '55 → 56', '56 → 57', '57 → 58', '58 → 59', '59 → 60', '60 → 61', '61 → 62', '62 → 63', '63 → 64', '64 → 65', '65 → 66', '66 → 67', '67 → 68', '68 → 69', '69 → 70', '70 → 71', '71 → 72', '72 → 73', '73 → 74', '74 → 75', '75 → 76', '76 → 77', '77 → 78', '78 → 79', '79 → 80', '80 → 81', '81 → 82', '82 → 83', '83 → 84', '84 → 85', '85 → 86', '86 → 87', '87 → 88', '88 → 89', '89 → 90', '90 → 91', '91 → 92', '92 → 93', '93 → 94', '94 → 95', '95 → 96', '96 → 97', '97 → 98', '98 → 99', '99 → 100', '100 → 101', '101 → 102', '102 → 103', '103 → 104', '104 → 105', '105 → 106']);
+  assert.equal(applied.raw.schemaVersion, 109);
+  assert.deepEqual(applied.applied, ['53 → 54', '54 → 55', '55 → 56', '56 → 57', '57 → 58', '58 → 59', '59 → 60', '60 → 61', '61 → 62', '62 → 63', '63 → 64', '64 → 65', '65 → 66', '66 → 67', '67 → 68', '68 → 69', '69 → 70', '70 → 71', '71 → 72', '72 → 73', '73 → 74', '74 → 75', '75 → 76', '76 → 77', '77 → 78', '78 → 79', '79 → 80', '80 → 81', '81 → 82', '82 → 83', '83 → 84', '84 → 85', '85 → 86', '86 → 87', '87 → 88', '88 → 89', '89 → 90', '90 → 91', '91 → 92', '92 → 93', '93 → 94', '94 → 95', '95 → 96', '96 → 97', '97 → 98', '98 → 99', '99 → 100', '100 → 101', '101 → 102', '102 → 103', '103 → 104', '104 → 105', '105 → 106', '106 → 107', '107 → 108', '108 → 109']);
   assert.deepEqual(applied.raw.voiDecisions, []);
   assert.deepEqual(applied.raw.voiStudies, []);
   const normalized = normalizeState(applied.raw, { now: NOW });
@@ -633,7 +633,7 @@ test('CSV scope #48 carries opaque codes and ratios, never a label or an amount'
   assert.equal(text.includes('SECRET'), false, 'no label leaves through this scope');
   assert.equal(text.includes('12345'), false, 'no absolute amount leaves through this scope');
   assert.match(text, /D01/);
-  assert.equal(CSV_EXPORTS.length, 100);
+  assert.equal(CSV_EXPORTS.length, 101);
 });
 
 test('signals, the attention count, the brief and the Insights bucket', () => {

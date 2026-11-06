@@ -71,7 +71,10 @@ function editor(ctx, report, selected) {
       h('div', { class: 'flow-fields' }, field('Case title', title), field('Accountable owner', owner), h('div', { class: 'form-grid' }, field('Review by', review), field('Severity · FMEA', severity, 'A triage rating, not a probability.')))),
     h('fieldset', { class: 'flow-action-picker', disabled: locked }, h('legend', null, 'The coordinated response'),
       h('div', { class: 'flow-action-grid' }, ...report.profile.commands.filter((k) => k !== 'comms').map((kind) => h('label', { class: 'flow-action-option', for: `flow-kind-${kind}` }, h('input', { id: `flow-kind-${kind}`, type: 'checkbox', name: 'kinds', value: kind, checked: v.kinds.includes(kind) }), h('span', null, h('strong', null, BUNDLE_LABELS[kind]), h('small', null, actionHelp[kind]))))),
-      v.kinds.includes('premise') ? field('Assumption prior (%) — your declaration', prior, 'A starting belief to test; the classifier did not estimate it.') : null,
+      (v.kinds.includes('premise') || v.kinds.includes('decision'))
+        ? field('Response confidence (%) — frozen at adoption', prior,
+          'Your own 5–95% declaration. LeadOS freezes it when the response is adopted and grades it once from dated evidence (ADR-0107). It is not a classifier estimate and never becomes a person score.')
+        : null,
       v.kinds.includes('budget') ? h('div', { class: 'form-grid' }, field('Budget envelope', budget), field('Explicit commitment amount', amount, 'Required. An extracted loss is never treated as approved spend.')) : null),
     h('p', { class: 'tiny muted' }, 'Stakeholder briefs are available after the case has reviewed stakeholders. Command Flow never invents a recipient or sends a message.'),
     h('div', { class: 'flow-submit-row' }, h('button', { class: 'btn btn-primary', type: 'submit', disabled: locked }, ui.busy ? 'Rehearsing the whole response…' : selected && ['draft', 'rehearsed'].includes(selected.status) ? 'Save changes & rehearse again' : 'Prepare & rehearse response'),

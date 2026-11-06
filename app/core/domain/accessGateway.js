@@ -140,6 +140,11 @@ const groups = [
   // boundary — enforcement on/off, revoking a credential — is director+.
   ['attest-seat-identity', 'identityEnroll identityUnlock identityLock identityRotate identityScan identityCheckpoint identityTouch'],
   ['govern-attestation', 'identitySetSettings identityRevoke'],
+  // ADR-0107: every altitude may scan its own learning ledger and pre-register
+  // one reviewed probability; moving every ledger's conventions is director+
+  // and additionally requires the full-access root seat in the action.
+  ['record-outcome-learning', 'outcomeScan setOutcomeAutoLearn outcomeDeclarePrior'],
+  ['govern-outcome-learning', 'outcomeSetConventions'],
 ];
 export const API_RIGHTS = Object.freeze(Object.fromEntries(groups.flatMap(([right, names]) => names.split(' ').map((name) => [name, right]))));
 const FIRST_ID_COLLECTION = Object.freeze({
@@ -163,6 +168,7 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 'hindsightAttentionCount', 'hindsightBriefText', 'hindsightConventions', 'hindsightCsvRows', 'hindsightReport', 'hindsightSettings',
 'epistemicAttentionCount', 'epistemicBriefText', 'epistemicConventions', 'epistemicCsvRows', 'epistemicPreview', 'epistemicReport', 'epistemicSettings',
 'diligenceAttentionCount', 'diligenceBriefText', 'diligenceConventions', 'diligenceCsvRows', 'diligencePreview', 'diligenceReport', 'diligenceSettings',
+'outcomeAttentionCount', 'outcomeBriefText', 'outcomeConventions', 'outcomeCsvRows', 'outcomeRead', 'outcomeReceipt', 'outcomeSignals',
 'prospectiveAttentionCount', 'prospectiveBriefText', 'prospectiveCsvRows', 'prospectiveRead', 'robustAllocationAttentionCount', 'robustAllocationBriefText', 'robustAllocationCsvRows', 'robustAllocationRead', 'clearingAttentionCount', 'clearingBriefText', 'clearingCsvRows', 'clearingRead', 'clearingSolvePreview', 'identityAttentionCount', 'identityBriefText', 'identityCompareCheckpoint', 'identityCsvRows', 'identityRead', 'identityVerify', 'mandateBriefText', 'mandateRead', 'missionArchive', 'missionBriefText', 'missionCommit', 'missionCreateIntervention', 'missionFreezeBrief', 'missionHandoffText', 'missionOpenCase', 'missionRead', 'missionScan', 'missionExecutionReceipt', 'missionCaptureAnalyze', 'missionCaptureRead', 'missionCaptureReceipt', 'missionWithdraw', 'operatingModelAttentionCount', 'operatingModelBriefText', 'operatingModelCsvRows', 'operatingModelNorms', 'operatingModelRead', 'operatingModelWorkTypes', 'previewMandate', 'routingAnalyze', 'routingAttentionCount', 'routingBriefText', 'routingCalibration', 'routingCsvRows', 'routingRead', 'saveMissionPreview', 'sealBriefText', 'sealRead', 'sealVerify', 'seatBriefText', 'seatRead', 'setActiveSeat', 'strategyCycleBriefText', 'strategyCycleCsvRows', 'strategyCycleRead', 'valueStreamBriefText', 'valueStreamCsvRows', 'valueStreamRead', 'valueStreamReallocationPreview']);
 const refusal = (reason) => ({ ok: false, code: 'scope-refusal', error: reason, field: 'scope' });
 
