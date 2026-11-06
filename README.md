@@ -1,3 +1,18 @@
+## 2026-11-06 — Objective-pointer hygiene in the Jurisdiction Compiler (Session 151, Schema v111, [ADR-0111](./docs/adr/0111-objective-pointer-hygiene.md))
+
+`#/jurisdiction` now adds a fifth panel — **Pointer hygiene**
+(`#/jurisdiction?panel=hygiene`) — closing the sample-selection blind spot
+(Heckman 1979) where open work records with no objective pointer were silently
+excluded and dangling/dropped goal ids could be priced as live mandates. Every
+open case, call and funded item is now accounted for (`anchored`,
+`unanchored-work`, or `dangling-objective`) with Wilson (1927) completeness
+bounds. Frontline leads and mid-managers get a `Touching my span` Map filter and
+one-click **Anchor goal / Re-point goal** (`jurAnchorWork`) inside their own
+span, writing persistent `impacts-goal` graph provenance and waking
+`RULE-JUR-01` in the same atomic commit; Directors, VPs and the CEO receive
+identity-free, small-cell-suppressed completeness and refusal counts across
+altitude tables, the board synthesis and CSV scope #103.
+
 ## 2026-11-06 — Who can actually resolve work that crosses two teams? (Session 149, Schema v111, [ADR-0109](./docs/adr/0109-jurisdiction-compiler.md))
 
 Open `#/jurisdiction` and press **Compile now**. LeadOS reads the open cases,

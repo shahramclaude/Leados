@@ -33,7 +33,7 @@
  * Pure data and pure functions: no imports, no clock, no DOM, no storage.
  */
 
-export const JUR_ENGINE_VERSION = 'jurisdiction-2026.11-v1';
+export const JUR_ENGINE_VERSION = 'jurisdiction-2026.11-v2';
 
 /**
  * THREE GOVERNANCE ROUTES for a cross-span cluster. Deliberately exactly three:
@@ -136,6 +136,7 @@ export const JUR_LIMITS = Object.freeze({
   markers: 900,
   membersPerCluster: 12,
   objectivesCap: 60,
+  hygieneRecords: 120,
   clustersPerPass: 3,
   clustersPerScan: 40,
   governedPerScan: 4,
@@ -149,6 +150,7 @@ export const JUR_EVENTS = Object.freeze({
   SCAN: 'jur.scan',
   CONVENTIONS: 'jur.conventions',
   GOVERNED: 'jur.governed',
+  ANCHOR: 'jur.anchor',
 });
 
 /**
@@ -161,6 +163,7 @@ export const JUR_WORK_EVENTS = Object.freeze([
   'case.created', 'case.updated', 'case.resolved', 'case.reopened',
   'decision.created', 'decision.updated', 'decision.reclassified',
   'portfolio.created', 'portfolio.updated', 'portfolio.funded',
+  'goal.updated',
   'link.created',
 ]);
 
@@ -224,6 +227,7 @@ export const JUR_SOURCES = Object.freeze([
 /** Relations that are provenance-only are never used to build a cluster. */
 export const JUR_PANELS = Object.freeze([
   Object.freeze({ key: 'map', label: 'The map', note: 'Every cross-span objective: which branches hold it, and whether any one seat below the ancestor can resolve it whole.' }),
+  Object.freeze({ key: 'hygiene', label: 'Pointer hygiene', note: 'Counted refusals for open work with no objective pointer or a dangling/dropped goal id — with span-scoped anchoring below the detail ceiling.' }),
   Object.freeze({ key: 'options', label: 'Governance options', note: 'Three priced routes per cluster — coalition, escalation, boundary redraw — with the arithmetic and every refusal printed.' }),
   Object.freeze({ key: 'grades', label: 'Forecast grades', note: 'Each governance route the ledger predicted, graded once against the dated decision a human actually made.' }),
   Object.freeze({ key: 'method', label: 'Method & refusals', note: 'Every declared convention, bound, framework and refusal this screen can print.' }),
@@ -236,6 +240,9 @@ export const JUR_REFUSALS = Object.freeze({
   'single-span': 'Every record in this cluster is held inside one branch. A single seat already has the mandate; there is no jurisdiction gap to price.',
   'no-lca': 'The reporting tree resolves no common ancestor for these spans. No governance route can be named without inventing authority.',
   'no-decisive-route': 'The two cheapest governance routes are within the declared materiality band. No route is recommended; the tie is printed, not broken silently.',
+  'dangling-objective': 'Work record names a goal id that no longer exists or has been dropped. Counted as a dangling refusal and never priced as a live jurisdiction boundary.',
+  'unanchored-work': 'Open work record carries no objective pointer and no impacts-goal link. Counted as an unanchored refusal rather than silently excluded (Heckman 1979 selection bias).',
+  'thin-anchoring': 'Too few open work records exist in this scope to bound objective-anchoring completeness. The count is printed; the Wilson rate is refused.',
   'ungraded': 'The governed decision this finding opened has not settled. The predicted route stays ungraded — an absent outcome is never scored as a miss.',
   'postdated': 'The review that would grade this finding is dated before the finding was frozen, or carries no date. The grade is refused, never back-filled.',
   'suppressed': 'This cell is below the declared small-cell floor. It is withheld, not zero — suppression is not differential privacy and is labelled as such.',

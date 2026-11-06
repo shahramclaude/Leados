@@ -32,7 +32,7 @@ import { JSDOM } from 'jsdom';
 import {
   createEmptyState, normalizeState, migrate, SCHEMA_VERSION, DEFAULT_SETTINGS, COLLECTIONS,
 } from '../../app/core/schema.js';
-import { createStore } from '../../app/core/store.js';
+import { createStore, STORAGE_KEY } from '../../app/core/store.js';
 import { createApi } from '../../app/actions.js';
 import { buildDemoState } from '../../app/core/demo.js';
 import { buildChain } from '../../app/core/domain/chain.js';
@@ -45,7 +45,7 @@ import { API_RIGHTS, SAFE_READS } from '../../app/core/domain/accessGateway.js';
 import {
   buildJurisdictionBook, harvestObjectives, priceCluster, jurConventions, jurWilson,
   jurGradeFinding, jurCsvRows, jurBrief, jurSpanRollUp, jurisdictionRead,
-  JUR_CSV_COLUMNS,
+  JUR_CSV_COLUMNS, buildGoalLinkMap, goalPointerStatus,
 } from '../../app/core/domain/jurisdiction.js';
 import {
   normalizeJurSettings, normalizeJurFindings, normalizeJurReadings, normalizeJurMarkers,
@@ -119,8 +119,9 @@ test('the engine shares the one spine, the graph, the rights and the CSV registe
   for (const t of ['jurfinding', 'jurreading']) assert.ok(LINK_ENTITY_TYPES.includes(t), t);
   for (const r of ['spans-work', 'governs-mandate', 'reads-span-mandate']) assert.ok(LINK_RELATIONS.includes(r), r);
   assert.equal(API_RIGHTS.jurScan, 'record-jurisdiction');
+  assert.equal(API_RIGHTS.jurAnchorWork, 'record-jurisdiction');
   assert.equal(API_RIGHTS.jurSetConventions, 'govern-jurisdiction');
-  for (const name of ['jurRead', 'jurBriefText', 'jurCsvRows', 'jurConventions', 'jurAttentionCount', 'jurSpanRollUp', 'jurBook']) {
+  for (const name of ['jurRead', 'jurHygiene', 'jurBriefText', 'jurCsvRows', 'jurConventions', 'jurAttentionCount', 'jurSpanRollUp', 'jurBook']) {
     assert.ok(SAFE_READS.has(name), name);
   }
   assert.equal(CSV_EXPORTS.length, 102);
@@ -372,7 +373,7 @@ test('the four panels render at an undeclared operator view and are axe-clean', 
   const dom = new JSDOM('<!doctype html><html lang="en"><body><main id="view"></main><div id="modal-root"></div><div id="toast-root"></div></body></html>', { url: 'https://leados.test/#/jurisdiction' });
   globalThis.window = dom.window; globalThis.document = dom.window.document; globalThis.Node = dom.window.Node;
   const AXE_SRC = fs.readFileSync(path.resolve(import.meta.dirname, '../../node_modules/axe-core/axe.min.js'), 'utf8');
-  for (const panel of ['map', 'options', 'grades', 'method']) {
+  for (const panel of ['map', 'hygiene', 'options', 'grades', 'method']) {
     const ctx = {
       state: store.state, store, api, now: NOW, query: new URLSearchParams(`panel=${panel}`),
       navigate() {}, refresh() {}, render() {},
@@ -386,4 +387,165 @@ test('the four panels render at an undeclared operator view and are axe-clean', 
     assert.deepEqual(results.violations.map((v) => v.id), [], `${panel} is axe-clean`);
   }
   dom.window.close();
+});
+
+/* ------------------------------------------- 9. ADR-0111 pointer hygiene */
+
+test('ADR-0111: unanchored and dangling goal pointers are counted refusals, never silently dropped or priced', () => {
+  const demo = buildDemoState(NOW);
+  const draft = clone(demo);
+  draft.settings = { ...(draft.settings || {}), ...normalizeJurSettings({}) };
+  draft.jurFindings = []; draft.jurReadings = []; draft.jurMarkers = [];
+
+  // 1. Shipped demo already has open unanchored decisions + portfolio items:
+  //    every open non-engine record must be accounted for.
+  const baseBook = buildJurisdictionBook(draft, { now: NOW });
+  assert.equal(
+    baseBook.totals.openWork,
+    baseBook.totals.anchoredWork + baseBook.totals.unanchoredWork + baseBook.totals.danglingWork,
+    'zero silent exclusions across open work records',
+  );
+  assert.ok(baseBook.totals.unanchoredWork > 0, 'unanchored demo calls/portfolio items are surfaced');
+  assert.equal(baseBook.totals.danglingWork, 0);
+  assert.ok(Number.isFinite(baseBook.totals.anchoringLoPct), 'Wilson anchoring completeness bound is computed');
+
+  // 2. Two spans naming a deleted goal id are counted as dangling-objective and
+  //    REFUSED — RULE-JUR-02 must never open a boundary decision for a ghost goal.
+  const ghostGoal = 'goal-deleted-ghost-99';
+  const people = draft.people.filter((p) => p.status !== 'archived');
+  draft.cases.push(
+    { id: 'case-ghost-1', kind: 'risk', status: 'open', title: 'Ghost work A', summary: '', ownerId: people[0].id, linkedGoalId: ghostGoal, openedOn: '2026-11-05' },
+    { id: 'case-ghost-2', kind: 'risk', status: 'open', title: 'Ghost work B', summary: '', ownerId: people[2].id, linkedGoalId: ghostGoal, openedOn: '2026-11-05' },
+    { id: 'case-ghost-3', kind: 'risk', status: 'open', title: 'Ghost work C', summary: '', ownerId: people[4].id, linkedGoalId: ghostGoal, openedOn: '2026-11-05' },
+  );
+  jurisdictionRule(draft, {
+    event: { type: 'jur.scan', entityId: 'all' }, now: NOW, settings: draft.settings,
+    idFactory: (p) => `${p}-ghost-${Math.random().toString(36).slice(2, 7)}`,
+  });
+  const ghostFinding = draft.jurFindings.find((f) => f.objectiveKey === `goal:${ghostGoal}`);
+  assert.ok(ghostFinding, 'cross-branch dangling objective is recorded as a finding');
+  assert.equal(ghostFinding.verdict, 'refused');
+  assert.equal(ghostFinding.refusalKey, 'dangling-objective');
+  assert.equal(ghostFinding.governedDecisionId, null, 'never opens a governed boundary decision on a missing goal');
+  const ghostBook = buildJurisdictionBook(draft, { now: NOW });
+  assert.equal(ghostBook.totals.danglingWork, 3);
+  assert.equal(goalPointerStatus(`goal:${ghostGoal}`, new Map(draft.goals.map((g) => [g.id, g])), true).status, 'missing');
+
+  // 3. Dropping a previously live goal supersedes its frozen finding on goal.updated.
+  const pricedBefore = draft.jurFindings.find((f) => f.verdict === 'priced' && f.status === 'frozen');
+  assert.ok(pricedBefore, 'at least one live priced finding exists');
+  const liveGoalId = pricedBefore.objectiveKey.slice(5);
+  const targetGoal = draft.goals.find((g) => g.id === liveGoalId);
+  targetGoal.status = 'dropped';
+  jurisdictionRule(draft, {
+    event: { type: 'goal.updated', entityId: liveGoalId }, now: NOW, settings: draft.settings,
+    idFactory: (p) => `${p}-drop`,
+  });
+  assert.equal(pricedBefore.status, 'superseded');
+  assert.equal(pricedBefore.gradeNote, JUR_REFUSALS['dangling-objective']);
+});
+
+test('ADR-0111: jurAnchorWork enforces frontline/manager span boundaries, wakes RULE-JUR-01 atomically, survives normalizeState and rolls up identity-free', () => {
+  const initial = createEmptyState(NOW.toISOString());
+  initial.settings = {
+    ...initial.settings,
+    leaderName: 'Dana Root',
+    chainLeaderAltitude: 'chief',
+    activeSeatId: 'lead1',
+    seatEnforce: true,
+    ...normalizeJurSettings({}),
+  };
+  initial.people = [
+    ['vp1', null, 'vp', 'Rina VP'],
+    ['dir1', 'vp1', 'director', 'Sam Director'],
+    ['mgr1', 'dir1', 'manager', 'Mei Manager'],
+    ['lead1', 'mgr1', 'lead', 'Priya Lead'],
+    ['lead2', 'mgr1', 'lead', 'Jordan Lead'],
+    ['ic1', 'lead1', 'ic', 'Ari Klein'],
+    ['ic2', 'lead2', 'ic', 'Cy Orlov'],
+  ].map(([id, managerId, level, name]) => ({ id, name, role: level, level, managerId, status: 'active' }));
+  initial.goals = [{
+    id: 'goal-shared-ops',
+    title: 'Zero-drop shift handoff SLA',
+    description: '',
+    ownerId: null,
+    scope: 'team',
+    coAuthored: null,
+    dueDate: null,
+    keyResults: [],
+    confidence: 'on-track',
+    initialConfidence: 'on-track',
+    status: 'active',
+    completedOn: null,
+    krUpdatedOn: null,
+    checkins: [],
+    createdAt: NOW.toISOString(),
+  }];
+  initial.cases = [
+    { id: 'case-peer-a', kind: 'risk', status: 'open', title: 'Peer branch work A', summary: '', ownerId: 'lead2', involvedPersonIds: [], linkedGoalId: 'goal-shared-ops', openedOn: '2026-11-05', createdAt: NOW.toISOString(), updatedAt: NOW.toISOString() },
+    { id: 'case-peer-b', kind: 'risk', status: 'open', title: 'Peer branch work B', summary: '', ownerId: 'ic2', involvedPersonIds: [], linkedGoalId: 'goal-shared-ops', openedOn: '2026-11-05', createdAt: NOW.toISOString(), updatedAt: NOW.toISOString() },
+    { id: 'case-peer-unanchored', kind: 'risk', status: 'open', title: 'Peer private case', summary: '', ownerId: 'lead2', involvedPersonIds: [], linkedGoalId: null, openedOn: '2026-11-05', createdAt: NOW.toISOString(), updatedAt: NOW.toISOString() },
+  ];
+  initial.decisions = [{
+    id: 'dec-frontline-unanchored',
+    title: 'Frontline shift triage call',
+    question: 'How do we sequence shift handoff?',
+    date: '2026-11-06',
+    reversibility: 'reversible',
+    driver: 'Priya Lead',
+    approver: 'Priya Lead',
+    contributors: '', informed: '',
+    options: [{ id: 'o1', label: 'Sequence A', pros: '', cons: '' }],
+    chosen: '', rationale: '', reviewOn: null, reviewedOn: null, outcome: 'pending', outcomeNotes: '',
+    forecastProbability: null, decidedOn: null, createdAt: NOW.toISOString(), portfolioNotes: [],
+  }];
+
+  const seeded = normalizeState(initial, { now: NOW }).state;
+  const data = new Map([[STORAGE_KEY, JSON.stringify(seeded)]]);
+  const storage = { getItem: (k) => data.get(k) ?? null, setItem: (k, v) => data.set(k, String(v)), removeItem: (k) => data.delete(k) };
+  let seq = 0;
+  const idFactory = (p) => `${p}-hyg-${++seq}`;
+  const store = createStore({ storage, now: () => NOW, idFactory });
+  store.load();
+  const api = createApi(store, { now: () => NOW, idFactory });
+
+  // Frontline seat (rank 1): sees own unanchored decision, NEVER peer branch's unanchored case.
+  const flHygiene = api.jurHygiene();
+  assert.equal(flHygiene.ok, true);
+  assert.equal(flHygiene.withheld, false);
+  assert.ok(flHygiene.hygieneQueue.some((q) => q.recordId === 'dec-frontline-unanchored'), 'frontline sees own unanchored decision');
+  assert.ok(!flHygiene.hygieneQueue.some((q) => q.recordId === 'case-peer-unanchored'), 'frontline never sees peer branch queue item');
+
+  // Sideways write attempt against peer's case is refused.
+  const denied = api.jurAnchorWork({ entityType: 'case', recordId: 'case-peer-unanchored', goalId: 'goal-shared-ops' });
+  assert.equal(denied.ok, false);
+
+  // Own-span anchor succeeds, writes impacts-goal link, survives normalizeState,
+  // AND wakes RULE-JUR-01 in the SAME atomic transaction to freeze the new cross-branch cluster
+  // and roll it up to mgr1 -> dir1 -> vp1 -> leader!
+  const anchored = api.jurAnchorWork({ entityType: 'decision', recordId: 'dec-frontline-unanchored', goalId: 'goal-shared-ops' });
+  assert.equal(anchored.ok, true, anchored.error);
+  assert.ok(buildGoalLinkMap(store.state).get('decision:dec-frontline-unanchored')?.includes('goal-shared-ops'));
+  const frozen = store.state.jurFindings.find((f) => f.objectiveKey === 'goal:goal-shared-ops');
+  assert.ok(frozen, 'anchoring woke RULE-JUR-01 and froze the cross-branch cluster in the same commit');
+  assert.ok(frozen.memberIds.includes('dec-frontline-unanchored'));
+  const rollTargets = new Set(edges(store.state, 'rolls-up-to').filter((e) => e.sourceId === frozen.id).map((e) => e.targetId));
+  for (const anc of ['mgr1', 'dir1', 'vp1', 'leader']) assert.ok(rollTargets.has(anc), `rolled up to ${anc}`);
+
+  const reloaded = normalizeState(clone(store.state), { now: NOW }).state;
+  assert.ok(buildGoalLinkMap(reloaded).get('decision:dec-frontline-unanchored')?.includes('goal-shared-ops'), 'decision goal anchor survives normalizeState');
+
+  // Switch to director (rank 3) and VP (rank 4): withheld is true, zero ids/titles leak,
+  // and direct item anchoring above rank 2 is refused.
+  for (const upperId of ['dir1', 'vp1']) {
+    store.update((d) => { d.settings.activeSeatId = upperId; }, { type: 'seat.changed', entity: 'seat', entityId: upperId, summary: 'Upper seat' });
+    const upperRead = jurisdictionRead(store.state, { now: NOW });
+    assert.equal(upperRead.withheld, true);
+    assert.equal(upperRead.hygieneQueue.length, 0);
+    assert.equal(upperRead.book.clusters.length, 0);
+    const serializedUpper = JSON.stringify({ cells: upperRead.cells, sources: upperRead.hygieneBySource, brief: upperRead.brief });
+    assert.ok(!/dec-frontline-unanchored|case-peer-unanchored|Frontline shift triage|Peer private case|goal-shared-ops/.test(serializedUpper), 'zero item titles, record ids or objective keys leak above rank 2');
+    const blockedUpperWrite = api.jurAnchorWork({ entityType: 'decision', recordId: 'dec-frontline-unanchored', goalId: 'goal-shared-ops' });
+    assert.equal(blockedUpperWrite.ok, false);
+  }
 });

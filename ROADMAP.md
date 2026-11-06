@@ -1,3 +1,51 @@
+## 2026-11-06 — Objective-pointer hygiene & span-scoped mandate anchoring (Session 151, Schema v111, [ADR-0111](./docs/adr/0111-objective-pointer-hygiene.md))
+
+**Implemented [frontline / manager primary → director / VP / CEO roll-up].**
+Closed the #1 roadmap target from Sessions 149–150 (`Objective-pointer hygiene`)
+without a schema bump:
+
+- **[frontline (rank 1) & mid-manager (rank 2) — primary]** `#/jurisdiction?panel=hygiene`
+  surfaces every open work record (`cases`, `decisions`, `portfolio`) inside the
+  leader's own detail boundary that carries no objective pointer (`unanchored-work`)
+  or names a missing / `dropped` goal (`dangling-objective`), plus a `Touching my span`
+  filter on `#/jurisdiction` Map. One-click **Anchor goal / Re-point goal**
+  (`jurAnchorWork`, gated by `record-jurisdiction` + span/ceiling checks) writes
+  a persistent `impacts-goal` graph edge (so `decisions` and non-goal-sourced
+  `portfolio` items survive `normalizeState`) and wakes `RULE-JUR-01` in the
+  same atomic transaction to freeze and roll up any newly formed cross-branch
+  cluster. Also fixed decision person-attribution (`workRecordPeople`) so
+  `driver`/`approver` names resolve to reporting-tree nodes.
+- **[director (rank 3) / VP (rank 4) / CEO (rank 5) — automatic roll-up]**
+  Above the rank-2 detail ceiling (`withheld === true`), item ids, titles and
+  objective keys are stripped; upper altitudes receive suppression-safe
+  pointer-hygiene counts by work source and altitude (`jurSpanRollUp`,
+  `jurisdictionRead`, `jurBrief`, and `row_kind: 'hygiene'` rows in CSV scope #103)
+  with Wilson (1927) completeness bounds and Heckman (1979) sample-selection
+  framing. Cross-branch clusters naming a deleted or `dropped` goal are refused
+  (`dangling-objective`) rather than priced into phantom `RULE-JUR-02`
+  governance decisions, and `goal.updated` supersedes frozen findings when a
+  goal is dropped.
+- **Altitude coverage map (updated Session 151):**
+  - *Frontline (rank 1):* Active — span-scoped Map filter + Pointer Hygiene triage queue + atomic `jurAnchorWork` on local cases & calls (Session 151).
+  - *Mid-manager (rank 2):* Active — span-scoped peer-handoff filter + dangling/dropped goal remediation across direct teams (Session 151).
+  - *Director (rank 3):* Active — unit-level compiled completeness bounds + small-cell-suppressed hygiene & coalition/escalation cells (Sessions 149, 151).
+  - *VP / Executive (rank 4):* Active — function-wide dark-work selection exposure + boundary pricing & convention governance (Sessions 148, 149, 151).
+  - *CEO / C-suite (rank 5):* Active — identity-free enterprise altitude table & board synthesis pairing cross-branch load with unanchored/dangling refusal rates (Sessions 148, 149, 151).
+
+**Next targets, altitude-tagged.**
+- [director / exec] **Boundary-redraw rehearsal**: a dry-run that shows which
+  `spans-work` clusters would collapse, which `rolls-up-to` edges would move and
+  which governed decisions would become stale, WITHOUT writing anything.
+- [exec / chief] **Cross-week jurisdiction drift**: a conformal trend over ISO
+  weeks of cross-branch share and median coalition size, refused below four
+  weeks, with the pooled rate beside the mean of unit rates.
+- [all altitudes] **Bounded epistemic backlog policy**: cap `RULE-EPI-02`
+  decisions opened per transaction per span per ISO week, with the remainder
+  deferred and printed.
+- [all altitudes] **Multi-span LCA repair in `chain.js`**: audit the ~80 other
+  callers of `lowestCommonAncestor`; fix the shared helper with a parity test.
+- [all altitudes] Access-registry polish carried forward from Session 148.
+
 ## 2026-11-06 — The event budget stops silently discarding work (Session 150, Schema v111, [ADR-0110](./docs/adr/0110-derived-event-budget.md))
 
 **Shipped [all altitudes] — P0 defect, not a feature.** The shared

@@ -46,7 +46,7 @@ import { ensureEntityLink } from './automation.js';
 import { buildChain, managerNodeId, LEADER_ID } from './chain.js';
 import {
   buildJurisdictionBook, jurConventions, jurGradeFinding, jurSpanRollUp,
-  jurAttentionCount as jurAttentionRead,
+  jurAttentionCount as jurAttentionRead, goalPointerStatus,
 } from './jurisdiction.js';
 import {
   JUR_ENGINE_VERSION, JUR_EVENTS, JUR_LIMITS, JUR_RULE_IDS, JUR_SETTLEMENT_EVENTS,
@@ -108,20 +108,35 @@ export function jurisdictionFindingIds(state) {
 /* 1. DETECT + FREEZE (cross-module propagation + vertical roll-up)     */
 /* ------------------------------------------------------------------ */
 
-function detectPass(draft, ctx, out, conventions, budget, { automatic, changedId }) {
+function detectPass(draft, ctx, out, conventions, budget, { automatic, changedId, eventType }) {
   const chain = buildChain(draft, { now: ctx.now, settings: draft.settings });
   const book = buildJurisdictionBook(draft, { now: ctx.now, conventions, chain });
   draft.jurFindings = Array.isArray(draft.jurFindings) ? draft.jurFindings : [];
+  if (Array.isArray(draft.goals)) {
+    const goalMap = new Map(draft.goals.filter((g) => g?.id).map((g) => [String(g.id), g]));
+    for (const finding of draft.jurFindings) {
+      if (!finding || finding.status !== 'frozen') continue;
+      if (!goalPointerStatus(finding.objectiveKey, goalMap, true).valid) {
+        finding.status = 'superseded';
+        finding.gradeNote = JUR_REFUSALS['dangling-objective'];
+        note(ctx, out, JUR_RULE_IDS.DETECT, 'superseded', 'jurfinding', finding.id,
+          'Superseded a frozen jurisdiction finding because its referenced goal was dropped or no longer exists');
+      }
+    }
+  }
   const week = book.week;
+  const changedGoalKey = eventType?.startsWith('goal.') && changedId ? `goal:${changedId}` : null;
+  const filterByMember = automatic && changedId && !changedGoalKey && eventType !== 'link.created';
   for (const cluster of book.clusters) {
     if (budget.remaining <= 0) break;
     const id = findingKey(cluster.objectiveKey, week);
     if (draft.jurFindings.some((f) => f?.id === id)) continue;
     // On an AUTOMATIC root work write, freeze only the cluster(s) the changed
-    // record actually belongs to. This is the propagation seam: registering a
-    // case in one module prices the objective it joined, in the same atomic
-    // transaction, without rescanning or re-pricing the whole workspace.
-    if (automatic && changedId && !cluster.memberIds.includes(String(changedId))) continue;
+    // record or goal actually belongs to. This is the propagation seam:
+    // registering or anchoring work in one module prices (or counts as refused)
+    // the objective it joined, in the same atomic transaction.
+    if (changedGoalKey && cluster.objectiveKey !== changedGoalKey) continue;
+    if (filterByMember && !cluster.memberIds.includes(String(changedId))) continue;
     const earliest = cluster.members.map((m) => m.date).filter(Boolean).sort()[0] || null;
     draft.jurFindings.push({
       id,
@@ -368,7 +383,7 @@ export function jurisdictionRule(draft, ctx = {}) {
   const fullPass = explicit || settlementEvent;
   const budget = { remaining: fullPass ? JUR_LIMITS.clustersPerScan : JUR_LIMITS.clustersPerPass };
   const book = detectPass(draft, runCtx, out, conventions, budget, {
-    automatic: !fullPass, changedId: event.entityId || null,
+    automatic: !fullPass, changedId: event.entityId || null, eventType: event.type,
   });
   if (fullPass) {
     governPass(draft, runCtx, out, conventions, book);

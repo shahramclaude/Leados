@@ -117,8 +117,8 @@ const groups = [
   ['govern-diligence', 'diligenceSetConventions'],
   ['record-fit', 'fitScan fitClassify'],
   ['govern-fit', 'fitSetConventions'],
-  // ADR-0109: the Jurisdiction Compiler's two writes and its scoped reads.
-  ['record-jurisdiction', 'jurScan'],
+  // ADR-0109 / ADR-0111: the Jurisdiction Compiler's writes and scoped reads.
+  ['record-jurisdiction', 'jurScan jurAnchorWork'],
   ['govern-jurisdiction', 'jurSetConventions'],
   // ADR-0092: the Differencing Defender. Publishing is an act every altitude
   // performs, so the command right is open at every rank (the action enforces the
@@ -181,7 +181,7 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // ADR-0109: the Jurisdiction Compiler's seat-scoped read surface. Registered
 // here because a module whose reads are absent from SAFE_READS is unreadable
 // under enforcement while its writes are still gated.
-'jurRead', 'jurBriefText', 'jurCsvRows', 'jurConventions', 'jurAttentionCount', 'jurSpanRollUp', 'jurBook',
+'jurRead', 'jurHygiene', 'jurBriefText', 'jurCsvRows', 'jurConventions', 'jurAttentionCount', 'jurSpanRollUp', 'jurBook',
 'outcomeAttentionCount', 'outcomeBriefText', 'outcomeConventions', 'outcomeCsvRows', 'outcomeRead', 'outcomeReceipt', 'outcomeSignals',
 'prospectiveAttentionCount', 'prospectiveBriefText', 'prospectiveCsvRows', 'prospectiveRead', 'robustAllocationAttentionCount', 'robustAllocationBriefText', 'robustAllocationCsvRows', 'robustAllocationRead', 'clearingAttentionCount', 'clearingBriefText', 'clearingCsvRows', 'clearingRead', 'clearingSolvePreview', 'identityAttentionCount', 'identityBriefText', 'identityCompareCheckpoint', 'identityCsvRows', 'identityRead', 'identityVerify', 'mandateBriefText', 'mandateRead', 'missionArchive', 'missionBriefText', 'missionCommit', 'missionCreateIntervention', 'missionFreezeBrief', 'missionHandoffText', 'missionOpenCase', 'missionRead', 'missionScan', 'missionExecutionReceipt', 'missionCaptureAnalyze', 'missionCaptureRead', 'missionCaptureReceipt', 'missionWithdraw', 'operatingModelAttentionCount', 'operatingModelBriefText', 'operatingModelCsvRows', 'operatingModelNorms', 'operatingModelRead', 'operatingModelWorkTypes', 'previewMandate', 'routingAnalyze', 'routingAttentionCount', 'routingBriefText', 'routingCalibration', 'routingCsvRows', 'routingRead', 'saveMissionPreview', 'sealBriefText', 'sealRead', 'sealVerify', 'seatBriefText', 'seatRead', 'setActiveSeat', 'strategyCycleBriefText', 'strategyCycleCsvRows', 'strategyCycleRead', 'valueStreamBriefText', 'valueStreamCsvRows', 'valueStreamRead', 'valueStreamReallocationPreview']);
 const refusal = (reason) => ({ ok: false, code: 'scope-refusal', error: reason, field: 'scope' });
