@@ -14,7 +14,12 @@ const need = (condition, error, field) => condition ? null : { ok: false, error,
 export const BUNDLE_ADAPTERS = Object.freeze({
   decision: {
     collection: 'decisions', type: 'decision', reversible: 'Remove only an untouched, unchosen decision',
-    validate(a, s) { return need(text(a.title), 'Name the decision.', 'title'); },
+    validate(a, s) {
+      const pct = Number(a.priorPct);
+      return need(text(a.title), 'Name the decision.', 'title')
+        || (a.priorPct !== undefined && a.priorPct !== null && a.priorPct !== ''
+          ? need(Number.isFinite(pct) && pct >= 5 && pct <= 95, 'Use a reviewed response confidence from 5 to 95%.', 'priorPct') : null);
+    },
     execute(a, api, s, now) { return api.addDecision({ title: a.title, question: text(a.question) || `What should we do about ${a.title}?`,
       date: dayKey(now), reviewOn: a.dueOn, reversibility: 'reversible', driver: s.settings?.leaderName || 'Workspace leader', approver: '',
       options: [{ label: 'Proceed with the reviewed response', pros: 'Coordinated action', cons: 'Uses resources' }, { label: 'Gather evidence first', pros: 'Reduces uncertainty', cons: 'Waiting has a cost' }], chosen: '' }); },
@@ -95,7 +100,18 @@ export function validateBundleCommands(commands, state, now = new Date()) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(a.dueOn) || !Number.isFinite(Date.parse(a.dueOn)) || new Date(a.dueOn).toISOString().slice(0, 10) !== a.dueOn || a.dueOn < dayKey(now) || a.dueOn > addDays(dayKey(now), 365)) return { ok: false, error: 'Every action needs a valid review/due date within the next year.', field: 'dueOn' };
     const invalid = adapter.validate(a, state, now);
     if (invalid) return invalid;
-    if (a.kind !== 'premise') delete a.priorPct;
+    // ADR-0107: a reviewed probability on the DECISION command is the
+    // pre-registration the Outcome Learning Loop freezes at adoption. It is a
+    // declaration by the human, never a classifier estimate.
+    // ADR-0107: keep the reviewed declaration ONLY on the two forecast-bearing
+    // commands, and only when a real finite number was supplied. An `undefined`
+    // key would change the byte shape of a bundle command and break exact
+    // rollback equality for older workspaces.
+    if (a.kind === 'premise' || a.kind === 'decision') {
+      const pct = Number(a.priorPct);
+      if (Number.isFinite(pct) && pct >= 5 && pct <= 95) a.priorPct = pct;
+      else delete a.priorPct;
+    } else delete a.priorPct;
     if (a.kind !== 'budget') delete a.amount;
     seen.add(a.kind); value.push(a);
   }

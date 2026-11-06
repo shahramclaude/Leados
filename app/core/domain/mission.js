@@ -14,6 +14,9 @@ import { BUNDLE_ADAPTERS } from './actionBundleRegistry.js';
 import { MISSION_DISCLOSURE, MISSION_LIMITS, MISSION_VERSION, missionProfile } from './missionRegistry.js';
 import { normalizeMissionSettings } from './missionSchema.js';
 import { capturesForSeat } from './missionCapture.js';
+// ADR-0107: the Outcome Learning Loop is another dimension of the SAME
+// vertical partition, not a second roll-up engine.
+import { buildOutcomeReport } from './outcomeLearning.js';
 
 export const exact = (n) => ({ lower: n, upper: n });
 export function displayBound(b) {
@@ -167,9 +170,10 @@ export function buildMission(state, { now = new Date(), seatId = null } = {}) {
     loops: detail ? executionRows.map(({ bundle, execution }) => ({ id: bundle.id, name: bundle.name, reviewOn: bundle.reviewOn, sourceId: bundle.sourceId, ...execution })) : [],
     method: executionHierarchy.method };
   const briefs = acting.rank >= 4 ? (state.missionBriefs || []).filter((b) => b.seatId === seat.id || seat.scope.has(b.seatId)) : [];
+  const outcome = buildOutcomeReport(state, { now, seatId: seat.id, settings: state.settings });
   return { ok: true, version: MISSION_VERSION, seat: { id: seat.id, name: seat.name, label: seat.label, rank, altitudeKey: seat.altitudeKey,
     horizonDays: seat.horizonDays, parentId: built.byId.has(seat.parentId) ? seat.parentId : null, isLeader: seat.isLeader },
-    captures: seat.id === acting.id ? capturesForSeat(state, acting.id, { now }) : [], actingSeatId: acting.id, enforced: !acting.fullAccess, profile, hierarchy, execution, queue, owners, eligibleCases, budgets, bundles, briefs,
+    captures: seat.id === acting.id ? capturesForSeat(state, acting.id, { now }) : [], actingSeatId: acting.id, enforced: !acting.fullAccess, profile, hierarchy, execution, queue, owners, eligibleCases, budgets, bundles, briefs, outcome,
     revision: state.meta?.revision || 0, unassigned: scoped.filter((i) => !i.people.length).length,
     observedPeople: seat.scopeN, disclosure: MISSION_DISCLOSURE,
     limitations: [MISSION_DISCLOSURE.aggregate, MISSION_DISCLOSURE.brief, MISSION_DISCLOSURE.local],

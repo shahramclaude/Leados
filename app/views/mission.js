@@ -8,9 +8,10 @@ import { displayBound } from '../core/domain/mission.js';
 import { BUNDLE_LABELS } from '../core/domain/actionBundleRegistry.js';
 import { renderCommandFlow } from '../ui/command-flow.js';
 import { renderExecutionPanel } from '../ui/execution-panel.js';
+import { renderOutcomePanel } from '../ui/outcome-panel.js';
 
 const ui = { busy: false, error: '', reviewed: false, bundleId: '', caseId: '' };
-const labels = { now: 'Your next moves', capture: 'Command Flow', execution: 'Execution evidence', hierarchy: 'Hierarchy & roll-up', interventions: 'Coordinated interventions', brief: 'Brief & handoff' };
+const labels = { now: 'Your next moves', capture: 'Command Flow', execution: 'Execution evidence', learning: 'Outcome learning', hierarchy: 'Hierarchy & roll-up', interventions: 'Coordinated interventions', brief: 'Brief & handoff' };
 const commandHelp = { decision: 'A DACI choice; adoption never chooses for you.', delegation: 'An owned outcome and a dated checkpoint.', premise: 'A testable assumption, not a claimed fact.', budget: 'An encumbrance against an existing envelope; not spend.', comms: 'Drafts for qualified stakeholders; nothing is sent.', coaching: 'A support prompt for the next 1:1; never a person score.' };
 function go(ctx, panel, extra = '') { ctx.navigate(`#/mission?panel=${panel}${extra}`); }
 function notify(result, success) { if (!result.ok) { toast(result.error, 'bad'); return false; } toast(result.warning || success, result.warning ? 'bad' : 'good'); return true; }
@@ -151,5 +152,5 @@ export function renderMission(ctx) {
       h('div', { class: 'mission-stats' }, stat({ label: 'Open work in scope', value: displayBound(r.hierarchy.totals.open), hint: 'Recorded work, not people' }), stat({ label: 'Past a promised date', value: displayBound(r.hierarchy.totals.overdue), hint: 'Exact or disclosure-safe interval' }), stat({ label: 'Beyond owner horizon', value: displayBound(r.hierarchy.totals.horizonDebt), hint: 'Jaques time-span escalation' }), stat({ label: 'Open execution loops', value: displayBound(r.execution.hierarchy.totals.open), hint: 'Evidence-reconciled, suppression-safe' }))),
     h('p', { class: 'mission-boundary tiny' }, MISSION_DISCLOSURE.local),
     tabs({ items: MISSION_PANELS.map((key) => ({ key, label: labels[key] })), active: panel, onSelect: (key) => go(ctx, key), ariaLabel: 'Mission Control panels' }),
-    panel === 'now' ? nowPanel(ctx, r) : panel === 'capture' ? renderCommandFlow(ctx, r) : panel === 'execution' ? renderExecutionPanel(ctx, r) : panel === 'hierarchy' ? hierarchyPanel(ctx, r) : panel === 'interventions' ? interventionsPanel(ctx, r) : briefPanel(ctx, r));
+    panel === 'now' ? nowPanel(ctx, r) : panel === 'capture' ? renderCommandFlow(ctx, r) : panel === 'execution' ? renderExecutionPanel(ctx, r) : panel === 'learning' ? renderOutcomePanel(ctx, r) : panel === 'hierarchy' ? hierarchyPanel(ctx, r) : panel === 'interventions' ? interventionsPanel(ctx, r) : briefPanel(ctx, r));
 }

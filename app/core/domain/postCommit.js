@@ -197,6 +197,12 @@ import { clearingRule } from './clearingRules.js';
 // Altitude is a dimension of this one spine, not a second engine. Inert unless
 // a decision is committed or an explicit scan runs.
 import { diligenceRule } from './diligenceRules.js';
+// ADR-0107: the Outcome Learning Loop. Registered immediately AFTER the
+// execution reconciler so a one-shot grade reads the finished terminal-evidence
+// state in the SAME atomic transaction. Altitude is a dimension of THIS spine:
+// freeze, grade and governed recalibration all fan `rolls-up-to` edges through
+// the same reporting tree. Root-event gated, marker-idempotent and pausable.
+import { outcomeRule } from './outcomeRules.js';
 
 export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // Schema v58: user-authored agreements evaluate FIRST, against the record as
@@ -255,6 +261,9 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // ADR-0106: after the bundle checkpoint exists, reconcile it from terminal
   // evidence on the same source event. Runs before the final seat roll-up.
   executionRule,
+  // ADR-0107: after terminal evidence has been reconciled, freeze the adopted
+  // response's expectation and grade any now-closed loop exactly once.
+  outcomeRule,
   // Schema v33: the Allocation Governor. Portfolio events re-measure the
   // explore/exploit mix; an exploration-floor breach opens one DACI
   // rebalancing decision. Runs before decision tempo so that decision

@@ -63,6 +63,8 @@ import { buildReputationReport, reputationCsvRows } from './domain/reputationalC
 import { buildHindsightReport, hindsightCsvRows } from './domain/hindsight.js';
 import { buildEpistemicReport, epistemicCsvRows } from './domain/epistemic.js';
 import { buildDiligenceReport, diligenceCsvRows } from './domain/diligence.js';
+// ADR-0107: CSV scope #101. Aggregate-only, identity-free, refusal-honest.
+import { buildOutcomeReport, outcomeCsvRows, OUTCOME_CSV_COLUMNS } from './domain/outcomeLearning.js';
 import { buildCadenceReport, cadenceCsvRows } from './domain/cadence.js';
 import { carryoverCsvRows } from './domain/carryover.js';
 import { valueStreamCsvRows } from './domain/valueStream.js';
@@ -1037,6 +1039,12 @@ export const CSV_EXPORTS = [
   // altitude cell export BLANK, never zero. No fact pointer, decision id,
   // person, span id, written consultation reason or forecast question is
   // emitted. The knowable set itself never leaves the scoped screen.
+  // CSV scope #101 (Schema v109, ADR-0107). Aggregate-only and refusal-honest:
+  // one workspace row, one row per child span (opaque sequential code, NO span
+  // id or label), one calibration row and one method row. A refused statistic
+  // and a suppressed cell export BLANK, never zero. No bundle id, case id,
+  // person, title, note, forecast source text or proof pointer is emitted.
+  { key: 'outcome-learning', label: 'Outcome learning (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'outcome-learning', description: 'One workspace row, one row per child span, one calibration row and one method row: suppression-safe interval counts of frozen expectations, once-only grades, good/mixed outcomes and late loops; shrunk outside view with Wilson 95% interval, pooled Brier skill, one-sided conformal lateness bound with finite-sample coverage, direction and every refusal named. NO bundle id, NO case id, NO span id or label, NO person, NO title, NO note, NO proof pointer and NO individual grade. A refused rate and a suppressed cell are BLANK rather than zero.' },
   { key: 'diligence', label: 'Diligence ledger (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'diligence', description: 'One summary row (frontiers, settled, open, knowable, consulted, unconsulted, Wilson-bounded coverage, thin settled calls, dark classes and graded forecasts), one row per evidence class (knowable, consulted, share, exact Jeffreys Beta(1/2,1/2) 90% interval, dark verdict or a printed refusal), one row per leadership altitude (identity-free counts and a refused coverage), and one row per once-only Brier grade (claims, Brier, strictly-prior base Brier, skill and verdict). NO fact pointer, NO decision id, NO checklist id, NO person, NO span id, NO written consultation reason, NO forecast question and NO individual belief. A refused rate and a suppressed cell are BLANK rather than zero.' },
   { key: 'differencing-register', label: 'Publication register (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'differencing-register', description: 'One row per published module plus one workspace row: release counts, provably-safe / protected / determined counts, withheld-cell and equation counts, the last publication date and the two stationarity statistics. NO span label, NO span id, NO person, NO record title, NO amount, and NO recovered value \u2014 a determined value is disclosed as a coordinate on the screen, never exported as a figure. A refused rate is BLANK rather than zero.' },
   { key: 'strategy-renewal', label: 'Strategy renewal (active-seat aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'strategy-renewal', description: 'Active-seat altitude and workspace learning rows only: active, carryover and overdue commitments, effort, in-window delivery reference with interval, evidence count and verdict. No pact IDs, bet IDs, titles, cohort identifiers, names or notes; refused and suppressed figures are BLANK rather than zero.' },
@@ -1070,7 +1078,7 @@ function roundish(v) {
   return Math.round(Number(v) * 100) / 100;
 }
 
-function buildScopeTable(state, scope, now) {
+export function buildScopeTable(state, scope, now) {
   const nameOf = personLookup(state);
   const today = dayKey(now);
 
@@ -6060,6 +6068,15 @@ function buildScopeTable(state, scope, now) {
         'kappa', 'pabak', 'bias_index', 'prevalence_index', 'p_value', 'verdict', 'expected_n',
         'arrived_n', 'silent_n', 'coverage_pct', 'band', 'rate_upper_30d', 'blind', 'suppressed']
         .map((key) => ({ key, header: key }));
+      return { columns, rows };
+    }
+    case 'outcome-learning': {
+      // CSV scope #101 (Schema v109, ADR-0107). The report is built under the
+      // active seat; above the individual-detail ceiling only the suppressed
+      // hierarchy intervals and refused statistics are exported.
+      const report = buildOutcomeReport(state, { now, settings: state.settings || {} });
+      const rows = outcomeCsvRows(report);
+      const columns = OUTCOME_CSV_COLUMNS.map((key) => ({ key, header: key }));
       return { columns, rows };
     }
     case 'diligence': {

@@ -1,3 +1,61 @@
+## 2026-11-06 — Outcome calibration & agentic hierarchy hunt (Session 147)
+
+Search-result snippets/documentation only; **no vendor product was independently
+tested**. Every vendor behaviour below is **[UNVERIFIED]** unless personally
+reproduced. Findings are tagged by organizational altitude and each records an
+implemented / planned / rejected decision with a one-line reason.
+
+- **[Frontline → CEO; decision intelligence]** Decia describes Bayesian
+  calibration, Brier scoring and a belief↔outcome loop (https://www.decia.ai/);
+  DecisionLedgerAI describes a 7-stage lifecycle with outcome recording and
+  prediction-accuracy calibration (https://decisionledgerai.com/); GrowthLoop's
+  Apr 2026 composable AI decisioning release claims closed-loop/causal outcome
+  measurement (https://www.prnewswire.com/news-releases/growthloop-launches-composable-ai-decisioning-platform-to-help-marketers-discover-and-leverage-what-actually-drives-better-customer-outcomes-302742327.html).
+  **Implemented [all altitudes]:** pre-registered forecasts graded once out of
+  sample with Brier skill against a strictly-prior 0.5 base rate, role-tiered
+  roll-up, no per-person score. **Rejected:** vendor-style "AI calibration" that
+  fits a curve on the same outcomes it grades — that is hindsight, not a proper
+  score.
+- **[Manager → CEO; calibration quality]** System1-Arena reports Brier/ECE over
+  92k questions where reasoning can improve accuracy while worsening calibration
+  (https://arxiv.org/html/2610.21244); a typed `brier` library for calibrated
+  decisions from open LLM logits appeared Oct 2026 (https://pypi.org/project/brier/).
+  **Implemented [director → CEO]:** a published outside view beside declared
+  forecasts, shrunk toward the maximum-entropy prior and refused below a
+  declared grade floor. **Rejected:** presenting a shrunk base rate as a causal
+  forecast; it is a reference-class prior, labelled as such.
+- **[Manager → CEO; uncertainty]** Conformal prediction write-ups give the
+  finite-sample quantile `ceil((1-alpha)(n+1))`, exchangeability, rolling
+  calibration and the identifiability condition `n >= 1/alpha - 1`
+  (https://stockalpha.ai/alpha-learning/conformal-prediction-in-finance-calibrated-forecast-bands-for-real-decisions;
+  https://arxiv.org/html/2602.18045v3;
+  https://iotdigitaltwinplm.com/conformal-prediction-uncertainty-quantification-machine-learning-coverage-guarantees-2026/).
+  **Implemented [manager → CEO]:** one-sided split-conformal upper bound on days
+  past a frozen horizon, REFUSED when the requested level is unidentifiable at
+  the sample size, blank rather than +∞. **Rejected:** claiming differential
+  privacy or conditional coverage; printed as an exchangeability assumption.
+- **[Frontline → CEO; agentic org patterns]** 2026 enterprise-agent guides
+  describe permission-aware retrieval, human-in-loop gates, evaluation loops and
+  an audit/control plane (https://press.farm/enterprise-ai-agents-in-2026-the-complete-guide-to-agentic-architecture-and-multi-agent-frameworks/);
+  "work charts" place agents as first-class roles with role-based governance and
+  outcome-based measurement (https://inkeep.com/blog/org-chart); Deloitte/BCG/KPMG
+  figures via secondary reporting suggest mature agent governance is rare
+  (https://technoedgels.com/agentic-ai-for-business-teams-in-2026-why-enterprises-need-role-based-training-before-ai-agents-scale/;
+  https://www.articsledge.com/post/enterprise-ai-statistics;
+  https://itbrief.news/story/ai-to-reshape-enterprise-structures-leadership-efficiency-by-2026).
+  **Implemented [all altitudes]:** one generalized event spine, explicit
+  pausable automation, append-only audit, explainable gateway refusals, and the
+  altitude dimension as a parameter — not per-role glue. **Rejected:** a second
+  hierarchy engine and per-person productivity scoring. **Planned [all]:**
+  authenticated server-enforced hierarchy; a Chief-AI-Agent-Officer-style audit
+  surface is explicitly NOT planned until the local-seat limitation is fixed.
+
+**Competitive/ambition benchmark this session.** Chased the closed-loop decision
+intelligence claim (belief frozen → outcome graded → pooled base rate printed
+beside the next call) and implemented it with statistical refusals and
+multi-altitude suppression rather than a generic AI coaching score. No vendor
+snippet verified that combination end to end; our own 16-test suite does.
+
 ## 2026-11-06 — Governed analytics and coaching hunt
 
 - **[Director → CEO]** A 2026 comparison describes Visier Vee as natural-language analysis over permitted data and One Model as inspectable predictive modeling: https://gowindmill.com/resources/lists/top-ai-people-analytics-tools-early-stage-companies/ . Vendor behavior is based on secondary reporting, not hands-on verification [UNVERIFIED]. Adopt as a goal: enforce permissions server-side and explain uncertainty; reject unvalidated individual flight-risk scores.

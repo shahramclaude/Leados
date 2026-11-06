@@ -78,7 +78,10 @@ export function prepareCapturePlan(state, capture, now = new Date()) {
   if (!proposal.ok) return proposal;
   const commands = proposal.commands.filter((c) => capture.kinds.includes(c.kind) && c.kind !== 'budget').map((c) => ({
     ...c, ownerId: capture.ownerId || c.ownerId, dueOn: capture.reviewOn,
-    ...(c.kind === 'premise' ? { priorPct: capture.priorPct ?? 70 } : {}),
+    // ADR-0107: one reviewed declaration freezes BOTH the testable premise and
+    // the adopted decision's pre-registered outcome probability. A loop adopted
+    // without a decision may still be scored from its premise prior.
+    ...(['premise', 'decision'].includes(c.kind) ? { priorPct: capture.priorPct ?? 70 } : {}),
   }));
   if (capture.kinds.includes('budget')) {
     const envelope = (state.budgets || []).find((b) => b.id === capture.budgetId && b.status === 'active');

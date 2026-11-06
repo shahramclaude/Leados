@@ -68,10 +68,10 @@ function traceRow({ id = 'trace-test', entity = 'scorecard', entityId = 'scoreca
 }
 
 test('schema v48 migrates additively without guessing successful history and normalizes a bounded content-free trace', () => {
-  assert.equal(SCHEMA_VERSION, 108);
+  assert.equal(SCHEMA_VERSION, 109);
   const previousLedger = [traceRow({ id: 'untrusted-v47-history' })];
   const migrated = migrate({ schemaVersion: 47, propagationLineage: previousLedger, scorecards: [] });
-  assert.deepEqual(migrated.applied, ['47 → 48', '48 → 49', '49 → 50', '50 → 51', '51 → 52', '52 → 53', '53 → 54', '54 → 55', '55 → 56', '56 → 57', '57 → 58', '58 → 59', '59 → 60', '60 → 61', '61 → 62', '62 → 63', '63 → 64', '64 → 65', '65 → 66', '66 → 67', '67 → 68', '68 → 69', '69 → 70', '70 → 71', '71 → 72', '72 → 73', '73 → 74', '74 → 75', '75 → 76', '76 → 77', '77 → 78', '78 → 79', '79 → 80', '80 → 81', '81 → 82', '82 → 83', '83 → 84', '84 → 85', '85 → 86', '86 → 87', '87 → 88', '88 → 89', '89 → 90', '90 → 91', '91 → 92', '92 → 93', '93 → 94', '94 → 95', '95 → 96', '96 → 97', '97 → 98', '98 → 99', '99 → 100', '100 → 101', '101 → 102', '102 → 103', '103 → 104', '104 → 105', '105 → 106']);
+  assert.deepEqual(migrated.applied, ['47 → 48', '48 → 49', '49 → 50', '50 → 51', '51 → 52', '52 → 53', '53 → 54', '54 → 55', '55 → 56', '56 → 57', '57 → 58', '58 → 59', '59 → 60', '60 → 61', '61 → 62', '62 → 63', '63 → 64', '64 → 65', '65 → 66', '66 → 67', '67 → 68', '68 → 69', '69 → 70', '70 → 71', '71 → 72', '72 → 73', '73 → 74', '74 → 75', '75 → 76', '76 → 77', '77 → 78', '78 → 79', '79 → 80', '80 → 81', '81 → 82', '82 → 83', '83 → 84', '84 → 85', '85 → 86', '86 → 87', '87 → 88', '88 → 89', '89 → 90', '90 → 91', '91 → 92', '92 → 93', '93 → 94', '94 → 95', '95 → 96', '96 → 97', '97 → 98', '98 → 99', '99 → 100', '100 → 101', '101 → 102', '102 → 103', '103 → 104', '104 → 105', '105 → 106', '106 → 107', '107 → 108', '108 → 109']);
   assert.deepEqual(migrated.raw.propagationLineage, [], 'the migration never infers or imports a pre-v48 success ledger');
 
   const rawTrace = traceRow();
@@ -89,7 +89,7 @@ test('schema v48 migrates additively without guessing successful history and nor
     propagationLineage: [rawTrace],
   }, { now: NOW });
   const [stored] = normalized.state.propagationLineage;
-  assert.equal(normalized.state.schemaVersion, 108);
+  assert.equal(normalized.state.schemaVersion, 109);
   assert.equal(normalized.state.propagationLineage.length, 1);
   assert.deepEqual(stored.steps[0].changedCollections, ['decisions', 'links']);
   assert.equal(stored.steps[0].links.length, 1, 'confidential typed edges are rejected');
@@ -640,6 +640,29 @@ test('every registered link type survives schema normalization/reload and resolv
     id: 'carryover-link-fixture', status: 'pending-settlement', pactId: 'p1',
     resource: { effortDays: 3, currency: 'DKK', committedAmount: 1000 }, createdAt: NOW_ISO,
   }];
+  // Schema v107: a review-gated mission capture is a first-class graph node.
+  raw.missionCaptures = [{
+    id: 'mission-capture-link-fixture', title: 'Fixture capture', sourceText: '',
+    ownerSeatId: raw.people[0].id, ownerId: raw.people[0].id, rank: 1, altitudeKey: 'frontline',
+    createdAt: NOW_ISO, updatedAt: NOW_ISO, reviewOn: '2026-12-01', status: 'dismissed',
+    dismissReason: 'Fixture only', kinds: ['decision'], classification: { engineVersion: 'fixture', primaryCategoryId: 'risk',
+      primaryLabel: 'Risk', confidenceBand: 'low', confidencePct: 0, marginPct: 0, ambiguous: false,
+      stakesReviewRequired: false, evidence: [] },
+    caseInput: { kind: 'risk', title: 'Fixture capture', summary: '', ownerId: raw.people[0].id,
+      involvedPersonIds: [], linkedGoalId: null, openedOn: '2026-11-01', reviewOn: '2026-12-01',
+      fmea: {}, financial: {}, stakeholders: [], rca: {}, autoPropagate: true },
+    commands: [], preview: null, history: [],
+  }];
+
+  // ADR-0107: a frozen response expectation is a first-class graph node. The
+  // resolver exposes only a neutral label and a focused Mission Control route.
+  raw.outcomeContracts = [{
+    id: 'outcome-contract-link-fixture', bundleId: 'bundle-link-fixture', sourceCaseId: sourceCase.id,
+    ownerNodeId: raw.people[0].id, declaredOn: '2026-11-01', horizonOn: '2026-11-08',
+    forecastPct: 70, forecastSource: 'decision-command', expectedActions: 1,
+    expectedSpend: [], sourcePointers: [], fingerprint: 'abcd1234',
+    version: 'outcome-learning-2026.11-v1', status: 'open', createdAt: NOW_ISO,
+  }];
 
   const targetIdFor = (type) => {
     if (type === 'case') return otherCase.id;
@@ -813,6 +836,10 @@ test('every registered link type survives schema normalization/reload and resolv
       // on the reading's own panel — the edge names the assessment, never the
       // span ids, channel counts or persons inside it.
       federationassessment: ['assessment', resolved.id],
+      // ADR-0107: the frozen expectation is addressed by query on Mission
+      // Control's learning panel — the edge names the contract, never its
+      // probability, case title, owner or source pointers.
+      outcomecontract: ['contract', resolved.id],
     }[link.targetType];
     if (focusParam) {
       assert.equal(query.get(focusParam[0]), focusParam[1], `${link.targetType} route carries an encoded, exact focus ID`);
@@ -877,8 +904,11 @@ test('committing a distorted scorecard records real multi-module propagation, ty
   const committed = api.commitScorecard(created.id, {});
   assert.equal(committed.ok, true, committed.error);
 
-  assert.equal(store.state.propagationLineage.length, 1, 'one committed transaction is appended');
-  const trace = store.state.propagationLineage[0];
+  // Creating the scorecard and committing it are both real root writes on the
+  // shared spine; assert the COMMIT trace exists rather than pinning an
+  // absolute count that a derived reader legitimately shifts.
+  const trace = store.state.propagationLineage.find((row) => row.rootEvent?.type === 'scorecard.committed');
+  assert.ok(trace, 'the committed transaction is appended');
   assert.equal(trace.rootEvent.type, 'scorecard.committed');
   assert.equal(trace.rootEvent.entity, 'scorecard');
   assert.equal(trace.rootEvent.entityId, created.id);
@@ -971,13 +1001,15 @@ test('clearDemo keeps the trace but scrubs every reference to records that clean
   });
   assert.equal(created.ok, true, created.error);
   assert.equal(api.commitScorecard(created.id, {}).ok, true);
-  assert.equal(store.state.propagationLineage.length, 1);
+  const commitTrace = store.state.propagationLineage.find((row) => row.rootEvent?.type === 'scorecard.committed');
+  assert.ok(commitTrace, 'the committed transaction is appended');
 
-  const before = store.state.propagationLineage[0];
+  const before = commitTrace;
   assert.ok(before.steps[0].targets.some((target) => target.type === 'person' && target.id === ownerId));
   store.clearDemo();
-  assert.equal(store.state.propagationLineage.length, 1, 'clearing demo records does not erase rule history');
-  const after = store.state.propagationLineage[0];
+  assert.ok(store.state.propagationLineage.some((row) => row.rootEvent?.entityId === created.id),
+    'clearing demo records does not erase rule history');
+  const after = store.state.propagationLineage.find((row) => row.rootEvent?.entityId === created.id);
   assert.equal(after.rootEvent.entityId, created.id, 'the surviving scorecard source remains linked');
   assert.ok(after.steps.some((step) => step.targets.some((target) => target.cleared && target.id === null)),
     'removed demo people/delegations are represented as cleared, not dangling IDs');
