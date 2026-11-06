@@ -91,8 +91,15 @@ association between one predicted route and one dated human choice, not a causal
 forecast or a person rating. Real-browser assistive-technology walkthrough,
 vendor parity and a category-first claim are [UNVERIFIED].
 
-**Sync.** Reported truthfully at the end of this session; see the final delivery
-note and `git`/`gh` output rather than an assumption.
+**Sync (ACTUAL, not assumed).** Commit `891f1b2` on
+`arena/699b29d5-leados`; `git push origin arena/699b29d5-leados` returned
+`PUSH_EXIT=0` (new remote branch); `gh pr create --base main --head
+arena/699b29d5-leados` returned `PR_EXIT=0` and opened **PR #177** at
+https://github.com/shahramclaude/Leados/pull/177 (OPEN; not merged this
+session). Changed files: 8 new (5 JUR domain modules, the view, ADR-0109, the
+test suite) and 133 modified (schema, spine, contracts, graph allowlists,
+rights, gateway, disclosure, CSV, actions, main, index, generated standalone,
+the full v111 test-tripwire sweep and six living docs). No sync failure.
 
 ## 2026-11-06 — Session 148: The Decision-Fit Ledger (ADR-0108, Schema v110, additive `109 → 110`)
 
