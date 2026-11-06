@@ -12,6 +12,7 @@ import { ALTITUDE_KEYS as ROUTING_ALTITUDE_KEYS, altitudeRank as routingAltitude
 import { addDays, dayKey, daysBetween } from './core/time.js';
 import { createMandateActions } from './core/domain/mandateActions.js';
 import { createMissionActions } from './core/domain/missionActions.js';
+import { createMissionCaptureActions } from './core/domain/missionCaptureActions.js';
 // ADR-0081: the Altitude Router's API mixin (one more consumer of the same
 // addCase adoption seam, not a second command bus).
 import { createAltitudeRouterActions } from './core/domain/altitudeRouterActions.js';
@@ -19693,6 +19694,7 @@ export function createApi(store, options = {}) {
   });
 
   Object.assign(api, createMissionActions(store, { now: clock, idFactory: id, createApi }));
+  Object.assign(api, createMissionCaptureActions(store, { now: clock, idFactory: id, createApi }));
   // ADR-0081: the Altitude Router's reviewed commands.
   Object.assign(api, createAltitudeRouterActions(store, { now: clock, idFactory: id, createApi }));
   // ADR-0084: reviewed Hoshin Catchball commands share the same gateway.

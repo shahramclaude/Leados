@@ -86,7 +86,7 @@ function adoptedBundleWorkspace({ bundleReviewOn = null } = {}) {
 }
 
 test('Schema v74 → v75 migration is additive, empty, idempotent, and fail-closed on malformed imports', () => {
-  assert.equal(SCHEMA_VERSION, 106);
+  assert.equal(SCHEMA_VERSION, 107);
   const old = createEmptyState();
   old.schemaVersion = 74;
   delete old.settlements;

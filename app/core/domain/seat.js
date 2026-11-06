@@ -234,7 +234,11 @@ export function canSee(record, collection, seat, built) {
     return { ...base, allow: 'aggregate',
       reason: `The declared seat “${seat.unresolvedSeatId}” no longer exists in this roster. Only counts are visible until a valid seat is declared — no record body is readable and no action is permitted.` };
   }
-  const people = recordPeople(record);
+  // A person's managerId is an upward reporting edge, not a second subject of
+  // the record. Including it denied a frontline lead access to their own profile
+  // (their manager is outside their downward span). Scope the person by id;
+  // all other records retain their full named-person boundary.
+  const people = collection === 'people' ? [record.id].filter(Boolean) : recordPeople(record);
   const inScope = people.length === 0 ? true : people.every((pid) => seat.scope.has(pid));
   if (!inScope) {
     return { ...base, allow: 'denied', reason: `This ${policy.label} names people outside ${seat.label}’s span. The reporting tree does not put it under this seat (no sideways disclosure).` };

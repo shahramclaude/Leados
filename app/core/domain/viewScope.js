@@ -47,6 +47,7 @@ export function scopedViewState(state, seatContext = null, { now = new Date(), s
   // work is available through Mission Control; raw history is not projected.
   out.events = [];
   out.pulses = [];
+  out.missionCaptures = []; // Raw notes never ride a generic projection; missionRead returns only the preparing seat’s plans.
   const visibleIds = new Map(COLLECTIONS.map((key) => [key, new Set((out[key] || []).map((r) => r.id))]));
   const typeCollection = (type) => LINK_ENTITY_COLLECTIONS[type] || (COLLECTIONS.includes(type) ? type : null);
   out.links = (state.links || []).filter((l) => {

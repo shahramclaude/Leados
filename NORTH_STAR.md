@@ -4,6 +4,9 @@ The workspace already recorded decisions, outcomes, links, unread signals and fo
 
 # LeadOS North Star (do not dilute — this is binding project doctrine)
 
+> **Session 145 (2026-11-06, Schema v107):** Mission Command Flow (`#/mission?panel=capture`, ADR-0105) ships the note → case → coordinated actions → hierarchy receipt as one reviewed, rehearsed, atomic transaction. Raw notes stay with the preparing seat; ancestors receive governed work. Full-suite result is recorded in AI-SESSION-LOG.md; seats remain workflow declarations, not authentication.
+
+
 ## Mission
 LeadOS is a leadership/management operating system usable at EVERY altitude of an organization — frontline supervisors, mid-level managers, directors, VPs, and the CEO — as one connected system, not separate apps bolted together.
 

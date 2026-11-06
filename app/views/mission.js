@@ -6,9 +6,10 @@ import { dayKey, addDays } from '../core/time.js';
 import { MISSION_PANELS, MISSION_DISCLOSURE } from '../core/domain/missionRegistry.js';
 import { displayBound } from '../core/domain/mission.js';
 import { BUNDLE_LABELS } from '../core/domain/actionBundleRegistry.js';
+import { renderCommandFlow } from '../ui/command-flow.js';
 
 const ui = { busy: false, error: '', reviewed: false, bundleId: '', caseId: '' };
-const labels = { now: 'Your next moves', hierarchy: 'Hierarchy & roll-up', interventions: 'Coordinated interventions', brief: 'Brief & handoff' };
+const labels = { now: 'Your next moves', capture: 'Command Flow', hierarchy: 'Hierarchy & roll-up', interventions: 'Coordinated interventions', brief: 'Brief & handoff' };
 const commandHelp = { decision: 'A DACI choice; adoption never chooses for you.', delegation: 'An owned outcome and a dated checkpoint.', premise: 'A testable assumption, not a claimed fact.', budget: 'An encumbrance against an existing envelope; not spend.', comms: 'Drafts for qualified stakeholders; nothing is sent.', coaching: 'A support prompt for the next 1:1; never a person score.' };
 function go(ctx, panel, extra = '') { ctx.navigate(`#/mission?panel=${panel}${extra}`); }
 function notify(result, success) { if (!result.ok) { toast(result.error, 'bad'); return false; } toast(result.warning || success, result.warning ? 'bad' : 'good'); return true; }
@@ -35,14 +36,14 @@ function registerSituation(ctx, report) {
 }
 
 function nowPanel(ctx, r) {
-  return h('div', { class: 'mission-layout' },
+  return h('div', { class: 'stack-sm' }, renderCommandFlow(ctx, r, { compact: true }), h('div', { class: 'mission-layout' },
     card({ title: 'Evidence-first triage', subtitle: 'Recorded dates, severity and decision horizon—not a probability or a person score.', body: r.queue.length ? h('div', { class: 'mission-queue' }, ...r.queue.slice(0, 12).map((item, i) => h('article', { class: 'mission-queue-item' },
       h('span', { class: 'mission-rank', 'aria-hidden': 'true' }, String(i + 1).padStart(2, '0')),
       h('div', { class: 'mission-queue-copy' }, h('div', { class: 'mission-row-top' }, h('h3', null, item.title), badge(item.overdueDays ? 'Overdue' : item.requiredRank > r.seat.rank ? 'Escalated' : 'On record', item.overdueDays ? 'bad' : 'neutral')),
         h('p', { class: 'muted small' }, item.reasons.length ? item.reasons.join(' · ') : `${item.label} · ${item.ageDays} days on record`),
         h('div', { class: 'mission-queue-foot' }, h('span', { class: 'tiny muted' }, `Triage priority ${item.triageScore}/100 · deterministic convention`), item.detail ? h('a', { class: 'text-link', href: item.route }, 'Open record →') : h('button', { class: 'text-link', type: 'button', onClick: () => go(ctx, 'hierarchy') }, 'Read span aggregate →')))))) : emptyState({ title: 'No open work in this span', body: 'Register a real situation, or choose another seat. Nothing is invented to fill this screen.', action: h('button', { class: 'btn btn-primary', type: 'button', onClick: () => registerSituation(ctx, r) }, 'Register situation') }) }),
     h('div', { class: 'stack-sm' }, card({ title: 'Your operating contract', subtitle: `${r.seat.label} · ${r.profile.horizon}`, className: 'mission-contract', body: h('div', { class: 'stack-sm' }, h('p', { class: 'mission-question' }, r.profile.question), kv('Focus', r.profile.focus), kv('Decision horizon', `${r.seat.horizonDays || r.profile.reviewDays} days`), kv('People in span', String(r.observedPeople)), h('a', { class: 'btn btn-ghost', href: '#/seat' }, 'Review duties & access')) }),
-      card({ title: 'One situation. A coordinated response.', body: h('div', { class: 'stack-sm' }, h('p', { class: 'muted' }, 'Turn a case into a bounded PDCA loop: choose, assign, test the assumption, and review the result together.'), h('button', { class: 'btn btn-primary', type: 'button', onClick: () => go(ctx, 'interventions') }, 'Build an intervention')) })));
+      card({ title: 'One situation. A coordinated response.', body: h('div', { class: 'stack-sm' }, h('p', { class: 'muted' }, 'Turn a case into a bounded PDCA loop: choose, assign, test the assumption, and review the result together.'), h('button', { class: 'btn btn-primary', type: 'button', onClick: () => go(ctx, 'interventions') }, 'Build an intervention')) }))) );
 }
 
 function hierarchyPanel(ctx, r) {
@@ -145,9 +146,9 @@ export function renderMission(ctx) {
   const r = ctx.api.missionRead(ctx.query.get('span') || null);
   if (!r.ok) return h('div', { class: 'page' }, pageHeader({ title: 'Mission Control' }), banner({ tone: 'bad', title: 'This span cannot be opened', body: r.error }), h('a', { class: 'btn btn-primary', href: '#/seat' }, 'Choose a valid seat'));
   return h('div', { class: 'view-stack mission-view', 'data-altitude': r.seat.altitudeKey },
-    h('section', { class: 'mission-hero' }, pageHeader({ eyebrow: `LEADOS · MISSION CONTROL / ${r.seat.label.toUpperCase()}`, title: r.profile.title, subtitle: `${r.profile.focus} · ${r.profile.horizon} · ${r.enforced ? 'Scoped operating seat' : 'Local operator preview'}`, actions: [h('a', { class: 'btn btn-ghost', href: '#/seat' }, 'Change altitude'), h('button', { class: 'btn btn-primary', type: 'button', onClick: () => registerSituation(ctx, r) }, 'Register situation')] }),
+    h('section', { class: 'mission-hero' }, pageHeader({ eyebrow: `LEADOS · MISSION CONTROL / ${r.seat.label.toUpperCase()}`, title: r.profile.title, subtitle: `${r.profile.focus} · ${r.profile.horizon} · ${r.enforced ? 'Scoped operating seat' : 'Local operator preview'}`, actions: [h('a', { class: 'btn btn-ghost', href: '#/seat' }, 'Change altitude'), h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => registerSituation(ctx, r) }, 'Structured intake'), h('a', { class: 'btn btn-primary', href: '#/mission?panel=capture' }, 'Describe a situation')] }),
       h('div', { class: 'mission-stats' }, stat({ label: 'Open work in scope', value: displayBound(r.hierarchy.totals.open), hint: 'Recorded work, not people' }), stat({ label: 'Past a promised date', value: displayBound(r.hierarchy.totals.overdue), hint: 'Exact or disclosure-safe interval' }), stat({ label: 'Beyond owner horizon', value: displayBound(r.hierarchy.totals.horizonDebt), hint: 'Jaques time-span escalation' }), stat({ label: 'Coordinated loops', value: String(r.bundles.filter((b) => b.status === 'committed').length), hint: 'Human-reviewed adoption receipts' }))),
     h('p', { class: 'mission-boundary tiny' }, MISSION_DISCLOSURE.local),
     tabs({ items: MISSION_PANELS.map((key) => ({ key, label: labels[key] })), active: panel, onSelect: (key) => go(ctx, key), ariaLabel: 'Mission Control panels' }),
-    panel === 'now' ? nowPanel(ctx, r) : panel === 'hierarchy' ? hierarchyPanel(ctx, r) : panel === 'interventions' ? interventionsPanel(ctx, r) : briefPanel(ctx, r));
+    panel === 'now' ? nowPanel(ctx, r) : panel === 'capture' ? renderCommandFlow(ctx, r) : panel === 'hierarchy' ? hierarchyPanel(ctx, r) : panel === 'interventions' ? interventionsPanel(ctx, r) : briefPanel(ctx, r));
 }

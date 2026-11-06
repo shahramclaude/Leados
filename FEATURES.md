@@ -1,3 +1,13 @@
+## 2026-11-06 — Session 145: Mission Command Flow (`#/mission?panel=capture`, ADR-0105, Schema v107)
+
+**Question answered:** can a leader describe a situation once and adopt the whole coordinated response — case, actions and hierarchy provenance — as one reviewed, rehearsed, atomic transaction?
+
+Command Flow composes the existing local classifier, Cases, Action Bundles and Operating Seat. The worker and live adoption call the same `transactMissionCapture`; adoption requires explicit review, current revision/day, matching fingerprints and a failure-free rehearsal whose live footprint must match. `RULE-MIS-01` writes `responds-to`, `coordinates` and one `rolls-up-to` per ancestor on the shared spine. Raw notes stay with the preparing seat; the case summary does not copy them; generic projections zero the capture ledger.
+
+**Altitudes.** Frontline decision/checkpoint/coaching; manager adds premise; director adds stakeholder eligibility; VP/CEO add explicit budget. No invented recipients, no inferred spend, no person score, no auto-adopt. Withdrawal is untouched-only and retains the source case.
+
+**Honest refusals.** Confidential conflict text blocked; workers required (no main-thread fallback); heuristic confidence disclosed; seats are not authentication; real-browser AT walkthrough [UNVERIFIED].
+
 ## 2026-11-06 — Session 144: The Diligence Ledger (`#/diligence`, ADR-0104, Schema v106, CSV #100)
 
 **Question answered:** before this decision, what was knowable — and did the organisation actually look?

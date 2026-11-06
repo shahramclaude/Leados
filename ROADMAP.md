@@ -1,3 +1,25 @@
+## 2026-11-06 — Mission Command Flow shipped; the next ambitious targets (Session 145, Schema v107, ADR-0105)
+
+**Shipped.** `#/mission?panel=capture` turns one reviewed note into a case, coordinated actions and typed hierarchy provenance in one atomic transaction. The worker and live adoption call the same `transactMissionCapture`; `RULE-MIS-01` writes `responds-to`, `coordinates` and `rolls-up-to` on the existing spine. Raw notes stay with the preparing seat; ancestors receive governed work. Schema v107 additive; rule count unchanged at 85.
+
+**Altitude coverage.**
+- *Frontline (rank 1)* — describe the shift-level situation; adopt decision + owned checkpoint + coaching prompt; no person score.
+- *Manager (rank 2)* — adds a testable premise; reads team detail and upward aggregate without receiving a subordinate's raw note.
+- *Director (rank 3)* — coordinates spans; stakeholder briefs become eligible only after real stakeholders exist; individual detail suppressed.
+- *VP (rank 4)* — explicit budget commitment against an eligible envelope; portfolio drill-down with disclosure bounds.
+- *CEO (rank 5)* — enterprise provenance and identity-free briefs; no raw intake, no invented recipients, no automatic decision choice.
+
+**Verification.** New suite 9/9; targeted batch 90/90; lint/boundary/links green; standalone rebuilt. Full canonical suite running at PR preparation; final result recorded in the session log.
+
+**Open backlog (tagged, ambitious).**
+- *All altitudes* — **reviewed command editing inside Command Flow**: edit each proposed decision option, delegation outcome and premise statement before rehearsal, not only kind/owner/date. **[PLANNED, largest UX gap.]**
+- *Frontline → manager* — **capture-to-1:1 agenda**: adopted coaching prompts should appear in the next scheduled 1:1 with a typed `prepares-for` edge and a completion receipt. **[PLANNED.]**
+- *Manager → director* — **cross-span capture merge**: two leads describing the same constraint should propose one LCA-owned case with a dedupe fingerprint and human confirmation. **[PLANNED.]**
+- *Director → VP* — **stakeholder brief drafting from an adopted case**: closed-vocabulary comms with qualified recipients, reviewed gaps and no send. **[PLANNED.]**
+- *VP → CEO* — **portfolio rehearsal comparison**: rehearse two reviewed responses side by side with software footprints and declared assumptions, never a causal benefit score. **[PLANNED.]**
+- *All altitudes* — **real-browser AT walkthrough** and worker failure-injection in a real browser. **[UNVERIFIED today.]**
+- *All altitudes* — **authentication/multi-user boundary**: seats are still local workflow declarations. **[PLANNED, architectural.]**
+
 ## 2026-11-06 — The Diligence Ledger: did we look before we leaped? (Session 144, Schema v106, ADR-0104, `#/diligence`, CSV #100)
 
 **Shipped.** Sessions 142 and 143 both named the same largest gap: *recording "we looked at X" at decision time*. Both were right, and neither closed it. `#/diligence` freezes a **KNOWABLE SET** — typed, dated POINTERS from five evidence classes other modules own (cases, premises, delegations, goals, strictly-earlier settled decisions) — in the **same atomic transaction** that records the decision. `RULE-DLG-01..04` run on the shared post-commit spine (85 rules / 85 contracts): one `diligence-for` edge, one `deliberates-on` edge per fact and **one `rolls-up-to` edge per leadership ancestor** in that single commit; one governed gap decision per span per ISO week; one governed redesign decision per dark class per ISO week; and a **once-only, out-of-sample Brier grade** of a process forecast pre-declared before settlement. A consultation is a first-class dated act — `used`, `deferred` and **`ruled-out` with a required written reason** all count as diligence, so dismissing a fact is no longer silently charged as a miss. Coverage is a Wilson (1927) interval refused below the declared floor; class inattention is an **exact** Jeffreys Beta(½,½) 90% credible interval (Lanczos + continued-fraction incomplete beta, bisected), and a class whose whole upper bound sits below the declared ceiling is DARK. CSV #100 aggregate-only, identity-free, BLANK never zero. Schema v106 additive, four new collections, eight clamped conventions, **no back-fill**.

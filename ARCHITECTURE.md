@@ -1,3 +1,11 @@
+## 2026-11-06 — Session 145 architecture delta (Schema v107)
+
+**No new engine.** Command Flow adds `missionCaptures` and a shared transaction (`transactMissionCapture`) used by both `missionCaptureRehearsal` and live adoption. It creates the case through `addCase`, stages commands through the extracted `createStagedStore`/`stageBundle` seams, delivers source events to the existing spine, and validates the live footprint in `afterRules`. `RULE-MIS-01` is widened for `mission.capture.adopted`; rule count remains 85.
+
+**Schema.** `SCHEMA_VERSION = 107`, additive `MIGRATIONS[106]` adding empty `missionCaptures`; fail-closed `normalizeMissionCaptures`; `missioncapture` entity resolver; gateway rights and preparing-seat gate; `seatRegistry` detailCeiling 0; `viewScope` zeroes the collection; disclosure manifest updated. `cleanBundlePreview` is shared from `actionBundleSchema.js`.
+
+**Privacy/access fix.** `canSee` scopes a `people` record by its own id, not its upward `managerId`, so a frontline lead can read/update their own profile without inheriting their manager's scope.
+
 ## 2026-11-06 — Session 144 architecture delta (Schema v106)
 
 **No new engine was introduced.** The Diligence Ledger registers `diligenceRule` on the existing `DEFAULT_POST_COMMIT_RULES` spine immediately before `attentionMarketRule`, with one `PROPAGATION_CONTRACTS` entry (85 rules / 85 contracts). It writes `diligenceChecklists`, `diligenceConsults`, `diligenceGrades`, `diligenceMarkers`, `decisions` and `links` through the same savepointed, atomic, append-only event transaction as every other module. Typed graph edges are created by the same `ensureEntityLink` helper; altitude roll-up is one `rolls-up-to` edge per leadership ancestor, not a second hierarchy service.

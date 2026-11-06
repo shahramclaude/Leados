@@ -117,10 +117,10 @@ function ruleIdnLinks(state) {
 /* ------------------------------------------------------------- 1. schema */
 
 test('schema v91 migrates additively; malformed credential rows are dropped, never repaired', () => {
-  assert.equal(SCHEMA_VERSION, 106);
+  assert.equal(SCHEMA_VERSION, 107);
   const old = { schemaVersion: 90, settings: { leaderName: 'Keep' }, cases: [{ id: 'keep' }] };
   const migrated = migrate(old);
-  assert.equal(migrated.raw.schemaVersion, 106);
+  assert.equal(migrated.raw.schemaVersion, 107);
   assert.deepEqual(migrated.applied, ['90 → 91', '91 → 92', '92 → 93', '93 → 94', '94 → 95', '95 → 96', '96 → 97', '97 → 98', '98 → 99', '99 → 100', '100 → 101', '101 → 102', '102 → 103', '103 → 104', '104 → 105', '105 → 106']);
   assert.deepEqual(migrated.raw.seatIdentities, []);
   assert.deepEqual(migrated.raw.identityMarkers, []);

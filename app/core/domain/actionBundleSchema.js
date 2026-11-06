@@ -7,7 +7,7 @@ const day = (v) => iso(v)?.slice(0, 10) || null;
 const int = (v, max = 1e7) => Number.isInteger(v) && v >= 0 && v <= max ? v : null;
 const hash = (v) => typeof v === 'string' && /^[a-f0-9]{16}$/.test(v) ? v : '';
 const STATUSES = ['draft', 'rehearsed', 'committed', 'withdrawn', 'archived'];
-function cleanPreview(raw) {
+export function cleanBundlePreview(raw) {
   if (!object(raw) || !Array.isArray(raw.changes) || !Array.isArray(raw.relationships)) return null;
   const changes = raw.changes.slice(0, 100).flatMap((r) => object(r) && /^[a-zA-Z]+$/.test(r.collection || '') && int(r.created) !== null && int(r.updated) !== null && int(r.removed) !== null
     ? [{ collection: r.collection, created: r.created, updated: r.updated, removed: r.removed }] : []);
@@ -29,7 +29,7 @@ export function normalizeActionBundles(raw, state, now, warnings = []) {
     }
     seen.add(item.id);
     let status = STATUSES.includes(item.status) ? item.status : 'draft';
-    const preview = cleanPreview(item.preview);
+    const preview = cleanBundlePreview(item.preview);
     if (['rehearsed', 'committed'].includes(status) && !preview) { status = 'draft'; warnings.push('Action bundles: an unverifiable preview was returned to draft.'); }
     if (status === 'committed' && (!iso(item.committedAt) || !Array.isArray(item.outputs))) { status = 'draft'; warnings.push('Action bundles: an incomplete adoption receipt was returned to draft.'); }
     const commands = item.commands.map((a) => Object.fromEntries(Object.entries(a).filter(([k, v]) => ['kind', 'title', 'ownerId', 'sourceId', 'budgetId', 'dueOn', 'question', 'outcome', 'statement', 'prompt'].includes(k)
@@ -42,7 +42,7 @@ export function normalizeActionBundles(raw, state, now, warnings = []) {
       committedAt: ['committed', 'withdrawn'].includes(status) ? iso(item.committedAt) : null, withdrawnAt: status === 'withdrawn' ? iso(item.withdrawnAt) : null,
       archivedAt: status === 'archived' ? iso(item.archivedAt) : null, evaluatedAt: iso(item.evaluatedAt),
       baseRevision: int(item.baseRevision) ?? 0, inputFingerprint: hash(item.inputFingerprint), sourceFingerprint: hash(item.sourceFingerprint),
-      preview, actual: cleanPreview(item.actual), outputs,
+      preview, actual: cleanBundlePreview(item.actual), outputs,
       history: (Array.isArray(item.history) ? item.history : []).filter((h) => object(h) && iso(h.at) && text(h.summary)).slice(-60).map((h) => ({ at: iso(h.at), type: text(h.type, 40), summary: text(h.summary, 300) })),
     });
     if (out.length >= BUNDLE_LIMITS.bundles) break;

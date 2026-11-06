@@ -319,6 +319,7 @@ export const LINK_ENTITY_TYPES = [
   'mandate',
   // ADR-0080: an identity-free brief summarizes leadership spans, not people.
   'missionbrief',
+  'missioncapture',
   // ADR-0081: one reviewed natural-language routing plan (plan AND later
   // grade in the same row). A first-class node so its adopted case, its
   // disclosure ladder and the governed re-routing question are navigable
@@ -556,6 +557,7 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   successionreading: 'successionReadings',
   mandate: 'mandates',
   missionbrief: 'missionBriefs',
+  missioncapture: 'missionCaptures',
   // ADR-0081: keep the registry exhaustive with LINK_ENTITY_TYPES.
   routingplan: 'altitudeRoutingPlans',
   // ADR-0084: Hoshin Kanri & Catchball Cascade collections.
@@ -1627,6 +1629,12 @@ export function resolveLinkedEntity(state, entityType, entityId) {
       // Never project source text or an inferred title into the shared graph.
       return rec ? { type: 'intake', id: rec.id, title: 'Situation note', status: rec.status,
         route: `#/responses?draft=${encodeURIComponent(rec.id)}`, raw: rec } : null;
+    }
+    case 'missioncapture': {
+      const rec = (state.missionCaptures || []).find((r) => r.id === entityId);
+      // A graph label never carries a note, a person name or an inferred title.
+      return rec ? { type: 'missioncapture', id: rec.id, title: 'Reviewed command capture', status: rec.status,
+        route: `#/mission?panel=capture&capture=${encodeURIComponent(rec.id)}`, raw: rec } : null;
     }
     case 'bundle': {
       const rec = (state.actionBundles || []).find((b) => b.id === entityId);

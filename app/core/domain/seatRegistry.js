@@ -125,6 +125,7 @@ export const RECORD_POLICIES = Object.freeze({
   disclosureGrants: { classKey: 'authority', label: 'Disclosure release contracts', route: '#/disclosure' },
   disclosureMarkers: { classKey: 'unit', label: 'Disclosure idempotency markers', route: '#/disclosure' },
   missionBriefs: { classKey: 'enterprise', label: 'Identity-free mission briefs', route: '#/mission?panel=brief' },
+  missionCaptures: { classKey: 'unit', detailCeiling: 0, label: 'Seat-private capture plans (scoped adapter only)', route: '#/mission?panel=capture' },
   // Individual detail. Names, notes and ratings live here.
   oneOnOnes: { classKey: 'individual', label: '1:1 conversations', route: '#/oneonones' },
   feedback: { classKey: 'individual', label: 'Feedback', route: '#/feedback' },
