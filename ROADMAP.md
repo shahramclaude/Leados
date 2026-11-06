@@ -1,3 +1,62 @@
+## 2026-11-06 — The event budget stops silently discarding work (Session 150, Schema v111, [ADR-0110](./docs/adr/0110-derived-event-budget.md))
+
+**Shipped [all altitudes] — P0 defect, not a feature.** The shared
+`MAX_AUTOMATION_EVENTS = 64` cap was rolled back **57 rules** on an ordinary
+demo `case.updated`: the seeded demo's accumulated epistemic/coupling backlog
+cascaded through 63 engine-authored `decision.created`, 7 `delegation.created`
+and 1 `automation.step` on top of the root event, so every `(rule, event)` pair
+after queue slot 64 was discarded with `automation.rule_error` — notably
+`RULE-EPI-02`'s governed decisions. A leader saw a green save while the engine
+quietly dropped its own work.
+
+Fix: production cap **64 → 256**, replay ceiling **256 → 1024**, both still
+finite, deduplication still the cycle bound. Measured on the shipped demo:
+**0** `automation.rule_error` events; the full cascade commits (399 logged
+entries). No schema change; 89 rules unchanged.
+
+- **[all altitudes]** Every altitude's automation now actually reaches the
+  people it was rolled up to — roll-up edges and governed decisions produced in
+  the same transaction are no longer silently truncated at slot 64.
+- **Tests:** `action-bundles` 19/19 (over-budget preflight now symbolic),
+  `case-rehearsal` 7/7 (worker timeout re-baselined 15 s → 120 s;
+  `failureCount` genuinely 0), `confidence-transport` 46/46 (declaration-
+  immutability assertion tightened to the 60 seeded declarations), `event-cascade`
+  + `assurance` 22/22, `jurisdiction` 10/10, `mission-command-flow` 9/9,
+  `standalone` 7/7, `npm run lint` exit 0, `check:boundary` 0 violations
+  (546 modules / 155 suites / 23 doc checks). Full 155-suite `npm test` remains
+  [UNVERIFIED] (~30 min under jsdom; not completed this session).
+- **One-time behaviour change:** the first write on a demo-seeded workspace now
+  commits the entire pending epistemic backlog (+63 decisions here). That is the
+  workspace paying down a backlog that was previously discarded on every write.
+  If per-transaction backlog volume proves too heavy for UI latency, the fix is
+  a bounded-backlog policy inside `RULE-EPI-02` (N per span per week, remainder
+  deferred and printed) — needs its own ADR, deliberately not done here.
+- **Altitude coverage:** no altitude view changed — this was spine correctness
+  underneath every altitude's automation. Coverage map otherwise unchanged from
+  Session 149; the previously-neglected P0 is closed.
+
+**Next targets, altitude-tagged.**
+- [frontline / manager] **Objective-pointer hygiene**: surface work records
+  that name a goal id that no longer exists, and records with no goal pointer at
+  all, as a counted refusal rather than an invisible exclusion.
+- [director / exec] **Boundary-redraw rehearsal**: a dry-run that shows which
+  `spans-work` clusters would collapse, which `rolls-up-to` edges would move and
+  which governed decisions would become stale, WITHOUT writing anything.
+- [exec / chief] **Cross-week jurisdiction drift**: a conformal trend over ISO
+  weeks of cross-branch share and median coalition size, refused below four
+  weeks, with the pooled rate beside the mean of unit rates.
+- [all altitudes] **Bounded epistemic backlog policy** (new, from this session's
+  measurement): cap `RULE-EPI-02` decisions opened per transaction per span per
+  ISO week, with the remainder deferred and printed; re-check UI latency of the
+  first demo write under the 256 cap in a real browser [UNVERIFIED].
+- [all altitudes] **Multi-span LCA repair in `chain.js`**: audit the ~80 other
+  callers of `lowestCommonAncestor`; fix the shared helper with a parity test.
+- [all altitudes] Access-registry polish carried forward from Session 148
+  (`SAFE_READS` lists `fitBrief` vs exported `fitBriefText`; `[FIT-PROPSE:`
+  typo; duplicated question tables; misnamed `AUTHORITY_CLASS_KEYS_PRESENT`;
+  `scoreAllocationRules` refuses `paired: 0`; `RULE-FIT-03` never fired
+  end-to-end).
+
 ## 2026-11-06 — Jurisdiction Compiler shipped; next targets (Session 149, Schema v111, [ADR-0109](./docs/adr/0109-jurisdiction-compiler.md))
 
 **Shipped [all altitudes].** `RULE-JUR-01..04` on the shared spine; 89 rules /
@@ -11,17 +70,13 @@ cross-module propagation (case + portfolio members, `spans-work` edges) and real
 cross-altitude roll-up (rank 1–5 identity-free readings, 40 `rolls-up-to`
 ancestor edges) in `tests/app/jurisdiction.test.mjs` (10/10).
 
-**Top next target [all altitudes] — P0 defect, not a feature.** The shared
-`MAX_AUTOMATION_EVENTS = 64` cap is reached on an ordinary `case.updated` over
-the shipped demo, producing 57 `automation.rule_error` rollbacks and 56
-engine-authored `decision.created` events. That is a silent failure of
-downstream rules (notably `epistemicRule`) and it is **pre-existing at v110** —
-confirmed by an A/B run with `jurisdictionRule` removed from the spine. Fixing
-it requires raising/replacing the derived-event cap AND updating
-`action-bundles.test.mjs:158`, which asserts the cap at exactly 64, plus a
-re-baseline of `case-rehearsal.test.mjs` and `confidence-transport.test.mjs`.
-Deliberately NOT patched this session: a cap change without a full green suite
-would be a guess.
+**P0 defect — FIXED in Session 150 (was pre-existing at v110).** The shared
+`MAX_AUTOMATION_EVENTS` cap was the cause of the 57 `automation.rule_error`
+rollbacks and 56 silently-missing engine-authored decisions on an ordinary
+`case.updated`. Session 150 raised the production cap 64 → 256 and the replay
+ceiling 256 → 1024 ([ADR-0110](./docs/adr/0110-derived-event-budget.md)); the
+demo cascade now commits with **0** rolled-back rules. See the Session 150
+entry at the top of this file.
 
 **Next targets, altitude-tagged.**
 - [frontline / manager] **Objective-pointer hygiene**: surface work records

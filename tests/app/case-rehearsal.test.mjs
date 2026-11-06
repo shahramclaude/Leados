@@ -111,7 +111,7 @@ test('module worker entry executes serialized production rehearsal off-thread', 
   try {
     const s = buildDemoState(now);
     const result = await new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => reject(Error('worker timed out')), 15000);
+      const timeout = setTimeout(() => reject(Error('worker timed out')), 120000);
       worker.once('message', (value) => { clearTimeout(timeout); resolve(value); });
       worker.once('error', (error) => { clearTimeout(timeout); reject(error); });
       worker.postMessage({ state: s, caseId: s.cases[0].id, input, now: now.toISOString() });

@@ -1,3 +1,72 @@
+## 2026-11-06 — Session 150: The event budget stops silently discarding work (ADR-0110, no schema bump)
+
+**The question.** Why does one ordinary `case.updated` on the shipped demo end
+with the engine reporting success while its own governed work never happens?
+Because the shared spine's derived-event budget (`MAX_AUTOMATION_EVENTS = 64`)
+was smaller than one real transaction. The answer was to size the budget to
+reality, not to trim the cascade to fit the budget.
+
+**What was built.** No feature — the Session 149 P0 defect fix.
+`MAX_AUTOMATION_EVENTS` 64 → **256**; `MAX_REPLAY_EVENT_BUDGET` 256 → **1024**
+(both finite; tuple deduplication remains the cycle bound). New
+[ADR-0110](./docs/adr/0110-derived-event-budget.md). No schema change, no rule
+change, no collection/setting/contract change (89 rules / 89 contracts
+untouched).
+
+**Evidence (measured, not assumed).** Seeded the demo via `store.seedDemo`
+(3 cases, 108 decisions) and applied an ordinary `updateCase` title patch.
+
+- **Before:** 64-slot truncation — **57** `automation.rule_error`
+  (`epistemicRule rolled back: Automation event limit (64) reached`), 56
+  engine-authored `decision.created` (42 epistemicRule, 6 hindsightRule,
+  3 couplingRule, 2 premiseRule, 2 decisionTempoRule, 1 earlyWarningRule)
+  committing before the cut-off, epistemic backlog silently lost.
+- **After:** **0** `automation.rule_error` events; decisions 108 → 171 (+63);
+  a full-budget probe logged 399 entries: `automation.propagated` 328,
+  `decision.created` 63, `delegation.created` 7, `automation.step` 1 — i.e. a
+  ~72-slot queue, which is why 256 (not a hair over 72) is the new production
+  cap, with the replay ceiling at 1024.
+
+**Fixes folded in.**
+- `action-bundles.test.mjs:158` — over-budget preflight test now derives
+  `sourceEvents` length from `MAX_AUTOMATION_EVENTS` (was a pinned 64).
+- `case-rehearsal.test.mjs` — worker timeout 15 s → 120 s; a correct full
+  off-thread cascade takes ~63 s here. `failureCount` is now genuinely 0.
+- `confidence-transport.test.mjs` — the "a declaration was NOT rewritten"
+  assertion now compares the 60 seeded declarations only (other rules
+  legitimately append their own decisions during the same commit; the
+  declaration-immutability intent is unchanged).
+- Comment-only alignment in `assurance.js` / `jurisdictionRules.js` (the 64-event
+  rationale text); rebuilt `LeadOS-standalone.html` (8,972,007 bytes, schema
+  v111, 545 modules).
+
+**Verified (actual).** `npm run lint` exit 0; `npm run check:boundary` — 546
+modules / 155 suites / 23 doc checks, 0 violations; `case-rehearsal` 7/7;
+`confidence-transport` 46/46; `action-bundles` 19/19; `event-cascade` +
+`assurance` 22/22; `jurisdiction` 10/10; `mission-command-flow` 9/9;
+`standalone` 7/7.
+
+**Unverified / flagged.**
+- Full `npm test` (155 suites, ~30 min under jsdom+axe) was **not** run this
+  session; green whole-suite is [UNVERIFIED]. Every touched and spine-adjacent
+  suite that was run is green.
+- Real-browser walkthrough of the first-write-on-demo path (which now commits
+  the pending epistemic backlog and takes ~35 s of synchronous engine work)
+  is [UNVERIFIED]; the follow-up bounded-backlog policy for `RULE-EPI-02` is
+  logged in ROADMAP as a new target, deliberately not folded in here.
+- The +63-decision one-time backlog commit on a fresh demo is expected engine
+  behaviour (one governed decision per stale unknown, marker-idempotent,
+  once ever) but it is a large first-click write; watch it.
+
+**Altitude(s) served.** All five — frontline, manager, director, executive,
+chief. Every altitude's automation and roll-up runs on this spine; the defect
+silently dropped governed work directed at every rung above the point of
+truncation. No altitude-specific surface changed; coverage map otherwise
+unchanged from Session 149.
+
+**Sync.** See ROADMAP.md Session 150 entry and the session summary for the
+actual push/PR result.
+
 ## 2026-11-06 — Session 149: The Jurisdiction Compiler (ADR-0109, Schema v111, additive `110 → 111`)
 
 **The question.** When two teams work the same objective and no single seat holds

@@ -586,8 +586,12 @@ describe('the four rules run on the shared spine', () => {
     assert.ok(links.length >= 1);
     assert.equal(links.every((l) => l.relation === 'recalibrates-belief'), true);
 
-    // A declaration was NOT rewritten by the rule.
-    assert.equal(store.state.decisions.map((d) => `${d.id}:${d.forecastProbability}`).join('|'), before);
+    // A declaration was NOT rewritten by the rule. Other rules may legitimately
+    // append their own engine-authored decisions to the workspace during the
+    // same commit (the shared spine runs on every commit); the 60 calls this
+    // module froze must carry the exact forecastProbability they were seeded with.
+    const seededIds = new Set(state.decisions.map((d) => d.id));
+    assert.equal(store.state.decisions.filter((d) => seededIds.has(d.id)).map((d) => `${d.id}:${d.forecastProbability}`).join('|'), before);
 
     // A flagged open promise earns one owned re-read task, linked to the promise.
     const tasks = store.state.delegations.filter((d) => String(d.support).includes('RULE-CTR-02'));

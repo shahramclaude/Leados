@@ -88,9 +88,9 @@ function note(ctx, out, ruleId, action, entity, entityId, summary) {
   // The returned result IS the propagation receipt, and every fact this rule
   // writes is already a typed graph edge in the same atomic transaction. This
   // rule deliberately emits NO `automation.propagated` event: the shared spine
-  // has a declared 64-event budget, and one extra derived event is re-delivered
-  // to all 89 rules, which cascades into ~56 engine-authored decisions and
-  // rolls the downstream epistemic rule back. Zero extra queue pressure, zero
+  // has a declared derived-event budget, and one extra derived event is re-delivered
+  // to all 89 rules, which cascades into dozens of engine-authored decisions and
+  // can roll the downstream epistemic rule back. Zero extra queue pressure, zero
   // lost provenance — the links and the result rows carry everything.
   out.push({ ruleId, action, entity, entityId, summary: String(summary).slice(0, 240) });
 }
