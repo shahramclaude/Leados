@@ -1,4 +1,6 @@
 ## Changelog — 2026-11-06 · Session 147: The Outcome Learning Loop (ADR-0107, Schema v109 · additive `108 → 109`)
+**Repository status:** commit `88844c8` pushed to `arena/4622ebba-leados` (`PUSH_EXIT=0`); PR **#175** OPEN and MERGEABLE at https://github.com/shahramclaude/Leados/pull/175 .
+
 
 **What changed, and why.** Adoption and execution closure were atomic; the
 *belief* behind them was not. A leader could not tell whether the organisation's
