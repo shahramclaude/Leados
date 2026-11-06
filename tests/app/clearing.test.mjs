@@ -94,7 +94,7 @@ function roundWithBids({ bids, respectFloors = true } = {}) {
 }
 
 test('Schema v100 adds an empty clearing ledger and clamps its conventions', () => {
-  assert.equal(SCHEMA_VERSION, 107);
+  assert.equal(SCHEMA_VERSION, 108);
   const migrated = migrate({ schemaVersion: 99, settings: { leaderName: 'Keep this' } });
   assert.deepEqual(migrated.applied, ['99 → 100', '100 → 101', '101 → 102', '102 → 103', '103 → 104', '104 → 105', '105 → 106']);
   assert.deepEqual(migrated.raw.clearingRounds, []);

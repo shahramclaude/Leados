@@ -1,3 +1,11 @@
+## 2026-11-06 — Session 146 architecture delta (Schema v108)
+
+**No new engine.** `executionRegistry.js` (per-kind adapters + compiled events), `execution.js` (pure derivation + owner resolution), `executionRules.js` (`RULE-EXE-01`) register on the existing post-commit spine after `actionBundleRule`; contracts 85 → 86. Derived events use `ctx.logEvent`, not `emitEvent`, to avoid cascades. The rule re-derives after closing the `[BND-02]` checkpoint so scans are idempotent.
+
+**Schema/access.** v108 adds `oneOnOnes.resolvedTopics` + `actionBundles.execution`; `cleanExecution` drops unverifiable markers with a warning. `executionAutoReconcile` default true; explicit scans bypass the pause. Mission APIs: `executionScan`, `setExecutionAutoPropagate`, `missionExecutionReceipt` (rank ≤ 2 + acting seat + span; SAFE_READS). `executionOwnerNodeId` fixes lead-owned loops escalated by the people-LCA.
+
+**UI.** `app/ui/execution-panel.js` + Mission `execution` panel; Bundles receipt card/closed stat/badge; `app/ui/workspace-nav.js` role-first sidebar using the same `workspaceRouteVerdict` as the router. Native details + labelled search; no new dependency.
+
 ## 2026-11-06 — Session 145 architecture delta (Schema v107)
 
 **No new engine.** Command Flow adds `missionCaptures` and a shared transaction (`transactMissionCapture`) used by both `missionCaptureRehearsal` and live adoption. It creates the case through `addCase`, stages commands through the extracted `createStagedStore`/`stageBundle` seams, delivers source events to the existing spine, and validates the live footprint in `afterRules`. `RULE-MIS-01` is widened for `mission.capture.adopted`; rule count remains 85.

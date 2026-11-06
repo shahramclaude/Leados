@@ -7,9 +7,10 @@ import { MISSION_PANELS, MISSION_DISCLOSURE } from '../core/domain/missionRegist
 import { displayBound } from '../core/domain/mission.js';
 import { BUNDLE_LABELS } from '../core/domain/actionBundleRegistry.js';
 import { renderCommandFlow } from '../ui/command-flow.js';
+import { renderExecutionPanel } from '../ui/execution-panel.js';
 
 const ui = { busy: false, error: '', reviewed: false, bundleId: '', caseId: '' };
-const labels = { now: 'Your next moves', capture: 'Command Flow', hierarchy: 'Hierarchy & roll-up', interventions: 'Coordinated interventions', brief: 'Brief & handoff' };
+const labels = { now: 'Your next moves', capture: 'Command Flow', execution: 'Execution evidence', hierarchy: 'Hierarchy & roll-up', interventions: 'Coordinated interventions', brief: 'Brief & handoff' };
 const commandHelp = { decision: 'A DACI choice; adoption never chooses for you.', delegation: 'An owned outcome and a dated checkpoint.', premise: 'A testable assumption, not a claimed fact.', budget: 'An encumbrance against an existing envelope; not spend.', comms: 'Drafts for qualified stakeholders; nothing is sent.', coaching: 'A support prompt for the next 1:1; never a person score.' };
 function go(ctx, panel, extra = '') { ctx.navigate(`#/mission?panel=${panel}${extra}`); }
 function notify(result, success) { if (!result.ok) { toast(result.error, 'bad'); return false; } toast(result.warning || success, result.warning ? 'bad' : 'good'); return true; }
@@ -147,8 +148,8 @@ export function renderMission(ctx) {
   if (!r.ok) return h('div', { class: 'page' }, pageHeader({ title: 'Mission Control' }), banner({ tone: 'bad', title: 'This span cannot be opened', body: r.error }), h('a', { class: 'btn btn-primary', href: '#/seat' }, 'Choose a valid seat'));
   return h('div', { class: 'view-stack mission-view', 'data-altitude': r.seat.altitudeKey },
     h('section', { class: 'mission-hero' }, pageHeader({ eyebrow: `LEADOS · MISSION CONTROL / ${r.seat.label.toUpperCase()}`, title: r.profile.title, subtitle: `${r.profile.focus} · ${r.profile.horizon} · ${r.enforced ? 'Scoped operating seat' : 'Local operator preview'}`, actions: [h('a', { class: 'btn btn-ghost', href: '#/seat' }, 'Change altitude'), h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => registerSituation(ctx, r) }, 'Structured intake'), h('a', { class: 'btn btn-primary', href: '#/mission?panel=capture' }, 'Describe a situation')] }),
-      h('div', { class: 'mission-stats' }, stat({ label: 'Open work in scope', value: displayBound(r.hierarchy.totals.open), hint: 'Recorded work, not people' }), stat({ label: 'Past a promised date', value: displayBound(r.hierarchy.totals.overdue), hint: 'Exact or disclosure-safe interval' }), stat({ label: 'Beyond owner horizon', value: displayBound(r.hierarchy.totals.horizonDebt), hint: 'Jaques time-span escalation' }), stat({ label: 'Coordinated loops', value: String(r.bundles.filter((b) => b.status === 'committed').length), hint: 'Human-reviewed adoption receipts' }))),
+      h('div', { class: 'mission-stats' }, stat({ label: 'Open work in scope', value: displayBound(r.hierarchy.totals.open), hint: 'Recorded work, not people' }), stat({ label: 'Past a promised date', value: displayBound(r.hierarchy.totals.overdue), hint: 'Exact or disclosure-safe interval' }), stat({ label: 'Beyond owner horizon', value: displayBound(r.hierarchy.totals.horizonDebt), hint: 'Jaques time-span escalation' }), stat({ label: 'Open execution loops', value: displayBound(r.execution.hierarchy.totals.open), hint: 'Evidence-reconciled, suppression-safe' }))),
     h('p', { class: 'mission-boundary tiny' }, MISSION_DISCLOSURE.local),
     tabs({ items: MISSION_PANELS.map((key) => ({ key, label: labels[key] })), active: panel, onSelect: (key) => go(ctx, key), ariaLabel: 'Mission Control panels' }),
-    panel === 'now' ? nowPanel(ctx, r) : panel === 'capture' ? renderCommandFlow(ctx, r) : panel === 'hierarchy' ? hierarchyPanel(ctx, r) : panel === 'interventions' ? interventionsPanel(ctx, r) : briefPanel(ctx, r));
+    panel === 'now' ? nowPanel(ctx, r) : panel === 'capture' ? renderCommandFlow(ctx, r) : panel === 'execution' ? renderExecutionPanel(ctx, r) : panel === 'hierarchy' ? hierarchyPanel(ctx, r) : panel === 'interventions' ? interventionsPanel(ctx, r) : briefPanel(ctx, r));
 }

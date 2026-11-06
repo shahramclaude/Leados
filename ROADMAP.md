@@ -1,3 +1,21 @@
+## 2026-11-06 — Execution closure shipped; next targets (Session 146, Schema v108, ADR-0106)
+
+**Shipped.** `RULE-EXE-01` + per-kind evidence registry reconcile adopted bundles from dated terminal records; Mission `#/mission?panel=execution` roll-up + receipt; Bundles receipt card; role-first sidebar with permitted-tool search; schema v108 additive; rule count 85 → 86.
+
+**Altitude coverage.**
+- *Frontline (rank 1)* — proof rows, next action, receipt; owns the loop.
+- *Manager (rank 2)* — span detail + receipt (existing individual-detail ceiling); coaching proof requires a held 1:1 with the exact resolved prompt.
+- *Director (rank 3)* — bounded execution intervals + drill links; no titles/proof ids.
+- *VP (rank 4)* — portfolio roll-up through the same ladder; budget proof is `spentOn`, not `actualOn`.
+- *CEO (rank 5)* — enterprise totals, identity-free; no individual 1:1 detail, no raw note.
+
+**Implemented vs planned vs rejected.**
+- Implemented: terminal-evidence registry, idempotent reconciliation, ancestor edges, review-checkpoint closure, pause gate, role-first nav.
+- Planned (next 1–3): (1) **Outcome learning** — grade execution receipts against pre-registered case hypotheses and feed calibration back into decision tempo; (2) **Capacity-aware delegation simulation** — rehearse load across spans before adoption, with bounded confidence; (3) **Succession/360 evidence joins** — connect resolved execution loops to readiness and feedback without person scores.
+- Rejected: auto-closing human decisions; counting cancellation/deletion as delivery; a second hierarchy engine; rank-only navigation without the router verdict; LLM-invented completion notes.
+
+**Verification.** New suites 11/11; targeted 44/44; lint/boundary/links green; full suite result in AI-SESSION-LOG.md.
+
 ## 2026-11-06 — Mission Command Flow shipped; the next ambitious targets (Session 145, Schema v107, ADR-0105)
 
 **Shipped.** `#/mission?panel=capture` turns one reviewed note into a case, coordinated actions and typed hierarchy provenance in one atomic transaction. The worker and live adoption call the same `transactMissionCapture`; `RULE-MIS-01` writes `responds-to`, `coordinates` and `rolls-up-to` on the existing spine. Raw notes stay with the preparing seat; ancestors receive governed work. Schema v107 additive; rule count unchanged at 85.

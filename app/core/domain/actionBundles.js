@@ -3,6 +3,7 @@ import { dayKey } from '../time.js';
 import { COLLECTIONS } from '../schema.js';
 import { compareAutomationGraphs } from './assurance.js';
 import { BUNDLE_ADAPTERS, BUNDLE_EVENTS, BUNDLE_LIMITS, BUNDLE_LABELS, validateBundleCommands } from './actionBundleRegistry.js';
+import { bundleExecution } from './execution.js';
 
 export const clone = (v) => JSON.parse(JSON.stringify(v));
 export function fingerprint(value) {
@@ -147,11 +148,13 @@ export function bundleReport(state, now = new Date()) {
   const today = dayKey(now);
   const bundles = (state.actionBundles || []).map((b) => ({ ...b,
     stale: ['draft', 'rehearsed'].includes(b.status) && (b.baseRevision !== state.meta?.revision || b.evaluatedAt?.slice(0, 10) !== today),
-    due: b.status === 'committed' && b.reviewOn <= today,
+    execution: bundleExecution(state, b, now),
+    due: b.status === 'committed' && b.reviewOn <= today && bundleExecution(state, b, now)?.state !== 'closed',
     withdrawable: b.status === 'committed' && withdrawalCheck(state, b).ok,
   }));
   return { bundles, open: bundles.filter((b) => ['draft', 'rehearsed'].includes(b.status)), due: bundles.filter((b) => b.due),
-    committed: bundles.filter((b) => b.status === 'committed'), withdrawn: bundles.filter((b) => b.status === 'withdrawn') };
+    committed: bundles.filter((b) => b.status === 'committed'), withdrawn: bundles.filter((b) => b.status === 'withdrawn'),
+    closed: bundles.filter((b) => b.execution?.state === 'closed') };
 }
 export function bundleAttentionCount(state, now = new Date()) { const r = bundleReport(state, now); return r.open.length + r.due.length; }
 export function bundleSignals(state, now = new Date()) {

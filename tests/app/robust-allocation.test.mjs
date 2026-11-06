@@ -140,10 +140,10 @@ function declaration(overrides = {}) {
 /* ------------------------------------------------------------------ schema */
 
 test('Schema v98 migrates additively: empty ledgers, declared conventions, nothing inferred', () => {
-  assert.equal(SCHEMA_VERSION, 107);
+  assert.equal(SCHEMA_VERSION, 108);
   const migrated = migrate({ schemaVersion: 96, settings: { leaderName: 'Keep this' }, cases: [{ id: 'x' }] });
   assert.deepEqual(migrated.applied, ['96 → 97', '97 → 98', '98 → 99', '99 → 100', '100 → 101', '101 → 102', '102 → 103', '103 → 104', '104 → 105', '105 → 106']);
-  assert.equal(migrated.raw.schemaVersion, 107);
+  assert.equal(migrated.raw.schemaVersion, 108);
   assert.deepEqual(migrated.raw.robustPlans, []);
   assert.deepEqual(migrated.raw.robustMarkers, []);
   assert.equal(migrated.raw.settings.leaderName, 'Keep this');

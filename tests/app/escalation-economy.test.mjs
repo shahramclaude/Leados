@@ -79,7 +79,7 @@ const esc = (toSeatId = 'mgr', extra = {}) => ({
 /* ------------------------------------------------------- 1. schema & spine */
 
 test('v94 migration, fail-closed records, graph vocabulary and spine parity', () => {
-  assert.equal(SCHEMA_VERSION, 107);
+  assert.equal(SCHEMA_VERSION, 108);
   const migrated = migrate({ schemaVersion: 93, settings: { leaderName: 'Keep' }, people: [] });
   assert.deepEqual(migrated.applied, ['93 → 94', '94 → 95', '95 → 96', '96 → 97', '97 → 98', '98 → 99', '99 → 100', '100 → 101', '101 → 102', '102 → 103', '103 → 104', '104 → 105', '105 → 106']);
   assert.deepEqual(migrated.raw.escalationRecords, []);

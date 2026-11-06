@@ -1,3 +1,17 @@
+## Changelog — 2026-11-06 · Session 146: Evidence-based execution closure + role-first navigation (ADR-0106, Schema v108 · additive 107 → 108, `#/mission?panel=execution`)
+
+**What changed, and why.** Adoption was atomic but closure was manual and invisible above the span. `RULE-EXE-01` now derives execution from dated terminal evidence and reconciles it on the shared spine; the sidebar leads with altitude duties instead of a 150-link catalogue.
+
+- **Evidence registry.** One adapter per bundle kind; fulfilled/stopped/blocked/missing/pending with dated proof. Returned/deleted/released/dismissed records are never delivery. Coaching requires a held 1:1 with the exact prompt in `resolvedTopics`.
+- **Closure + provenance.** `rests-on` proof pointers + one `rolls-up-to` per ancestor; closes only the engine-authored review checkpoint; idempotent fingerprint; bounded history; audit-only derived events; pause gate with explicit scan override.
+- **Ownership fix.** `executionOwnerNodeId` keeps a lead-owned loop with the lead instead of escalating through the people-LCA.
+- **Mission/Bundles UI.** Execution panel (stats, bounds, reconcile, auto toggle, loops, vertical roll-up/drill); receipt card; closed stat; execution badge. Senior seats get intervals, not proof ids.
+- **Role-first nav.** Pinned Mission/capture/execution/altitude; seat duties or core workflow; collapsed catalogue; permitted-tool search; same router verdict; keyboard-native details.
+- **Schema v108 additive.** `resolvedTopics` + `execution` markers; fail-closed `cleanExecution`; default auto-reconcile true. 104 test files swept for current-version literals.
+- **Verification.** New suites 11/11; targeted 44/44; lint/boundary/links green; standalone rebuilt v108. Full suite result in AI-SESSION-LOG.md.
+
+**Honest limits.** Not a causal forecast; seats are not authentication; real-browser AT walkthrough [UNVERIFIED]; vendor capabilities not audited.
+
 ## Changelog — 2026-11-06 · Session 145: Mission Command Flow (ADR-0105, Schema v107 · additive 106 → 107, `#/mission?panel=capture`)
 
 **What changed, and why.** The engines existed; the leadership loop did not. A note had to become a case, then a bundle, then a rehearsal, then an adoption — separate transactions with orphan/stale failure modes. Command Flow makes the whole response one reviewed, rehearsed, atomic write.

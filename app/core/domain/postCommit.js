@@ -69,6 +69,7 @@ import { credibilityRule } from './credibilityRules.js';
 import { confidenceRule } from './confidenceRules.js';
 import { responseRule } from './responseRules.js';
 import { actionBundleRule } from './actionBundleRules.js';
+import { executionRule } from './executionRules.js';
 import { settlementRule } from './settlementRules.js';
 import { counterfactualRule } from './counterfactualPolicyRules.js';
 import { reliabilityRule } from './reliabilityRules.js';
@@ -251,6 +252,9 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // Bundle reconciliation follows comms so rule-created briefs receive typed
   // provenance in the same source-event pass, not on a later manual scan.
   actionBundleRule,
+  // ADR-0106: after the bundle checkpoint exists, reconcile it from terminal
+  // evidence on the same source event. Runs before the final seat roll-up.
+  executionRule,
   // Schema v33: the Allocation Governor. Portfolio events re-measure the
   // explore/exploit mix; an exploration-floor breach opens one DACI
   // rebalancing decision. Runs before decision tempo so that decision

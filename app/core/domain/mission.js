@@ -5,8 +5,9 @@
  * complementary small-cell suppression. No person is scored or ranked.
  */
 import { addDays, dayKey } from '../time.js';
-import { activeSeat, buildSeats, canSee } from './seat.js';
-import { harvestWork, LEADER_ID } from './chain.js';
+import { activeSeat, buildSeats, canSee, recordPeople } from './seat.js';
+import { harvestWork, responsibleNodeId, LEADER_ID } from './chain.js';
+import { bundleExecution, executionSummary, executionOwnerNodeId } from './execution.js';
 import { SIGNAL_SOURCES } from './chainRegistry.js';
 import { fingerprint } from './actionBundles.js';
 import { BUNDLE_ADAPTERS } from './actionBundleRegistry.js';
@@ -139,16 +140,36 @@ export function buildMission(state, { now = new Date(), seatId = null } = {}) {
     .map((b) => ({ id: b.id, label: b.label || b.name || 'Budget envelope', currency: b.currency, ownerId: b.ownerId })) : [];
   const bundles = (state.actionBundles || []).filter((b) => {
     const c = (state.cases || []).find((r) => r.id === b.sourceId);
-    return c && scoped.some((i) => i.type === 'case' && i.entityId === c.id) && canSee(c, 'cases', acting, built).allow === 'full';
+    if (!c || canSee(c, 'cases', acting, built).allow === 'denied') return false;
+    // A resolved case leaves the OPEN-work harvest, but its execution loop must
+    // remain visible until the evidence closes it. Ownership, not open status,
+    // is the scope key for bundles (same LCA partition as the chain).
+    const ownerNodeId = executionOwnerNodeId(c, built);
+    return ownerNodeId === seat.id || seat.scope.has(ownerNodeId);
   }).map((b) => ({ id: b.id, name: detail ? b.name : 'Cross-module intervention', status: b.status, reviewOn: b.reviewOn,
     sourceId: b.sourceId, commands: b.commands.map((c) => ({ kind: c.kind, title: detail ? c.title : c.kind })),
     preview: b.preview, actual: b.actual, outputsN: b.outputs?.length || 0, baseRevision: b.baseRevision, evaluatedAt: b.evaluatedAt,
     stale: ['draft', 'rehearsed'].includes(b.status) && (b.baseRevision !== state.meta?.revision || b.evaluatedAt?.slice(0, 10) !== dayKey(now)),
-    due: b.status === 'committed' && b.reviewOn <= dayKey(now) }));
+    due: b.status === 'committed' && b.reviewOn <= dayKey(now), executionState: b.status === 'committed' ? bundleExecution(state, b, now)?.state || null : null }));
+  // ADR-0106: execution loops roll up on the SAME ownership partition as work.
+  // Senior seats receive suppression-safe bounds, never a loop title or proof id.
+  const executionRows = (state.actionBundles || []).filter((b) => bundles.some((x) => x.id === b.id)).map((b) => ({ bundle: b, execution: bundleExecution(state, b, now) })).filter((r) => r.execution);
+  const loopItems = executionRows.map(({ bundle, execution }) => {
+    const source = (state.cases || []).find((c) => c.id === bundle.sourceId);
+    const ownerNodeId = executionOwnerNodeId(source, built);
+    const opened = bundle.committedAt?.slice(0, 10) || dayKey(now);
+    return { type: 'execution-loop', entityId: bundle.id, ownerNodeId, ageDays: Math.max(0, Math.floor((now.getTime() - Date.parse(opened)) / 86400000)),
+      overdueDays: execution.state !== 'closed' && bundle.reviewOn < dayKey(now) ? Math.max(0, Math.floor((now.getTime() - Date.parse(bundle.reviewOn)) / 86400000)) : 0,
+      requiredRank: seat.rank, ownerRank: seat.rank, sensitive: false };
+  });
+  const executionHierarchy = suppressHierarchy(loopItems, seat, built, { floor: normalizeMissionSettings(state.settings).missionCellFloor, detail });
+  const execution = { detail, summary: detail ? executionSummary(executionRows.map((r) => r.execution)) : null, hierarchy: executionHierarchy,
+    loops: detail ? executionRows.map(({ bundle, execution }) => ({ id: bundle.id, name: bundle.name, reviewOn: bundle.reviewOn, sourceId: bundle.sourceId, ...execution })) : [],
+    method: executionHierarchy.method };
   const briefs = acting.rank >= 4 ? (state.missionBriefs || []).filter((b) => b.seatId === seat.id || seat.scope.has(b.seatId)) : [];
   return { ok: true, version: MISSION_VERSION, seat: { id: seat.id, name: seat.name, label: seat.label, rank, altitudeKey: seat.altitudeKey,
     horizonDays: seat.horizonDays, parentId: built.byId.has(seat.parentId) ? seat.parentId : null, isLeader: seat.isLeader },
-    captures: seat.id === acting.id ? capturesForSeat(state, acting.id, { now }) : [], actingSeatId: acting.id, enforced: !acting.fullAccess, profile, hierarchy, queue, owners, eligibleCases, budgets, bundles, briefs,
+    captures: seat.id === acting.id ? capturesForSeat(state, acting.id, { now }) : [], actingSeatId: acting.id, enforced: !acting.fullAccess, profile, hierarchy, execution, queue, owners, eligibleCases, budgets, bundles, briefs,
     revision: state.meta?.revision || 0, unassigned: scoped.filter((i) => !i.people.length).length,
     observedPeople: seat.scopeN, disclosure: MISSION_DISCLOSURE,
     limitations: [MISSION_DISCLOSURE.aggregate, MISSION_DISCLOSURE.brief, MISSION_DISCLOSURE.local],

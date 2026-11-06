@@ -1,5 +1,6 @@
 /** Schema v74. Persist only bounded proposals, reviewed previews and adoption/compensation receipts. */
 import { BUNDLE_ADAPTERS, BUNDLE_KINDS, BUNDLE_LIMITS } from './actionBundleRegistry.js';
+import { EXECUTION_STATES, EXECUTION_VERSION } from './executionRegistry.js';
 const object = (v) => v && typeof v === 'object' && !Array.isArray(v);
 const text = (v, max = 200) => typeof v === 'string' ? v.trim().slice(0, max) : '';
 const iso = (v) => typeof v === 'string' && Number.isFinite(Date.parse(v)) ? new Date(v).toISOString() : null;
@@ -16,6 +17,13 @@ export function cleanBundlePreview(raw) {
   return { changes, relationships, failureCount: int(raw.failureCount, 10000) ?? 0,
     ruleIds: [...new Set((Array.isArray(raw.ruleIds) ? raw.ruleIds : []).map((v) => text(v, 80)).filter(Boolean))].slice(0, 100),
     scope: 'Actual software commands and rule effects in a disposable workspace. Not a causal forecast; no message is sent.' };
+}
+function cleanExecution(raw) {
+  if (!object(raw) || raw.version !== EXECUTION_VERSION || !EXECUTION_STATES.includes(raw.state) || !hash(raw.fingerprint) || !iso(raw.changedAt)) return null;
+  return { version: EXECUTION_VERSION, state: raw.state, fingerprint: raw.fingerprint, changedAt: iso(raw.changedAt),
+    closedOn: day(raw.closedOn), caseResolvedOn: day(raw.caseResolvedOn), reviewTaskId: text(raw.reviewTaskId, 80) || null,
+    evidence: (Array.isArray(raw.evidence) ? raw.evidence : []).slice(0, BUNDLE_LIMITS.targets).flatMap((e) => object(e) && BUNDLE_KINDS.includes(e.kind) && ['pending', 'fulfilled', 'stopped', 'blocked', 'missing'].includes(e.state)
+      ? [{ kind: e.kind, state: e.state, ...(text(e.type) && text(e.id) ? { type: text(e.type, 40), id: text(e.id, 80), on: day(e.on) } : {}) }] : []) };
 }
 export function normalizeActionBundles(raw, state, now, warnings = []) {
   if (!Array.isArray(raw)) return [];
@@ -37,12 +45,15 @@ export function normalizeActionBundles(raw, state, now, warnings = []) {
     const outputs = (Array.isArray(item.outputs) ? item.outputs : []).slice(0, BUNDLE_LIMITS.targets).flatMap((o) => object(o) && BUNDLE_KINDS.includes(o.kind) && text(o.id) && hash(o.fingerprint) && text(o.type || o.kind, 40)
       ? [{ type: text(o.type || o.kind, 40), collection: text(o.collection || BUNDLE_ADAPTERS[o.kind]?.collection || '', 40), id: text(o.id, 80), kind: o.kind, fingerprint: o.fingerprint, ...(o.prompt ? { prompt: text(o.prompt, 180) } : {}), ...(o.budgetId ? { budgetId: text(o.budgetId, 80) } : {}) }] : []);
     if (item.status === 'committed' && outputs.length !== (item.outputs || []).length) { status = 'draft'; warnings.push('Action bundles: a malformed compensation target was refused.'); }
+    const execution = status === 'committed' ? cleanExecution(item.execution) : null;
+    if (status === 'committed' && item.execution && !execution) warnings.push('Action bundles: an unverifiable execution marker was dropped; live state is re-derived from source evidence.');
     out.push({ id: text(item.id, 80), name: text(item.name, 180) || 'Coordinated action bundle', sourceType: 'case', sourceId: item.sourceId,
       reviewOn: day(item.reviewOn), commands, status, createdAt: iso(item.createdAt), updatedAt: iso(item.updatedAt) || iso(item.createdAt),
       committedAt: ['committed', 'withdrawn'].includes(status) ? iso(item.committedAt) : null, withdrawnAt: status === 'withdrawn' ? iso(item.withdrawnAt) : null,
       archivedAt: status === 'archived' ? iso(item.archivedAt) : null, evaluatedAt: iso(item.evaluatedAt),
       baseRevision: int(item.baseRevision) ?? 0, inputFingerprint: hash(item.inputFingerprint), sourceFingerprint: hash(item.sourceFingerprint),
       preview, actual: cleanBundlePreview(item.actual), outputs,
+      execution,
       history: (Array.isArray(item.history) ? item.history : []).filter((h) => object(h) && iso(h.at) && text(h.summary)).slice(-60).map((h) => ({ at: iso(h.at), type: text(h.type, 40), summary: text(h.summary, 300) })),
     });
     if (out.length >= BUNDLE_LIMITS.bundles) break;

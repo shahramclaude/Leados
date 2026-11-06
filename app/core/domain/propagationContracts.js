@@ -43,6 +43,7 @@ import { autopilotRule } from './autopilot.js';
 import { caseCreatedRule } from './caseLifecycle.js';
 import { responseRule } from './responseRules.js';
 import { actionBundleRule } from './actionBundleRules.js';
+import { executionRule } from './executionRules.js';
 import { forecastIntegrityRule } from './forecastIntegrity.js';
 import { resilienceRule } from './resilience.js';
 import { decisionTempoRule } from './decisionTempo.js';
@@ -154,6 +155,9 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
   },
   {
     rule: actionBundleRule, module: 'actionBundleRules.js', purpose: 'RULE-BND-01..03: typed provenance for every adopted action, one owned review checkpoint, and orphan-edge reconciliation. Explicit scans inspect the bounded bundle ledger. Compensation is a separate all-or-nothing transaction and never overwrites touched work.', writes: ['links', 'delegations'], emits: [], scansWorkspace: true,
+  },
+  {
+    rule: executionRule, module: 'executionRules.js', purpose: 'RULE-EXE-01: registry-subscribed source events re-derive each adopted bundle from dated terminal evidence, write rests-on proof pointers and one rolls-up-to edge per leadership ancestor, and close only the engine-authored review checkpoint when the human-resolved case and every action agree. Missing, returned, cancelled and deleted records are never counted as delivered. Pausable; explicit scans always run.', writes: ['actionBundles', 'delegations', 'links', 'events'], emits: [], scansWorkspace: true,
   },
   {
     rule: caseCreatedRule,
