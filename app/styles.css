@@ -3219,3 +3219,25 @@ tr.is-focused td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
 @media (max-width: 900px) { .flow-compose-grid { grid-template-columns: 1fr; } }
 @media (max-width: 560px) { .flow-action-grid { grid-template-columns: 1fr; } .flow-history-row { grid-template-columns: 1fr; } .flow-steps { gap: 8px 14px; } }
 @media (prefers-reduced-motion: reduce) { .command-flow *, .command-flow *::before, .command-flow *::after { animation: none !important; transition: none !important; } }
+
+/* ADR-0106: role-first navigation + execution evidence */
+.nav-workspace { display: flex; flex-direction: column; gap: 8px; }
+.nav-search-wrap { padding: 0 2px 4px; }
+.nav-search { width: 100%; min-height: 38px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.18); background: rgba(255,255,255,0.07); color: #f2fbf7; padding: 7px 10px; font: inherit; font-size: 13px; }
+.nav-search::placeholder { color: #9db8b0; }
+.nav-search:focus-visible { outline: 3px solid #7fd1b9; outline-offset: 1px; }
+.nav-pinned { display: flex; flex-direction: column; gap: 2px; padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.10); }
+.nav-pinned .nav-item { font-weight: 600; }
+.nav-mode, .nav-result-count { color: #9db8b0; font-size: 11.5px; margin: 0 6px; }
+.nav-empty { color: #d8e6e1; font-size: 12px; margin: 6px; }
+.nav-group { margin-bottom: 4px; }
+.nav-summary { display: flex; align-items: center; justify-content: space-between; gap: 8px; cursor: pointer; list-style: none; padding: 7px 8px; border-radius: 7px; }
+.nav-summary::-webkit-details-marker { display: none; }
+.nav-summary::after { content: '▸'; color: #91b2a9; font-size: 11px; }
+details[open] > .nav-summary::after { content: '▾'; }
+.nav-summary:hover { background: rgba(255,255,255,0.06); }
+.nav-section-count { margin-left: auto; color: #91b2a9; font-size: 10.5px; font-weight: 600; }
+.nav-duty-question { color: #9db8b0; font-size: 11.5px; line-height: 1.4; margin: 0 8px 6px; }
+.nav-catalogue .nav-item { font-size: 13px; padding-block: 6px; }
+.execution-panel .stat-row { flex-wrap: wrap; }
+.execution-panel code { overflow-wrap: anywhere; }

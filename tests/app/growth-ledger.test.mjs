@@ -124,7 +124,7 @@ const planById = (h, id = 'gp1') => h.store.state.growthPlans.find((p) => p.id =
 /* ------------------------------------------------------ schema & migration */
 
 test('schema v8 → v9 adds a review ledger and leaves unknown history empty', () => {
-  assert.equal(SCHEMA_VERSION, 107);
+  assert.equal(SCHEMA_VERSION, 108);
 
   const v8 = {
     schemaVersion: 8,
@@ -150,8 +150,8 @@ test('schema v8 → v9 adds a review ledger and leaves unknown history empty', (
 
   const { state, warnings } = normalizeState(migrated.raw, { now: NOW });
   assert.deepEqual(warnings, []);
-  assert.equal(state.schemaVersion, 107);
-  assert.equal(state.schemaVersion, 107);
+  assert.equal(state.schemaVersion, 108);
+  assert.equal(state.schemaVersion, 108);
   const migratedPlan = state.growthPlans[0];
   assert.deepEqual(migratedPlan.reviews, [], 'no review is invented');
   assert.equal(migratedPlan.reviewDeferrals, 0, 'a v8 file did not count deferrals');

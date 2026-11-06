@@ -16,6 +16,7 @@ import { teamHealth } from './core/domain/health.js';
 import { dueMeetings } from './core/domain/oneonone.js';
 import { renderToday } from './views/today.js';
 import { renderMission } from './views/mission.js';
+import { renderWorkspaceNav } from './ui/workspace-nav.js';
 import { scopedViewState, safeSeatContext } from './core/domain/viewScope.js';
 // ADR-0086: the Disclosure Compiler. Every route's posture is compiled once per
 // render; above a detail ceiling the shell serves the altitude-appropriate
@@ -1310,7 +1311,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
     // Declared seats use the scoped command center; do not run every legacy
     // counter over a deliberately redacted projection.
     const counts = enforced ? {} : counters(state, at, seatCtx);
-    counts.mission = (state.actionBundles || []).filter((b) => b.status === 'committed' && b.reviewOn <= dayKey(at)).length;
+    counts.mission = bundleAttentionCount(state, at);
     // ADR-0076: role-tiered navigation. A frontline lead is not shown CEO-level
     // portfolio analytics; a CEO is not shown individual 1:1 content. The same
     // pure route verdict gates both the link and direct navigation.
@@ -1325,45 +1326,10 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
     const hiddenN = enforced
       ? NAV.reduce((n, group) => n + group.items.filter((item) => !allowed(item)).length, 0)
       : 0;
-    mount(
-      nav,
-      h(
-        'div',
-        { class: 'nav-inner' },
-        ...NAV.map((group) =>
-          h(
-            'div',
-            { class: 'nav-group' },
-            group.section ? h('p', { class: 'nav-section' }, group.section) : null,
-            ...group.items.map((item) => {
-              if (!allowed(item)) return null;
-              const active = item.route === route || (item.route === 'people' && route === 'person') || (item.route === 'reviews' && route === 'review') || (item.route === 'cases' && route === 'case') || (item.route === 'resilience' && route === 'resilience-detail') || (item.route === 'power' && route === 'power-detail') || (item.route === 'changes' && route === 'change') || (item.route === 'negotiations' && route === 'negotiation') || (item.route === 'finance' && route === 'budget') || (item.route === 'stakeholders' && route === 'stakeholder') || (item.route === 'conflicts' && route === 'conflict') || (item.route === 'hiring' && route === 'hiring-detail');
-              const count = item.badge ? counts[item.badge] : 0;
-              return h(
-                'a',
-                {
-                  class: `nav-item ${active ? 'is-active' : ''}`,
-                  href: `#/${item.route}`,
-                  'aria-current': active ? 'page' : null,
-                },
-                h('span', { class: 'nav-icon', 'aria-hidden': 'true' }, item.icon),
-                h('span', { class: 'nav-label' }, item.label),
-                isAggregate(item)
-                  ? h('span', {
-                    class: 'nav-posture',
-                    title: `Aggregate only at ${seat.label}: counts and rates, no item detail.`,
-                    'aria-label': 'aggregate only at this altitude',
-                  }, '◌')
-                  : null,
-                count ? h('span', { class: 'nav-count', 'aria-label': `${count} needing attention` }, String(count)) : null,
-              );
-            }),
-          ),
-        ),
-        hiddenN ? h('p', { class: 'nav-section' }, `${hiddenN} section(s) withheld at ${seat.label} · `,
-          h('a', { href: '#/seat?panel=boundary', class: 'sidebar-link' }, 'see the boundary')) : null,
-      ),
-    );
+    mount(nav, renderWorkspaceNav({
+      groups: NAV, route, seat, allowed, counts, isAggregate, hiddenN,
+      currentHref: typeof window !== 'undefined' ? window.location.hash : '',
+    }));
   }
 
   function renderTopbar(state, at, seatCtx = null) {

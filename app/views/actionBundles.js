@@ -7,6 +7,7 @@ import { bundleReport } from '../core/domain/actionBundles.js';
 import { resolveLinkedEntity } from '../core/domain/cases.js';
 import { runActionBundleRehearsal } from '../ui/response-worker.js';
 import { dayKey } from '../core/time.js';
+import { renderBundleExecution, executionBadge } from '../ui/execution-panel.js';
 
 const ui = { sourceId: '', bundleId: '', proposal: null, busy: false, error: '', queryKey: null };
 const clone = (v) => JSON.parse(JSON.stringify(v));
@@ -121,6 +122,7 @@ function receipt(ctx, b) {
   ].filter(Boolean), body: h('div', { class: 'stack-sm' },
     b.status === 'committed' && !b.withdrawable ? banner({ tone: 'info', title: 'Later work is protected', body: 'At least one target has changed or been used. Review the individual records; compensation will not overwrite them.' }) : null,
     targets.length ? h('div', { class: 'bundle-targets' }, ...targets.map((o) => h('a', { class: 'bundle-target', href: o.node.route }, h('span', null, BUNDLE_LABELS[o.kind]), h('strong', null, o.node.title), h('span', { class: 'muted tiny' }, 'Open live record →')))) : h('p', { class: 'muted' }, 'Compensated or deleted targets are retained in the audit receipt, not recreated as live work.'),
+    b.status === 'committed' ? renderBundleExecution(ctx, b) : null,
     h('h3', { class: 'small-heading' }, 'Append-only bundle history'),
     h('ol', { class: 'timeline' }, ...b.history.map((e) => h('li', { class: 'timeline-item' }, h('span', { class: 'timeline-date' }, e.at.slice(0, 10)), h('div', { class: 'timeline-body' }, h('strong', null, e.type), h('p', null, e.summary)))))) });
 }
@@ -137,12 +139,12 @@ export function renderActionBundles(ctx) {
   if (selected && ['draft', 'rehearsed'].includes(selected.status) && !ui.proposal) { ui.proposal = clone(selected); ui.sourceId = selected.sourceId; }
   const root = h('div', { class: 'view-stack bundle-view' },
     pageHeader({ eyebrow: 'LEADOS · COORDINATED EXECUTION', title: 'One review. Many modules. One transaction.', subtitle: 'Turn an operational case into a reviewed execution bundle. See the exact ripple, adopt it together, and reverse only untouched work.', actions: [h('a', { class: 'btn btn-ghost', href: '#/responses' }, 'Start from a situation note')] }),
-    h('div', { class: 'stat-row' }, stat({ label: 'Awaiting review', value: report.open.length }), stat({ label: 'Adopted', value: report.committed.length }), stat({ label: 'Reviews due', value: report.due.length }), stat({ label: 'Safely withdrawn', value: report.withdrawn.length })),
+    h('div', { class: 'stat-row' }, stat({ label: 'Awaiting review', value: report.open.length }), stat({ label: 'Adopted', value: report.committed.length }), stat({ label: 'Reviews due', value: report.due.length }), stat({ label: 'Closed on evidence', value: report.closed.length, tone: 'good' }), stat({ label: 'Safely withdrawn', value: report.withdrawn.length })),
     card({ title: 'Choose the source case', subtitle: 'The case stays the single source of truth. Its owner, stakeholders, mitigation estimate and budget supply the proposal—never a guessed fact.', body: cases.length ? h('div', { class: 'bundle-source-list' }, ...cases.slice(0, 24).map((c) => h('button', { class: `bundle-source${ui.sourceId === c.id ? ' is-selected' : ''}`, type: 'button', onClick: () => start(ctx, c.id) }, h('strong', null, c.title), h('span', null, `${c.status} · ${c.ownerId ? ctx.state.people.find((p) => p.id === c.ownerId)?.name || 'Owner unavailable' : 'No owner'}`), badge('Build bundle', 'neutral')))) : emptyState({ title: 'Start with one real situation', body: 'Register a case or adopt a response first. The bundle builder will connect its operational, financial and people implications.', action: h('a', { class: 'btn btn-primary', href: '#/cases' }, 'Open operational cases') }) }),
     editor(ctx) || (selected && ['committed', 'withdrawn'].includes(selected.status) ? receipt(ctx, selected) : null),
     report.bundles.length ? card({ title: 'Bundle ledger', subtitle: 'Proposals, immutable adoption receipts and guarded compensation. Open a plan to inspect its current state.', body: table({ caption: 'Action bundles', rows: report.bundles, columns: [
       { label: 'Plan', render: (b) => h('a', { href: `#/bundles?bundle=${encodeURIComponent(b.id)}` }, b.name) },
-      { label: 'Status', render: (b) => badge(b.due ? 'review due' : b.status, b.due ? 'caution' : b.status === 'committed' ? 'good' : 'neutral') },
+      { label: 'Status', render: (b) => b.execution ? executionBadge(b.execution.state) : badge(b.status, 'neutral') },
       { label: 'Actions', render: (b) => b.commands.length }, { label: 'Review', render: (b) => b.reviewOn },
       { label: 'Next step', render: (b) => h('a', { class: 'btn btn-tiny btn-ghost', href: `#/bundles?bundle=${encodeURIComponent(b.id)}` }, ['draft', 'rehearsed'].includes(b.status) ? 'Review / rehearse' : 'Open receipt') },
     ] }) }) : null,

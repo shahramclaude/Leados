@@ -478,7 +478,7 @@ export {
 // older blob simply opens on the undeclared operator view. A version bump here
 // would have forced 78 test files to be rewritten for zero user benefit; the
 // honest choice is to add nothing to migrate.
-export const SCHEMA_VERSION = 107;
+export const SCHEMA_VERSION = 108;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -1407,6 +1407,9 @@ export const DEFAULT_SETTINGS = Object.freeze({
   // Schema v73: Response Studio follow-up is pauseable; provenance is not.
   responseAutoPropagate: true,
   bundleAutoPropagate: true,
+  // ADR-0106: evidence-based execution reconciliation is automatic; an explicit
+  // scan still works while paused. It never invents a human outcome.
+  executionAutoReconcile: true,
   settlementAutoPropagate: true,
   settlementFidelityFloorPct: 75,
   settlementStaleDays: 7,
@@ -2848,6 +2851,7 @@ export function normalizeSettings(raw) {
     // Schema v73: only the follow-up write is pauseable.
     responseAutoPropagate: s.responseAutoPropagate !== false,
     bundleAutoPropagate: s.bundleAutoPropagate !== false,
+    executionAutoReconcile: s.executionAutoReconcile !== false,
     settlementAutoPropagate: s.settlementAutoPropagate !== false,
     settlementFidelityFloorPct: clampInt(s.settlementFidelityFloorPct, 50, 95, d.settlementFidelityFloorPct),
     settlementStaleDays: clampInt(s.settlementStaleDays, 1, 60, d.settlementStaleDays),
@@ -6398,6 +6402,9 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
     status: ['held', 'skipped', 'moved'].includes(m.status) ? m.status : 'held',
     mood: m.mood === null || m.mood === undefined ? null : clampInt(m.mood, 1, 5, 3),
     agenda: normalizeAgenda(m.agenda),
+    // ADR-0106: exact prompts covered in a held 1:1. Historical meetings have
+    // no such proof ([]), so a deleted talking point is never back-filled as coaching.
+    resolvedTopics: normalizeTalkingPoints(m.resolvedTopics),
     notes: str(m.notes).slice(0, 20000),
     actions: normalizeActions(m.actions, { withOwner: true }),
     createdAt: isoOrNull(m.createdAt) || now,
@@ -7931,6 +7938,13 @@ export const MIGRATIONS = {
   // past that the record cannot prove.
   // ADR-0105: additive, empty on upgrade. No historical note is reclassified,
   // and no existing case is pretending to have passed a human review it never had.
+  107: (v107) => ({
+    ...v107,
+    schemaVersion: 108,
+    // Additive proof fields. Empty means unmeasured, never a fabricated completion.
+    oneOnOnes: Array.isArray(v107.oneOnOnes) ? v107.oneOnOnes.map((m) => m && typeof m === 'object' ? { ...m, resolvedTopics: Array.isArray(m.resolvedTopics) ? m.resolvedTopics : [] } : m) : [],
+    actionBundles: Array.isArray(v107.actionBundles) ? v107.actionBundles.map((b) => b && typeof b === 'object' ? { ...b, execution: b.execution ?? null } : b) : [],
+  }),
   106: (v106) => ({ ...v106, schemaVersion: 107, missionCaptures: Array.isArray(v106.missionCaptures) ? v106.missionCaptures : [] }),
   105: (v105) => ({
     ...v105,

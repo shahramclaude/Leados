@@ -1517,6 +1517,7 @@ export function createApi(store, options = {}) {
         date,
         status,
         mood: data.mood ?? null,
+        resolvedTopics: status === 'held' ? resolvedTopicList : [],
         agenda: (data.agenda || []).map((a) => ({
           id: id('ag'),
           text: clean(a.text) || '',
@@ -8858,7 +8859,7 @@ export function createApi(store, options = {}) {
       if ((store.state.actionBundles || []).length >= BUNDLE_LIMITS.bundles) return fail('The bundle ledger is full. Export a backup before continuing.');
       const record = { id: id('bnd'), name: name.slice(0, 180), sourceType: 'case', sourceId: source.id, reviewOn,
         commands: valid.value, status: 'draft', createdAt: stamp(), updatedAt: stamp(), committedAt: null, withdrawnAt: null, archivedAt: null,
-        evaluatedAt: null, baseRevision: store.state.meta.revision, inputFingerprint: '', sourceFingerprint: '', preview: null, actual: null, outputs: [],
+        evaluatedAt: null, baseRevision: store.state.meta.revision, inputFingerprint: '', sourceFingerprint: '', preview: null, actual: null, outputs: [], execution: null,
         history: [{ at: stamp(), type: 'created', summary: 'Human-reviewed proposal; no operational action applied.' }] };
       record.inputFingerprint = bundleInputFingerprint(record); record.sourceFingerprint = bundleSourceFingerprint(store.state, record);
       store.update((d) => d.actionBundles.unshift(record), { type: BUNDLE_EVENTS.CREATED, entity: 'bundle', entityId: record.id, summary: `Action bundle proposed: ${record.name}` });

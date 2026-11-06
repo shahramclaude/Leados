@@ -6,6 +6,8 @@ import { MISSION_EVENTS, MISSION_LIMITS } from './missionRegistry.js';
 import { normalizeMissionBriefs } from './missionSchema.js';
 import { proposeBundle, validateBundleCommands } from './actionBundleRegistry.js';
 import { guardApiCall } from './accessGateway.js';
+import { bundleExecution, executionReceiptText } from './execution.js';
+import { EXECUTION_SCAN_EVENT } from './executionRegistry.js';
 
 export function createMissionActions(store, { now, idFactory, createApi }) {
   const fail = (error, field = null) => ({ ok: false, error, ...(field ? { field } : {}) });
@@ -23,6 +25,25 @@ export function createMissionActions(store, { now, idFactory, createApi }) {
     missionScan() {
       store.update(() => {}, { type: MISSION_EVENTS.SCAN, entity: 'workspace', entityId: '', summary: 'Mission Control reconciled vertical work provenance' });
       return saved({ report: current() });
+    },
+    executionScan() {
+      const m = current(); if (!m.ok) return m;
+      store.update(() => {}, { type: EXECUTION_SCAN_EVENT, entity: 'workspace', entityId: '', summary: 'Execution evidence reconciled explicitly; missing proof was not counted as delivery' });
+      return saved({ report: current() });
+    },
+    setExecutionAutoPropagate(enabled) {
+      const value = enabled !== false;
+      store.update((d) => { d.settings.executionAutoReconcile = value; }, { type: 'execution.auto_set', entity: 'workspace', entityId: '', summary: `Automatic execution reconciliation ${value ? 'resumed' : 'paused'}; explicit scans remain available` });
+      return saved({ executionAutoReconcile: value });
+    },
+    missionExecutionReceipt(bundleId) {
+      const m = current(); if (!m.ok) return m;
+      if (m.enforced && (m.seat.rank > 2 || m.seat.id !== m.actingSeatId)) return fail('Execution proof pointers are individual-detail work. This altitude receives the aggregate roll-up, not the receipt.');
+      const bundle = (store.state.actionBundles || []).find((b) => b.id === bundleId);
+      if (!bundle || !m.bundles.some((b) => b.id === bundleId)) return fail('That execution loop is outside this operating span.');
+      const execution = bundleExecution(store.state, bundle, now());
+      if (!execution) return fail('Only an adopted bundle has an execution receipt.');
+      return { ok: true, text: executionReceiptText(bundle, execution), execution };
     },
     setMissionFloor(value) {
       const n = Number(value);

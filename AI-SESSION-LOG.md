@@ -1,3 +1,17 @@
+## 2026-11-06 — Session 146: Evidence-based execution closure + role-first navigation (Schema v108, ADR-0106)
+
+**Repository identity.** Origin verified `https://github.com/shahramclaude/Leados.git`; branch `arena/b02c70bb-leados`; base `ebad985` (PR #172). Canonical target `index.html` + `app/**`; legacy `src/**` untouched.
+
+**Blunt audit.** The adoption engine (Session 145) was real; the closure loop was not. Bundles stayed `committed` after terminal evidence existed; the `[BND-02]` review checkpoint stayed open; Mission had no execution roll-up; the sidebar led with the full catalogue. Static inventory: 522 app JS files / 2,355 imports / 4,222 exports / zero findings at audit time; `npm ci` exit 0. Full line-by-line audit **[UNVERIFIED]**.
+
+**Shipped.** `executionRegistry.js`, `execution.js`, `executionRules.js` (`RULE-EXE-01`, 86th rule/contract); schema v108 + `cleanExecution`; `logOneOnOne.resolvedTalkingPoints` persistence; Mission execution roll-up + `executionScan`/`setExecutionAutoPropagate`/`missionExecutionReceipt`; gateway allowlist; `execution-panel.js`; Mission/Bundles UI; `workspace-nav.js` role-first sidebar; `executionOwnerNodeId` fix; idempotent re-derivation after checkpoint closure; index meta; ADR-0106; README/ROADMAP/RESEARCH/ARCHITECTURE/LEADOS-STATE/CHANGELOG; 104 test files swept v107→v108; new `execution-loop` + `workspace-navigation` suites; standalone rebuilt.
+
+**Defects found and fixed.** (1) budget proof read nonexistent `actualOn` → `spentOn`; (2) `accepted` is not a case status → terminal set `resolved|closed`; (3) Mission bundles filtered through open-work harvest so resolved cases vanished → ownership filter; (4) `canSee==='full'` excluded senior aggregates → `!=='denied'`; (5) lead-owned case + IC escalated to manager via people-LCA → `executionOwnerNodeId`; (6) review-checkpoint closure changed the fingerprint after the marker was written → re-derive after closure (idempotent scan); (7) empty NAV section produced an axe `summary-name` violation → fallback label; (8) unverifiable execution markers now warn and drop.
+
+**Verification at entry.** New suites 11/11; targeted Mission/Bundle/Seat 44/44; lint exit 0; boundary 527 modules / 151 suites / 23 doc checks / 0 violations; links green; standalone rebuilt v108. Full canonical suite launched via `npm run verify:canonical` and running at entry time — final result appended below after the gate. Scratch e2e (5-person chain, NOW 2026-11-06) verified capture→rehearse→adopt→complete/decide/review/held-1:1→resolveCase→closed with typed links and review task done; owner-fix roll-up verified by the new suite.
+
+**Sync result.** Pending commit/push/PR — actual outcome appended below.
+
 ## 2026-11-06 — Session 145: Mission Command Flow (Schema v107, ADR-0105)
 
 **Repository identity.** Origin verified as `https://github.com/shahramclaude/Leados.git`; branch `arena/aebb2057-leados`; base `dac09bc`. Canonical target remains `index.html` + `app/**`; legacy `src/**` untouched.

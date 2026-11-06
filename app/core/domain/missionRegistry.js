@@ -8,7 +8,7 @@ export const MISSION_VERSION = 'mission-control-2026.11-v2';
 export const MISSION_LIMITS = Object.freeze({ briefs: 60, queue: 40, cells: 100, floor: 5, captures: 200, noteChars: 8000 });
 export const MISSION_EVENTS = Object.freeze({ SCAN: 'mission.scan', FROZEN: 'mission.brief_frozen', CAPTURE_PREPARED: 'mission.capture.prepared', CAPTURE_UPDATED: 'mission.capture.updated', CAPTURE_REHEARSED: 'mission.capture.rehearsed', CAPTURE_ADOPTED: 'mission.capture.adopted', CAPTURE_DISMISSED: 'mission.capture.dismissed' });
 export const MISSION_RULES = Object.freeze({ ROLLUP: 'RULE-MIS-01' });
-export const MISSION_PANELS = Object.freeze(['now', 'capture', 'hierarchy', 'interventions', 'brief']);
+export const MISSION_PANELS = Object.freeze(['now', 'capture', 'execution', 'hierarchy', 'interventions', 'brief']);
 export const MISSION_PROFILES = Object.freeze({
   1: Object.freeze({ title: 'Make this week work', horizon: 'This week', focus: 'Clarity, coaching and follow-through', question: 'What must I unblock before the next shift?', commands: Object.freeze(['decision', 'delegation', 'coaching']), reviewDays: 7 }),
   2: Object.freeze({ title: 'Coordinate the teams', horizon: 'This month', focus: 'Cross-team dependencies and accountable ownership', question: 'Where does work cross a boundary, and who owns the handoff?', commands: Object.freeze(['decision', 'delegation', 'premise']), reviewDays: 14 }),

@@ -147,7 +147,7 @@ function declaration(overrides = {}) {
 /* ------------------------------------------------------------- schema v99 */
 
 test('schema v99: additive 98 → 99, node-budget default, fail-closed evidence and certificate fields', () => {
-  assert.equal(SCHEMA_VERSION, 107);
+  assert.equal(SCHEMA_VERSION, 108);
   const v98 = normalize(tree());
   v98.schemaVersion = 98;
   delete v98.settings.robustAllocationNodeBudget;
