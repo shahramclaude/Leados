@@ -12,7 +12,7 @@ import { proposeBundle, validateBundleCommands, BUNDLE_ADAPTERS } from '../../ap
 import { rehearseActionBundle } from '../../app/services/actionBundleRehearsal.js';
 import { fingerprint, withdrawalCheck, bundleReport, bundleSourceFingerprint, bundleInputFingerprint } from '../../app/core/domain/actionBundles.js';
 import { normalizeActionBundles } from '../../app/core/domain/actionBundleSchema.js';
-import { runPostCommitRules } from '../../app/core/domain/postCommit.js';
+import { runPostCommitRules, MAX_AUTOMATION_EVENTS } from '../../app/core/domain/postCommit.js';
 import { runActionBundleRehearsal } from '../../app/ui/response-worker.js';
 import { renderActionBundles } from '../../app/views/actionBundles.js';
 import { exportWorkspaceCsv, CSV_EXPORTS } from '../../app/core/csv.js';
@@ -155,7 +155,7 @@ test('reload preserves exact compensation fingerprints and refuses a malformed a
 test('source-event preflight rejects an over-budget batch before any rule executes', () => {
   const state = createEmptyState(); let ran = false;
   assert.throws(() => runPostCommitRules(state, { event: { type: 'bundle.committed', entity: 'bundle', entityId: 'b' }, now: NOW,
-    sourceEvents: Array.from({ length: 64 }, (_, i) => ({ type: 'person.updated', entity: 'person', entityId: `p${i}` })), rules: [() => { ran = true; return []; }] }), /event budget/);
+    sourceEvents: Array.from({ length: MAX_AUTOMATION_EVENTS }, (_, i) => ({ type: 'person.updated', entity: 'person', entityId: `p${i}` })), rules: [() => { ran = true; return []; }] }), /event budget/);
   assert.equal(ran, false);
 });
 test('storage failure is disclosed rather than reported as a saved adoption', () => {

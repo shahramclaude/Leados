@@ -1,3 +1,24 @@
+## 2026-11-06 · Session 150: The event budget stops silently discarding work ([ADR-0110](./docs/adr/0110-derived-event-budget.md) · no schema bump)
+
+- **Fixed (P0 defect, all altitudes):** the shared spine's derived-event cap
+  (`MAX_AUTOMATION_EVENTS`) was 64 — smaller than one ordinary demo write. A
+  single `case.updated` cascaded through ~72 queue slots (63 engine-authored
+  `decision.created`, 7 `delegation.created`), so everything after slot 64 was
+  rolled back: 57 `automation.rule_error` events, the epistemic backlog
+  silently lost. Cap raised to 256; replay ceiling to 1024. Measured after:
+  **0** rolled-back rules on the same write.
+- **Tests re-baselined:** `action-bundles` 19/19, `case-rehearsal` 7/7 (worker
+  timeout 15 s → 120 s), `confidence-transport` 46/46, `event-cascade` +
+  `assurance` 22/22, `jurisdiction` 10/10, `mission-command-flow` 9/9,
+  `standalone` 7/7; lint exit 0; boundary 0 violations.
+- **Behaviour change to know:** the first write on a newly seeded demo commits
+  the entire pending epistemic backlog (+63 decisions) instead of discarding it
+  — expected, one-time, marker-idempotent. A bounded-backlog policy for
+  `RULE-EPI-02` is the logged follow-up, not this session's work.
+- **Known pre-existing failures (unchanged by this session):** none observed in
+  the suites that were run. Full 155-suite `npm test` and the real-browser
+  first-write path remain [UNVERIFIED].
+
 ## Changelog — 2026-11-06 · Session 149: The Jurisdiction Compiler (ADR-0109, Schema v111 · additive `110 → 111`)
 
 - **New feature:** `#/jurisdiction` prices three hierarchy-native governance

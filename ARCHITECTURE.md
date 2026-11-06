@@ -1,3 +1,17 @@
+## 2026-11-06 — Session 150 architecture delta (Schema v111, no bump)
+
+**Spine budget, not engine semantics.** `MAX_AUTOMATION_EVENTS` 64 → 256 and
+`MAX_REPLAY_EVENT_BUDGET` 256 → 1024 in `postCommit.js`; nothing else in the
+transaction machinery moved — savepoints, decline memo, deduplication, lineage
+and receipts are byte-identical in behaviour below the new ceilings. Measured
+need: ~72 distinct queue slots on an ordinary demo `case.updated`; measured
+result: 0 `automation.rule_error` rollbacks. Stakes: every altitude's roll-up
+lands in the same atomic transaction, so a truncated cascade was silently
+withholding governed work from every rung above the truncation point. ADR-0110.
+
+**Standalone.** `LeadOS-standalone.html` rebuilt at 8,972,007 bytes / 545
+source modules / schema v111; `tests/app/standalone.test.mjs` 7/7.
+
 ## 2026-11-06 — Session 146 architecture delta (Schema v108)
 
 **No new engine.** `executionRegistry.js` (per-kind adapters + compiled events), `execution.js` (pure derivation + owner resolution), `executionRules.js` (`RULE-EXE-01`) register on the existing post-commit spine after `actionBundleRule`; contracts 85 → 86. Derived events use `ctx.logEvent`, not `emitEvent`, to avoid cascades. The rule re-derives after closing the `[BND-02]` checkpoint so scans are idempotent.

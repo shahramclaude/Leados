@@ -772,13 +772,22 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
 
 /**
  * Maximum distinct events, including the originating action, per transaction.
+ *
+ * Session 150 (2026-11-06): the production cap was raised 64 → 256 after the
+ * shipped demo proved 64 too tight for an ordinary write — a single
+ * `case.updated` on the seeded demo cascaded through 63 engine-authored
+ * `decision.created` and 7 `delegation.created` lifecycle events (~72 queue
+ * slots), so every rule after slot 64 was rolled back and the epistemic
+ * (RULE-EPI-02) work was silently lost. Measured on the demo: a full cascade
+ * settles at 399 logged entries / 0 rolled-back rules. 256 keeps headroom
+ * while remaining finite; the deduplication set still bounds runaway cycles.
+ *
  * An EXPLICIT whole-workspace replay (the read-only assurance rehearsal, or an
  * operator retrying a failed promotion) may ask for a larger, still-finite
- * budget so it reports the WHOLE cascade instead of truncating it into dozens
- * of rolled-back rules. Ordinary production writes keep the 64-event cap.
+ * budget so it reports the WHOLE cascade instead of truncating it.
  */
-export const MAX_AUTOMATION_EVENTS = 64;
-export const MAX_REPLAY_EVENT_BUDGET = 256;
+export const MAX_AUTOMATION_EVENTS = 256;
+export const MAX_REPLAY_EVENT_BUDGET = 1024;
 
 function automationEventBudget(context) {
   const requested = Number(context?.eventBudget);

@@ -109,10 +109,10 @@ export function previewCaseAutomation(state, caseId, { now = new Date(), rules }
   runPostCommitRules(draft, {
     event: { type: 'case.automation.refresh', entity: 'case', entityId: caseId }, now,
     idFactory, logEvent: (e) => events.push(e), warnings, trace,
-    // A rehearsal is a READ-ONLY copy. Production keeps the 64-event safety cap,
-    // but an assurance replay that truncates a fully populated workspace into
-    // dozens of rolled-back rules reports a fake failure instead of the real
-    // cascade. The rehearsal gets a larger, still-finite budget.
+    // A rehearsal is a READ-ONLY copy. Production applies the declared
+    // production cap, but an assurance replay that truncates a fully populated
+    // workspace into dozens of rolled-back rules reports a fake failure instead
+    // of the real cascade. The rehearsal gets a larger, still-finite budget.
     eventBudget: MAX_REPLAY_EVENT_BUDGET,
     ...(rules ? { rules } : {}),
   });
