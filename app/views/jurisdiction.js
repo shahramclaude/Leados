@@ -1,18 +1,20 @@
 /**
  * app/views/jurisdiction.js — `#/jurisdiction`, the Jurisdiction Compiler
- * (ADR-0109, Schema v111).
+ * (ADR-0109, ADR-0111, Schema v111).
  *
- * Four panels, four questions, and a DIFFERENT answer at every altitude:
+ * Five panels, five questions, and a DIFFERENT answer at every altitude:
  *   Map      "Which of my objectives is another branch also working, and who
  *            could resolve the whole thing?"
+ *   Hygiene  "Which open work records carry no objective pointer or name a
+ *            dropped/deleted goal — and what can my span anchor right now?"
  *   Options  "What do the coalition, the escalation and the boundary redraw
  *            each cost — and which one does the record actually favour?"
  *   Grades   "Was the governance route this ledger predicted the one a human
  *            chose?"
  *   Method   "What is declared, clamped, named and refused?"
  *
- * Above the director detail ceiling the shell serves a COMPILED, identity-free
- * cell table and an auto-generated board-ready synthesis; no objective key,
+ * Above the manager detail ceiling the shell serves COMPILED, identity-free
+ * cell tables and an auto-generated board-ready synthesis; no objective key,
  * member id, person, title or note is ever rendered there. A suppressed cell is
  * BLANK with its reason, never a zero. This is not differential privacy.
  */
@@ -43,7 +45,12 @@ function safeRead(ctx) {
   try {
     return jurisdictionRead(ctx.state, { now: ctx.now, settings: ctx.state.settings || {} });
   } catch (error) {
-    return { ok: false, error: String(error?.message || error), book: { clusters: [], priced: [], refused: [], totals: {} }, cells: [], grades: [], withheld: false, conventions: jurConventions({}), brief: '' };
+    return {
+      ok: false, error: String(error?.message || error),
+      book: { clusters: [], priced: [], refused: [], totals: {}, hygiene: { openWorkN: 0, anchoredWorkN: 0, unanchoredWorkN: 0, danglingWorkN: 0 } },
+      cells: [], hygieneBySource: [], hygieneQueue: [], eligibleGoals: [], ownSpanClusterKeys: [], grades: [],
+      withheld: false, conventions: jurConventions({}), brief: '',
+    };
   }
 }
 
@@ -65,9 +72,42 @@ function act(ctx, fn, okMessage) {
   return true;
 }
 
+function openAnchorModal(ctx, row, eligibleGoals) {
+  if (!eligibleGoals?.length) {
+    toast('No active goals are visible to this seat yet. Create or activate a goal in Goals first.', 'bad');
+    return;
+  }
+  const form = buildForm([
+    {
+      name: 'goalId',
+      label: 'Active objective',
+      type: 'select',
+      value: eligibleGoals[0].id,
+      options: eligibleGoals.map((g) => ({ value: g.id, label: `${g.title} (${g.status})` })),
+      help: 'Writes a persistent impacts-goal edge (and updates direct objective fields where applicable) in one atomic transaction.',
+    },
+  ]);
+  openModal({
+    title: 'Anchor work record to an active objective',
+    description: `Bind “${row.title}” (${row.sourceLabel}) to a live goal inside your span. If another branch is also working that goal, RULE-JUR-01 detects and rolls up the shared mandate in the same commit.`,
+    body: h('div', { class: 'stack' }, form.node),
+    footer: [
+      h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => closeAllModals() }, 'Cancel'),
+      h('button', { class: 'btn btn-primary', type: 'button', onClick: () => {
+        const { goalId } = form.getValues();
+        const res = ctx.api.jurAnchorWork({ entityType: row.entityType, recordId: row.recordId, goalId });
+        if (!res || res.ok === false) { toast(res?.error || 'Could not anchor work record.', 'bad'); return; }
+        closeAllModals();
+        toast('Anchored work record to active objective.', 'good');
+        ctx.render?.();
+      } }, 'Anchor objective'),
+    ],
+  });
+}
+
 /* --------------------------------------------------------------- panels */
 
-function mapPanel(ctx, read) {
+function mapPanel(ctx, read, query) {
   const book = read.book;
   if (read.withheld) {
     const rows = (read.cells || []).map((cell) => ({
@@ -75,26 +115,39 @@ function mapPanel(ctx, read) {
       clusters: cell.clusters,
       priced: cell.suppressed ? '—' : cell.priced,
       refused: cell.suppressed ? '—' : cell.refused,
+      openWork: cell.openWork ?? 0,
+      pointerRefusals: cell.hygieneSuppressed ? '—' : ((cell.unanchoredWork ?? 0) + (cell.danglingWork ?? 0)),
       verdict: cell.suppressed ? 'withheld' : 'measured',
-      reason: cell.reason || '',
+      reason: cell.reason || cell.hygieneReason || '',
     }));
     return h('div', { class: 'stack' },
       banner({ tone: 'info', title: `${read.seat?.label || 'This altitude'} reads the jurisdiction map as compiled counts`,
-        body: 'Objective keys, member records and person detail are withheld above the director ceiling (ADR-0086). You are reading the same workspace as identity-free altitude cells, with small-cell suppression. Suppression is not differential privacy and is labelled as such.' }),
-      table({ caption: 'Cross-branch objectives by leadership rank', emptyMessage: 'No cross-branch objectives on record.',
+        body: 'Objective keys, member records and person detail are withheld above the manager ceiling (ADR-0086). You are reading identity-free altitude cells with small-cell suppression, alongside counted objective-pointer refusals so dark work never masquerades as alignment.' }),
+      table({ caption: 'Cross-branch objectives and pointer hygiene by leadership rank', emptyMessage: 'No cross-branch objectives on record.',
         columns: [
           { label: 'Altitude', key: 'rank' },
           { label: 'Cross-branch objectives', key: 'clusters' },
           { label: 'Priced', key: 'priced' },
           { label: 'Refused', key: 'refused' },
+          { label: 'Open work', key: 'openWork' },
+          { label: 'Pointer refusals', key: 'pointerRefusals' },
           { label: 'Verdict', key: 'verdict' },
           { label: 'Reason', key: 'reason' },
         ], rows }),
       card({ title: 'Board-ready synthesis', subtitle: 'Auto-generated from the workspace graph — no model, no network, no invented figure.',
         body: h('p', { class: 'muted' }, read.brief) }));
   }
-  const rows = book.clusters.map((c) => ({
+
+  const scopedSeat = Boolean(read.seat && !read.seat.fullAccess && !read.seat.readOnly);
+  const ownSet = new Set(read.ownSpanClusterKeys || []);
+  const scopeFilter = scopedSeat && query.get('scope') === 'span' ? 'span' : 'all';
+  const sourceClusters = scopeFilter === 'span'
+    ? book.clusters.filter((c) => ownSet.has(c.objectiveKey))
+    : book.clusters;
+
+  const rows = sourceClusters.map((c) => ({
     objective: objectiveLabel(c.objectiveKey),
+    inSpan: ownSet.has(c.objectiveKey),
     members: c.evidenceN,
     branches: c.coalitionSize,
     rungs: c.escalationRungs,
@@ -103,26 +156,208 @@ function mapPanel(ctx, read) {
     verdict: c.verdict,
     reason: c.verdict === 'refused' ? (c.refusalKey || '') : '',
   }));
+
+  const controls = scopedSeat ? h('div', { class: 'row', style: 'gap:8px;align-items:center;flex-wrap:wrap;' },
+    h('button', {
+      class: scopeFilter === 'all' ? 'btn btn-primary' : 'btn btn-ghost',
+      type: 'button',
+      onClick: () => ctx.navigate('#/jurisdiction'),
+    }, `All cross-branch (${book.clusters.length})`),
+    h('button', {
+      class: scopeFilter === 'span' ? 'btn btn-primary' : 'btn btn-ghost',
+      type: 'button',
+      onClick: () => ctx.navigate('#/jurisdiction?scope=span'),
+    }, `Touching my span (${ownSet.size})`),
+  ) : null;
+
+  const hygieneCallout = read.spanHygiene && read.spanHygiene.actionable > 0
+    ? banner({
+      tone: 'warn',
+      title: `${read.spanHygiene.actionable} open work record(s) in your span carry an unanchored or dangling objective pointer`,
+      body: 'Unanchored or dropped-goal work is counted as a refusal rather than priced blindly. Open Pointer hygiene to anchor local cases or calls to an active objective in one click.',
+      actions: [h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => ctx.navigate('#/jurisdiction?panel=hygiene') }, 'Open Pointer hygiene')],
+    })
+    : null;
+
   if (!rows.length) {
-    return emptyState({ title: 'No cross-branch objectives detected',
-      body: 'Every objective on record is worked inside a single reporting branch, so one seat already holds the mandate. Register work in two teams against the same goal, then run Compile now: the gap, the coalition and the three priced routes appear in one atomic write.' });
+    return h('div', { class: 'stack' },
+      controls,
+      hygieneCallout,
+      emptyState({
+        title: scopeFilter === 'span' ? 'No cross-branch objectives touch your span right now' : 'No cross-branch objectives detected',
+        body: scopeFilter === 'span'
+          ? 'None of the currently anchored cross-branch objectives includes a work record in your reporting subtree. Check Pointer hygiene if local open work has not been anchored to a goal yet.'
+          : 'Every anchored objective on record is worked inside a single reporting branch, so one seat already holds the mandate. Check Pointer hygiene for unanchored or dangling work records, or run Compile now.',
+      }));
   }
+
+  const columns = [
+    { label: 'Objective', key: 'objective' },
+    ...(scopedSeat ? [{ label: 'Span', render: (r) => badge(r.inSpan ? 'your span' : 'peer branches', r.inSpan ? 'good' : 'neutral') }] : []),
+    { label: 'Work records', key: 'members' },
+    { label: 'Branches', key: 'branches' },
+    { label: 'Rungs to the ancestor', key: 'rungs' },
+    { label: 'Predicted route', key: 'route' },
+    { label: 'Confidence floor', render: (r) => pct(r.confidence) },
+    { label: 'Verdict', render: (r) => badge(r.verdict, r.verdict === 'priced' ? 'good' : 'neutral') },
+    { label: 'Reason', key: 'reason' },
+  ];
+
   return h('div', { class: 'stack' },
+    controls,
+    hygieneCallout,
     table({ caption: 'Cross-branch objectives and their minimal covering coalitions', emptyMessage: 'No cross-branch objectives.',
+      columns, rows }),
+    h('p', { class: 'tiny muted' }, 'An objective key is an opaque goal pointer, never a title. Clusters pointing at a missing or dropped goal are counted and refused (`dangling-objective`), never priced.'));
+}
+
+function hygienePanel(ctx, read) {
+  const totals = read.book.totals || {};
+  const sourceRows = (read.hygieneBySource || []).map((s) => ({
+    source: s.label,
+    open: s.open,
+    anchored: s.suppressed ? '—' : dash(s.anchored),
+    unanchored: s.suppressed ? '—' : dash(s.unanchored),
+    dangling: s.suppressed ? '—' : dash(s.dangling),
+    floor: s.suppressed ? '—' : pct(s.anchoringLoPct),
+    verdict: s.suppressed ? 'withheld' : (s.open === 0 ? 'empty' : ((s.unanchored + s.dangling) > 0 ? 'refusals-counted' : 'complete')),
+    reason: s.reason || '',
+  }));
+
+  const statsStrip = h('div', { class: 'grid-3' },
+    stat({
+      label: 'Anchored / open work',
+      value: `${dash(totals.anchoredWork ?? 0)} / ${dash(totals.openWork ?? 0)}`,
+      hint: read.spanHygiene ? `${read.spanHygiene.anchoredWork}/${read.spanHygiene.openWork} inside your span` : 'All open cases, calls and funded items',
+    }),
+    stat({
+      label: 'Counted pointer refusals',
+      value: `${dash(totals.unanchoredWork ?? 0)} unanchored · ${dash(totals.danglingWork ?? 0)} dangling`,
+      hint: 'Surface-counted, never silently dropped',
+    }),
+    stat({
+      label: 'Anchoring completeness floor',
+      value: pct(totals.anchoringLoPct),
+      hint: totals.anchoringLoPct === null ? 'Refused below evidence floor' : 'Wilson (1927) 95% lower bound',
+    }));
+
+  if (read.withheld) {
+    const rankRows = (read.cells || []).map((cell) => ({
+      rank: `Rank ${cell.rank}`,
+      open: cell.openWork ?? 0,
+      anchored: cell.hygieneSuppressed ? '—' : dash(cell.anchoredWork),
+      unanchored: cell.hygieneSuppressed ? '—' : dash(cell.unanchoredWork),
+      dangling: cell.hygieneSuppressed ? '—' : dash(cell.danglingWork),
+      floor: cell.hygieneSuppressed ? '—' : pct(cell.anchoringLoPct),
+      verdict: cell.hygieneSuppressed ? 'withheld' : (cell.openWork === 0 ? 'empty' : 'measured'),
+      reason: cell.hygieneReason || '',
+    }));
+    return h('div', { class: 'stack' },
+      statsStrip,
+      banner({
+        tone: 'info',
+        title: `${read.seat?.label || 'This altitude'} reads objective-pointer hygiene as compiled rates`,
+        body: 'Individual work records and titles are withheld above rank 2. Heckman (1979) sample-selection check: if a large share of open work is unanchored or tied to dropped goals, cross-branch boundary counts are a lower bound on true coordination load.',
+      }),
+      table({
+        caption: 'Objective-pointer hygiene by work source',
+        emptyMessage: 'No work sources registered.',
+        columns: [
+          { label: 'Work source', key: 'source' },
+          { label: 'Open records', key: 'open' },
+          { label: 'Anchored', key: 'anchored' },
+          { label: 'Unanchored', key: 'unanchored' },
+          { label: 'Dangling / dropped', key: 'dangling' },
+          { label: 'Wilson floor', key: 'floor' },
+          { label: 'Verdict', key: 'verdict' },
+          { label: 'Reason', key: 'reason' },
+        ],
+        rows: sourceRows,
+      }),
+      table({
+        caption: 'Objective-pointer hygiene by leadership rank',
+        emptyMessage: 'No open work records.',
+        columns: [
+          { label: 'Altitude', key: 'rank' },
+          { label: 'Open records', key: 'open' },
+          { label: 'Anchored', key: 'anchored' },
+          { label: 'Unanchored', key: 'unanchored' },
+          { label: 'Dangling / dropped', key: 'dangling' },
+          { label: 'Wilson floor', key: 'floor' },
+          { label: 'Verdict', key: 'verdict' },
+          { label: 'Reason', key: 'reason' },
+        ],
+        rows: rankRows,
+      }));
+  }
+
+  const queue = read.hygieneQueue || [];
+  const goals = read.eligibleGoals || [];
+  return h('div', { class: 'stack' },
+    statsStrip,
+    table({
+      caption: 'Objective-pointer hygiene by work source',
+      emptyMessage: 'No work sources.',
       columns: [
-        { label: 'Objective', key: 'objective' },
-        { label: 'Work records', key: 'members' },
-        { label: 'Branches', key: 'branches' },
-        { label: 'Rungs to the ancestor', key: 'rungs' },
-        { label: 'Predicted route', key: 'route' },
-        { label: 'Confidence floor', render: (r) => pct(r.confidence) },
-        { label: 'Verdict', render: (r) => badge(r.verdict, r.verdict === 'priced' ? 'good' : 'neutral') },
+        { label: 'Work source', key: 'source' },
+        { label: 'Open records', key: 'open' },
+        { label: 'Anchored', key: 'anchored' },
+        { label: 'Unanchored', key: 'unanchored' },
+        { label: 'Dangling / dropped', key: 'dangling' },
+        { label: 'Wilson floor', key: 'floor' },
         { label: 'Reason', key: 'reason' },
-      ], rows }),
-    h('p', { class: 'tiny muted' }, 'An objective key is an opaque goal pointer, never a title. The confidence floor is a Wilson (1927) lower bound on how much of the cluster the reporting tree can place — not a rating of anyone.'));
+      ],
+      rows: sourceRows,
+    }),
+    queue.length
+      ? card({
+        title: read.seat && !read.seat.fullAccess ? 'Span pointer remediation queue' : 'Workspace pointer remediation queue',
+        subtitle: 'Open work records inside your detail boundary with no goal pointer or a missing/dropped goal id. Anchoring writes a typed impacts-goal link and runs RULE-JUR-01 in one atomic write.',
+        body: table({
+          caption: 'Unanchored and dangling open work records eligible for anchoring',
+          emptyMessage: 'Every open work record in your span is anchored to an active goal.',
+          columns: [
+            { label: 'Source', key: 'sourceLabel' },
+            { label: 'Work record', key: 'title' },
+            { label: 'Dated', render: (r) => dash(r.date) },
+            {
+              label: 'Refusal',
+              render: (r) => badge(
+                r.pointerState === 'dangling' ? `dangling (${r.goalStatus})` : 'unanchored',
+                r.pointerState === 'dangling' ? 'bad' : 'neutral',
+              ),
+            },
+            { label: 'Printed reason', key: 'reasonNote' },
+            {
+              label: 'Remediate',
+              render: (r) => h('button', {
+                class: 'btn btn-ghost',
+                type: 'button',
+                onClick: () => openAnchorModal(ctx, r, goals),
+              }, r.pointerState === 'dangling' ? 'Re-point goal' : 'Anchor goal'),
+            },
+          ],
+          rows: queue,
+        }),
+      })
+      : emptyState({
+        title: 'Every visible open work record is anchored to a live objective',
+        body: 'No unanchored or dangling goal pointers exist inside this seat’s detail boundary.',
+      }),
+    h('p', { class: 'tiny muted' }, 'Heckman (1979) sample-selection defence: unlinked open work is never silently dropped from the denominator, and a record pointing at a deleted or dropped goal is never priced into a phantom boundary decision.'));
 }
 
 function optionsPanel(ctx, read) {
+  if (read.withheld) {
+    return h('div', { class: 'stack' },
+      banner({
+        tone: 'info',
+        title: `${read.seat?.label || 'This altitude'} reads governance options as workspace aggregates`,
+        body: 'Item-level objective keys are withheld above rank 2. Export the aggregate CSV or read the Map synthesis for route frequencies and suppression-safe altitude cells.',
+      }),
+      card({ title: 'Board-ready synthesis', subtitle: 'Identity-free governance summary.',
+        body: h('p', { class: 'muted' }, read.brief) }));
+  }
   const priced = read.book.priced || [];
   const refused = read.book.refused || [];
   if (!priced.length && !refused.length) {
@@ -158,7 +393,7 @@ function optionsPanel(ctx, read) {
         { label: 'Verdict', render: (r) => badge(r.verdict, r.verdict === 'priced' ? 'good' : 'neutral') },
         { label: 'Reason', key: 'reason' },
       ], rows }),
-    h('p', { class: 'tiny muted' }, 'Coordination units are DECLARED, clamped and printed on the Method panel — not money, not fitted from the record. A route is recommended only when it beats the runner-up by the declared materiality band; a tie is printed as a tie, never broken silently. No route ever moves a reporting line on its own.'));
+    h('p', { class: 'tiny muted' }, 'Coordination units are DECLARED, clamped and printed on the Method panel — not money, not fitted from the record. A route is recommended only when it beats the runner-up by the declared materiality band; a dangling goal pointer or tie is refused with its printed reason.'));
 }
 
 function gradesPanel(ctx, read) {
@@ -166,6 +401,19 @@ function gradesPanel(ctx, read) {
   const graded = findings.filter((f) => f?.status === 'graded');
   const ungradable = findings.filter((f) => f?.status === 'ungradable');
   const frozen = findings.filter((f) => f?.status === 'frozen');
+  const stats = h('div', { class: 'grid-3' },
+    stat({ label: 'Graded once', value: graded.length, hint: 'Out of sample, Brier vs 0.5 base' }),
+    stat({ label: 'Stored refusals', value: ungradable.length, hint: 'Never a zero' }),
+    stat({ label: 'Awaiting a dated choice', value: frozen.length, hint: 'Silence is not consent' }));
+  if (read.withheld) {
+    return h('div', { class: 'stack' },
+      stats,
+      banner({
+        tone: 'info',
+        title: 'Individual finding keys are withheld above rank 2',
+        body: 'Grades are exported per governance route in the aggregate CSV once the cohort clears the declared cell floor.',
+      }));
+  }
   const rows = [...graded, ...ungradable, ...frozen].map((f) => ({
     objective: objectiveLabel(f.objectiveKey),
     predicted: f.predictedOption ? `${f.predictedOption} (${Math.round((f.predictedProbability || 0) * 100)}%)` : '—',
@@ -176,10 +424,7 @@ function gradesPanel(ctx, read) {
     note: f.gradeNote || (f.status === 'frozen' ? JUR_REFUSALS.ungraded : ''),
   }));
   return h('div', { class: 'stack' },
-    h('div', { class: 'grid-3' },
-      stat({ label: 'Graded once', value: graded.length, hint: 'Out of sample, Brier vs 0.5 base' }),
-      stat({ label: 'Stored refusals', value: ungradable.length, hint: 'Never a zero' }),
-      stat({ label: 'Awaiting a dated choice', value: frozen.length, hint: 'Silence is not consent' })),
+    stats,
     rows.length ? table({ caption: 'Once-only governance forecast grades', emptyMessage: 'No frozen findings yet.',
       columns: [
         { label: 'Objective', key: 'objective' },
@@ -213,7 +458,8 @@ function methodPanel(ctx, read) {
       body: h('ul', { class: 'stack' },
         h('li', null, 'Riker (1962) size principle — the minimal covering antichain of branches, never a grand coalition.'),
         h('li', null, 'Coase (1937) / Williamson (1975) — declared cross-boundary transaction costs: k(k−1)/2 handoff pairs, one cost per rung escalated, one one-off redraw.'),
-        h('li', null, 'Wilson (1927) — score interval on attribution completeness; the lower bound is the confidence floor.'),
+        h('li', null, 'Heckman (1979) sample-selection coverage — open work with no objective pointer or a dropped/missing goal id is counted in the denominator as a named refusal, never silently excluded.'),
+        h('li', null, 'Wilson (1927) — score intervals on attribution completeness and objective-anchoring completeness; lower bounds are printed and refused below the evidence floor.'),
         h('li', null, 'Luce (1959) choice axiom — a softmax over −cost at a declared temperature gives the route probability.'),
         h('li', null, 'Brier (1950) — once-only, out-of-sample grade against a strictly-prior 0.5 base.'),
         h('li', null, 'Ashby (1956) requisite variety — a single decider must reconcile as many branches as the cluster holds.')) }),
@@ -222,7 +468,7 @@ function methodPanel(ctx, read) {
         h('li', null, 'Local seats are auditable workflow declarations, not authentication.'),
         h('li', null, 'Small-cell suppression is a refusal, not differential privacy.'),
         h('li', null, 'Coordination units are declared conventions, not measured money; a boundary redraw is never executed automatically.'),
-        h('li', null, 'Clusters are joined by a shared objective pointer; two teams naming different goals are not inferred to be one objective.'),
+        h('li', null, 'Clusters are joined by a shared objective pointer or impacts-goal link; two teams naming different goals are not inferred to be one objective.'),
         h('li', null, 'A grade is an association between a predicted route and one dated choice, not a causal claim.')) }));
 }
 
@@ -250,7 +496,6 @@ function openConventions(ctx) {
         if (!result || result.ok === false) { toast(result?.error || 'Could not re-declare.', 'bad'); return; }
         closeAllModals();
         toast(result.changed?.length ? `Re-declared: ${result.changed.join(', ')}` : 'Nothing changed.', 'good');
-
         ctx.render?.();
       } }, 'Re-declare'),
     ],
@@ -269,7 +514,8 @@ export function renderJurisdiction(ctx) {
   const question = JUR_ALTITUDE_QUESTIONS[({ 1: 'frontline', 2: 'manager', 3: 'director', 4: 'exec', 5: 'chief' })[rank]] || JUR_ALTITUDE_QUESTIONS.frontline;
   const totals = read.book.totals || {};
   const panels = {
-    map: () => mapPanel(ctx, read),
+    map: () => mapPanel(ctx, read, query),
+    hygiene: () => hygienePanel(ctx, read),
     options: () => optionsPanel(ctx, read),
     grades: () => gradesPanel(ctx, read),
     method: () => methodPanel(ctx, read),
@@ -281,7 +527,7 @@ export function renderJurisdiction(ctx) {
     subtitle: question,
     actions: [
       h('button', { class: 'btn btn-primary', type: 'button',
-        onClick: () => act(ctx, () => ctx.api.jurScan(), 'Compiled cross-branch objectives, priced routes and rolled up span readings'), }, 'Compile now'),
+        onClick: () => act(ctx, () => ctx.api.jurScan(), 'Compiled cross-branch objectives, pointer hygiene, priced routes and rolled up span readings'), }, 'Compile now'),
       h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => openConventions(ctx) }, 'Conventions'),
       h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => {
         const rows = jurCsvRows(ctx.state, { now: ctx.now, settings: ctx.state.settings || {} });
@@ -289,18 +535,19 @@ export function renderJurisdiction(ctx) {
           serializeCsv({ columns: JUR_CSV_COLUMNS.map((key) => ({ key, header: key })), rows }), 'text/csv');
       } }, 'Export aggregate CSV'),
     ],
-    meta: h('div', null, kv('Generated', formatDate(ctx.now)), kv('Engine', read.book.engineVersion || 'jurisdiction-2026.11-v1'), kv('Conventions', 'declared, not fitted')),
+    meta: h('div', null, kv('Generated', formatDate(ctx.now)), kv('Engine', read.book.engineVersion || 'jurisdiction-2026.11-v2'), kv('Conventions', 'declared, not fitted')),
   });
 
   return h('div', { class: 'page view-stack', 'data-altitude': read.seat?.rank ? `rank-${read.seat.rank}` : 'operator' },
     header,
-    h('div', { class: 'grid-3' },
-      stat({ label: 'Objectives on record', value: dash(totals.objectives ?? 0), hint: 'Grouped by shared goal pointer' }),
+    h('div', { class: 'grid-4' },
+      stat({ label: 'Objectives on record', value: dash(totals.objectives ?? 0), hint: 'Grouped by goal pointer or link' }),
       stat({ label: 'Cross-branch', value: dash(totals.crossBranch ?? 0), hint: 'No single branch holds the whole objective' }),
-      stat({ label: 'Priced / refused', value: `${dash(totals.priced ?? 0)} / ${dash(totals.refused ?? 0)}`, hint: 'Refusals printed, never zeroed' })),
+      stat({ label: 'Priced / refused', value: `${dash(totals.priced ?? 0)} / ${dash(totals.refused ?? 0)}`, hint: 'Refusals printed, never zeroed' }),
+      stat({ label: 'Pointer refusals', value: `${dash(totals.unanchoredWork ?? 0)} / ${dash(totals.danglingWork ?? 0)}`, hint: totals.anchoringLoPct != null ? `Unanchored / dangling · floor ${totals.anchoringLoPct}%` : 'Unanchored / dangling work' })),
     tabs({ items: PANELS.map((p) => ({ key: p.key, label: p.label })), active: panel, ariaLabel: 'Jurisdiction compiler sections',
       onSelect: (key) => ctx.navigate(key === 'map' ? '#/jurisdiction' : `#/jurisdiction?panel=${key}`) }),
     h('p', { class: 'tiny muted' }, PANELS.find((p) => p.key === panel)?.note || ''),
     panels[panel](),
-    h('p', { class: 'tiny muted' }, 'This compiler never moves a reporting line, never reassigns a case, never rates a person and never edits another module’s record. A boundary decision is a governed decision a human must accept; silence is never consent. The local seat is a workflow declaration, not authentication.'));
+    h('p', { class: 'tiny muted' }, 'This compiler never moves a reporting line, never reassigns a case, never rates a person and never silently drops unlinked work. Anchoring binds a work record inside your own span to a live goal; a boundary decision remains a governed decision a human must accept.'));
 }

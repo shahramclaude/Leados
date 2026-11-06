@@ -1,3 +1,63 @@
+## 2026-11-06 — Session 151: Objective-pointer hygiene & span-scoped mandate anchoring (ADR-0111, Schema v111, no schema bump)
+
+**What was built.** Closed the top `[frontline / manager]` roadmap item in the
+Jurisdiction Compiler (`#/jurisdiction`, [ADR-0111](./docs/adr/0111-objective-pointer-hygiene.md)):
+
+1. **Counted pointer refusals (Heckman 1979 sample-selection framing + Wilson
+   1927 completeness bounds).** `harvestObjectives` (`app/core/domain/jurisdiction.js`)
+   now accounts for every open non-engine work record across `cases`, `decisions`
+   and `portfolio` — classifying each into `anchored`, `unanchored`
+   (`unanchored-work`) or `dangling` (`dangling-objective` when a referenced goal
+   id is missing from `state.goals` or `status === 'dropped'`). Cross-branch
+   dangling clusters are refused rather than priced into phantom `RULE-JUR-02`
+   boundary decisions, and `RULE-JUR-01` listens to `goal.updated` to supersede
+   frozen findings whose goal was dropped.
+2. **Graph-backed objective resolution & decision span attribution.**
+   `objectiveKeysFor` now reads both declared `objectivePaths` and persistent
+   `impacts-goal` graph edges in `state.links` (fixing reload loss on `decisions`,
+   which do not persist `linkedGoalId` in `schema.js`). `workRecordPeople`
+   resolves `decision.driver` / `decision.approver` names to `chain.nodes` so
+   span attribution and access checks work on open calls.
+3. **Frontline & manager triage + atomic anchoring (`jurAnchorWork`,
+   `#/jurisdiction?panel=hygiene`).** Added the **Pointer hygiene** panel (5
+   panels total), a `Touching my span` filter on Map for declared rank 1–2
+   seats, `jurHygiene` (`SAFE_READS`), and `jurAnchorWork` (`record-jurisdiction`),
+   which enforces own-span detail boundaries, writes the `impacts-goal` edge and
+   emits `${entityType}.updated` so `RULE-JUR-01` freezes and rolls up any newly
+   formed cross-branch cluster in the same atomic transaction.
+4. **Identity-free vertical roll-up.** `jurSpanRollUp`, `jurisdictionRead`
+   (withheld above rank 2), `jurBrief`, and CSV scope #103 (`row_kind: 'hygiene'`)
+   roll up suppression-safe pointer-hygiene counts and Wilson floors to Director,
+   VP and CEO views without leaking record ids, objective keys, titles or names;
+   also tightened `optionsPanel` and `gradesPanel` when `read.withheld === true`.
+
+**Altitude(s) served.**
+- **Primary:** Frontline team leads (rank 1) & mid-level managers (rank 2) —
+  triaging local open cases/calls with missing or dropped goal pointers and
+  anchoring them inside their own span without manual cross-module re-entry.
+- **Vertical roll-up:** Directors (rank 3), VPs/executives (rank 4), and
+  CEO/C-suite (rank 5) — reading suppression-safe completeness intervals and
+  refusal counts by source and altitude so unlinked dark work never masks
+  cross-branch exposure.
+
+**Verified (actual).** Single focused verification pass:
+`node --test tests/app/jurisdiction.test.mjs` (12/12 pass, including all 5 panels
+axe-clean, dangling/dropped goal refusal + supersession, and 5-rung frontline →
+CEO `jurAnchorWork` + `normalizeState` + disclosure checks); `npm run lint`
+(exit 0); `npm run check:boundary` (546 app ES modules, 155 suites, 23 doc
+checks, 0 violations); `npm run check:links` (868 links, 0 broken);
+`npm run build:standalone` (8,994,207 bytes < 9,000,000 ceiling, schema v111) +
+`node --test tests/app/standalone.test.mjs` (7/7 pass).
+
+**Unverified / flagged.**
+- Full 155-suite `npm test` (~30 min under jsdom+axe) was intentionally not run
+  per Session Driver v3 focused-verification rule; untouched modules are
+  [UNVERIFIED] this session.
+- Interactive real-browser walkthrough of the **Anchor goal / Re-point goal**
+  modal is [UNVERIFIED] (jsdom + axe + API action paths verified).
+
+**Blockers.** None.
+
 ## 2026-11-06 — Session 150: The event budget stops silently discarding work (ADR-0110, no schema bump)
 
 **The question.** Why does one ordinary `case.updated` on the shipped demo end

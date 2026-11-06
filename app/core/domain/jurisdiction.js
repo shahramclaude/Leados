@@ -1,15 +1,22 @@
 /**
- * app/core/domain/jurisdiction.js — the Jurisdiction Compiler engine (ADR-0109).
+ * app/core/domain/jurisdiction.js — the Jurisdiction Compiler engine
+ * (ADR-0109, ADR-0111).
  *
  * "When connected work crosses organisational spans, WHICH SEAT can actually
  *  resolve the whole thing — and is a minimal coalition cheaper than escalating
  *  to the lowest common ancestor, or redrawing the boundary?"
  *
  * This is a pure read model over two things LeadOS already owns: the TYPED
- * WORK RECORD (cases / decisions / funded work, each naming an objective) and
- * the REPORTING TREE (`buildChain`, `lowestCommonAncestor`,
- * `responsibleNodeId`). It introduces no poll, no sentiment score, no person
- * rating and no second hierarchy engine.
+ * WORK RECORD (cases / decisions / funded work, each naming an objective by
+ * field or `impacts-goal` graph edge) and the REPORTING TREE (`buildChain`,
+ * `lowestCommonAncestor`, `responsibleNodeId`). It introduces no poll, no
+ * sentiment score, no person rating and no second hierarchy engine.
+ *
+ * ADR-0111 closes the sample-selection blind spot (Heckman 1979): open work
+ * records with NO goal pointer (`unanchored-work`) and records naming a goal id
+ * that no longer exists or has been dropped (`dangling-objective`) are counted
+ * refusals with Wilson (1927) completeness bounds — never silently excluded and
+ * never priced as phantom jurisdiction boundaries.
  *
  * Every figure is re-derived on read from the dated records plus DECLARED,
  * CLAMPED conventions printed on the Method panel. Nothing is fitted. A
@@ -25,7 +32,7 @@ import { addDays, dayKey, weekKey } from '../time.js';
 import {
   buildChain, responsibleNodeId, managerNodeId, LEADER_ID,
 } from './chain.js';
-import { recordPeople, buildSeats, activeSeat } from './seat.js';
+import { recordPeople, buildSeats, activeSeat, canSee } from './seat.js';
 import { altitudeRank } from './chainRegistry.js';
 import {
   JUR_CONVENTION_BOUNDS, JUR_CONVENTION_DEFAULTS, JUR_ENGINE_VERSION,
@@ -72,23 +79,69 @@ function readPath(obj, path) {
   return String(path).split('.').reduce((acc, key) => (acc == null ? undefined : acc[key]), obj);
 }
 
-/** First non-empty objective key from a declared, ordered list of field paths. */
-export function objectiveKeysFor(record, source) {
-  if (source.objectiveRequires) {
-    const { field, equals } = source.objectiveRequires;
-    if (record?.[field] !== equals) return [];
-  }
-  const keys = [];
-  for (const path of source.objectivePaths) {
-    const value = readPath(record, path);
-    if (Array.isArray(value)) {
-      for (const v of value) if (typeof v === 'string' && v.trim()) keys.push(`goal:${v.trim().slice(0, 120)}`);
-    } else if (typeof value === 'string' && value.trim()) {
-      keys.push(`goal:${value.trim().slice(0, 120)}`);
+/**
+ * Map `${entityType}:${recordId}` → goal ids connected by persistent
+ * `impacts-goal` graph edges. Decisions and non-goal-sourced portfolio items
+ * persist their objective anchor on the typed operational graph (`state.links`)
+ * rather than duplicating foreign keys that `normalizeState` strips.
+ */
+export function buildGoalLinkMap(state) {
+  const map = new Map();
+  const push = (entityType, recordId, goalId) => {
+    const key = `${entityType}:${recordId}`;
+    if (!map.has(key)) map.set(key, []);
+    const list = map.get(key);
+    if (!list.includes(goalId)) list.push(goalId);
+  };
+  for (const link of (Array.isArray(state?.links) ? state.links : [])) {
+    if (!link || link.relation !== 'impacts-goal') continue;
+    if (link.targetType === 'goal' && link.sourceType && link.sourceId && link.targetId) {
+      push(String(link.sourceType), String(link.sourceId), String(link.targetId).trim().slice(0, 120));
+    } else if (link.sourceType === 'goal' && link.targetType && link.targetId && link.sourceId) {
+      push(String(link.targetType), String(link.targetId), String(link.sourceId).trim().slice(0, 120));
     }
-    if (keys.length) break;
+  }
+  return map;
+}
+
+/**
+ * Objective keys from a declared, ordered list of field paths PLUS any typed
+ * `impacts-goal` edges in `state.links`.
+ */
+export function objectiveKeysFor(record, source, linkedGoalIds = []) {
+  const keys = [];
+  const fieldEligible = !source.objectiveRequires
+    || record?.[source.objectiveRequires.field] === source.objectiveRequires.equals;
+  if (fieldEligible) {
+    for (const path of source.objectivePaths) {
+      const value = readPath(record, path);
+      if (Array.isArray(value)) {
+        for (const v of value) if (typeof v === 'string' && v.trim()) keys.push(`goal:${v.trim().slice(0, 120)}`);
+      } else if (typeof value === 'string' && value.trim()) {
+        keys.push(`goal:${value.trim().slice(0, 120)}`);
+      }
+      if (keys.length) break;
+    }
+  }
+  for (const gid of (Array.isArray(linkedGoalIds) ? linkedGoalIds : [])) {
+    if (typeof gid === 'string' && gid.trim()) keys.push(`goal:${gid.trim().slice(0, 120)}`);
   }
   return unique(keys).slice(0, 3);
+}
+
+/**
+ * Verify an objective pointer against `state.goals`. A goal id that no longer
+ * exists (`missing`) or whose status is `dropped` (`dropped`) is a dangling
+ * pointer — counted as a refusal, never priced as a live mandate boundary.
+ */
+export function goalPointerStatus(objectiveKey, goalMap, validateGoals = true) {
+  const raw = String(objectiveKey || '');
+  const goalId = raw.startsWith('goal:') ? raw.slice(5) : raw;
+  if (!validateGoals) return { valid: true, status: 'assumed', goalId };
+  const goal = goalMap.get(goalId);
+  if (!goal) return { valid: false, status: 'missing', goalId };
+  if (goal.status === 'dropped') return { valid: false, status: 'dropped', goalId };
+  return { valid: true, status: goal.status || 'active', goalId };
 }
 
 function isOpen(record, source) {
@@ -106,55 +159,208 @@ function recordDate(record, source) {
   return null;
 }
 
+export function isEngineAuditRecord(record) {
+  return /\[RULE-[A-Z]{2,4}-\d+[:\]]/.test(String(record?.question || record?.title || ''));
+}
+
 /**
- * Harvest objectives from the workspace's own work records. A member is a
- * POINTER (id, type, span, attributed, date) — no title, note or person name
- * is copied. Grouping is by objective key, so a new work source plugs in with
- * one row in JUR_SOURCES and zero changes to this function (Section 3).
+ * Resolve every person node id named on a work record. `cases` and `portfolio`
+ * carry person ids directly (`recordPeople`); `decisions` store `driver` and
+ * `approver` as names in `schema.js`, resolved here against `chain.nodes` so
+ * span ownership and attribution work across all three collections.
  */
-export function harvestObjectives(state, { chain, conventions }) {
+export function workRecordPeople(record, chain) {
+  const direct = recordPeople(record);
+  if (direct.length || !record || !chain?.nodes) return direct;
+  const out = new Set();
+  const resolveName = (raw) => {
+    for (const part of String(raw || '').split(/[,;]/).map((s) => s.trim()).filter(Boolean)) {
+      if (chain.nodes.has(part)) { out.add(part); continue; }
+      const lower = part.toLowerCase();
+      for (const node of chain.nodes.values()) {
+        if (String(node?.name || '').trim().toLowerCase() === lower) {
+          out.add(node.id);
+          break;
+        }
+      }
+    }
+  };
+  resolveName(record.approver);
+  resolveName(record.driver);
+  return [...out];
+}
+
+export function rankOf(chain, nodeId) {
+  const node = chain?.nodes?.get(nodeId);
+  return node ? altitudeRank(node.altitude) || 0 : 0;
+}
+
+/**
+ * Harvest objectives AND objective-pointer hygiene from the workspace's own
+ * open work records. Every open non-engine work record is accounted for:
+ *  - `anchored`: names >= 1 live goal in `state.goals`
+ *  - `unanchored`: carries no objective pointer and no `impacts-goal` link
+ *  - `dangling`: names a goal id that no longer exists or has been `dropped`
+ *
+ * A member is a POINTER (id, type, span, attributed, date) — no title, note or
+ * person name is copied here. Grouping is by objective key, so a new work
+ * source plugs in with one row in JUR_SOURCES and zero changes here.
+ */
+export function harvestObjectives(state, { chain, conventions = jurConventions(state?.settings || {}) } = {}) {
   const byObjective = new Map();
-  let totalObjectives = 0;
+  const clusterMeta = new Map();
+  const validateGoals = Array.isArray(state?.goals);
+  const goalMap = new Map((validateGoals ? state.goals : []).filter((g) => g?.id).map((g) => [String(g.id), g]));
+  const goalLinkMap = buildGoalLinkMap(state);
+
+  let openWorkN = 0;
+  let anchoredWorkN = 0;
+  let unanchoredWorkN = 0;
+  let danglingWorkN = 0;
+  const unanchored = [];
+  const dangling = [];
+  const records = [];
+  const sourceStats = new Map(JUR_SOURCES.map((s) => [s.collection, {
+    collection: s.collection, entityType: s.entityType, label: s.label,
+    open: 0, anchored: 0, unanchored: 0, dangling: 0,
+  }]));
+
   for (const source of JUR_SOURCES) {
     const rows = Array.isArray(state?.[source.collection]) ? state[source.collection] : [];
+    const bucket = sourceStats.get(source.collection);
     for (const record of rows) {
       if (!record?.id || !isOpen(record, source)) continue;
       // GOVERNED FINDINGS ARE AUDIT OUTPUT, NOT WORK. Every rule module stamps a
       // `[RULE-XXXX-NN]` provenance marker into the governed decisions it opens
       // in the same transaction. Pricing those as cross-span work is the
       // Session-143 second-order-decision regression: a scan would measure the
-      // engine's own audit output. The exclusion is structural (state-only),
-      // never an import of another rule module (which would be a silent cycle).
-      if (/\[RULE-[A-Z]{2,4}-\d+[:\]]/.test(String(record?.question || record?.title || ''))) continue;
-      const keys = objectiveKeysFor(record, source);
-      if (!keys.length) continue;
-      const people = recordPeople(record);
+      // engine's own audit output. The exclusion is structural (state-only).
+      if (isEngineAuditRecord(record)) continue;
+      const recordId = String(record.id).slice(0, 120);
+      const people = workRecordPeople(record, chain);
       const span = responsibleNodeId(chain, people);
-      const attributed = people.length > 0 && Boolean(chain.nodes.get(span));
-      for (const key of keys) {
-        if (!byObjective.has(key)) byObjective.set(key, []);
+      const spanRank = rankOf(chain, span);
+      const attributed = people.length > 0 && Boolean(chain?.nodes?.get(span));
+      const date = recordDate(record, source);
+      const linkedGoals = goalLinkMap.get(`${source.entityType}:${recordId}`) || [];
+      const keys = objectiveKeysFor(record, source, linkedGoals);
+
+      openWorkN += 1;
+      bucket.open += 1;
+
+      if (!keys.length) {
+        unanchoredWorkN += 1;
+        bucket.unanchored += 1;
+        const pointer = {
+          recordId, entityType: source.entityType, collection: source.collection,
+          label: source.label, span, spanRank, attributed, date,
+          pointerState: 'unanchored', reasonKey: 'unanchored-work',
+          reasonNote: JUR_REFUSALS['unanchored-work'],
+          goalStatus: 'unanchored', danglingGoalIds: [],
+        };
+        records.push(pointer);
+        if (unanchored.length < JUR_LIMITS.hygieneRecords) unanchored.push(pointer);
+        continue;
+      }
+
+      const checks = keys.map((k) => ({ key: k, ...goalPointerStatus(k, goalMap, validateGoals) }));
+      const badChecks = checks.filter((c) => !c.valid);
+      if (badChecks.length > 0) {
+        danglingWorkN += 1;
+        bucket.dangling += 1;
+        const problem = badChecks.some((c) => c.status === 'missing') ? 'missing' : 'dropped';
+        const pointer = {
+          recordId, entityType: source.entityType, collection: source.collection,
+          label: source.label, span, spanRank, attributed, date,
+          pointerState: 'dangling', reasonKey: 'dangling-objective',
+          reasonNote: JUR_REFUSALS['dangling-objective'],
+          goalStatus: problem,
+          danglingGoalIds: badChecks.map((c) => c.goalId),
+        };
+        records.push(pointer);
+        if (dangling.length < JUR_LIMITS.hygieneRecords) dangling.push(pointer);
+      } else {
+        anchoredWorkN += 1;
+        bucket.anchored += 1;
+        records.push({
+          recordId, entityType: source.entityType, collection: source.collection,
+          label: source.label, span, spanRank, attributed, date,
+          pointerState: 'anchored', reasonKey: '', reasonNote: '',
+          goalStatus: 'active', danglingGoalIds: [],
+        });
+      }
+
+      for (const check of checks) {
+        const key = check.key;
+        if (!byObjective.has(key)) {
+          byObjective.set(key, []);
+          clusterMeta.set(key, { dangling: !check.valid, goalStatus: check.status });
+        } else if (!check.valid) {
+          clusterMeta.set(key, { dangling: true, goalStatus: check.status });
+        }
         const members = byObjective.get(key);
         if (members.length >= JUR_LIMITS.membersPerCluster) continue;
         members.push({
           key,
-          recordId: String(record.id).slice(0, 120),
+          recordId,
           entityType: source.entityType,
           collection: source.collection,
           label: source.label,
           span,
           attributed,
-          date: recordDate(record, source),
+          date,
         });
       }
     }
   }
-  totalObjectives = byObjective.size;
-  // Deterministic order; a cap is a refusal to grow without bound, printed.
+
+  const totalObjectives = byObjective.size;
   const objectives = [...byObjective.entries()]
     .sort((a, b) => a[0].localeCompare(b[0]))
     .slice(0, JUR_LIMITS.objectivesCap)
-    .map(([objectiveKey, members]) => ({ objectiveKey, members }));
-  return { objectives, totalObjectives, capped: byObjective.size > JUR_LIMITS.objectivesCap };
+    .map(([objectiveKey, members]) => {
+      const meta = clusterMeta.get(objectiveKey) || { dangling: false, goalStatus: 'active' };
+      return { objectiveKey, members, dangling: meta.dangling, goalStatus: meta.goalStatus };
+    });
+
+  const floor = conventions?.jurEvidenceFloorN ?? JUR_CONVENTION_DEFAULTS.jurEvidenceFloorN;
+  const enoughWork = openWorkN >= floor;
+  const wilson = enoughWork ? jurWilson(anchoredWorkN, openWorkN) : { pct: null, lo: null, hi: null };
+  const refusalN = unanchoredWorkN + danglingWorkN;
+  const darkSharePct = enoughWork ? round1((refusalN / openWorkN) * 100) : null;
+  const bySource = [...sourceStats.values()].map((row) => {
+    const ok = row.open >= floor;
+    const w = ok ? jurWilson(row.anchored, row.open) : { pct: null, lo: null, hi: null };
+    return {
+      ...row,
+      refusals: row.unanchored + row.dangling,
+      anchoringPct: w.pct,
+      anchoringLoPct: w.lo,
+      anchoringHiPct: w.hi,
+      refusalKey: row.open === 0 ? '' : (ok ? '' : 'thin-anchoring'),
+    };
+  });
+
+  const hygiene = {
+    openWorkN,
+    anchoredWorkN,
+    unanchoredWorkN,
+    danglingWorkN,
+    refusalN,
+    anchoringPct: wilson.pct,
+    anchoringLoPct: wilson.lo,
+    anchoringHiPct: wilson.hi,
+    darkSharePct,
+    anchoringRefusalKey: openWorkN > 0 && !enoughWork ? 'thin-anchoring' : '',
+    anchoringRefusalNote: openWorkN > 0 && !enoughWork ? JUR_REFUSALS['thin-anchoring'] : '',
+    unanchored,
+    dangling,
+    records,
+    bySource,
+    capped: unanchoredWorkN > unanchored.length || danglingWorkN > dangling.length,
+  };
+
+  return { objectives, totalObjectives, capped: byObjective.size > JUR_LIMITS.objectivesCap, hygiene };
 }
 
 /**
@@ -183,9 +389,7 @@ export function branchChildOf(chain, lca, spanId) {
  * instead of the ancestor that actually covers every span. A jurisdiction
  * compiler cannot understate the coalition by pricing a phantom sub-branch.
  * We intersect the full ancestor chain of every span and return the DEEPEST
- * node in the first span's chain that all of them share. This is a local,
- * explicitly-documented correction; the shared helper is left untouched so
- * ~80 modules that call it with two ids keep their exact behaviour.
+ * node in the first span's chain that all of them share.
  */
 export function commonAncestorOfAll(chain, spanIds) {
   const ids = [...new Set((spanIds || []).filter((id) => id && chain.nodes.has(id)))];
@@ -211,16 +415,13 @@ export function commonAncestorOfAll(chain, spanIds) {
   return LEADER_ID;
 }
 
-export function rankOf(chain, nodeId) {
-  const node = chain.nodes.get(nodeId);
-  return node ? altitudeRank(node.altitude) || 0 : 0;
-}
-
 /**
  * Price ONE cross-span objective cluster. Returns the full computation with
  * every input named, or a `refused` result carrying the reason verbatim. A
  * cluster whose spans all sit in one branch is NOT a jurisdiction gap and is
- * returned with `gap: false` (counted, never frozen).
+ * returned with `gap: false` (counted, never frozen). A cluster whose goal id
+ * no longer exists or was dropped is REFUSED (`dangling-objective`), never
+ * priced into a governance decision.
  */
 export function priceCluster(cluster, { chain, conventions }) {
   const members = cluster.members || [];
@@ -228,8 +429,11 @@ export function priceCluster(cluster, { chain, conventions }) {
   const spans = unique(attributed.map((m) => m.span));
   const evidenceN = members.length;
   const attribution = jurWilson(attributed.length, evidenceN);
+  const dangling = Boolean(cluster.dangling);
   const base = {
     objectiveKey: cluster.objectiveKey,
+    dangling,
+    goalStatus: cluster.goalStatus || (dangling ? 'missing' : 'active'),
     members,
     memberIds: unique(members.map((m) => m.recordId)),
     memberTypes: unique(members.map((m) => m.entityType)),
@@ -247,7 +451,8 @@ export function priceCluster(cluster, { chain, conventions }) {
     advantagePct: null, gap: false, verdict: 'refused', refusalKey: '', refusalNote: '',
   };
   if (spans.length < 2) {
-    return { ...base, gap: false, refusalKey: 'single-span', refusalNote: JUR_REFUSALS['single-span'] };
+    const key = dangling ? 'dangling-objective' : 'single-span';
+    return { ...base, gap: false, refusalKey: key, refusalNote: JUR_REFUSALS[key] };
   }
   const lca = commonAncestorOfAll(chain, spans);
   if (!lca || !chain.nodes.get(lca)) {
@@ -257,12 +462,6 @@ export function priceCluster(cluster, { chain, conventions }) {
   const maxSpanRank = Math.max(...spans.map((s) => rankOf(chain, s)), 0);
   const minSpanRank = Math.min(...spans.map((s) => rankOf(chain, s)));
   const branches = unique(spans.map((s) => branchChildOf(chain, lca, s))).slice(0, JUR_LIMITS.branchesCap);
-  // Escalation lifts every branch's work up to the common ancestor. The total
-  // number of rungs lifted is the declared attention/delay a single decider
-  // must absorb (Ashby 1956). A branch that IS the ancestor lifts nothing: it
-  // already holds the mandate. Using `lcaRank - maxSpanRank` instead would print
-  // a flattering zero whenever the ancestor is one of the spans — which is the
-  // normal case — and silently make escalation free. This never does that.
   const branchRungs = branches
     .filter((b) => b !== lca)
     .map((b) => Math.max(0, lcaRank - rankOf(chain, b)));
@@ -288,6 +487,13 @@ export function priceCluster(cluster, { chain, conventions }) {
     costCoalition, costEscalate, costRedraw, costs, advantagePct,
     gap: true,
   };
+  if (dangling) {
+    return {
+      ...pricedBase,
+      costCoalition: null, costEscalate: null, costRedraw: null, costs: [], advantagePct: null,
+      refusalKey: 'dangling-objective', refusalNote: JUR_REFUSALS['dangling-objective'],
+    };
+  }
   if (evidenceN < conventions.jurEvidenceFloorN) {
     return { ...pricedBase, refusalKey: 'thin-cluster', refusalNote: JUR_REFUSALS['thin-cluster'] };
   }
@@ -314,7 +520,7 @@ export function priceCluster(cluster, { chain, conventions }) {
   };
 }
 
-/** The full book: every cross-span objective, priced or refused, with totals. */
+/** The full book: every cross-span objective, priced or refused, plus hygiene. */
 export function buildJurisdictionBook(state, { now = new Date(), conventions = jurConventions(), chain = null } = {}) {
   const at = now instanceof Date ? now : new Date(now);
   const built = chain || buildChain(state, { now: at, settings: state?.settings });
@@ -334,6 +540,7 @@ export function buildJurisdictionBook(state, { now = new Date(), conventions = j
     priced,
     refused,
     byId,
+    hygiene: harvest.hygiene,
     totals: {
       objectives: harvest.totalObjectives,
       objectivesCapped: harvest.capped,
@@ -341,6 +548,15 @@ export function buildJurisdictionBook(state, { now = new Date(), conventions = j
       crossBranch: gaps.length,
       priced: priced.length,
       refused: refused.length,
+      openWork: harvest.hygiene.openWorkN,
+      anchoredWork: harvest.hygiene.anchoredWorkN,
+      unanchoredWork: harvest.hygiene.unanchoredWorkN,
+      danglingWork: harvest.hygiene.danglingWorkN,
+      hygieneRefusals: harvest.hygiene.refusalN,
+      anchoringPct: harvest.hygiene.anchoringPct,
+      anchoringLoPct: harvest.hygiene.anchoringLoPct,
+      anchoringHiPct: harvest.hygiene.anchoringHiPct,
+      darkSharePct: harvest.hygiene.darkSharePct,
       governed: 0,
       graded: 0,
     },
@@ -350,10 +566,10 @@ export function buildJurisdictionBook(state, { now = new Date(), conventions = j
 
 /**
  * Identity-free span roll-up. A seat at `nodeId` sees ONLY counts for clusters
- * whose responsible spans fall anywhere in its subtree. No objective key, no
- * member id, no person and no title crosses this boundary. A cell below the
- * declared small-cell floor is SUPPRESSED (not zero), labelled as not
- * differential privacy.
+ * and pointer-hygiene records whose responsible spans fall in its subtree. No
+ * objective key, no member id, no person and no title crosses this boundary. A
+ * cell below the declared small-cell floor is SUPPRESSED (not zero), labelled
+ * as not differential privacy.
  */
 export function jurSpanRollUp(state, { nodeId, now = new Date(), conventions = jurConventions(), chain = null, book = null } = {}) {
   const report = book || buildJurisdictionBook(state, { now, conventions, chain });
@@ -372,6 +588,16 @@ export function jurSpanRollUp(state, { nodeId, now = new Date(), conventions = j
     : null;
   const governed = (Array.isArray(state?.decisions) ? state.decisions : [])
     .filter((d) => String(d?.question || '').includes('[JUR-OPTION:') && String(d?.question || '').includes('[RULE-JUR-02:')).length;
+
+  const ownWork = (report.hygiene?.records || []).filter((r) => subtree.has(r.span));
+  const hygieneSuppressed = ownWork.length < floor;
+  const ownAnchored = ownWork.filter((r) => r.pointerState === 'anchored').length;
+  const ownUnanchored = ownWork.filter((r) => r.pointerState === 'unanchored').length;
+  const ownDangling = ownWork.filter((r) => r.pointerState === 'dangling').length;
+  const ownAnchoring = !hygieneSuppressed && ownWork.length >= conventions.jurEvidenceFloorN
+    ? jurWilson(ownAnchored, ownWork.length)
+    : { pct: null, lo: null, hi: null };
+
   return {
     ok: true,
     nodeId,
@@ -384,6 +610,13 @@ export function jurSpanRollUp(state, { nodeId, now = new Date(), conventions = j
     suppressed,
     cellFloor: floor,
     medianCoalitionSize: suppressed || priced.length < floor ? null : round1(median),
+    openWork: ownWork.length,
+    hygieneSuppressed,
+    anchoredWork: hygieneSuppressed ? null : ownAnchored,
+    unanchoredWork: hygieneSuppressed ? null : ownUnanchored,
+    danglingWork: hygieneSuppressed ? null : ownDangling,
+    hygieneRefusals: hygieneSuppressed ? null : ownUnanchored + ownDangling,
+    anchoringLoPct: ownAnchoring.lo,
   };
 }
 
@@ -411,11 +644,12 @@ export function jurGradeFinding(finding, { actualOption, settledOn, frozenAt, no
 
 /** Aggregate-only CSV rows (scope #103). A refused/suppressed figure is BLANK. */
 export const JUR_CSV_COLUMNS = Object.freeze([
-  'row_kind', 'scope', 'altitude_rank', 'option_key', 'objectives', 'cross_branch',
-  'single_branch', 'priced', 'refused', 'governed', 'graded', 'coalition_size',
-  'escalation_rungs', 'cost_units', 'confidence_pct', 'confidence_lo_pct',
-  'confidence_hi_pct', 'brier', 'base_brier', 'skill', 'cell_floor',
-  'suppressed', 'verdict', 'reason_code',
+  'row_kind', 'scope', 'altitude_rank', 'option_key', 'objectives',
+  'open_work', 'anchored_work', 'unanchored_work', 'dangling_work',
+  'cross_branch', 'single_branch', 'priced', 'refused', 'governed', 'graded',
+  'coalition_size', 'escalation_rungs', 'cost_units', 'confidence_pct',
+  'confidence_lo_pct', 'confidence_hi_pct', 'brier', 'base_brier', 'skill',
+  'cell_floor', 'suppressed', 'verdict', 'reason_code',
 ]);
 
 export function jurCsvRows(state, { now = new Date(), settings = null, conventions = jurConventions(settings || state?.settings || {}) } = {}) {
@@ -428,25 +662,40 @@ export function jurCsvRows(state, { now = new Date(), settings = null, conventio
     .filter((d) => String(d?.question || '').includes('[JUR-OPTION:')).length;
   const medians = report.priced.map((c) => c.coalitionSize).sort((a, b) => a - b);
   const median = medians.length ? medians[Math.floor(medians.length / 2)] : null;
+  const hyg = report.hygiene;
   rows.push({
     row_kind: 'workspace', scope: 'workspace', altitude_rank: blank, option_key: blank,
-    objectives: report.totals.objectives, cross_branch: report.totals.crossBranch,
+    objectives: report.totals.objectives,
+    open_work: hyg.openWorkN,
+    anchored_work: hyg.anchoredWorkN,
+    unanchored_work: hyg.unanchoredWorkN,
+    dangling_work: hyg.danglingWorkN,
+    cross_branch: report.totals.crossBranch,
     single_branch: report.totals.singleBranch, priced: report.totals.priced,
     refused: report.totals.refused, governed, graded: graded.length,
     coalition_size: median, escalation_rungs: blank, cost_units: blank,
-    confidence_pct: blank, confidence_lo_pct: blank, confidence_hi_pct: blank,
+    confidence_pct: hyg.anchoringPct ?? blank,
+    confidence_lo_pct: hyg.anchoringLoPct ?? blank,
+    confidence_hi_pct: hyg.anchoringHiPct ?? blank,
     brier: blank, base_brier: blank, skill: blank, cell_floor: conventions.jurCellFloor,
-    suppressed: blank, verdict: report.totals.crossBranch ? 'measured' : 'empty',
-    reason_code: blank,
+    suppressed: blank, verdict: report.totals.crossBranch || hyg.openWorkN ? 'measured' : 'empty',
+    reason_code: hyg.anchoringRefusalKey || blank,
   });
   // One identity-free row per leadership rank. A cell below the floor is BLANK.
   for (let rank = 1; rank <= 5; rank += 1) {
     const inRank = report.clusters.filter((c) => c.maxSpanRank === rank);
     const inRankPriced = inRank.filter((c) => c.verdict === 'priced');
     const suppressed = inRank.length < conventions.jurCellFloor;
+    const rankWork = hyg.records.filter((r) => r.spanRank === rank);
+    const workSuppressed = rankWork.length < conventions.jurCellFloor;
     rows.push({
       row_kind: 'altitude', scope: `rank-${rank}`, altitude_rank: rank, option_key: blank,
-      objectives: blank, cross_branch: inRank.length, single_branch: blank,
+      objectives: blank,
+      open_work: rankWork.length,
+      anchored_work: workSuppressed ? blank : rankWork.filter((r) => r.pointerState === 'anchored').length,
+      unanchored_work: workSuppressed ? blank : rankWork.filter((r) => r.pointerState === 'unanchored').length,
+      dangling_work: workSuppressed ? blank : rankWork.filter((r) => r.pointerState === 'dangling').length,
+      cross_branch: inRank.length, single_branch: blank,
       priced: suppressed ? blank : inRankPriced.length,
       refused: suppressed ? blank : inRank.length - inRankPriced.length,
       governed: blank, graded: blank, coalition_size: suppressed || !inRankPriced.length ? blank
@@ -459,6 +708,28 @@ export function jurCsvRows(state, { now = new Date(), settings = null, conventio
       reason_code: suppressed ? 'suppressed' : blank,
     });
   }
+  // One identity-free pointer-hygiene row per work source (cases / decisions / portfolio).
+  for (const src of hyg.bySource) {
+    const suppressed = src.open < conventions.jurCellFloor;
+    rows.push({
+      row_kind: 'hygiene', scope: `source-${src.entityType}`, altitude_rank: blank, option_key: blank,
+      objectives: blank,
+      open_work: src.open,
+      anchored_work: suppressed ? blank : src.anchored,
+      unanchored_work: suppressed ? blank : src.unanchored,
+      dangling_work: suppressed ? blank : src.dangling,
+      cross_branch: blank, single_branch: blank, priced: blank,
+      refused: suppressed ? blank : src.refusals,
+      governed: blank, graded: blank, coalition_size: blank, escalation_rungs: blank, cost_units: blank,
+      confidence_pct: suppressed ? blank : (src.anchoringPct ?? blank),
+      confidence_lo_pct: suppressed ? blank : (src.anchoringLoPct ?? blank),
+      confidence_hi_pct: suppressed ? blank : (src.anchoringHiPct ?? blank),
+      brier: blank, base_brier: blank, skill: blank, cell_floor: conventions.jurCellFloor,
+      suppressed: suppressed ? 'yes' : blank,
+      verdict: suppressed ? 'withheld' : 'measured',
+      reason_code: suppressed ? 'suppressed' : (src.refusalKey || blank),
+    });
+  }
   // One row per declared governance route: how often it was predicted, how
   // often it was right, and the pooled Brier (BLANK below the evidence floor).
   for (const option of JUR_OPTION_KEYS) {
@@ -467,7 +738,8 @@ export function jurCsvRows(state, { now = new Date(), settings = null, conventio
     const enough = grades.length >= conventions.jurCellFloor;
     rows.push({
       row_kind: 'option', scope: 'workspace', altitude_rank: blank, option_key: option,
-      objectives: blank, cross_branch: blank, single_branch: blank, priced: predicted.length,
+      objectives: blank, open_work: blank, anchored_work: blank, unanchored_work: blank, dangling_work: blank,
+      cross_branch: blank, single_branch: blank, priced: predicted.length,
       refused: blank, governed: blank, graded: grades.length,
       coalition_size: option === 'coalition' ? (predicted.length ? round1(predicted.reduce((a, c) => a + c.coalitionSize, 0) / predicted.length) : blank) : blank,
       escalation_rungs: option === 'escalate' ? (predicted.length ? round1(predicted.reduce((a, c) => a + c.escalationRungs, 0) / predicted.length) : blank) : blank,
@@ -484,7 +756,8 @@ export function jurCsvRows(state, { now = new Date(), settings = null, conventio
   for (const [key, value] of Object.entries(conventions)) {
     rows.push({
       row_kind: 'method', scope: 'convention', altitude_rank: blank, option_key: key,
-      objectives: blank, cross_branch: blank, single_branch: blank, priced: blank,
+      objectives: blank, open_work: blank, anchored_work: blank, unanchored_work: blank, dangling_work: blank,
+      cross_branch: blank, single_branch: blank, priced: blank,
       refused: blank, governed: blank, graded: blank, coalition_size: blank,
       escalation_rungs: blank, cost_units: blank, confidence_pct: blank,
       confidence_lo_pct: blank, confidence_hi_pct: blank, brier: blank,
@@ -497,8 +770,9 @@ export function jurCsvRows(state, { now = new Date(), settings = null, conventio
 
 /**
  * AUTO-GENERATED BOARD-READY SYNTHESIS. One paragraph, identity-free, with
- * every refusal named. This is the "leader asks AI to compile the brief" moment
- * (Glean/Workday), but computed from the workspace's own graph — not invented.
+ * every refusal named. Includes objective-pointer hygiene (Heckman 1979
+ * selection-coverage check) so unanchored dark work is never mistaken for
+ * single-branch alignment.
  */
 export function jurBrief(state, { now = new Date(), settings = null, conventions = jurConventions(settings || state?.settings || {}) } = {}) {
   const report = buildJurisdictionBook(state, { now, conventions });
@@ -507,16 +781,19 @@ export function jurBrief(state, { now = new Date(), settings = null, conventions
   const governed = (Array.isArray(state?.decisions) ? state.decisions : [])
     .filter((d) => String(d?.question || '').includes('[JUR-OPTION:')).length;
   const t = report.totals;
+  const hygieneText = t.openWork > 0
+    ? `Objective-pointer hygiene across ${t.openWork} open work record(s): ${t.anchoredWork} anchored to live objectives, ${t.unanchoredWork} unanchored refusal(s) and ${t.danglingWork} dangling/dropped goal refusal(s)${t.anchoringLoPct !== null ? ` (Wilson completeness lower bound ${t.anchoringLoPct}%)` : ' (completeness rate refused below the evidence floor)'}.`
+    : 'No open work records are on file yet.';
   if (!t.crossBranch) {
-    return `${t.objectives} objective(s) are on record; none of them is worked across more than one reporting branch. There is no jurisdiction gap to price. A single seat holds each objective, so no coalition, escalation or boundary decision is owed.`;
+    return `${t.objectives} objective(s) are on record; none of them is worked across more than one reporting branch. There is no priced jurisdiction gap, though ${hygieneText} Frameworks: Riker (1962), Coase (1937) / Williamson (1975), Heckman (1979) sample-selection coverage, Wilson (1927), Luce (1959), Brier (1950), Ashby (1956).`;
   }
   const best = report.priced.slice().sort((a, b) => b.coalitionSize - a.coalitionSize)[0];
   const top = best ? `The widest needs a ${best.coalitionSize}-branch coalition ${best.escalationRungs} rung(s) below its lowest common ancestor.` : 'No cluster is priced yet.';
   const grades = graded.length ? `${graded.length} frozen governance forecast(s) have been graded once, out of sample.` : 'No governance forecast has been graded yet — an absent outcome is never scored as a miss.';
-  return `${t.crossBranch} of ${t.objectives} objective(s) are worked across more than one reporting branch; ${t.singleBranch} sit inside a single branch. ${t.priced} are priced and ${t.refused} are refused with a printed reason. ${top} The ledger has opened ${governed} governed boundary decision(s) that a human must accept; silence is never consent. ${grades} Every figure above rank 2 is identity-free with small-cell suppression at ${conventions.jurCellFloor}; suppression is not differential privacy. Frameworks: Riker (1962) minimal coalition, Coase (1937) / Williamson (1975) governance transaction costs, Wilson (1927) attribution confidence, Luce (1959) route choice, Brier (1950) once-only grading, Ashby (1956) requisite variety.`;
+  return `${t.crossBranch} of ${t.objectives} objective(s) are worked across more than one reporting branch; ${t.singleBranch} sit inside a single branch. ${t.priced} are priced and ${t.refused} are refused with a printed reason. ${top} ${hygieneText} The ledger has opened ${governed} governed boundary decision(s) that a human must accept; silence is never consent. ${grades} Every figure above rank 2 is identity-free with small-cell suppression at ${conventions.jurCellFloor}; suppression is not differential privacy. Frameworks: Riker (1962) minimal coalition, Coase (1937) / Williamson (1975) governance transaction costs, Heckman (1979) sample-selection coverage, Wilson (1927) attribution & anchoring confidence, Luce (1959) route choice, Brier (1950) once-only grading, Ashby (1956) requisite variety.`;
 }
 
-/** Role-tiered read. The seat changes WHAT is claimed, not only how much. */
+/** Role-tiered read. The seat changes WHAT is claimed and what may be anchored. */
 export function jurisdictionRead(state, { now = new Date(), settings = null, seatId = null, conventions = jurConventions(settings || state?.settings || {}) } = {}) {
   const at = now instanceof Date ? now : new Date(now);
   const book = buildJurisdictionBook(state, { now: at, conventions });
@@ -527,30 +804,145 @@ export function jurisdictionRead(state, { now = new Date(), settings = null, sea
   const findings = Array.isArray(state?.jurFindings) ? state.jurFindings : [];
   const grades = findings.filter((f) => f?.status === 'graded');
   const floor = conventions.jurCellFloor;
-  // Above the detail ceiling the read is a compiled cell table, never items.
+
+  // Span-scoped cluster membership for frontline & manager seats.
+  const scopedSeat = Boolean(seat && !seat.fullAccess && !seat.readOnly && seat.scope instanceof Set);
+  const ownSpanClusterKeys = scopedSeat
+    ? book.clusters.filter((c) => c.spanNodeIds.some((s) => seat.scope.has(s))).map((c) => c.objectiveKey)
+    : book.clusters.map((c) => c.objectiveKey);
+
+  // Above the detail ceiling (rank 3..5 declared seats) the read is compiled
+  // cells only — no objective key, no record id, no goal id, no title.
   const cells = [];
-  if (withheld) {
-    for (let r = 1; r <= 5; r += 1) {
-      const inRank = book.clusters.filter((c) => c.maxSpanRank === r);
-      const suppressed = inRank.length < floor;
-      cells.push({
-        rank: r, clusters: inRank.length, suppressed,
-        priced: suppressed ? null : inRank.filter((c) => c.verdict === 'priced').length,
-        refused: suppressed ? null : inRank.filter((c) => c.verdict === 'refused').length,
-        reason: suppressed ? JUR_REFUSALS.suppressed : null,
+  for (let r = 1; r <= 5; r += 1) {
+    const inRank = book.clusters.filter((c) => c.maxSpanRank === r);
+    const suppressed = inRank.length < floor;
+    const rankWork = book.hygiene.records.filter((rec) => rec.spanRank === r);
+    const hygieneSuppressed = rankWork.length < floor;
+    const anchoredN = rankWork.filter((rec) => rec.pointerState === 'anchored').length;
+    const unanchoredN = rankWork.filter((rec) => rec.pointerState === 'unanchored').length;
+    const danglingN = rankWork.filter((rec) => rec.pointerState === 'dangling').length;
+    const w = !hygieneSuppressed && rankWork.length >= conventions.jurEvidenceFloorN
+      ? jurWilson(anchoredN, rankWork.length)
+      : { pct: null, lo: null, hi: null };
+    cells.push({
+      rank: r, clusters: inRank.length, suppressed,
+      priced: suppressed ? null : inRank.filter((c) => c.verdict === 'priced').length,
+      refused: suppressed ? null : inRank.filter((c) => c.verdict === 'refused').length,
+      reason: suppressed ? JUR_REFUSALS.suppressed : null,
+      openWork: rankWork.length,
+      hygieneSuppressed,
+      anchoredWork: hygieneSuppressed ? null : anchoredN,
+      unanchoredWork: hygieneSuppressed ? null : unanchoredN,
+      danglingWork: hygieneSuppressed ? null : danglingN,
+      anchoringLoPct: w.lo,
+      hygieneReason: hygieneSuppressed && rankWork.length > 0 ? JUR_REFUSALS.suppressed : null,
+    });
+  }
+
+  const hygieneBySource = book.hygiene.bySource.map((src) => {
+    const suppressed = withheld && src.open < floor;
+    return {
+      entityType: src.entityType,
+      label: src.label,
+      open: src.open,
+      suppressed,
+      anchored: suppressed ? null : src.anchored,
+      unanchored: suppressed ? null : src.unanchored,
+      dangling: suppressed ? null : src.dangling,
+      refusals: suppressed ? null : src.refusals,
+      anchoringPct: suppressed ? null : src.anchoringPct,
+      anchoringLoPct: suppressed ? null : src.anchoringLoPct,
+      reason: suppressed && src.open > 0
+        ? JUR_REFUSALS.suppressed
+        : (src.refusalKey ? JUR_REFUSALS[src.refusalKey] : ''),
+    };
+  });
+
+  // Below the detail ceiling (frontline rank 1, mid-manager rank 2, or local
+  // operator): build the seat-authorized remediation queue + active goals.
+  let hygieneQueue = [];
+  let eligibleGoals = [];
+  let spanHygiene = null;
+  if (!withheld && (!seat || !seat.readOnly)) {
+    const recordLookup = new Map();
+    for (const src of JUR_SOURCES) {
+      for (const rec of (Array.isArray(state?.[src.collection]) ? state[src.collection] : [])) {
+        if (rec?.id) recordLookup.set(`${src.collection}:${rec.id}`, rec);
+      }
+    }
+    const candidates = [...book.hygiene.dangling, ...book.hygiene.unanchored];
+    for (const item of candidates) {
+      const raw = recordLookup.get(`${item.collection}:${item.recordId}`);
+      if (!raw) continue;
+      if (seat && !seat.fullAccess) {
+        if (canSee(raw, item.collection, seat, built).allow !== 'full') continue;
+        const people = workRecordPeople(raw, built.chain);
+        if (!people.length && !seat.isLeader) continue;
+        if (people.length && !people.every((pid) => seat.scope.has(pid))) continue;
+      }
+      hygieneQueue.push({
+        recordId: item.recordId,
+        entityType: item.entityType,
+        collection: item.collection,
+        sourceLabel: item.label,
+        title: String(raw.title || raw.question || item.recordId).trim().slice(0, JUR_LIMITS.labelChars),
+        date: item.date,
+        span: item.span,
+        pointerState: item.pointerState,
+        goalStatus: item.goalStatus,
+        reasonKey: item.reasonKey,
+        reasonNote: item.reasonNote,
+        danglingGoalIds: item.danglingGoalIds,
       });
     }
+    eligibleGoals = (Array.isArray(state?.goals) ? state.goals : [])
+      .filter((g) => g?.id && g.status !== 'dropped')
+      .filter((g) => !seat || seat.fullAccess || canSee(g, 'goals', seat, built).allow === 'full')
+      .map((g) => ({
+        id: String(g.id),
+        title: String(g.title || g.id).trim().slice(0, JUR_LIMITS.labelChars),
+        status: g.status || 'active',
+      }));
+    if (scopedSeat) {
+      const inSpan = book.hygiene.records.filter((r) => seat.scope.has(r.span));
+      spanHygiene = {
+        openWork: inSpan.length,
+        anchoredWork: inSpan.filter((r) => r.pointerState === 'anchored').length,
+        unanchoredWork: inSpan.filter((r) => r.pointerState === 'unanchored').length,
+        danglingWork: inSpan.filter((r) => r.pointerState === 'dangling').length,
+        actionable: hygieneQueue.length,
+      };
+    }
   }
+
   return {
     ok: true,
     engineVersion: JUR_ENGINE_VERSION,
     week: book.week,
     conventions,
-    seat: seat ? { id: seat.id, rank, label: seat.label, fullAccess: Boolean(seat.fullAccess) } : null,
+    seat: seat ? { id: seat.id, rank, label: seat.label, fullAccess: Boolean(seat.fullAccess), readOnly: Boolean(seat.readOnly) } : null,
     withheld,
-    book,
+    ownSpanClusterKeys,
+    spanHygiene,
+    hygieneBySource,
+    hygieneQueue,
+    eligibleGoals,
+    book: withheld ? {
+      ...book,
+      clusters: [],
+      priced: [],
+      refused: [],
+      byId: new Map(),
+      hygiene: {
+        ...book.hygiene,
+        unanchored: [],
+        dangling: [],
+        records: [],
+      },
+    } : book,
     cells,
-    grades,
+    grades: withheld ? [] : grades,
     brief: jurBrief(state, { now: at, conventions }),
     refusals: JUR_REFUSALS,
     reviewOn: addDays(dayKey(at), conventions.jurReviewDays),
