@@ -1,3 +1,54 @@
+## 2026-11-06 — Every action is now read before it is adopted (Session 155, Schema v112 unchanged, [ADR-0114](./docs/adr/0114-reviewed-command-editing.md), `#/mission?panel=capture`)
+
+**Implemented [frontline / mid-manager primary; director / VP / CEO via the same shared path].**
+The roadmap's `[PLANNED, largest UX gap]` since Session 106, and the exact item Session 154
+failed on. Two halves, one item:
+
+- **Authority aligned to declared doctrine.** The rank-2 Mission profile had offered
+  `premise` since ADR-0105 ("manager adds premise", README) while the shared
+  `test-assumption` right read `minRank: 3` — a manager's rehearsal died at the adoption
+  transaction. The right now reads `2–5`; frontline (rank 1) is unchanged in both the
+  profile and the right. No new right, no capture-specific exception.
+- **Reviewed, word-by-word editing before rehearsal.** A new optional, fail-closed
+  `commandEdits` object on the capture carries the reviewer's exact words: decision
+  name/question/2–5 named options with pros/cons; delegation name/expected outcome;
+  premise name/statement/signpost; coaching subject/prompt. Edits are applied on top of
+  the proposal and then pass through the unchanged `validateBundleCommands` → rehearsal →
+  adoption chain — an edit replaces words, never constraints. `captureInputFingerprint`
+  covers `commandEdits`, so editing after a rehearsal invalidates it (asserted). An
+  option list with an unnamed option is **refused** (`field: 'options'`), never silently
+  defaulted. The approval card prints each command's reviewed words and option labels;
+  the decision is still never chosen by adoption. `normalizeActionBundles` and
+  `normalizeMissionCaptures` now round-trip `signpost` and decision `options`, or the
+  stored fingerprint could never match the rehearsed one (a defect the new tests caught).
+- **Altitude coverage map (updated Session 155):** frontline (rank 1) Active — the
+  word-by-word review surface first ships for the exact altitude with the least edit
+  headroom; mid-manager (rank 2) Active — the premise-bearing reviewed loop now closes
+  end to end, closing the Session 154 blocker by name; director (rank 3) / VP (rank 4) /
+  CEO (rank 5) Active — the identical surface and the same shared right, unchanged from
+  148–152 elsewhere. No altitude regressions; no new rule, collection or schema bump.
+
+**Verification.** New `command-flow-edit` suite **10/10**; `mission-command-flow` **9/9**;
+`action-bundles` **18/19 → 19/19** (the one pre-existing standalone-worker failure passes
+after rebuild); `standalone` + `mission-control` **17/17**. Lint / boundary / links recorded
+in the session log. Full canonical suite not run. Real-browser AT walkthrough
+**[UNVERIFIED]**. Seats remain workflow declarations, not authentication.
+
+**Next targets, altitude-tagged.**
+- [manager → director] **Cross-span capture merge** — two leads describing the same
+  constraint should propose one LCA-owned case with a dedupe fingerprint and human
+  confirmation. Now buildable on ADR-0113's lineage edges.
+- [all altitudes] **Bounded epistemic backlog policy**: cap `RULE-EPI-02`
+  decisions opened per transaction per span per ISO week, with the remainder
+  deferred and printed.
+- [exec / chief] **Cross-week jurisdiction drift**: a conformal trend over ISO
+  weeks of cross-branch share and median coalition size, refused below four weeks.
+- [all altitudes] **Multi-span LCA repair in `chain.js`**: audit the callers of
+  `lowestCommonAncestor`; fix the shared helper with a parity test.
+- [all altitudes] Decision options/delegation outcome/premise **editing is now shipped** —
+  the residual Command Flow gap is stakeholder-brief drafting from an adopted case
+  (director → VP) and portfolio rehearsal comparison (VP → CEO).
+
 ## 2026-11-06 — Command Flow assumption editing blocked (Session 154)
 
 **In Progress [mid-manager → director roll-up].** A manager needs to state the
@@ -75,9 +126,7 @@ slot that the topic picker owns, which `decision-growth-prep.test.mjs` caught;
 the printed list now carries its own `.prep-provenance-list` class.
 
 **Next targets, altitude-tagged.**
-- [frontline / manager] **Reviewed command editing inside Command Flow** — edit each
-  proposed decision option, delegation outcome and premise statement before
-  rehearsal, not only kind/owner/date. Still `[PLANNED, largest UX gap]`.
+- [frontline / manager] ~~**Reviewed command editing inside Command Flow**~~ **DONE (Session 155, ADR-0114)** — every proposed action is now editable before rehearsal: decision question + 2–5 named options, delegation expected outcome, premise statement + signpost, coaching prompt; edits freeze with the adoption and invalidate stale rehearsals.
 - [manager → director] **Cross-span capture merge** — two leads describing the same
   constraint should propose one LCA-owned case with a dedupe fingerprint and human
   confirmation. Now buildable on ADR-0113's lineage edges.
@@ -470,7 +519,7 @@ second hierarchy engine; back-filling forecasts into historical responses.
 **Verification.** New suite 9/9; targeted batch 90/90; lint/boundary/links green; standalone rebuilt. Full canonical suite running at PR preparation; final result recorded in the session log.
 
 **Open backlog (tagged, ambitious).**
-- *All altitudes* — **reviewed command editing inside Command Flow**: edit each proposed decision option, delegation outcome and premise statement before rehearsal, not only kind/owner/date. **[PLANNED, largest UX gap.]**
+- *All altitudes* — ~~**reviewed command editing inside Command Flow**~~ **DONE (Session 155, ADR-0114).**
 - *Frontline → manager* — **capture-to-1:1 agenda**: adopted coaching prompts should appear in the next scheduled 1:1 with a typed `prepares-for` edge and a completion receipt. **[PLANNED.]**
 - *Manager → director* — **cross-span capture merge**: two leads describing the same constraint should propose one LCA-owned case with a dedupe fingerprint and human confirmation. **[PLANNED.]**
 - *Director → VP* — **stakeholder brief drafting from an adopted case**: closed-vocabulary comms with qualified recipients, reviewed gaps and no send. **[PLANNED.]**

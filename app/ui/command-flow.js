@@ -7,7 +7,12 @@ import { BUNDLE_LABELS } from '../core/domain/actionBundleRegistry.js';
 import { CAPTURE_DISCLOSURE, CAPTURE_PLAYBOOK } from '../core/domain/missionRegistry.js';
 import { addDays, dayKey } from '../core/time.js';
 
-const ui = { seatId: null, captureId: '', form: null, busy: false, error: '', reviewed: false };
+const ui = { seatId: null, captureId: '', form: null, busy: false, error: '', reviewed: false, edits: null, editsFor: null };
+const DEFAULT_DECISION_OPTIONS = [
+  { label: 'Proceed with the reviewed response', pros: 'Coordinated action', cons: 'Uses resources' },
+  { label: 'Gather evidence first', pros: 'Reduces uncertainty', cons: 'Waiting has a cost' },
+];
+const EDIT_MAX = { title: 180, question: 1000, outcome: 1000, statement: 1000, signpost: 400, prompt: 180 };
 const actionHelp = {
   decision: 'A governed choice. Adoption never chooses an option.',
   delegation: 'An accountable outcome with a dated checkpoint.',
@@ -20,18 +25,43 @@ function values(report, selected) {
   return ui.form || { text: selected?.sourceText || '', title: selected?.title || '', ownerId: selected?.ownerId || '', reviewOn: selected?.reviewOn || addDays(dayKey(new Date(report.generatedAt)), report.profile.reviewDays), severity: selected?.caseInput?.fmea?.severity || 5, kinds: selected?.kinds || report.profile.commands.filter((k) => k !== 'comms' && k !== 'budget'), budgetId: selected?.budgetId || '', amount: selected?.amount ?? '', priorPct: selected?.priorPct ?? 70 };
 }
 function field(label, control, hint = '') { return h('div', { class: 'field' }, h('label', { for: control.id }, label), control, hint ? h('p', { class: 'field-hint' }, hint) : null); }
+function editInput(name, value, onInput, extra = {}) { return h('input', { id: `flow-edit-${name}`, name: `flow-edit-${name}`, type: 'text', value: value ?? '', onInput, ...extra }); }
+function editArea(name, value, onInput, extra = {}) { return h('textarea', { id: `flow-edit-${name}`, name: `flow-edit-${name}`, rows: 2, value: value ?? '', onInput, ...extra }); }
 function input(name, value, type = 'text', extra = {}) { return h('input', { id: `flow-${name}`, name, type, value: value ?? '', ...extra }); }
 function select(name, options, value) { return h('select', { id: `flow-${name}`, name }, ...options.map((o) => h('option', { value: o.value, selected: o.value === value }, o.label))); }
 function choose(ctx, id) { ui.captureId = id; ui.form = null; ui.error = ''; ui.reviewed = false; ctx.navigate(`#/mission?panel=capture&capture=${encodeURIComponent(id)}`); ctx.refresh(); }
+const cloneEdits = (v) => (v && typeof v === 'object' && !Array.isArray(v)) ? JSON.parse(JSON.stringify(v)) : null;
+const editOf = (kind) => ui.edits?.[kind] || {};
+function writeEdit(kind, patch) {
+  const edits = { ...(ui.edits || {}) };
+  const cur = { ...(edits[kind] || {}), ...patch };
+  for (const key of Object.keys(cur)) if (cur[key] === '' || cur[key] == null) delete cur[key];
+  if (Object.keys(cur).length) edits[kind] = cur; else delete edits[kind];
+  ui.edits = Object.keys(edits).length ? edits : null;
+}
+function setEdit(kind, key, value) { writeEdit(kind, { [key]: String(value ?? '').slice(0, EDIT_MAX[key] || 1000).trim() }); }
+function optionValues() { const o = ui.edits?.decision?.options; return o ? o.map((x) => ({ ...x })) : DEFAULT_DECISION_OPTIONS.map((x) => ({ ...x })); }
+function setOption(index, key, value) {
+  const opts = optionValues();
+  if (!opts[index]) return;
+  opts[index] = { ...opts[index], [key]: String(value ?? '').slice(0, key === 'label' ? 120 : 300) };
+  writeEdit('decision', { options: opts });
+}
+function addOption(ctx) { const opts = optionValues(); if (opts.length >= 5 || !ctx) return; opts.push({ label: '', pros: '', cons: '' }); writeEdit('decision', { options: opts }); ctx.refresh(); }
+function removeOption(ctx, index) { const opts = optionValues(); if (opts.length <= 2 || !ctx) return; opts.splice(index, 1); writeEdit('decision', { options: opts }); ctx.refresh(); }
 function readForm(form) {
   const data = new FormData(form);
   return { text: String(data.get('text') || ''), title: String(data.get('title') || ''), ownerId: String(data.get('ownerId') || ''), reviewOn: String(data.get('reviewOn') || ''), severity: String(data.get('severity') || ''), kinds: data.getAll('kinds').map(String), budgetId: String(data.get('budgetId') || ''), amount: String(data.get('amount') || ''), priorPct: String(data.get('priorPct') || '70') };
 }
 async function prepareAndRehearse(ctx, form, existing) {
   if (ui.busy) return;
-  const input = readForm(form); ui.form = input; ui.busy = true; ui.error = ''; ui.reviewed = false; ctx.refresh();
+  const input = readForm(form); ui.form = input; ui.busy = true; ui.error = ''; ui.reviewed = false;
+  // ADR-0114: the sent edits are the COMPLETE set for the actions kept this
+  // round — an emptied field clears its edit instead of resurrecting the old one.
+  const commandEdits = Object.fromEntries(Object.entries(ui.edits || {}).filter(([kind]) => input.kinds.includes(kind)));
+  ctx.refresh();
   try {
-    const prepared = ctx.api.missionCapturePrepare({ ...input, ...(existing ? { captureId: existing.id } : {}) });
+    const prepared = ctx.api.missionCapturePrepare({ ...input, commandEdits: Object.keys(commandEdits).length ? commandEdits : null, ...(existing ? { captureId: existing.id } : {}) });
     if (!prepared.ok) { ui.error = prepared.error; return; }
     ui.captureId = prepared.id;
     const revision = ctx.store.state.meta.revision;
@@ -54,6 +84,66 @@ function withdraw(ctx, capture) {
   const error = h('p', { class: 'form-error', role: 'alert' });
   const modal = openModal({ title: 'Withdraw only untouched actions', body: h('form', { class: 'stack-sm', onSubmit: (e) => { e.preventDefault(); const result = ctx.api.missionCaptureWithdraw(capture.id, reason.value); if (!result.ok) { error.textContent = result.error; return; } modal.close(); toast('Untouched actions withdrawn. The source case and history remain.', 'good'); ctx.refresh(); } }, h('p', null, 'Later edits, completed work, spend and sent messages are protected. The source case is never erased by this command.'), field('Why withdraw?', reason), error, h('button', { class: 'btn btn-primary', type: 'submit' }, 'Withdraw untouched actions')) });
 }
+function commandDetail(c) {
+  if (!c) return '';
+  if (c.kind === 'decision') {
+    const opts = Array.isArray(c.options) && c.options.length ? c.options : DEFAULT_DECISION_OPTIONS;
+    return `${c.question ? `${c.question} · ` : ''}${opts.length} options: ${opts.map((o) => o.label).join(' / ')}`.slice(0, 240);
+  }
+  if (c.kind === 'delegation') return (c.outcome || '').slice(0, 240);
+  if (c.kind === 'premise') return [c.statement || '', c.signpost ? `Signpost: ${c.signpost}` : ''].filter(Boolean).join(' · ').slice(0, 240);
+  if (c.kind === 'coaching') return (c.prompt || '').slice(0, 240);
+  return '';
+}
+function commandEditsSection(ctx, v, locked) {
+  const kinds = ['decision', 'delegation', 'premise', 'coaching'].filter((k) => v.kinds.includes(k));
+  if (!kinds.length) return null;
+  const t = v.title || 'the case title';
+  const e = (kind) => editOf(kind);
+  const onI = (kind, key) => (ev) => setEdit(kind, key, ev.target.value);
+  const editField = (kind, key, label, placeholder, { area = false, max = 1000, hint = '' } = {}) => {
+    const control = area
+      ? editArea(`${kind}-${key}`, e(kind)[key] || '', onI(kind, key), { maxlength: max, placeholder, disabled: locked })
+      : editInput(`${kind}-${key}`, e(kind)[key] || '', onI(kind, key), { maxlength: max, placeholder, disabled: locked });
+    return field(label, control, hint);
+  };
+  const sections = kinds.map((kind) => {
+    const head = h('p', { class: 'flow-command-edit-kind' }, h('strong', null, BUNDLE_LABELS[kind]), h('small', { class: 'muted' }, ' · your words, kept verbatim'));
+    if (kind === 'decision') {
+      const opts = optionValues();
+      return h('div', { class: 'flow-command-edit', dataset: { kind } }, head,
+        editField('decision', 'title', 'Action name', `Choose the recovery path: ${t}`, { max: EDIT_MAX.title }),
+        editField('decision', 'question', 'The decision to make', `What should we do about ${t}?`, { max: EDIT_MAX.question }),
+        h('div', { class: 'flow-options', role: 'group', 'aria-label': 'Decision options' },
+          h('div', { class: 'flow-option-head', 'aria-hidden': 'true' }, h('span', null, 'Option'), h('span', null, 'Pros'), h('span', null, 'Cons'), h('span', null, '')),
+          ...opts.map((o, i) => h('div', { class: 'flow-option-row' },
+            editInput(`decision-option-${i}-label`, o.label, (ev) => setOption(i, 'label', ev.target.value), { maxlength: 120, placeholder: `Option ${i + 1} name`, 'aria-label': `Option ${i + 1} name`, disabled: locked }),
+            editInput(`decision-option-${i}-pros`, o.pros, (ev) => setOption(i, 'pros', ev.target.value), { maxlength: 300, placeholder: 'Pros', 'aria-label': `Option ${i + 1} pros`, disabled: locked }),
+            editInput(`decision-option-${i}-cons`, o.cons, (ev) => setOption(i, 'cons', ev.target.value), { maxlength: 300, placeholder: 'Cons', 'aria-label': `Option ${i + 1} cons`, disabled: locked }),
+            h('button', { class: 'btn btn-tiny btn-ghost', type: 'button', disabled: locked || opts.length <= 2, 'aria-label': `Remove option ${i + 1}`, onClick: () => removeOption(ctx, i) }, 'Remove'))),
+          h('button', { class: 'btn btn-tiny btn-ghost', type: 'button', disabled: locked || opts.length >= 5, onClick: () => addOption(ctx) }, 'Add another option'),
+          h('p', { class: 'tiny muted' }, 'Two to five named options. Adoption records the question and options you approve; it never chooses one.')));
+    }
+    if (kind === 'delegation') {
+      return h('div', { class: 'flow-command-edit', dataset: { kind } }, head,
+        editField('delegation', 'title', 'Action name', `Verify the recovery checkpoint: ${t}`, { max: EDIT_MAX.title }),
+        editField('delegation', 'outcome', 'What “done” looks like', 'Record the result, remaining blockers and the next checkpoint.', { area: true, max: EDIT_MAX.outcome, hint: 'Owned by the person chosen above; the receipt tracks delivery, not effort.' }));
+    }
+    if (kind === 'premise') {
+      return h('div', { class: 'flow-command-edit', dataset: { kind } }, head,
+        editField('premise', 'title', 'Assumption name', `Recovery holds: ${t}`, { max: EDIT_MAX.title }),
+        editField('premise', 'statement', 'The assumption to test', `${t} will hold through the next review. This is a declaration, not evidence.`, { area: true, max: EDIT_MAX.statement }),
+        editField('premise', 'signpost', 'How you will know it broke', 'Compare the promised recovery checkpoint with dated delivery evidence; record what would disprove this assumption.', { max: EDIT_MAX.signpost, hint: 'A falsifiable observation with a date — RAND assumption-based planning.' }));
+    }
+    return h('div', { class: 'flow-command-edit', dataset: { kind } }, head,
+      editField('coaching', 'title', 'Prompt subject', t, { max: EDIT_MAX.title }),
+      editField('coaching', 'prompt', 'The prompt for the 1:1', `What support would help with ${t}? Discuss the system, not blame.`, { max: EDIT_MAX.prompt, hint: 'A support prompt, never a person score.' }));
+  });
+  return h('fieldset', { class: 'flow-command-edits', disabled: locked },
+    h('legend', null, 'Read the response, word by word'),
+    h('p', { class: 'tiny muted' }, 'Every action below is proposed words, not policy. Change anything before rehearsing — the rehearsal prints exactly what you approve, and adoption freezes it.'),
+    ...sections);
+}
 function editor(ctx, report, selected) {
   const v = values(report, selected); const locked = ui.busy || selected?.status === 'adopted' || selected?.status === 'dismissed';
   const text = h('textarea', { id: 'flow-text', name: 'text', rows: 7, minlength: 12, maxlength: 8000, required: true, disabled: locked, placeholder: 'What happened? What is blocked, who is affected, and what needs a decision? Use observable facts, not confidential mediation or health details.' }, v.text);
@@ -70,12 +160,13 @@ function editor(ctx, report, selected) {
         h('div', { class: 'flow-example-row' }, h('button', { class: 'btn btn-tiny btn-ghost', type: 'button', disabled: locked, onClick: () => { text.value = 'The supplier delivery is late again and the team is overloaded. The billing backlog is blocking handoffs. We need an accountable recovery checkpoint this week.'; ui.form = readForm(form); text.focus(); } }, 'Insert a worked example'), h('span', { class: 'tiny muted' }, 'Illustrative text only; never saved until you prepare it.'))),
       h('div', { class: 'flow-fields' }, field('Case title', title), field('Accountable owner', owner), h('div', { class: 'form-grid' }, field('Review by', review), field('Severity · FMEA', severity, 'A triage rating, not a probability.')))),
     h('fieldset', { class: 'flow-action-picker', disabled: locked }, h('legend', null, 'The coordinated response'),
-      h('div', { class: 'flow-action-grid' }, ...report.profile.commands.filter((k) => k !== 'comms').map((kind) => h('label', { class: 'flow-action-option', for: `flow-kind-${kind}` }, h('input', { id: `flow-kind-${kind}`, type: 'checkbox', name: 'kinds', value: kind, checked: v.kinds.includes(kind) }), h('span', null, h('strong', null, BUNDLE_LABELS[kind]), h('small', null, actionHelp[kind]))))),
+      h('div', { class: 'flow-action-grid' }, ...report.profile.commands.filter((k) => k !== 'comms').map((kind) => h('label', { class: 'flow-action-option', for: `flow-kind-${kind}` }, h('input', { id: `flow-kind-${kind}`, type: 'checkbox', name: 'kinds', value: kind, checked: v.kinds.includes(kind), onChange: () => { ui.form = readForm(form); ctx.refresh(); } }), h('span', null, h('strong', null, BUNDLE_LABELS[kind]), h('small', null, actionHelp[kind]))))),
       (v.kinds.includes('premise') || v.kinds.includes('decision'))
         ? field('Response confidence (%) — frozen at adoption', prior,
           'Your own 5–95% declaration. LeadOS freezes it when the response is adopted and grades it once from dated evidence (ADR-0107). It is not a classifier estimate and never becomes a person score.')
         : null,
       v.kinds.includes('budget') ? h('div', { class: 'form-grid' }, field('Budget envelope', budget), field('Explicit commitment amount', amount, 'Required. An extracted loss is never treated as approved spend.')) : null),
+    commandEditsSection(ctx, v, locked),
     h('p', { class: 'tiny muted' }, 'Stakeholder briefs are available after the case has reviewed stakeholders. Command Flow never invents a recipient or sends a message.'),
     h('div', { class: 'flow-submit-row' }, h('button', { class: 'btn btn-primary', type: 'submit', disabled: locked }, ui.busy ? 'Rehearsing the whole response…' : selected && ['draft', 'rehearsed'].includes(selected.status) ? 'Save changes & rehearse again' : 'Prepare & rehearse response'),
       selected && ['draft', 'rehearsed'].includes(selected.status) ? h('button', { class: 'btn btn-ghost', type: 'button', disabled: ui.busy, onClick: () => dismiss(ctx, selected) }, 'Dismiss proposal') : null,
@@ -105,7 +196,7 @@ function approval(ctx, report, selected) {
   const reviewed = h('input', { id: 'flow-reviewed', type: 'checkbox', checked: ui.reviewed, disabled: ui.busy, onChange: () => { ui.reviewed = reviewed.checked; const adopt = document.getElementById('flow-adopt'); if (adopt) adopt.disabled = !ui.reviewed || ui.busy || selected.status !== 'rehearsed' || selected.stale; } });
   return card({ title: p ? 'The exact software footprint' : 'Ready to rehearse', subtitle: p ? `${p.ruleIds.length} rule contracts exercised · zero live writes so far` : 'Prepare the response to create a disposable rehearsal.', body: h('div', { class: 'stack-sm' },
     selected.stale ? banner({ tone: 'caution', title: 'Rehearsal expired', body: 'The workspace or calendar changed. Save and rehearse again before adoption.' }) : null,
-    selected.commands.length ? h('ul', { class: 'flow-command-list' }, ...selected.commands.map((c) => h('li', null, badge(BUNDLE_LABELS[c.kind], 'info'), h('span', null, c.title)))) : null,
+    selected.commands.length ? h('ul', { class: 'flow-command-list' }, ...selected.commands.map((c) => h('li', null, badge(BUNDLE_LABELS[c.kind], 'info'), h('span', null, c.title, commandDetail(c) ? h('small', { class: 'flow-command-detail' }, commandDetail(c)) : null)))) : null,
     p ? table({ caption: 'Rehearsed operational changes', rows: p.changes, columns: [{ label: 'Module / ledger', render: (r) => moduleLabels[r.collection] || r.collection }, { label: 'Created', render: (r) => String(r.created) }, { label: 'Updated', render: (r) => String(r.updated) }, { label: 'Removed', render: (r) => String(r.removed) }] }) : null,
     p?.relationships.length ? h('div', { class: 'flow-relations' }, ...p.relationships.map((r) => h('span', { class: 'case-link-pill' }, `${r.sourceType} → ${r.relation} → ${r.targetType} · +${r.added}`))) : null,
     h('p', { class: 'tiny muted' }, 'This is a software effect, not a causal prediction of morale, delivery or financial benefit. Existing rules may create additional checkpoints and evidence locks.'),
@@ -120,6 +211,10 @@ export function renderCommandFlow(ctx, report, { compact = false } = {}) {
   if (ui.seatId !== report.actingSeatId) { Object.assign(ui, { seatId: report.actingSeatId, captureId: '', form: null, busy: false, error: '', reviewed: false }); }
   const queryId = ctx.query?.get('capture');
   const selected = report.captures.find((c) => c.id === (queryId || ui.captureId)) || report.captures.find((c) => ['draft', 'rehearsed'].includes(c.status)) || null;
+  // ADR-0114: the editable words belong to ONE capture. Switching captures (or
+  // starting a new note) re-seeds the editors from that capture's saved edits.
+  const editsFor = selected?.id || 'new';
+  if (ui.editsFor !== editsFor) { ui.edits = cloneEdits(selected?.commandEdits); ui.editsFor = editsFor; }
   if (compact) return h('div', { class: 'stack-sm' }, banner({ tone: 'info', title: 'Describe it once. LeadOS coordinates the response.', body: CAPTURE_PLAYBOOK[report.seat.rank], actions: [h('a', { class: 'btn btn-primary', href: '#/mission?panel=capture' }, 'Open Command Flow')] }), ui.error ? banner({ tone: 'bad', title: 'Rehearsal needs attention', body: ui.error }) : null);
   return h('div', { class: 'stack-sm command-flow' },
     h('div', { class: 'flow-steps', 'aria-label': 'Command Flow stages' }, ...['Describe', 'Review & rehearse', 'Adopt together', 'Follow through'].map((label, i) => h('span', null, h('b', { 'aria-hidden': 'true' }, String(i + 1)), label))),

@@ -389,7 +389,12 @@ export const ACTION_RIGHTS = Object.freeze({
   // to a real reporting pair inside the declared span (checked by the action).
   'close-expectation-round': { minRank: 1, maxRank: 5, label: 'Open, seal or withdraw a two-sided expectation round' },
   'coordinate-intervention': { minRank: 1, maxRank: 5, label: 'Rehearse and adopt a bounded cross-module intervention' },
-  'test-assumption': { minRank: 3, maxRank: 5, label: 'Register a testable operating assumption' },
+  // ADR-0105 + ADR-0114: a testable assumption is part of every leading seat's craft.
+  // Command Flow offered `premise` to rank 2 from the start ("manager adds premise",
+  // README, ADR-0105) while this window still read 3–5, so a manager's rehearsal died
+  // at adoption. The shared right now matches the declared altitude doctrine: frontline
+  // does not register premises; every rank from manager up does.
+  'test-assumption': { minRank: 2, maxRank: 5, label: 'Register a testable operating assumption' },
   'prepare-comms': { minRank: 3, maxRank: 5, label: 'Prepare a stakeholder communication' },
   'set-disclosure-floor': { minRank: 3, maxRank: 5, label: 'Set the small-cell disclosure floor' },
   // ADR-0082: verifying the sealed audit chain is every altitude's business —

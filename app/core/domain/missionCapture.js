@@ -13,7 +13,7 @@ import { bundleInputFingerprint, bundlePreview, bundleSourceFingerprint, clone, 
 import { CAPTURE_SOURCE, MISSION_EVENTS, MISSION_LIMITS, missionProfile } from './missionRegistry.js';
 import { normalizeCaptureCaseInput } from './missionCaptureSchema.js';
 
-export const captureInputFingerprint = (c) => fingerprint({ version: 1, caseInput: c.caseInput, kinds: c.kinds, reviewOn: c.reviewOn, budgetId: c.budgetId, amount: c.amount, priorPct: c.priorPct, ownerSeatId: c.ownerSeatId });
+export const captureInputFingerprint = (c) => fingerprint({ version: 1, caseInput: c.caseInput, kinds: c.kinds, reviewOn: c.reviewOn, budgetId: c.budgetId, amount: c.amount, priorPct: c.priorPct, ownerSeatId: c.ownerSeatId, commandEdits: c.commandEdits || null });
 export function captureSourceFingerprint(state, c) {
   const ids = new Set([c.caseInput.ownerId, ...c.caseInput.involvedPersonIds]);
   return fingerprint({
@@ -76,7 +76,23 @@ export function prepareCapturePlan(state, capture, now = new Date()) {
   const projected = { ...state, cases: [...(state.cases || []), { ...caseInput, id: sourceId, status: 'open', stakeholders: [] }] };
   const proposal = proposeBundle(projected, sourceId, now);
   if (!proposal.ok) return proposal;
-  const commands = proposal.commands.filter((c) => capture.kinds.includes(c.kind) && c.kind !== 'budget').map((c) => ({
+  const edits = capture.commandEdits || {};
+  const applyEdit = (c) => {
+    const e = edits[c.kind];
+    if (!e) return c;
+    // ADR-0114: the reviewer's words win verbatim. The kind, owner, source, date
+    // and (for a premise/decision) the reviewed prior are merged, then the whole
+    // list still passes through validateBundleCommands below — an edit never
+    // bypasses validation, it merely replaces what the proposal would have said.
+    const merged = { ...c };
+    if (e.title) merged.title = e.title;
+    if (c.kind === 'decision') { if (e.question) merged.question = e.question; if (e.options) merged.options = e.options; }
+    if (c.kind === 'delegation' && e.outcome) merged.outcome = e.outcome;
+    if (c.kind === 'premise') { if (e.statement) merged.statement = e.statement; if (e.signpost) merged.signpost = e.signpost; }
+    if (c.kind === 'coaching' && e.prompt) merged.prompt = e.prompt;
+    return merged;
+  };
+  const commands = proposal.commands.filter((c) => capture.kinds.includes(c.kind) && c.kind !== 'budget').map((c) => applyEdit({
     ...c, ownerId: capture.ownerId || c.ownerId, dueOn: capture.reviewOn,
     // ADR-0107: one reviewed declaration freezes BOTH the testable premise and
     // the adopted decision's pre-registered outcome probability. A loop adopted

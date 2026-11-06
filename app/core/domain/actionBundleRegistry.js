@@ -22,7 +22,9 @@ export const BUNDLE_ADAPTERS = Object.freeze({
     },
     execute(a, api, s, now) { return api.addDecision({ title: a.title, question: text(a.question) || `What should we do about ${a.title}?`,
       date: dayKey(now), reviewOn: a.dueOn, reversibility: 'reversible', driver: s.settings?.leaderName || 'Workspace leader', approver: '',
-      options: [{ label: 'Proceed with the reviewed response', pros: 'Coordinated action', cons: 'Uses resources' }, { label: 'Gather evidence first', pros: 'Reduces uncertainty', cons: 'Waiting has a cost' }], chosen: '' }); },
+      options: Array.isArray(a.options) && a.options.length >= 2
+        ? a.options.slice(0, 5).map((o) => ({ label: text(o?.label, 120), pros: text(o?.pros, 300), cons: text(o?.cons, 300) }))
+        : [{ label: 'Proceed with the reviewed response', pros: 'Coordinated action', cons: 'Uses resources' }, { label: 'Gather evidence first', pros: 'Reduces uncertainty', cons: 'Waiting has a cost' }], chosen: '' }); },
     target: (s, id) => (s.decisions || []).find((r) => r.id === id),
     untouched: (r) => !r.chosen && !r.reviewedOn && r.outcome === 'pending',
     compensate(api, r) { return api.withdrawBundleDecision(r.id); },
@@ -43,7 +45,7 @@ export const BUNDLE_ADAPTERS = Object.freeze({
       || need(Number.isFinite(Number(a.priorPct)) && Number(a.priorPct) >= 5 && Number(a.priorPct) <= 95, 'Use a prior from 5 to 95%.', 'priorPct'); },
     execute(a, api) { const priorPct = Number(a.priorPct); return api.addPremise({ title: a.title,
       statement: text(a.statement) || `${a.title} will hold through the next review. This is a declaration, not evidence.`,
-      signpost: 'Compare the promised recovery checkpoint with dated delivery evidence; record what would disprove this assumption.',
+      signpost: text(a.signpost) || 'Compare the promised recovery checkpoint with dated delivery evidence; record what would disprove this assumption.',
       ownerId: a.ownerId, priorPct, watchPct: Math.max(10, priorPct - 15), breachPct: Math.max(5, priorPct - 30),
       criticality: 'major', reviewBy: a.dueOn, sourceRefs: [{ sourceType: 'case', sourceId: a.sourceId }] }); },
     target: (s, id) => (s.premises || []).find((r) => r.id === id),
@@ -96,7 +98,15 @@ export function validateBundleCommands(commands, state, now = new Date()) {
     const a = { kind: raw.kind, title: text(raw.title, 180), ownerId: text(raw.ownerId, 80) || null,
       sourceId: text(raw.sourceId, 80) || null, budgetId: text(raw.budgetId, 80) || null,
       dueOn: text(raw.dueOn, 10), priorPct: raw.priorPct, amount: raw.amount,
-      question: text(raw.question), outcome: text(raw.outcome), statement: text(raw.statement), prompt: text(raw.prompt, 180) };
+      question: text(raw.question), outcome: text(raw.outcome), statement: text(raw.statement), prompt: text(raw.prompt, 180), signpost: text(raw.signpost, 400) };
+    // ADR-0114: a decision the human has actually read names its own options. The
+    // two proposed defaults stay legal, but a reviewed 2–5 option list with named
+    // labels replaces them; an option list without labels is refused, never padded.
+    if (raw.kind === 'decision' && raw.options !== undefined) {
+      const opts = Array.isArray(raw.options) ? raw.options.map((o) => ({ label: text(o?.label, 120), pros: text(o?.pros, 300), cons: text(o?.cons, 300) })) : [];
+      if (opts.length < 2 || opts.length > 5 || opts.some((o) => !o.label)) return { ok: false, error: 'A decision needs 2–5 options, each with a name.', field: 'options' };
+      a.options = opts;
+    }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(a.dueOn) || !Number.isFinite(Date.parse(a.dueOn)) || new Date(a.dueOn).toISOString().slice(0, 10) !== a.dueOn || a.dueOn < dayKey(now) || a.dueOn > addDays(dayKey(now), 365)) return { ok: false, error: 'Every action needs a valid review/due date within the next year.', field: 'dueOn' };
     const invalid = adapter.validate(a, state, now);
     if (invalid) return invalid;
@@ -112,6 +122,7 @@ export function validateBundleCommands(commands, state, now = new Date()) {
       if (Number.isFinite(pct) && pct >= 5 && pct <= 95) a.priorPct = pct;
       else delete a.priorPct;
     } else delete a.priorPct;
+    if (a.kind !== 'premise') delete a.signpost;
     if (a.kind !== 'budget') delete a.amount;
     seen.add(a.kind); value.push(a);
   }

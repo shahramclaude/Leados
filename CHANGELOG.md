@@ -1,3 +1,23 @@
+## 2026-11-06 · Session 155: Reviewed command editing ([ADR-0114](./docs/adr/0114-reviewed-command-editing.md) · Schema v112 unchanged)
+
+- **New capability:** every Command Flow action is now editable word-by-word
+  before rehearsal — decision name/question/2–5 named options (pros/cons),
+  delegation name/outcome, premise name/statement/falsifiable signpost,
+  coaching subject/prompt. Edits ride the capture as one fail-closed
+  `commandEdits` object, merge onto the proposal, then pass through the
+  unchanged validate → rehearse → adopt chain. Fingerprinted with the rest of
+  the proposal; an unnamed option is refused (`field: 'options'`), never
+  silently defaulted; the approval card prints the reviewed words.
+- **Authority aligned:** shared `test-assumption` right `minRank 3 → 2`,
+  matching ADR-0105 / README ("manager adds premise"). Frontline rank 1
+  unchanged in profile and right. Closes the Session 154 blocker.
+- **Defects fixed (found by the new tests):** `normalizeActionBundles` and
+  `normalizeMissionCaptures` stripped `signpost` and decision `options`, so a
+  stored fingerprint could never match the rehearsed one; both round-trip now.
+- **Tests:** new `command-flow-edit` 10/10; `mission-command-flow` 9/9;
+  `action-bundles` 19/19; `standalone` + `mission-control` 17/17; lint PASS.
+  Real-browser walkthrough [UNVERIFIED].
+
 ## 2026-11-06 · Session 152: The Boundary-redraw rehearsal ([ADR-0112](./docs/adr/0112-boundary-redraw-rehearsal.md) · Schema v111 unchanged)
 
 - **New feature:** `#/jurisdiction?panel=redraw` — a director-and-above
