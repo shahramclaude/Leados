@@ -536,6 +536,11 @@ export function buildJurisdictionBook(state, { now = new Date(), conventions = j
     week: weekKey(at),
     conventions,
     chain: built,
+    // ADR-0115: the cross-week drift reader needs the DENOMINATOR of the
+    // cross-branch share. `clusters` is gaps only; `allClusters` is every
+    // objective the harvest could place, including single-branch ones. No title,
+    // person or note is added — this is the same priced read model.
+    allClusters: all,
     clusters: gaps,
     priced,
     refused,
@@ -578,6 +583,12 @@ export function jurSpanRollUp(state, { nodeId, now = new Date(), conventions = j
   if (!node) return { ok: false, reason: 'no-node' };
   const subtree = new Set([...(node.subtreeIds || []), nodeId, LEADER_ID === nodeId ? nodeId : null].filter(Boolean));
   const own = report.clusters.filter((c) => c.spanNodeIds.some((s) => subtree.has(s)));
+  // ADR-0115: every objective in this span's subtree, not only cross-branch
+  // gaps. A reading written before this denominator existed has `objectives:
+  // null`, and the drift reader REFUSES its share rather than printing 100%.
+  const allHere = Array.isArray(report.allClusters)
+    ? report.allClusters.filter((c) => c.spanNodeIds.some((s) => subtree.has(s)))
+    : null;
   const priced = own.filter((c) => c.verdict === 'priced');
   const refused = own.filter((c) => c.verdict === 'refused');
   const floor = conventions.jurCellFloor;
@@ -603,6 +614,7 @@ export function jurSpanRollUp(state, { nodeId, now = new Date(), conventions = j
     nodeId,
     nodeRank: rankOf(built, nodeId),
     clusters: own.length,
+    objectives: allHere ? allHere.length : null,
     crossBranch: own.length,
     priced: suppressed ? null : priced.length,
     governed: suppressed ? null : governed,

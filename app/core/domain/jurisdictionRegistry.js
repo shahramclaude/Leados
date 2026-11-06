@@ -115,6 +115,16 @@ export const JUR_CONVENTION_DEFAULTS = Object.freeze({
   // long enough. This is a governed ASK, never an automatic boundary change.
   jurProposalAfterDays: 0,
   jurAutoPropagate: true,
+  // ADR-0115: the cross-week drift reader. DECLARED, CLAMPED and PRINTED on the
+  // existing Method panel; re-declarable by the existing full-access conventions
+  // command, never fitted from the weekly record. A conformal band is refused
+  // below `jurDriftMinWeeks` frozen ISO weeks; `jurDriftCoveragePct` is the
+  // nominal marginal coverage and the achieved finite-sample bound k/(n+1) is
+  // printed beside it. `jurDriftMaxWeeks` caps the look-back so a long-lived
+  // workspace cannot let a pre-reorganisation era dominate the band.
+  jurDriftMinWeeks: 4,
+  jurDriftCoveragePct: 66,
+  jurDriftMaxWeeks: 16,
 });
 
 export const JUR_CONVENTION_BOUNDS = Object.freeze({
@@ -127,6 +137,9 @@ export const JUR_CONVENTION_BOUNDS = Object.freeze({
   jurMaterialityPct: [1, 100],
   jurReviewDays: [7, 90],
   jurProposalAfterDays: [0, 60],
+  jurDriftMinWeeks: [3, 12],
+  jurDriftCoveragePct: [50, 90],
+  jurDriftMaxWeeks: [4, 52],
 });
 
 /** A cap is a refusal to grow without bound, not a silent drop. */
@@ -151,6 +164,10 @@ export const JUR_EVENTS = Object.freeze({
   CONVENTIONS: 'jur.conventions',
   GOVERNED: 'jur.governed',
   ANCHOR: 'jur.anchor',
+  // ADR-0115: explicit drift pass. Runs a full scan (so this week's readings
+  // freeze) and then grades the cross-week series; unlike `jur.scan` it is the
+  // named command a VP/chief presses when reviewing quarterly exposure.
+  DRIFT: 'jur.drift',
 });
 
 /**
@@ -176,6 +193,7 @@ export const JUR_RULE_IDS = Object.freeze({
   GOVERN: 'RULE-JUR-02',
   GRADE: 'RULE-JUR-03',
   ROLLUP: 'RULE-JUR-04',
+  DRIFT: 'RULE-JUR-05',
 });
 
 export const JUR_TRIGGER_PREFIX = 'jur.';
@@ -231,6 +249,7 @@ export const JUR_PANELS = Object.freeze([
   Object.freeze({ key: 'options', label: 'Governance options', note: 'Three priced routes per cluster — coalition, escalation, boundary redraw — with the arithmetic and every refusal printed.' }),
   Object.freeze({ key: 'redraw', label: 'Boundary rehearsal', note: 'A dry run of a proposed reporting-line move: which cross-branch objectives collapse, which rolls-up-to edges move and which unsettled governed decisions go stale. Nothing is written.' }),
   Object.freeze({ key: 'grades', label: 'Forecast grades', note: 'Each governance route the ledger predicted, graded once against the dated decision a human actually made.' }),
+  Object.freeze({ key: 'drift', label: 'Cross-week drift', note: 'Is cross-branch exposure structurally changing, or is this ordinary week-to-week variation? A distribution-free conformal band over dated, identity-free span readings; refused below the declared week floor.' }),
   Object.freeze({ key: 'method', label: 'Method & refusals', note: 'Every declared convention, bound, framework and refusal this screen can print.' }),
 ]);
 
@@ -247,6 +266,13 @@ export const JUR_REFUSALS = Object.freeze({
   'ungraded': 'The governed decision this finding opened has not settled. The predicted route stays ungraded — an absent outcome is never scored as a miss.',
   'postdated': 'The review that would grade this finding is dated before the finding was frozen, or carries no date. The grade is refused, never back-filled.',
   'suppressed': 'This cell is below the declared small-cell floor. It is withheld, not zero — suppression is not differential privacy and is labelled as such.',
+  'drift-thin-series': 'Fewer frozen ISO-week readings than the declared week floor. A trend over two or three snapshots is a guess, so every band and verdict is refused.',
+  'drift-no-readings': 'No identity-free span reading has been frozen in this scope. Run a jurisdiction scan in each ISO week to build a dated series; an unsampled week is never back-filled.',
+  'drift-no-denominator': 'This week’s readings predate the objective denominator (older readings carry no objective count). The cross-branch SHARE is refused, never printed as 100% or zero; the coalition series may still publish.',
+  'drift-incomplete-series': 'One or more weeks in the look-back window has no publishable value for this measure. The conformal band is refused rather than interpolating or dropping the gap.',
+  'drift-thin-calibration': 'Nominal coverage needs more strictly-prior week-over-week changes than this series holds (k = ceil((n+1)·coverage) > n). The band is refused, never extended to infinity as a number.',
+  'drift-suppressed': 'Every span reading frozen this week was small-cell suppressed by RULE-JUR-04. The week is counted as a refusal, not printed as a zero.',
+  'drift-no-coalition': 'No span reading this week carries a publishable median coalition size. The coalition series is refused for that week, never defaulted to one.',
 });
 
 /** The reading each altitude is allowed to claim. A chief never gets item detail. */
@@ -280,4 +306,14 @@ export function governedDecisionMarker(findingId, week) {
 
 export function governanceDecisionMarker(findingId, week) {
   return `[RULE-JUR-02:${findingId}:${week}]`;
+}
+
+/** ADR-0115: one governed cross-week drift decision per ISO week, at most. */
+export function driftMarker(week) {
+  return `[JUR-DRIFT:${week}]`;
+}
+
+/** Stamped into the governed decision so no module prices it back as work. */
+export function driftDecisionMarker(week) {
+  return `[RULE-JUR-05:${week}]`;
 }

@@ -1,3 +1,33 @@
+## 2026-11-06 — Is the shape of the work changing? (Session 156, Schema v112 unchanged, [ADR-0115](./docs/adr/0115-cross-week-jurisdiction-drift.md), `#/jurisdiction?panel=drift`)
+
+A VP forecasting quarterly coordination risk and a chief reviewing
+cross-division exposure now get a **dated series, not a snapshot**. The
+Jurisdiction Compiler had frozen one identity-free span reading per ISO week
+since ADR-0109, but never compared weeks. The new **Cross-week drift** panel:
+
+- prints the **pooled cross-branch share** beside the unweighted **mean of unit
+  rates**, with their composition gap (Yule/Simpson aggregation bias) — a span
+  count that changes after a reorganisation moves one without moving the other;
+- grades both the share and the median coalition size with a **distribution-free
+  split-conformal band** (Vovk et al. 2005): `k = ceil((n+1)·coverage)`, the
+  achieved finite-sample coverage printed beside the nominal one, refused below
+  four frozen weeks, refused when `k > n`, and never interpolating an unsampled
+  week;
+- scopes by the seat's own reporting subtree and prints that altitude's own
+  question — frontline and manager read their span, director their unit, VP
+  their function, chief the enterprise — with identity-free brief and CSV;
+- on a published crossing, `RULE-JUR-05` opens **one** governed,
+  marker-idempotent decision per ISO week on the shared post-commit spine with
+  `rolls-up-to` edges to executive seats. It never redraws a boundary, never
+  edits a reading and never accepts itself. Press **Scan & govern drift**.
+
+Declared conventions (week floor 4, coverage 66%, 16-week look-back) are
+clamped, printed and re-declarable through the existing full-access
+**Conventions** command. Readings frozen before this session have no objective
+denominator and **refuse** their share rather than back-filling a number. A band
+crossing is an anomaly under *declared* exchangeability, not a causal finding.
+No new collection, migration, rule registration or CSV scope.
+
 ## 2026-11-06 — Command Flow, word by word (Session 155, Schema v112 unchanged, [ADR-0114](./docs/adr/0114-reviewed-command-editing.md), `#/mission?panel=capture`)
 
 The largest Command Flow UX gap is closed: before a response is rehearsed, the

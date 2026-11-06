@@ -2,7 +2,7 @@
  * app/views/jurisdiction.js — `#/jurisdiction`, the Jurisdiction Compiler
  * (ADR-0109, ADR-0111, Schema v111).
  *
- * Six panels, six questions, and a DIFFERENT answer at every altitude:
+ * Seven panels, seven questions, and a DIFFERENT answer at every altitude:
  *   Map      "Which of my objectives is another branch also working, and who
  *            could resolve the whole thing?"
  *   Hygiene  "Which open work records carry no objective pointer or name a
@@ -14,6 +14,9 @@
  *            go stale — and what did nothing?" (director-and-above; dry run)
  *   Grades   "Was the governance route this ledger predicted the one a human
  *            chose?"
+ *   Drift    "Is cross-branch exposure structurally changing across ISO weeks,
+ *            or is this ordinary variation?" (conformal; VP/chief primary,
+ *            usable at every altitude inside its own scope)
  *   Method   "What is declared, clamped, named and refused?"
  *
  * Above the manager detail ceiling the shell serves COMPILED, identity-free
@@ -37,6 +40,10 @@ import {
 import {
   rehearseBoundaryRedraw, redrawBrief, REDRAW_LIMITS,
 } from '../core/domain/redrawRehearsal.js';
+import { jurDriftRead } from '../core/domain/jurisdictionDrift.js';
+import {
+  JUR_DRIFT_ALTITUDE_QUESTIONS, JUR_DRIFT_ENGINE_VERSION,
+} from '../core/domain/jurisdictionDriftRegistry.js';
 
 const PANELS = JUR_PANELS;
 const dash = (v) => (v === null || v === undefined || v === '' ? '—' : String(v));
@@ -742,6 +749,143 @@ function redrawPanel(ctx, read) {
         h('li', null, 'Frameworks: Coase (1937) / Williamson (1975) governance choice · Riker (1962) size principle · Ashby (1956) requisite variety · Jensen & Meckling (1976) residual control · Klein (1998) premortem.')) }));
 }
 
+/* --------------------------------------------------- ADR-0115: drift */
+
+/** Downloads are allowed to fail in a browser; then the text stays copyable. */
+function downloadOrCopy(ctx, { filename, text, mime, title, okMessage }) {
+  try {
+    const saved = downloadText({ filename, text, mime });
+    if (saved) { toast(okMessage, 'good'); return; }
+    const copy = h('textarea', { class: 'input', rows: 12, readonly: true }, text);
+    openModal({
+      title,
+      body: h('div', { class: 'stack' },
+        h('p', null, 'This browser refused the file download. The aggregate text is below; select and copy it.'), copy),
+      footer: [h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => closeAllModals() }, 'Close')],
+    });
+    copy.focus(); copy.select();
+  } catch (error) {
+    toast(`Could not build the file: ${String(error?.message || error)}`, 'bad');
+  }
+}
+
+function driftPanel(ctx) {
+  let report;
+  try {
+    report = jurDriftRead(ctx.state, { now: ctx.now, settings: ctx.state.settings || {} });
+  } catch (error) {
+    return banner({ tone: 'bad', title: 'The cross-week reader could not run',
+      body: String(error?.message || error) });
+  }
+  const rank = report.rank || 0;
+  const altitudeKey = ({ 1: 'frontline', 2: 'manager', 3: 'director', 4: 'exec', 5: 'chief' })[rank] || 'chief';
+  const question = JUR_DRIFT_ALTITUDE_QUESTIONS[altitudeKey];
+  const conv = report.conventions;
+  const bands = report.bands;
+  const blank = (v, suffix = '') => (v === null || v === undefined ? `—${suffix}` : `${v}${suffix}`);
+  const verdictText = report.verdict === 'drift'
+    ? `DRIFT — ${[...new Set(report.outside.map((o) => o.metric))].join(' + ')} outside its conformal band (${report.direction})`
+    : report.verdict === 'within-band' ? 'Within the band — no structural change detected'
+      : `Refused — ${report.reason}`;
+  const day = (ctx.now instanceof Date ? ctx.now : new Date(ctx.now || Date.now())).toISOString().slice(0, 10);
+
+  const weekRows = report.weeks.map((w) => ({
+    week: w.week,
+    spans: w.spansN,
+    suppressed: w.suppressedN,
+    objectives: w.objectivesN,
+    cross: w.crossBranchN,
+    pooled: blank(w.pooledPct, '%'),
+    meanUnit: blank(w.meanUnitPct, '%'),
+    gap: blank(w.compositionGapPct, ' pp'),
+    coalition: blank(w.medianCoalition),
+    shareDelta: blank(w.shareDelta, ' pp'),
+    reason: w.reason || (w.coalitionReason ? `coalition: ${w.coalitionReason}` : '—'),
+  }));
+
+  const bandRows = Object.entries(bands).map(([key, b]) => ({
+    measure: key === 'share' ? 'Cross-branch share (pp)' : 'Median coalition size (branches)',
+    status: b.status === 'published' ? (b.outside ? 'OUTSIDE' : 'within') : 'REFUSED',
+    delta: blank(b.currentDelta),
+    bound: blank(b.bound),
+    n: b.m,
+    k: b.k ?? '—',
+    coverage: blank(b.coverageBound),
+    p: blank(b.p),
+    note: b.status === 'published' ? b.method : JUR_REFUSALS[b.reason] || b.reason || '—',
+  }));
+
+  const actions = [
+    h('button', { class: 'btn btn-primary', type: 'button',
+      onClick: () => act(ctx, () => ctx.api.jurDriftScan(), 'Froze this week’s span readings, graded the cross-week bands and governed a published crossing'),
+    }, 'Scan & govern drift'),
+    h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => openConventions(ctx) }, 'Conventions'),
+    h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => downloadOrCopy(ctx, {
+      filename: `leados-jurisdiction-drift-${day}.csv`,
+      text: serializeCsv(report.columns.map((key) => ({ key, header: key })), report.rows),
+      mime: 'text/csv', title: 'Download blocked — copy the drift CSV', okMessage: 'Aggregate drift CSV downloaded.',
+    }) }, 'Export aggregate CSV'),
+    h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => downloadOrCopy(ctx, {
+      filename: `leados-jurisdiction-drift-${day}.md`,
+      text: report.brief, mime: 'text/markdown',
+      title: 'Download blocked — copy the drift brief', okMessage: 'Identity-free drift brief downloaded.',
+    }) }, 'Download brief'),
+  ];
+
+  return h('div', { class: 'stack', 'data-jur-drift': report.verdict, 'data-altitude': `rank-${rank}` },
+    banner({
+      tone: report.verdict === 'drift' ? 'bad' : report.status === 'refused' ? 'info' : 'good',
+      title: `Cross-week verdict: ${verdictText}`,
+      body: `${report.scopeLabel} · altitude rank ${rank} · ${question} `
+        + `${report.withheld ? 'Above the manager detail ceiling this reading prints counts and rates only — never a span id, objective key, person or title.' : 'This is your own span’s dated series.'} `
+        + `${report.reasonText ? ` ${report.reasonText}` : ''}`,
+      actions,
+    }),
+    h('div', { class: 'grid-4' },
+      stat({ label: 'Frozen ISO weeks', value: dash(report.allWeeksN), hint: `Look-back window ${report.windowN}; floor ${conv.minWeeks}` }),
+      stat({ label: 'Pooled cross-branch share', value: blank(report.latest?.pooledPct, '%'), hint: `Mean of unit rates ${blank(report.latest?.meanUnitPct, '%')} · gap ${blank(report.latest?.compositionGapPct, ' pp')}` }),
+      stat({ label: 'Nominal coverage', value: `${conv.coveragePct}%`, hint: `Achieved finite-sample ${blank(bands.share.coverageBound)}` }),
+      stat({ label: 'Unsampled weeks', value: dash(report.gapWeeks), hint: 'A gap is counted, never a zero or an interpolation' })),
+    card({ title: 'The dated series', subtitle: 'One aggregate row per frozen ISO week. The pooled rate and the mean of unit rates are printed side by side.',
+      body: table({
+        caption: 'Cross-week jurisdiction drift: weekly aggregate series',
+        emptyMessage: 'No frozen ISO-week readings yet. Run a scan in each week to build a dated series.',
+        columns: [
+          { label: 'ISO week (Monday)', key: 'week' }, { label: 'Spans', key: 'spans' },
+          { label: 'Suppressed', key: 'suppressed' }, { label: 'Objectives', key: 'objectives' },
+          { label: 'Cross-branch', key: 'cross' }, { label: 'Pooled share', key: 'pooled' },
+          { label: 'Mean unit rate', key: 'meanUnit' }, { label: 'Composition gap', key: 'gap' },
+          { label: 'Median coalition', key: 'coalition' }, { label: 'Share Δ', key: 'shareDelta' },
+          { label: 'Refusal', key: 'reason' },
+        ], rows: weekRows,
+      }) }),
+    card({ title: 'Conformal bands', subtitle: 'Distribution-free, strictly-prior calibration, refused below the declared week floor.',
+      body: table({
+        caption: 'Cross-week jurisdiction drift: conformal bands and their finite-sample coverage',
+        columns: [
+          { label: 'Measure', key: 'measure' }, { label: 'Verdict', key: 'status' },
+          { label: 'Newest Δ', key: 'delta' }, { label: 'Bound', key: 'bound' },
+          { label: 'Calibration n', key: 'n' }, { label: 'k', key: 'k' },
+          { label: 'Coverage achieved', key: 'coverage' }, { label: 'Conformal p', key: 'p' },
+          { label: 'Method / refusal', key: 'note' },
+        ], rows: bandRows,
+      }) }),
+    card({ title: 'Declared method & every refusal', subtitle: `Engine ${JUR_DRIFT_ENGINE_VERSION}. Conventions are declared, clamped and re-declarable only by a full-access seat.`,
+      body: h('div', { class: 'stack' },
+        h('p', { class: 'tiny muted' }, `Declared: week floor ${conv.minWeeks} (3–12), nominal coverage ${conv.coveragePct}% (50–90), look-back ${conv.maxWeeks} weeks (4–52). Re-declare with the Conventions button above; nothing here is fitted from the record.`),
+        h('ul', { class: 'stack' },
+          h('li', null, 'Split conformal (Vovk et al. 2005; Angelopoulos & Bates 2021): calibration residuals are the absolute week-over-week changes of strictly-prior weeks; k = ceil((n+1)·coverage); the achieved coverage k/(n+1) is printed. When k > n the band is refused, never extended to infinity.'),
+          h('li', null, 'Yule (1903) / Simpson aggregation bias: pooled Σcross-branch/Σobjectives and the unweighted mean of unit rates are printed side by side, with their gap. A span count that changes after a reorganisation moves the mean without moving the pooled rate.'),
+          h('li', null, 'Median coalition size is the median of each span’s own frozen median — labelled as such, not a pooled median of clusters.'),
+          h('li', null, 'RULE-JUR-05 opens at most one governed decision per ISO week on a published crossing, with a rolls-up-to edge per executive seat. It never redraws a boundary, never edits a reading and never accepts itself.'),
+          h('li', null, 'A band crossing is an anomaly under DECLARED exchangeability, not a causal finding. Small-cell suppression is a counted refusal, not differential privacy. Local seats are workflow declarations, not authentication.')),
+        table({
+          caption: 'Every cross-week drift refusal this screen can print',
+          columns: [{ label: 'Code', key: 'key' }, { label: 'Printed reason', key: 'text' }],
+          rows: Object.entries(report.refusals).map(([key, text]) => ({ key, text })),
+        })) }));
+}
+
 function methodPanel(ctx, read) {
   const conventions = read.conventions || jurConventions({});
   const rows = Object.keys(JUR_CONVENTION_DEFAULTS).map((key) => ({
@@ -822,6 +966,7 @@ export function renderJurisdiction(ctx) {
     options: () => optionsPanel(ctx, read),
     redraw: () => redrawPanel(ctx, read),
     grades: () => gradesPanel(ctx, read),
+    drift: () => driftPanel(ctx),
     method: () => methodPanel(ctx, read),
   };
 

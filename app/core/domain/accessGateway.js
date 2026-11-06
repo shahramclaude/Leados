@@ -118,7 +118,7 @@ const groups = [
   ['record-fit', 'fitScan fitClassify'],
   ['govern-fit', 'fitSetConventions'],
   // ADR-0109 / ADR-0111: the Jurisdiction Compiler's writes and scoped reads.
-  ['record-jurisdiction', 'jurScan jurAnchorWork'],
+  ['record-jurisdiction', 'jurScan jurAnchorWork jurDriftScan'],
   ['govern-jurisdiction', 'jurSetConventions'],
   // ADR-0092: the Differencing Defender. Publishing is an act every altitude
   // performs, so the command right is open at every rank (the action enforces the
@@ -182,6 +182,10 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // here because a module whose reads are absent from SAFE_READS is unreadable
 // under enforcement while its writes are still gated.
 'jurRead', 'jurHygiene', 'jurBriefText', 'jurCsvRows', 'jurConventions', 'jurAttentionCount', 'jurSpanRollUp', 'jurBook',
+// ADR-0115: the seat-scoped cross-week drift reads. The verdict itself is
+// derived from RULE-JUR-04's frozen readings, so a read absent from SAFE_READS
+// would make the VP/chief surface vanish exactly when enforcement is on.
+'jurDriftRead', 'jurDriftCsvRows', 'jurDriftBriefText',
 // ADR-0113: the agenda ledger's read surface. Registered for the same reason as
 // the modules above — a read absent from SAFE_READS is unreadable under
 // enforcement while its writes are still gated.
