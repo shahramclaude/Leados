@@ -789,6 +789,9 @@ export function createStore(options = {}) {
       ...(postCommitRules === undefined ? {} : { rules: postCommitRules }),
       ...(Array.isArray(options.rules) ? { rules: options.rules } : {}),
       ...(Array.isArray(options.sourceEvents) ? { sourceEvents: options.sourceEvents } : {}),
+      // Explicit replays may request a larger, clamped event budget. Ordinary
+      // writes never pass this and retain the production safety cap.
+      ...(Number.isInteger(options.eventBudget) ? { eventBudget: options.eventBudget } : {}),
     });
     lastPropagationMetrics = {
       ...metrics,

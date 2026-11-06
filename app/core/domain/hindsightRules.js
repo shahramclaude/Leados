@@ -34,6 +34,7 @@ import { addDays, dayKey, weekKey } from '../time.js';
 import { ensureEntityLink } from './automation.js';
 import { buildSeats, activeSeat } from './seat.js';
 import { epistemicFindingIds } from './epistemicRules.js';
+import { diligenceFindingIds } from './diligenceRules.js';
 import { LEADER_ID } from './chain.js';
 import { auditLock, buildLockRecord } from './hindsight.js';
 import { hindsightConventions } from './hindsightSchema.js';
@@ -179,6 +180,10 @@ function lockPass(draft, ctx, out, conventions) {
     if (marker && marker.decisionId) ownDecisions.add(marker.decisionId);
   }
   for (const id of epistemicFindingIds(draft)) ownDecisions.add(id);
+  // ADR-0104: the Diligence Ledger's governed gap/dark findings are audit
+  // output too — they have no operational information set to freeze. Declare
+  // the exclusion explicitly so a pruned marker cannot resurrect one.
+  for (const id of diligenceFindingIds(draft)) ownDecisions.add(id);
   let createdN = 0;
   const ordered = [...decisions].sort((a, b) => String(b?.date || '').localeCompare(String(a?.date || '')));
   for (const decision of ordered) {

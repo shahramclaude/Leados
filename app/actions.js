@@ -25,6 +25,7 @@ import { createFreezeLineActions } from './core/domain/freezeLineActions.js';
 import { createReputationActions } from './core/domain/reputationalCapitalActions.js';
 import { createHindsightActions } from './core/domain/hindsightActions.js';
 import { createEpistemicActions } from './core/domain/epistemicActions.js';
+import { createDiligenceActions } from './core/domain/diligenceActions.js';
 import { createSpanCalibrationActions } from './core/domain/spanCalibrationActions.js';
 // ADR-0092: the Differencing Defender's API mixin — the publication register is a
 // command boundary like every other module's.
@@ -67,7 +68,7 @@ import { createBoardActions } from './core/domain/boardActions.js';
 import { createIdentityActions } from './core/domain/identityActions.js';
 import { guardApi } from './core/domain/accessGateway.js';
 import { analyzeMitigationRobustness, robustnessEvidenceKey, robustnessDecision, ROBUSTNESS_EVENT } from './core/domain/mitigationRobustness.js';
-import { DEFAULT_POST_COMMIT_RULES } from './core/domain/postCommit.js';
+import { DEFAULT_POST_COMMIT_RULES, MAX_REPLAY_EVENT_BUDGET } from './core/domain/postCommit.js';
 // ADR-0076: the Operating Seat — an enforced, altitude-aware access boundary
 // and a vertical roll-up derived live from the reporting tree (no new schema).
 import { seatReport, buildSeats, activeSeat, canAct } from './core/domain/seat.js';
@@ -6755,6 +6756,12 @@ export function createApi(store, options = {}) {
       } : {
         type: 'watch.triaged', entity: 'alert', entityId: alertId,
         summary: `Retry case promotion for confirmed ${alert.seriesId} alert`,
+      }, {
+        // An operator-initiated retry of a FAILED promotion is an explicit
+        // whole-workspace replay, not an ordinary incremental write. Give it
+        // the same bounded rehearsal budget as the assurance control room so a
+        // populated workspace is not truncated into fake rolled-back rules.
+        eventBudget: MAX_REPLAY_EVENT_BUDGET,
       });
       if (store.state.meta.revision === revision) return fail('Workspace is locked or writes are blocked.');
       const recorded = (store.state.watchAlerts || []).find((row) => row && row.id === alertId);
@@ -19715,6 +19722,13 @@ export function createApi(store, options = {}) {
   // expiry, the calibration review and the once-only grade are all produced by
   // RULE-EPI-01..05 on the same spine in the SAME atomic transaction.
   Object.assign(api, createEpistemicActions(store, { now: clock, idFactory: id }));
+  // ADR-0104: the Diligence Ledger. Recording a consultation, pre-registering a
+  // process forecast, scanning and re-declaring the conventions are declared
+  // commands; every read is a seat-scoped SAFE_READ. The knowable set is FROZEN
+  // automatically by RULE-DLG-01 on the shared spine in the SAME ATOMIC
+  // TRANSACTION as the decision, with one `diligence-for` edge, one
+  // `deliberates-on` edge per fact and one `rolls-up-to` edge per ancestor.
+  Object.assign(api, createDiligenceActions(store, { now: clock, idFactory: id }));
   // ADR-0100: the Discretion Calibrator. Freezing measures the record and changes
   // nothing; only a dated, full-access adoption moves the ladder, and the spine
   // registers the reading, opens any falsified-rung decision and grades due

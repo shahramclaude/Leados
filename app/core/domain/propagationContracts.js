@@ -120,6 +120,7 @@ import { spanCalibrationRule } from './spanCalibrationRules.js';
 import { reputationalCapitalRule } from './reputationalCapitalRules.js';
 import { hindsightRule } from './hindsightRules.js';
 import { epistemicRule } from './epistemicRules.js';
+import { diligenceRule } from './diligenceRules.js';
 import { cadenceRule } from './cadenceRules.js';
 import { carryoverRule } from './carryoverRules.js';
 
@@ -675,6 +676,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'hindsightRules.js',
     purpose: 'RULE-HND-01 freezes one information set per decision: the records the shared link spine had ALREADY tied to it on or before the decision date (each link carries `createdOn`, so a retrospective lock reconstructs the same set exactly), plus the decision record\'s own quality bar as it stood then. The lock becomes a graph node with one `locks` edge to the decision, up to twenty `consults` edges to the facts it rested on, and one `rolls-up-to` edge per leadership ancestor of the owning span, in the SAME atomic transaction. RULE-HND-02 opens exactly ONE governed process review, ever, for a decision whose frozen process was thin and whose recorded outcome was nevertheless good — the successful mistake nobody reviews. RULE-HND-03 opens one governed decision when a lock consulted less than the declared share of the facts already on the record at decision time, naming the missed COUNT and never the missing content. RULE-HND-04 opens at most one bounded review prompt per lock per ISO week when a decision passes its own review date plus the declared grace ungraded. The module never edits a decision, never rewrites a lock, never infers relevance, never charges a decision for a fact that arrived after it, never rates or names a person, and never closes a human decision. Marker-idempotent, pausable by hindsightAutoPropagate, and an explicit scan always runs.',
     writes: ['decisionLocks', 'decisionLockMarkers', 'decisions', 'links'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: diligenceRule,
+    module: 'diligenceRules.js',
+    purpose: 'RULE-DLG-01 FREEZE reads five evidence classes other modules OWN (cases, premises, delegations, goals and strictly-earlier settled decisions) and freezes one typed-pointer knowable set per decision at the moment the decision is committed. It writes one `diligence-for` edge to that decision, one `deliberates-on` edge per fact pointer, and one `rolls-up-to` edge per leadership ancestor of the owning span IN THE SAME ATOMIC TRANSACTION: the transaction that records a call also makes the frontier it leapt over visible above the span. RULE-DLG-02 GAP opens exactly ONE governed decision per span per ISO week when a settled frontier sits below the declared diligence floor. RULE-DLG-03 DARK opens exactly ONE governed decision per class per ISO week when the whole Jeffreys Beta(1/2,1/2) 90% credible interval on the consulted share of a class sits below the declared ceiling — the class the organisation systematically walks past. RULE-DLG-04 GRADE grades a pre-declared process forecast exactly ONCE, out of sample, after settlement, by Brier skill against a strictly-prior 0.5 base rate; an overconfident forecast is printed, not hidden. Consultation is append-only evidence that a leader LOOKED: `used`, `deferred` and `ruled-out` (with a required reason) all count as diligence, so a dismissed fact is not silently charged as a miss. The module never edits the records of another module, never infers relevance from a title, never back-fills a frontier at upgrade, never rates or names a person, and never closes a human decision. Marker-idempotent, bounded, pausable by diligenceAutoPropagate, and an explicit scan always runs.',
+    writes: ['diligenceChecklists', 'diligenceConsults', 'diligenceGrades', 'diligenceMarkers', 'decisions', 'links'],
     emits: [],
     scansWorkspace: true,
   },

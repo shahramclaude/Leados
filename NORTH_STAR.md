@@ -1,3 +1,7 @@
+## 2026-11-06 — Session 144: measure the act of looking, not just the outcome
+
+The workspace already recorded decisions, outcomes, links, unread signals and forecast error. It could not record the most ordinary act of judgement: *I read this fact and deliberately ruled it out.* The Diligence Ledger closes that gap by freezing what was knowable at decision time and making looking-and-dismissing a dated, append-only act. This is not a score on a person; it is an instrument that can refuse its own rate when the evidence is too thin. One decision commit now makes the frontier visible from frontline to C-suite through the same event spine. Competitive benchmark: decision-provenance audit trails, "alternatives rejected" forensic logs, manual decision registers and prediction journals — none shown to derive and grade a leader's own *process* against a frozen knowable set at every altitude. Gap claim, not market-first claim. `[UNVERIFIED]`: full repository audit and real-browser AT walkthrough.
+
 # LeadOS North Star (do not dilute — this is binding project doctrine)
 
 ## Mission

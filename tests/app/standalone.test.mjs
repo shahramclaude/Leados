@@ -188,7 +188,14 @@ test('standalone artifact exists and is a single inline HTML document', () => {
   // modules = 16,900 bytes per module, DOWN again from Session 135's 17,102.
   // The ceiling only tracks module count; the density bound below is what
   // catches a module being inlined twice.
-  assert.ok(bytes < 8_700_000, `standalone file is unexpectedly large (${bytes} bytes)`);
+  // Session 144 (ADR-0104) added six modules (diligenceRegistry,
+  // diligenceSchema, diligence, diligenceRules, diligenceActions,
+  // views/diligence) plus the shell/schema/CSV/graph/permission/manifest
+  // wiring. Measured build: 8,706,536 bytes / 516 modules = 16,873 bytes per
+  // module, DOWN again from Session 142's 16,900. The ceiling only tracks
+  // module count; the bytes-per-module bound below is what catches a module
+  // being inlined twice.
+  assert.ok(bytes < 9_000_000, `standalone file is unexpectedly large (${bytes} bytes)`);
   const declaredModules = Number((html.match(/content="[^"]*?(\d+) source modules/) || [])[1]);
   assert.ok(declaredModules > 100, `expected the build to declare its module count (got ${declaredModules})`);
   const bytesPerModule = Math.round(bytes / declaredModules);

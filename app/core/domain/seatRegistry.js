@@ -109,6 +109,16 @@ export const RECORD_POLICIES = Object.freeze({
   epistemicObservations: { classKey: 'unit', label: 'Frozen belief observations', route: '#/epistemic?panel=calibration' },
   epistemicGrades: { classKey: 'unit', label: 'Once-only belief grades', route: '#/epistemic?panel=calibration' },
   epistemicMarkers: { classKey: 'unit', label: 'Epistemic idempotency markers', route: '#/epistemic' },
+  // ADR-0104: a frozen knowable set is a statement about a DECISION and the
+  // typed fact pointers the record held on that date, so it is classed with the
+  // units it rolls up from — never with individual detail. Consultations carry
+  // a written reason and are therefore held out of declared-seat view state
+  // entirely; the scoped report is the only reader. Grades and markers carry
+  // counts and ids only.
+  diligenceChecklists: { classKey: 'unit', label: 'Frozen knowable sets', route: '#/diligence?panel=frontier' },
+  diligenceConsults: { classKey: 'unit', label: 'Dated diligence consultations', route: '#/diligence?panel=frontier' },
+  diligenceGrades: { classKey: 'unit', label: 'Once-only process-forecast grades', route: '#/diligence?panel=forecasts' },
+  diligenceMarkers: { classKey: 'unit', label: 'Diligence idempotency markers', route: '#/diligence' },
   // ADR-0086: a disclosure release is a bounded authority contract, so it is
   // readable at every altitude that can hold one — and its ledger is exactly
   // what makes the widening auditable afterwards.
@@ -393,6 +403,13 @@ export const ACTION_RIGHTS = Object.freeze({
   // director+ AND the handler requires a full-access seat.
   'record-epistemic-unknown': { minRank: 1, maxRank: 5, label: 'Record, answer, dismiss or freeze a belief in the epistemic ledger' },
   'govern-epistemic': { minRank: 4, maxRank: 5, label: 'Re-declare the epistemic-ledger conventions' },
+  // ADR-0104: recording that a leader LOOKED at a dated fact (used, deferred,
+  // or ruled out WITH a reason), pre-registering a process forecast and running
+  // an explicit scan are every altitude's business. Re-declaring the floors
+  // moves every frontier, every class interval and every grade in the workspace
+  // at once, so it is rank 4-5 AND the handler requires a full-access seat.
+  'record-diligence-consult': { minRank: 1, maxRank: 5, label: 'Record a consultation, pre-register a process forecast or scan the diligence ledger' },
+  'govern-diligence': { minRank: 4, maxRank: 5, label: 'Re-declare the diligence-ledger conventions' },
   // ADR-0084: authoring the operating model is an org-design act — it declares
   // how every position at a level spends its week and prices structural change.
   // The same right that edits a reporting line authors the model of the lines.
