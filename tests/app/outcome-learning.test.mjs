@@ -105,7 +105,7 @@ test('outside view refuses a thin record and shrinks a thick one toward 50%', ()
 });
 
 test('conventions clamp, and every normalizer fails closed on a corrupt row', () => {
-  assert.equal(SCHEMA_VERSION, 111);
+  assert.equal(SCHEMA_VERSION, 112);
   const c = normalizeOutcomeSettings({ outcomeMinGrades: 999, outcomeConformalCoverage: 5, outcomeAutoLearn: false });
   assert.equal(c.outcomeMinGrades, 25); assert.equal(c.outcomeConformalCoverage, 0.95); assert.equal(c.outcomeAutoLearn, false);
   const warnings = [];
@@ -128,7 +128,7 @@ test('conventions clamp, and every normalizer fails closed on a corrupt row', ()
 test('v109 is additive: three empty ledgers, declared settings, zero back-fill', () => {
   const old = { schemaVersion: 108, settings: { leaderName: 'Keep', executionAutoReconcile: false } };
   const m = migrate(old);
-  assert.equal(m.raw.schemaVersion, 111); assert.equal(m.raw.settings.leaderName, 'Keep');
+  assert.equal(m.raw.schemaVersion, 112); assert.equal(m.raw.settings.leaderName, 'Keep');
   assert.equal(m.raw.settings.executionAutoReconcile, false);
   assert.deepEqual(m.raw.outcomeContracts, []); assert.deepEqual(m.raw.outcomeGrades, []); assert.deepEqual(m.raw.outcomeMarkers, []);
   assert.equal(m.raw.settings.outcomeMinGrades, 5);
@@ -145,7 +145,7 @@ test('the 87th rule/contract, rights, safe reads, panel and CSV scope are regist
   const contract = PROPAGATION_CONTRACTS.find((c) => c.rule === outcomeRule);
   assert.ok(contract && contract.writes.includes('outcomeContracts') && contract.writes.includes('links'));
   assert.equal(PROPAGATION_CONTRACTS.length, DEFAULT_POST_COMMIT_RULES.length);
-  assert.equal(DEFAULT_POST_COMMIT_RULES.length, 89);
+  assert.equal(DEFAULT_POST_COMMIT_RULES.length, 90);
   assert.equal(API_RIGHTS.outcomeScan, 'record-outcome-learning');
   assert.equal(API_RIGHTS.outcomeSetConventions, 'govern-outcome-learning');
   for (const name of ['outcomeRead', 'outcomeReceipt', 'outcomeBriefText', 'outcomeCsvRows']) assert.ok(SAFE_READS.has(name), name);

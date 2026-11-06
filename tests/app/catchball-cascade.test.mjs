@@ -48,14 +48,14 @@ const proposal = (toSeatId = 'lead1', extra = {}) => ({ title: 'Improve the deli
 
 // Schema and graph are additive; imported rows cannot silently become accepted pacts.
 test('v88 migration, record validation, graph vocabulary and spine parity', () => {
-  assert.equal(SCHEMA_VERSION, 111);
+  assert.equal(SCHEMA_VERSION, 112);
   const migrated = migrate({ schemaVersion: 88, settings: { leaderName: 'Keep' }, people: [] });
-  assert.deepEqual(migrated.applied, ['88 → 89', '89 → 90', '90 → 91', '91 → 92', '92 → 93', '93 → 94', '94 → 95', '95 → 96', '96 → 97', '97 → 98', '98 → 99', '99 → 100', '100 → 101', '101 → 102', '102 → 103', '103 → 104', '104 → 105', '105 → 106', '106 → 107', '107 → 108', '108 → 109', '109 → 110', '110 → 111']);
+  assert.deepEqual(migrated.applied, ['88 → 89', '89 → 90', '90 → 91', '91 → 92', '92 → 93', '93 → 94', '94 → 95', '95 → 96', '96 → 97', '97 → 98', '98 → 99', '99 → 100', '100 → 101', '101 → 102', '102 → 103', '103 → 104', '104 → 105', '105 → 106', '106 → 107', '107 → 108', '108 → 109', '109 → 110', '110 → 111', '111 → 112']);
   assert.deepEqual(migrated.raw.catchballPacts, []);
   assert.deepEqual(migrated.raw.catchballRounds, []);
   assert.equal(migrated.raw.settings.leaderName, 'Keep');
   const afterConcordance = migrate({ schemaVersion: 89, expectationRounds: [{ id: 'existing-round' }], settings: {} });
-  assert.deepEqual(afterConcordance.applied, ['89 → 90', '90 → 91', '91 → 92', '92 → 93', '93 → 94', '94 → 95', '95 → 96', '96 → 97', '97 → 98', '98 → 99', '99 → 100', '100 → 101', '101 → 102', '102 → 103', '103 → 104', '104 → 105', '105 → 106', '106 → 107', '107 → 108', '108 → 109', '109 → 110', '110 → 111']);
+  assert.deepEqual(afterConcordance.applied, ['89 → 90', '90 → 91', '91 → 92', '92 → 93', '93 → 94', '94 → 95', '95 → 96', '96 → 97', '97 → 98', '98 → 99', '99 → 100', '100 → 101', '101 → 102', '102 → 103', '103 → 104', '104 → 105', '105 → 106', '106 → 107', '107 → 108', '108 → 109', '109 → 110', '110 → 111', '111 → 112']);
   assert.equal(afterConcordance.raw.expectationRounds[0].id, 'existing-round');
   assert.deepEqual(afterConcordance.raw.catchballPacts, []);
   const warnings = [];

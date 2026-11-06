@@ -1165,6 +1165,9 @@ input.is-invalid, textarea.is-invalid, select.is-invalid { border-color: var(--b
 
 .prep-list { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
 .prep-list-ordered { padding-left: 20px; list-style: decimal; }
+/* ADR-0113: the printed provenance list is a read model, not a picker. It is
+   numbered like the agenda but deliberately carries no checkbox control. */
+.prep-provenance-list { padding-left: 20px; list-style: decimal; }
 .prep-item {
   display: flex; flex-direction: column; gap: 2px;
   padding: 9px 0; border-bottom: 1px solid var(--line);

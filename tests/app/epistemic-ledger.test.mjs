@@ -139,7 +139,7 @@ function harness(state) {
 /* ------------------------------------------------------------------ schema */
 
 test('Schema v105 migrates additively: empty ledgers, declared conventions, nothing back-filled', () => {
-  assert.equal(SCHEMA_VERSION, 111);
+  assert.equal(SCHEMA_VERSION, 112);
   const base = createEmptyState(NOW_ISO);
   const legacy = { ...base, schemaVersion: 104 };
   delete legacy.epistemicUnknowns;
@@ -149,7 +149,7 @@ test('Schema v105 migrates additively: empty ledgers, declared conventions, noth
   legacy.settings = { ...base.settings };
   delete legacy.settings.epistemicWindowDays;
   const migrated = migrate(legacy);
-  assert.equal(migrated.raw.schemaVersion, 111);
+  assert.equal(migrated.raw.schemaVersion, 112);
   assert.deepEqual(migrated.raw.epistemicUnknowns, []);
   assert.deepEqual(migrated.raw.epistemicObservations, []);
   assert.deepEqual(migrated.raw.epistemicGrades, []);

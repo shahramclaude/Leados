@@ -156,18 +156,18 @@ const verdictOf = (evaluation, key) => evaluation.rows.find((row) => row.key ===
 /* ------------------------------------------------------------ schema/wiring */
 
 test('schema v91 (main) then v92/v93: board collections arrive additively', () => {
-  assert.equal(SCHEMA_VERSION, 111);
+  assert.equal(SCHEMA_VERSION, 112);
   assert.equal(typeof MIGRATIONS[90], 'function');
   const before = { ...createEmptyState(NOW.toISOString()), schemaVersion: 90 };
   delete before.boardMemos;
   delete before.boardMarkers;
   const migrated = migrate(before);
-  assert.deepEqual(migrated.applied, ['90 → 91', '91 → 92', '92 → 93', '93 → 94', '94 → 95', '95 → 96', '96 → 97', '97 → 98', '98 → 99', '99 → 100', '100 → 101', '101 → 102', '102 → 103', '103 → 104', '104 → 105', '105 → 106', '106 → 107', '107 → 108', '108 → 109', '109 → 110', '110 → 111'], 'each step additive');
-  assert.equal(migrated.raw.schemaVersion, 111);
+  assert.deepEqual(migrated.applied, ['90 → 91', '91 → 92', '92 → 93', '93 → 94', '94 → 95', '95 → 96', '96 → 97', '97 → 98', '98 → 99', '99 → 100', '100 → 101', '101 → 102', '102 → 103', '103 → 104', '104 → 105', '105 → 106', '106 → 107', '107 → 108', '108 → 109', '109 → 110', '110 → 111', '111 → 112'], 'each step additive');
+  assert.equal(migrated.raw.schemaVersion, 112);
   assert.deepEqual(migrated.raw.boardMemos, []);
   assert.deepEqual(migrated.raw.boardMarkers, []);
   const normalized = normalizeState(migrated.raw, { now: NOW }).state;
-  assert.equal(normalized.schemaVersion, 111);
+  assert.equal(normalized.schemaVersion, 112);
   assert.equal(normalized.settings.boardCellFloor, 5);
   assert.equal(normalized.settings.boardEvidenceFloor, 4);
   assert.equal(normalized.settings.boardMaterialityPct, 10);
@@ -209,7 +209,7 @@ test('the rule is on the shared spine, has an auditable contract, and cannot out
   // was failing before that session; ADR-0092 brought it to 76, ADR-0094
   // (RULE-PIC-01..04) to 77 and ADR-0095 (RULE-RAL-01..04, one rule on the shared
   // spine) brings it to 78.
-  assert.equal(DEFAULT_POST_COMMIT_RULES.length, 89, 'the shared spine includes cadence, Strategy Cycle (RULE-SCR), Envoy (RULE-ENV), Federation (RULE-FED), Differencing (RULE-DFR), the Prospective Contract (RULE-PIC), the Robust Allocation Terminal (RULE-RAL), the Internal Clearinghouse (RULE-CLR), the Discretion Calibrator (RULE-SPC) and the Reputational Capital Ledger (RULE-RCL) and, from ADR-0108, the Decision-Fit Ledger (RULE-FIT)');
+  assert.equal(DEFAULT_POST_COMMIT_RULES.length, 90, 'the shared spine includes cadence, Strategy Cycle (RULE-SCR), Envoy (RULE-ENV), Federation (RULE-FED), Differencing (RULE-DFR), the Prospective Contract (RULE-PIC), the Robust Allocation Terminal (RULE-RAL), the Internal Clearinghouse (RULE-CLR), the Discretion Calibrator (RULE-SPC) and the Reputational Capital Ledger (RULE-RCL) and, from ADR-0108, the Decision-Fit Ledger (RULE-FIT)');
   assert.ok(DEFAULT_POST_COMMIT_RULES.includes(boardRule));
   const contract = contractFor(boardRule);
   assert.ok(contract, 'boardRule has a declared contract');

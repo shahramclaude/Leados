@@ -79,7 +79,7 @@ const edges = (state, relation) => (Array.isArray(state.links) ? state.links : [
 /* --------------------------------------------------------- 1. storage */
 
 test('v111 is additive, declared, fail-closed and invents no jurisdiction fact', () => {
-  assert.equal(SCHEMA_VERSION, 111);
+  assert.equal(SCHEMA_VERSION, 112);
   for (const key of ['jurFindings', 'jurReadings', 'jurMarkers']) assert.ok(COLLECTIONS.includes(key), key);
   const empty = createEmptyState(NOW.toISOString());
   assert.deepEqual(empty.jurFindings, []);
@@ -89,8 +89,8 @@ test('v111 is additive, declared, fail-closed and invents no jurisdiction fact',
   assert.ok(jurConventions(empty.settings).jurRedrawUnits > 0, 'a redraw with zero cost would always win');
 
   const migrated = migrate({ schemaVersion: 109, settings: {}, people: [], decisions: [] });
-  assert.equal(migrated.raw.schemaVersion, 111);
-  assert.equal(migrated.applied.at(-1), '110 → 111');
+  assert.equal(migrated.raw.schemaVersion, 112);
+  assert.equal(migrated.applied.at(-1), '111 → 112');
   assert.deepEqual(migrated.raw.jurFindings, []);
   assert.deepEqual(migrated.raw.jurReadings, []);
   assert.deepEqual(migrated.raw.jurMarkers, []);
@@ -110,8 +110,8 @@ test('v111 is additive, declared, fail-closed and invents no jurisdiction fact',
 });
 
 test('the engine shares the one spine, the graph, the rights and the CSV register', () => {
-  assert.equal(DEFAULT_POST_COMMIT_RULES.length, 89);
-  assert.equal(PROPAGATION_CONTRACTS.length, 89, '1:1 rule/contract parity');
+  assert.equal(DEFAULT_POST_COMMIT_RULES.length, 90);
+  assert.equal(PROPAGATION_CONTRACTS.length, 90, '1:1 rule/contract parity');
   assert.ok(DEFAULT_POST_COMMIT_RULES.includes(jurisdictionRule));
   const contract = PROPAGATION_CONTRACTS.find((c) => c.rule === jurisdictionRule);
   assert.ok(contract, 'RULE-JUR has a declared contract');

@@ -174,9 +174,9 @@ function thinScenario() {
 /* ------------------------------------------------------------------ schema */
 
 test('Schema v104 migrates additively: empty lock ledgers, declared conventions, nothing back-filled', () => {
-  assert.equal(SCHEMA_VERSION, 111);
+  assert.equal(SCHEMA_VERSION, 112);
   const migrated = migrate({ schemaVersion: 103, settings: { leaderName: 'Keep this' } });
-  assert.deepEqual(migrated.applied, ['103 → 104', '104 → 105', '105 → 106', '106 → 107', '107 → 108', '108 → 109', '109 → 110', '110 → 111']);
+  assert.deepEqual(migrated.applied, ['103 → 104', '104 → 105', '105 → 106', '106 → 107', '107 → 108', '108 → 109', '109 → 110', '110 → 111', '111 → 112']);
   assert.deepEqual(migrated.raw.decisionLocks, []);
   assert.deepEqual(migrated.raw.decisionLockMarkers, []);
   assert.equal(migrated.raw.settings.leaderName, 'Keep this');
@@ -336,7 +336,7 @@ test('all four quadrants are reachable from the frozen claim and the live outcom
 
 test('RULE-HND-01 registers the lock as a graph node with locks / consults / rolls-up-to in the same transaction', () => {
   assert.ok(DEFAULT_POST_COMMIT_RULES.includes(hindsightRule));
-  assert.equal(DEFAULT_POST_COMMIT_RULES.length, 89);
+  assert.equal(DEFAULT_POST_COMMIT_RULES.length, 90);
   assert.equal(PROPAGATION_CONTRACTS.length, DEFAULT_POST_COMMIT_RULES.length);
   assert.ok(LINK_ENTITY_TYPES.includes('hindsightlock'));
   assert.ok(LINK_RELATIONS.includes('locks') && LINK_RELATIONS.includes('consults'));
