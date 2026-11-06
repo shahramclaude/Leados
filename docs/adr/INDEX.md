@@ -129,3 +129,5 @@ Format: copy `0001-record-architecture-decisions.md`, number sequentially, statu
 - [ADR-0106](0106-evidence-execution-loop.md) — Evidence-based execution closure + role-first navigation: terminal-evidence registry, RULE-EXE-01 reconciliation, ancestor proof edges, Mission execution roll-up and altitude-first sidebar (Session 146, Schema v108).
 - [ADR-0105](0105-mission-command-flow.md) — Mission Command Flow: one reviewed note, one atomic case + actions + hierarchy receipt (Session 145, Schema v107).
 - [ADR-0104: The Diligence Ledger — before you decided, what was KNOWABLE and did the organisation actually look? A five-module frozen frontier written with one `diligence-for`, one `deliberates-on` per fact and one `rolls-up-to` per ancestor in the SAME atomic commit; consulted/ruled-out-with-a-reason/deferred; Wilson coverage, exact Jeffreys dark classes and one once-only Brier grade of a pre-declared process forecast (`#/diligence`, Schema v106, CSV #100)](./0104-diligence-ledger.md)
+
+- [ADR-0109 — The Jurisdiction Compiler](./0109-jurisdiction-compiler.md) — Session 149, Schema v111, `#/jurisdiction`, RULE-JUR-01..04, CSV #103.

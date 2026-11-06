@@ -30,6 +30,10 @@ import { createHindsightActions } from './core/domain/hindsightActions.js';
 import { createEpistemicActions } from './core/domain/epistemicActions.js';
 import { createDiligenceActions } from './core/domain/diligenceActions.js';
 import { createFitActions } from './core/domain/decisionFitActions.js';
+// ADR-0109: the Jurisdiction Compiler. Its findings, governed boundary
+// decisions, typed edges, once-only grades and identity-free span readings are
+// all produced by RULE-JUR-01..04 on the shared spine, never here.
+import { createJurisdictionActions } from './core/domain/jurisdictionActions.js';
 import { createSpanCalibrationActions } from './core/domain/spanCalibrationActions.js';
 // ADR-0092: the Differencing Defender's API mixin — the publication register is a
 // command boundary like every other module's.
@@ -19740,6 +19744,9 @@ export function createApi(store, options = {}) {
   // ADR-0108: the Decision-Fit Ledger. Reads are pure adapters; the three writes
   // are scan / classify / conventions, all on the shared spine.
   Object.assign(api, createFitActions(store, { now: clock, idFactory: id }));
+  // ADR-0109: the Jurisdiction Compiler's scan and convention writes pass
+  // through the same reviewed gateway as every other terminal.
+  Object.assign(api, createJurisdictionActions(store, { now: clock, idFactory: id }));
   // ADR-0100: the Discretion Calibrator. Freezing measures the record and changes
   // nothing; only a dated, full-access adoption moves the ladder, and the spine
   // registers the reading, opens any falsified-rung decision and grades due

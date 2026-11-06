@@ -132,9 +132,9 @@ function commitReorg(api) {
 /* ------------------------------------------------------------------ schema */
 
 test('Schema v101 migrates additively: empty ledgers, declared conventions, no inferred freeze line', () => {
-  assert.equal(SCHEMA_VERSION, 110);
+  assert.equal(SCHEMA_VERSION, 111);
   const migrated = migrate({ schemaVersion: 100, settings: { leaderName: 'Keep this' } });
-  assert.deepEqual(migrated.applied, ['100 → 101', '101 → 102', '102 → 103', '103 → 104', '104 → 105', '105 → 106', '106 → 107', '107 → 108', '108 → 109', '109 → 110']);
+  assert.deepEqual(migrated.applied, ['100 → 101', '101 → 102', '102 → 103', '103 → 104', '104 → 105', '105 → 106', '106 → 107', '107 → 108', '108 → 109', '109 → 110', '110 → 111']);
   assert.deepEqual(migrated.raw.freezeReadings, []);
   assert.deepEqual(migrated.raw.freezeMarkers, []);
   assert.equal(migrated.raw.settings.leaderName, 'Keep this');

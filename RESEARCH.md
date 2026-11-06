@@ -1,3 +1,59 @@
+## 2026-11-06 — Hierarchy-native governance allocation hunt (Session 149)
+
+Search-result snippets and vendor documentation only; **no vendor product was
+independently tested**. Every parity claim below is **[UNVERIFIED]** until
+personally reproduced. Tagged by organizational altitude; implemented /
+planned / rejected with a one-line reason.
+
+**The hunt.** Queries covered AI-native enterprise decision intelligence 2025,
+predictive org-hierarchy roll-up, Workday / Glean / Viva / Visier / Power BI
+Copilot, autonomous decision intelligence, AI coaching and roleplay scenario
+simulation, and AI intake classification / auto-routing. Sources read: Glean/Workday
+*AI Transformation 100* (a Workday people-analytics VP describes unstructured
+Slack/project data flowing into one AI system for steering-committee briefs and
+drill-down, and says org-chart roles must be redrawn to find cross-silo patterns);
+a 2025 opinion piece naming Fractal / Google DeepMind×McKinsey / C3.ai / Palantir
+"Autonomous Decision Intelligence" and Microsoft Viva Insights + CultureAmp NLP
+culture maps; a 2026 people-analytics roundup (Visier agentic scenario planning,
+Workday augmented narratives, Power BI Copilot chat-with-data); Viva/Workday
+comparisons on role-based narrative insights vs collaboration metadata; and AI
+coaching / intake roundups (Zapier classify-and-route, EasyCoach-style branching
+roleplay, Calendly smart intake routing, Fireflies/Otter transcripts).
+
+**The gap [all altitudes].** Adjacent capabilities are real: AI briefs, people
+analytics with drill-down, decision intelligence, culture sensing, AI coaching
+scripts, intake auto-routing, board-ready summaries, scenario planning. What the
+snippets did NOT verify is a product that (a) treats the reporting tree as a
+computable governance model, (b) detects a cross-branch objective from work
+records that already exist in cases / decisions / funded portfolio, (c) prices
+Riker minimal coalition vs LCA escalation vs Williamson boundary redraw with
+declared transaction costs, (d) opens exactly one governed human decision and
+grades the forecast once out of sample by Brier skill, and (e) rolls
+identity-free, small-cell-suppressed counts up five altitudes on the SAME
+append-only event spine with zero re-entry. **[UNVERIFIED]** category-first claim.
+
+**Implemented [all altitudes].** The Jurisdiction Compiler, ADR-0109 / Schema
+v111. Wilson lower bound as confidence (not a person rating), Luce softmax as
+route probability, Brier vs strictly-prior 0.5 as the grade, Ashby requisite
+variety as the escalation cost. Declared conventions, never fitted.
+
+**Planned [director / exec].** Boundary-redraw rehearsal (dry-run graph delta),
+cross-week jurisdiction drift with a printed exchangeability assumption, and the
+`chain.js` true multi-span LCA repair. See `ROADMAP.md` Session 149 head.
+
+**Rejected [all altitudes].** Sentiment/collaboration-metadata inference of
+cross-silo work (invents an unverifiable fact about people and leaks individual
+detail upward); a composite jurisdiction health score (hides disagreement the
+board needs); fitting coordination costs from past decisions (lets the ledger
+grade its own prior); auto-executing a reporting-line change (a human act of
+authority, not an automation).
+
+**Methodological caution.** A search snippet is evidence that a claim was made,
+not that a product behaves that way. The LeadOS claim is only about code in this
+repository and the tests that ran against it; the full `npm test` suite did not
+complete inside this session's budget, so cross-module parity with untouched
+modules is [UNVERIFIED] beyond the targeted suites that passed.
+
 ## 2026-11-06 — Delegation economics & authority pricing hunt (Session 148)
 
 Search-result snippets/documentation only; **no vendor product was independently

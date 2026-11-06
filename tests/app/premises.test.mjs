@@ -417,7 +417,7 @@ test('dependency TTS/TTR sensor produces dated, keyed, idempotent observations',
 /* ==================================================== 3. schema & actions */
 
 test('Schema v36: additive migration preserves premise data and adds outcome ledger', () => {
-  assert.equal(SCHEMA_VERSION, 110);
+  assert.equal(SCHEMA_VERSION, 111);
   assert.equal(DEFAULT_SETTINGS.premiseWatchPct, 55);
   assert.equal(DEFAULT_SETTINGS.premiseBreachPct, 30);
   assert.equal(DEFAULT_SETTINGS.premiseHalfLifeDays, 90);
@@ -427,12 +427,12 @@ test('Schema v36: additive migration preserves premise data and adds outcome led
   assert.deepEqual(empty.premises, []);
   assert.deepEqual(empty.premiseOutcomes, []);
   const migrated = migrate({ schemaVersion: 35, settings: {}, decisions: [], people: [], premises: [premise()] });
-  assert.equal(migrated.raw.schemaVersion, 110);
-  assert.equal(migrated.applied.at(-1), '109 → 110', 'the whole chain runs to the current schema');
+  assert.equal(migrated.raw.schemaVersion, 111);
+  assert.equal(migrated.applied.at(-1), '110 → 111', 'the whole chain runs to the current schema');
   assert.deepEqual(migrated.raw.premiseOutcomes, []);
   assert.equal(migrated.raw.premises.length, 1, 'existing premises retained');
   const state = normalizeState(migrated.raw, { now: NOW }).state;
-  assert.equal(state.schemaVersion, 110);
+  assert.equal(state.schemaVersion, 111);
   assert.deepEqual(state.premises, [state.premises[0]]);
   assert.deepEqual(state.premiseOutcomes, []);
   assert.ok(LINK_ENTITY_TYPES.includes('premise'));
@@ -725,7 +725,7 @@ test('PREM signals merge into Insights without inventing findings on an empty wo
 });
 
 test('CSV scope #35: opaque premise telemetry, no titles, statements, notes or names', () => {
-  assert.equal(CSV_EXPORTS.length, 101);
+  assert.equal(CSV_EXPORTS.length, 102);
   const spec = CSV_EXPORTS.find((s) => s.key === 'premises');
   assert.ok(spec);
   assert.equal(spec.sensitive, false);

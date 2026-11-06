@@ -79,16 +79,16 @@ const clone = (v) => JSON.parse(JSON.stringify(v));
 /* ------------------------------------------------------------------ */
 
 test('schema v79 is additive and invents no plan, task or grade', () => {
-  assert.equal(SCHEMA_VERSION, 110);
+  assert.equal(SCHEMA_VERSION, 111);
   const v78 = { ...createEmptyState(NOW.toISOString()), schemaVersion: 78 };
   delete v78.supplyPlans;
   delete v78.supplyMarkers;
   const migrated = migrate(v78);
-  assert.equal(migrated.applied.at(-1), '109 → 110', 'the whole chain runs to the current schema');
+  assert.equal(migrated.applied.at(-1), '110 → 111', 'the whole chain runs to the current schema');
   assert.deepEqual(migrated.raw.supplyPlans, []);
   assert.deepEqual(migrated.raw.supplyMarkers, []);
   const normalized = normalizeState(migrated.raw, { now: NOW });
-  assert.equal(normalized.state.schemaVersion, 110);
+  assert.equal(normalized.state.schemaVersion, 111);
   assert.deepEqual(normalized.state.supplyPlans, []);
 });
 

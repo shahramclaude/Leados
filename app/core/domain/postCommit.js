@@ -198,6 +198,13 @@ import { clearingRule } from './clearingRules.js';
 // a decision is committed or an explicit scan runs.
 import { diligenceRule } from './diligenceRules.js';
 import { decisionFitRule } from './decisionFitRules.js';
+// ADR-0109: the Jurisdiction Compiler. Registered immediately after the
+// Decision-Fit Ledger and BEFORE the Attention Market's final work-producing
+// pass, so the governed boundary decisions it opens are priced like any other
+// work in the SAME atomic transaction. Altitude is a dimension of THIS spine:
+// every finding fans `rolls-up-to` edges through the same reporting tree.
+// Root-event gated, marker-idempotent and pausable by jurAutoPropagate.
+import { jurisdictionRule } from './jurisdictionRules.js';
 // ADR-0107: the Outcome Learning Loop. Registered immediately AFTER the
 // execution reconciler so a one-shot grade reads the finished terminal-evidence
 // state in the SAME atomic transaction. Altitude is a dimension of THIS spine:
@@ -735,6 +742,14 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // Marker-idempotent, bounded and pausable. Runs after the diligence ledger so
   // the decisions it opens are priced by the market downstream.
   decisionFitRule,
+  // ADR-0109: RULE-JUR-01..04. A cross-branch objective (work records in
+  // different reporting branches that name the same goal) freezes ONE governance
+  // finding in the same transaction, with one `spans-work` edge to every member
+  // record and one `rolls-up-to` edge per leadership ancestor; an explicit scan
+  // opens ONE governed "who holds this?" decision per finding (never an
+  // automatic boundary change), grades due forecasts once out of sample, and
+  // freezes identity-free span readings. Marker-idempotent, bounded, pausable.
+  jurisdictionRule,
   attentionMarketRule,
   // ADR-0077: the Succession Terminal (bench certification). Runs before the
   // Operating Seat because its certificate edges are provenance the seat's

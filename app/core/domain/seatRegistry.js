@@ -78,6 +78,12 @@ export const DEFAULT_RECORD_POLICY = Object.freeze({
 });
 
 export const RECORD_POLICIES = Object.freeze({
+  // ADR-0109: a jurisdiction finding is UNIT-class — branch ids, ranks and
+  // coordination units, never a person. A span reading is counts only, and the
+  // marker ledger carries opaque ids. All three read as aggregates above rank 2.
+  jurFindings: { classKey: 'unit', label: 'Cross-branch governance findings', route: '#/jurisdiction?panel=map' },
+  jurReadings: { classKey: 'unit', label: 'Jurisdiction span readings', route: '#/jurisdiction?panel=grades' },
+  jurMarkers: { classKey: 'unit', label: 'Jurisdiction idempotency markers', route: '#/jurisdiction' },
   mandates: { classKey: 'authority', label: 'Decision-rights contracts', route: '#/mandates' },
   // ADR-0100: a calibration reading is rung-level material — counts, intervals and
   // verdicts, never a person or an item. The adoption ledger is the same class:
@@ -419,6 +425,13 @@ export const ACTION_RIGHTS = Object.freeze({
   // requires the full-access root seat, exactly as the other convention rights do.
   'record-fit': { minRank: 1, maxRank: 5, label: 'Scan the decision-fit ledger or re-price one call’s authority' },
   'govern-fit': { minRank: 4, maxRank: 5, label: 'Re-declare the decision-fit conventions' },
+  // ADR-0109: detecting and pricing a cross-branch objective is every leader's
+  // business (the scan writes only derived findings and one governed decision a
+  // human must still accept); re-declaring the conventions that price EVERY
+  // boundary in the workspace is director+ and the handler additionally requires
+  // the full-access root seat, exactly as the other convention rights do.
+  'record-jurisdiction': { minRank: 1, maxRank: 5, label: 'Scan the jurisdiction compiler or read one span’s cross-branch governance' },
+  'govern-jurisdiction': { minRank: 4, maxRank: 5, label: 'Re-declare the jurisdiction conventions' },
   // ADR-0107: scoring one adopted response is every leader's business;
   // re-declaring the floors that price EVERY response is director+ and the
   // handler additionally requires the full-access root seat.

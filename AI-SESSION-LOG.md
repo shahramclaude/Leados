@@ -1,3 +1,99 @@
+## 2026-11-06 — Session 149: The Jurisdiction Compiler (ADR-0109, Schema v111, additive `110 → 111`)
+
+**The question.** When two teams work the same objective and no single seat holds
+the whole thing, every product in this category offers a dashboard of the
+symptom. LeadOS now prices the *governance choice*: keep paying handoffs between
+the two branches, escalate the whole objective to their lowest common ancestor,
+or redraw the reporting boundary once. It does this from work records the
+workspace already holds — no org-chart re-entry, no survey, no sentiment score,
+no person rating.
+
+**Shipped.** `#/jurisdiction`; `jurisdictionRegistry.js` (zero-import vocabulary
+and JUR_SOURCES), `jurisdictionSchema.js` (fail-closed normalizers for
+`jurFindings` / `jurReadings` / `jurMarkers`, declared clamped settings),
+`jurisdiction.js` (pure pricing + read model), `jurisdictionRules.js`
+(`RULE-JUR-01..04`), `jurisdictionActions.js` (two writes, seven scoped reads),
+`app/views/jurisdiction.js` (four panels, five altitude questions). Schema v111
+additive `110 → 111`; **89 post-commit rules / 89 auditable contracts**;
+CSV scope **#103** (aggregate-only, BLANK for refusals and suppressed cells);
+`record-jurisdiction` (rank 1–5) / `govern-jurisdiction` (rank 4–5, full access);
+adapter-scoped disclosure manifest with detail ceiling 2.
+
+**Real cross-module propagation and real cross-altitude roll-up, verified.**
+One `jurScan` on the shipped demo freezes 2 governance findings, writes 5
+`spans-work` edges to case + funded-portfolio members in more than one
+collection, 40 `rolls-up-to` edges to leadership ancestors, 1 governed
+"who holds this?" decision, 1 `governs-mandate` edge and 6 identity-free
+`jurReadings` at ranks 1,2,3,4,5 with `reads-span-mandate` edges — all in ONE
+atomic transaction on the SAME generalized post-commit spine. Registering a new
+case that names an already-shared goal wakes `RULE-JUR-01` in the same
+transaction without a scan (`tests/app/jurisdiction.test.mjs`, 10 tests, all
+pass). A second scan in the same ISO week invents nothing.
+
+**Named frameworks, implemented not name-dropped.** Riker (1962) minimal
+covering coalition / size principle; Coase (1937) + Williamson (1975)
+governance transaction costs (k(k−1)/2 handoff pairs, one cost per rung lifted,
+one one-off redraw); Wilson (1927) lower bound on attribution completeness;
+Luce (1959) choice axiom softmax over −cost; Brier (1950) once-only skill
+against a strictly-prior 0.5 base; Ashby (1956) requisite variety. All
+conventions are declared, bounded and printed on the Method panel — never
+fitted from the record.
+
+**Correctness fixes found while testing.** (1) `chain.js`'s shared
+`lowestCommonAncestor` returns on the FIRST resolvable pair, so with three or
+more spans whose first two share a branch it understates the coalition.
+`jurisdiction.js` now computes the TRUE multi-span LCA by intersecting every
+span's full ancestor chain; the shared helper is deliberately left untouched so
+~80 two-id callers keep their exact behaviour. [UNVERIFIED] whether those
+callers ever pass three ids. (2) `lcaRank − maxSpanRank` made escalation free
+whenever the ancestor is itself one of the spans (the normal case); escalation
+now sums the rungs lifted from every non-ancestor branch. (3) Escalation pricing
+was corrected to be non-zero on the shipped demo, which now prices one cluster
+as `escalate` and one as `coalition`. (4) Each priced route now carries its own
+Luce probability, not just the winner. (5) The three fail-closed normalizers now
+count non-array payloads and dropped markers as warnings rather than silently
+returning [].
+
+**Architecture decision / no silent failures.** `RULE-JUR` deliberately emits
+NO `automation.propagated` event: the returned result rows and the typed graph
+edges ARE the propagation receipt, and the shared spine's declared 64-event
+budget would otherwise re-deliver one extra derived event to all 89 rules. Root
+work events are gated (`ctx.derived !== true`) and engine-authored governed
+decisions are excluded by a structural state-only marker regex, so the compiler
+never prices its own audit output (the Session-143 second-order-decision
+regression). Governance decisions never move a reporting line, never reassign a
+case and never accept themselves; silence is never consent.
+
+**Verification actually run.** `npm run lint`, `npm run check:boundary` (546 app
+ES modules, 155 test suites, 23 doc checks, 0 leaks), `npm run check:links`
+(858 links / 226 markdown files, all resolve), `npm run build:standalone`
+(8,972,142 bytes < 9,000,000 ceiling), `node --test tests/app/standalone.test.mjs`
+(7/7), and green single-file runs for `jurisdiction` (10/10), `disclosure-compiler`,
+`workspace-navigation`, `decision-fit`, `board-room`, `csv`, `action-bundles`.
+A full `npm test` was started three times; it is extremely slow under jsdom+axe
+(~30 min) and did not complete inside this session's time budget, so **full-suite
+green is [UNVERIFIED]**. Two failures observed are **pre-existing at v110 and
+unchanged by this session**, confirmed by an A/B run with `jurisdictionRule`
+removed: `case-rehearsal.test.mjs` (57 `automation.rule_error` events because
+`MAX_AUTOMATION_EVENTS = 64` is reached, cascading 56 engine-authored decisions;
+plus a 15s worker timeout) and `confidence-transport.test.mjs` (the same 56
+spurious `dec-s-*` decisions change its scan fingerprint). Both are a real
+product defect — a too-tight derived-event budget causes downstream rules to be
+rolled back — and are logged as the top roadmap item rather than hidden. No
+`MAX_AUTOMATION_EVENTS` change was made because `action-bundles.test.mjs:158`
+asserts the cap at exactly 64; fixing it properly needs its own session.
+
+**Honest limits.** Local seats are workflow declarations, not authentication.
+Small-cell suppression is a printed refusal, not differential privacy.
+Coordination units are declared conventions, not money. Clusters join on a
+shared objective pointer, not inferred semantic similarity. A grade is an
+association between one predicted route and one dated human choice, not a causal
+forecast or a person rating. Real-browser assistive-technology walkthrough,
+vendor parity and a category-first claim are [UNVERIFIED].
+
+**Sync.** Reported truthfully at the end of this session; see the final delivery
+note and `git`/`gh` output rather than an assumption.
+
 ## 2026-11-06 — Session 148: The Decision-Fit Ledger (ADR-0108, Schema v110, additive `109 → 110`)
 
 **The question.** Every product in this category measures a *latency* — how long a decision took,

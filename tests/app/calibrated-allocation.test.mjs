@@ -147,12 +147,12 @@ function declaration(overrides = {}) {
 /* ------------------------------------------------------------- schema v99 */
 
 test('schema v99: additive 98 → 99, node-budget default, fail-closed evidence and certificate fields', () => {
-  assert.equal(SCHEMA_VERSION, 110);
+  assert.equal(SCHEMA_VERSION, 111);
   const v98 = normalize(tree());
   v98.schemaVersion = 98;
   delete v98.settings.robustAllocationNodeBudget;
   const migrated = migrate(clone(v98));
-  assert.deepEqual(migrated.applied, ['98 → 99', '99 → 100', '100 → 101', '101 → 102', '102 → 103', '103 → 104', '104 → 105', '105 → 106', '106 → 107', '107 → 108', '108 → 109', '109 → 110']);
+  assert.deepEqual(migrated.applied, ['98 → 99', '99 → 100', '100 → 101', '101 → 102', '102 → 103', '103 → 104', '104 → 105', '105 → 106', '106 → 107', '107 → 108', '108 → 109', '109 → 110', '110 → 111']);
   assert.equal(migrated.raw.settings.robustAllocationNodeBudget, 250000);
   // Evidence instrument: unknown keys fail closed to null; known keys persist.
   const plan = normalizeRobustPlan({
@@ -380,7 +380,7 @@ test('the brief carries the calibration section with no ids, and the CSV surface
   assert.ok(!brief.includes(CONTRACT_SENTINEL), 'no contract id');
   assert.ok(!brief.includes('ral-'), 'no ledger id');
   assert.ok(!NAMES.some((n) => brief.includes(n)), 'no person named');
-  assert.equal(CSV_EXPORTS.length, 101, 'ADR-0102 added scope #98; the register still governs releases');
+  assert.equal(CSV_EXPORTS.length, 102, 'ADR-0102 added scope #98; the register still governs releases');
   assert.ok(ROBUST_ALLOCATION_MARKER_KINDS.includes('premise-tension'), 'the tension marker kind is declared');
 });
 
