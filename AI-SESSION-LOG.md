@@ -10,7 +10,7 @@
 
 **Verification at entry.** New suites 11/11; targeted Mission/Bundle/Seat 44/44; lint exit 0; boundary 527 modules / 151 suites / 23 doc checks / 0 violations; links green; standalone rebuilt v108. Full canonical suite launched via `npm run verify:canonical` and running at entry time — final result appended below after the gate. Scratch e2e (5-person chain, NOW 2026-11-06) verified capture→rehearse→adopt→complete/decide/review/held-1:1→resolveCase→closed with typed links and review task done; owner-fix roll-up verified by the new suite.
 
-**Sync result.** Pending commit/push/PR — actual outcome appended below.
+**Sync result (actual).** Commit `82fb397` pushed to `origin/arena/b02c70bb-leados` (exit 0). Pull request opened: https://github.com/shahramclaude/Leados/pull/173 (`gh pr create` exit 0). Full canonical suite was still running at PR creation (lint/boundary/links already green; `access-audit` in progress); this log will be updated if the gate completes during the session.
 
 ## 2026-11-06 — Session 145: Mission Command Flow (Schema v107, ADR-0105)
 
