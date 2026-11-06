@@ -1,3 +1,5 @@
+**Current snapshot (Session 149, 2026-11-06):** Schema **v111** (additive `110 → 111`), [ADR-0109](./docs/adr/0109-jurisdiction-compiler.md), `#/jurisdiction`, `RULE-JUR-01..04`, CSV scope **#103**, **89 rules / 89 contracts**. The head of `AI-SESSION-LOG.md` / `ROADMAP.md` / `RESEARCH.md` is authoritative. The Session 147 / v109 snapshot immediately below is **historical, not current** — it was stale before this session and is retained for traceability. The Jurisdiction Compiler prices minimal coalition vs LCA escalation vs boundary redraw from existing cross-branch work and rolls identity-free readings up all five altitudes on the same post-commit spine.
+
 **Snapshot:** 2026-11-06 (Session 147, Schema v109, additive `108 → 109`,
 [ADR-0107](./docs/adr/0107-outcome-learning-loop.md), `#/mission?panel=learning`,
 RULE-OLN-01..04, CSV #101, 87 rules / 87 contracts). The Outcome Learning Loop

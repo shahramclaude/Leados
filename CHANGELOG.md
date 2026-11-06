@@ -1,3 +1,35 @@
+## Changelog — 2026-11-06 · Session 149: The Jurisdiction Compiler (ADR-0109, Schema v111 · additive `110 → 111`)
+
+- **New feature:** `#/jurisdiction` prices three hierarchy-native governance
+  routes for every cross-branch objective — Riker minimal coalition, escalation
+  to the lowest common ancestor, Williamson boundary redraw — from cases, open
+  calls and funded work already on record. No new data entry, no sentiment data.
+- **New engine:** `RULE-JUR-01..04` on the shared post-commit spine: detect and
+  freeze one finding per (objective, ISO week) with `spans-work` edges to every
+  member record and `rolls-up-to` edges to every leadership ancestor; open one
+  governed "who holds this?" decision carrying all three priced routes; grade
+  the predicted route exactly once out of sample by Brier skill vs 0.5; freeze
+  identity-free small-cell-suppressed span readings per rung per week.
+- **New storage:** Schema v111 additive `110 → 111`; `jurFindings`,
+  `jurReadings`, `jurMarkers` declarations-only collections with fail-closed
+  normalizers; ten declared, clamped, in-product-printed conventions; 89 rules /
+  89 auditable contracts; CSV scope #103 aggregate-only with BLANK refusals.
+- **New permissions:** `record-jurisdiction` (rank 1–5), `govern-jurisdiction`
+  (rank 4–5 + full access), seven scoped safe reads, adapter-scoped disclosure
+  manifest with detail ceiling 2. Frontline→chief get genuinely different
+  questions and detail, from one record.
+- **Correctness:** a true multi-span lowest-common-ancestor computation (the
+  shared two-id helper understates coalitions); non-zero, per-branch escalation
+  rung accounting; per-route Luce probabilities; warnings counted for corrupt
+  declarations; zero extra derived events so the 64-event budget is untouched.
+- **Tests:** `tests/app/jurisdiction.test.mjs` (10/10) proves real cross-module
+  propagation, five-rank roll-up, idempotence, governed-decision isolation,
+  once-only grading, aggregate-only export and four axe-clean panels.
+- **Known pre-existing failures (unchanged by this session):** the 64 derived
+  -event budget rolls back downstream rules in `case-rehearsal.test.mjs` and
+  `confidence-transport.test.mjs`; A/B-confirmed with `jurisdictionRule` removed.
+  Full `npm test` green is [UNVERIFIED] this session.
+
 ## Changelog — 2026-11-06 · Session 147: The Outcome Learning Loop (ADR-0107, Schema v109 · additive `108 → 109`)
 **Repository status:** commit `88844c8` pushed to `arena/4622ebba-leados` (`PUSH_EXIT=0`); PR **#175** OPEN and MERGEABLE at https://github.com/shahramclaude/Leados/pull/175 .
 

@@ -280,6 +280,15 @@ import {
   normalizeFitSettings,
   normalizeFitSnapshots,
 } from './domain/decisionFitSchema.js';
+// ADR-0109 (Schema v111): the Jurisdiction Compiler's fail-closed normalizers
+// and declared conventions.
+import {
+  JUR_SETTINGS_DEFAULTS,
+  normalizeJurFindings,
+  normalizeJurMarkers,
+  normalizeJurReadings,
+  normalizeJurSettings,
+} from './domain/jurisdictionSchema.js';
 import { ALTITUDES as SPAN_ALTITUDES } from './domain/chainRegistry.js';
 // ADR-0088: the Escalation Economy — the disposition ledger, intervention-rate
 // commitments, idempotency markers, and clamped conventions.
@@ -495,7 +504,7 @@ export {
 // older blob simply opens on the undeclared operator view. A version bump here
 // would have forced 78 test files to be rewritten for zero user benefit; the
 // honest choice is to add nothing to migrate.
-export const SCHEMA_VERSION = 110;
+export const SCHEMA_VERSION = 111;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -1822,7 +1831,15 @@ export const DEFAULT_SETTINGS = Object.freeze({
   diligenceAutoPropagate: true,
   // ADR-0103: the epistemic ledger's own floors are read back by the view so a
   // refused rate always prints the convention that refused it.
-  });
+  // ADR-0107/0108/0109: the declared, clamped conventions for the Outcome
+  // Learning Loop, the Decision-Fit Ledger and the Jurisdiction Compiler. These
+  // live in DEFAULT_SETTINGS (not only in the forecast-source lookup) so a fresh
+  // workspace's settings object is complete before its first normalize; every
+  // figure still comes from the module's own clamped normalizer on read.
+  ...OUTCOME_SETTINGS_DEFAULTS,
+  ...FIT_SETTINGS_DEFAULTS,
+  ...JUR_SETTINGS_DEFAULTS,
+});
 
 export const COLLECTIONS = [
   'people',
@@ -2272,6 +2289,13 @@ export const COLLECTIONS = [
   'fitReadings',
   'fitMarkers',
   'outcomeMarkers',
+  // ADR-0109 (Schema v111): the Jurisdiction Compiler. `jurFindings` freezes
+  // one governance finding per cross-branch objective per ISO week;
+  // `jurReadings` freezes one identity-free span reading per rung per week;
+  // `jurMarkers` is the idempotency ledger that makes a rescan converge.
+  'jurFindings',
+  'jurReadings',
+  'jurMarkers',
 
 ];
 
@@ -2928,6 +2952,7 @@ export function normalizeSettings(raw) {
     ...normalizeOperatingModelSettings(s),
     ...normalizeCarryoverSettings(s),
     ...normalizeDisclosureSettings(s),
+    ...normalizeJurSettings(s),
     // ADR-0088: the Board Room's declared conventions.
     ...normalizeBoardSettings(s),
     ...normalizeSealSettings(s),
@@ -5036,6 +5061,10 @@ const FORECAST_SOURCE_COLLECTIONS = Object.freeze({
   // ADR-0108: declared, clamped conventions for the Decision-Fit Ledger. Every
   // one is printed in-product with its bound; none is fitted from the record.
   ...FIT_SETTINGS_DEFAULTS,
+  // ADR-0109: declared, clamped conventions for the Jurisdiction Compiler.
+  // Every one is printed in-product with its bound; none is fitted from the
+  // record. A refused governance route is never stored as a zero.
+  ...JUR_SETTINGS_DEFAULTS,
 
 });
 
@@ -7161,6 +7190,14 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.fitProposals = normalizeFitProposals(raw.fitProposals, warnings);
   state.fitReadings = normalizeFitReadings(raw.fitReadings, warnings);
   state.fitMarkers = normalizeFitMarkers(raw.fitMarkers);
+  // ADR-0109: the Jurisdiction Compiler resolves BEFORE typed links for the
+  // same reason — every `spans-work` / `governs-mandate` / `rolls-up-to` edge
+  // it writes must validate against a real finding, decision or reading id.
+  // A finding without a resolvable ancestor, a priced route or a printed
+  // refusal is DROPPED with a warning, never repaired into a recommendation.
+  state.jurFindings = normalizeJurFindings(raw.jurFindings, warnings);
+  state.jurReadings = normalizeJurReadings(raw.jurReadings, warnings);
+  state.jurMarkers = normalizeJurMarkers(raw.jurMarkers);
   state.diligenceChecklists = normalizeDiligenceChecklists(raw.diligenceChecklists, warnings);
   state.diligenceConsults = normalizeDiligenceConsults(raw.diligenceConsults, warnings, { now: new Date() });
   state.diligenceGrades = normalizeDiligenceGrades(raw.diligenceGrades);
@@ -8000,6 +8037,25 @@ export const MIGRATIONS = {
     fitMarkers: Array.isArray(v109.fitMarkers) ? v109.fitMarkers : [],
     settings: isPlainObject(v109.settings)
       ? { ...v109.settings, ...normalizeFitSettings(v109.settings) }
+      : { ...DEFAULT_SETTINGS },
+  }),
+  // ADR-0109: additive 110 → 111. An existing workspace already holds work
+  // records that name objectives, but it has never computed WHO can resolve a
+  // cross-branch one, so all three ledgers start EMPTY — "no jurisdiction gap
+  // has been priced here yet", a different claim from "every objective has a
+  // mandate holder". Nothing is back-filled: RULE-JUR-01 detects each gap on
+  // the next root work write or explicit scan, and every coalition, cost,
+  // interval and grade is re-derived on read. Back-filling a governance finding
+  // at upgrade time would pretend a boundary decision happened in the past that
+  // no human made.
+  110: (v110) => ({
+    ...v110,
+    schemaVersion: 111,
+    jurFindings: Array.isArray(v110.jurFindings) ? v110.jurFindings : [],
+    jurReadings: Array.isArray(v110.jurReadings) ? v110.jurReadings : [],
+    jurMarkers: Array.isArray(v110.jurMarkers) ? v110.jurMarkers : [],
+    settings: isPlainObject(v110.settings)
+      ? { ...v110.settings, ...normalizeJurSettings(v110.settings) }
       : { ...DEFAULT_SETTINGS },
   }),
   // ADR-0099: additive 100 → 101. No freeze line is inferred for an existing

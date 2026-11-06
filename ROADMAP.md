@@ -1,3 +1,83 @@
+## 2026-11-06 — Jurisdiction Compiler shipped; next targets (Session 149, Schema v111, [ADR-0109](./docs/adr/0109-jurisdiction-compiler.md))
+
+**Shipped [all altitudes].** `RULE-JUR-01..04` on the shared spine; 89 rules /
+89 contracts; schema v111 additive `110 → 111` with three declarations-only
+collections (`jurFindings`, `jurReadings`, `jurMarkers`) and ten declared
+clamped conventions; CSV scope #103 (aggregate-only, BLANK refusals); the
+`jurisdiction` disclosure manifest (adapter-scoped, unit-class, detail ceiling
+2); `record-jurisdiction` (rank 1–5) and `govern-jurisdiction` (rank 4–5 +
+full access); four panels and five altitude-specific questions. Verified real
+cross-module propagation (case + portfolio members, `spans-work` edges) and real
+cross-altitude roll-up (rank 1–5 identity-free readings, 40 `rolls-up-to`
+ancestor edges) in `tests/app/jurisdiction.test.mjs` (10/10).
+
+**Top next target [all altitudes] — P0 defect, not a feature.** The shared
+`MAX_AUTOMATION_EVENTS = 64` cap is reached on an ordinary `case.updated` over
+the shipped demo, producing 57 `automation.rule_error` rollbacks and 56
+engine-authored `decision.created` events. That is a silent failure of
+downstream rules (notably `epistemicRule`) and it is **pre-existing at v110** —
+confirmed by an A/B run with `jurisdictionRule` removed from the spine. Fixing
+it requires raising/replacing the derived-event cap AND updating
+`action-bundles.test.mjs:158`, which asserts the cap at exactly 64, plus a
+re-baseline of `case-rehearsal.test.mjs` and `confidence-transport.test.mjs`.
+Deliberately NOT patched this session: a cap change without a full green suite
+would be a guess.
+
+**Next targets, altitude-tagged.**
+- [frontline / manager] **Objective-pointer hygiene**: surface work records
+  that name a goal id that no longer exists, and records with no goal pointer at
+  all, as a counted refusal rather than an invisible exclusion.
+- [director / exec] **Boundary-redraw rehearsal**: a dry-run that shows which
+  `spans-work` clusters would collapse, which `rolls-up-to` edges would move and
+  which governed decisions would become stale, WITHOUT writing anything — the
+  compiler currently prices the redraw but never previews it.
+- [exec / chief] **Cross-week jurisdiction drift**: a conformal (exchangeability
+  assumed, printed) trend over ISO weeks of cross-branch share and median
+  coalition size, refused below four weeks, with the pooled rate beside the mean
+  of unit rates (Simpson 1951 defence).
+- [all altitudes] **Multi-span LCA repair in `chain.js`**: `lowestCommonAncestor`
+  resolves on the first pair; `jurisdiction.js` now works around it locally.
+  Audit which of the ~80 other callers ever pass three or more ids, then fix the
+  shared helper with a parity test. [UNVERIFIED] impact.
+- [all altitudes] Access-registry polish carried forward from Session 148:
+  `SAFE_READS` lists `fitBrief` while `decisionFitActions.js` exports
+  `fitBriefText`; `[FIT-PROPSE:` typo; duplicated question tables; misnamed
+  `AUTHORITY_CLASS_KEYS_PRESENT`; `scoreAllocationRules` refuses `paired: 0`;
+  `RULE-FIT-03` has never fired end-to-end because the demo's material move is
+  0 days old.
+
+**Deliberately rejected this session, with reasons.**
+- *Auto-executing the boundary redraw.* Rejected: a reporting-line change is a
+  human act of authority; an engine that silently moves people is a governance
+  failure, not automation. The compiler opens one governed decision instead.
+- *Sentiment / collaboration-graph inference of "cross-silo work".* Rejected:
+  Microsoft Viva / CultureAmp-style metadata would invent a fact about people
+  that the record does not hold, and would leak individual detail upward. A
+  shared objective pointer is auditable and identity-free.
+- *A composite "jurisdiction health score".* Rejected: averaging coalition size,
+  confidence and Brier skill into one number hides the disagreement that a board
+  needs to see (the Board Room ADR-0085 precedent).
+- *Fitting the coordination-unit costs from past decisions.* Rejected: a
+  self-fitted prior would let the ledger grade its own recommendations; every
+  convention stays declared, clamped and printed.
+- *Raising the 64-event cap as a quick fix for the two failing tests.* Rejected:
+  it would change ~89 rules' derived-event behaviour and break a test that
+  asserts the cap; correctness over a green-looking run.
+
+**Competitive synthesis [all altitudes, search-snippet level only].** Glean /
+Workday AI Transformation 100 (unstructured Slack/project data → steering
+committee briefs; org-chart roles redrawn for cross-silo pattern finding),
+Visier / Workday People Analytics (agentic scenario planning, augmented
+narratives), Power BI Copilot (chat-with-data), Microsoft Viva Insights /
+CultureAmp (collaboration metadata and NLP culture maps), Fractal / C3.ai /
+Palantir-style Autonomous Decision Intelligence, and AI intake classifiers /
+routing and AI roleplay coaching all cover adjacent pieces. **No snippet
+verified a product that computes a hierarchy-native governance allocation —
+minimal coalition vs LCA escalation vs boundary redraw — prices all three from
+the same event spine, opens one governed human decision and grades it once out
+of sample while rolling identity-free counts up five altitudes.** Category-first
+status remains [UNVERIFIED]; no vendor was independently tested.
+
 ## 2026-11-06 — Decision-Fit Ledger shipped; next targets (Session 148, Schema v110, [ADR-0108](./docs/adr/0108-decision-fit.md))
 
 **Shipped [all altitudes].** `RULE-FIT-01..04`; schema v110 additive with four empty

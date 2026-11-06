@@ -103,6 +103,9 @@ const RENDERER_ROUTES = [
   // carry typed fact pointers, and consultations carry a written reason, so
   // they never enter a declared-seat projection) and declares a manifest row.
   'diligence',
+  // ADR-0109: the Jurisdiction Compiler declares its own manifest row, so the
+  // catalogue and the shell stay one route for one route.
+  'jurisdiction',
 ];
 
 /** Sentinel-bearing roster: every person, span and private note is traceable. */
@@ -199,7 +202,7 @@ function seatsOrThrow(state) {
 /* --------------------------------------------------------------- 1. schema */
 
 test('schema v90 migrates additively and refuses malformed or stale grants', () => {
-  assert.equal(SCHEMA_VERSION, 110);
+  assert.equal(SCHEMA_VERSION, 111);
   const old = { schemaVersion: 89, settings: { leaderName: 'Keep' }, cases: [{ id: 'keep' }], disclosureGrants: [{ id: 'existing' }] };
   const migrated = migrate(old);
   assert.equal(migrated.raw.schemaVersion, SCHEMA_VERSION);

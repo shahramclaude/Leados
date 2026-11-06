@@ -63,6 +63,8 @@ import { buildReputationReport, reputationCsvRows } from './domain/reputationalC
 import { buildHindsightReport, hindsightCsvRows } from './domain/hindsight.js';
 import { buildEpistemicReport, epistemicCsvRows } from './domain/epistemic.js';
 import { buildDiligenceReport, diligenceCsvRows } from './domain/diligence.js';
+// ADR-0109: CSV scope #103. Aggregate-only, identity-free, refusal-honest.
+import { jurCsvRows, JUR_CSV_COLUMNS } from './domain/jurisdiction.js';
 // ADR-0107: CSV scope #101. Aggregate-only, identity-free, refusal-honest.
 import { buildOutcomeReport, outcomeCsvRows, OUTCOME_CSV_COLUMNS } from './domain/outcomeLearning.js';
 import { buildCadenceReport, cadenceCsvRows } from './domain/cadence.js';
@@ -1044,6 +1046,12 @@ export const CSV_EXPORTS = [
   // id or label), one calibration row and one method row. A refused statistic
   // and a suppressed cell export BLANK, never zero. No bundle id, case id,
   // person, title, note, forecast source text or proof pointer is emitted.
+  // CSV scope #103 (Schema v111, ADR-0109). Aggregate-only and refusal-honest:
+  // one workspace row, one row per leadership rank, one row per governance route
+  // and one row per declared convention. A suppressed cell and a refused route
+  // export BLANK, never zero. No objective key, no member id, no person, no span
+  // label, no case or decision title and no private note survives the boundary.
+  { key: 'jurisdiction', label: 'Jurisdiction compiler (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'jurisdiction', description: 'One workspace row, one row per leadership rank, one row per priced governance route (coalition / escalate / redraw) and one row per declared convention: cross-branch objective counts, coalition sizes, escalation rungs, coordination-unit costs, Wilson attribution bounds, once-only Brier grades against a 0.5 base and every printed refusal. NO objective key, NO member record id, NO person, NO span label or id, NO title and NO note. A refused rate and a suppressed cell are BLANK rather than zero; suppression is not differential privacy.' },
   { key: 'outcome-learning', label: 'Outcome learning (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'outcome-learning', description: 'One workspace row, one row per child span, one calibration row and one method row: suppression-safe interval counts of frozen expectations, once-only grades, good/mixed outcomes and late loops; shrunk outside view with Wilson 95% interval, pooled Brier skill, one-sided conformal lateness bound with finite-sample coverage, direction and every refusal named. NO bundle id, NO case id, NO span id or label, NO person, NO title, NO note, NO proof pointer and NO individual grade. A refused rate and a suppressed cell are BLANK rather than zero.' },
   { key: 'diligence', label: 'Diligence ledger (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'diligence', description: 'One summary row (frontiers, settled, open, knowable, consulted, unconsulted, Wilson-bounded coverage, thin settled calls, dark classes and graded forecasts), one row per evidence class (knowable, consulted, share, exact Jeffreys Beta(1/2,1/2) 90% interval, dark verdict or a printed refusal), one row per leadership altitude (identity-free counts and a refused coverage), and one row per once-only Brier grade (claims, Brier, strictly-prior base Brier, skill and verdict). NO fact pointer, NO decision id, NO checklist id, NO person, NO span id, NO written consultation reason, NO forecast question and NO individual belief. A refused rate and a suppressed cell are BLANK rather than zero.' },
   { key: 'differencing-register', label: 'Publication register (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'differencing-register', description: 'One row per published module plus one workspace row: release counts, provably-safe / protected / determined counts, withheld-cell and equation counts, the last publication date and the two stationarity statistics. NO span label, NO span id, NO person, NO record title, NO amount, and NO recovered value \u2014 a determined value is disclosed as a coordinate on the screen, never exported as a figure. A refused rate is BLANK rather than zero.' },
@@ -6068,6 +6076,13 @@ export function buildScopeTable(state, scope, now) {
         'kappa', 'pabak', 'bias_index', 'prevalence_index', 'p_value', 'verdict', 'expected_n',
         'arrived_n', 'silent_n', 'coverage_pct', 'band', 'rate_upper_30d', 'blind', 'suppressed']
         .map((key) => ({ key, header: key }));
+      return { columns, rows };
+    }
+    case 'jurisdiction': {
+      // CSV scope #103 (Schema v111, ADR-0109). Every row is a compiled,
+      // identity-free aggregate; BLANK for every refusal and suppressed cell.
+      const rows = jurCsvRows(state, { now, settings: state.settings || {} });
+      const columns = JUR_CSV_COLUMNS.map((key) => ({ key, header: key }));
       return { columns, rows };
     }
     case 'outcome-learning': {

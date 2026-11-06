@@ -1,3 +1,42 @@
+## 2026-11-06 — Who can actually resolve work that crosses two teams? (Session 149, Schema v111, [ADR-0109](./docs/adr/0109-jurisdiction-compiler.md))
+
+Open `#/jurisdiction` and press **Compile now**. LeadOS reads the open cases,
+open calls and funded portfolio items you already recorded, groups them by the
+objective they already point at, resolves each to its responsible span on the
+existing reporting tree, and finds the objectives that no single seat holds
+whole. For each one it prices exactly three governance routes in declared
+coordination units: a **minimal covering coalition** (Riker 1962; k(k−1)/2
+Coase 1937 handoff pairs), an **escalation to the lowest common ancestor**
+(Ashby 1956; one declared cost per rung lifted) or a **one-off boundary redraw**
+(Williamson 1975). Confidence is a Wilson (1927) lower bound on how much of the
+cluster the reporting tree can place — not a rating of anyone. Route probability
+is a Luce (1959) softmax over −cost; a route is recommended only when it beats
+the runner-up by a declared materiality band, so a tie prints as a tie.
+
+Nothing here moves a reporting line. `RULE-JUR-01..04` run on the same shared
+post-commit spine as every other LeadOS module: one write freezes a governance
+finding with a `spans-work` edge to **every** case / decision / funded-work
+member and a `rolls-up-to` edge to **every** leadership ancestor, opens exactly
+one governed "who holds this?" decision carrying all three priced routes, grades
+the predicted route **once** out of sample by Brier (1950) skill against a 0.5
+base, and freezes identity-free small-cell-suppressed readings at every rung
+from frontline to chief. Zero manual re-entry. Silence is never consent.
+
+For the frontline lead the page asks who would have to agree before a plan can
+change; for the manager it counts handoffs; for the director it compares
+coalition versus escalation; for the VP it reads self-inflicted coordination
+load; for the CEO it reads the enterprise share no single seat can resolve plus
+an auto-generated board-ready synthesis — five genuinely different operating
+pictures from ONE record. CSV scope #103 exports aggregates only: no objective
+key, no member id, no person, no span label, no title, no note; a refused rate
+and a suppressed cell are BLANK, never zero. Four panels, declared/clamped
+conventions on the Method panel, and seven named frameworks implemented rather
+than name-dropped.
+
+Honest limits are printed in-product: a seat is an auditable declaration, not
+authentication; suppression is not differential privacy; coordination units are
+declared conventions, not money; a grade is an association, not a causal claim.
+
 ## 2026-11-06 — What your authority costs, priced against your own record (Session 148, Schema v110, [ADR-0108](./docs/adr/0108-decision-fit.md))
 
 LeadOS now answers the question every other product in the category skips. Decision

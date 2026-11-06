@@ -340,6 +340,14 @@ export const LINK_ENTITY_TYPES = [
   // ADR-0108: a frozen span reading. Counts, a share and its interval; no id of
   // any call and no person inside the span.
   'fitreading',
+  // ADR-0109 (Schema v111): the Jurisdiction Compiler. A frozen cross-branch
+  // governance finding is a first-class node so every work record it spans, the
+  // governed boundary decision it opened and every leadership ancestor it rolled
+  // up to are navigable from the finding — and the finding from them. It carries
+  // node ids, ranks and coordination units only; no objective title, no case
+  // text and no person rating. An identity-free span reading is a node too.
+  'jurfinding',
+  'jurreading',
   // ADR-0084: Hoshin Kanri & Catchball Cascade pacts and append-only bilateral
   // negotiation rounds.
   'catchballpact',
@@ -620,6 +628,12 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   fitsnapshot: 'fitSnapshots',
   fitproposal: 'fitProposals',
   fitreading: 'fitReadings',
+  // ADR-0109: keep the registry exhaustive with LINK_ENTITY_TYPES. A frozen
+  // jurisdiction finding and an identity-free span reading are each navigable
+  // graph nodes, so every `spans-work`/`governs-mandate`/`reads-span-mandate`
+  // edge lands on a record a reader can open.
+  jurfinding: 'jurFindings',
+  jurreading: 'jurReadings',
   // ADR-0087: the Operating Cadence Clock. A forum is a first-class graph node
   // every queued item, escalated constraint and agenda-fit gap is navigable FROM
   // the forum that is supposed to close it; a frozen reading is a node so the
@@ -1123,6 +1137,14 @@ export const LINK_RELATIONS = [
   // fan-out reuses the existing `rolls-up-to` relation — altitude stays a
   // dimension of the SAME spine, not a second engine.
   'prices-authority', 'proposes-move', 'reads-span-fit',
+  // ADR-0109: written only by RULE-JUR-01..04. `spans-work` binds a frozen
+  // cross-branch finding to EVERY work record (case, decision, funded work) it
+  // read — cross-module propagation as a typed edge; `governs-mandate` binds
+  // that finding to the one governed decision a human must accept;
+  // `reads-span-mandate` binds an identity-free span reading to its span.
+  // Vertical fan-out reuses the existing `rolls-up-to` relation — altitude
+  // stays a dimension of the SAME spine, not a second hierarchy engine.
+  'spans-work', 'governs-mandate', 'reads-span-mandate',
 
 ];
 
@@ -1130,6 +1152,9 @@ export const LINK_RELATION_LABELS = {
   carries: 'Carried to this leadership span as a sealed packet',
   reconnects: 'Measured carriage resumed on this span\u2019s declared edge above it',
   'pre-registers': 'Froze a bet before this governed work was approved',
+  'spans-work': 'Cross-branch objective spans this work record',
+  'governs-mandate': 'Governed boundary decision a human must accept',
+  'reads-span-mandate': 'Identity-free span jurisdiction reading',
   'grades-outcome': 'Graded this frozen cohort once, out of sample',
   'clears-bid': 'Cleared a sealed span bid in the internal resource market',
   'prices-externality': 'Priced the sibling opportunity-cost hurdle',
