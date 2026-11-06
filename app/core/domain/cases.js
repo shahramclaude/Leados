@@ -429,6 +429,13 @@ export const LINK_ENTITY_TYPES = [
   // a person's name and never a note. This is what makes a MISSED signal
   // navigable above the span that missed it.
   'unknown',
+  // ADR-0104 (Schema v106): a frozen knowable set and its once-only Brier
+  // grade are two distinct first-class graph nodes. The frontier carries typed
+  // POINTERS and structural dates only — never a fact's title, a note or a
+  // person's name. The grade carries counts and a verdict, never the forecast
+  // it judged, so provenance cannot be mistaken for the claim itself.
+  'diligencechecklist',
+  'diligencegrade',
   // ADR-0085's `carryover` node and ADR-0088's `escalationrecord` /
   // `escalationcommitment` nodes are declared above, each exactly once. A second
   // copy of a type here is not harmless bookkeeping: it breaks the
@@ -566,6 +573,9 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   hindsightlock: 'decisionLocks',
   // ADR-0103: the epistemic ledger owns the unknown node's IDs.
   unknown: 'epistemicUnknowns',
+  // ADR-0104: the diligence ledger owns the frontier and grade node IDs.
+  diligencechecklist: 'diligenceChecklists',
+  diligencegrade: 'diligenceGrades',
   // ADR-0100: a frozen calibration reading (the adoption ledger is its own node
   // only through the event log; an adoption is a declaration, not a work item).
   spanreading: 'spanReadings',
@@ -747,6 +757,13 @@ export const SYSTEM_GENERATED_LINK_RELATIONS = Object.freeze([
   // `settles` — the record (or its decision) judges the bet's stop rule;
   // `releases-resource` — the settled record returned encumbered authority.
   'carries-over', 'settles', 'releases-resource',
+  // ADR-0104: written only by RULE-DLG-01..04. `diligence-for` binds a frozen
+  // frontier to the decision it froze; `deliberates-on` says which typed fact
+  // pointer is IN the knowable set (never that it was read); `tracks-followup`
+  // binds a governed finding to the decision that opened it; `grades-diligence`
+  // is the once-only out-of-sample grade edge. Vertical fan-out reuses the
+  // existing `rolls-up-to` relation — altitude is a dimension of the SAME spine.
+  'diligence-for', 'deliberates-on', 'tracks-followup', 'grades-diligence',
 ]);
 
 export const LINK_RELATIONS = [
@@ -1064,6 +1081,16 @@ export const LINK_RELATIONS = [
   // agenda-fit gap names a seat a forum's membership is missing.
   'queued-for',
   'fit-gap',
+  // ADR-0104: Diligence Ledger provenance. `diligence-for` — a frozen knowable
+  // set belongs to exactly one decision; `deliberates-on` — a typed fact pointer
+  // was in that set on the decision date; `tracks-followup` — a governed gap or
+  // dark-class decision was opened from this one decision; `grades-diligence` —
+  // a once-only Brier grade judged one pre-declared process forecast. None of
+  // them asserts that anybody looked; the consultation ledger proves that.
+  'diligence-for',
+  'deliberates-on',
+  'tracks-followup',
+  'grades-diligence',
 ];
 
 export const LINK_RELATION_LABELS = {
@@ -1196,6 +1223,10 @@ export const LINK_RELATION_LABELS = {
   'releases-resource': 'Settled record returned encumbered budget authority',
   'queued-for': 'Queued for the one forum competent to close it',
   'fit-gap': 'Forum membership is missing this owning seat',
+  'diligence-for': 'Frozen knowable set for this decision',
+  'deliberates-on': 'This dated fact was in the knowable set',
+  'tracks-followup': 'Governed diligence finding opened from this decision',
+  'grades-diligence': 'Once-only out-of-sample grade of a pre-declared forecast',
 };
 
 const Z_80_INTERVAL = 1.2815515655446004; // Standard normal 90th percentile (P10 / P90)
@@ -2675,6 +2706,56 @@ export function resolveLinkedEntity(state, entityType, entityId) {
           expiresOn: rec.expiresOn,
           sourceType: rec.sourceType,
           sourceId: rec.sourceId,
+        },
+      };
+    }
+    case 'diligencechecklist': {
+      const rec = (state.diligenceChecklists || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      // The shared graph carries the frontier's structural dates, its fact
+      // COUNT and its state — never a fact pointer, a consultation reason, a
+      // decision title or a person's name. The scoped report is the reader.
+      return {
+        type: 'diligencechecklist',
+        id: rec.id,
+        title: `Knowable set frozen ${rec.frozenOn} for the ${rec.decisionOn} decision`,
+        status: rec.status === 'settled' ? 'Decision settled — frontier closed' : rec.status === 'lapsed' ? 'Lapsed without an outcome' : 'Open',
+        route: `#/diligence?panel=frontier&frontier=${encodeURIComponent(rec.id)}`,
+        raw: {
+          id: rec.id,
+          decisionId: rec.decisionId,
+          decisionOn: rec.decisionOn,
+          frozenOn: rec.frozenOn,
+          factN: Array.isArray(rec.facts) ? rec.facts.length : rec.factN || 0,
+          status: rec.status,
+          outcome: rec.outcome,
+          hasForecast: Boolean(rec.forecast),
+          gradedOn: rec.gradedOn,
+          altitudeKey: rec.altitudeKey,
+        },
+      };
+    }
+    case 'diligencegrade': {
+      const rec = (state.diligenceGrades || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      // A grade projects counts and the once-only verdict only — never the
+      // forecast text or the individual class claims it scored.
+      return {
+        type: 'diligencegrade',
+        id: rec.id,
+        title: `Process forecast graded once on ${rec.gradedOn}`,
+        status: rec.verdict === 'worse-than-coin' ? 'Overconfident — negative Brier skill' : rec.verdict === 'better-than-coin' ? 'Better than the declared base rate' : 'Refused',
+        route: '#/diligence?panel=forecasts',
+        raw: {
+          id: rec.id,
+          checklistId: rec.checklistId,
+          gradedOn: rec.gradedOn,
+          claimsN: rec.claimsN,
+          hitsN: rec.hitsN,
+          brier: rec.brier,
+          baseBrier: rec.baseBrier,
+          skill: rec.skill,
+          verdict: rec.verdict,
         },
       };
     }

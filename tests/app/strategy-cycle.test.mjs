@@ -128,9 +128,9 @@ function reading(id, scopeSeatId, altitudeKey, rank, patch = {}) {
 }
 
 test('Schema v94 migrates additively without fabricating cycles and strips untyped snapshot content', () => {
-  assert.equal(SCHEMA_VERSION, 105);
+  assert.equal(SCHEMA_VERSION, 106);
   const migrated = migrate({ schemaVersion: 93, settings: { leaderName: 'Keep this' }, catchballPacts: [{ id: 'existing-pact' }] });
-  assert.deepEqual(migrated.applied, ['93 → 94', '94 → 95', '95 → 96', '96 → 97', '97 → 98', '98 → 99', '99 → 100', '100 → 101', '101 → 102', '102 → 103', '103 → 104', '104 → 105']);
+  assert.deepEqual(migrated.applied, ['93 → 94', '94 → 95', '95 → 96', '96 → 97', '97 → 98', '98 → 99', '99 → 100', '100 → 101', '101 → 102', '102 → 103', '103 → 104', '104 → 105', '105 → 106']);
   assert.deepEqual(migrated.raw.strategyCycles, []);
   assert.deepEqual(migrated.raw.strategyCycleMarkers, []);
   assert.equal(migrated.raw.settings.leaderName, 'Keep this');

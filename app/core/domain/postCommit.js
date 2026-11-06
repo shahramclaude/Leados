@@ -189,6 +189,13 @@ import { robustAllocationRule } from './robustAllocationRules.js';
 // ADR-0098: the Internal Clearinghouse writes its governed delivery, hurdle,
 // overdue and mix work on this same atomic post-commit spine.
 import { clearingRule } from './clearingRules.js';
+// ADR-0104: the Diligence Ledger. Registered immediately before the attention
+// market so RULE-DLG-01's frozen knowable set, its `diligence-for` /
+// `deliberates-on` edges and one `rolls-up-to` edge per leadership ancestor are
+// written in the SAME atomic transaction as the decision that triggered them.
+// Altitude is a dimension of this one spine, not a second engine. Inert unless
+// a decision is committed or an explicit scan runs.
+import { diligenceRule } from './diligenceRules.js';
 
 export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // Schema v58: user-authored agreements evaluate FIRST, against the record as
@@ -696,6 +703,15 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // ADR-0098: RULE-CLR-01..05 runs before the attention market so the decisions
   // and owned settlement work it opens are priced in the same transaction.
   clearingRule,
+  // ADR-0104: RULE-DLG-01..04. A decision freezes a knowable set of typed fact
+  // pointers in the same transaction; a settled frontier below the declared
+  // diligence floor opens one governed gap decision per span per ISO week;
+  // a dark evidence class (Jeffreys upper bound below the ceiling) opens one
+  // governed redesign decision per class per ISO week; a pre-declared process
+  // forecast is graded exactly once, out of sample, by Brier skill. Runs before
+  // the market's final work-producing pass so the decisions it opens are priced
+  // identically. Marker-idempotent, bounded and pausable.
+  diligenceRule,
   attentionMarketRule,
   // ADR-0077: the Succession Terminal (bench certification). Runs before the
   // Operating Seat because its certificate edges are provenance the seat's
@@ -716,8 +732,21 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   sealRule,
 ]);
 
-/** Maximum distinct events, including the originating action, per transaction. */
+/**
+ * Maximum distinct events, including the originating action, per transaction.
+ * An EXPLICIT whole-workspace replay (the read-only assurance rehearsal, or an
+ * operator retrying a failed promotion) may ask for a larger, still-finite
+ * budget so it reports the WHOLE cascade instead of truncating it into dozens
+ * of rolled-back rules. Ordinary production writes keep the 64-event cap.
+ */
 export const MAX_AUTOMATION_EVENTS = 64;
+export const MAX_REPLAY_EVENT_BUDGET = 256;
+
+function automationEventBudget(context) {
+  const requested = Number(context?.eventBudget);
+  if (!Number.isInteger(requested)) return MAX_AUTOMATION_EVENTS;
+  return Math.min(Math.max(requested, MAX_AUTOMATION_EVENTS), MAX_REPLAY_EVENT_BUDGET);
+}
 
 // Existing rule producers do not all know their subscribers. Detect genuinely
 // new first-class records at a successful rule boundary and publish their
@@ -827,6 +856,7 @@ const nowMs = () => (typeof performance !== 'undefined' && performance.now
  */
 export function runPostCommitRules(draft, context = {}) {
   const rules = Array.isArray(context.rules) ? context.rules : DEFAULT_POST_COMMIT_RULES;
+  const eventBudget = automationEventBudget(context);
   const reporter = context.metrics && typeof context.metrics === 'object' ? context.metrics : null;
   const startedAt = reporter ? nowMs() : 0;
   if (reporter) {
@@ -876,7 +906,7 @@ export function runPostCommitRules(draft, context = {}) {
   // This is not a subscription shortcut: each event still visits every rule.
   // Fail before any rule runs if the bounded queue cannot carry the contract.
   if (Array.isArray(context.sourceEvents)) {
-    if (context.sourceEvents.length + 1 > MAX_AUTOMATION_EVENTS) throw new Error('The command bundle exceeds the automation event budget; nothing was applied.');
+    if (context.sourceEvents.length + 1 > eventBudget) throw new Error('The command bundle exceeds the automation event budget; nothing was applied.');
     for (const event of context.sourceEvents) {
       if (!event || typeof event.type !== 'string' || !/^[a-z][a-zA-Z0-9.-]{0,79}$/.test(event.type)
         || typeof event.entity !== 'string' || !event.entity || typeof event.entityId !== 'string') throw new Error('A staged command produced an invalid source event.');
@@ -894,7 +924,7 @@ export function runPostCommitRules(draft, context = {}) {
     for (const event of createdRecordEvents(context.previousState, (key) => draft[key])) {
       const key = eventKey(event);
       if (seen.has(key)) continue;
-      if (seen.size >= MAX_AUTOMATION_EVENTS) { omitted += 1; continue; }
+      if (seen.size >= eventBudget) { omitted += 1; continue; }
       seen.add(key);
       queue.push({ event, derived: true, parentStepId: null, depth: 1 });
       if (typeof context.logEvent === 'function') context.logEvent({
@@ -902,7 +932,7 @@ export function runPostCommitRules(draft, context = {}) {
       });
     }
     if (omitted) {
-      const message = `Automation event limit (${MAX_AUTOMATION_EVENTS}) reached; ${omitted} source-created event(s) were not delivered.`;
+      const message = `Automation event limit (${eventBudget}) reached; ${omitted} source-created event(s) were not delivered.`;
       if (typeof context.logEvent === 'function') context.logEvent({ type: 'automation.rule_error', entity: 'workspace', entityId: '', summary: message });
       if (Array.isArray(context.warnings)) context.warnings.push(message);
     }
@@ -956,8 +986,8 @@ export function runPostCommitRules(draft, context = {}) {
           const event = JSON.parse(JSON.stringify(emission));
           const key = eventKey(event);
           if (seen.has(key) || pendingKeys.has(key)) return false;
-          if (seen.size + pendingKeys.size >= MAX_AUTOMATION_EVENTS) {
-            throw new Error(`Automation event limit (${MAX_AUTOMATION_EVENTS}) reached; this rule was rolled back.`);
+          if (seen.size + pendingKeys.size >= eventBudget) {
+            throw new Error(`Automation event limit (${eventBudget}) reached; this rule was rolled back.`);
           }
           pendingKeys.add(key);
           bufferedEmissions.push(event);

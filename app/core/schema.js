@@ -253,6 +253,15 @@ import {
   normalizeEpistemicSettings,
   normalizeEpistemicUnknowns,
 } from './domain/epistemicSchema.js';
+// ADR-0104 (Schema v106): the Diligence Ledger. Frozen knowable sets, dated
+// consultations, once-only Brier grades, idempotency markers and conventions.
+import {
+  normalizeDiligenceChecklists,
+  normalizeDiligenceConsults,
+  normalizeDiligenceGrades,
+  normalizeDiligenceMarkers,
+  normalizeDiligenceSettings,
+} from './domain/diligenceSchema.js';
 import { ALTITUDES as SPAN_ALTITUDES } from './domain/chainRegistry.js';
 // ADR-0088: the Escalation Economy — the disposition ledger, intervention-rate
 // commitments, idempotency markers, and clamped conventions.
@@ -468,7 +477,7 @@ export {
 // older blob simply opens on the undeclared operator view. A version bump here
 // would have forced 78 test files to be rewritten for zero user benefit; the
 // honest choice is to add nothing to migrate.
-export const SCHEMA_VERSION = 105;
+export const SCHEMA_VERSION = 106;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -1768,6 +1777,28 @@ export const DEFAULT_SETTINGS = Object.freeze({
   epistemicBlindDarkPct: 5,
   epistemicReviewDays: 14,
   epistemicAutoPropagate: true,
+  // ADR-0104: the Diligence Ledger. `diligenceKnowableFloor` refuses a coverage
+  // rate below that many frozen knowable facts; `diligenceCoverageFloorPct` is
+  // the declared diligence floor whose breach opens ONE governed gap decision
+  // per span per ISO week; `diligenceClassFloor` refuses a Jeffreys interval
+  // below that many facts in a class; `diligenceDarkCeilingPct` declares a class
+  // dark when its WHOLE 90% credible upper bound sits below it;
+  // `diligenceForecastHorizonDays` bounds the out-of-sample grading window;
+  // `diligenceReviewDays` is the review horizon on every governed finding; and
+  // `diligenceStaleDays` stops a pending decision from ever being "graded" by
+  // an outcome that never arrived. All conventions are printed, never fitted.
+  diligenceKnowableFloor: 8,
+  diligenceCoverageFloorPct: 70,
+  diligenceClassFloor: 6,
+  diligenceDarkCeilingPct: 30,
+  // A Brier grade needs at least this many scoreable claims. A forecast can
+  // declare at most five evidence classes plus one coverage claim, so this
+  // floor is deliberately separate from the knowable-facts floor.
+  diligenceGradeClaimFloor: 3,
+  diligenceForecastHorizonDays: 45,
+  diligenceReviewDays: 14,
+  diligenceStaleDays: 90,
+  diligenceAutoPropagate: true,
   // ADR-0103: the epistemic ledger's own floors are read back by the view so a
   // refused rate always prints the convention that refused it.
   });
@@ -2190,6 +2221,16 @@ export const COLLECTIONS = [
   'epistemicObservations',
   'epistemicGrades',
   'epistemicMarkers',
+  // ADR-0104: the Diligence Ledger. `diligenceChecklists` freezes the knowable
+  // set (typed POINTERS only) for one decision at the moment it is recorded;
+  // `diligenceConsults` is the append-only evidence that a leader looked;
+  // `diligenceGrades` holds one out-of-sample Brier grade per pre-declared
+  // forecast; `diligenceMarkers` is the four rules' idempotency ledger. No
+  // rate, interval, band or grade is persisted: all are re-derived on read.
+  'diligenceChecklists',
+  'diligenceConsults',
+  'diligenceGrades',
+  'diligenceMarkers',
   'links',
   'portfolio',
   'events',
@@ -2881,6 +2922,10 @@ export function normalizeSettings(raw) {
     // age, declared expiry, the four floors and the two coverage bands —
     // clamped and printed, never fitted.
     ...normalizeEpistemicSettings(s),
+    // ADR-0104: the diligence-ledger conventions — knowable floor, coverage
+    // floor, class floor, dark ceiling, forecast horizon, review horizon and
+    // stale horizon — clamped and printed, never fitted from the record.
+    ...normalizeDiligenceSettings(s),
     chainAdoptedHorizons: normalizeAdoptedHorizons(s.chainAdoptedHorizons, DECLARED_HORIZONS),
     chainAdoptedOn: /^\d{4}-\d{2}-\d{2}$/.test(String(s.chainAdoptedOn || '')) ? s.chainAdoptedOn : null,
     chainAdoptedReadingId: typeof s.chainAdoptedReadingId === 'string' && s.chainAdoptedReadingId.trim()
@@ -7038,6 +7083,16 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.epistemicObservations = normalizeEpistemicObservations(raw.epistemicObservations, warnings, { now: new Date() });
   state.epistemicGrades = normalizeEpistemicGrades(raw.epistemicGrades);
   state.epistemicMarkers = normalizeEpistemicMarkers(raw.epistemicMarkers);
+  // ADR-0104: frozen frontiers, consultations and once-only grades resolve
+  // BEFORE typed links so `diligence-for`, `deliberates-on` and
+  // `grades-diligence` edges validate against real ids. A checklist without its
+  // decision, its decision date or its freeze date, and a "ruled-out" consult
+  // without a reason, are DROPPED with a warning — never repaired into a claim
+  // that somebody looked when the record cannot prove it.
+  state.diligenceChecklists = normalizeDiligenceChecklists(raw.diligenceChecklists, warnings);
+  state.diligenceConsults = normalizeDiligenceConsults(raw.diligenceConsults, warnings, { now: new Date() });
+  state.diligenceGrades = normalizeDiligenceGrades(raw.diligenceGrades);
+  state.diligenceMarkers = normalizeDiligenceMarkers(raw.diligenceMarkers);
   state.spanAdoptions = normalizeSpanAdoptions(raw.spanAdoptions, warnings);
   state.spanMarkers = normalizeSpanMarkers(raw.spanMarkers);
   // ADR-0085: the Operating Cadence Clock. A malformed forum, a sitting with no
@@ -7863,6 +7918,24 @@ export const MIGRATIONS = {
   // freezes every decision on the next commit and every figure is derived on
   // read, so a back-filled lock at upgrade time would only pretend the freeze
   // happened when it did not.
+  // ADR-0104: additive 105 → 106. An existing workspace has decisions but no
+  // frozen frontiers, so all four ledgers start EMPTY — "no knowable set has
+  // been frozen here yet", a different claim from "every decision was fully
+  // diligent". Nothing is back-filled: RULE-DLG-01 freezes each decision on
+  // the next commit, and every interval, band and grade is derived on read.
+  // Inventing a frontier at upgrade time would pretend a look happened in the
+  // past that the record cannot prove.
+  105: (v105) => ({
+    ...v105,
+    schemaVersion: 106,
+    diligenceChecklists: Array.isArray(v105.diligenceChecklists) ? v105.diligenceChecklists : [],
+    diligenceConsults: Array.isArray(v105.diligenceConsults) ? v105.diligenceConsults : [],
+    diligenceGrades: Array.isArray(v105.diligenceGrades) ? v105.diligenceGrades : [],
+    diligenceMarkers: Array.isArray(v105.diligenceMarkers) ? v105.diligenceMarkers : [],
+    settings: isPlainObject(v105.settings)
+      ? { ...v105.settings, ...normalizeDiligenceSettings(v105.settings) }
+      : { ...DEFAULT_SETTINGS },
+  }),
   104: (v104) => ({
     ...v104,
     schemaVersion: 105,

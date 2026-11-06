@@ -1,3 +1,15 @@
+## 2026-11-06 — Session 144: The Diligence Ledger (`#/diligence`, ADR-0104, Schema v106, CSV #100)
+
+**Question answered:** before this decision, what was knowable — and did the organisation actually look?
+
+Six panels: Diligence desk, Knowable set, Class cells, Process forecasts, Governed findings, Conventions. A frozen frontier is derived from five evidence classes owned by other modules (cases, premises, delegations, goals, strictly-earlier settled decisions). Consultations are append-only: `used`, `deferred`, or `ruled-out` with a required written reason. Wilson (1927) coverage refuses below the declared knowable floor; an exact Jeffreys Beta(½,½) 90% credible interval detects systematically dark evidence classes; a pre-decision process forecast is graded once, out of sample, by Brier (1950) skill against a strictly-prior 0.5 base rate.
+
+**Cross-module + cross-altitude in one atomic write.** `RULE-DLG-01..04` on the shared post-commit spine write `diligence-for`, one `deliberates-on` per fact pointer, and one `rolls-up-to` per leadership ancestor in the same transaction as the decision. No manual re-entry, no second roll-up engine. `RULE-DLG-02/03` open bounded governed findings; `RULE-DLG-04` writes a once-only grade. Hindsight Lock excludes this module's audit output.
+
+**Altitudes.** Frontline records consultations and forecasts at its own span; manager/director reads class cells and floor consistency; VP/executive re-declares the eight clamped conventions (`govern-diligence`, rank 4–5 AND full access) and reads portfolio-level gaps; CEO/C-suite receives an identity-free upward brief with counts, directions, refusals and pooled skill. `record-diligence-consult` is rank 1–5. Disclosure manifest: `unit`, adapter-scoped, `detailCeiling: 0`. CSV #100 is aggregate-only with BLANK refusals.
+
+**Honest refusals.** No back-fill at schema migration; no forecast after settlement; no per-person score; no invented risk; no automatic closing of a human decision; no rating above the small-cell floor. Real-browser AT walkthrough `[UNVERIFIED]`; vendor capability not audited.
+
 ## Session 142 — The Hindsight Lock (`#/hindsight`, ADR-0102)
 
 Every other screen can say whether a decision *worked*. This one says whether it was *knowing* — and refuses to confuse the two. When a decision is recorded, `RULE-HND-01` freezes its **information set** in the same transaction: the typed links that existed by that day, each resolved to its own record date. From then on the set is history, never recomputed, so the answer cannot drift as the workspace grows.

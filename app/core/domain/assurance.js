@@ -2,7 +2,7 @@
  * No new storage schema. Replays use disposable copies and the production rules.
  */
 import { LINK_ENTITY_TYPES, LINK_RELATIONS, resolveLinkedEntity } from './cases.js';
-import { runPostCommitRules } from './postCommit.js';
+import { runPostCommitRules, MAX_REPLAY_EVENT_BUDGET } from './postCommit.js';
 
 const keyOf = (type, id) => JSON.stringify([type, id]);
 const allowed = (type) => LINK_ENTITY_TYPES.includes(type);
@@ -109,6 +109,11 @@ export function previewCaseAutomation(state, caseId, { now = new Date(), rules }
   runPostCommitRules(draft, {
     event: { type: 'case.automation.refresh', entity: 'case', entityId: caseId }, now,
     idFactory, logEvent: (e) => events.push(e), warnings, trace,
+    // A rehearsal is a READ-ONLY copy. Production keeps the 64-event safety cap,
+    // but an assurance replay that truncates a fully populated workspace into
+    // dozens of rolled-back rules reports a fake failure instead of the real
+    // cascade. The rehearsal gets a larger, still-finite budget.
+    eventBudget: MAX_REPLAY_EVENT_BUDGET,
     ...(rules ? { rules } : {}),
   });
   const changes = [];

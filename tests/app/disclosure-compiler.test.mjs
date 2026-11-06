@@ -99,6 +99,10 @@ const RENDERER_ROUTES = [
   // carry record ids and answers, which never enter a projection) and declares a
   // manifest row like every other terminal.
   'epistemic',
+  // ADR-0104: the Diligence Ledger owns a scoped report adapter (raw frontiers
+  // carry typed fact pointers, and consultations carry a written reason, so
+  // they never enter a declared-seat projection) and declares a manifest row.
+  'diligence',
 ];
 
 /** Sentinel-bearing roster: every person, span and private note is traceable. */
@@ -195,7 +199,7 @@ function seatsOrThrow(state) {
 /* --------------------------------------------------------------- 1. schema */
 
 test('schema v90 migrates additively and refuses malformed or stale grants', () => {
-  assert.equal(SCHEMA_VERSION, 105);
+  assert.equal(SCHEMA_VERSION, 106);
   const old = { schemaVersion: 89, settings: { leaderName: 'Keep' }, cases: [{ id: 'keep' }], disclosureGrants: [{ id: 'existing' }] };
   const migrated = migrate(old);
   assert.equal(migrated.raw.schemaVersion, SCHEMA_VERSION);

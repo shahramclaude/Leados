@@ -174,9 +174,9 @@ function thinScenario() {
 /* ------------------------------------------------------------------ schema */
 
 test('Schema v104 migrates additively: empty lock ledgers, declared conventions, nothing back-filled', () => {
-  assert.equal(SCHEMA_VERSION, 105);
+  assert.equal(SCHEMA_VERSION, 106);
   const migrated = migrate({ schemaVersion: 103, settings: { leaderName: 'Keep this' } });
-  assert.deepEqual(migrated.applied, ['103 → 104', '104 → 105']);
+  assert.deepEqual(migrated.applied, ['103 → 104', '104 → 105', '105 → 106']);
   assert.deepEqual(migrated.raw.decisionLocks, []);
   assert.deepEqual(migrated.raw.decisionLockMarkers, []);
   assert.equal(migrated.raw.settings.leaderName, 'Keep this');
@@ -336,7 +336,7 @@ test('all four quadrants are reachable from the frozen claim and the live outcom
 
 test('RULE-HND-01 registers the lock as a graph node with locks / consults / rolls-up-to in the same transaction', () => {
   assert.ok(DEFAULT_POST_COMMIT_RULES.includes(hindsightRule));
-  assert.equal(DEFAULT_POST_COMMIT_RULES.length, 84);
+  assert.equal(DEFAULT_POST_COMMIT_RULES.length, 85);
   assert.equal(PROPAGATION_CONTRACTS.length, DEFAULT_POST_COMMIT_RULES.length);
   assert.ok(LINK_ENTITY_TYPES.includes('hindsightlock'));
   assert.ok(LINK_RELATIONS.includes('locks') && LINK_RELATIONS.includes('consults'));
@@ -489,7 +489,7 @@ test('CSV scope #98 is registered and carries no decision, lock, person or fact 
   api.hindsightScan();
   const spec = CSV_EXPORTS.find((row) => row.key === 'hindsight');
   assert.ok(spec, 'CSV scope #98 is registered');
-  assert.equal(CSV_EXPORTS.length, 99);
+  assert.equal(CSV_EXPORTS.length, 100);
   const res = exportWorkspaceCsv(store.state, 'hindsight', { now: NOW });
   assert.equal(res.ok, true, res.error);
   assert.ok(res.rowCount > 0);
