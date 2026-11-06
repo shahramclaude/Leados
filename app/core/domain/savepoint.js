@@ -115,6 +115,9 @@ function createLazySavepoint(base) {
   const shadow = {};
 
   const read = (key) => {
+    // A deleted key must stay absent until explicitly reassigned. Otherwise a
+    // later read resurrects the base value and commit silently restores it.
+    if (removed.has(key)) return undefined;
     if (materialised.has(key)) return materialised.get(key);
     if (!Object.hasOwn(base, key)) return undefined;
     const copy = copyValue(base[key]);

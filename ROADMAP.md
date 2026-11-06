@@ -1,3 +1,10 @@
+## 2026-11-06 — Reliability and governance priority
+
+- **Implemented [all altitudes]:** fix deleted-field resurrection in shared automation savepoints; regression tests exercise both transaction strategies and rule failure isolation.
+- **Planned [frontline → CEO]:** authenticated, server-enforced org hierarchy and scoped persistence; browser seats alone are not an access boundary.
+- **Planned [director → CEO]:** independently test disclosure against differencing and small-cohort leakage, then validate aggregate forecasts prospectively against baselines.
+- **Deliberately rejected [all]:** individual flight-risk scoring without calibration, fairness validation, consent and governance.
+
 ## 2026-11-06 — Execution closure shipped; next targets (Session 146, Schema v108, ADR-0106)
 
 **Shipped.** `RULE-EXE-01` + per-kind evidence registry reconcile adopted bundles from dated terminal records; Mission `#/mission?panel=execution` roll-up + receipt; Bundles receipt card; role-first sidebar with permitted-tool search; schema v108 additive; rule count 85 → 86.

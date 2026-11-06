@@ -1,3 +1,11 @@
+## 2026-11-06 — Shared savepoint deletion integrity
+
+Origin verified `https://github.com/shahramclaude/Leados.git`, branch `arena/e239d6b5-leados`. The repository has approximately 780,000 tracked lines; full file-by-file audit [UNVERIFIED]. Inspected canonical post-commit engine, copy-on-write savepoint, seat/access gateway and cascade/roll-up fixtures. Existing event propagation and role-tiered hierarchy are implemented; local seat selection is explicitly not authentication, and enterprise access controls are missing. Many modules and end-to-end UX remain [UNVERIFIED].
+
+Fixed deletion followed by read resurrecting the original value in the lazy savepoint. Added strategy parity, reflection, reassignment, subscriber and rollback regression tests. Targeted verification: savepoint 4/4, cascade 2/2, existing frontline cross-module and lead→manager→director→VP roll-up 1/1, targeted ESLint passed. Initial combined suite timed out after 180 seconds; full suite [UNVERIFIED]. A first roll-up run lacked jsdom; `npm ci` succeeded and the targeted rerun passed. No browser test.
+
+This is a narrow infrastructure repair, not the requested substantial multi-feature leap. Competitive findings and deferred authenticated access are in RESEARCH.md and ROADMAP.md. Sync result: commit `15c69f1` pushed successfully to `origin/arena/e239d6b5-leados`; PR https://github.com/shahramclaude/Leados/pull/174 created successfully. This log update follows that confirmed push.
+
 ## 2026-11-06 — Session 146: Evidence-based execution closure + role-first navigation (Schema v108, ADR-0106)
 
 **Repository identity.** Origin verified `https://github.com/shahramclaude/Leados.git`; branch `arena/b02c70bb-leados`; base `ebad985` (PR #172). Canonical target `index.html` + `app/**`; legacy `src/**` untouched.
