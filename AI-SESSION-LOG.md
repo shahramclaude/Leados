@@ -4,7 +4,7 @@ Origin verified `https://github.com/shahramclaude/Leados.git`, branch `arena/e23
 
 Fixed deletion followed by read resurrecting the original value in the lazy savepoint. Added strategy parity, reflection, reassignment, subscriber and rollback regression tests. Targeted verification: savepoint 4/4, cascade 2/2, existing frontline cross-module and lead→manager→director→VP roll-up 1/1, targeted ESLint passed. Initial combined suite timed out after 180 seconds; full suite [UNVERIFIED]. A first roll-up run lacked jsdom; `npm ci` succeeded and the targeted rerun passed. No browser test.
 
-This is a narrow infrastructure repair, not the requested substantial multi-feature leap. Competitive findings and deferred authenticated access are in RESEARCH.md and ROADMAP.md. Sync result: see PR/commit state; push has not yet been attempted at time of writing.
+This is a narrow infrastructure repair, not the requested substantial multi-feature leap. Competitive findings and deferred authenticated access are in RESEARCH.md and ROADMAP.md. Sync result: commit `15c69f1` pushed successfully to `origin/arena/e239d6b5-leados`; PR https://github.com/shahramclaude/Leados/pull/174 created successfully. This log update follows that confirmed push.
 
 ## 2026-11-06 — Session 146: Evidence-based execution closure + role-first navigation (Schema v108, ADR-0106)
 
