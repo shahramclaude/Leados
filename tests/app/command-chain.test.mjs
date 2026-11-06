@@ -141,7 +141,7 @@ function ruleContext(event, settings = {}, now = NOW) {
 /* ------------------------------------------------------------------ */
 
 test('schema v82 is additive: two collections, no rewrite, and a probability-free reading is refused', () => {
-  assert.equal(SCHEMA_VERSION, 109);
+  assert.equal(SCHEMA_VERSION, 110);
   assert.equal(typeof MIGRATIONS[81], 'function');
 
   const v81 = { ...createEmptyState(NOW.toISOString()), schemaVersion: 81 };
@@ -149,14 +149,14 @@ test('schema v82 is additive: two collections, no rewrite, and a probability-fre
   delete v81.chainMarkers;
   v81.people = [{ id: 'p1', name: 'Existing person', level: 'lead', status: 'active' }];
   const migrated = migrate(v81);
-  assert.equal(migrated.applied.at(-1), '108 → 109', 'the whole chain runs to the current schema');
+  assert.equal(migrated.applied.at(-1), '109 → 110', 'the whole chain runs to the current schema');
   assert.deepEqual(migrated.raw.chainReadings, []);
   assert.deepEqual(migrated.raw.chainMarkers, []);
   assert.equal(migrated.raw.people.length, 1, 'no existing record is touched');
 
   const normalized = normalizeState(migrated.raw, { now: NOW });
-  assert.equal(normalized.state.schemaVersion, 109);
-  assert.equal(normalized.state.schemaVersion, 109);
+  assert.equal(normalized.state.schemaVersion, 110);
+  assert.equal(normalized.state.schemaVersion, 110);
 
   const warnings = [];
   const readings = normalizeChainReadings([
@@ -711,9 +711,14 @@ test('the demo workspace renders the chain, and the roll-up is an exact sum of t
   const demo = buildDemoState(NOW);
   const report = chainReport(demo, NOW, demo.settings);
 
-  // Altitudes are only claimed where the roster actually has them.
-  assert.ok(report.totals.altitudesPresent <= 3, 'a two-level demo cannot claim five altitudes');
-  assert.ok(!report.chain.representedAltitudes.includes('chief'));
+  // ADR-0108: the demo roster now runs the FULL five-rung ladder (Priya →
+  // Samuel/Mei → Rafe → Ingrid → Alex Rivera), so the assertion is inverted: the
+  // demo must claim every altitude, because a hierarchy claim demonstrated only
+  // on the shallowest possible org is a claim that was never exercised.
+  assert.equal(report.totals.altitudesPresent, 5, 'the demo ladder must exercise all five altitudes');
+  for (const key of ['frontline', 'manager', 'director', 'exec', 'chief']) {
+    assert.ok(report.chain.representedAltitudes.includes(key), `the demo ladder must represent ${key}`);
+  }
 
   // Multi-altitude roll-up: every altitude's open count is the exact sum of the
   // dossiers at that altitude, and the altitude totals sum to the whole cascade.

@@ -1933,6 +1933,46 @@ export function buildDemoState(now = new Date()) {
   state.people.find((person) => person.id === jordan).managerId = mei;
   state.people.find((person) => person.id === freya).managerId = samuel;
 
+  // ADR-0108 — THE FULL LADDER. The roster above was two altitudes deep, so
+  // three of the five rungs could never be exercised and every hierarchy claim
+  // in the product was demonstrated on the shallowest possible org. Session 115
+  // put "multi-altitude demo depth" on the roadmap and it was never taken.
+  //
+  // Two leaders are added so the demo runs a genuine five-rung chain:
+  //   Priya (frontline) → Samuel/Mei (manager) → Rafe (director)
+  //     → Ingrid (VP) → the workspace leader Alex Rivera (chief)
+  //
+  // Crucially they own NO pre-seeded work of their own. Everything the director,
+  // the VP and the chief read is derived from the records that already exist
+  // below them, which is the property the whole hierarchy claim rests on and the
+  // one a hand-seeded executive dashboard would quietly fake.
+  const ladder = [
+    { id: 'person-demo-11', name: 'Rafe Okonkwo', role: 'Director of Engineering', level: 'director', focus: 'Make four teams’ work add up to the reliability bet, or say which bet has no work under it.' },
+    { id: 'person-demo-12', name: 'Ingrid Solberg', role: 'VP Platform', level: 'vp', focus: 'Fund the platform bets that are worth more than the ones we refuse, and test the bench.' },
+  ];
+  for (const person of ladder) {
+    state.people.push({
+      id: person.id,
+      name: person.name,
+      role: person.role,
+      level: person.level,
+      team: 'Platform',
+      managerId: null,
+      startDate: at(820),
+      focus: person.focus,
+      talkingPoints: [],
+      status: 'active',
+      createdAt: new Date(ts(120)).toISOString(),
+      archivedAt: null,
+    });
+  }
+  state.people.find((person) => person.id === priya).managerId = 'person-demo-11';
+  state.people.find((person) => person.id === 'person-demo-11').managerId = 'person-demo-12';
+  // The workspace leader is the CHIEF here, so the demo opens at the top of the
+  // ladder and every rung below is reachable through the seat lens. Ingrid has
+  // no roster manager: she reports to the workspace leader, as a real VP would.
+  state.settings.chainLeaderAltitude = 'chief';
+
   // 1:1s — weekly rhythm for most, slipping for Priya, brand new for Samuel.
   const oneOnOne = (personId, daysAgo, status, mood, notes, actions = []) => {
     state.oneOnOnes.push({
@@ -2835,6 +2875,44 @@ export function buildDemoState(now = new Date()) {
   });
 
   state.portfolio = [
+    // ADR-0108: a director and a VP own FUNDED delivery bets. Two reasons, and
+    // the second is the one that matters. First, an executive roster that owns no
+    // funded work is a fiction that quietly breaks the capacity model: adding two
+    // full-time leaders with no demand diluted utilisation from a deliberately
+    // tight 0.83 to 0.69 and made the Capacity screen report slack in an
+    // organisation that is supposed to be over-committed. Second, the Decision-Fit
+    // Ledger's whole claim is that executive load is DERIVED from the work below
+    // it — but a VP who owns nothing at all is not a leader, and pricing her
+    // authority would be pricing an empty seat. She owns two bets she must
+    // personally carry; everything above her is still derived.
+    pf({
+      title: 'Reliability bet: the platform SLO programme',
+      sourceType: 'goal',
+      sourceId: metricsGoalId,
+      ownerId: 'person-demo-11',
+      effortDays: { optimistic: 5, mostLikely: 7, pessimistic: 10 },
+      value: { optimistic: 42000, mostLikely: 60000, pessimistic: 88000 },
+      decision: 'funded',
+      decisionOn: at(26),
+      rationale: 'The director personally owns the reliability commitment the four teams below him are funded against.',
+      targetOn: at(-20),
+      createdOn: at(28),
+      createdAt: new Date(ts(28)).toISOString(),
+    }),
+    pf({
+      title: 'Platform consolidation: retire the second data plane',
+      sourceType: 'goal',
+      sourceId: metricsGoalId,
+      ownerId: 'person-demo-12',
+      effortDays: { optimistic: 4, mostLikely: 6, pessimistic: 9 },
+      value: { optimistic: 38000, mostLikely: 52000, pessimistic: 74000 },
+      decision: 'funded',
+      decisionOn: at(22),
+      rationale: 'The VP carries the consolidation decision personally; it is a one-way call she cannot delegate below the platform group.',
+      targetOn: at(-18),
+      createdOn: at(24),
+      createdAt: new Date(ts(24)).toISOString(),
+    }),
     pf({
       title: 'Billing reconciliation automation',
       sourceType: 'goal',

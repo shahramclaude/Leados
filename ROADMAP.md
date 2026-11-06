@@ -1,3 +1,56 @@
+## 2026-11-06 — Decision-Fit Ledger shipped; next targets (Session 148, Schema v110, [ADR-0108](./docs/adr/0108-decision-fit.md))
+
+**Shipped [all altitudes].** `RULE-FIT-01..04`; schema v110 additive with four empty
+collections (`fitSnapshots`, `fitProposals`, `fitReadings`, `fitMarkers`) and declared
+conventions; **88 rules / 88 auditable contracts**; CSV scope #102 (aggregate-only,
+BLANK refusals, no ids); the five-rung demo ladder; `record-fit` (rank 1–5) and
+`govern-fit` (rank 4–5) rights with the module's read surface registered in
+`SAFE_READS`. The decision-fit model is **declared, not fitted**: five authority
+classes with floors, expected hold at each rung, error price per point of information
+deficit, monitoring cost per extra rung crossed — every figure net of all three and
+printed with its inputs and its refusal.
+
+- **[all altitudes]** *A price on authority, not another latency metric.* For every
+  open call: what holding it at this rung costs against each candidate rung, net of the
+  error price and the monitoring cost of the rungs crossed. Evidence:
+  `app/core/domain/decisionFit.js` (`priceAlternative`, `buildFitBook`),
+  `docs/adr/0108-decision-fit.md` §3.
+- **[all altitudes]** *Contested share measured against the leader's own record, with a
+  naive-rule benchmark.* Own-held calls only, Wilson interval, refusing below the
+  disclosure floor; the leader's real allocation compared to hold-all and delegate-all
+  on their own settled cohort. Evidence: `buildContestedShare`,
+  `scoreAllocationRules` in `decisionFit.js`.
+- **[frontline → CEO]** *Cross-altitude roll-up on the existing spine.* A frozen
+  frontline snapshot reaches the chief through `rolls-up-to` with no manual re-entry;
+  span readings above rank 2 withhold identity and refuse below their disclosure floor.
+  Evidence: `fitRollUp`, `RULE-FIT-04`, 23 roll-up edges verified in the demo.
+- **[frontline → CEO]** *The inversion, now priced instead of printed as silence.* A
+  call held BELOW its class floor gets an escalation row, tagged a compliance fix whose
+  net is usually negative and printed honestly as such. Evidence: `priceAlternative`
+  `escalating`/`complianceFix`, `heldBelowFloor` on every book row.
+
+**Found and fixed while building [engineering].** Four defects: the empty ladder for a
+below-floor holder; non-idempotent scans (13 → 40 snapshots) from keying identity on the
+owning rung rather than the call; the ledger pricing its **own audit output** (13 → 40 →
+67 — the Session-143 second-order-decision regression in a new module); and a
+cross-module import cycle that fails **silently** to an empty book. All four are
+documented in ADR-0108 §7 with the reproduction, because a fix without its failure mode
+is a rumour.
+
+**Next (in order).**
+1. **[all altitudes]** `scoreAllocationRules` still refuses `paired: 0` — it joins the
+   open book only. Needs a priced look-up spanning SETTLED decisions so the paired
+   comparison has a cohort. The refusal is honest today; a benchmark that never runs is
+   a gap, not a feature.
+2. **[director → CEO]** Grade the forecast: the demo has one material move and it is 0
+   days old, so `RULE-FIT-03` has never fired end-to-end. Seed a genuinely held call, or
+   accept that the first real grade is the first real proof.
+3. **[manager]** Registry polish found by review: the `[FIT-PROPSE:` typo, duplicated
+   `FIT_QUESTION_TABLE`/`FIT_ALTITUDE_QUESTIONS`, and the misnamed
+   `AUTHORITY_CLASS_KEYS_PRESENT`.
+4. **[all altitudes]** Real-browser accessibility sweep — still [UNVERIFIED] across the
+   whole product, and the stand-in is a jsdom textContent harness.
+
 ## 2026-11-06 — Outcome Learning Loop shipped; next targets (Session 147, Schema v109, [ADR-0107](./docs/adr/0107-outcome-learning-loop.md))
 
 **Gap decision.** The inventory already had adoption, execution closure,

@@ -124,6 +124,7 @@ import { reputationalCapitalRule } from './reputationalCapitalRules.js';
 import { hindsightRule } from './hindsightRules.js';
 import { epistemicRule } from './epistemicRules.js';
 import { diligenceRule } from './diligenceRules.js';
+import { decisionFitRule } from './decisionFitRules.js';
 import { cadenceRule } from './cadenceRules.js';
 import { carryoverRule } from './carryoverRules.js';
 
@@ -693,6 +694,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'diligenceRules.js',
     purpose: 'RULE-DLG-01 FREEZE reads five evidence classes other modules OWN (cases, premises, delegations, goals and strictly-earlier settled decisions) and freezes one typed-pointer knowable set per decision at the moment the decision is committed. It writes one `diligence-for` edge to that decision, one `deliberates-on` edge per fact pointer, and one `rolls-up-to` edge per leadership ancestor of the owning span IN THE SAME ATOMIC TRANSACTION: the transaction that records a call also makes the frontier it leapt over visible above the span. RULE-DLG-02 GAP opens exactly ONE governed decision per span per ISO week when a settled frontier sits below the declared diligence floor. RULE-DLG-03 DARK opens exactly ONE governed decision per class per ISO week when the whole Jeffreys Beta(1/2,1/2) 90% credible interval on the consulted share of a class sits below the declared ceiling — the class the organisation systematically walks past. RULE-DLG-04 GRADE grades a pre-declared process forecast exactly ONCE, out of sample, after settlement, by Brier skill against a strictly-prior 0.5 base rate; an overconfident forecast is printed, not hidden. Consultation is append-only evidence that a leader LOOKED: `used`, `deferred` and `ruled-out` (with a required reason) all count as diligence, so a dismissed fact is not silently charged as a miss. The module never edits the records of another module, never infers relevance from a title, never back-fills a frontier at upgrade, never rates or names a person, and never closes a human decision. Marker-idempotent, bounded, pausable by diligenceAutoPropagate, and an explicit scan always runs.',
     writes: ['diligenceChecklists', 'diligenceConsults', 'diligenceGrades', 'diligenceMarkers', 'decisions', 'links'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: decisionFitRule,
+    module: 'decisionFitRules.js',
+    purpose: 'RULE-FIT-01 FREEZE classifies every open, governed call into one of five authority classes, each with a FLOOR (a floor, not a ceiling: above it any rung may hold the call, which is what makes delegation an option at all), and freezes the classification as an immutable snapshot keyed on (decision, class) — never on the rung that happens to hold it, so a rescan converges instead of appending. It writes one `prices-authority` edge to the decision it priced. RULE-FIT-02 PROPOSE opens exactly ONE governed delegation proposal per call per ISO week when the call has outlived its rung declared expected hold AND a material, non-provisional saving exists; it never moves work, and it never prices a call held BELOW its class floor as delegable — that call is priced as an ESCALATION to the floor, tagged as a compliance fix whose net is usually negative and printed honestly as such. RULE-FIT-03 GRADE grades the forecast that priced a settled delegation exactly ONCE, out of sample, against the dated contract outcome. RULE-FIT-04 ROLLUP publishes one identity-free span reading per (span, ISO week) as `rolls-up-to` per leadership ancestor IN THE SAME ATOMIC TRANSACTION, with a contested share that REFUSES below its disclosure floor rather than printing a share of two. Governed findings are audit output, never operational work: the rule excludes every module own governed decisions by three state-only provenance tests plus the structural test that a call with neither driver nor approver has no authority holder to price — the Session-143 second-order-decision regression, which reappeared here as 13 -> 40 -> 67 snapshots. The module never rates or names a person, never infers authority from a title, never back-fills a price at upgrade, and never auto-accepts its own proposal. Marker-idempotent, bounded, pausable by fitAutoPropagate, and an explicit fit.scan always runs.',
+    writes: ['fitSnapshots', 'fitProposals', 'fitReadings', 'fitMarkers', 'decisions', 'links'],
     emits: [],
     scansWorkspace: true,
   },

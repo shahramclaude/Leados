@@ -1,3 +1,55 @@
+## 2026-11-06 — What your authority costs, priced against your own record (Session 148, Schema v110, [ADR-0108](./docs/adr/0108-decision-fit.md))
+
+LeadOS now answers the question every other product in the category skips. Decision
+Tempo measures a latency; the Escalation Economy measures what an escalation costs.
+Neither asks what a leader is actually judged on: **this call cost seven days at
+£4,200 a week — if I had delegated it one rung down, what would I have saved, what
+would that have risked, and does my own dated record show my judgement of what I
+must personally hold beating a rule that does not use my judgement at all?**
+
+The **Decision-Fit Ledger** (`#/fit`) answers both halves:
+
+- **A declared price on authority.** Five authority classes, each with a *floor* — a
+  floor, not a ceiling: above it any rung may hold the call, which is what makes
+  delegation an option at all. For every open call: the expected hold at the owning
+  rung against each candidate rung, the wait saved, the error price of moving evidence
+  a rung away, and the **monitoring cost of every extra rung crossed**. Net of all
+  three, stock-denominated, with the arithmetic printed so it can be checked.
+- **A measured contested share against the leader's own record**, own-held calls only,
+  Wilson interval, refusing below its disclosure floor instead of printing a share of
+  two — and a naive-rule benchmark that compares the leader's real allocation to
+  "hold everything" and "delegate everything" on their own settled cohort.
+
+Four rules on the **same** event spine: `RULE-FIT-01..04` freeze, propose, grade and
+roll up. A proposal never moves work — it opens a governed decision a human must
+accept. **Silence is never consent.** A frozen frontline snapshot reaches the chief
+through the existing `rolls-up-to` relation with no manual re-entry.
+
+The five-rung demo ladder is new too. The roster was two altitudes deep, so three of
+the five rungs could never be exercised and every hierarchy claim in the product was
+demonstrated on the shallowest possible org. Priya → Samuel/Mei → Rafe → Ingrid →
+Alex Rivera, owning **no** pre-seeded work of their own: everything above the manager
+rung is derived from records below it, which is the property the hierarchy claim rests
+on and the one a hand-seeded executive dashboard would quietly fake.
+
+**What building it found.** Four defects, and the third is the important one. The
+ledger priced *its own audit output*: a scan runs every module's pass, so 54 governed
+findings were opened in the same transaction and then each got an authority
+classification — 13 → 40 → 67 snapshots across passes. That is the Session-143
+second-order-decision regression reappearing in a new module, and it was fixed the
+same way, from state rather than by import. The naive fix created a **cross-module
+import cycle whose bindings are undefined at evaluation time** — no error, no warning,
+a converged and completely empty book: a green, quiet, wrong result. Also fixed: a
+holder below their class floor got an *empty* ladder (rendered as "no alternative
+exists" when the truth is "the holder cannot lawfully grant this"), now priced as an
+escalation; and scans that appended instead of converging. Full detail in ADR-0108 §7.
+
+**Honest limits.** `scoreAllocationRules` still refuses with `paired: 0` — it joins the
+open book only, so the paired comparison has no settled cohort yet; the refusal is
+printed, not faked. Seats are declarations, not authentication. The grade panel renders
+its empty state because the demo's one material move has not yet outlived its rung's
+expected hold. Full real-browser accessibility remains [UNVERIFIED].
+
 ## 2026-11-06 — Evidence closes the loop, and now the loop grades the belief (Session 147, Schema v109, [ADR-0107](./docs/adr/0107-outcome-learning-loop.md))
 
 LeadOS now remembers **what you expected before you acted**. Mission Control →

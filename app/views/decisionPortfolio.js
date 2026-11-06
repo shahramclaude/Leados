@@ -84,10 +84,16 @@ export function renderDecisionPortfolio(ctx) {
     );
   }
 
+  // ADR-0108 sweep: `tabs()` takes `{ items, active, onSelect }`. The old
+  // `{ tabs, active, baseUrl }` call shape survived a refactor and every
+  // `item.label` was read off `undefined`, so `#/portfolio` threw before it
+  // could resolve the route and main.js fell back to "This screen failed to
+  // draw". Tab state is query-addressed like every other panel terminal.
   const tabNav = tabs({
-    tabs: TABS,
+    items: TABS,
     active: activeTab,
-    baseUrl: '#/portfolio',
+    ariaLabel: 'Decision portfolio sections',
+    onSelect: (key) => ctx.navigate(key === 'overview' ? '#/portfolio' : `#/portfolio?tab=${key}`),
   });
 
   let body;

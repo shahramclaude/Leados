@@ -123,9 +123,9 @@ const withKey = (fn) => {
 /* ------------------------------------------------------------------ schema */
 
 test('additive with no schema bump: collections, graph vocabulary, spine and exports', () => {
-  assert.equal(SCHEMA_VERSION, 109, 'ADR-0088 added no bump of its own; ADR-0103 is the current additive version (this assertion was stale at 97 on main and is repaired here)');
+  assert.equal(SCHEMA_VERSION, 110, 'ADR-0088 added no bump of its own; ADR-0103 is the current additive version (this assertion was stale at 97 on main and is repaired here)');
   const migrated = migrate({ schemaVersion: 92, settings: { leaderName: 'Keep me' }, people: [] });
-  assert.deepEqual(migrated.applied, ['92 → 93', '93 → 94', '94 → 95', '95 → 96', '96 → 97', '97 → 98', '98 → 99', '99 → 100', '100 → 101', '101 → 102', '102 → 103', '103 → 104', '104 → 105', '105 → 106', '106 → 107', '107 → 108', '108 → 109']);
+  assert.deepEqual(migrated.applied, ['92 → 93', '93 → 94', '94 → 95', '95 → 96', '96 → 97', '97 → 98', '98 → 99', '99 → 100', '100 → 101', '101 → 102', '102 → 103', '103 → 104', '104 → 105', '105 → 106', '106 → 107', '107 → 108', '108 → 109', '109 → 110']);
   assert.equal(migrated.raw.settings.leaderName, 'Keep me');
   const empty = createEmptyState(NOW.toISOString());
   for (const key of ['exchangePackets', 'exchangeArtefacts', 'exchangeMarkers']) {

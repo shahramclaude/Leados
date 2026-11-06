@@ -56,6 +56,18 @@ function hash(value) {
 
 const markerId = (kind, key) => `hnd-${kind}-${hash(String(key))}`;
 
+/**
+ * The decision ids RULE-HND opened, so other modules' ledgers never price or
+ * lock the audit output of this one. Mutually exclusive by construction.
+ */
+export function hindsightFindingIds(state = {}) {
+  const out = new Set();
+  for (const marker of (Array.isArray(state?.decisionLockMarkers) ? state.decisionLockMarkers : [])) {
+    if (marker && marker.decisionId) out.add(marker.decisionId);
+  }
+  return out;
+}
+
 function markersOf(draft) {
   return Array.isArray(draft.decisionLockMarkers) ? draft.decisionLockMarkers : [];
 }
@@ -184,6 +196,14 @@ function lockPass(draft, ctx, out, conventions) {
   // output too — they have no operational information set to freeze. Declare
   // the exclusion explicitly so a pruned marker cannot resurrect one.
   for (const id of diligenceFindingIds(draft)) ownDecisions.add(id);
+  // ADR-0108: the Decision-Fit Ledger's governed delegation proposals are audit
+  // output too. Read from the ledger's own state rather than by importing its
+  // rule module — the two modules would otherwise import each other, and a
+  // rule-module cycle resolves to undefined bindings at evaluation time (found
+  // by testing: a converged-but-empty ledger).
+  for (const proposal of (Array.isArray(draft.fitProposals) ? draft.fitProposals : [])) {
+    if (proposal && proposal.optionDecisionId) ownDecisions.add(proposal.optionDecisionId);
+  }
   let createdN = 0;
   const ordered = [...decisions].sort((a, b) => String(b?.date || '').localeCompare(String(a?.date || '')));
   for (const decision of ordered) {

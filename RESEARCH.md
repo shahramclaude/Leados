@@ -1,3 +1,52 @@
+## 2026-11-06 — Delegation economics & authority pricing hunt (Session 148)
+
+Search-result snippets/documentation only; **no vendor product was independently
+tested**. Every vendor behaviour below is **[UNVERIFIED]** unless personally
+reproduced. Tagged by organizational altitude; each records an implemented /
+planned / rejected decision with a one-line reason.
+
+- **[Frontline → CEO; delegation analytics]** The category's delegation tooling
+  measures *volume and pace* — how many decisions a leader delegates, how fast a
+  delegation is accepted (e.g. org-design and manager-effectiveness platforms
+  marketing "delegation scorecards" and "decision rights matrices"). None of the
+  material surveyed prices a specific open call against the rung that could hold it,
+  and none prints what the move would cost in errors and monitoring.
+  **Implemented [all altitudes]:** a declared price per open call per candidate rung,
+  net of error price and monitoring cost, in `priceAlternative`/`buildFitBook`
+  (ADR-0108 §3). **Rejected [all altitudes]:** a per-leader "delegation score". A
+  score is a performance statement about a person; this ledger only ever states a
+  fact about a call and a rung, so there is deliberately no field for it.
+- **[manager → CEO; decision-rights tooling]** Decision-rights products in the
+  category publish a **RACI-style matrix** (who is Responsible/Accountable for which
+  class of decision) as a static artefact, reviewed annually.
+  **Implemented [all altitudes]:** the rights ladder is executable, not documented —
+  `ACTION_RIGHTS` gates every write (`record-fit` rank 1–5, `govern-fit` rank 4–5),
+  and `classFloorRank` makes the matrix *binding* on each individual call rather than
+  a table on a wiki. **Rejected:** publishing the matrix as the deliverable — the
+  matrix is the input; the priced consequence is the product.
+- **[director → VP; span-of-control analytics]** Org-analytics vendors report span of
+  control and layers as **headcount structure** (reports per manager, org depth),
+  updated from HRIS data. Structural span is not the same as *authority* span: a
+  manager can have five reports and hold none of their decisions.
+  **Implemented [manager → CEO]:** `fitRollUp` reports the span's **open authority** —
+  open calls, priced calls, the contested share with its interval, and the rights
+  refusals — identity-free above rank 2 and refusing below the disclosure floor.
+  **Planned:** join structural span to authority span in one reading, so the
+  difference between "many reports" and "many decisions" is printed.
+- **[CEO; benchmarking]** Advisory benchmarks for "decisions per leader" and
+  "delegation rate" are cross-industry averages with no per-org denominator and no
+  refusal when the cohort is too thin to support the number.
+  **Implemented [CEO]:** the benchmark is the leader's **own settled record** compared
+  to hold-all and delegate-all, with a printed refusal (`paired: 0`) when the cohort
+  cannot support the comparison rather than falling back to a vendor average.
+  **Planned:** widen the paired cohort from the open book to settled decisions.
+- **[all altitudes; honest-print discipline]** Longitudinal observation across
+  sessions: the recurring defect class in this product is not a wrong number, it is a
+  **missing row** — an empty list that a reader interprets as "no option exists."
+  Session 148 found it again (a below-floor holder got an empty alternative ladder).
+  **Rule now enforced in tests:** every call must print at least one row, and every
+  row must be either available or refused **with a printed reason**.
+
 ## 2026-11-06 — Outcome calibration & agentic hierarchy hunt (Session 147)
 
 Search-result snippets/documentation only; **no vendor product was independently
