@@ -187,7 +187,7 @@ test('v76 -> v78 migrates additively and invents nothing', () => {
   assert.deepEqual(v77.reliabilityMarkers, []);
   assert.deepEqual(v77.couplingReviews, []);
   assert.deepEqual(v77.couplingMarkers, []);
-  assert.equal(SCHEMA_VERSION, 104);
+  assert.equal(SCHEMA_VERSION, 105);
 });
 
 test('a v75 workspace chains through both additive migrations', () => {

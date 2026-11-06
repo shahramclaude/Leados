@@ -2,6 +2,7 @@ import test, { before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import fs from 'node:fs/promises';
+import fsSync from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -27,12 +28,28 @@ before(async () => {
     });
   });
 });
+/**
+ * The fixture is an alias INSIDE the app tree on purpose: the server must refuse
+ * to serve a private file through a symlink. That makes it dangerous to leave
+ * behind — a stray copy breaks `eslint .` on a dangling link and would be swept
+ * into a commit by `git add -A`. So the fixture is removed on EVERY exit path:
+ * the normal `after` hook, an uncaught failure, and an interrupt.
+ */
+function removeFixtureSync() {
+  try { fsSync.rmSync(alias, { force: true }); } catch { /* already gone */ }
+  try { fsSync.rmSync(backup, { force: true }); } catch { /* already gone */ }
+  linked = false;
+}
+process.once('exit', removeFixtureSync);
+for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
+  process.once(signal, () => { removeFixtureSync(); process.exit(1); });
+}
+
 after(async () => {
   if (child && child.exitCode === null) {
     await new Promise((resolve) => { child.once('exit', resolve); child.kill('SIGTERM'); });
   }
-  if (linked) await fs.unlink(alias);
-  await fs.rm(backup, { force: true });
+  removeFixtureSync();
 });
 
 test('static server serves the canonical shell and JS/CSS with preview-style Host/Origin accepted', async () => {

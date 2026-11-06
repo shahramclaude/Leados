@@ -244,6 +244,15 @@ import {
   normalizeHindsightMarkers,
   normalizeHindsightSettings,
 } from './domain/hindsightSchema.js';
+// ADR-0103 (Schema v105): the Epistemic Ledger. Harvested unknowns, frozen
+// belief observations, their once-only grades and the rule-idempotency ledger.
+import {
+  normalizeEpistemicGrades,
+  normalizeEpistemicMarkers,
+  normalizeEpistemicObservations,
+  normalizeEpistemicSettings,
+  normalizeEpistemicUnknowns,
+} from './domain/epistemicSchema.js';
 import { ALTITUDES as SPAN_ALTITUDES } from './domain/chainRegistry.js';
 // ADR-0088: the Escalation Economy — the disposition ledger, intervention-rate
 // commitments, idempotency markers, and clamped conventions.
@@ -459,7 +468,7 @@ export {
 // older blob simply opens on the undeclared operator view. A version bump here
 // would have forced 78 test files to be rewritten for zero user benefit; the
 // honest choice is to add nothing to migrate.
-export const SCHEMA_VERSION = 104;
+export const SCHEMA_VERSION = 105;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -1739,6 +1748,28 @@ export const DEFAULT_SETTINGS = Object.freeze({
   hindsightCellFloor: 3,
   hindsightReviewGraceDays: 14,
   hindsightAutoPropagate: true,
+  // ADR-0103: the Epistemic Ledger. `epistemicWindowDays` is how far back the
+  // harvest reads the record; `epistemicEscalateDays` is the age at which an
+  // unopened danger/defect signal opens one governed decision; `epistemicExpiryDays`
+  // is the declared, evidence-bound expiry stamped on every harvested unknown;
+  // `epistemicAnswerFloor` refuses an answer rate below that many closed unknowns;
+  // `epistemicPairFloor` refuses a kappa and the four-cell table below that many
+  // paired beliefs; `epistemicCellFloor` is both the small-cell floor and the
+  // measurability floor for a blind class; `epistemicBlindFloor` and
+  // `epistemicBlindDarkPct` are the two declared coverage bands; and
+  // `epistemicReviewDays` is the horizon on every governed finding it opens.
+  epistemicWindowDays: 90,
+  epistemicEscalateDays: 14,
+  epistemicExpiryDays: 30,
+  epistemicAnswerFloor: 5,
+  epistemicPairFloor: 8,
+  epistemicCellFloor: 3,
+  epistemicBlindFloor: 55,
+  epistemicBlindDarkPct: 5,
+  epistemicReviewDays: 14,
+  epistemicAutoPropagate: true,
+  // ADR-0103: the epistemic ledger's own floors are read back by the view so a
+  // refused rate always prints the convention that refused it.
   });
 
 export const COLLECTIONS = [
@@ -2149,6 +2180,16 @@ export const COLLECTIONS = [
   // figure is re-derived from the lock and the live links on read.
   'decisionLocks',
   'decisionLockMarkers',
+  // ADR-0103: the Epistemic Ledger. `epistemicUnknowns` holds the harvested and
+  // declared unknowns (each one a pointer to the record it came from, never a
+  // copy of it); `epistemicObservations` holds the frozen belief sets a human
+  // declared; `epistemicGrades` holds their once-only grades; `epistemicMarkers`
+  // is the five rules' idempotency ledger. No rate, kappa, cell or coverage is
+  // ever persisted: every figure is re-derived on read.
+  'epistemicUnknowns',
+  'epistemicObservations',
+  'epistemicGrades',
+  'epistemicMarkers',
   'links',
   'portfolio',
   'events',
@@ -2836,6 +2877,10 @@ export function normalizeSettings(raw) {
     // ADR-0102: the hindsight-lock conventions — quality floor, coverage share,
     // fact, gap and settled floors, cell floor and review grace — clamped.
     ...normalizeHindsightSettings(s),
+    // ADR-0103: the epistemic-ledger conventions — harvest window, escalation
+    // age, declared expiry, the four floors and the two coverage bands —
+    // clamped and printed, never fitted.
+    ...normalizeEpistemicSettings(s),
     chainAdoptedHorizons: normalizeAdoptedHorizons(s.chainAdoptedHorizons, DECLARED_HORIZONS),
     chainAdoptedOn: /^\d{4}-\d{2}-\d{2}$/.test(String(s.chainAdoptedOn || '')) ? s.chainAdoptedOn : null,
     chainAdoptedReadingId: typeof s.chainAdoptedReadingId === 'string' && s.chainAdoptedReadingId.trim()
@@ -6984,6 +7029,15 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // never repaired into an information set a leader might be shown.
   state.decisionLocks = normalizeDecisionLocks(raw.decisionLocks, warnings, { now: new Date() });
   state.decisionLockMarkers = normalizeHindsightMarkers(raw.decisionLockMarkers);
+  // ADR-0103: epistemic unknowns, frozen belief observations and their grades
+  // resolve BEFORE typed links so the `rests-on` / `rolls-up-to` / `informs`
+  // edges validate against real ids. A row claiming a resolution without its
+  // day, its answer or its dismissal reason is DROPPED with a warning — never
+  // repaired into a claim a reader might act on.
+  state.epistemicUnknowns = normalizeEpistemicUnknowns(raw.epistemicUnknowns, warnings, { now: new Date() });
+  state.epistemicObservations = normalizeEpistemicObservations(raw.epistemicObservations, warnings, { now: new Date() });
+  state.epistemicGrades = normalizeEpistemicGrades(raw.epistemicGrades);
+  state.epistemicMarkers = normalizeEpistemicMarkers(raw.epistemicMarkers);
   state.spanAdoptions = normalizeSpanAdoptions(raw.spanAdoptions, warnings);
   state.spanMarkers = normalizeSpanMarkers(raw.spanMarkers);
   // ADR-0085: the Operating Cadence Clock. A malformed forum, a sitting with no
@@ -7809,6 +7863,17 @@ export const MIGRATIONS = {
   // freezes every decision on the next commit and every figure is derived on
   // read, so a back-filled lock at upgrade time would only pretend the freeze
   // happened when it did not.
+  104: (v104) => ({
+    ...v104,
+    schemaVersion: 105,
+    epistemicUnknowns: Array.isArray(v104.epistemicUnknowns) ? v104.epistemicUnknowns : [],
+    epistemicObservations: Array.isArray(v104.epistemicObservations) ? v104.epistemicObservations : [],
+    epistemicGrades: Array.isArray(v104.epistemicGrades) ? v104.epistemicGrades : [],
+    epistemicMarkers: Array.isArray(v104.epistemicMarkers) ? v104.epistemicMarkers : [],
+    settings: isPlainObject(v104.settings)
+      ? { ...v104.settings, ...normalizeEpistemicSettings(v104.settings) }
+      : { ...DEFAULT_SETTINGS },
+  }),
   103: (v103) => ({
     ...v103,
     schemaVersion: 104,

@@ -41,6 +41,12 @@ const LINK_TYPE_BY_SOURCE = new Map(SIGNAL_SOURCES.map((s) => [s.key, s.linkType
 const DERIVED_EVENT_PREFIXES = Object.freeze([
   'automation.', 'seat.', 'propagation.', 'vault.', 'workspace.',
   'settings.', 'demo.', 'import.', 'export.', 'lock.', 'crypto.',
+  // ADR-0103: the epistemic ledger's own events are DERIVED readings of the
+  // record, not new operational facts. Re-deriving a ledger must never count as
+  // the operator doing work — otherwise every scan would look like activity and
+  // the Operating Seat's freshness rules would be measuring this module instead
+  // of the organisation.
+  'epistemic.',
 ]);
 
 /** Generalized predicate: any committed record event from any module. */

@@ -24,6 +24,7 @@ import { createFederationActions } from './core/domain/federationActions.js';
 import { createFreezeLineActions } from './core/domain/freezeLineActions.js';
 import { createReputationActions } from './core/domain/reputationalCapitalActions.js';
 import { createHindsightActions } from './core/domain/hindsightActions.js';
+import { createEpistemicActions } from './core/domain/epistemicActions.js';
 import { createSpanCalibrationActions } from './core/domain/spanCalibrationActions.js';
 // ADR-0092: the Differencing Defender's API mixin — the publication register is a
 // command boundary like every other module's.
@@ -19708,6 +19709,12 @@ export function createApi(store, options = {}) {
   // declared commands; every read is a seat-scoped SAFE_READ. The information
   // set itself is frozen automatically by RULE-HND-01..04 on the same spine.
   Object.assign(api, createHindsightActions(store, { now: clock, idFactory: id }));
+  // ADR-0103: the Epistemic Ledger. Declaring, answering, dismissing, freezing a
+  // belief, scanning and re-declaring the conventions are declared commands;
+  // every read is a seat-scoped SAFE_READ. The harvest, the escalation, the
+  // expiry, the calibration review and the once-only grade are all produced by
+  // RULE-EPI-01..05 on the same spine in the SAME atomic transaction.
+  Object.assign(api, createEpistemicActions(store, { now: clock, idFactory: id }));
   // ADR-0100: the Discretion Calibrator. Freezing measures the record and changes
   // nothing; only a dated, full-access adoption moves the ladder, and the spine
   // registers the reading, opens any falsified-rung decision and grades due

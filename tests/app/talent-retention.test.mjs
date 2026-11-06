@@ -705,7 +705,7 @@ test('the rule never throws into the store when a record is malformed', () => {
 /* ================================================== 10. schema & migration */
 
 test('schema v85 → v86 is additive and invents no compensation, departure or plan', () => {
-  assert.equal(SCHEMA_VERSION, 104);
+  assert.equal(SCHEMA_VERSION, 105);
   const v28 = {
     schemaVersion: 85,
     meta: { createdAt: `${TODAY}T09:00:00.000Z`, updatedAt: `${TODAY}T09:00:00.000Z`, isDemo: false, revision: 3 },

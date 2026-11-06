@@ -1,3 +1,24 @@
+## 2026-11-05 — The Epistemic Ledger: what the record already knew and nobody read (Session 143, Schema v105, ADR-0103)
+
+**Shipped.** `#/epistemic` — the product could already report on every record someone opened; it now reports on the records the workspace is **carrying and nobody has read**, and it derives them rather than asking. Seven dated signal classes are harvested into **one unknown per source record** (id hashed from the record, `rests-on` pointer, no content copied), each with a declared evidence-bound expiry. `RULE-EPI-01..05` on the shared spine (84 rules / 84 contracts) write the unknown as a graph node with one `rests-on` and **one `rolls-up-to` per ancestor in the same atomic transaction**, escalate an ageing unopened signal exactly once — aged from the condition, so a 65-day-old case escalates on sight — expire an unanswered one without ever recording it as resolved, open one calibration review per span, and grade a frozen belief once. Calibration is Cohen's κ with prevalence/bias indices and PABAK, **direction-first** and refused below its floors; the implied ledger bounds each span's blind classes from the **absence** of arriving edges with the rule of three. CSV #99 aggregate-only, BLANK never zero.
+
+**Altitude coverage.**
+- *Frontline lead (rank 1)* — the unopened danger signals harvested from its own team's records, and the calibration cells over its own declared beliefs; opens one and records what it found, or dismisses it with a reason.
+- *Manager (rank 2–3)* — which evidence classes in the span produced **nothing at all**, and the pooled over/under-confidence direction per direct span. Individual beliefs never travel up.
+- *Director / VP (rank 4, full access)* — re-declares the ten conventions and opens the calibration reviews; sees coverage by blind class across every span in scope with suppressed small cells printed as refusals.
+- *CEO (rank 5)* — the identity-free brief: counts by altitude and class, the direction of the gap, and every refusal named rather than a number guessed.
+
+**Open backlog (tagged by altitude).**
+- *All altitudes* — **coverage is bounded by what the workspace recorded.** Work nobody logged is invisible to the ledger; the only honest fix is an intake path that makes "we looked at X" a record. **[PLANNED, largest gap — printed in the product.]**
+- *Manager+* — **class-level closure**: when an unknown from the same evidence class is dismissed three times for the same reason, the class itself should be re-declared rather than each signal re-litigated. **[PLANNED.]**
+- *Director+* — **downward disclosure of a blind class**: a span whose class is dark should receive a governed prompt naming the class without revealing the peer spans it was inferred from. **[PLANNED — needs the differencing register.]**
+- *All altitudes* — **real-browser AT walkthrough** of the six panels. **[UNVERIFIED today.]**
+
+**Deliberately rejected.**
+- An LLM "unknown-unknowns" brainstorm as a harvest source — an invented risk is not evidence, and it would put fiction at the same table as the record. *Rejected permanently.*
+- Per-person calibration scores — the unit is the unknown, the span, the class, the cell. *Rejected permanently.*
+- Re-opening an expired unknown automatically — expiry is a fact, not a reset button. *Rejected.*
+
 ## 2026-11-05 — The Hindsight Lock: were we right, or were we lucky? (Session 142, Schema v104, ADR-0102)
 
 **Shipped.** `#/hindsight` — the product could already say whether a decision *worked*; it now says whether it was *knowing*, and refuses to confuse the two. `RULE-HND-01` freezes the decision's **information set** in the transaction that records the decision (typed links with `createdOn` ≤ decision date, each resolved to its own record date), so the answer is history and cannot drift as the workspace grows. Every currently-linked fact is partitioned against that claim: **known** / **missed** (knowable, not consulted) / **later** (printed, never charged) / **undated** (excluded, never guessed). Coverage = `known / (known + missed)` with a Wilson (1927) 95% interval, **REFUSED** below three knowable facts. Process (≥4 of the module's own five `decisionQuality` requirements) × information (≥60%) × outcome gives `earned` / `resulted` / `variance` / `fixable` plus an honest `unmeasured` that prints its reason. Resulting share gated at `max(3, cell floor)`; the exact two-sided Fisher test refused below eight settled decisions; per-span cells below three suppressed. `RULE-HND-02..04` (83 rules on the shared spine) open one process review per successful mistake — **never twice** — one gap decision above two missed facts, and one weekly ask for a decision that passed its own review date ungraded. CSV #98, aggregate-only, identity-free, BLANK never zero.

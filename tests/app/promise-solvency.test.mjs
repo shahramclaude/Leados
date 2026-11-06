@@ -116,13 +116,13 @@ function harness(initial) {
 /* ------------------------------------------------------------------ 1. schema */
 
 test('schema v80 is additive and invents no reading, marker or moved date', () => {
-  assert.equal(SCHEMA_VERSION, 104);
+  assert.equal(SCHEMA_VERSION, 105);
   const v79 = { ...createEmptyState(NOW.toISOString()), schemaVersion: 79 };
   delete v79.solvencyReadings;
   delete v79.solvencyMarkers;
   delete v79.solvencyRenegotiations;
   const migrated = migrate(v79);
-  assert.equal(migrated.applied.at(-1), '103 → 104');
+  assert.equal(migrated.applied.at(-1), '103 → 104', '104 → 105');
   assert.deepEqual(migrated.raw.solvencyReadings, []);
   assert.deepEqual(migrated.raw.solvencyMarkers, []);
   assert.deepEqual(migrated.raw.solvencyRenegotiations, []);
@@ -598,7 +598,7 @@ test('insights carry the domain, and the badge counts only what is urgent', () =
 });
 
 test('CSV scope #70 exports aggregates only, and a refusal is blank rather than zero', () => {
-  assert.equal(CSV_EXPORTS.length, 98);
+  assert.equal(CSV_EXPORTS.length, 99);
   const scope = CSV_EXPORTS.find((e) => e.key === 'promise-solvency');
   assert.ok(scope);
   const state = buildDemoState(NOW);
