@@ -1,3 +1,82 @@
+## 2026-11-06 — Session 148: The Decision-Fit Ledger (ADR-0108, Schema v110, additive `109 → 110`)
+
+**The question.** Every product in this category measures a *latency* — how long a decision took,
+how many approvals it sat in. LeadOS already had two of those. None of them answers what a leader
+is actually judged on: *this call cost seven days at £4,200 a week; if I had delegated it one rung
+down, what would I have saved, what would that have risked — and does my own dated record show my
+judgement of what I must personally hold beating a rule that does not use my judgement at all?*
+That is an **allocation** question, not a workflow question, and ADR-0108 answers it in both of
+its halves.
+
+**What shipped.** A fifth altitude-aware module on the existing spine — not a dashboard:
+
+- **A declared price on authority.** Five authority classes with a *floor* (a floor, not a
+  ceiling: above it, any rung may hold the call, which is what makes delegation an option at all).
+  For each open call: the expected hold at the owning rung against each candidate rung, the wait
+  saved, the error price of moving a call where the evidence is thinner, and the **monitoring cost
+  of every extra rung crossed**. Net of all three. Stock denominated, never per-week — the earlier
+  draft printed a weekly rate as if it were a total, making every saving look 10× its size.
+- **A measured contested share against the leader's own record** — own-held calls only, with a
+  Wilson interval, refusing below the disclosure floor rather than printing a share of two.
+- **A naive-rule benchmark.** The leader's real allocation is compared, *on their own settled
+  cohort*, against holding everything and delegating everything. A leader whose allocation does
+  not beat "delegate everything" is told so by their own record, not by a consultant.
+- **Four rules on the shared event spine** (`RULE-FIT-01..04`): freeze, propose, grade, roll up.
+  A proposal never moves work — it opens a governed decision a human must accept. Silence is
+  never consent.
+- **Cross-altitude roll-up with no manual re-entry.** A frozen frontline snapshot reaches the chief
+  through the existing `rolls-up-to` relation. Verified: 23 roll-up edges from fit snapshots, a
+  rank-1 snapshot reaching rank 3, 4 and 5.
+- **Rights tiering.** `record-fit` (rank 1–5, scan/classify), `govern-fit` (rank 4–5, re-declare
+  conventions). Reads registered in `SAFE_READS` — see §7.4 below, where their absence was found.
+- **A five-rung demo ladder.** The roster was two altitudes deep, so three of the five rungs could
+  never be exercised and every hierarchy claim in the product was demonstrated on the shallowest
+  possible org. Priya (frontline) → Samuel/Mei (manager) → Rafe (director) → Ingrid (VP) → Alex
+  Rivera (chief), owning **no** pre-seeded work of their own: everything Rafe, Ingrid and Alex read
+  is derived from records below them, which is the property the hierarchy claim rests on and the
+  one a hand-seeded executive dashboard would quietly fake.
+
+**What building it actually found.** Four defects — three real, one silent. Full detail in
+ADR-0108 §7; the summary matters more than the list:
+
+1. **The ledger printed its own inversion.** Alternatives were priced by walking *down* from the
+   owner, so a rank-1 lead holding a rank-4 capital call got an **empty** ladder — rendered as
+   "no alternative exists" when the truth is "the holder cannot lawfully grant this at all." Fixed
+   by pricing a below-floor holder as an **escalation** to the class floor, tagged as a compliance
+   fix whose net is usually negative and printed honestly as such.
+2. **Scans were not idempotent** (13 → 40 snapshots on a second pass) because identity was keyed on
+   the owning *rung* rather than the *call*. Fixed: identity is `(decision, class)`; a changed
+   class or owner supersedes the old snapshot instead of editing it. Verified byte-identical across
+   four scans.
+3. **The ledger priced the engine's own audit output** — 54 governed findings opened by every other
+   module in the same transaction, 13 → 40 → 67. This is the Session-143 second-order-decision
+   regression reappearing in a new module. Fixed with three state-only provenance tests plus a
+   structural one, and **no memoisation**: the event log grows during a scan, so a cache froze the
+   exclusion list at its first, smallest value and reproduced the leak exactly (6 → 32).
+4. **A cross-module import cycle that failed silently.** The naive fix imported the other rule
+   modules' finding-id functions, creating a cycle whose bindings are undefined at evaluation time:
+   no error, no warning, a converged and completely *empty* book. A green, quiet, wrong result.
+   Provenance is now read from state, never by import.
+
+**Repository sync (ACTUAL result).** Recorded below after the run; this entry is written before the
+commit and updated with the verified exit codes and PR number.
+
+**Verification.** `tests/app/decision-fit.test.mjs` — 12 tests: v110 additivity and migration,
+scan idempotence (four scans, one live snapshot per decision, no governed proposal in the book),
+supersede-don't-edit reclassification, stock-not-flow units with monitoring cost strictly positive
+across multi-rung moves, declared (never zero) evidence deficit, non-empty ladder for every call
+with every row either available or refused-with-reason, escalation pricing for below-floor calls,
+delegation-only ladders above the floor, frontline snapshot reaching the chief, disclosure refusal
+below the floor with nulled interval bounds, rights tiering and safe-read registration.
+`tests/app/command-chain.test.mjs` updated for the five-rung demo (the old assertion encoded the
+two-layer org as a ceiling: `altitudesPresent <= 3`).
+
+**Honest gaps.** `scoreAllocationRules` still refuses with `paired: 0` — it joins the open book
+only, so the paired comparison has no settled cohort. The refusal is printed, not faked; the fix
+(a priced look-up spanning settled decisions) is the next session's first task. The grade panel
+renders its empty state because the demo's single material move is 0 days old and has not yet
+outlived its rung's expected hold — the correct print for that workspace, not a stub.
+
 ## 2026-11-06 — Session 147: The Outcome Learning Loop (ADR-0107, Schema v109, additive `108 → 109`)
 **Repository sync (ACTUAL result).** `git commit` `88844c8` created 147 changed
 files; `git push origin arena/4622ebba-leados` succeeded (`PUSH_EXIT=0`, new

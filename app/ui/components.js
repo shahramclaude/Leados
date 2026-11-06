@@ -182,6 +182,25 @@ export function emptyState({ title, body = null, action = null, icon = '◇' }) 
  * a caption is the only element that does that from inside the table. It is
  * rendered visually hidden by default so the visual design is unchanged.
  */
+/**
+ * Column contract, deliberately tolerant of BOTH historical shapes.
+ *
+ * `{ label, render(row) }` and `{ label, key }` are both in use across ~150
+ * views. A `key` column renders `row[key]`, an explicit `render` always wins,
+ * and a column with neither renders an em dash rather than throwing — one
+ * stale call site must never be able to blank a whole route (ADR-0108).
+ * `width` is emitted as a column style instead of being silently dropped.
+ */
+function columnCell(col, row) {
+  if (typeof col.render === 'function') return col.render(row);
+  if (col.key !== undefined && col.key !== null) return row == null ? '' : (row[col.key] ?? '');
+  return '—';
+}
+
+function columnHead(col) {
+  return h('th', { scope: 'col', class: col.className || '', style: col.width ? `width:${col.width}` : null }, col.label || '');
+}
+
 export function table({ columns, rows, caption = '', emptyMessage = 'Nothing here yet.' }) {
   if (!rows.length) return emptyState({ title: emptyMessage });
   return h(
@@ -191,7 +210,7 @@ export function table({ columns, rows, caption = '', emptyMessage = 'Nothing her
       'table',
       caption ? { class: 'table', 'aria-label': caption } : { class: 'table' },
       caption ? h('caption', { class: 'sr-only' }, caption) : null,
-      h('thead', null, h('tr', null, ...columns.map((c) => h('th', { scope: 'col', class: c.className || '' }, c.label)))),
+      h('thead', null, h('tr', null, ...columns.map(columnHead))),
       h(
         'tbody',
         null,
@@ -199,7 +218,7 @@ export function table({ columns, rows, caption = '', emptyMessage = 'Nothing her
           h(
             'tr',
             { class: row.className || '', ...(row.attrs || {}) },
-            ...columns.map((col) => h('td', { class: col.className || '', 'data-label': col.label }, col.render(row))),
+            ...columns.map((col) => h('td', { class: col.className || '', 'data-label': col.label || '' }, columnCell(col, row))),
           ),
         ),
       ),

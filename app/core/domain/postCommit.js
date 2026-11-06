@@ -197,6 +197,7 @@ import { clearingRule } from './clearingRules.js';
 // Altitude is a dimension of this one spine, not a second engine. Inert unless
 // a decision is committed or an explicit scan runs.
 import { diligenceRule } from './diligenceRules.js';
+import { decisionFitRule } from './decisionFitRules.js';
 // ADR-0107: the Outcome Learning Loop. Registered immediately AFTER the
 // execution reconciler so a one-shot grade reads the finished terminal-evidence
 // state in the SAME atomic transaction. Altitude is a dimension of THIS spine:
@@ -725,6 +726,15 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // the market's final work-producing pass so the decisions it opens are priced
   // identically. Marker-idempotent, bounded and pausable.
   diligenceRule,
+  // ADR-0108: RULE-FIT-01..04. An open decision freezes one authority
+  // classification in the same transaction, priced as a delegation option and
+  // written up every leadership ancestor; a call held past its rung's expected
+  // hold with a material priced saving opens ONE governed delegation proposal per
+  // call per ISO week (never an auto-move); a settled contract is graded exactly
+  // once out of sample; each span's week is frozen as an identity-free reading.
+  // Marker-idempotent, bounded and pausable. Runs after the diligence ledger so
+  // the decisions it opens are priced by the market downstream.
+  decisionFitRule,
   attentionMarketRule,
   // ADR-0077: the Succession Terminal (bench certification). Runs before the
   // Operating Seat because its certificate edges are provenance the seat's

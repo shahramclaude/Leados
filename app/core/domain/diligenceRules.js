@@ -184,6 +184,11 @@ export function diligenceFindingIds(state = {}) {
   for (const marker of Array.isArray(state.diligenceMarkers) ? state.diligenceMarkers : []) {
     if (marker && marker.decisionId && ['gap', 'dark'].includes(marker.kind)) out.add(marker.decisionId);
   }
+  // ADR-0108: mutually exclusive with the Decision-Fit Ledger — read from its
+  // state, never by importing its rule module (a rule-module cycle).
+  for (const proposal of (Array.isArray(state?.fitProposals) ? state.fitProposals : [])) {
+    if (proposal && proposal.optionDecisionId) out.add(proposal.optionDecisionId);
+  }
   return out;
 }
 

@@ -705,7 +705,7 @@ test('the rule never throws into the store when a record is malformed', () => {
 /* ================================================== 10. schema & migration */
 
 test('schema v85 → v86 is additive and invents no compensation, departure or plan', () => {
-  assert.equal(SCHEMA_VERSION, 109);
+  assert.equal(SCHEMA_VERSION, 110);
   const v28 = {
     schemaVersion: 85,
     meta: { createdAt: `${TODAY}T09:00:00.000Z`, updatedAt: `${TODAY}T09:00:00.000Z`, isDemo: false, revision: 3 },
@@ -718,7 +718,7 @@ test('schema v85 → v86 is additive and invents no compensation, departure or p
   assert.ok(migrated.applied.length > 0);
   // migrate() returns { raw, applied }; normalisation is a separate step.
   const state = normalizeState(migrated.raw, { now: new Date(`${TODAY}T09:00:00Z`) }).state;
-  assert.equal(state.schemaVersion, 109);
+  assert.equal(state.schemaVersion, 110);
   assert.deepEqual(state.departures, []);
   assert.deepEqual(state.retentionPlans, []);
   assert.equal(state.people[0].compensation, null, 'no compensation is invented');

@@ -328,6 +328,18 @@ export const LINK_ENTITY_TYPES = [
   // disclosure ladder and the governed re-routing question are navigable
   // from the plan — and the plan from them. No note text is a link endpoint.
   'routingplan',
+  // ADR-0108: a frozen authority classification is a first-class node so the
+  // decision it priced, the governed proposal it justified and every ancestor it
+  // rolled up to are navigable from the snapshot — and the snapshot from them.
+  // It carries a class, a rank and money; no person is ever an endpoint and no
+  // title, note or call text is copied into it.
+  'fitsnapshot',
+  // ADR-0108: a governed delegation proposal. It is an event with a price and a
+  // contract, so it is a node, and the contract it opened is reachable from it.
+  'fitproposal',
+  // ADR-0108: a frozen span reading. Counts, a share and its interval; no id of
+  // any call and no person inside the span.
+  'fitreading',
   // ADR-0084: Hoshin Kanri & Catchball Cascade pacts and append-only bilateral
   // negotiation rounds.
   'catchballpact',
@@ -601,6 +613,13 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   disclosuregrant: 'disclosureGrants',
   // ADR-0084: keep the registry exhaustive with LINK_ENTITY_TYPES.
   boardmemo: 'boardMemos',
+  // ADR-0108: keep the registry exhaustive with LINK_ENTITY_TYPES. A frozen
+  // classification, a governed proposal and a span reading are each navigable
+  // graph nodes, so every `prices-authority`/`proposes-move`/`reads-span-fit`
+  // edge lands on a record a reader can open.
+  fitsnapshot: 'fitSnapshots',
+  fitproposal: 'fitProposals',
+  fitreading: 'fitReadings',
   // ADR-0087: the Operating Cadence Clock. A forum is a first-class graph node
   // every queued item, escalated constraint and agenda-fit gap is navigable FROM
   // the forum that is supposed to close it; a frozen reading is a node so the
@@ -1097,6 +1116,14 @@ export const LINK_RELATIONS = [
   'deliberates-on',
   'tracks-followup',
   'grades-diligence',
+  // ADR-0108: written only by RULE-FIT-01..04. `prices-authority` binds a frozen
+  // classification (or a governed proposal) to the decision it priced;
+  // `proposes-move` binds a governed proposal to the call it would move;
+  // `reads-span-fit` binds a frozen reading to the span it read. Vertical
+  // fan-out reuses the existing `rolls-up-to` relation — altitude stays a
+  // dimension of the SAME spine, not a second engine.
+  'prices-authority', 'proposes-move', 'reads-span-fit',
+
 ];
 
 export const LINK_RELATION_LABELS = {

@@ -185,10 +185,10 @@ function ruleContext(event, { now = NOW, settings = {} } = {}) {
 
 describe('Schema v63 — delivery survival', () => {
   test('the current schema version is 63 and the migration is additive', () => {
-    assert.equal(SCHEMA_VERSION, 109);
+    assert.equal(SCHEMA_VERSION, 110);
     const migrated = migrate({ schemaVersion: 62, settings: {}, people: [] });
-    assert.equal(migrated.raw.schemaVersion, 109);
-    assert.deepEqual(migrated.applied, ['62 → 63', '63 → 64', '64 → 65', '65 → 66', '66 → 67', '67 → 68', '68 → 69', '69 → 70', '70 → 71', '71 → 72', '72 → 73', '73 → 74', '74 → 75', '75 → 76', '76 → 77', '77 → 78', '78 → 79', '79 → 80', '80 → 81', '81 → 82', '82 → 83', '83 → 84', '84 → 85', '85 → 86', '86 → 87', '87 → 88', '88 → 89', '89 → 90', '90 → 91', '91 → 92', '92 → 93', '93 → 94', '94 → 95', '95 → 96', '96 → 97', '97 → 98', '98 → 99', '99 → 100', '100 → 101', '101 → 102', '102 → 103', '103 → 104', '104 → 105', '105 → 106', '106 → 107', '107 → 108', '108 → 109']);
+    assert.equal(migrated.raw.schemaVersion, 110);
+    assert.deepEqual(migrated.applied, ['62 → 63', '63 → 64', '64 → 65', '65 → 66', '66 → 67', '67 → 68', '68 → 69', '69 → 70', '70 → 71', '71 → 72', '72 → 73', '73 → 74', '74 → 75', '75 → 76', '76 → 77', '77 → 78', '78 → 79', '79 → 80', '80 → 81', '81 → 82', '82 → 83', '83 → 84', '84 → 85', '85 → 86', '86 → 87', '87 → 88', '88 → 89', '89 → 90', '90 → 91', '91 → 92', '92 → 93', '93 → 94', '94 → 95', '95 → 96', '96 → 97', '97 → 98', '98 → 99', '99 → 100', '100 → 101', '101 → 102', '102 → 103', '103 → 104', '104 → 105', '105 → 106', '106 → 107', '107 → 108', '108 → 109', '109 → 110']);
     assert.deepEqual(migrated.raw.survivalReadings, []);
     assert.deepEqual(migrated.raw.survivalMarkers, []);
     // A prediction cannot be back-filled: the upgrade adds no reading.
@@ -197,7 +197,7 @@ describe('Schema v63 — delivery survival', () => {
 
   test('the v62 migration still runs and hands its settings forward', () => {
     const migrated = migrate({ schemaVersion: 61, settings: { couplingAutoPropagate: false } });
-    assert.equal(migrated.raw.schemaVersion, 109);
+    assert.equal(migrated.raw.schemaVersion, 110);
     assert.equal(migrated.raw.settings.coupledLoadAutoPropagate, false);
     assert.deepEqual(migrated.raw.performanceConcerns, []);
     assert.deepEqual(migrated.raw.survivalReadings, []);

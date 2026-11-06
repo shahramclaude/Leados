@@ -72,10 +72,12 @@ import { renderReputation } from './views/reputation.js';
 import { renderHindsight } from './views/hindsight.js';
 import { renderEpistemic } from './views/epistemic.js';
 import { renderDiligence } from './views/diligence.js';
+import { renderFit } from './views/fit.js';
 import { reputationAttentionCount } from './core/domain/reputationalCapital.js';
 import { hindsightAttentionCount } from './core/domain/hindsight.js';
 import { epistemicAttentionCount } from './core/domain/epistemic.js';
 import { diligenceAttentionCount } from './core/domain/diligence.js';
+import { fitAttentionCount } from './core/domain/decisionFitRules.js';
 import { renderSpanCalibration } from './views/spanCalibration.js';
 import { envoyAttentionCount } from './core/domain/envoy.js';
 import { federationAttentionCount } from './core/domain/federation.js';
@@ -309,6 +311,8 @@ export const NAV = [
     // knows; this asks what the DECISION failed to consult at the moment it was
     // made, freezes that set forever, and grades a pre-declared process forecast.
     { route: 'diligence', label: 'Diligence ledger', icon: '⊞', badge: 'diligence' },
+    // ADR-0108: what the authority you are holding costs, priced as an option.
+    { route: 'fit', label: 'Decision-fit ledger', icon: '⇋', badge: 'fit' },
     // ADR-0092: publication integrity — what the aggregates this span publishes
     // actually disclose once a reader subtracts them.
     { route: 'differencing', label: 'Differencing', icon: '⊖', badge: 'differencing' },
@@ -490,6 +494,7 @@ const RENDERERS = {
   hindsight: (ctx) => renderHindsight(ctx),
   epistemic: (ctx) => renderEpistemic(ctx),
   diligence: (ctx) => renderDiligence(ctx),
+  fit: (ctx) => renderFit(ctx),
   'span-calibration': (ctx) => renderSpanCalibration(ctx),
   differencing: (ctx) => renderDifferencing(ctx),
   prospective: (ctx) => renderProspective(ctx),
@@ -1120,6 +1125,8 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       epistemic: epistemicAttentionCount(state, { now: at, settings: state.settings }),
       // ADR-0104: thin settled frontiers, dark classes and due-once grades.
       diligence: diligenceAttentionCount(state, { now: at, settings: state.settings }),
+      // ADR-0108: priced calls with a material delegation move and no proposal open.
+      fit: fitAttentionCount(state, at, state.settings),
       // ADR-0092: a module that publishes a determined surface, plus open findings.
       differencing: differencesAttentionCount(state, { now: at, settings: state.settings }),
       // ADR-0094: due or overdue frozen contracts plus open governed findings.

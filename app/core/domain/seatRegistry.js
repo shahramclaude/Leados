@@ -411,6 +411,14 @@ export const ACTION_RIGHTS = Object.freeze({
   // at once, so it is rank 4-5 AND the handler requires a full-access seat.
   'record-diligence-consult': { minRank: 1, maxRank: 5, label: 'Record a consultation, pre-register a process forecast or scan the diligence ledger' },
   'govern-diligence': { minRank: 4, maxRank: 5, label: 'Re-declare the diligence-ledger conventions' },
+  // ADR-0108: scanning the Decision-Fit ledger, pricing the authority of one
+  // call and accepting a delegation proposal are every leader's business — the
+  // first two write only a derived reading, and the third opens a governed
+  // decision a human still has to make. Re-declaring the conventions that price
+  // EVERY delegation in the workspace is director+ and the handler additionally
+  // requires the full-access root seat, exactly as the other convention rights do.
+  'record-fit': { minRank: 1, maxRank: 5, label: 'Scan the decision-fit ledger or re-price one call’s authority' },
+  'govern-fit': { minRank: 4, maxRank: 5, label: 'Re-declare the decision-fit conventions' },
   // ADR-0107: scoring one adopted response is every leader's business;
   // re-declaring the floors that price EVERY response is director+ and the
   // handler additionally requires the full-access root seat.

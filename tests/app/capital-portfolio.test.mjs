@@ -416,19 +416,19 @@ test('the trust ladder only claims what the evidence supports', () => {
 /* --------------------------------------------------------- 8. schema v38 */
 
 test('Schema v38 adds portfolios and checkpoints additively', () => {
-  assert.equal(SCHEMA_VERSION, 109);
+  assert.equal(SCHEMA_VERSION, 110);
   assert.equal(DEFAULT_SETTINGS.capitalEffortBudget, 12);
   assert.equal(DEFAULT_SETTINGS.capitalAutoPropagate, true);
   const empty = createEmptyState(NOW.toISOString());
   assert.deepEqual(empty.capitalPolicies, []);
   assert.deepEqual(empty.dynamicsCheckpoints, []);
   const migrated = migrate({ schemaVersion: 37, settings: {}, people: [], portfolio: [] });
-  assert.equal(migrated.raw.schemaVersion, 109);
-  assert.equal(migrated.applied.at(-1), '108 → 109', 'the whole chain runs to the current schema');
+  assert.equal(migrated.raw.schemaVersion, 110);
+  assert.equal(migrated.applied.at(-1), '109 → 110', 'the whole chain runs to the current schema');
   assert.deepEqual(migrated.raw.capitalPolicies, []);
   assert.deepEqual(migrated.raw.dynamicsCheckpoints, []);
   const state = normalizeState(migrated.raw, { now: NOW }).state;
-  assert.equal(state.schemaVersion, 109);
+  assert.equal(state.schemaVersion, 110);
   assert.ok(LINK_ENTITY_TYPES.includes('capital'));
   assert.ok(LINK_ENTITY_TYPES.includes('checkpoint'));
   assert.ok(LINK_RELATIONS.includes('allocates'));

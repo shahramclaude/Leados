@@ -270,6 +270,16 @@ import {
   normalizeDiligenceMarkers,
   normalizeDiligenceSettings,
 } from './domain/diligenceSchema.js';
+// ADR-0108 (Schema v110): the Decision-Fit Ledger's fail-closed normalizers and
+// declared conventions.
+import {
+  FIT_SETTINGS_DEFAULTS,
+  normalizeFitMarkers,
+  normalizeFitProposals,
+  normalizeFitReadings,
+  normalizeFitSettings,
+  normalizeFitSnapshots,
+} from './domain/decisionFitSchema.js';
 import { ALTITUDES as SPAN_ALTITUDES } from './domain/chainRegistry.js';
 // ADR-0088: the Escalation Economy — the disposition ledger, intervention-rate
 // commitments, idempotency markers, and clamped conventions.
@@ -485,7 +495,7 @@ export {
 // older blob simply opens on the undeclared operator view. A version bump here
 // would have forced 78 test files to be rewritten for zero user benefit; the
 // honest choice is to add nothing to migrate.
-export const SCHEMA_VERSION = 109;
+export const SCHEMA_VERSION = 110;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -2251,6 +2261,16 @@ export const COLLECTIONS = [
   // governance markers. Purely additive; all three start EMPTY on upgrade.
   'outcomeContracts',
   'outcomeGrades',
+  // ADR-0108 (Schema v110): the Decision-Fit Ledger. `fitSnapshots` freezes one
+  // authority classification per decision (class, floor, owner rung, the priced
+  // ladder at freeze time); `fitProposals` records each governed delegation the
+  // spine proposed and the contract it opened; `fitReadings` freezes one span
+  // reading per rung per period for later grading; `fitMarkers` is the
+  // idempotency ledger that makes a rescan converge.
+  'fitSnapshots',
+  'fitProposals',
+  'fitReadings',
+  'fitMarkers',
   'outcomeMarkers',
 
 ];
@@ -5013,6 +5033,9 @@ const FORECAST_SOURCE_COLLECTIONS = Object.freeze({
   // Every one is printed in-product and refused below its own floor; none is
   // fitted from the workspace's own outcomes.
   ...OUTCOME_SETTINGS_DEFAULTS,
+  // ADR-0108: declared, clamped conventions for the Decision-Fit Ledger. Every
+  // one is printed in-product with its bound; none is fitted from the record.
+  ...FIT_SETTINGS_DEFAULTS,
 
 });
 
@@ -7131,6 +7154,13 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.outcomeContracts = normalizeOutcomeContracts(raw.outcomeContracts, warnings);
   state.outcomeGrades = normalizeOutcomeGrades(raw.outcomeGrades, warnings);
   state.outcomeMarkers = normalizeOutcomeMarkers(raw.outcomeMarkers);
+  // ADR-0108: the Decision-Fit Ledger resolves before typed links for the same
+  // reason — every `rests-on` / `rolls-up-to` edge it writes must validate
+  // against a real snapshot, proposal or reading id.
+  state.fitSnapshots = normalizeFitSnapshots(raw.fitSnapshots, warnings);
+  state.fitProposals = normalizeFitProposals(raw.fitProposals, warnings);
+  state.fitReadings = normalizeFitReadings(raw.fitReadings, warnings);
+  state.fitMarkers = normalizeFitMarkers(raw.fitMarkers);
   state.diligenceChecklists = normalizeDiligenceChecklists(raw.diligenceChecklists, warnings);
   state.diligenceConsults = normalizeDiligenceConsults(raw.diligenceConsults, warnings, { now: new Date() });
   state.diligenceGrades = normalizeDiligenceGrades(raw.diligenceGrades);
@@ -7945,12 +7975,31 @@ export const MIGRATIONS = {
   // at upgrade time would be hindsight dressed as foresight.
   108: (v108) => ({
     ...v108,
-    schemaVersion: 109,
+    schemaVersion: 110,
     outcomeContracts: Array.isArray(v108.outcomeContracts) ? v108.outcomeContracts : [],
     outcomeGrades: Array.isArray(v108.outcomeGrades) ? v108.outcomeGrades : [],
     outcomeMarkers: Array.isArray(v108.outcomeMarkers) ? v108.outcomeMarkers : [],
     settings: isPlainObject(v108.settings)
       ? { ...v108.settings, ...normalizeOutcomeSettings(v108.settings) }
+      : { ...DEFAULT_SETTINGS },
+  }),
+  // ADR-0108: additive 109 → 110. An existing workspace has decisions but no
+  // frozen authority classification, so all four ledgers start EMPTY — "nobody
+  // has priced this workspace's authority yet", which is a different claim from
+  // "every past call sat at the right rung". Nothing is back-filled:
+  // RULE-FIT-01 freezes each open decision on the next root commit or explicit
+  // scan, and every price, deficit, share and interval is re-derived on read.
+  // Back-filling a classification at upgrade time would pretend a priced
+  // judgement happened in the past that no human made.
+  109: (v109) => ({
+    ...v109,
+    schemaVersion: 110,
+    fitSnapshots: Array.isArray(v109.fitSnapshots) ? v109.fitSnapshots : [],
+    fitProposals: Array.isArray(v109.fitProposals) ? v109.fitProposals : [],
+    fitReadings: Array.isArray(v109.fitReadings) ? v109.fitReadings : [],
+    fitMarkers: Array.isArray(v109.fitMarkers) ? v109.fitMarkers : [],
+    settings: isPlainObject(v109.settings)
+      ? { ...v109.settings, ...normalizeFitSettings(v109.settings) }
       : { ...DEFAULT_SETTINGS },
   }),
   // ADR-0099: additive 100 → 101. No freeze line is inferred for an existing
