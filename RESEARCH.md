@@ -1,3 +1,9 @@
+## 2026-11-06 — Governed analytics and coaching hunt
+
+- **[Director → CEO]** A 2026 comparison describes Visier Vee as natural-language analysis over permitted data and One Model as inspectable predictive modeling: https://gowindmill.com/resources/lists/top-ai-people-analytics-tools-early-stage-companies/ . Vendor behavior is based on secondary reporting, not hands-on verification [UNVERIFIED]. Adopt as a goal: enforce permissions server-side and explain uncertainty; reject unvalidated individual flight-risk scores.
+- **[Frontline → executive]** A 2026 comparison describes BetterUp's 360 feedback and Team Pulse, and Torch's behavior-change tracking: https://www.growthspace.com/blog/best-leadership-development-platforms . Vendor behavior [UNVERIFIED]; distinguish measured outcomes from coaching activity.
+- **[All altitudes] Implemented:** savepoint deletion integrity protects the shared event spine, not a new predictive model. **Planned:** authenticated scoped hierarchy, independently audited privacy-preserving roll-ups and calibrated model validation. **Rejected:** treating browser-selectable seats as enterprise authorization; emitting sensitive individual predictions without validation and safeguards. No market-first claim.
+
 ## 2026-11-06 — Execution-evidence hunt: decision intelligence, hierarchy roll-up and coaching proof (Session 146)
 
 Search-result documentation/snippets only; **no vendor product was independently tested**. Claims remain **[UNVERIFIED]** unless cited as official documentation.

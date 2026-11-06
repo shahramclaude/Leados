@@ -1,3 +1,7 @@
+## 2026-11-06 — Transactional savepoint integrity
+
+The shared copy-on-write automation savepoint now respects a deleted top-level field on subsequent reads, preventing accidental resurrection at commit. Targeted tests cover eager/lazy parity, reassignment, successful event subscribers and failed-rule rollback. Existing frontline case propagation and hierarchy roll-up fixture passes. This is a reliability fix, not a new analytics module; local seats are not authenticated access control. Full suite and browser accessibility [UNVERIFIED].
+
 ## 2026-11-06 — Evidence closes the loop; the workspace leads with your altitude (Session 146, Schema v108, [ADR-0106](./docs/adr/0106-evidence-execution-loop.md), `#/mission?panel=execution`)
 
 **Adoption was atomic; closure was not.** Session 145 could adopt a case + coordinated actions in one transaction, but the bundle stayed `committed` after the decision was reviewed, the delegation completed and the case resolved. `RULE-EXE-01` now re-derives every adopted bundle from **dated terminal evidence** through a per-kind registry: fulfilled, explicitly stopped, blocked, missing or pending. Returned work, released money, dismissed comms and deleted coaching prompts are never delivery. When the human-resolved source case and every action agree, the loop closes and only the engine-authored review checkpoint is completed — with a system note, never an invented human outcome.
