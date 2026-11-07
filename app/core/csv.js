@@ -6103,7 +6103,10 @@ export function buildScopeTable(state, scope, now) {
         'covers_declared_n', 'covers_eligible_n', 'covers_exercised_n', 'candidates_eligible_n',
         'candidates_refused_n', 'concentration_top_share_pct', 'sole_handed', 'window_days', 'refused_reason',
         'absence_seat_rank', 'absence_from', 'absence_to', 'absence_duties_n', 'absence_covered_n',
-        'absence_thin_n', 'absence_cover_absent_n', 'absence_ineligible_n', 'absence_gap_n', 'absence_exposed_open_n'];
+        'absence_thin_n', 'absence_cover_absent_n', 'absence_ineligible_n', 'absence_gap_n', 'absence_exposed_open_n',
+        'branch_seats_n', 'duties_n', 'branch_covered_n', 'branch_gap_n', 'branch_open_gap_n', 'branch_readiness_pct',
+        'branch_withheld', 'branch_floor_n', 'branch_rate_floor_n',
+        'branch_released_n', 'branch_released_seats_n', 'branch_withheld_n', 'branch_deferred_n', 'branch_pooled_pct', 'branch_mean_pct'];
       const columns = keys.map((key) => ({ key, header: key }));
       return { columns, rows };
     }

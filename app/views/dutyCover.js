@@ -17,7 +17,7 @@ import { h, toast, openModal, closeAllModals, buildForm } from '../ui/dom.js';
 import { downloadText } from '../ui/download.js';
 import { pageHeader, card, stat, badge, banner, tabs, emptyState, table } from '../ui/components.js';
 import { serializeCsv } from '../core/csv.js';
-import { DUTY_COVERAGE_PANELS, DUTY_PREMISE } from '../core/domain/dutyCoverageRegistry.js';
+import { DUTY_BRANCH_DISCLOSURE_PREMISE, DUTY_COVERAGE_PANELS, DUTY_PREMISE } from '../core/domain/dutyCoverageRegistry.js';
 import { DUTY_ABSENCE_PREMISE } from '../core/domain/dutyAbsenceRegistry.js';
 
 const PANELS = DUTY_COVERAGE_PANELS;
@@ -25,7 +25,10 @@ const CSV_COLUMNS = ['row_kind', 'scope', 'altitude', 'duty_key', 'band', 'open_
   'covers_declared_n', 'covers_eligible_n', 'covers_exercised_n', 'candidates_eligible_n',
   'candidates_refused_n', 'concentration_top_share_pct', 'sole_handed', 'window_days', 'refused_reason',
   'absence_seat_rank', 'absence_from', 'absence_to', 'absence_duties_n', 'absence_covered_n',
-  'absence_thin_n', 'absence_cover_absent_n', 'absence_ineligible_n', 'absence_gap_n', 'absence_exposed_open_n'];
+  'absence_thin_n', 'absence_cover_absent_n', 'absence_ineligible_n', 'absence_gap_n', 'absence_exposed_open_n',
+  'branch_seats_n', 'duties_n', 'branch_covered_n', 'branch_gap_n', 'branch_open_gap_n', 'branch_readiness_pct',
+  'branch_withheld', 'branch_floor_n', 'branch_rate_floor_n',
+  'branch_released_n', 'branch_released_seats_n', 'branch_withheld_n', 'branch_deferred_n', 'branch_pooled_pct', 'branch_mean_pct'];
 
 let apiRef = null;
 /** Scratch for the planning form's preview window (a read, never a write). */
@@ -577,23 +580,36 @@ function deskPanel(ctx, report) {
     }),
     report.branchCoverage ? card({
       title: 'Continuity across direct branches',
-      subtitle: 'Each duty line belongs to one direct leadership branch; your own duties are excluded. Branch numbers are anonymous and may change when the roster changes. They are not division names.',
+      subtitle: `Each duty line belongs to one direct leadership branch; your own duties are excluded. Branch numbers are anonymous and may change when the roster changes. They are not division names. A cell below the declared floor of ${report.branchCoverage.floor} duty line(s) is withheld, and one released cell is withheld beside each of them so nothing is recoverable by subtraction.`,
       body: h('div', { class: 'stack' },
         report.branchCoverage.refusal
           ? h('p', { class: 'muted' }, report.branchCoverage.refusal)
           : h('p', null, `Pooled: ${pctText(report.branchCoverage.pooledPct)} · mean of branch rates: ${pctText(report.branchCoverage.meanPct)}. Different branch sizes can make these differ (Yule–Simpson aggregation). These describe the register, not a forecast of an absence.`),
+        report.branchCoverage.suppressedN
+          ? banner({
+            tone: 'warn',
+            title: `${report.branchCoverage.suppressedN} branch cell(s) withheld at the disclosure floor of ${report.branchCoverage.floor} contributing seat(s)`,
+            body: `${report.branchCoverage.pooledRefused || ''} ${report.branchCoverage.meanRefused || ''} Withheld is not zero: a blank cell prints its reason here rather than a small number that would describe a person.`.trim(),
+          })
+          : null,
         table({
           caption: 'Direct branch duty coverage',
           columns: [
             { label: 'Branch', render: (r) => r.label },
-            { label: 'Covered / duties', render: (r) => `${r.coveredN} / ${r.dutiesN}` },
-            { label: 'Readiness', render: (r) => pctText(r.readinessPct) },
-            { label: 'No cover', render: (r) => String(r.gapN) },
-            { label: 'Open work, no cover', render: (r) => String(r.openGapN) },
+            { label: 'Seats / duties', render: (r) => `${r.seatsN} / ${r.dutiesN}` },
+            { label: 'Covered / duties', render: (r) => (r.suppressed ? 'WITHHELD' : `${r.coveredN} / ${r.dutiesN}`) },
+            { label: 'Readiness', render: (r) => (r.suppressed ? 'WITHHELD' : pctText(r.readinessPct)) },
+            { label: 'No cover', render: (r) => (r.suppressed ? 'WITHHELD' : String(r.gapN)) },
+            { label: 'Open work, no cover', render: (r) => (r.suppressed ? 'WITHHELD' : String(r.openGapN)) },
+            { label: 'Why the cell is blank', render: (r) => r.refused || '' },
           ],
           rows: report.branchCoverage.branches,
           emptyMessage: 'No direct leadership branches in this seat.',
         }),
+        report.branchCoverage.deferredN
+          ? h('p', { class: 'muted small' }, `${report.branchCoverage.deferredN} further branch(es) are not compared: the table is capped at ${report.conventions.dutyCoverageBranchCap}. The cap is declared, and the remainder is counted rather than silently dropped.`)
+          : null,
+        h('p', { class: 'muted small' }, DUTY_BRANCH_DISCLOSURE_PREMISE),
         h('p', { class: 'muted small' }, 'A missing or unexercised declaration is not evidence that an absence will cause failure. Ask the relevant leaders to review their own registers; no cover is assigned here.')),
     }) : null,
     report.absences?.own || (report.absences?.inSpan?.length || 0)
@@ -777,6 +793,9 @@ function methodPanel(ctx, report) {
         h('div', { class: 'stat-grid' },
           stat({ label: 'Exercise window', value: `${conventions.dutyCoverageExerciseDays} day(s)`, hint: `bounds ${report.bounds.dutyCoverageExerciseDays.join('–')}` }),
           stat({ label: 'Concentration threshold', value: `${conventions.dutyCoverageConcentrationPct}%`, hint: `bounds ${report.bounds.dutyCoverageConcentrationPct.join('–')}%` }),
+          stat({ label: 'Branch cell floor', value: `${conventions.dutyCoverageBranchFloorN}`, hint: `a branch cell below this many duty lines is WITHHELD, not printed small; bounds ${report.bounds.dutyCoverageBranchFloorN.join('–')}` }),
+          stat({ label: 'Branch rate floor', value: `${conventions.dutyCoverageBranchRateFloorN}`, hint: `a per-branch rate is quoted only at or above this many duty lines; bounds ${report.bounds.dutyCoverageBranchRateFloorN.join('–')}` }),
+          stat({ label: 'Branches compared', value: `${conventions.dutyCoverageBranchCap}`, hint: `the table is capped and the remainder counted; bounds ${report.bounds.dutyCoverageBranchCap.join('–')}` }),
           stat({ label: 'Covers per duty', value: '3', hint: 'a duty is not a committee; the cap is declared, not discovered' })),
         editable
           ? h('div', { class: 'row-actions' },
@@ -786,6 +805,9 @@ function methodPanel(ctx, report) {
                 const form = buildForm([
                   { name: 'dutyCoverageExerciseDays', label: 'Exercise window (days)', type: 'number', min: 7, max: 180, value: conventions.dutyCoverageExerciseDays },
                   { name: 'dutyCoverageConcentrationPct', label: 'Concentration threshold (%)', type: 'number', min: 50, max: 100, value: conventions.dutyCoverageConcentrationPct },
+                  { name: 'dutyCoverageBranchFloorN', label: 'Branch disclosure floor (contributing seats per cell)', type: 'number', min: 2, max: 25, value: conventions.dutyCoverageBranchFloorN },
+                  { name: 'dutyCoverageBranchRateFloorN', label: 'Branch rate floor (contributing seats before a rate prints)', type: 'number', min: 2, max: 40, value: conventions.dutyCoverageBranchRateFloorN },
+                  { name: 'dutyCoverageBranchCap', label: 'Branches compared per table', type: 'number', min: 4, max: 64, value: conventions.dutyCoverageBranchCap },
                 ]);
                 openModal({
                   title: 'Re-declare the duty-coverage conventions',
@@ -797,7 +819,13 @@ function methodPanel(ctx, report) {
                       class: 'btn btn-primary', type: 'button',
                       onClick: () => {
                         const v = form.getValues();
-                        const result = ctx.api.dutyCoverageSetConventions({ dutyCoverageExerciseDays: Number(v.dutyCoverageExerciseDays), dutyCoverageConcentrationPct: Number(v.dutyCoverageConcentrationPct) });
+                        const result = ctx.api.dutyCoverageSetConventions({
+                          dutyCoverageExerciseDays: Number(v.dutyCoverageExerciseDays),
+                          dutyCoverageConcentrationPct: Number(v.dutyCoverageConcentrationPct),
+                          dutyCoverageBranchFloorN: Number(v.dutyCoverageBranchFloorN),
+                          dutyCoverageBranchRateFloorN: Number(v.dutyCoverageBranchRateFloorN),
+                          dutyCoverageBranchCap: Number(v.dutyCoverageBranchCap),
+                        });
                         if (!notify(result, 'Conventions re-declared.')) return;
                         closeAllModals();
                         ctx.refresh();
@@ -815,6 +843,7 @@ function methodPanel(ctx, report) {
         h('li', null, h('strong', null, 'Stored:'), ' the human declaration — duty line, named cover, the declaring words, the day, the governed decision, the revocation reason. Nothing else.'),
         h('li', null, h('strong', null, 'Derived on every read:'), ' the duty’s span holder, the eligible pool and its refusals, whether the cover has exercised access, and who actually carried the work.'),
         h('li', null, h('strong', null, 'Refused:'), ' a coverage score for a person, an automation that assigns a stand-in, and a “verified” tick-box. A tick would be a second, decaying record of a fact the workspace can re-derive.'),
+        h('li', null, h('strong', null, 'Withheld, not zeroed:'), ' a direct-branch cell below the declared disclosure floor, and one further released cell beside it, so the blank cannot be recovered by subtracting the released cells from a known total. This is primary + complementary suppression, not differential privacy.'),
         h('li', null, h('strong', null, 'Schema v114 is additive.'), ' An upgraded workspace starts with an empty cover ledger — “no duty here has a declared cover yet”, which is not the same claim as “every duty is covered”.')),
     }),
     card({

@@ -172,5 +172,11 @@ export function normalizeDutyCoverageSettings(settings = {}) {
   return {
     dutyCoverageExerciseDays: clampInt(s.dutyCoverageExerciseDays, ...DUTY_COVERAGE_BOUNDS.dutyCoverageExerciseDays, d.dutyCoverageExerciseDays),
     dutyCoverageConcentrationPct: clampInt(s.dutyCoverageConcentrationPct, ...DUTY_COVERAGE_BOUNDS.dutyCoverageConcentrationPct, d.dutyCoverageConcentrationPct),
+    // ADR-0126: the branch-comparison disclosure floor. Withheld cells are
+    // printed as withheld, never as zero, and the floor is re-declarable only
+    // by the same rank-4+ full-access seat that declares the other two.
+    dutyCoverageBranchFloorN: clampInt(s.dutyCoverageBranchFloorN, ...DUTY_COVERAGE_BOUNDS.dutyCoverageBranchFloorN, d.dutyCoverageBranchFloorN),
+    dutyCoverageBranchRateFloorN: clampInt(s.dutyCoverageBranchRateFloorN, ...DUTY_COVERAGE_BOUNDS.dutyCoverageBranchRateFloorN, d.dutyCoverageBranchRateFloorN),
+    dutyCoverageBranchCap: clampInt(s.dutyCoverageBranchCap, ...DUTY_COVERAGE_BOUNDS.dutyCoverageBranchCap, d.dutyCoverageBranchCap),
   };
 }
