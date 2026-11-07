@@ -397,6 +397,10 @@ export function absenceWindowPlan(state, built, seat, window, { now = new Date()
     });
     const available = coverRows.filter((c) => c.available && c.eligible);
     const exercisedAvailable = available.filter((c) => c.windowExercise?.exercised);
+    // ADR-0128: how much of the covered reading rests on an explicit rehearsal
+    // record rather than inferred dated work — printed, never merged silently.
+    const rehearsedAvailable = available.filter((c) => c.windowExercise?.status === 'rehearsed');
+    const gapsAvailable = available.filter((c) => c.windowExercise?.status === 'gaps');
     const conflicts = coverRows.filter((c) => !c.available).map((c) => ({
       coverId: c.coverId,
       name: c.name,
@@ -415,8 +419,8 @@ export function absenceWindowPlan(state, built, seat, window, { now = new Date()
     const windowLabel = `${parsedWindow.from} → ${parsedWindow.to}`;
     const windowReasons = {
       gap: `No one is declared answerable for “${duty.label}” during ${windowLabel}. The duty is real — ${reading.openN} open item(s) sit in it — and the cover is a human declaration this workspace has not recorded.`,
-      thin: `${available.length} cover(s) are declared, eligible and present during ${windowLabel}, but none has duty-specific evidence recorded by today inside the preparation window ${exerciseWindow.from} → ${exerciseWindow.to}. The register prints “thin” rather than a reassuring “covered”.`,
-      covered: `${exercisedAvailable.length} of ${available.length} declared cover(s) are present during ${windowLabel} and have duty-specific evidence recorded by today inside the preparation window ${exerciseWindow.from} → ${exerciseWindow.to}.`,
+      thin: `${available.length} cover(s) are declared, eligible and present during ${windowLabel}, but none has duty-specific evidence recorded by today inside the preparation window ${exerciseWindow.from} → ${exerciseWindow.to}. The register prints “thin” rather than a reassuring “covered”.` + (gapsAvailable.length ? ` A rehearsal inside the window FOUND GAPS: practice happened; certified readiness did not — the governed decision opened at the recording names what must change.` : ''),
+      covered: `${exercisedAvailable.length} of ${available.length} declared cover(s) are present during ${windowLabel} and have duty-specific evidence recorded by today inside the preparation window ${exerciseWindow.from} → ${exerciseWindow.to}.` + (rehearsedAvailable.length ? ` ${rehearsedAvailable.length} of them by EXPLICIT REHEARSAL record — a dated attestation, not inferred work.` : ''),
       'cover-absent': `Every declared cover for “${duty.label}” is themselves absent during ${windowLabel}: ${conflicts.map((c) => `${c.name || 'the cover'} (${c.label}) is out ${c.from} → ${c.to}`).join('; ')}. No other cover is declared for this duty line, so the duty is exposed on those dates.`,
       ineligible: reading.bandReason,
     };
@@ -451,6 +455,8 @@ export function absenceWindowPlan(state, built, seat, window, { now = new Date()
       covers: coverRows,
       availableCoversN: available.length,
       exercisedAvailableN: exercisedAvailable.length,
+      rehearsedAvailableN: rehearsedAvailable.length,
+      gapsAvailableN: gapsAvailable.length,
       conflicts,
       cascade,
     });
@@ -521,7 +527,7 @@ export function dutyAbsenceRollup(state, built, seat, { now = new Date(), settin
     const e = r.summary.exercise || {};
     for (const key of Object.keys(acc)) acc[key] += e[key] || 0;
     return acc;
-  }, { gradedCoversN: 0, validCoversN: 0, staleCoversN: 0, missingCoversN: 0, futureCoversN: 0, lateCoversN: 0, validLinesN: 0, thinLinesN: 0 });
+  }, { gradedCoversN: 0, validCoversN: 0, rehearsedCoversN: 0, gapsCoversN: 0, attestedRehearsalsN: 0, selfReportedRehearsalsN: 0, staleCoversN: 0, missingCoversN: 0, futureCoversN: 0, lateCoversN: 0, validLinesN: 0, thinLinesN: 0 });
   return {
     rows,
     exposedN: rows.reduce((sum, r) => sum + r.summary.exposedN, 0),
@@ -825,6 +831,10 @@ export function absenceConcurrency(state, built, seat, { now = new Date(), setti
     coverExercise: {
       gradedCoversN: 0,
       validCoversN: 0,
+      rehearsedCoversN: 0,
+      gapsCoversN: 0,
+      attestedRehearsalsN: 0,
+      selfReportedRehearsalsN: 0,
       staleCoversN: 0,
       missingCoversN: 0,
       futureCoversN: 0,
@@ -1010,7 +1020,7 @@ export function absenceConcurrency(state, built, seat, { now = new Date(), setti
     const capacityText = load.summary.overEnvelopeN
       ? ` Cover capacity: ${load.summary.overEnvelopeN} available cover(s) would be answerable for more open work than the ${load.summary.envelopeN}-item observed envelope for this span (largest ${load.summary.maxCombinedN}).`
       : (load.summary.refusal ? ` Cover capacity refused: ${load.summary.refusal}` : '');
-    const exerciseText = ` Pre-window exercise: ${windowExercise.validCoversN} available cover(s) have duty-specific evidence recorded by the preparation cutoff; ${windowExercise.thinLinesN} duty line(s) read thin.`;
+    const exerciseText = ` Pre-window exercise: ${windowExercise.rehearsedCoversN} available cover(s) hold an explicit rehearsal record (${windowExercise.attestedRehearsalsN} attested, ${windowExercise.selfReportedRehearsalsN} self-reported) and ${windowExercise.validCoversN} have inferred duty-specific evidence recorded by the preparation cutoff; ${windowExercise.gapsCoversN} rehearsal(s) found gaps; ${windowExercise.thinLinesN} duty line(s) read thin.`;
     const reasons = {
       'open-exposed': `${count} seats are absent at once ${w.from} → ${w.to} (${days} day(s)). ${exposedN} of their duty line(s) have no available, eligible cover on those shared dates and ${exposedOpenN} of them carry open work right now.${coverText}${capacityText}${exerciseText}`,
       exposed: `${count} seats are absent at once ${w.from} → ${w.to} (${days} day(s)). ${exposedN} duty line(s) have no available cover on those dates; none of them carries open work today, which is not the same as being safe.${coverText}${capacityText}${exerciseText}`,
@@ -1067,6 +1077,8 @@ export function absenceConcurrency(state, built, seat, { now = new Date(), setti
     for (const key of Object.keys(result.coverExercise)) result.coverExercise[key] += w.exercise[key] || 0;
   }
   result.summary.exerciseValidCoversN = result.coverExercise.validCoversN;
+  result.summary.exerciseRehearsedCoversN = result.coverExercise.rehearsedCoversN;
+  result.summary.exerciseGapsCoversN = result.coverExercise.gapsCoversN;
   result.summary.exerciseThinLinesN = result.coverExercise.thinLinesN;
   return result;
 }
@@ -1085,7 +1097,7 @@ function buildAbsenceSection(state, built, seat, { now, settings, items }) {
   const ownSummary = own
     ? absenceWindowPlan(state, built, seat, { from: own.from, to: own.to }, { now, settings, items, depth: 0, namesVisible }).summary
     : null;
-  const exercise = { gradedCoversN: 0, validCoversN: 0, staleCoversN: 0, missingCoversN: 0, futureCoversN: 0, lateCoversN: 0, validLinesN: 0, thinLinesN: 0 };
+  const exercise = { gradedCoversN: 0, validCoversN: 0, rehearsedCoversN: 0, gapsCoversN: 0, attestedRehearsalsN: 0, selfReportedRehearsalsN: 0, staleCoversN: 0, missingCoversN: 0, futureCoversN: 0, lateCoversN: 0, validLinesN: 0, thinLinesN: 0 };
   for (const summary of [ownSummary, ...inSpan.rows.map((r) => r.summary)]) {
     const e = summary?.exercise || {};
     for (const key of Object.keys(exercise)) exercise[key] += e[key] || 0;
@@ -1443,7 +1455,7 @@ export function dutyCoverageBriefText(report) {
     lines.push(`Dated absence plans: ${absenceTotal} active in this span — ${report.absences.exposedOpenN} duty line(s) carry open work with no available cover on the absence dates. Availability is derived from the declared windows, never stored.`);
     const exercise = report.absences.exercise;
     if (exercise) {
-      lines.push(`Pre-window cover exercise: ${exercise.validLinesN} duty line(s) have duty-specific evidence recorded by today inside the preparation window ending the day before absence starts; ${exercise.thinLinesN} read thin. Cover statuses: ${exercise.validCoversN} valid, ${exercise.staleCoversN} stale, ${exercise.missingCoversN} missing, ${exercise.futureCoversN} future-dated, ${exercise.lateCoversN} after cutoff.`);
+      lines.push(`Pre-window cover exercise: ${exercise.validLinesN} duty line(s) have duty-specific evidence recorded by today inside the preparation window ending the day before absence starts; ${exercise.thinLinesN} read thin. Cover statuses: ${exercise.rehearsedCoversN} rehearsed by explicit dated record (${exercise.attestedRehearsalsN} holder/supervisor-attested, ${exercise.selfReportedRehearsalsN} self-reported), ${exercise.validCoversN} valid on inferred work, ${exercise.gapsCoversN} rehearsal(s) found gaps, ${exercise.staleCoversN} stale, ${exercise.missingCoversN} missing, ${exercise.futureCoversN} future-dated, ${exercise.lateCoversN} after cutoff.`);
     }
   }
   // ADR-0123: concurrency is printed as its own reading, with its own refusal.
@@ -1563,6 +1575,11 @@ export function dutyCoverageCsvRows(report) {
       absence_ineligible_n: a.summary.ineligibleN,
       absence_gap_n: a.summary.gapN,
       absence_exposed_open_n: a.summary.exposedOpenN,
+      // ADR-0128: the explicit-rehearsal counts ride the same aggregate row —
+      // how many available covers are certified by a dated attestation rather
+      // than inferred work, and how many rehearsals found gaps. Counts only.
+      absence_rehearsed_n: a.summary.exercise?.rehearsedCoversN ?? '',
+      absence_rehearsal_gaps_n: a.summary.exercise?.gapsCoversN ?? '',
       refused_reason: '',
     });
   }

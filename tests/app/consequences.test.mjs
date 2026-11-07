@@ -105,11 +105,11 @@ function harness(initial = fixture(), now = () => NOW) {
 
 describe('schema v67 and fail-closed persistence', () => {
   test('the 66→67 migration adds empty ledgers, never a retrospective forecast', () => {
-    assert.equal(SCHEMA_VERSION, 116);
+    assert.equal(SCHEMA_VERSION, 117);
     assert.equal(typeof MIGRATIONS[66], 'function');
     const raw = migrate({ schemaVersion: 66, settings: {}, decisions: [decision('old')] });
-    assert.deepEqual(raw.applied, ['66 → 67', '67 → 68', '68 → 69', '69 → 70', '70 → 71', '71 → 72', '72 → 73', '73 → 74', '74 → 75', '75 → 76', '76 → 77', '77 → 78', '78 → 79', '79 → 80', '80 → 81', '81 → 82', '82 → 83', '83 → 84', '84 → 85', '85 → 86', '86 → 87', '87 → 88', '88 → 89', '89 → 90', '90 → 91', '91 → 92', '92 → 93', '93 → 94', '94 → 95', '95 → 96', '96 → 97', '97 → 98', '98 → 99', '99 → 100', '100 → 101', '101 → 102', '102 → 103', '103 → 104', '104 → 105', '105 → 106', '106 → 107', '107 → 108', '108 → 109', '109 → 110', '110 → 111', '111 → 112', '112 → 113', '113 → 114', '114 → 115', '115 → 116']);
-    assert.equal(raw.raw.schemaVersion, 116);
+    assert.deepEqual(raw.applied, ['66 → 67', '67 → 68', '68 → 69', '69 → 70', '70 → 71', '71 → 72', '72 → 73', '73 → 74', '74 → 75', '75 → 76', '76 → 77', '77 → 78', '78 → 79', '79 → 80', '80 → 81', '81 → 82', '82 → 83', '83 → 84', '84 → 85', '85 → 86', '86 → 87', '87 → 88', '88 → 89', '89 → 90', '90 → 91', '91 → 92', '92 → 93', '93 → 94', '94 → 95', '95 → 96', '96 → 97', '97 → 98', '98 → 99', '99 → 100', '100 → 101', '101 → 102', '102 → 103', '103 → 104', '104 → 105', '105 → 106', '106 → 107', '107 → 108', '108 → 109', '109 → 110', '110 → 111', '111 → 112', '112 → 113', '113 → 114', '114 → 115', '115 → 116', '116 → 117']);
+    assert.equal(raw.raw.schemaVersion, 117);
     assert.deepEqual(raw.raw.consequenceReadings, []);
     assert.deepEqual(raw.raw.consequenceMarkers, []);
     const state = normalizeState(raw.raw, { now: NOW }).state;

@@ -45,6 +45,11 @@ import { createDutyCoverageActions } from './core/domain/dutyCoverageActions.js'
 // windows, never stored.
 import { createDutyAbsenceActions } from './core/domain/dutyAbsenceActions.js';
 import { createDutyStandbyActions } from './core/domain/dutyStandbyActions.js';
+// ADR-0128: explicit rehearsal records. One safe read (the seat-scoped ledger)
+// and three dated human commands (record, revoke, scan); whether a rehearsal
+// counts for an absence is derived inside ADR-0125's window-exercise index,
+// never stored.
+import { createDutyRehearsalActions } from './core/domain/dutyRehearsalActions.js';
 // ADR-0118: comparing two rehearsed responses and recording the arbitration is a
 // VP/chief command on the same guarded bus and the same post-commit spine as
 // every other terminal.
@@ -19785,6 +19790,7 @@ export function createApi(store, options = {}) {
   Object.assign(api, createDutyCoverageActions(store, { now: clock, idFactory: id }));
   Object.assign(api, createDutyAbsenceActions(store, { now: clock, idFactory: id }));
   Object.assign(api, createDutyStandbyActions(store, { now: clock, idFactory: id }));
+  Object.assign(api, createDutyRehearsalActions(store, { now: clock, idFactory: id }));
   // ADR-0118: the only write is RECORD-ARBITRATION; the receipt, the governed
   // decision, the two `rehearses` edges and the vertical roll-up land in one
   // atomic transaction performed by this mixin plus RULE-CMP-01.

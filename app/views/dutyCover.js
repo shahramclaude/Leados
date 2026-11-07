@@ -19,6 +19,7 @@ import { pageHeader, card, stat, badge, banner, tabs, emptyState, table } from '
 import { serializeCsv } from '../core/csv.js';
 import { DUTY_BRANCH_DISCLOSURE_PREMISE, DUTY_COVERAGE_PANELS, DUTY_PREMISE } from '../core/domain/dutyCoverageRegistry.js';
 import { DUTY_ABSENCE_PREMISE } from '../core/domain/dutyAbsenceRegistry.js';
+import { DUTY_REHEARSAL_MODES, DUTY_REHEARSAL_MODE_LABELS, DUTY_REHEARSAL_PREMISE } from '../core/domain/dutyRehearsalRegistry.js';
 
 const PANELS = DUTY_COVERAGE_PANELS;
 const CSV_COLUMNS = ['row_kind', 'scope', 'altitude', 'duty_key', 'band', 'open_n',
@@ -26,6 +27,7 @@ const CSV_COLUMNS = ['row_kind', 'scope', 'altitude', 'duty_key', 'band', 'open_
   'candidates_refused_n', 'concentration_top_share_pct', 'sole_handed', 'window_days', 'refused_reason',
   'absence_seat_rank', 'absence_from', 'absence_to', 'absence_duties_n', 'absence_covered_n',
   'absence_thin_n', 'absence_cover_absent_n', 'absence_ineligible_n', 'absence_gap_n', 'absence_exposed_open_n',
+  'absence_rehearsed_n', 'absence_rehearsal_gaps_n',
   'branch_seats_n', 'duties_n', 'branch_covered_n', 'branch_gap_n', 'branch_open_gap_n', 'branch_readiness_pct',
   'branch_withheld', 'branch_floor_n', 'branch_rate_floor_n',
   'branch_released_n', 'branch_released_seats_n', 'branch_withheld_n', 'branch_deferred_n', 'branch_pooled_pct', 'branch_mean_pct'];
@@ -164,6 +166,132 @@ function absenceRevokeDialog(ctx, plan) {
   });
 }
 
+/* --------------------------------------- ADR-0128: explicit rehearsal records */
+
+function rehearsalDialog(ctx, cover) {
+  const form = buildForm([
+    { name: 'rehearsedOn', label: 'When was the rehearsal run? (ISO date)', type: 'date', value: '', help: `The day the practice happened — not after today, and at most 60 days behind the recording. A rehearsal is an attestation about a dated day.` },
+    {
+      name: 'mode', label: 'What kind of practice was run?', type: 'select', value: 'supervised',
+      help: 'A declared vocabulary, not free text: the strength of the evidence depends on what kind of practice happened.',
+      options: DUTY_REHEARSAL_MODES.map((m) => ({ value: m, label: DUTY_REHEARSAL_MODE_LABELS[m] })),
+    },
+    {
+      name: 'outcome', label: 'What did the rehearsal show?', type: 'select', value: 'ready',
+      help: '“Ready” certifies the cover for this duty inside the preparation window. “Gaps” does NOT certify — it opens a governed decision naming what must change before the window.',
+      options: [
+        { value: 'ready', label: 'Ready — the cover can answer this duty' },
+        { value: 'gaps', label: 'Gaps found — name what must change first' },
+      ],
+    },
+    { name: 'note', label: 'What was practised, and what did it show? (required when gaps were found)', type: 'textarea', value: '', rows: 3, help: 'Your own words, kept verbatim. A gaps attestation without words opens a decision with nothing in it.' },
+  ]);
+  openModal({
+    title: `Record a rehearsal — “${cover.dutyLabel || 'this duty line'}”`,
+    description: `Cover: ${cover.name || cover.label || 'the declared cover'}. You are attesting that this declared cover practised this duty on a dated day, and saying what it showed. This is a dated human act: it lands on the record with your seat as the observer, rolls up the holder's chain, and grades the dated plan's preparation window.`,
+    body: h('div', { class: 'stack' },
+      form.node,
+      h('p', { class: 'muted small' }, DUTY_REHEARSAL_PREMISE)),
+    footer: [
+      h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => closeAllModals() }, 'Cancel'),
+      h('button', {
+        class: 'btn btn-primary', type: 'button',
+        onClick: () => {
+          const v = form.getValues();
+          const result = ctx.api.dutyRehearsalRecord({
+            coverRowId: cover.id, rehearsedOn: v.rehearsedOn, mode: v.mode, outcome: v.outcome, note: v.note,
+          });
+          if (!notify(result, result?.decisionId
+            ? 'Rehearsal recorded — the gaps it found are now a governed decision.'
+            : 'Rehearsal recorded — the dated plan now grades this cover on an explicit attestation.')) return;
+          closeAllModals();
+          ctx.refresh();
+        },
+      }, 'Record the rehearsal'),
+    ],
+  });
+}
+
+function rehearsalRevokeDialog(ctx, row) {
+  const form = buildForm([
+    { name: 'reason', label: 'Why does this attestation no longer hold?', type: 'textarea', value: '', rows: 3, help: 'Append-only: the row is marked revoked with this reason and never deleted. A certification that quietly disappeared would masquerade as a rehearsal that never happened.' },
+  ]);
+  openModal({
+    title: 'Revoke a rehearsal record',
+    description: `${row.rehearsedOn} · ${row.modeLabel} · outcome ${row.outcome}. Revoking removes it from the window-exercise evidence on the next read; the dated plan re-grades without it.`,
+    body: form.node,
+    footer: [
+      h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => closeAllModals() }, 'Cancel'),
+      h('button', {
+        class: 'btn btn-primary', type: 'button',
+        onClick: () => {
+          const result = ctx.api.dutyRehearsalRevoke({ id: row.id, reason: form.getValues().reason });
+          if (!notify(result, 'Rehearsal record revoked.')) return;
+          closeAllModals();
+          ctx.refresh();
+        },
+      }, 'Revoke the record'),
+    ],
+  });
+}
+
+const attestationBadge = (attestation) => {
+  if (attestation === 'holder') return badge('holder-attested', 'good', 'The duty holder recorded the practice — the strongest attestation');
+  if (attestation === 'supervisor') return badge('supervisor-attested', 'good', 'A leader above the holder observed and recorded it');
+  if (attestation === 'self') return badge('self-reported', 'warn', 'The cover recorded their own rehearsal — an accountable dated claim, printed as self-reported, never as an attestation');
+  return badge('outside the line', 'bad', 'A seat with no position at this duty recorded it — the schema drops such rows on reload');
+};
+
+function rehearsalsCard(ctx) {
+  const result = ctx.api.dutyRehearsalList?.();
+  if (!result || result.ok === false) return null;
+  const { rows, namesVisible, summary } = result;
+  const shown = rows.slice(0, 40);
+  return card({
+    title: `Explicit rehearsal records — ${summary.activeN} active`,
+    subtitle: 'Practice somebody recorded, not practice inferred. A ready rehearsal inside the preparation window grades ABOVE dated-work evidence; a rehearsal that found GAPS keeps the line thin and opens a governed decision instead.',
+    actions: [
+      h('button', {
+        class: 'btn btn-small', type: 'button',
+        onClick: () => { const r = ctx.api.dutyRehearsalScan(); if (notify(r, 'Scan complete — nothing was certified.')) ctx.refresh(); },
+      }, 'Scan'),
+    ],
+    body: h('div', { class: 'stack' },
+      h('div', { class: 'stat-grid' },
+        stat({ label: 'Ready', value: String(summary.readyN), tone: summary.readyN ? 'good' : '', hint: `${summary.attestedN} holder/supervisor-attested · ${summary.selfReportedN} self-reported` }),
+        stat({ label: 'Gaps found', value: String(summary.gapsN), tone: summary.gapsN ? 'bad' : 'good', hint: 'each opened a governed decision naming what must change before the window' }),
+        stat({ label: 'Revoked', value: String(summary.rowsN - summary.activeN), hint: 'append-only: marked revoked with a reason, never deleted' })),
+      shown.length
+        ? table({
+          caption: 'Dated rehearsal attestations visible to this seat',
+          columns: [
+            { label: 'Rehearsed', render: (r) => r.rehearsedOn },
+            { label: 'Duty', render: (r) => r.dutyLabel },
+            { label: 'Holder', render: (r) => (namesVisible ? (r.holderName || r.holderLabel) : r.holderLabel) },
+            { label: 'Cover', render: (r) => (namesVisible ? (r.coverName || r.coverLabel) : r.coverLabel) },
+            { label: 'Practice', render: (r) => h('span', { class: 'muted small' }, r.modeLabel) },
+            { label: 'Outcome', render: (r) => (r.outcome === 'ready' ? badge('ready', 'good') : badge('gaps found', 'bad', 'The governed decision opened at the recording names what must change')) },
+            { label: 'Recorded by', render: (r) => h('span', null, attestationBadge(r.attestation), h('span', { class: 'muted small' }, ` ${r.recordedByLabel}, ${r.recordedOn}`)) },
+            { label: 'Act', render: (r) => (r.status === 'active' && r.canRevoke
+              ? h('button', { class: 'btn btn-ghost btn-small', type: 'button', onClick: () => rehearsalRevokeDialog(ctx, r) }, 'Revoke')
+              : h('span', { class: 'muted small' }, r.status === 'revoked' ? `revoked ${r.revokedOn || ''}` : '—')) },
+          ],
+          rows: shown,
+          emptyMessage: 'No rehearsal recorded yet.',
+        })
+        : emptyState({
+          title: 'No rehearsal has been recorded in this span',
+          body: 'The dated plan currently grades cover exercise from INFERRED evidence: dated work of the duty’s sources touching the holder’s span with the cover on the record. Recording a rehearsal — from a duty line’s cover list — replaces inference with a dated attestation for that cover. No rehearsal is not a failure; an unrecorded rehearsal is.',
+        }),
+      shown.length && rows.length > shown.length
+        ? h('p', { class: 'muted small' }, `${rows.length - shown.length} further record(s) are in the ledger; the card prints the 40 most recent rehearsals.`)
+        : null,
+      namesVisible
+        ? h('ul', { class: 'plain-list' }, ...shown.filter((r) => r.note).slice(0, 6).map((r) => h('li', { class: 'muted small' }, `${r.rehearsedOn} · ${r.dutyLabel} · ${r.outcome === 'ready' ? 'ready' : 'GAPS'} — “${r.note}”`)))
+        : h('p', { class: 'muted small' }, 'Above the manager altitude the notes and names are withheld at construction; dates, modes, outcomes, attestation strength and counts survive.')),
+  });
+}
+
 /* ------------------------------------------------- ADR-0122: the plan panel */
 
 const windowBandBadge = (band) => {
@@ -177,6 +305,10 @@ const windowBandBadge = (band) => {
 const windowExerciseBadge = (exercise) => {
   if (!exercise) return badge('not graded', 'warn', 'No window-specific exercise reading is available');
   const day = exercise.evidence?.day || exercise.lastEvidence?.day || null;
+  // ADR-0128: an explicit rehearsal record outranks inferred dated work — and a
+  // rehearsal that FOUND GAPS is its own printed state, never a green badge.
+  if (exercise.status === 'rehearsed') return badge(`rehearsed ${day}`, 'good', exercise.reason);
+  if (exercise.status === 'gaps') return badge(`rehearsal found gaps ${day}`, 'bad', exercise.reason);
   if (exercise.status === 'valid') return badge(`evidence ${day}`, 'good', exercise.reason);
   if (exercise.status === 'stale') return badge(`stale ${day}`, 'warn', exercise.reason);
   if (exercise.status === 'future') return badge(`future ${day}`, 'warn', exercise.reason);
@@ -196,7 +328,7 @@ function windowPlanCard(ctx, plan, namesShown) {
         stat({ label: 'Exposed lines', value: String(s.exposedN), tone: s.exposedN ? 'bad' : 'good', hint: 'duty lines with no available, eligible cover on these dates' }),
         stat({ label: 'Open work exposed', value: String(s.exposedOpenN), tone: s.exposedOpenN ? 'bad' : 'good', hint: 'open items sitting in lines with no available cover during the window' }),
         stat({ label: 'Cover conflicts', value: String(s.conflictsN), tone: s.conflictsN ? 'bad' : '', hint: 'declared covers who are themselves absent during the window' }),
-        stat({ label: 'Pre-window evidence', value: String(s.exercise?.validCoversN ?? 0), tone: s.exercise?.thinLinesN ? 'bad' : 'good', hint: `${s.exercise?.validCoversN ?? 0} valid cover(s) · ${s.exercise?.thinLinesN ?? 0} thin line(s) · ${s.exercise?.staleCoversN ?? 0} stale · ${s.exercise?.missingCoversN ?? 0} missing · ${s.exercise?.futureCoversN ?? 0} future · ${s.exercise?.lateCoversN ?? 0} after cutoff` })),
+        stat({ label: 'Pre-window evidence', value: String((s.exercise?.rehearsedCoversN ?? 0) + (s.exercise?.validCoversN ?? 0)), tone: s.exercise?.thinLinesN ? 'bad' : 'good', hint: `${s.exercise?.rehearsedCoversN ?? 0} rehearsed by explicit record (${s.exercise?.attestedRehearsalsN ?? 0} attested, ${s.exercise?.selfReportedRehearsalsN ?? 0} self-reported) · ${s.exercise?.validCoversN ?? 0} valid on inferred work · ${s.exercise?.gapsCoversN ?? 0} gaps found · ${s.exercise?.thinLinesN ?? 0} thin line(s) · ${s.exercise?.staleCoversN ?? 0} stale · ${s.exercise?.missingCoversN ?? 0} missing · ${s.exercise?.futureCoversN ?? 0} future · ${s.exercise?.lateCoversN ?? 0} after cutoff` })),
     }),
     ...plan.rows.map((row) => card({
       title: `${row.label} — ${windowBandBadge(row.windowBand)}`,
@@ -217,6 +349,7 @@ function windowPlanCard(ctx, plan, namesShown) {
               { label: 'Available', render: (c) => (c.available ? badge('present', 'good') : badge(`absent ${c.absence.from} → ${c.absence.to}`, 'bad')) },
               { label: 'Eligible', render: (c) => (c.eligible ? badge('eligible', 'good') : badge('ineligible', 'bad')) },
               { label: 'Exercise', render: (c) => windowExerciseBadge(c.windowExercise) },
+              { label: 'Act', render: (c) => h('button', { class: 'btn btn-ghost btn-small', type: 'button', onClick: () => rehearsalDialog(ctx, { id: c.id, name: c.name, label: c.label, dutyLabel: row.label }) }, 'Rehearse') },
             ],
             rows: row.covers,
             emptyMessage: 'No cover declared.',
@@ -322,7 +455,7 @@ function rollupCard(ctx, rollup, namesShown) {
           { label: 'Cover absent', render: (r) => String(r.summary.coverAbsentN) },
           { label: 'No cover', render: (r) => String(r.summary.gapN) },
           { label: 'Open, exposed', render: (r) => String(r.summary.exposedOpenN) },
-          { label: 'Pre-window evidence', render: (r) => `${r.summary.exercise?.validCoversN ?? 0} valid / ${r.summary.exercise?.thinLinesN ?? 0} thin` },
+          { label: 'Pre-window evidence', render: (r) => `${r.summary.exercise?.rehearsedCoversN ?? 0} rehearsed / ${r.summary.exercise?.validCoversN ?? 0} valid / ${r.summary.exercise?.gapsCoversN ?? 0} gaps / ${r.summary.exercise?.thinLinesN ?? 0} thin` },
         ],
         rows: rollup.rows,
         emptyMessage: 'No absences.',
@@ -479,6 +612,7 @@ function planPanel(ctx, report) {
           plan ? windowPlanCard(ctx, plan, namesShown) : null),
       })
       : planningFormCard(ctx, namesShown),
+    rehearsalsCard(ctx),
     concurrencyCard(report.absences?.concurrency),
     rollupCard(ctx, rollup, namesShown),
     card({
@@ -489,6 +623,7 @@ function planPanel(ctx, report) {
         h('li', null, h('strong', null, 'Concurrency (ADR-0123):'), ' overlapping absence windows are swept from the same declared dates. The sweep prints the shared dates, the duty lines with no available cover on them, and the cover who would be the only answerable person for two or more absent seats — the single point of failure a per-absence reading cannot show. Adjacency is not overlap, and above the manager altitude the cover is named by rank and seat only.'),
         h('li', null, h('strong', null, 'Cover capacity (ADR-0124):'), ' on the shared dates, the cover’s own open work and the open work they alone would inherit are counted as one set union (items already inside the cover’s own span are not added twice) and graded against the peak open-work load actually observed in this span. With no open work on the record there is no envelope and the reading refuses; a duty line with several available covers is printed as shared rather than split by guess.'),
         h('li', null, h('strong', null, 'Pre-window exercise (ADR-0125):'), ' a cover counts as exercised for THIS absence only when a record of THIS duty’s declared sources touches the holder’s span, is dated inside the preparation window (the declared exercise days ending the day before the absence starts), and is already recorded by today. Closed work counts; future-dated work, work after the cutoff, and unrelated duty sources do not. The standing register remains a separate, today-anchored reading.'),
+        h('li', null, h('strong', null, 'Explicit rehearsals (ADR-0128):'), ' dated-work evidence is INFERRED — a cover named on one case grades the same as a cover the holder walked through the duty. A rehearsal record is the human act itself: a seat that was there (the holder, a leader above, or the cover) attests that a declared cover practised THIS duty on a dated day, in a declared mode. A ready rehearsal inside the preparation window grades ABOVE inferred work (', h('em', null, 'rehearsed'), '); a rehearsal that FOUND GAPS grades as its own state, keeps the line thin, and opens a governed decision quoting the recorder verbatim. The attestation strength — holder, supervisor, self-reported — is derived from the roster on every read and printed; a third-party attestation is dropped on reload. Nothing about the verdict is stored.'),
         h('li', null, h('strong', null, 'Refused:'), ' a stored availability flag, an engine-assigned absence, an auto-assigned second cover and a “covered during the window” tick. Availability is a function of two declared windows; a stored copy would drift the moment either window changed.'),
         h('li', null, h('strong', null, 'Schema v115 is additive.'), ' An upgraded workspace opens with an empty absence ledger — “no absence has been declared here yet”, which is not the same claim as “every absence is covered”.')),
     }),
@@ -527,7 +662,9 @@ function dutyCard(ctx, row, namesShown) {
               { label: 'Declared', render: (c) => c.declaredOn },
               { label: 'Eligible', render: (c) => (c.eligible ? badge('eligible', 'good') : badge('ineligible', 'bad')) },
               { label: 'Exercise', render: (c) => (c.exercised ? badge(`last ${c.lastWorkDay}`, 'good') : badge(c.lastWorkDay ? `stale ${c.lastWorkDay}` : 'never recorded', 'warn')) },
-              { label: 'Action', render: (c) => h('button', { class: 'btn btn-ghost btn-small', type: 'button', onClick: () => revokeDialog(ctx, c) }, 'Revoke') },
+              { label: 'Action', render: (c) => h('span', { class: 'row-actions' },
+                h('button', { class: 'btn btn-ghost btn-small', type: 'button', onClick: () => rehearsalDialog(ctx, { id: c.id, name: c.name, label: c.label, dutyLabel: r.label }) }, 'Rehearse'),
+                h('button', { class: 'btn btn-ghost btn-small', type: 'button', onClick: () => revokeDialog(ctx, c) }, 'Revoke')) },
             ],
             rows: r.covers,
             emptyMessage: 'No cover declared.',
@@ -641,7 +778,7 @@ function deskPanel(ctx, report) {
       title: 'Why this is not a cover-rota app',
       body: h('ul', { class: 'plain-list' },
         h('li', null, h('strong', null, 'The duty table is already declared.'), ' This screen does not invent duties: it reads ADR-0075’s altitude table and asks the one question the table could not answer — who is answerable when the holder is absent.'),
-        h('li', null, h('strong', null, '“Exercised” is derived, never ticked.'), ' A cover counts as live only when that person recorded work inside the duty’s span inside the declared window. A declaration nobody exercises prints as “thin”, not “covered”.'),
+        h('li', null, h('strong', null, '“Exercised” is derived, never ticked.'), ' A cover counts as live only when that person recorded work inside the duty’s span inside the declared window — or, stronger, when a seat that was there recorded an explicit rehearsal (ADR-0128). A declaration nobody exercises prints as “thin”, not “covered”; a rehearsal that found gaps prints as a governed decision, not a badge.'),
         h('li', null, h('strong', null, 'A duty rises, it never falls sideways.'), ' Candidates include a higher-ranked span inside it or a reporting-tree ancestor. The holder cannot cover their own absence; peers are never offered and a lower rank is refused with the reason printed (Jaques 1956; Aghion & Tirole 1997).'),
         h('li', null, h('strong', null, 'One declaration, one transaction.'), ' The cover, its `prepares-for` edge, the governed decision naming the consequence and one `rolls-up-to` edge per ancestor all commit atomically through the shared spine.')),
     }),

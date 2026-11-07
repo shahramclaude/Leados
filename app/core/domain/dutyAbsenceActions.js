@@ -130,8 +130,8 @@ export function createDutyAbsenceActions(store, { now, idFactory }) {
       const plan = absenceWindowPlan(store.state, built, seat, window, { now: clock(), settings: settings(), items });
       const exposed = plan.summary.exposedN;
       const exposedOpen = plan.summary.exposedOpenN;
-      const exercise = plan.summary.exercise || { validCoversN: 0, staleCoversN: 0, missingCoversN: 0, futureCoversN: 0, lateCoversN: 0, thinLinesN: 0 };
-      const exerciseLine = `Pre-window exercise: ${exercise.validCoversN} available cover(s) have duty-specific evidence recorded by today inside ${plan.exerciseWindow.from} → ${plan.exerciseWindow.to}; ${exercise.staleCoversN} stale, ${exercise.missingCoversN} missing, ${exercise.futureCoversN} future-dated, ${exercise.lateCoversN} after cutoff. ${exercise.thinLinesN} duty line(s) read thin.`;
+      const exercise = plan.summary.exercise || { validCoversN: 0, rehearsedCoversN: 0, gapsCoversN: 0, attestedRehearsalsN: 0, selfReportedRehearsalsN: 0, staleCoversN: 0, missingCoversN: 0, futureCoversN: 0, lateCoversN: 0, thinLinesN: 0 };
+      const exerciseLine = `Pre-window exercise: ${exercise.rehearsedCoversN} available cover(s) hold an explicit rehearsal record (${exercise.attestedRehearsalsN} attested, ${exercise.selfReportedRehearsalsN} self-reported) and ${exercise.validCoversN} have inferred duty-specific evidence recorded by today inside ${plan.exerciseWindow.from} → ${plan.exerciseWindow.to}; ${exercise.gapsCoversN} rehearsal(s) found gaps, ${exercise.staleCoversN} stale, ${exercise.missingCoversN} missing, ${exercise.futureCoversN} future-dated, ${exercise.lateCoversN} after cutoff. ${exercise.thinLinesN} duty line(s) read thin.`;
 
       const at = clock();
       const today = dayKey(at);
@@ -253,7 +253,7 @@ export function createDutyAbsenceActions(store, { now, idFactory }) {
         type: DUTY_ABSENCE_EVENTS.DECLARE,
         entity: 'absenceplan',
         entityId: rowId,
-        summary: `Absence declared: ${seat.label} absent ${windowText}. ${exposed} of ${plan.summary.dutiesN} duty line(s) exposed. Pre-window exercise: ${exercise.validCoversN} valid cover(s), ${exercise.thinLinesN} thin line(s). ${concurrency.windows.length ? `${concurrency.windows.length} concurrent window(s), ${concurrency.summary.exposedOpenN} open uncovered, ${concurrency.summary.singleCoverN} single-cover point(s).` : 'No concurrent window.'} Cover capacity: ${concurrency.coverLoad.gradedN} graded, ${concurrency.coverLoad.overEnvelopeN} over envelope.`.slice(0, 300),
+        summary: `Absence declared: ${seat.label} absent ${windowText}. ${exposed} of ${plan.summary.dutiesN} duty line(s) exposed. Pre-window exercise: ${exercise.rehearsedCoversN} rehearsed by explicit record, ${exercise.validCoversN} valid on inferred work, ${exercise.gapsCoversN} gaps found, ${exercise.thinLinesN} thin line(s). ${concurrency.windows.length ? `${concurrency.windows.length} concurrent window(s), ${concurrency.summary.exposedOpenN} open uncovered, ${concurrency.summary.singleCoverN} single-cover point(s).` : 'No concurrent window.'} Cover capacity: ${concurrency.coverLoad.gradedN} graded, ${concurrency.coverLoad.overEnvelopeN} over envelope.`.slice(0, 300),
       });
       return saved({
         id: rowId,
@@ -326,7 +326,7 @@ export function createDutyAbsenceActions(store, { now, idFactory }) {
         type: DUTY_ABSENCE_EVENTS.SCAN,
         entity: 'workspace',
         entityId: '',
-        summary: `Absence plans re-derived: ${report.absences.own ? 1 : 0} own, ${rollup.rows.length} in span, ${report.absences.exposedOpenN} open uncovered. Pre-window exercise: ${report.absences.exercise?.validLinesN ?? 0} valid line(s), ${report.absences.exercise?.thinLinesN ?? 0} thin. Concurrency: ${conc.refused ? 'refused' : `${conc.summary.windowsN} window(s), max ${conc.summary.maxConcurrent} seats, ${conc.summary.singleCoverN} single-cover point(s)`}. Cover capacity: ${conc.coverLoad.gradedN} graded, ${conc.coverLoad.overEnvelopeN} over envelope. Nothing was scheduled.`.slice(0, 300),
+        summary: `Absence plans re-derived: ${report.absences.own ? 1 : 0} own, ${rollup.rows.length} in span, ${report.absences.exposedOpenN} open uncovered. Pre-window exercise: ${report.absences.exercise?.validLinesN ?? 0} valid line(s), ${report.absences.exercise?.thinLinesN ?? 0} thin, ${report.absences.exercise?.rehearsedCoversN ?? 0} cover(s) rehearsed by explicit record, ${report.absences.exercise?.gapsCoversN ?? 0} rehearsal(s) found gaps. Concurrency: ${conc.refused ? 'refused' : `${conc.summary.windowsN} window(s), max ${conc.summary.maxConcurrent} seats, ${conc.summary.singleCoverN} single-cover point(s)`}. Cover capacity: ${conc.coverLoad.gradedN} graded, ${conc.coverLoad.overEnvelopeN} over envelope. Nothing was scheduled.`.slice(0, 300),
       });
       return saved({
         exposedOpenN: report.absences.exposedOpenN,
