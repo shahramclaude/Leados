@@ -145,7 +145,7 @@ function harness(state, clock = () => NOW) {
 /* ------------------------------------------------------------------ schema */
 
 test('Schema v105 migrates additively: empty ledgers, declared conventions, nothing back-filled', () => {
-  assert.equal(SCHEMA_VERSION, 112);
+  assert.equal(SCHEMA_VERSION, 113);
   const base = createEmptyState(NOW_ISO);
   const legacy = { ...base, schemaVersion: 104 };
   delete legacy.epistemicUnknowns;

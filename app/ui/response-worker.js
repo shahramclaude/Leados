@@ -39,6 +39,10 @@ export function runActionBundleRehearsal(state, bundleId, now, options = {}) {
   return runRehearsal({ kind: 'bundle', state, bundleId, now: now.toISOString() }, options);
 }
 
+export function runPortfolioComparison(state, bundleAId, bundleBId, now, { seatId = null, rank = null, ...options } = {}) {
+  return runRehearsal({ kind: 'comparison', state, bundleAId, bundleBId, seatId, rank, now: now.toISOString() }, options);
+}
+
 export function runMissionCaptureRehearsal(state, captureId, now, options = {}) {
   return runRehearsal({ kind: 'capture', state, captureId, now: now.toISOString() }, options);
 }

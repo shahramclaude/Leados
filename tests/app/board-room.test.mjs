@@ -156,7 +156,7 @@ const verdictOf = (evaluation, key) => evaluation.rows.find((row) => row.key ===
 /* ------------------------------------------------------------ schema/wiring */
 
 test('schema v91 (main) then v92/v93: board collections arrive additively', () => {
-  assert.equal(SCHEMA_VERSION, 112);
+  assert.equal(SCHEMA_VERSION, 113);
   assert.equal(typeof MIGRATIONS[90], 'function');
   const before = { ...createEmptyState(NOW.toISOString()), schemaVersion: 90 };
   delete before.boardMemos;

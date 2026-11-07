@@ -249,6 +249,10 @@ export const MODULE_MANIFESTS = Object.freeze({
   // register (ADR-0092), so a SERIES of their tables was never audited across
   // days, seats or altitudes. Both now declare a manifest so their aggregates
   // can be planned and published into the differencing register.
+  // ADR-0118: the portfolio rehearsal comparison. Adaptive detail from the VP
+  // rung up: the comparison is the executive's own artefact, and rolling it to
+  // counts only above rank 4 would hide it from the chief who must decide.
+  compare: row('compare', 'Portfolio rehearsal comparison', ['portfolioComparisons', 'actionBundles'], { mode: A, classKey: 'portfolio', detailCeiling: 5, dates: ['recordedOn', 'recordedAt'], dues: ['reviewOn'], statuses: ['status'], amounts: ['amount'], currencies: ['currency'], note: 'The comparison adapter publishes two reviewed responses\' declared commitments, software footprints and the human arbitration between them. No person is rated and no benefit, probability or ranking is produced.' }),
   escalation: row('escalation', 'Escalation economy', ['escalationRecords', 'escalationCommitments'], { mode: A, classKey: 'unit', adapterScoped: true, detailCeiling: 5, dates: ['loggedOn', 'createdAt'], dues: ['decidedOn', 'reviewOn'], statuses: ['status', 'disposition'], note: 'The escalation adapter publishes span counts of recorded decision moments and graded commitments; no person, seat name, title, proposed action or note. The register audits the release series as one integer system.' }),
   cadence: row('cadence', 'Operating cadence', ['cadenceForums', 'cadenceSessions'], { mode: A, classKey: 'unit', adapterScoped: true, detailCeiling: 5, dates: ['createdAt', 'heldOn'], dues: ['nextOn'], statuses: ['status'], note: 'The cadence adapter publishes span counts of declared forums and held sittings; no chair name, attendee list, forum free text or item title. The register audits the release series as one integer system.' }),
 });

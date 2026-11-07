@@ -79,7 +79,7 @@ const edges = (state, relation) => (Array.isArray(state.links) ? state.links : [
 /* --------------------------------------------------------- 1. storage */
 
 test('v111 is additive, declared, fail-closed and invents no jurisdiction fact', () => {
-  assert.equal(SCHEMA_VERSION, 112);
+  assert.equal(SCHEMA_VERSION, 113);
   for (const key of ['jurFindings', 'jurReadings', 'jurMarkers']) assert.ok(COLLECTIONS.includes(key), key);
   const empty = createEmptyState(NOW.toISOString());
   assert.deepEqual(empty.jurFindings, []);
@@ -90,7 +90,7 @@ test('v111 is additive, declared, fail-closed and invents no jurisdiction fact',
 
   const migrated = migrate({ schemaVersion: 109, settings: {}, people: [], decisions: [] });
   assert.equal(migrated.raw.schemaVersion, 112);
-  assert.equal(migrated.applied.at(-1), '111 → 112');
+  assert.equal(migrated.applied.at(-1), '112 → 113');
   assert.deepEqual(migrated.raw.jurFindings, []);
   assert.deepEqual(migrated.raw.jurReadings, []);
   assert.deepEqual(migrated.raw.jurMarkers, []);

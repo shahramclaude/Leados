@@ -463,6 +463,12 @@ export const LINK_ENTITY_TYPES = [
   // it judged, so provenance cannot be mistaken for the claim itself.
   'diligencechecklist',
   'diligencegrade',
+  // ADR-0118 (Schema v113): a portfolio rehearsal comparison is a first-class
+  // node. It carries bundle ids, declared commitments, software footprints and a
+  // Pareto verdict — never a person's name, a note or a benefit score — so the
+  // two candidate responses, the arbitration decision it informed and every
+  // leadership ancestor it rolled up to are navigable from the comparison.
+  'comparison',
   // ADR-0085's `carryover` node and ADR-0088's `escalationrecord` /
   // `escalationcommitment` nodes are declared above, each exactly once. A second
   // copy of a type here is not harmless bookkeeping: it breaks the
@@ -478,6 +484,7 @@ export const LINK_ENTITY_TYPES = [
  */
 export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   case: 'cases',
+  comparison: 'portfolioComparisons',
   lesson: null,
   decision: 'decisions',
   delegation: 'delegations',
@@ -1701,6 +1708,13 @@ export function resolveLinkedEntity(state, entityType, entityId) {
       // A graph label never carries a note, a person name or an inferred title.
       return rec ? { type: 'missioncapture', id: rec.id, title: 'Reviewed command capture', status: rec.status,
         route: `#/mission?panel=capture&capture=${encodeURIComponent(rec.id)}`, raw: rec } : null;
+    }
+    case 'comparison': {
+      const rec = (state.portfolioComparisons || []).find((r) => r.id === entityId);
+      // A graph label carries the arbitration, never a candidate's title, a
+      // person or a rationale fragment.
+      return rec ? { type: 'comparison', id: rec.id, title: 'Portfolio rehearsal comparison', status: rec.status,
+        route: `#/compare?id=${encodeURIComponent(rec.id)}`, raw: rec } : null;
     }
     case 'bundle': {
       const rec = (state.actionBundles || []).find((b) => b.id === entityId);
