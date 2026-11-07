@@ -112,9 +112,9 @@ function deliver(app, id, to = 'lead1', extra = {}) {
 /* ---------------------------------------------------------------- 1. schema */
 
 test('1. schema v84 is additive and fail-closed', () => {
-  assert.equal(SCHEMA_VERSION, 117);
+  assert.equal(SCHEMA_VERSION, 118);
   const migrated = migrate({ schemaVersion: 83, people: [] });
-  assert.equal(migrated.raw.schemaVersion, 117);
+  assert.equal(migrated.raw.schemaVersion, 118);
   assert.deepEqual(migrated.raw.mandates, []);
   assert.equal(migrated.applied.at(-1), '116 → 117', 'the whole chain runs to the current schema');
   assert.equal(typeof MIGRATIONS[83], 'function');

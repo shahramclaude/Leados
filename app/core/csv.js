@@ -1058,7 +1058,7 @@ export const CSV_EXPORTS = [
   // label, no case or decision title and no private note survives the boundary.
   { key: 'jurisdiction', label: 'Jurisdiction compiler (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'jurisdiction', description: 'One workspace row, one row per leadership rank, one row per priced governance route (coalition / escalate / redraw) and one row per declared convention: cross-branch objective counts, coalition sizes, escalation rungs, coordination-unit costs, Wilson attribution bounds, once-only Brier grades against a 0.5 base and every printed refusal. NO objective key, NO member record id, NO person, NO span label or id, NO title and NO note. A refused rate and a suppressed cell are BLANK rather than zero; suppression is not differential privacy.' },
 
-  { key: 'duty-coverage', label: 'Duty coverage register (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'duty-coverage', description: 'One row per declared duty line under the active seat (duty key, band, open work, declared / eligible / exercised cover counts, eligible and refused candidate counts, top-hand concentration share, sole-handed flag), one register summary row, and one aggregate row per active absence plan in scope (seat rank, absence window, per-band exposure counts, and the ADR-0128 explicit-rehearsal counts: covers certified by a dated attestation and rehearsals that found gaps). NO person, NO name, NO seat id, NO span label, NO note, NO decision id, NO absence reason. The rate measures the REGISTER (named + eligible + exercised), never a person; a refused or thin cell is BLANK rather than zero.' },
+  { key: 'duty-coverage', label: 'Duty coverage register (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'duty-coverage', description: 'One row per declared duty line under the active seat (duty key, band, open work, declared / eligible / exercised cover counts, eligible and refused candidate counts, top-hand concentration share, sole-handed flag), one register summary row, and one aggregate row per active absence plan in scope (seat rank, absence window, per-band exposure counts, the ADR-0128 explicit-rehearsal counts (covers certified by a dated attestation and rehearsals that found gaps), the ADR-0126 branch cells with their disclosure floor and suppression flags, and — ADR-0129 — each withheld cell’s reading state and band plus the hand-off counts: published, declined, outstanding (overdue), lapsed and never-asked. NO person, NO name, NO seat id, NO span label, NO note, NO decision id, NO absence reason. The rate measures the REGISTER (named + eligible + exercised), never a person; a refused or thin cell is BLANK rather than zero.' },
   // CSV scope #104 (Schema v116, ADR-0127): cover acknowledgement. Aggregate
   // rows only — ranks, dates, derived standby states and counts. The named
   // cover's identity never enters the row set, and an ask that has not been
@@ -6113,7 +6113,12 @@ export function buildScopeTable(state, scope, now) {
         'absence_rehearsed_n', 'absence_rehearsal_gaps_n',
         'branch_seats_n', 'duties_n', 'branch_covered_n', 'branch_gap_n', 'branch_open_gap_n', 'branch_readiness_pct',
         'branch_withheld', 'branch_floor_n', 'branch_rate_floor_n',
-        'branch_released_n', 'branch_released_seats_n', 'branch_withheld_n', 'branch_deferred_n', 'branch_pooled_pct', 'branch_mean_pct'];
+        'branch_released_n', 'branch_released_seats_n', 'branch_withheld_n', 'branch_deferred_n', 'branch_pooled_pct', 'branch_mean_pct',
+        // ADR-0129: the hand-off's derived state per withheld cell and its
+        // counts. BLANK — never 0, never "fine" — for a cell nobody asked about.
+        'branch_reading_state', 'branch_reading_band', 'branch_reading_asked_on', 'branch_reading_published_on',
+        'branch_reading_published_n', 'branch_reading_declined_n', 'branch_reading_outstanding_n',
+        'branch_reading_lapsed_n', 'branch_reading_not_asked_n'];
       const columns = keys.map((key) => ({ key, header: key }));
       return { columns, rows };
     }

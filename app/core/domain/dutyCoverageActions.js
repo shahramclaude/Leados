@@ -315,7 +315,7 @@ export function createDutyCoverageActions(store, { now, idFactory }) {
       if (!seat.fullAccess) return fail('Re-declaring the conventions requires a full-access seat.');
       const patch = {};
       for (const key of Object.keys(DUTY_COVERAGE_BOUNDS)) if (input[key] !== undefined) patch[key] = input[key];
-      if (!Object.keys(patch).length) return fail('Nothing to declare: name dutyCoverageExerciseDays, dutyCoverageConcentrationPct, dutyCoverageBranchFloorN, dutyCoverageBranchRateFloorN or dutyCoverageBranchCap.', 'settings');
+      if (!Object.keys(patch).length) return fail('Nothing to declare: name dutyCoverageExerciseDays, dutyCoverageConcentrationPct, dutyCoverageBranchFloorN, dutyCoverageBranchRateFloorN, dutyCoverageBranchCap, dutyCoverageReadingResponseDays or dutyCoverageReadingValidDays.', 'settings');
       const next = normalizeDutyCoverageSettings({ ...settings(), ...patch });
       store.update((draft) => {
         draft.settings = { ...draft.settings, ...next };
@@ -323,7 +323,7 @@ export function createDutyCoverageActions(store, { now, idFactory }) {
         type: DUTY_COVERAGE_EVENTS.SETTINGS,
         entity: 'settings',
         entityId: 'duty-coverage',
-        summary: `Duty-coverage conventions re-declared: exercise window ${next.dutyCoverageExerciseDays} day(s), concentration threshold ${next.dutyCoverageConcentrationPct}%, branch disclosure floor ${next.dutyCoverageBranchFloorN} duty line(s), branch rate floor ${next.dutyCoverageBranchRateFloorN}, ${next.dutyCoverageBranchCap} branch(es) compared.`.slice(0, 300),
+        summary: `Duty-coverage conventions re-declared: exercise window ${next.dutyCoverageExerciseDays} day(s), concentration threshold ${next.dutyCoverageConcentrationPct}%, branch disclosure floor ${next.dutyCoverageBranchFloorN} duty line(s), branch rate floor ${next.dutyCoverageBranchRateFloorN}, ${next.dutyCoverageBranchCap} branch(es) compared, reading response window ${next.dutyCoverageReadingResponseDays} day(s), reading validity ${next.dutyCoverageReadingValidDays} day(s).`.slice(0, 300),
       });
       return saved({ conventions: next });
     },

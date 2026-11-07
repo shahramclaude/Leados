@@ -26,6 +26,10 @@ import { normalizeDutyCovers, normalizeDutyCoverageMarkers, normalizeDutyCoverag
 import { normalizeAbsencePlans } from './domain/dutyAbsenceSchema.js';
 import { normalizeStandbyAnswers, normalizeDutyStandbySettings } from './domain/dutyStandbySchema.js';
 import { normalizeDutyRehearsals } from './domain/dutyRehearsalSchema.js';
+// ADR-0129 (Schema v118): the branch reading hand-off. Two fail-closed ledgers —
+// the chief's ask and the branch leader's answer — normalised together so an
+// answer from a seat that was never asked cannot survive a reload.
+import { normalizeBranchReadingAsks, normalizeBranchReadings } from './domain/branchReadingSchema.js';
 import { DUTY_STANDBY_BOUNDS, DUTY_STANDBY_DEFAULTS } from './domain/dutyStandbyRegistry.js';
 import { normalizePropagationLineage } from './domain/automationLineage.js';
 import { normalizeImpactExecutionSnapshot } from './domain/impactExecution.js';
@@ -537,7 +541,7 @@ export {
 // workspace opens with an EMPTY absence ledger: no absence is scheduled at
 // upgrade time, because an absence invented at upgrade time would make every
 // cover in the span read as unavailable on dates no human declared.
-export const SCHEMA_VERSION = 117;
+export const SCHEMA_VERSION = 118;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -2396,6 +2400,16 @@ export const COLLECTIONS = [
   // today (ADR-0125's index) — never stored, so a certification cannot drift from
   // the window it was run for, and a drill that found gaps never becomes a badge.
   'dutyRehearsals',
+  // ADR-0129 (Schema v118): the Branch Reading hand-off. `branchReadingAsks` holds
+  // ONLY the chief's dated request for a reading of one direct branch — the
+  // branch it is about, the seat that asked and why. `branchReadings` holds ONLY
+  // the branch leader's answer: the derived band frozen on the day it was given
+  // (never a count), their own words, or a refusal with its reason. Whether the
+  // ask is asked, overdue, published, declined, lapsed or withdrawn is DERIVED
+  // on read from the two ledgers, the declared windows and today — never stored,
+  // so a reading cannot silently outlive the window it was given for.
+  'branchReadingAsks',
+  'branchReadings',
 
 ];
 
@@ -7435,6 +7449,15 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // repaired into plausible-looking evidence. Resolved BEFORE links so the
   // `attests-rehearsal-of` provenance edge validates against a real row id.
   state.dutyRehearsals = normalizeDutyRehearsals(raw.dutyRehearsals, state.dutyCovers, state.people, warnings);
+  // ADR-0129: an ask is about a branch on THIS roster and an answer belongs to
+  // the branch that was asked. The answers are resolved against the asks at the
+  // same time so a hand-edited file cannot publish a reading for a branch that
+  // never asked for one, record an answer dated before its ask, or invent a band
+  // outside the declared vocabulary. Both resolve BEFORE links so the
+  // `requests-reading-from` and `answers-reading-ask` provenance edges validate
+  // against real row ids.
+  state.branchReadingAsks = normalizeBranchReadingAsks(raw.branchReadingAsks, state.people, warnings);
+  state.branchReadings = normalizeBranchReadings(raw.branchReadings, state.branchReadingAsks, warnings);
   state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
   state.boardMarkers = normalizeBoardMarkers(raw.boardMarkers, warnings);
   // ADR-0085: packets and attested artefacts resolve before links so `carries`,
@@ -8267,6 +8290,24 @@ export const MIGRATIONS = {
     ...v116,
     schemaVersion: 117,
     dutyRehearsals: Array.isArray(v116.dutyRehearsals) ? v116.dutyRehearsals : [],
+  }),
+  // ADR-0129: additive 117 → 118. An existing workspace may hold withheld branch
+  // cells it has never asked a single question about, so both ledgers start
+  // EMPTY. "No reading has been requested here yet" is a different claim from
+  // "every branch is holding", and back-filling an ask or an answer at upgrade
+  // time would fabricate both a question nobody asked and a disclosure nobody
+  // authorised. Every withheld cell therefore opens reading `not-asked`, which
+  // is the truthful state and is printed as such rather than as a blank. The two
+  // new conventions are clamped in so the printed windows exist before anyone
+  // re-declares them; a value already set survives, clamped to its bound.
+  117: (v117) => ({
+    ...v117,
+    schemaVersion: 118,
+    branchReadingAsks: Array.isArray(v117.branchReadingAsks) ? v117.branchReadingAsks : [],
+    branchReadings: Array.isArray(v117.branchReadings) ? v117.branchReadings : [],
+    settings: isPlainObject(v117.settings)
+      ? { ...v117.settings, ...normalizeDutyCoverageSettings(v117.settings) }
+      : { ...DEFAULT_SETTINGS },
   }),
   // ADR-0113: additive 111 → 112. An existing workspace is full of prompts it
   // never classified and has never filed one by hand, so both ledgers start

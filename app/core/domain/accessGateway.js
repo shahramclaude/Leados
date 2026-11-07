@@ -45,6 +45,13 @@ const groups = [
   // above the holder in the same reporting chain. The ledger read is a
   // seat-scoped SAFE_READ below.
   ['attest-duty-rehearsal', 'dutyRehearsalRecord dutyRehearsalRevoke dutyRehearsalScan'],
+  // ADR-0129: the Branch Reading hand-off. Asking, withdrawing, publishing,
+  // declining and revoking are all declared commands (deny-by-default under a
+  // seat); the handlers additionally enforce that the ask goes ONE level down to
+  // a direct branch and that only the branch the ask named can answer it, so a
+  // requester can never publish their own reading or answer for a peer.
+  ['request-branch-reading', 'branchReadingRequest branchReadingWithdraw'],
+  ['answer-branch-reading', 'branchReadingPublish branchReadingDecline branchReadingRevoke'],
   ['declare-seat', 'setActiveSeat scanSeats'],
   // ADR-0087: the Board Room. Every method is declared; an unknown name still
   // fails closed. Committing a pack is the chief's right; reading it is enterprise.
@@ -219,6 +226,11 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // under enforcement while its writes are still gated, which would hide the
 // rehearsal evidence from exactly the plan panel that grades it.
 'dutyRehearsalList',
+// ADR-0129: both chairs of the hand-off in one seat-scoped read. Registered for
+// the same reason as every module above — a read absent from SAFE_READS is
+// unreadable under enforcement while its writes are still gated, which would
+// hide the ask from exactly the branch leader being asked.
+'branchReadingBoard',
 // ADR-0108: the Decision-Fit Ledger's read surface. Registered here because a
 // module whose reads are absent from SAFE_READS is unreadable under enforcement
 // while its writes are still gated — the reading half of the feature would
