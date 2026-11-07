@@ -174,9 +174,9 @@ function thinScenario() {
 /* ------------------------------------------------------------------ schema */
 
 test('Schema v104 migrates additively: empty lock ledgers, declared conventions, nothing back-filled', () => {
-  assert.equal(SCHEMA_VERSION, 113);
+  assert.equal(SCHEMA_VERSION, 114);
   const migrated = migrate({ schemaVersion: 103, settings: { leaderName: 'Keep this' } });
-  assert.deepEqual(migrated.applied, ['103 → 104', '104 → 105', '105 → 106', '106 → 107', '107 → 108', '108 → 109', '109 → 110', '110 → 111', '111 → 112', '112 → 113']);
+  assert.deepEqual(migrated.applied, ['103 → 104', '104 → 105', '105 → 106', '106 → 107', '107 → 108', '108 → 109', '109 → 110', '110 → 111', '111 → 112', '112 → 113', '113 → 114']);
   assert.deepEqual(migrated.raw.decisionLocks, []);
   assert.deepEqual(migrated.raw.decisionLockMarkers, []);
   assert.equal(migrated.raw.settings.leaderName, 'Keep this');
@@ -489,7 +489,7 @@ test('CSV scope #98 is registered and carries no decision, lock, person or fact 
   api.hindsightScan();
   const spec = CSV_EXPORTS.find((row) => row.key === 'hindsight');
   assert.ok(spec, 'CSV scope #98 is registered');
-  assert.equal(CSV_EXPORTS.length, 102);
+  assert.equal(CSV_EXPORTS.length, 103);
   const res = exportWorkspaceCsv(store.state, 'hindsight', { now: NOW });
   assert.equal(res.ok, true, res.error);
   assert.ok(res.rowCount > 0);

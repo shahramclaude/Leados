@@ -203,7 +203,7 @@ test('on a declared workspace the new rule does not inflate another terminal\u20
 /* ------------------------------------------------------------------ schema */
 
 test('schema v95: the migration is additive and an undeclared workspace is untouched', () => {
-  assert.equal(SCHEMA_VERSION, 113);
+  assert.equal(SCHEMA_VERSION, 114);
   for (const key of ['omWorkSplits', 'omEdges', 'omDecisions', 'omMarkers']) {
     assert.ok(COLLECTIONS.includes(key), `${key} must be a declared collection`);
   }
@@ -565,7 +565,7 @@ test('the aggregate-only CSV carries no person, name, title or individual hour',
   const { store, api } = boot();
   // Force the rules so the full reading exists.
   api.operatingModelScan();
-  assert.equal(CSV_EXPORTS.length, 102);
+  assert.equal(CSV_EXPORTS.length, 103);
   const scope = CSV_EXPORTS.find((e) => e.key === 'operating-model');
   assert.ok(scope, 'CSV scope #83 is registered');
   assert.equal(scope.sensitive, false);

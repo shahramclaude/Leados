@@ -138,6 +138,12 @@ export const RECORD_POLICIES = Object.freeze({
   // individual detail — the same class as the 1:1 it prepares. Above rank 2 the
   // ledger prints counts and rates only, never a prompt.
   agendaEntries: { classKey: 'individual', label: 'Filed 1:1 agenda lines', route: '#/agenda-ledger?panel=filed' },
+  // ADR-0121: a declared duty cover is a statement about a POSITION, not about a
+  // person's performance. It is unit-class: the seat that holds the duty and the
+  // spans above it read the row, and above the manager altitude the register
+  // prints counts, bands and refusals rather than the cover's name.
+  dutyCovers: { classKey: 'unit', label: 'Declared duty covers', route: '#/duty-cover?panel=register' },
+  dutyCoverageMarkers: { classKey: 'unit', label: 'Duty-coverage scan markers', route: '#/duty-cover' },
   agendaMarkers: { classKey: 'individual', label: 'Agenda ledger rule markers', route: '#/agenda-ledger' },
   feedback: { classKey: 'individual', label: 'Feedback', route: '#/feedback' },
   conflicts: { classKey: 'individual', label: 'Conflict records', route: '#/conflicts' },
@@ -377,6 +383,11 @@ export function routeVerdict(route, seat) {
  * is operating — it is an auditable handover, not a privilege escalation.
  */
 export const ACTION_RIGHTS = Object.freeze({
+  // ADR-0121: every leadership seat declares who answers for its own duties when
+  // it is absent — a frontline lead as much as a chief. Explicitly NOT the
+  // operator view's job: an undeclared workspace has no seat to cover.
+  'declare-duty-cover': { minRank: 1, maxRank: 5, label: 'Declare a stand-in for a duty line' },
+  'govern-duty-cover': { minRank: 4, maxRank: 5, label: 'Re-declare the duty-coverage conventions' },
   'log-oneonone': { minRank: 1, maxRank: 2, label: 'Log a 1:1' },
   'log-feedback': { minRank: 1, maxRank: 2, label: 'Give feedback' },
   'log-conflict': { minRank: 1, maxRank: 2, label: 'Log a conflict' },

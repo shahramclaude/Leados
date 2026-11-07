@@ -21,6 +21,8 @@ import { normalizeBoardMemos, normalizeBoardMarkers, normalizeBoardSettings } fr
 // ADR-0087: the Attested Commit. Credential enrollments resolve BEFORE links
 // and events so nothing validates against an enrollment that was never real.
 import { normalizeSeatIdentities, normalizeIdentityMarkers, normalizeIdentitySettings } from './domain/identitySchema.js';
+// ADR-0121 (Schema v114): the Duty Coverage Register's fail-closed normalizers.
+import { normalizeDutyCovers, normalizeDutyCoverageMarkers, normalizeDutyCoverageSettings } from './domain/dutyCoverageSchema.js';
 import { normalizePropagationLineage } from './domain/automationLineage.js';
 import { normalizeImpactExecutionSnapshot } from './domain/impactExecution.js';
 // ADR-0088: Hoshin Carryover Terminal records, idempotency markers, once-only
@@ -514,7 +516,16 @@ export {
 // older blob simply opens on the undeclared operator view. A version bump here
 // would have forced 78 test files to be rewritten for zero user benefit; the
 // honest choice is to add nothing to migrate.
-export const SCHEMA_VERSION = 113;
+// v114 adds the Duty Coverage Register (ADR-0121, `#/duty-cover`):
+// `dutyCovers` records a dated, human declaration of who is answerable for ONE
+// duty line when the seat holder is absent, and `dutyCoverageMarkers` the scan
+// ledger. Purely additive: eligibility, exercise and concentration are derived
+// on read from the reporting tree and the dated records other modules already
+// keep, so an upgraded workspace opens with an EMPTY cover ledger — "no duty
+// here has a declared cover yet", which is not the claim "every duty is
+// covered". Nothing is back-filled: a cover invented at upgrade time would be a
+// responsibility no human accepted.
+export const SCHEMA_VERSION = 114;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -1857,6 +1868,10 @@ export const DEFAULT_SETTINGS = Object.freeze({
   // receipt floor below which no rate prints, and the age at which an unfiled-
   // but-still-open filed line reads as stale. Printed, never fitted.
   ...AGENDA_SETTINGS_DEFAULTS,
+  // ADR-0121: the duty-coverage conventions — the window inside which recorded
+  // work counts as evidence a stand-in's access is real, and the share above
+  // which one hand doing a duty's work reads as a single point of failure.
+  ...normalizeDutyCoverageSettings({}),
 });
 
 export const COLLECTIONS = [
@@ -2330,6 +2345,15 @@ export const COLLECTIONS = [
   // decision it opened. No benefit score, no probability and no ranking is ever
   // stored: dominance is re-derived on read from the validated vector.
   'portfolioComparisons',
+  // ADR-0121 (Schema v114): the Duty Coverage Register. `dutyCovers` is the
+  // dated, human declaration of who is answerable for ONE duty line when the
+  // seat holder is absent (with the governed decision that names the consequence
+  // and the `prepares-for` edge to the person); `dutyCoverageMarkers` is the
+  // rules'/scans' idempotency ledger. Eligibility, exercise and concentration
+  // are DERIVED on read from the reporting tree and the dated records — never
+  // stored, so no number can drift from the number it reports.
+  'dutyCovers',
+  'dutyCoverageMarkers',
 
 ];
 
@@ -3026,6 +3050,7 @@ export function normalizeSettings(raw) {
     // floor, class floor, dark ceiling, forecast horizon, review horizon and
     // stale horizon — clamped and printed, never fitted from the record.
     ...normalizeDiligenceSettings(s),
+    ...normalizeDutyCoverageSettings(s),
     ...normalizeAgendaSettings(s),
     chainAdoptedHorizons: normalizeAdoptedHorizons(s.chainAdoptedHorizons, DECLARED_HORIZONS),
     chainAdoptedOn: /^\d{4}-\d{2}-\d{2}$/.test(String(s.chainAdoptedOn || '')) ? s.chainAdoptedOn : null,
@@ -7343,6 +7368,11 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // enrollment is dropped, never repaired.
   state.seatIdentities = normalizeSeatIdentities(raw.seatIdentities, warnings);
   state.identityMarkers = normalizeIdentityMarkers(raw.identityMarkers);
+  // ADR-0121: a malformed cover row is dropped with a warning, never repaired —
+  // an invented stand-in is an invented responsibility. Resolved BEFORE links so
+  // the `prepares-for` provenance edge validates against a real cover id.
+  state.dutyCovers = normalizeDutyCovers(raw.dutyCovers, warnings);
+  state.dutyCoverageMarkers = normalizeDutyCoverageMarkers(raw.dutyCoverageMarkers);
   state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
   state.boardMarkers = normalizeBoardMarkers(raw.boardMarkers, warnings);
   // ADR-0085: packets and attested artefacts resolve before links so `carries`,
@@ -8116,6 +8146,22 @@ export const MIGRATIONS = {
     ...v112,
     schemaVersion: 113,
     portfolioComparisons: Array.isArray(v112.portfolioComparisons) ? v112.portfolioComparisons : [],
+  }),
+  // ADR-0121: additive 113 → 114. An existing workspace has duty lines
+  // declared (they were always derived from the altitude table) but has never
+  // declared a stand-in for any of them, so the cover ledger starts EMPTY.
+  // "No duty here has a declared cover yet" is a different claim from "every
+  // duty is covered", and inventing a cover at upgrade time would fabricate a
+  // responsibility no human accepted. Exercise, eligibility and concentration
+  // are derived from records that already exist, so nothing needs back-filling.
+  113: (v113) => ({
+    ...v113,
+    schemaVersion: 114,
+    dutyCovers: Array.isArray(v113.dutyCovers) ? v113.dutyCovers : [],
+    dutyCoverageMarkers: Array.isArray(v113.dutyCoverageMarkers) ? v113.dutyCoverageMarkers : [],
+    settings: isPlainObject(v113.settings)
+      ? { ...v113.settings, ...normalizeDutyCoverageSettings(v113.settings) }
+      : { ...DEFAULT_SETTINGS },
   }),
   // ADR-0113: additive 111 → 112. An existing workspace is full of prompts it
   // never classified and has never filed one by hand, so both ledgers start
