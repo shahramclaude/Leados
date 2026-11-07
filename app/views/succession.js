@@ -106,6 +106,17 @@ function header(ctx, r) {
         },
       }, 'Export brief'),
       h('button', {
+        class: 'btn btn-ghost',
+        onClick: () => {
+          const json = ctx.api.successionExportPackFn();
+          const saved = downloadText({ filename: `leados-succession-bench-pack-${dayKey(new Date())}.json`, text: json, mime: 'application/json' });
+          if (saved) { toast('Bench pack downloaded — counts only, identity-free.', 'good'); return; }
+          const copy = h('textarea', { class: 'input', rows: 16, readonly: true }, json);
+          openModal({ title: 'Download blocked — copy the bench pack', body: h('div', { class: 'stack' }, h('p', null, 'This browser refused the file download. The counts-only bench pack is below; select and copy it.'), copy), footer: [h('button', { class: 'btn btn-ghost', onClick: () => closeAllModals() }, 'Close')] });
+          copy.focus(); copy.select();
+        },
+      }, 'Export bench pack'),
+      h('button', {
         class: 'btn btn-primary',
         onClick: () => freezeDialog(ctx, r),
       }, 'Freeze a bench claim'),
