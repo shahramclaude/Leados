@@ -119,10 +119,10 @@ const linkRows = (state, sourceType, relation = null) => (state.links || []).fil
 /* ------------------------------------------------------------------ schema */
 
 test('Schema v97 migrates additively: empty ledgers, declared conventions, nothing inferred', () => {
-  assert.equal(SCHEMA_VERSION, 114);
+  assert.equal(SCHEMA_VERSION, 115);
   const migrated = migrate({ schemaVersion: 95, settings: { leaderName: 'Keep this' }, cases: [{ id: 'x' }] });
-  assert.deepEqual(migrated.applied, ['95 → 96', '96 → 97', '97 → 98', '98 → 99', '99 → 100', '100 → 101', '101 → 102', '102 → 103', '103 → 104', '104 → 105', '105 → 106', '106 → 107', '107 → 108', '108 → 109', '109 → 110', '110 → 111', '111 → 112', '112 → 113', '113 → 114']);
-  assert.equal(migrated.raw.schemaVersion, 114);
+  assert.deepEqual(migrated.applied, ['95 → 96', '96 → 97', '97 → 98', '98 → 99', '99 → 100', '100 → 101', '101 → 102', '102 → 103', '103 → 104', '104 → 105', '105 → 106', '106 → 107', '107 → 108', '108 → 109', '109 → 110', '110 → 111', '111 → 112', '112 → 113', '113 → 114', '114 → 115']);
+  assert.equal(migrated.raw.schemaVersion, 115);
   assert.deepEqual(migrated.raw.prospectiveContracts, []);
   assert.deepEqual(migrated.raw.prospectiveGrades, []);
   assert.deepEqual(migrated.raw.prospectiveMarkers, []);

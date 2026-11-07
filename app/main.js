@@ -1723,7 +1723,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       settings: 'Settings',
       prep: '1:1 prep sheet',
       'agenda-ledger': '1:1 agenda ledger',
-      'duty-cover': 'Duty coverage — for every duty line this altitude (and the spans below it) is supposed to perform: who is declared answerable when the holder is absent, whether that person’s altitude can reach the duty at all, whether their access has ever been exercised on a dated record, which duty carries open work with nobody behind it, and where one hand is carrying a duty alone',
+      'duty-cover': 'Duty coverage — for every duty line this altitude (and the spans below it) is supposed to perform: who is declared answerable when the holder is absent, whether that person’s altitude can reach the duty at all, whether their access has ever been exercised on a dated record, which duty carries open work with nobody behind it, where one hand is carrying a duty alone, and — under the Absence plan panel — which dated absence windows leave a duty line with no available cover at all',
     };
     return labels[route] || 'LeadOS';
   }

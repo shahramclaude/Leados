@@ -23,6 +23,7 @@ import { normalizeBoardMemos, normalizeBoardMarkers, normalizeBoardSettings } fr
 import { normalizeSeatIdentities, normalizeIdentityMarkers, normalizeIdentitySettings } from './domain/identitySchema.js';
 // ADR-0121 (Schema v114): the Duty Coverage Register's fail-closed normalizers.
 import { normalizeDutyCovers, normalizeDutyCoverageMarkers, normalizeDutyCoverageSettings } from './domain/dutyCoverageSchema.js';
+import { normalizeAbsencePlans } from './domain/dutyAbsenceSchema.js';
 import { normalizePropagationLineage } from './domain/automationLineage.js';
 import { normalizeImpactExecutionSnapshot } from './domain/impactExecution.js';
 // ADR-0088: Hoshin Carryover Terminal records, idempotency markers, once-only
@@ -525,7 +526,15 @@ export {
 // here has a declared cover yet", which is not the claim "every duty is
 // covered". Nothing is back-filled: a cover invented at upgrade time would be a
 // responsibility no human accepted.
-export const SCHEMA_VERSION = 114;
+// v115 adds the Dated Absence Plan (ADR-0122, `#/duty-cover?panel=plan`):
+// `absencePlans` records a dated, human declaration of when a seat will not be
+// there — the window the register was missing. Availability of a declared cover
+// during a window, the cover-absent conflict and the cascade are all DERIVED
+// on read from the declared covers and absence windows, so an upgraded
+// workspace opens with an EMPTY absence ledger: no absence is scheduled at
+// upgrade time, because an absence invented at upgrade time would make every
+// cover in the span read as unavailable on dates no human declared.
+export const SCHEMA_VERSION = 115;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -2354,6 +2363,13 @@ export const COLLECTIONS = [
   // stored, so no number can drift from the number it reports.
   'dutyCovers',
   'dutyCoverageMarkers',
+  // ADR-0122 (Schema v115): the Dated Absence Plan. `absencePlans` is the
+  // dated, human declaration of when a seat will not be there — the window
+  // (inclusive ISO days), the reason, the governed decision that names what
+  // stops during the window, and the `declares-absence-of` edge to the seat.
+  // Window availability, the cover-absent conflict and the cascade are DERIVED
+  // on read from the declared covers and absence windows — never stored.
+  'absencePlans',
 
 ];
 
@@ -7373,6 +7389,11 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // the `prepares-for` provenance edge validates against a real cover id.
   state.dutyCovers = normalizeDutyCovers(raw.dutyCovers, warnings);
   state.dutyCoverageMarkers = normalizeDutyCoverageMarkers(raw.dutyCoverageMarkers);
+  // ADR-0122: a malformed absence row is dropped with a warning, never repaired —
+  // an invented absence is an invented unavailability for every cover in the span.
+  // Resolved BEFORE links so the `declares-absence-of` provenance edge validates
+  // against a real absence id.
+  state.absencePlans = normalizeAbsencePlans(raw.absencePlans, warnings);
   state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
   state.boardMarkers = normalizeBoardMarkers(raw.boardMarkers, warnings);
   // ADR-0085: packets and attested artefacts resolve before links so `carries`,
@@ -8162,6 +8183,18 @@ export const MIGRATIONS = {
     settings: isPlainObject(v113.settings)
       ? { ...v113.settings, ...normalizeDutyCoverageSettings(v113.settings) }
       : { ...DEFAULT_SETTINGS },
+  }),
+  // ADR-0122: additive 114 → 115. An existing workspace may hold declared
+  // covers but has never declared an absence window, so the absence ledger
+  // starts EMPTY. "No absence has been declared here yet" is a different claim
+  // from "every absence is covered", and inventing an absence at upgrade time
+  // would make every declared cover read as unavailable on dates no human
+  // declared. Availability, conflict and cascade are derived from the records
+  // that already exist, so nothing needs back-filling.
+  114: (v114) => ({
+    ...v114,
+    schemaVersion: 115,
+    absencePlans: Array.isArray(v114.absencePlans) ? v114.absencePlans : [],
   }),
   // ADR-0113: additive 111 → 112. An existing workspace is full of prompts it
   // never classified and has never filed one by hand, so both ledgers start

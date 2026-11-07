@@ -124,10 +124,10 @@ const seatOf = (state) => activeSeat(buildSeats(state, { now: NOW, settings: sta
 /* --------------------------------------------------------------- 1. schema */
 
 test('schema v114 is additive and convergent; a malformed cover is dropped, never repaired', () => {
-  assert.equal(SCHEMA_VERSION, 114);
+  assert.equal(SCHEMA_VERSION, 115);
   const migrated = migrate({ schemaVersion: 113, people: [{ id: 'p1', name: 'A' }], settings: { leaderName: 'Dana' } });
-  assert.deepEqual(migrated.applied, ['113 → 114']);
-  assert.equal(migrated.raw.schemaVersion, 114);
+  assert.deepEqual(migrated.applied, ['113 → 114', '114 → 115']);
+  assert.equal(migrated.raw.schemaVersion, 115);
   assert.deepEqual(migrated.raw.dutyCovers, [], 'no stand-in is invented at upgrade time');
   assert.deepEqual(migrated.raw.dutyCoverageMarkers, []);
   assert.equal(migrated.raw.settings.dutyCoverageExerciseDays, DUTY_COVERAGE_DEFAULTS.dutyCoverageExerciseDays);

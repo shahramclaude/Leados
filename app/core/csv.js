@@ -1057,7 +1057,7 @@ export const CSV_EXPORTS = [
   // label, no case or decision title and no private note survives the boundary.
   { key: 'jurisdiction', label: 'Jurisdiction compiler (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'jurisdiction', description: 'One workspace row, one row per leadership rank, one row per priced governance route (coalition / escalate / redraw) and one row per declared convention: cross-branch objective counts, coalition sizes, escalation rungs, coordination-unit costs, Wilson attribution bounds, once-only Brier grades against a 0.5 base and every printed refusal. NO objective key, NO member record id, NO person, NO span label or id, NO title and NO note. A refused rate and a suppressed cell are BLANK rather than zero; suppression is not differential privacy.' },
 
-  { key: 'duty-coverage', label: 'Duty coverage register (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'duty-coverage', description: 'One row per declared duty line under the active seat (duty key, band, open work, declared / eligible / exercised cover counts, eligible and refused candidate counts, top-hand concentration share, sole-handed flag) plus one register summary row. NO person, NO name, NO seat id, NO span label, NO note, NO decision id. The rate measures the REGISTER (named + eligible + exercised), never a person; a refused or thin cell is BLANK rather than zero.' },
+  { key: 'duty-coverage', label: 'Duty coverage register (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'duty-coverage', description: 'One row per declared duty line under the active seat (duty key, band, open work, declared / eligible / exercised cover counts, eligible and refused candidate counts, top-hand concentration share, sole-handed flag), one register summary row, and one aggregate row per active absence plan in scope (seat rank, absence window, per-band exposure counts). NO person, NO name, NO seat id, NO span label, NO note, NO decision id, NO absence reason. The rate measures the REGISTER (named + eligible + exercised), never a person; a refused or thin cell is BLANK rather than zero.' },
   { key: 'outcome-learning', label: 'Outcome learning (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'outcome-learning', description: 'One workspace row, one row per child span, one calibration row and one method row: suppression-safe interval counts of frozen expectations, once-only grades, good/mixed outcomes and late loops; shrunk outside view with Wilson 95% interval, pooled Brier skill, one-sided conformal lateness bound with finite-sample coverage, direction and every refusal named. NO bundle id, NO case id, NO span id or label, NO person, NO title, NO note, NO proof pointer and NO individual grade. A refused rate and a suppressed cell are BLANK rather than zero.' },
   { key: 'diligence', label: 'Diligence ledger (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'diligence', description: 'One summary row (frontiers, settled, open, knowable, consulted, unconsulted, Wilson-bounded coverage, thin settled calls, dark classes and graded forecasts), one row per evidence class (knowable, consulted, share, exact Jeffreys Beta(1/2,1/2) 90% interval, dark verdict or a printed refusal), one row per leadership altitude (identity-free counts and a refused coverage), and one row per once-only Brier grade (claims, Brier, strictly-prior base Brier, skill and verdict). NO fact pointer, NO decision id, NO checklist id, NO person, NO span id, NO written consultation reason, NO forecast question and NO individual belief. A refused rate and a suppressed cell are BLANK rather than zero.' },
   { key: 'differencing-register', label: 'Publication register (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'differencing-register', description: 'One row per published module plus one workspace row: release counts, provably-safe / protected / determined counts, withheld-cell and equation counts, the last publication date and the two stationarity statistics. NO span label, NO span id, NO person, NO record title, NO amount, and NO recovered value \u2014 a determined value is disclosed as a coordinate on the screen, never exported as a figure. A refused rate is BLANK rather than zero.' },
@@ -6092,14 +6092,18 @@ export function buildScopeTable(state, scope, now) {
       return { columns, rows };
     }
     case 'duty-coverage': {
-      // CSV scope #104 (Schema v114, ADR-0121). Aggregate-only: the report is
-      // built under the active seat, so above the manager altitude the cover
-      // names never enter the row set at all.
+      // CSV scope #104 (Schema v114, ADR-0121; Schema v115, ADR-0122 adds the
+      // absence rows). Aggregate-only: the report is built under the active
+      // seat, so above the manager altitude the cover names never enter the
+      // row set at all, and an absence row carries its window and exposure
+      // counts only.
       const report = buildDutyCoverageReport(state, { now, settings: state.settings || {} });
       const rows = dutyCoverageCsvRows(report);
       const keys = ['row_kind', 'scope', 'altitude', 'duty_key', 'band', 'open_n',
         'covers_declared_n', 'covers_eligible_n', 'covers_exercised_n', 'candidates_eligible_n',
-        'candidates_refused_n', 'concentration_top_share_pct', 'sole_handed', 'window_days', 'refused_reason'];
+        'candidates_refused_n', 'concentration_top_share_pct', 'sole_handed', 'window_days', 'refused_reason',
+        'absence_seat_rank', 'absence_from', 'absence_to', 'absence_duties_n', 'absence_covered_n',
+        'absence_thin_n', 'absence_cover_absent_n', 'absence_ineligible_n', 'absence_gap_n', 'absence_exposed_open_n'];
       const columns = keys.map((key) => ({ key, header: key }));
       return { columns, rows };
     }

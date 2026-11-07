@@ -79,6 +79,7 @@ export const DUTY_COVERAGE_PANELS = Object.freeze([
   Object.freeze({ key: 'register', label: 'Register' }),
   Object.freeze({ key: 'gaps', label: 'Gaps & refusals' }),
   Object.freeze({ key: 'concentration', label: 'Concentration' }),
+  Object.freeze({ key: 'plan', label: 'Absence plan' }),
   Object.freeze({ key: 'method', label: 'Method' }),
 ]);
 

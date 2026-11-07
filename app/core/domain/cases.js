@@ -108,6 +108,10 @@ export const LINK_ENTITY_TYPES = [
   // the `prepares-for` edge from it to the person it answers for is the
   // provenance, and it is written in the same transaction as the declaration.
   'dutycover',
+  // ADR-0122 (Schema v115): a dated absence plan is a first-class graph node —
+  // the `declares-absence-of` edge from it to the seat it covers the absence
+  // of is the provenance, written in the same transaction as the declaration.
+  'absenceplan',
   // Schema v44: an after-action lesson is independently navigable from the
   // dated workspace artifact offered as its corroboration.
   'lesson',
@@ -489,6 +493,7 @@ export const LINK_ENTITY_TYPES = [
 export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   case: 'cases',
   dutycover: 'dutyCovers',
+  absenceplan: 'absencePlans',
   comparison: 'portfolioComparisons',
   lesson: null,
   decision: 'decisions',
@@ -858,6 +863,10 @@ export const LINK_RELATIONS = [
   // lineage edge from a human commitment back to the person, written in the same
   // atomic transaction as the filing; it never reads or rewrites the prompt.
   'prepares-for',
+  // ADR-0122: a dated absence plan declares the absence of the seat that will
+  // not be at it. Distinct from `prepares-for` (a stand-in prepares for a duty)
+  // because a plan states a WINDOW of unavailability, not a line of lineage.
+  'declares-absence-of',
   'develops',
   'consumes-capacity',
   'funds',

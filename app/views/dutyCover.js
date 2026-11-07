@@ -18,13 +18,18 @@ import { downloadText } from '../ui/download.js';
 import { pageHeader, card, stat, badge, banner, tabs, emptyState, table } from '../ui/components.js';
 import { serializeCsv } from '../core/csv.js';
 import { DUTY_COVERAGE_PANELS, DUTY_PREMISE } from '../core/domain/dutyCoverageRegistry.js';
+import { DUTY_ABSENCE_PREMISE } from '../core/domain/dutyAbsenceRegistry.js';
 
 const PANELS = DUTY_COVERAGE_PANELS;
 const CSV_COLUMNS = ['row_kind', 'scope', 'altitude', 'duty_key', 'band', 'open_n',
   'covers_declared_n', 'covers_eligible_n', 'covers_exercised_n', 'candidates_eligible_n',
-  'candidates_refused_n', 'concentration_top_share_pct', 'sole_handed', 'window_days', 'refused_reason'];
+  'candidates_refused_n', 'concentration_top_share_pct', 'sole_handed', 'window_days', 'refused_reason',
+  'absence_seat_rank', 'absence_from', 'absence_to', 'absence_duties_n', 'absence_covered_n',
+  'absence_thin_n', 'absence_cover_absent_n', 'absence_ineligible_n', 'absence_gap_n', 'absence_exposed_open_n'];
 
 let apiRef = null;
+/** Scratch for the planning form's preview window (a read, never a write). */
+let planPreview = null;
 
 const panelFor = (query) => {
   const key = query?.get?.('panel');
@@ -133,6 +138,215 @@ function revokeDialog(ctx, cover) {
   });
 }
 
+function absenceRevokeDialog(ctx, plan) {
+  const form = buildForm([
+    { name: 'reason', label: 'Why does this absence no longer hold?', type: 'textarea', value: '', rows: 3, help: 'Append-only: the row is marked revoked with this reason and never deleted.' },
+  ]);
+  openModal({
+    title: 'Revoke a declared absence',
+    description: `${plan.from} → ${plan.to} is currently declared. Revoking returns the seat to the standing register — and any cover that was reading as unavailable on those dates becomes available again.`,
+    body: form.node,
+    footer: [
+      h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => closeAllModals() }, 'Cancel'),
+      h('button', {
+        class: 'btn btn-primary', type: 'button',
+        onClick: () => {
+          const result = ctx.api.dutyAbsenceRevoke({ id: plan.id, reason: form.getValues().reason });
+          if (!notify(result, 'Absence revoked.')) return;
+          closeAllModals();
+          ctx.refresh();
+        },
+      }, 'Revoke the absence'),
+    ],
+  });
+}
+
+/* ------------------------------------------------- ADR-0122: the plan panel */
+
+const windowBandBadge = (band) => {
+  if (band === 'covered') return badge('covered in window', 'good', 'An available, eligible cover has recorded work inside this span');
+  if (band === 'thin') return badge('thin in window', 'warn', 'Available and eligible, but no recorded exercise inside the window');
+  if (band === 'cover-absent') return badge('cover absent', 'bad', 'Every declared cover is themselves absent during the window');
+  if (band === 'ineligible') return badge('ineligible', 'bad', 'A declared cover cannot answer at this altitude');
+  return badge('no cover', 'bad', 'Nobody is declared answerable for this duty line');
+};
+
+function windowPlanCard(ctx, plan, namesShown) {
+  const s = plan.summary;
+  const windowText = `${plan.window.from} → ${plan.window.to}`;
+  return h('div', { class: 'stack' },
+    card({
+      title: `Window plan — ${windowText}`,
+      subtitle: `${s.dutiesN} duty line(s) this seat holds, graded against the exact dates the seat will not be there.`,
+      body: h('div', { class: 'stat-grid' },
+        stat({ label: 'Duty lines', value: String(s.dutiesN), hint: `${s.coveredN} covered · ${s.thinN} thin · ${s.coverAbsentN} cover-absent · ${s.gapN} no cover in window` }),
+        stat({ label: 'Exposed lines', value: String(s.exposedN), tone: s.exposedN ? 'bad' : 'good', hint: 'duty lines with no available, eligible cover on these dates' }),
+        stat({ label: 'Open work exposed', value: String(s.exposedOpenN), tone: s.exposedOpenN ? 'bad' : 'good', hint: 'open items sitting in lines with no available cover during the window' }),
+        stat({ label: 'Cover conflicts', value: String(s.conflictsN), tone: s.conflictsN ? 'bad' : '', hint: 'declared covers who are themselves absent during the window' })),
+    }),
+    ...plan.rows.map((row) => card({
+      title: `${row.label} — ${windowBandBadge(row.windowBand)}`,
+      subtitle: row.question,
+      actions: [bandBadge(row.band)],
+      body: h('div', { class: 'stack' },
+        h('p', { class: 'muted small' }, row.windowReason),
+        h('div', { class: 'stat-grid' },
+          stat({ label: 'Open work', value: String(row.openN), hint: row.oldestOn ? `oldest open since ${row.oldestOn}` : 'nothing open in this duty line' }),
+          stat({ label: 'Available covers', value: String(row.availableCoversN), hint: `${row.exercisedAvailableN} exercised inside the window` }),
+          stat({ label: 'Conflicts', value: String(row.conflicts.length), tone: row.conflicts.length ? 'bad' : '', hint: 'covers who are themselves absent on these dates' })),
+        row.covers.length
+          ? table({
+            caption: `Declared covers for ${row.label}, graded on ${windowText}`,
+            columns: [
+              { label: 'Cover', render: (c) => h('span', null, namesShown ? (c.name || '—') : 'Name withheld above the manager altitude') },
+              { label: 'Rank', render: (c) => num(c.rank) },
+              { label: 'Available', render: (c) => (c.available ? badge('present', 'good') : badge(`absent ${c.absence.from} → ${c.absence.to}`, 'bad')) },
+              { label: 'Eligible', render: (c) => (c.eligible ? badge('eligible', 'good') : badge('ineligible', 'bad')) },
+              { label: 'Exercise', render: (c) => (c.exercised ? badge(`last ${c.lastWorkDay}`, 'good') : badge(c.lastWorkDay ? `stale ${c.lastWorkDay}` : 'never recorded', 'warn')) },
+            ],
+            rows: row.covers,
+            emptyMessage: 'No cover declared.',
+          })
+          : h('p', { class: 'muted small' }, 'No cover is declared for this duty line — it reads exposed on every date of the window.'),
+        row.cascade.length
+          ? h('div', { class: 'stack-xs' },
+            h('p', { class: 'field-label' }, 'The cascade: is an absent cover’s own absence covered?'),
+            h('ul', { class: 'plain-list' }, ...row.cascade.map((c) => h('li', { class: 'muted small' }, `${namesShown ? (c.name || 'the cover') : 'the cover'} is out ${c.from} → ${c.to} — their own absence reads ${c.selfCoverage === 'covered' ? 'covered' : (c.selfCoverage === 'exposed' ? 'EXPOSED as well: their own duty lines have no available cover on those dates' : 'without duties to grade')}.`))))
+          : null,
+      ),
+    })),
+    h('p', { class: 'muted small' }, 'Availability is derived from the declared windows, never stored: change either window and this plan re-grades on the next read. A plan is a read — declaring the window is the only write.'),
+  );
+}
+
+function planningFormCard(ctx, namesShown) {
+  const form = buildForm([
+    { name: 'from', label: 'Absence starts (ISO date)', type: 'date', value: '', help: 'The first day the seat will not be there.' },
+    { name: 'to', label: 'Absence ends (ISO date, inclusive)', type: 'date', value: '', help: 'The last day. The window is capped at 90 days.' },
+    { name: 'reason', label: 'Why will the seat not be there?', type: 'textarea', value: '', rows: 3, help: 'One line. This is the words the next reader sees, not a summary.' },
+    { name: 'note', label: 'Note (optional)', type: 'textarea', value: '', rows: 2 },
+  ]);
+  const previewCard = () => planPreview
+    ? card({
+      title: 'Preview — not yet declared',
+      subtitle: `${planPreview.window.from} → ${planPreview.window.to} · this is a read of the current declarations, nothing is written.`,
+      body: windowPlanCard(ctx, planPreview.result, namesShown),
+      actions: [
+        h('button', {
+          class: 'btn btn-primary', type: 'button',
+          onClick: () => {
+            const values = planPreview.values;
+            const result = ctx.api.dutyAbsenceDeclare({ from: values.from, to: values.to, reason: values.reason, note: values.note });
+            if (!notify(result, 'Absence declared — the exposure is now a governed decision.')) return;
+            planPreview = null;
+            ctx.refresh();
+          },
+        }, 'Declare this absence'),
+      ],
+    })
+    : null;
+  return card({
+    title: 'Plan an absence',
+    subtitle: DUTY_ABSENCE_PREMISE,
+    body: h('div', { class: 'stack' },
+      form.node,
+      h('div', { class: 'row-actions' },
+        h('button', {
+          class: 'btn btn-small', type: 'button',
+          onClick: () => {
+            const values = form.getValues();
+            const result = ctx.api.dutyAbsencePlan({ window: { from: values.from, to: values.to } });
+            if (!result?.ok) { toast(result?.error || 'That window could not be graded.', 'bad'); return; }
+            if (!result.window) { toast('Choose two dates inside the declared span.', 'warn'); return; }
+            // Capture the values NOW: the preview re-renders the view, and a
+            // rebuilt form would start empty. The declare button grades the
+            // same window the preview showed.
+            planPreview = { window: result.window, result: result.plan, values };
+            ctx.refresh();
+          },
+        }, 'Preview this window'),
+        h('button', {
+          class: 'btn btn-ghost btn-small', type: 'button',
+          onClick: () => { planPreview = null; ctx.refresh(); },
+        }, 'Clear preview')),
+      previewCard()),
+  });
+}
+
+function rollupCard(ctx, rollup, namesShown) {
+  if (!rollup?.rows?.length) {
+    return card({
+      title: 'Absences in this span',
+      body: emptyState({
+        title: 'No dated absence is declared below this seat',
+        body: 'Every duty line in the span reads its standing cover. When a seat declares an absence window, this card grades that window against the span’s declared covers — counts only, never a name above the manager altitude.',
+      }),
+    });
+  }
+  return card({
+    title: `Absences in this span — ${rollup.rows.length}`,
+    subtitle: 'Each absence is graded against its own window. Counts only: no person, no seat id, no reason above the manager altitude.',
+    body: h('div', { class: 'stack' },
+      table({
+        caption: 'Dated absence plans, rolled up',
+        columns: [
+          { label: 'Seat', render: (r) => h('span', null, namesShown ? `${r.label}` : `${r.label} (rank ${r.rank})`) },
+          { label: 'Window', render: (r) => `${r.from} → ${r.to}` },
+          { label: 'Duties', render: (r) => String(r.summary.dutiesN) },
+          { label: 'Covered', render: (r) => String(r.summary.coveredN) },
+          { label: 'Thin', render: (r) => String(r.summary.thinN) },
+          { label: 'Cover absent', render: (r) => String(r.summary.coverAbsentN) },
+          { label: 'No cover', render: (r) => String(r.summary.gapN) },
+          { label: 'Open, exposed', render: (r) => String(r.summary.exposedOpenN) },
+        ],
+        rows: rollup.rows,
+        emptyMessage: 'No absences.',
+      }),
+      rollup.exposedOpenN
+        ? banner({ tone: 'bad', title: `${rollup.exposedOpenN} duty line(s) below this seat carry open work with no available cover on the absence dates`, body: 'This is not a scoring failure; it is an unrecorded stand-in on specific dates. Declaring cover is a dated human act, and the exposure prints until one is declared or the window passes.' })
+        : null),
+  });
+}
+
+function planPanel(ctx, report) {
+  const result = ctx.api.dutyAbsencePlan?.();
+  if (!result || result.ok === false) {
+    return card({ title: 'Absence plan unavailable', body: emptyState({ title: 'The absence plan could not be built', body: result?.error || 'No plan is available.' }) });
+  }
+  const { window, plan, own, rollup } = result;
+  const namesShown = report.namesVisible;
+  return h('div', { class: 'stack' },
+    own
+      ? card({
+        title: `Declared absence — ${own.from} → ${own.to}`,
+        subtitle: own.reason,
+        actions: [
+          h('button', { class: 'btn btn-ghost btn-small', type: 'button', onClick: () => absenceRevokeDialog(ctx, own) }, 'Revoke'),
+        ],
+        body: h('div', { class: 'stack' },
+          h('p', { class: 'muted small' }, `Declared ${own.declaredOn}. The plan below grades every duty line this seat holds against these exact dates; the exposure it names is the governed decision opened with the declaration.`),
+          own.summary
+            ? h('div', { class: 'stat-grid' },
+              stat({ label: 'Duty lines', value: String(own.summary.dutiesN), hint: `${own.summary.coveredN} covered · ${own.summary.thinN} thin · ${own.summary.coverAbsentN} cover-absent · ${own.summary.gapN} no cover` }),
+              stat({ label: 'Exposed lines', value: String(own.summary.exposedN), tone: own.summary.exposedN ? 'bad' : 'good', hint: 'no available, eligible cover on these dates' }),
+              stat({ label: 'Open work exposed', value: String(own.summary.exposedOpenN), tone: own.summary.exposedOpenN ? 'bad' : 'good' }),
+              stat({ label: 'Cover conflicts', value: String(own.summary.conflictsN), tone: own.summary.conflictsN ? 'bad' : '' }))
+            : h('p', { class: 'muted small' }, 'This seat holds no declared duty line, so no duty is graded against the window.'),
+          plan ? windowPlanCard(ctx, plan, namesShown) : null),
+      })
+      : planningFormCard(ctx, namesShown),
+    rollupCard(ctx, rollup, namesShown),
+    card({
+      title: 'What is declared, and what is derived',
+      body: h('ul', { class: 'plain-list' },
+        h('li', null, h('strong', null, 'Declared:'), ' the absence window itself — two ISO dates, the reason the seat holder wrote, and the governed decision naming what stops. A human declares an absence; nothing schedules one.'),
+        h('li', null, h('strong', null, 'Derived on every read:'), ' whether each declared cover is AVAILABLE on the window’s dates (a cover with their own absence overlapping the window is not), the window band per duty line, and the cascade — whether an absent cover’s own absence is covered.'),
+        h('li', null, h('strong', null, 'Refused:'), ' a stored availability flag, an engine-assigned absence and a “covered during the window” tick. Availability is a function of two declared windows; a stored copy would drift the moment either window changed.'),
+        h('li', null, h('strong', null, 'Schema v115 is additive.'), ' An upgraded workspace opens with an empty absence ledger — “no absence has been declared here yet”, which is not the same claim as “every absence is covered”.')),
+    }),
+  );
+}
+
 /* ------------------------------------------------------------------ panels */
 
 function dutyCard(ctx, row, namesShown) {
@@ -237,6 +451,15 @@ function deskPanel(ctx, report) {
         }),
         h('p', { class: 'muted small' }, 'A missing or unexercised declaration is not evidence that an absence will cause failure. Ask the relevant leaders to review their own registers; no cover is assigned here.')),
     }) : null,
+    report.absences?.own || (report.absences?.inSpan?.length || 0)
+      ? card({
+        title: 'Dated absence plans',
+        subtitle: 'Windows the register grades every duty line against, on the dates the seats will not be there.',
+        body: h('div', { class: 'stack' },
+          h('p', { class: 'muted small' }, `${report.absences.own ? 1 : 0} own, ${report.absences.inSpan.length} in span — ${report.absences.exposedOpenN} duty line(s) carry open work with no available cover on the absence dates. Availability is derived from the declared windows; the plan is a read, declaring the window is the write.`),
+          h('a', { class: 'btn btn-small', href: '#/duty-cover?panel=plan' }, 'Open the absence plan')),
+      })
+      : null,
     s.openGapN
       ? banner({
         tone: 'bad',
@@ -474,7 +697,8 @@ export function renderDutyCover(ctx) {
     : panel === 'register' ? registerPanel(ctx, report)
       : panel === 'gaps' ? gapsPanel(ctx, report)
         : panel === 'concentration' ? concentrationPanel(ctx, report)
-          : methodPanel(ctx, report);
+          : panel === 'plan' ? planPanel(ctx, report)
+            : methodPanel(ctx, report);
 
   return h('div', { class: 'stack duty-cover-view' },
     pageHeader({
