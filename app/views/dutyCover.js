@@ -164,11 +164,21 @@ function absenceRevokeDialog(ctx, plan) {
 /* ------------------------------------------------- ADR-0122: the plan panel */
 
 const windowBandBadge = (band) => {
-  if (band === 'covered') return badge('covered in window', 'good', 'An available, eligible cover has recorded work inside this span');
-  if (band === 'thin') return badge('thin in window', 'warn', 'Available and eligible, but no recorded exercise inside the window');
+  if (band === 'covered') return badge('covered in window', 'good', 'An available, eligible cover has duty-specific evidence recorded before the absence starts');
+  if (band === 'thin') return badge('thin in window', 'warn', 'Available and eligible, but no duty-specific evidence inside the preparation window');
   if (band === 'cover-absent') return badge('cover absent', 'bad', 'Every declared cover is themselves absent during the window');
   if (band === 'ineligible') return badge('ineligible', 'bad', 'A declared cover cannot answer at this altitude');
   return badge('no cover', 'bad', 'Nobody is declared answerable for this duty line');
+};
+
+const windowExerciseBadge = (exercise) => {
+  if (!exercise) return badge('not graded', 'warn', 'No window-specific exercise reading is available');
+  const day = exercise.evidence?.day || exercise.lastEvidence?.day || null;
+  if (exercise.status === 'valid') return badge(`evidence ${day}`, 'good', exercise.reason);
+  if (exercise.status === 'stale') return badge(`stale ${day}`, 'warn', exercise.reason);
+  if (exercise.status === 'future') return badge(`future ${day}`, 'warn', exercise.reason);
+  if (exercise.status === 'late') return badge(`after cutoff ${day}`, 'warn', exercise.reason);
+  return badge('no duty evidence', 'warn', exercise.reason);
 };
 
 function windowPlanCard(ctx, plan, namesShown) {
@@ -177,12 +187,13 @@ function windowPlanCard(ctx, plan, namesShown) {
   return h('div', { class: 'stack' },
     card({
       title: `Window plan — ${windowText}`,
-      subtitle: `${s.dutiesN} duty line(s) this seat holds, graded against the exact dates the seat will not be there.`,
+      subtitle: `${s.dutiesN} duty line(s) this seat holds, graded against the exact dates the seat will not be there. Preparation evidence must be duty-specific and recorded by today inside ${plan.exerciseWindow.from} → ${plan.exerciseWindow.to}.`,
       body: h('div', { class: 'stat-grid' },
         stat({ label: 'Duty lines', value: String(s.dutiesN), hint: `${s.coveredN} covered · ${s.thinN} thin · ${s.coverAbsentN} cover-absent · ${s.gapN} no cover in window` }),
         stat({ label: 'Exposed lines', value: String(s.exposedN), tone: s.exposedN ? 'bad' : 'good', hint: 'duty lines with no available, eligible cover on these dates' }),
         stat({ label: 'Open work exposed', value: String(s.exposedOpenN), tone: s.exposedOpenN ? 'bad' : 'good', hint: 'open items sitting in lines with no available cover during the window' }),
-        stat({ label: 'Cover conflicts', value: String(s.conflictsN), tone: s.conflictsN ? 'bad' : '', hint: 'declared covers who are themselves absent during the window' })),
+        stat({ label: 'Cover conflicts', value: String(s.conflictsN), tone: s.conflictsN ? 'bad' : '', hint: 'declared covers who are themselves absent during the window' }),
+        stat({ label: 'Pre-window evidence', value: String(s.exercise?.validCoversN ?? 0), tone: s.exercise?.thinLinesN ? 'bad' : 'good', hint: `${s.exercise?.validCoversN ?? 0} valid cover(s) · ${s.exercise?.thinLinesN ?? 0} thin line(s) · ${s.exercise?.staleCoversN ?? 0} stale · ${s.exercise?.missingCoversN ?? 0} missing · ${s.exercise?.futureCoversN ?? 0} future · ${s.exercise?.lateCoversN ?? 0} after cutoff` })),
     }),
     ...plan.rows.map((row) => card({
       title: `${row.label} — ${windowBandBadge(row.windowBand)}`,
@@ -192,7 +203,7 @@ function windowPlanCard(ctx, plan, namesShown) {
         h('p', { class: 'muted small' }, row.windowReason),
         h('div', { class: 'stat-grid' },
           stat({ label: 'Open work', value: String(row.openN), hint: row.oldestOn ? `oldest open since ${row.oldestOn}` : 'nothing open in this duty line' }),
-          stat({ label: 'Available covers', value: String(row.availableCoversN), hint: `${row.exercisedAvailableN} exercised inside the window` }),
+          stat({ label: 'Available covers', value: String(row.availableCoversN), hint: `${row.exercisedAvailableN} with valid pre-window duty evidence` }),
           stat({ label: 'Conflicts', value: String(row.conflicts.length), tone: row.conflicts.length ? 'bad' : '', hint: 'covers who are themselves absent on these dates' })),
         row.covers.length
           ? table({
@@ -202,12 +213,22 @@ function windowPlanCard(ctx, plan, namesShown) {
               { label: 'Rank', render: (c) => num(c.rank) },
               { label: 'Available', render: (c) => (c.available ? badge('present', 'good') : badge(`absent ${c.absence.from} → ${c.absence.to}`, 'bad')) },
               { label: 'Eligible', render: (c) => (c.eligible ? badge('eligible', 'good') : badge('ineligible', 'bad')) },
-              { label: 'Exercise', render: (c) => (c.exercised ? badge(`last ${c.lastWorkDay}`, 'good') : badge(c.lastWorkDay ? `stale ${c.lastWorkDay}` : 'never recorded', 'warn')) },
+              { label: 'Exercise', render: (c) => windowExerciseBadge(c.windowExercise) },
             ],
             rows: row.covers,
             emptyMessage: 'No cover declared.',
           })
           : h('p', { class: 'muted small' }, 'No cover is declared for this duty line — it reads exposed on every date of the window.'),
+        row.covers.length
+          ? h('ul', { class: 'plain-list' }, ...row.covers.map((c) => {
+            const ex = c.windowExercise;
+            const evidence = ex?.evidence || ex?.lastEvidence;
+            const source = evidence && namesShown && evidence.sourceId
+              ? ` Record ${evidence.sourceId}${evidence.route ? ` (${evidence.route})` : ''}.`
+              : '';
+            return h('li', { class: 'muted small' }, `${namesShown ? (c.name || 'cover') : 'cover'} — ${ex?.reason || 'No window-specific exercise reading.'}${source}`);
+          }))
+          : null,
         row.cascade.length
           ? h('div', { class: 'stack-xs' },
             h('p', { class: 'field-label' }, 'The cascade: is an absent cover’s own absence covered?'),
@@ -298,6 +319,7 @@ function rollupCard(ctx, rollup, namesShown) {
           { label: 'Cover absent', render: (r) => String(r.summary.coverAbsentN) },
           { label: 'No cover', render: (r) => String(r.summary.gapN) },
           { label: 'Open, exposed', render: (r) => String(r.summary.exposedOpenN) },
+          { label: 'Pre-window evidence', render: (r) => `${r.summary.exercise?.validCoversN ?? 0} valid / ${r.summary.exercise?.thinLinesN ?? 0} thin` },
         ],
         rows: rollup.rows,
         emptyMessage: 'No absences.',
@@ -366,7 +388,8 @@ function concurrencyCard(concurrency) {
         stat({ label: 'Most seats out at once', value: String(s.maxConcurrent), tone: s.maxConcurrent > 2 ? 'bad' : '', hint: `${s.seatsInOverlapN} distinct seat(s) appear in an overlap` }),
         stat({ label: 'Open work, no cover', value: String(s.exposedOpenN), tone: s.exposedOpenN ? 'bad' : 'good', hint: `${s.exposedN} exposed duty line(s) across the windows` }),
         stat({ label: 'Single-cover points', value: String(s.singleCoverN), tone: s.singleCoverN ? 'bad' : 'good', hint: 'one person is the only answerable cover for 2+ absent seats' }),
-        stat({ label: 'Covers past observed load', value: String(s.coverLoadOverN), tone: s.coverLoadOverN ? 'bad' : 'good', hint: `envelope ${concurrency.coverLoad?.envelopeN ?? 0} open item(s); largest graded union ${s.coverLoadMaxN}` })),
+        stat({ label: 'Covers past observed load', value: String(s.coverLoadOverN), tone: s.coverLoadOverN ? 'bad' : 'good', hint: `envelope ${concurrency.coverLoad?.envelopeN ?? 0} open item(s); largest graded union ${s.coverLoadMaxN}` }),
+        stat({ label: 'Thin on pre-window evidence', value: String(s.exerciseThinLinesN ?? 0), tone: s.exerciseThinLinesN ? 'bad' : 'good', hint: `${s.exerciseValidCoversN ?? 0} available cover(s) have duty-specific evidence recorded by the preparation cutoff` })),
       table({
         caption: 'Overlapping absence windows',
         columns: [
@@ -377,6 +400,7 @@ function concurrencyCard(concurrency) {
           { label: 'Exposed lines', render: (w) => String(w.exposedN) },
           { label: 'Open, exposed', render: (w) => String(w.exposedOpenN) },
           { label: 'Single cover', render: (w) => String(w.singleCovers.length) },
+          { label: 'Pre-window evidence', render: (w) => `${w.exercise?.validCoversN ?? 0} valid / ${w.exercise?.thinLinesN ?? 0} thin` },
         ],
         rows: concurrency.windows,
         emptyMessage: 'No overlap.',
@@ -458,9 +482,10 @@ function planPanel(ctx, report) {
       title: 'What is declared, and what is derived',
       body: h('ul', { class: 'plain-list' },
         h('li', null, h('strong', null, 'Declared:'), ' the absence window itself — two ISO dates, the reason the seat holder wrote, and the governed decision naming what stops. A human declares an absence; nothing schedules one.'),
-        h('li', null, h('strong', null, 'Derived on every read:'), ' whether each declared cover is AVAILABLE on the window’s dates (a cover with their own absence overlapping the window is not), the window band per duty line, and the cascade — whether an absent cover’s own absence is covered.'),
+        h('li', null, h('strong', null, 'Derived on every read:'), ' whether each declared cover is AVAILABLE on the window’s dates (a cover with their own absence overlapping the window is not), the window band per duty line, the cascade — whether an absent cover’s own absence is covered — and whether the cover has duty-specific evidence recorded by today inside the preparation window ending the day before the absence starts.'),
         h('li', null, h('strong', null, 'Concurrency (ADR-0123):'), ' overlapping absence windows are swept from the same declared dates. The sweep prints the shared dates, the duty lines with no available cover on them, and the cover who would be the only answerable person for two or more absent seats — the single point of failure a per-absence reading cannot show. Adjacency is not overlap, and above the manager altitude the cover is named by rank and seat only.'),
         h('li', null, h('strong', null, 'Cover capacity (ADR-0124):'), ' on the shared dates, the cover’s own open work and the open work they alone would inherit are counted as one set union (items already inside the cover’s own span are not added twice) and graded against the peak open-work load actually observed in this span. With no open work on the record there is no envelope and the reading refuses; a duty line with several available covers is printed as shared rather than split by guess.'),
+        h('li', null, h('strong', null, 'Pre-window exercise (ADR-0125):'), ' a cover counts as exercised for THIS absence only when a record of THIS duty’s declared sources touches the holder’s span, is dated inside the preparation window (the declared exercise days ending the day before the absence starts), and is already recorded by today. Closed work counts; future-dated work, work after the cutoff, and unrelated duty sources do not. The standing register remains a separate, today-anchored reading.'),
         h('li', null, h('strong', null, 'Refused:'), ' a stored availability flag, an engine-assigned absence, an auto-assigned second cover and a “covered during the window” tick. Availability is a function of two declared windows; a stored copy would drift the moment either window changed.'),
         h('li', null, h('strong', null, 'Schema v115 is additive.'), ' An upgraded workspace opens with an empty absence ledger — “no absence has been declared here yet”, which is not the same claim as “every absence is covered”.')),
     }),

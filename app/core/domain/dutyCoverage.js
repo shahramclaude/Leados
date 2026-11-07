@@ -64,6 +64,9 @@ import {
   DUTY_COVER_LOAD_LIMITS,
   DUTY_COVER_LOAD_REFUSALS,
 } from './dutyAbsenceRegistry.js';
+import {
+  buildWindowExerciseIndex, windowExerciseFor, redactWindowExercise, summarizeWindowExercise,
+} from './dutyWindowExercise.js';
 
 /* ------------------------------------------------------------------ helpers */
 
@@ -353,7 +356,7 @@ export function dutiesForSeat(seat) {
  * Nothing here is stored: the same inputs re-derive the same plan, and a plan
  * whose window or cover changed prints the change on the next read.
  */
-export function absenceWindowPlan(state, built, seat, window, { now = new Date(), settings = null, items = null, depth = 0 } = {}) {
+export function absenceWindowPlan(state, built, seat, window, { now = new Date(), settings = null, items = null, depth = 0, windowExerciseIndex = null, namesVisible = null } = {}) {
   const effective = settings || state?.settings || {};
   const conv = normalizeDutyCoverageSettings(effective);
   const parsedWindow = parseAbsenceWindow(window);
@@ -362,6 +365,16 @@ export function absenceWindowPlan(state, built, seat, window, { now = new Date()
   for (const plan of Array.isArray(state?.absencePlans) ? state.absencePlans : []) {
     if (plan && plan.status === 'active' && plan.seatId) absences.set(plan.seatId, plan);
   }
+  // ADR-0125: the preparation evidence window is anchored to the absence start,
+  // not to today. The index is historical and duty-specific; callers sweeping
+  // many windows pass one index per holder seat so the harvest happens once.
+  const showNames = namesVisible === null ? (seat.fullAccess || (seat.rank ?? 1) <= 2) : Boolean(namesVisible);
+  const exerciseIndex = windowExerciseIndex || buildWindowExerciseIndex(state, built, seat, { now, settings: effective, duties: dutiesForSeat(seat) });
+  const exerciseWindow = {
+    from: addDays(parsedWindow.from, -conv.dutyCoverageExerciseDays),
+    to: addDays(parsedWindow.from, -1),
+    days: conv.dutyCoverageExerciseDays,
+  };
 
   const rows = [];
   for (const duty of dutiesForSeat(seat)) {
@@ -369,14 +382,20 @@ export function absenceWindowPlan(state, built, seat, window, { now = new Date()
     const coverRows = reading.covers.map((c) => {
       const absence = absences.get(c.coverId) || null;
       const available = !absence || !overlaps(absence, parsedWindow);
+      const windowExercise = redactWindowExercise(windowExerciseFor(exerciseIndex, duty.key, c.coverId, parsedWindow, {
+        now, exerciseDays: conv.dutyCoverageExerciseDays,
+      }), showNames);
       return {
         ...c,
         available,
         absence: absence ? { from: absence.from, to: absence.to, reason: absence.reason } : null,
+        // `exercised` remains the standing-register reading; the dated plan is
+        // graded by `windowExercise`, which is duty-specific and pre-window.
+        windowExercise,
       };
     });
     const available = coverRows.filter((c) => c.available && c.eligible);
-    const exercisedAvailable = available.filter((c) => c.exercised);
+    const exercisedAvailable = available.filter((c) => c.windowExercise?.exercised);
     const conflicts = coverRows.filter((c) => !c.available).map((c) => ({
       coverId: c.coverId,
       name: c.name,
@@ -395,8 +414,8 @@ export function absenceWindowPlan(state, built, seat, window, { now = new Date()
     const windowLabel = `${parsedWindow.from} → ${parsedWindow.to}`;
     const windowReasons = {
       gap: `No one is declared answerable for “${duty.label}” during ${windowLabel}. The duty is real — ${reading.openN} open item(s) sit in it — and the cover is a human declaration this workspace has not recorded.`,
-      thin: `${available.length} cover(s) are declared, eligible and present during ${windowLabel}, but none has dated work in this span in the last ${conv.dutyCoverageExerciseDays} day(s). The register prints “thin” rather than a reassuring “covered”.`,
-      covered: `${exercisedAvailable.length} of ${available.length} declared cover(s) are present during ${windowLabel} and have recorded work inside this span in the last ${conv.dutyCoverageExerciseDays} day(s).`,
+      thin: `${available.length} cover(s) are declared, eligible and present during ${windowLabel}, but none has duty-specific evidence recorded by today inside the preparation window ${exerciseWindow.from} → ${exerciseWindow.to}. The register prints “thin” rather than a reassuring “covered”.`,
+      covered: `${exercisedAvailable.length} of ${available.length} declared cover(s) are present during ${windowLabel} and have duty-specific evidence recorded by today inside the preparation window ${exerciseWindow.from} → ${exerciseWindow.to}.`,
       'cover-absent': `Every declared cover for “${duty.label}” is themselves absent during ${windowLabel}: ${conflicts.map((c) => `${c.name || 'the cover'} (${c.label}) is out ${c.from} → ${c.to}`).join('; ')}. No other cover is declared for this duty line, so the duty is exposed on those dates.`,
       ineligible: reading.bandReason,
     };
@@ -439,8 +458,10 @@ export function absenceWindowPlan(state, built, seat, window, { now = new Date()
   const byWindowBand = { covered: 0, thin: 0, 'cover-absent': 0, ineligible: 0, gap: 0 };
   for (const row of rows) byWindowBand[row.windowBand] += 1;
   const exposedRows = rows.filter((r) => r.windowBand === 'gap' || r.windowBand === 'cover-absent' || r.windowBand === 'ineligible');
+  const exercise = summarizeWindowExercise(rows);
   return {
     window: parsedWindow,
+    exerciseWindow,
     seatId: seat.id,
     seatLabel: seat.label,
     rows,
@@ -454,6 +475,7 @@ export function absenceWindowPlan(state, built, seat, window, { now = new Date()
       exposedN: exposedRows.length,
       exposedOpenN: exposedRows.filter((r) => r.openN > 0).length,
       conflictsN: rows.reduce((sum, r) => sum + r.conflicts.length, 0),
+      exercise,
     },
     conventions: conv,
   };
@@ -469,6 +491,8 @@ export function absenceWindowPlan(state, built, seat, window, { now = new Date()
 export function dutyAbsenceRollup(state, built, seat, { now = new Date(), settings = null, items = null } = {}) {
   const effective = settings || state?.settings || {};
   const allItems = items || harvestWork(state, built.chain, { now, settings: effective });
+  const namesVisible = seat.fullAccess || (seat.rank ?? 1) <= 2;
+  const exerciseIndexes = new Map();
   const rows = [];
   for (const plan of Array.isArray(state?.absencePlans) ? state.absencePlans : []) {
     if (!plan || plan.status !== 'active' || !plan.seatId) continue;
@@ -476,7 +500,10 @@ export function dutyAbsenceRollup(state, built, seat, { now = new Date(), settin
     if (!seat.fullAccess && !seat.scope.has(plan.seatId)) continue;
     const absentSeat = built.byId.get(plan.seatId);
     if (!absentSeat) continue;
-    const planForSeat = absenceWindowPlan(state, built, absentSeat, { from: plan.from, to: plan.to }, { now, settings: effective, items: allItems, depth: 1 });
+    if (!exerciseIndexes.has(absentSeat.id)) {
+      exerciseIndexes.set(absentSeat.id, buildWindowExerciseIndex(state, built, absentSeat, { now, settings: effective, duties: dutiesForSeat(absentSeat) }));
+    }
+    const planForSeat = absenceWindowPlan(state, built, absentSeat, { from: plan.from, to: plan.to }, { now, settings: effective, items: allItems, depth: 1, windowExerciseIndex: exerciseIndexes.get(absentSeat.id), namesVisible });
     rows.push({
       seatId: plan.seatId,
       label: absentSeat.label,
@@ -489,10 +516,16 @@ export function dutyAbsenceRollup(state, built, seat, { now = new Date(), settin
     });
   }
   rows.sort((a, b) => (a.from < b.from ? -1 : a.from > b.from ? 1 : a.label.localeCompare(b.label)));
+  const exercise = rows.reduce((acc, r) => {
+    const e = r.summary.exercise || {};
+    for (const key of Object.keys(acc)) acc[key] += e[key] || 0;
+    return acc;
+  }, { gradedCoversN: 0, validCoversN: 0, staleCoversN: 0, missingCoversN: 0, futureCoversN: 0, lateCoversN: 0, validLinesN: 0, thinLinesN: 0 });
   return {
     rows,
     exposedN: rows.reduce((sum, r) => sum + r.summary.exposedN, 0),
     exposedOpenN: rows.reduce((sum, r) => sum + r.summary.exposedOpenN, 0),
+    exercise,
   };
 }
 
@@ -735,6 +768,15 @@ export function absenceConcurrency(state, built, seat, { now = new Date(), setti
   // work the register already harvests. It does not depend on the dates, so it
   // is computed once and reused by every overlap window.
   const envelope = coverLoadEnvelope(built, seat, allItems);
+  // ADR-0125: one historical exercise index per absent holder seat, reused by
+  // every shared window that seat participates in.
+  const exerciseIndexes = new Map();
+  const exerciseIndexFor = (node) => {
+    if (!exerciseIndexes.has(node.id)) {
+      exerciseIndexes.set(node.id, buildWindowExerciseIndex(state, built, node, { now, settings: effective, duties: dutiesForSeat(node) }));
+    }
+    return exerciseIndexes.get(node.id);
+  };
 
   const result = {
     engineVersion: DUTY_CONCURRENCY_ENGINE_VERSION,
@@ -774,6 +816,20 @@ export function absenceConcurrency(state, built, seat, { now = new Date(), setti
       coverLoadRefusedN: 0,
       coverLoadDeferredN: 0,
       coverLoadMaxN: 0,
+      exerciseValidCoversN: 0,
+      exerciseThinLinesN: 0,
+    },
+    // ADR-0125: date-valid, duty-specific cover exercise travels with the same
+    // concurrency sweep, so the shared dates and the preparation cutoff agree.
+    coverExercise: {
+      gradedCoversN: 0,
+      validCoversN: 0,
+      staleCoversN: 0,
+      missingCoversN: 0,
+      futureCoversN: 0,
+      lateCoversN: 0,
+      validLinesN: 0,
+      thinLinesN: 0,
     },
     // ADR-0124: the capacity reading travels WITH the concurrency sweep at
     // every altitude, so a manager's decision and a chief's roll-up quote the
@@ -833,13 +889,15 @@ export function absenceConcurrency(state, built, seat, { now = new Date(), setti
     const coverAssignments = new Map();
     let exposedN = 0;
     let exposedOpenN = 0;
+    const exerciseRows = [];
 
     for (const p of w.active) {
       seatsOut.add(p.seatId);
       const planForWindow = absenceWindowPlan(
         state, built, p.node, { from: w.from, to: w.to },
-        { now, settings: effective, items: allItems, depth: 1 },
+        { now, settings: effective, items: allItems, depth: 1, windowExerciseIndex: exerciseIndexFor(p.node), namesVisible },
       );
+      exerciseRows.push(...planForWindow.rows);
       let seatExposed = 0;
       let seatExposedOpen = 0;
       for (const row of planForWindow.rows) {
@@ -896,6 +954,10 @@ export function absenceConcurrency(state, built, seat, { now = new Date(), setti
       });
     }
 
+    // ADR-0125: the shared window's cover exercise is graded against each
+    // absent holder's own preparation cutoff, then counted without identities.
+    const windowExercise = summarizeWindowExercise(exerciseRows);
+
     // ADR-0124: grade every available cover of this shared window against the
     // revealed envelope BEFORE the single-cover findings are redacted, so the
     // capacity travels with the finding rather than as a separate table.
@@ -947,11 +1009,12 @@ export function absenceConcurrency(state, built, seat, { now = new Date(), setti
     const capacityText = load.summary.overEnvelopeN
       ? ` Cover capacity: ${load.summary.overEnvelopeN} available cover(s) would be answerable for more open work than the ${load.summary.envelopeN}-item observed envelope for this span (largest ${load.summary.maxCombinedN}).`
       : (load.summary.refusal ? ` Cover capacity refused: ${load.summary.refusal}` : '');
+    const exerciseText = ` Pre-window exercise: ${windowExercise.validCoversN} available cover(s) have duty-specific evidence recorded by the preparation cutoff; ${windowExercise.thinLinesN} duty line(s) read thin.`;
     const reasons = {
-      'open-exposed': `${count} seats are absent at once ${w.from} → ${w.to} (${days} day(s)). ${exposedN} of their duty line(s) have no available, eligible cover on those shared dates and ${exposedOpenN} of them carry open work right now.${coverText}${capacityText}`,
-      exposed: `${count} seats are absent at once ${w.from} → ${w.to} (${days} day(s)). ${exposedN} duty line(s) have no available cover on those dates; none of them carries open work today, which is not the same as being safe.${coverText}${capacityText}`,
-      concentrated: `${count} seats are absent at once ${w.from} → ${w.to} (${days} day(s)). Every duty line has an available cover, but the cover is not always a different person — see the single point(s) below.${coverText}${capacityText}`,
-      covered: `${count} seats are absent at once ${w.from} → ${w.to} (${days} day(s)). Every duty line has an available, genuinely distinct cover. This is a register reading, not a forecast.${capacityText}`,
+      'open-exposed': `${count} seats are absent at once ${w.from} → ${w.to} (${days} day(s)). ${exposedN} of their duty line(s) have no available, eligible cover on those shared dates and ${exposedOpenN} of them carry open work right now.${coverText}${capacityText}${exerciseText}`,
+      exposed: `${count} seats are absent at once ${w.from} → ${w.to} (${days} day(s)). ${exposedN} duty line(s) have no available cover on those dates; none of them carries open work today, which is not the same as being safe.${coverText}${capacityText}${exerciseText}`,
+      concentrated: `${count} seats are absent at once ${w.from} → ${w.to} (${days} day(s)). Every duty line has an available cover, but the cover is not always a different person — see the single point(s) below.${coverText}${capacityText}${exerciseText}`,
+      covered: `${count} seats are absent at once ${w.from} → ${w.to} (${days} day(s)). Every duty line has an available, genuinely distinct cover. This is a register reading, not a forecast.${capacityText}${exerciseText}`,
     };
 
     result.windows.push({
@@ -968,6 +1031,7 @@ export function absenceConcurrency(state, built, seat, { now = new Date(), setti
       singleCovers,
       coverLoads: load.rows,
       capacity: load.summary,
+      exercise: windowExercise,
     });
   }
 
@@ -998,6 +1062,11 @@ export function absenceConcurrency(state, built, seat, { now = new Date(), setti
   result.summary.coverLoadRefusedN = result.coverLoad.refusedN;
   result.summary.coverLoadDeferredN = result.coverLoad.deferredCoversN;
   result.summary.coverLoadMaxN = result.coverLoad.maxCombinedN;
+  for (const w of windows) {
+    for (const key of Object.keys(result.coverExercise)) result.coverExercise[key] += w.exercise[key] || 0;
+  }
+  result.summary.exerciseValidCoversN = result.coverExercise.validCoversN;
+  result.summary.exerciseThinLinesN = result.coverExercise.thinLinesN;
   return result;
 }
 
@@ -1013,8 +1082,13 @@ function buildAbsenceSection(state, built, seat, { now, settings, items }) {
   const inSpan = dutyAbsenceRollup(state, built, seat, { now, settings, items });
   const namesVisible = seat.fullAccess || (seat.rank ?? 1) <= 2;
   const ownSummary = own
-    ? absenceWindowPlan(state, built, seat, { from: own.from, to: own.to }, { now, settings, items, depth: 0 }).summary
+    ? absenceWindowPlan(state, built, seat, { from: own.from, to: own.to }, { now, settings, items, depth: 0, namesVisible }).summary
     : null;
+  const exercise = { gradedCoversN: 0, validCoversN: 0, staleCoversN: 0, missingCoversN: 0, futureCoversN: 0, lateCoversN: 0, validLinesN: 0, thinLinesN: 0 };
+  for (const summary of [ownSummary, ...inSpan.rows.map((r) => r.summary)]) {
+    const e = summary?.exercise || {};
+    for (const key of Object.keys(exercise)) exercise[key] += e[key] || 0;
+  }
   return {
     own: own
       ? {
@@ -1037,6 +1111,9 @@ function buildAbsenceSection(state, built, seat, { now, settings, items }) {
     })),
     exposedN: (ownSummary ? ownSummary.exposedN : 0) + inSpan.exposedN,
     exposedOpenN: (ownSummary ? ownSummary.exposedOpenN : 0) + inSpan.exposedOpenN,
+    // ADR-0125: the same date-valid exercise counts roll up with the dated
+    // plans; no cover identity is carried in this aggregate.
+    exercise,
     // ADR-0123: the overlap reading travels with the register at every
     // altitude, so a director's unit and a chief's enterprise receive the same
     // derived windows without a second store or a second computation.
@@ -1236,6 +1313,10 @@ export function dutyCoverageBriefText(report) {
   const absenceTotal = (report.absences?.own ? 1 : 0) + (report.absences?.inSpan?.length || 0);
   if (absenceTotal) {
     lines.push(`Dated absence plans: ${absenceTotal} active in this span — ${report.absences.exposedOpenN} duty line(s) carry open work with no available cover on the absence dates. Availability is derived from the declared windows, never stored.`);
+    const exercise = report.absences.exercise;
+    if (exercise) {
+      lines.push(`Pre-window cover exercise: ${exercise.validLinesN} duty line(s) have duty-specific evidence recorded by today inside the preparation window ending the day before absence starts; ${exercise.thinLinesN} read thin. Cover statuses: ${exercise.validCoversN} valid, ${exercise.staleCoversN} stale, ${exercise.missingCoversN} missing, ${exercise.futureCoversN} future-dated, ${exercise.lateCoversN} after cutoff.`);
+    }
   }
   // ADR-0123: concurrency is printed as its own reading, with its own refusal.
   const conc = report.absences?.concurrency;
