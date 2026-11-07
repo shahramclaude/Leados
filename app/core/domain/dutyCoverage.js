@@ -48,6 +48,7 @@ import { harvestWork, LEADER_ID } from './chain.js';
 import { buildSeats, activeSeat } from './seat.js';
 import { addDays, dayKey, daysBetween } from '../time.js';
 import {
+  DUTY_BRANCH_DISCLOSURE_PREMISE,
   DUTY_COVERAGE_LIMITS,
   DUTY_PREMISE,
 } from './dutyCoverageRegistry.js';
@@ -1121,41 +1122,165 @@ function buildAbsenceSection(state, built, seat, { now, settings, items }) {
   };
 }
 
-/** Compare direct leadership branches without copying identities or records upward.
+/**
+ * Compare direct leadership branches without copying identities or records upward.
+ *
+ * ADR-0126 adds the disclosure floor. The table separates a unit by structure
+ * (which branch) while printing exact counts of the people inside it, so:
+ *
+ *   - a branch cell below `dutyCoverageBranchFloorN` duty lines is WITHHELD
+ *     (primary suppression), with the reason printed and its counts never
+ *     leaking through a rate;
+ *   - one further released cell is withheld beside it (complementary
+ *     suppression) whenever the released set would otherwise be a single cell,
+ *     because one released cell against a known total is the withheld cell by
+ *     subtraction;
+ *   - `readinessPct` is quoted only at or above `dutyCoverageBranchRateFloorN`
+ *     duty lines — a proportion of one reads as a fact and is not one;
+ *   - the pooled rate is REFUSED when any cell is withheld (it is the sum the
+ *     withheld cell would be recovered from), and the mean is quoted only over
+ *     the released cells, with how many that was.
+ *
+ * This is primary + complementary suppression, not differential privacy, and
+ * the reading says so: the floor stops arithmetic recovery, not structural
+ * inference by a reader who already holds the roster.
+ *
  * Each duty is assigned once to its nearest direct branch; the active seat's
  * own duties are excluded. Rates are descriptive register coverage, not risk
  * predictions. Branch numbers are ephemeral and are not organisational IDs.
  */
-function branchCoverage(built, seat, rows) {
+function branchCoverage(built, seat, rows, conventions = null) {
   if (seat.fullAccess || seat.readOnly || (seat.rank ?? 0) < 3) return null;
+  const conv = conventions || normalizeDutyCoverageSettings({});
+  const floor = conv.dutyCoverageBranchFloorN;
+  const rateFloor = conv.dutyCoverageBranchRateFloorN;
+  const cap = conv.dutyCoverageBranchCap;
   const children = seat.childSeatIds.map((id) => built.byId.get(id)).filter(Boolean)
     .sort((a, b) => a.id.localeCompare(b.id));
-  const branches = children.map((child, i) => {
-    const branchRows = rows.filter((row) => row.seat.id === child.id || child.scope.has(row.seat.id));
-    const total = branchRows.length;
-    const covered = branchRows.filter((row) => row.reading.band === 'covered').length;
-    return {
-      label: `Branch ${i + 1} · ${child.label}`,
-      dutiesN: total, coveredN: covered,
-      gapN: branchRows.filter((row) => row.reading.band === 'gap').length,
-      openGapN: branchRows.filter((row) => row.reading.band === 'gap' && row.reading.openN > 0).length,
-      readinessPct: total ? round1(covered * 100 / total) : null,
-    };
-  });
   const ownN = rows.filter((row) => row.seat.id === seat.id).length;
   // Check each row, rather than only the totals: an omission and a duplicate
   // could otherwise cancel out and make a broken partition look complete.
   const partitioned = rows.every((row) => row.seat.id === seat.id
     ? !children.some((child) => child.id === row.seat.id || child.scope.has(row.seat.id))
     : children.filter((child) => child.id === row.seat.id || child.scope.has(row.seat.id)).length === 1);
-  if (!partitioned) return { branches: [], ownN, refusal: 'The reporting tree did not partition this register; comparison refused.' };
-  const eligible = branches.filter((branch) => branch.dutiesN > 0);
-  const total = eligible.reduce((sum, branch) => sum + branch.dutiesN, 0);
-  const covered = eligible.reduce((sum, branch) => sum + branch.coveredN, 0);
+  if (!partitioned) {
+    return {
+      branches: [], ownN, floor, rateFloor, suppressedN: 0, releasedN: 0, deferredN: 0,
+      pooledPct: null, meanPct: null, pooledRefused: null, meanRefused: null,
+      refusal: 'The reporting tree did not partition this register; comparison refused.',
+    };
+  }
+  const graded = children.slice(0, cap).map((child, i) => {
+    const branchRows = rows.filter((row) => row.seat.id === child.id || child.scope.has(row.seat.id));
+    const total = branchRows.length;
+    const covered = branchRows.filter((row) => row.reading.band === 'covered').length;
+    // ADR-0126: the disclosure unit is the LEADERSHIP SEAT that contributes
+    // duty lines to this branch — i.e. the number of people the cell describes.
+    // It is derived from the same partition as the counts, never asserted.
+    const seatsN = new Set(branchRows.map((row) => row.seat.id)).size;
+    return {
+      // No seat id and no node id travel on a branch row: the row is a table
+      // position and a label, and a privacy test elsewhere in the suite pins
+      // that. Suppression is tracked by index, not by publishing the key.
+      idx: i,
+      label: `Branch ${i + 1} · ${child.label}`,
+      seatsN, dutiesN: total, coveredN: covered,
+      gapN: branchRows.filter((row) => row.reading.band === 'gap').length,
+      openGapN: branchRows.filter((row) => row.reading.band === 'gap' && row.reading.openN > 0).length,
+      readinessPct: null,
+    };
+  });
+  const deferredN = Math.max(0, children.length - graded.length);
+
+  // Primary suppression: a cell describing fewer seats than the floor is
+  // withheld outright. The duty floor is a belt on top of the seat floor, so a
+  // convention that declares only one of them cannot accidentally release a
+  // cell the other would withhold.
+  const belowFloor = (b) => (b.seatsN > 0 && b.seatsN < floor) || (b.dutiesN > 0 && b.dutiesN < floor);
+  const withheld = new Set(graded.filter(belowFloor).map((b) => b.idx));
+  // Complementary suppression: one further released cell, chosen deterministically
+  // (smallest cell, then stable label) so a single withheld cell is never
+  // recoverable by subtracting the released cells from a known total.
+  let complementary = null;
+  if (withheld.size) {
+    const stillReleased = graded.filter((b) => !withheld.has(b.idx) && b.dutiesN > 0);
+    if (stillReleased.length <= 1 && stillReleased.length > 0) {
+      const victim = [...stillReleased].sort((a, b) => a.seatsN - b.seatsN || a.dutiesN - b.dutiesN || a.label.localeCompare(b.label))[0];
+      withheld.add(victim.idx);
+      complementary = victim.idx;
+    }
+  }
+
+  const branches = graded.map((b) => {
+    const hidden = withheld.has(b.idx);
+    const belowRateFloor = !hidden && ((b.seatsN > 0 && b.seatsN < rateFloor) || b.dutiesN < rateFloor);
+    return {
+      ...b,
+      suppressed: hidden,
+      complementary: b.idx === complementary,
+      // A withheld cell prints NO figure — not a zero, and not a lower/upper
+      // bound a reader can sum. Its seat and duty counts survive because the
+      // altitude table and the roster shape are structural, not a finding.
+      coveredN: hidden ? null : b.coveredN,
+      gapN: hidden ? null : b.gapN,
+      openGapN: hidden ? null : b.openGapN,
+      readinessPct: hidden || belowRateFloor || !b.dutiesN ? null : round1((b.coveredN * 100) / b.dutiesN),
+      refused: hidden
+        ? (b.idx === complementary
+          ? `Withheld to protect the cell below the floor of ${floor} contributing seat(s): releasing this one would recover it by subtraction from the parent total.`
+          : `Withheld: ${b.seatsN} leadership seat(s) / ${b.dutiesN} duty line(s) sit below the declared disclosure floor of ${floor}. A rate over this few people describes them as individuals.`)
+        : (belowRateFloor
+          ? `Counts released; the rate is withheld below ${rateFloor} contributing seat(s).`
+          : null),
+    };
+  });
+
+  const out = branches.map(({ idx, ...rest }) => rest);
+  const released = out.filter((b) => !b.suppressed && b.dutiesN > 0);
+  const eligibleN = branches.filter((b) => b.dutiesN > 0).length;
+  const total = released.reduce((sum, b) => sum + b.dutiesN, 0);
+  const covered = released.reduce((sum, b) => sum + b.coveredN, 0);
+  const rateable = released.filter((b) => b.readinessPct !== null);
+  const allSeatsN = released.reduce((sum, b) => sum + b.seatsN, 0);
+
+  // A comparison needs two branches to be a comparison at all. That refusal is
+  // about the partition, not the disclosure floor, and it prints first.
+  const comparisonRefused = eligibleN < 2
+    ? 'At least two branches with declared duty lines are needed for comparison.'
+    : null;
+
+  // The pooled rate is the arithmetic a withheld cell is recovered from, so it
+  // is refused outright whenever anything is withheld.
+  const pooledRefused = comparisonRefused || (withheld.size
+    ? `${withheld.size} branch cell(s) are withheld below the disclosure floor of ${floor} contributing seat(s); a pooled rate over the released cells would recover them by subtraction, so no pooled rate is quoted.`
+    : (total && total < rateFloor
+      ? `A pooled rate over ${allSeatsN} contributing seat(s) / ${total} duty line(s) is below the declared rate floor of ${rateFloor}.`
+      : null));
+
+  const meanRefused = !rateable.length
+    ? (withheld.size
+      ? `No branch-level mean is quoted: every cell was withheld, so there is no released figure to average and none is invented in its place.`
+      : 'At least two branches with a quotable rate are needed for a mean of branch rates.')
+    : (rateable.length < 2
+      ? 'At least two branches with a quotable rate are needed for a mean of branch rates.'
+      : (withheld.size
+        ? `The mean is quoted over the ${rateable.length} released branch(es) only; ${withheld.size} withheld cell(s) are excluded and the figure is not the whole table.`
+        : null));
+
   return {
-    branches, ownN, refusal: eligible.length < 2 ? 'At least two branches with declared duty lines are needed for comparison.' : null,
-    pooledPct: total ? round1(covered * 100 / total) : null,
-    meanPct: eligible.length ? round1(eligible.reduce((sum, branch) => sum + branch.coveredN / branch.dutiesN, 0) * 100 / eligible.length) : null,
+    branches: out, ownN, floor, rateFloor,
+    suppressedN: withheld.size, releasedN: released.length, deferredN, releasedSeatsN: allSeatsN,
+    // Quoted only when nothing is withheld, so the two numbers always describe
+    // the same table (Yule–Simpson composition guard, printed beside them).
+    pooledPct: pooledRefused || !total ? null : round1((covered * 100) / total),
+    pooledRefused,
+    meanPct: !comparisonRefused && rateable.length >= 2
+      ? round1(rateable.reduce((sum, b) => sum + b.readinessPct, 0) / rateable.length)
+      : null,
+    meanBranchesN: rateable.length,
+    meanRefused,
+    refusal: comparisonRefused,
+    premise: DUTY_BRANCH_DISCLOSURE_PREMISE,
   };
 }
 
@@ -1256,12 +1381,15 @@ export function buildDutyCoverageReport(state, { now = new Date(), settings = nu
       scopeN: seat.scopeN,
     },
     namesVisible,
-    branchCoverage: branchCoverage(built, seat, rows),
+    branchCoverage: branchCoverage(built, seat, rows, conv),
     absences: buildAbsenceSection(state, built, seat, { now, settings: effective, items }),
     conventions: conv,
     bounds: {
       dutyCoverageExerciseDays: [7, 180],
       dutyCoverageConcentrationPct: [50, 100],
+      dutyCoverageBranchFloorN: [2, 25],
+      dutyCoverageBranchRateFloorN: [2, 40],
+      dutyCoverageBranchCap: [4, 64],
       dutyAbsenceMaxSpanDays: DUTY_ABSENCE_LIMITS.maxSpanDays,
       dutyConcurrencyWindowCap: DUTY_ABSENCE_LIMITS.concurrentWindowCap,
       dutyCoverLoadCap: DUTY_COVER_LOAD_LIMITS.coverCap,
@@ -1341,7 +1469,20 @@ export function dutyCoverageBriefText(report) {
   const comparison = report.branchCoverage;
   if (comparison) {
     if (comparison.refusal) lines.push(`Branch comparison refused: ${comparison.refusal}`);
-    else lines.push(`Direct branches: pooled register readiness ${comparison.pooledPct}%; mean branch readiness ${comparison.meanPct}%. ${comparison.ownN} own duty line(s) excluded. These are descriptive register measures, not forecasts.`);
+    else {
+      // ADR-0126: a withheld cell is named as withheld, never printed small.
+      const released = comparison.branches.filter((b) => !b.suppressed && b.dutiesN > 0);
+      const withheld = comparison.branches.filter((b) => b.suppressed);
+      const rate = comparison.pooledPct !== null
+        ? `pooled register readiness ${comparison.pooledPct}%`
+        : `pooled readiness NOT QUOTED (${comparison.pooledRefused})`;
+      const mean = comparison.meanPct !== null
+        ? `mean of branch rates ${comparison.meanPct}% over ${comparison.meanBranchesN} released branch(es)`
+        : `mean of branch rates NOT QUOTED (${comparison.meanRefused})`;
+      lines.push(`Direct branches: ${released.length} cell(s) released, ${withheld.length} withheld at the declared disclosure floor of ${comparison.floor} contributing seat(s). ${rate}. ${mean}. ${comparison.ownN} own duty line(s) excluded. These are descriptive register measures, not forecasts.`);
+      if (comparison.deferredN) lines.push(`  · ${comparison.deferredN} further branch(es) were not compared: the table is capped at ${report.conventions.dutyCoverageBranchCap}.`);
+      lines.push('  · A per-branch rate is a statement about the few people inside that branch: cells below the floor are withheld and one further cell is withheld beside them. This is primary + complementary suppression, not differential privacy.');
+    }
   }
   if (report.refusals.length) {
     lines.push(`Printed refusals (${report.refusals.length}):`);
@@ -1425,10 +1566,48 @@ export function dutyCoverageCsvRows(report) {
       refused_reason: '',
     });
   }
+  // ADR-0126: one aggregate row per direct branch cell. A withheld cell exports
+  // BLANK counts and BLANK rate — never 0, which would read as "no gaps here" —
+  // and its branch number is the ephemeral table position, not an org id.
+  const branch = report.branchCoverage;
+  if (branch && branch.branches.length) {
+    for (const b of branch.branches) {
+      rows.push({
+        row_kind: 'branch',
+        scope,
+        altitude: report.seat.altitudeKey || '',
+        duty_key: '',
+        band: b.suppressed ? 'withheld' : '',
+        branch_seats_n: b.seatsN,
+        duties_n: b.dutiesN,
+        branch_covered_n: b.suppressed ? '' : b.coveredN,
+        branch_gap_n: b.suppressed ? '' : b.gapN,
+        branch_open_gap_n: b.suppressed ? '' : b.openGapN,
+        branch_readiness_pct: b.readinessPct === null ? '' : b.readinessPct,
+        branch_withheld: b.suppressed ? 'yes' : 'no',
+        branch_floor_n: branch.floor,
+        branch_rate_floor_n: branch.rateFloor,
+        refused_reason: b.refused ? b.refused.slice(0, 200) : '',
+      });
+    }
+    rows.push({
+      row_kind: 'branch-summary',
+      scope,
+      altitude: report.seat.altitudeKey || '',
+      band: '',
+      branch_released_n: branch.releasedN,
+      branch_released_seats_n: branch.releasedSeatsN,
+      branch_withheld_n: branch.suppressedN,
+      branch_deferred_n: branch.deferredN,
+      branch_pooled_pct: branch.pooledPct === null ? '' : branch.pooledPct,
+      branch_mean_pct: branch.meanPct === null ? '' : branch.meanPct,
+      branch_floor_n: branch.floor,
+      branch_rate_floor_n: branch.rateFloor,
+      refused_reason: branch.pooledRefused ? String(branch.pooledRefused).slice(0, 200) : '',
+    });
+  }
   return rows;
 }
-
-/** Attention: an open-work duty with no cover, or a stale ineligible one. */
 export function dutyCoverageAttentionCount(state, { now = new Date(), settings = null } = {}) {
   try {
     const built = buildSeats(state, { now, settings: settings || state?.settings || null });

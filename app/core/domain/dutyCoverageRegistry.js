@@ -108,11 +108,49 @@ export const DUTY_COVERAGE_LIMITS = Object.freeze({
 export const DUTY_COVERAGE_DEFAULTS = Object.freeze({
   dutyCoverageExerciseDays: 30,
   dutyCoverageConcentrationPct: 90,
+  // ADR-0126: the disclosure floor for the direct-branch comparison. A branch
+  // cell smaller than this is withheld (primary suppression) and one more
+  // released cell is withheld beside it (complementary suppression) so the
+  // blanked cell cannot be recovered by subtracting from the parent total.
+  // Denominated in the LEADERSHIP SEATS that contribute duty lines to the
+  // branch — the number of people the cell is a statement about. The altitude
+  // duty table declares five duty lines per seat, so the two are proportional;
+  // seats is the quantity a reader reasons about, so the floor is declared in
+  // seats and the duty count is printed beside it.
+  //
+  // Three: a two-seat branch is the whole register of a director and one
+  // manager, and "50% covered" over those two is a sentence about two people.
+  dutyCoverageBranchFloorN: 3,
+  // A rate is quoted only at or above this many contributing seats — a
+  // proportion over two or three people is a rumour with a percent sign.
+  dutyCoverageBranchRateFloorN: 4,
+  // How many child spans the comparison table will render in one read.
+  dutyCoverageBranchCap: 24,
 });
 
 export const DUTY_COVERAGE_BOUNDS = Object.freeze({
   dutyCoverageExerciseDays: [7, 180],
   dutyCoverageConcentrationPct: [50, 100],
+  dutyCoverageBranchFloorN: [2, 25],
+  dutyCoverageBranchRateFloorN: [2, 40],
+  dutyCoverageBranchCap: [4, 64],
 });
 
 export const DUTY_PREMISE = 'A duty with no named, capable, exercised stand-in is a duty one absence away from stopping. LeadOS can name the cover because it already knows the reporting tree, the duty table and the dated work records — but it will not invent a stand-in: declaring cover is a dated human act, and every gap prints the reason it is a gap instead of a reassuring blank.';
+
+/**
+ * ADR-0126 — the disclosure floor on the branch comparison.
+ *
+ * The comparison table is the one surface in this register that separates a
+ * unit by NAME-bearing structure (which branch) while printing an exact count
+ * of the people inside it. A branch with one duty line and one cover prints
+ * "100% covered", and the chief reading it knows exactly which person that
+ * sentence is about — the partition key is in the roster they are holding. The
+ * same reasoning the workspace already applies to pulse cells and outcome
+ * loops (small-cell suppression, primary + complementary) applies here; it had
+ * simply never been wired to this table.
+ *
+ * This is explicitly NOT differential privacy, and the reading says so.
+ */
+export const DUTY_BRANCH_DISCLOSURE_PREMISE = 'A per-branch rate is a statement about the few people inside that branch. Below the declared floor a branch cell is WITHHELD rather than printed small, one more released cell is withheld beside it so the blanked cell cannot be recovered by subtracting from the parent total, and a rate is quoted only above its own floor. Withheld is never zero: the cell prints why it is blank. This is primary + complementary suppression, not differential privacy, and the reading never claims otherwise.';
+

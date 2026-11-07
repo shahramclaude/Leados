@@ -405,7 +405,7 @@ test('the report carries concurrency at every altitude; the brief prints it; CSV
   // The CSV keeps its existing row kinds: concurrency is a register reading,
   // not a new export scope that would change every downstream consumer.
   const csv = dutyCoverageCsvRows(buildDutyCoverageReport(dirState, { now: NOW, settings: dirState.settings }));
-  assert.deepEqual([...new Set(csv.map((r) => r.row_kind))].sort(), ['absence', 'duty', 'register']);
+  assert.deepEqual([...new Set(csv.map((r) => r.row_kind))].sort(), ['absence', 'branch', 'branch-summary', 'duty', 'register']);
 
   // No absences at all: nothing is printed as a concurrency reading.
   const quiet = makeState({ activeSeatId: 'dir1' });

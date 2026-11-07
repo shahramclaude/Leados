@@ -388,7 +388,13 @@ test('the same derived capacity rolls up through report/brief at five altitudes;
     assert.equal(readings[seatId].conc.windows.length, 1, `${seatId} rolls up the shared window`);
     assert.equal(readings[seatId].conc.windows[0].coverLoads.length, 1, `${seatId} carries the capacity reading`);
     assert.match(readings[seatId].brief, /Cover capacity on the shared dates/);
-    assert.deepEqual([...new Set(readings[seatId].csv.map((r) => r.row_kind))].sort(), ['absence', 'duty', 'register']);
+    // ADR-0126 (Session 172): the branch comparison exists from director rank
+    // up; a manager seat has no child branches, so it exports no branch rows.
+    const kinds = [...new Set(readings[seatId].csv.map((r) => r.row_kind))].sort();
+    const expected = seatId === 'mgr1'
+      ? ['absence', 'duty', 'register']
+      : ['absence', 'branch', 'branch-summary', 'duty', 'register'];
+    assert.deepEqual(kinds, expected, `${seatId} exports the expected row kinds`);
   }
   assert.match(readings.mgr1.brief, /1 would carry more than that peak/);
   assert.ok(!readings.dir1.brief.includes('Mei Chen'), 'the upward brief is identity-free');
