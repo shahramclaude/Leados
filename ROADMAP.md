@@ -1,3 +1,20 @@
+## 2026-11-07 — Prevent false self-cover (Session 166, Schema v114 unchanged)
+
+**Implemented [mid-manager PRIMARY; frontline, director, VP, CEO active].** A manager planning who answers for their duties during an absence could previously declare themself as stand-in and get a `covered` band from their own recent work. The shared duty candidate engine now refuses the holder with a reason; the existing designation command enforces the same rule. Existing self-declarations remain in the audit ledger, read `ineligible` even when exercised, and can be revoked with a reason. The existing register, harvested cross-module work, governed declaration/decision events, roll-up reports and identity-free brief consume the corrected reading; no automatic assignment, new schema or independent tracker. An ineligible declaration remains ineligible even when another cover is usable, per the existing conservative band policy.
+
+**Altitude coverage map (Session 166):**
+- Frontline: own absence register benefits; last primary 163.
+- Mid-manager: **PRIMARY** — prevents false readiness while arranging duty cover; primary 162/**166**.
+- Director: corrected, redacted unit roll-up; last primary 165.
+- VP: corrected, redacted function roll-up; last primary 165.
+- CEO / C-suite: corrected enterprise roll-up; last primary 164.
+
+**In Progress — dated absence plan [frontline → manager].** This is only a prerequisite: the register still has no absence dates, cover availability, overlap/conflict checks, durable plan or dated roll-up. Do not treat its band as evidence that a cover is available during a specific absence. Next, build a real dated plan against the existing governance and event spine; frontline is now the most-neglected altitude.
+
+**Verified:** `node --test tests/app/duty-coverage.test.mjs` 10/10, including self refusal, retained legacy declaration, exercised-but-ineligible, manager → director band, name withholding, brief and revocation; standalone rebuilt. Full suite and real-browser accessibility [UNVERIFIED]. Seats remain workflow declarations, not authentication; small anonymous branches can be inferred.
+
+**Next:** [frontline → manager] dated absence planning slice as above; [all altitudes] authenticated identity and tenant boundary remains the standing foundational item.
+
 ## 2026-11-07 — Repair the duty-cover privacy boundary (Session 165, Schema v114 unchanged, `[FLAGGED]` in 164 closed)
 
 **Implemented [director (rank 3) / VP (rank 4) PRIMARY; CEO / C-suite active, frontline and mid-manager preserved].** Session 164 flagged the gap plainly: the duty-coverage report returned unredacted `gaps`, `thin`, `ineligible` arrays and full seat objects even above rank 2, while the new branch projection was correctly anonymous. A director reviewing unit continuity exposure saw the same counts and bands as the frontline lead — but the API still carried cover names, seat names, declaring notes and person ids that the view hid. The repair closes the report-level boundary without touching the permitted own-seat workflows that ADR-0121 promises: a frontline lead and a mid-manager still read their own duty lines with cover names intact; a director, VP and CEO now receive a fully redacted register at every altitude-gated seam.

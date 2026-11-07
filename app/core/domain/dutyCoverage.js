@@ -146,7 +146,7 @@ function oldestOpenDay(items) {
  * candidate. A candidate must be a leadership node whose altitude can carry the
  * duty's horizon, reached WITHOUT crossing a peer boundary:
  *
- *   the seat itself     the holder rehearses their own absence;
+ *   the seat itself     REFUSED: an absent holder cannot stand in for themself;
  *   inside the span     a subordinate leadership node at or above the seat's
  *                       rank (a reorganisation can put one there);
  *   above the seat      every reporting-tree ancestor: an absence rises to the
@@ -171,7 +171,7 @@ export function dutyCandidates(state, built, seat, duty) {
     if (!inSpan && !above) continue; // a peer or an unrelated branch: never offered
     const isSelf = node.id === seat.id;
     const candidateRank = nodeSeat.rank;
-    const eligible = isSelf || candidateRank >= seatRank;
+    const eligible = !isSelf && candidateRank >= seatRank;
     rows.push({
       personId: node.id,
       name: node.name,
@@ -181,13 +181,13 @@ export function dutyCandidates(state, built, seat, duty) {
       isSelf,
       relation: isSelf ? 'self' : (above ? 'ancestor' : 'descendant'),
       eligible,
-      reason: eligible
-        ? (isSelf
-          ? 'The seat itself — the holder may rehearse their own absence.'
-          : above
+      reason: isSelf
+        ? 'The duty holder cannot cover their own absence. Declare a different eligible stand-in.'
+        : eligible
+          ? (above
             ? `Reporting-tree ancestor at rank ${candidateRank}: an absence rises to the span that owns the lowest common work (Aghion & Tirole 1997 subsidiarity), never sideways to a peer.`
             : `Rank ${candidateRank} inside this span: can answer the duty without leaving the span.`)
-        : `Rank ${candidateRank} sits BELOW rank ${seatRank}. A duty never passes down below the altitude whose horizon it occupies (Jaques 1956) — this candidate cannot be answerable for it.`,
+          : `Rank ${candidateRank} sits BELOW rank ${seatRank}. A duty never passes down below the altitude whose horizon it occupies (Jaques 1956) — this candidate cannot be answerable for it.`,
     });
   }
   return rows.sort((a, b) => Number(b.isSelf) - Number(a.isSelf) || a.rank - b.rank || a.name.localeCompare(b.name));
@@ -257,7 +257,7 @@ export function dutyReading(state, built, seat, duty, { now = new Date(), settin
   const reasons = {
     gap: `No one is declared answerable for “${duty.label}” when this ${seat.label} seat is absent. The duty is real — ${relevant.length} open item(s) sit in it — but the cover is a human declaration this workspace has not recorded yet.`,
     thin: `${eligibleCovers.length} cover(s) are declared and eligible, but none has dated work in this span in the last ${conv.dutyCoverageExerciseDays} day(s). The register cannot distinguish “ready and quiet” from “forgotten”, so it prints “thin” rather than a reassuring “covered”.`,
-    ineligible: `${ineligibleCovers.length} declared cover(s) cannot answer this duty at rank ${seat.rank}. The declaration is stale, not wrong in spirit — re-declare it on an eligible person.`,
+    ineligible: `${ineligibleCovers.length} declared cover(s) cannot answer this duty. ${ineligibleCovers.map((c) => c.eligibilityReason).join(" ")} Revoke the stale declaration and declare an eligible stand-in.`,
     covered: `${exercisedCovers.length} of ${eligibleCovers.length} declared cover(s) have recorded work inside this span in the last ${conv.dutyCoverageExerciseDays} day(s).`,
   };
 
@@ -466,9 +466,9 @@ export function buildDutyCoverageReport(state, { now = new Date(), settings = nu
     thin,
     ineligible,
     refusals: [
-      ...rows.filter((r) => !r.reading.candidates.length).map((r) => ({
+      ...rows.filter((r) => !r.reading.eligibleCandidates.length).map((r) => ({
         dutyId: r.reading.dutyId,
-        reason: `“${r.reading.label}” has no eligible candidate inside this span: the reporting tree puts nobody at or above rank ${r.seat.rank} under ${namesVisible ? r.seat.name : 'this seat'}. Declare the duty's cover from the altitude above, or record the stand-in as a person on the roster first.`,
+        reason: `“${r.reading.label}” has no eligible stand-in in the reporting tree for ${namesVisible ? r.seat.name : 'this seat'}. The holder cannot cover their own absence; add an eligible leadership stand-in to the roster or review the reporting tree.`,
       })),
       ...ineligible.map((r) => ({
         dutyId: r.reading.dutyId,

@@ -1,3 +1,11 @@
+## 2026-11-07 — Session 166: Refuse self-cover (Schema v114 unchanged)
+
+**Built / altitudes.** Mid-manager PRIMARY: while planning an absence, a manager must not see their own exercise as proof someone else can answer. The shared duty-candidate engine now refuses the duty holder as a stand-in; existing self-declarations remain auditable but read ineligible, with a reason and a revocation path. Frontline uses the same rule; director, VP and CEO inherit corrected roll-ups. Existing cross-module work harvesting and governed decision/roll-up event path are reused; no schema or rule added. Manager was last primary in 162, earlier than frontline 163, CEO 164 and director/VP 165.
+
+**Verified.** One focused pass: `node --test tests/app/duty-coverage.test.mjs` 10/10, including rejected self-designation, exercised legacy row, manager/director reading, name wall, brief and revocation, plus existing declaration transaction and UI tests. Standalone rebuilt. Full suite and real-browser accessibility [UNVERIFIED]. Blockers: none for this slice. Seats are not authentication.
+
+**In Progress / next.** A dated absence plan still needs dates, availability and overlapping-cover checks, durable planning and dated hierarchy roll-up; this fix alone does not establish availability. Frontline is the next most-neglected altitude. Authenticated identity and tenant isolation remain foundational; small anonymous branches may be inferable.
+
 ## 2026-11-07 — Session 165: Duty-cover privacy boundary repaired (Schema v114 unchanged, closes 164 [FLAGGED])
 
 **Built / altitudes.** Director (rank 3) / VP (rank 4) PRIMARY — the flagged report-level privacy boundary is closed while preserving the permitted own-seat workflows that ADR-0121 promises. Frontline (rank 1) and mid-manager (rank 2) still read their own duty lines with cover names intact; director, VP and CEO now receive a fully redacted register at every seam. CEO was last primary in 164, frontline 163, mid 162, director/VP 161 — director/VP were most-neglected and the repair was the roadmap's own Next target.
