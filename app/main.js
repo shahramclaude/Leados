@@ -259,7 +259,9 @@ import { sealAttentionCount } from './core/domain/sealChain.js';
 import { renderIdentity } from './views/identity.js';
 // ADR-0121: who answers for each duty line when the seat holder is absent.
 import { renderDutyCover } from './views/dutyCover.js';
+import { renderStandby } from './views/standby.js';
 import { dutyCoverageAttentionCount } from './core/domain/dutyCoverage.js';
+import { dutyStandbyAttentionCount } from './core/domain/dutyStandby.js';
 import { identityAttentionCount } from './core/domain/identity.js';
 
 function safeDecode(segment) {
@@ -489,6 +491,7 @@ export const NAV = [
     { route: 'disclosure', label: 'Disclosure Console', icon: '◑', badge: 'disclosure' },
     // ADR-0121: who answers for each declared duty line when the holder is out.
     { route: 'duty-cover', label: 'Duty coverage', icon: '⛨', badge: 'dutyCoverage' },
+    { route: 'standby', label: 'Cover acknowledgement', icon: '✋', badge: 'standby' },
   ] },
 ];
 
@@ -545,6 +548,7 @@ const RENDERERS = {
   seal: (ctx) => renderSeal(ctx),
   identity: (ctx) => renderIdentity(ctx),
   'duty-cover': (ctx) => renderDutyCover(ctx),
+  standby: (ctx) => renderStandby(ctx),
   people: (ctx) => renderPeople(ctx),
   person: (ctx, segments) => renderPerson(ctx, safeDecode(segments[1])),
   onboarding: (ctx) => renderOnboarding(ctx),
@@ -711,6 +715,10 @@ export function parseRoute(hash) {
     // ADR-0121: the Duty Coverage Register. Not 'handover' (Leader Continuity)
     // and not 'seat' (the Altitude Lens) — this is its own question.
     'duty-cover': 'duty-cover', 'duty-coverage': 'duty-cover', 'duty-cover-register': 'duty-cover',
+    // ADR-0127: the acknowledgement screen, and the names a person would type
+    // looking for "who is covering for me" / "did my cover agree".
+    standby: 'standby', 'cover-acknowledgement': 'standby', 'standby-asks': 'standby',
+    'cover-standby': 'standby', 'standby-answer': 'standby',
     'cover-register': 'duty-cover', 'stand-in': 'duty-cover', 'deputy-register': 'duty-cover',
     'succession': 'succession', 'bench': 'succession', 'leadership-bench': 'succession',
     'key-person': 'succession', 'key-person-risk': 'succession',
@@ -1178,6 +1186,10 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       identity: identityAttentionCount(state, { now: at, settings: state.settings }),
       // ADR-0121: duty lines carrying open work with no eligible, exercised cover.
       dutyCoverage: dutyCoverageAttentionCount(state, { now: at, settings: state.settings }),
+      // ADR-0127: refusals and asks past their declared response deadline. An ask
+      // still inside its deadline is a normal Monday and is NOT counted here — a
+      // badge that fires on every fresh declaration is a badge people stop reading.
+      standby: dutyStandbyAttentionCount(state, { now: at, settings: state.settings }),
       // Schema v32: drafts written from case facts that still await a human.
       comms: (state.commsDrafts || []).filter((d) => d && d.status === 'draft').length,
       due: dueMeetings(state, at, state.settings).length,

@@ -35,6 +35,10 @@ const groups = [
   // action additionally enforces that the declared window is valid and does not
   // overlap an absence the seat already holds.
   ['declare-duty-absence', 'dutyAbsenceDeclare dutyAbsenceRevoke dutyAbsenceScan'],
+  // ADR-0127: cover acknowledgement. The answer is the named cover's own act; the
+  // action refuses any other seat, and both reads are seat-scoped adapters that
+  // never widen a peer's inbox or a peer's outgoing asks.
+  ['answer-duty-standby', 'dutyStandbyAcknowledge dutyStandbyDecline dutyStandbyRevoke dutyStandbyScan dutyStandbySetConventions'],
   ['declare-seat', 'setActiveSeat scanSeats'],
   // ADR-0087: the Board Room. Every method is declared; an unknown name still
   // fails closed. Committing a pack is the chief's right; reading it is enterprise.
@@ -199,6 +203,11 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // its writes are still gated — the planning half of the feature would vanish
 // exactly when a real organisation turned enforcement on.
 'dutyAbsencePlan',
+// ADR-0127: the acknowledgement board's read surface. Registered here for the
+// same reason as every module above — a read absent from SAFE_READS is unreadable
+// under enforcement while its writes are still gated, which would hide the ask
+// from exactly the person being asked.
+'dutyStandbyForMe', 'dutyStandbyBoard', 'dutyStandbySettings',
 // ADR-0108: the Decision-Fit Ledger's read surface. Registered here because a
 // module whose reads are absent from SAFE_READS is unreadable under enforcement
 // while its writes are still gated — the reading half of the feature would

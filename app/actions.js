@@ -44,6 +44,7 @@ import { createDutyCoverageActions } from './core/domain/dutyCoverageActions.js'
 // commands (declare, revoke, scan); availability is derived from the declared
 // windows, never stored.
 import { createDutyAbsenceActions } from './core/domain/dutyAbsenceActions.js';
+import { createDutyStandbyActions } from './core/domain/dutyStandbyActions.js';
 // ADR-0118: comparing two rehearsed responses and recording the arbitration is a
 // VP/chief command on the same guarded bus and the same post-commit spine as
 // every other terminal.
@@ -19783,6 +19784,7 @@ export function createApi(store, options = {}) {
   Object.assign(api, createAgendaActions(store, { now: clock, idFactory: id }));
   Object.assign(api, createDutyCoverageActions(store, { now: clock, idFactory: id }));
   Object.assign(api, createDutyAbsenceActions(store, { now: clock, idFactory: id }));
+  Object.assign(api, createDutyStandbyActions(store, { now: clock, idFactory: id }));
   // ADR-0118: the only write is RECORD-ARBITRATION; the receipt, the governed
   // decision, the two `rehearses` edges and the vertical roll-up land in one
   // atomic transaction performed by this mixin plus RULE-CMP-01.

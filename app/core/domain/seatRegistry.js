@@ -145,6 +145,9 @@ export const RECORD_POLICIES = Object.freeze({
   dutyCovers: { classKey: 'unit', label: 'Declared duty covers', route: '#/duty-cover?panel=register' },
   dutyCoverageMarkers: { classKey: 'unit', label: 'Duty-coverage scan markers', route: '#/duty-cover' },
   absencePlans: { classKey: 'unit', label: 'Dated absence plans', route: '#/duty-cover?panel=plan' },
+  // ADR-0127: an acknowledgement names a person as the answerer, so it carries
+  // the same individual-detail ceiling as the cover ledger it answers.
+  dutyStandbyAnswers: { classKey: 'unit', label: 'Cover acknowledgements', route: '#/standby?panel=asked' },
   agendaMarkers: { classKey: 'individual', label: 'Agenda ledger rule markers', route: '#/agenda-ledger' },
   feedback: { classKey: 'individual', label: 'Feedback', route: '#/feedback' },
   conflicts: { classKey: 'individual', label: 'Conflict records', route: '#/conflicts' },
@@ -393,6 +396,11 @@ export const ACTION_RIGHTS = Object.freeze({
   // range the register was missing. Self-service by design: an absence is the
   // seat holder's own dated act, and the span above reads it rolled up.
   'declare-duty-absence': { minRank: 1, maxRank: 5, label: 'Declare a dated absence window' },
+  // ADR-0127: answering a standby ask is the STAND-IN's own act, so it is open at
+  // every altitude and enforced in the action: only the seat named as the cover
+  // may answer, only for dates inside the ask, and never twice over. Reading the
+  // outgoing board is scoped to the spans the seat already governs.
+  'answer-duty-standby': { minRank: 1, maxRank: 5, label: 'Answer a standby ask as the named cover' },
   'log-oneonone': { minRank: 1, maxRank: 2, label: 'Log a 1:1' },
   'log-feedback': { minRank: 1, maxRank: 2, label: 'Give feedback' },
   'log-conflict': { minRank: 1, maxRank: 2, label: 'Log a conflict' },

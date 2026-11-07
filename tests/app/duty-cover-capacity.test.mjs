@@ -178,7 +178,7 @@ function expectedInherited(state, built, seatIds, dutyKeys) {
 /* ------------------------------------------- 1. no open work ⇒ honest refusal */
 
 test('with no observed open work the capacity reading refuses instead of printing spare capacity', () => {
-  assert.equal(SCHEMA_VERSION, 115, 'ADR-0124 adds no schema bump');
+  assert.equal(SCHEMA_VERSION, 116, 'ADR-0124 adds no schema bump');
   assert.equal(DUTY_COVER_LOAD_ENGINE_VERSION, 'duty-cover-load-2026.11-v1');
   assert.ok(DUTY_COVER_LOAD_PREMISE.length > 0);
   assert.equal(DUTY_COVER_LOAD_LIMITS.coverCap, 24);
