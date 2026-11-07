@@ -1,3 +1,13 @@
+## 2026-11-07 — Session 164: Branch continuity comparison (Schema v114 unchanged)
+
+**Built / altitudes.** CEO / C-suite PRIMARY: compare direct-branch duty-cover readiness and open-work gaps while reviewing enterprise continuity exposure. Director and VP see the same comparison within their own span; frontline and manager continue the declarations and work that feed it. CEO was last primary in Session 160, behind frontline 163, manager 162 and director/VP 161. The existing shared duty register, harvested work and hierarchy roll-up supply the readings; no duplicate store, automation rule or invented cover. Anonymous branch numbers can change with the roster; pooled and equally weighted rates illustrate composition, not predicted failure.
+
+**Verified.** `node --test tests/app/duty-branch-comparison.test.mjs`: 1/1 PASS (real cover declaration, roll-up link, uneven branch sizes, chief desk, VP scope/refusal and reload). `npm run build:standalone` PASS. After the test, the partition guard was strengthened to check each duty's membership; that change **[UNVERIFIED]**. Full suite and real-browser accessibility **[UNVERIFIED]**.
+
+**Flagged.** The existing executive report still returns unredacted `gaps`, `thin`, `ineligible`, and seat objects; this new branch projection itself has no names or IDs, but that does not establish privacy for the whole API. Small anonymous branches can also be inferred. Seats remain local workflow declarations, not authentication. No other modules audited.
+
+**Next up.** [director / VP] Repair the flagged register-report privacy boundary; [all altitudes] authenticated identity + tenant boundary remains the standing top foundational item.
+
 ## 2026-11-07 — Session 163: Who answers for each duty when the holder is absent (Schema v114, ADR-0121, `#/duty-cover`)
 
 **Built / altitudes.** Frontline (rank 1) PRIMARY: a shift lead can now see, per duty line, who is answerable if they are out, whether that person's altitude can reach the duty, and whether their access has ever been exercised. Mid-manager, director, VP and CEO read the same register at their own altitude. Frontline took priority because Session 162's coverage map showed it last-served (159) against manager 162, director/VP 161 and CEO 160.

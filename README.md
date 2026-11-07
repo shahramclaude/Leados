@@ -1,3 +1,7 @@
+## 2026-11-07 — Branch continuity comparison (Session 164)
+
+On `#/duty-cover`, director, VP and chief seats can compare their direct leadership branches' duty-register coverage, uncovered lines and open-work gaps. The pooled rate and mean branch rate are shown separately; branch numbers are anonymous and can change with the roster. This describes recorded coverage, not the probability of disruption. Seat selection is not authentication, and the broader register report's existing privacy boundary is flagged in the roadmap.
+
 ## 2026-11-07 — Cross-team work reaches the right manager (Session 162, Schema v113 unchanged, [ADR-0120](./docs/adr/0120-shared-multi-span-ownership.md))
 
 Routing and ownership now consider **every** affected team, not just the first pair. A blocker naming people under several leads is assigned to their lowest common manager; the existing case automation creates the mitigation and rolls the receipt up to director/VP with altitude-appropriate disclosure. Capture merge and jurisdiction use the same shared computation. No setup or schema change. Historical approvals are not rewritten, and choosing a local seat is still not signing in.

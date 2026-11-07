@@ -216,6 +216,27 @@ function deskPanel(ctx, report) {
         stat({ label: 'Single-hand duties', value: String(s.soleHandedN), tone: s.soleHandedN ? 'bad' : '', hint: `one hand carries ≥ ${report.conventions.dutyCoverageConcentrationPct}% of the recorded work` }),
         stat({ label: 'Exercise window', value: `${report.conventions.dutyCoverageExerciseDays}d`, hint: `since ${s.windowStart}; re-declarable by a rank-4+ full-access seat` })),
     }),
+    report.branchCoverage ? card({
+      title: 'Continuity across direct branches',
+      subtitle: 'Each duty line belongs to one direct leadership branch; your own duties are excluded. Branch numbers are anonymous and may change when the roster changes. They are not division names.',
+      body: h('div', { class: 'stack' },
+        report.branchCoverage.refusal
+          ? h('p', { class: 'muted' }, report.branchCoverage.refusal)
+          : h('p', null, `Pooled: ${pctText(report.branchCoverage.pooledPct)} · mean of branch rates: ${pctText(report.branchCoverage.meanPct)}. Different branch sizes can make these differ (Yule–Simpson aggregation). These describe the register, not a forecast of an absence.`),
+        table({
+          caption: 'Direct branch duty coverage',
+          columns: [
+            { label: 'Branch', render: (r) => r.label },
+            { label: 'Covered / duties', render: (r) => `${r.coveredN} / ${r.dutiesN}` },
+            { label: 'Readiness', render: (r) => pctText(r.readinessPct) },
+            { label: 'No cover', render: (r) => String(r.gapN) },
+            { label: 'Open work, no cover', render: (r) => String(r.openGapN) },
+          ],
+          rows: report.branchCoverage.branches,
+          emptyMessage: 'No direct leadership branches in this seat.',
+        }),
+        h('p', { class: 'muted small' }, 'A missing or unexercised declaration is not evidence that an absence will cause failure. Ask the relevant leaders to review their own registers; no cover is assigned here.')),
+    }) : null,
     s.openGapN
       ? banner({
         tone: 'bad',
