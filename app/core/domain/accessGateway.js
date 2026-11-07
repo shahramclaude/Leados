@@ -30,6 +30,11 @@ const groups = [
   // that the declaring seat HOLDS the duty or sits above it in the same branch,
   // and refuses an ineligible candidate with the printed reason.
   ['declare-duty-cover', 'dutyCoverageDesignate dutyCoverageRevoke dutyCoverageScan'],
+  // ADR-0122: the Dated Absence Plan. Declaring one's own absence window is a
+  // self-service act at every altitude; the plan read is a SAFE_READ below. The
+  // action additionally enforces that the declared window is valid and does not
+  // overlap an absence the seat already holds.
+  ['declare-duty-absence', 'dutyAbsenceDeclare dutyAbsenceRevoke dutyAbsenceScan'],
   ['declare-seat', 'setActiveSeat scanSeats'],
   // ADR-0087: the Board Room. Every method is declared; an unknown name still
   // fails closed. Committing a pack is the chief's right; reading it is enterprise.
@@ -189,6 +194,11 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 'epistemicAttentionCount', 'epistemicBriefText', 'epistemicConventions', 'epistemicCsvRows', 'epistemicPreview', 'epistemicReport', 'epistemicSettings',
 'diligenceAttentionCount', 'diligenceBriefText', 'diligenceConventions', 'diligenceCsvRows', 'diligencePreview', 'diligenceReport', 'diligenceSettings',
 'dutyCoverageAttentionCount', 'dutyCoverageBriefText', 'dutyCoverageCandidates', 'dutyCoverageCsvRows', 'dutyCoverageReport', 'dutyCoverageSettings',
+// ADR-0122: the absence plan's read surface. Registered here because a module
+// whose reads are absent from SAFE_READS is unreadable under enforcement while
+// its writes are still gated — the planning half of the feature would vanish
+// exactly when a real organisation turned enforcement on.
+'dutyAbsencePlan',
 // ADR-0108: the Decision-Fit Ledger's read surface. Registered here because a
 // module whose reads are absent from SAFE_READS is unreadable under enforcement
 // while its writes are still gated — the reading half of the feature would

@@ -144,6 +144,7 @@ export const RECORD_POLICIES = Object.freeze({
   // prints counts, bands and refusals rather than the cover's name.
   dutyCovers: { classKey: 'unit', label: 'Declared duty covers', route: '#/duty-cover?panel=register' },
   dutyCoverageMarkers: { classKey: 'unit', label: 'Duty-coverage scan markers', route: '#/duty-cover' },
+  absencePlans: { classKey: 'unit', label: 'Dated absence plans', route: '#/duty-cover?panel=plan' },
   agendaMarkers: { classKey: 'individual', label: 'Agenda ledger rule markers', route: '#/agenda-ledger' },
   feedback: { classKey: 'individual', label: 'Feedback', route: '#/feedback' },
   conflicts: { classKey: 'individual', label: 'Conflict records', route: '#/conflicts' },
@@ -388,6 +389,10 @@ export const ACTION_RIGHTS = Object.freeze({
   // operator view's job: an undeclared workspace has no seat to cover.
   'declare-duty-cover': { minRank: 1, maxRank: 5, label: 'Declare a stand-in for a duty line' },
   'govern-duty-cover': { minRank: 4, maxRank: 5, label: 'Re-declare the duty-coverage conventions' },
+  // ADR-0122: every leadership seat declares ITS OWN absence window — the date
+  // range the register was missing. Self-service by design: an absence is the
+  // seat holder's own dated act, and the span above reads it rolled up.
+  'declare-duty-absence': { minRank: 1, maxRank: 5, label: 'Declare a dated absence window' },
   'log-oneonone': { minRank: 1, maxRank: 2, label: 'Log a 1:1' },
   'log-feedback': { minRank: 1, maxRank: 2, label: 'Give feedback' },
   'log-conflict': { minRank: 1, maxRank: 2, label: 'Log a conflict' },
