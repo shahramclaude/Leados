@@ -1,3 +1,17 @@
+## 2026-11-07 — The bounded epistemic backlog (`#/epistemic`, ADR-0117, Schema v112 unchanged)
+
+**Implemented [frontline (rank 1) primary → every altitude on the same spine].**
+`RULE-EPI-02` opens at most `epistemicEscalateMaxPerWeek` (declared 5, clamped
+1–52) escalations per owning span per ISO week — a WIP limit on the escalation
+inbox so a large harvested backlog drains as a weekly batch a human can read
+instead of flooding every save. Oldest condition first; one quota per week shared
+by every transaction, scans included. The over-budget remainder is deferred and
+PRINTED: a dated deferral marker per span per week, a Desk stat and
+deferred-backlog card, a `deferred to next week` badge on queued rows and an
+identity-free brief line ("A deferral is a queue, not a resolution"). Escaping
+the queue is a governed re-declaration of the convention (director+, full
+access).
+
 ## 2026-11-06 — The Boundary-redraw rehearsal (`#/jurisdiction?panel=redraw`, ADR-0112, Schema v111 unchanged)
 
 **Implemented [director / VP / CEO; frontline & manager excluded with a printed explanation].**

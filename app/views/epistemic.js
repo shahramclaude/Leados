@@ -224,6 +224,7 @@ function deskPanel(ctx, report) {
   const pb = report.playbook;
   const s = report.summary;
   const c = report.calibration;
+  const b = report.backlog;
   return h('div', { class: 'stack' },
     banner({ tone: 'info', title: pb.title, body: `${pb.question} Horizon: ${pb.horizon}.` }),
     card({
@@ -239,6 +240,14 @@ function deskPanel(ctx, report) {
         stat({ label: 'Unknowns in scope', value: String(s.unknownN), hint: `${s.harvestedN} not yet frozen, ${s.declaredN} declared by a human` }),
         stat({ label: 'Unopened', value: String(s.unopenedN), tone: s.unopenedN ? 'bad' : '', hint: 'The record already knows; nobody has read it' }),
         stat({ label: 'Expired unanswered', value: String(s.expiredN), tone: s.expiredN ? 'warn' : '', hint: 'Time passed. The workspace refuses to call that resolved' }),
+        stat({
+          label: 'Escalation budget',
+          value: `${b.openedN}/${b.capN}`,
+          tone: b.deferredN ? 'warn' : '',
+          hint: b.deferredN
+            ? `${b.deferredN} deferred, oldest first · re-opens the week of ${b.nextWeekKey}`
+            : `per span · ISO week of ${b.weekKey}`,
+        }),
         stat({ label: 'Median age', value: s.medianAgeDays === null ? '—' : `${s.medianAgeDays}d`, hint: s.oldestAgeDays === null ? 'nothing in scope' : `oldest ${s.oldestAgeDays} days` }),
         stat({
           label: 'Overconfidence',
@@ -248,6 +257,24 @@ function deskPanel(ctx, report) {
         }),
         stat({ label: 'Dark classes', value: String(report.blind.darkN), tone: report.blind.darkN ? 'bad' : '', hint: `${report.blind.measurableN} measurable of ${report.blind.rows.length}` })),
     }),
+    b.deferredN ? card({
+      title: 'Escalations deferred by the weekly budget',
+      subtitle: 'A deferral is a queue, not a resolution. Nothing here is dropped or closed.',
+      body: h('div', { class: 'stack' },
+        h('p', null, `${b.deferredN} unread danger/defect signal(s) have passed the declared escalation age, but their span has already opened its declared weekly budget of ${b.capN} escalation(s) in the ISO week of ${b.weekKey}. They stay queued, oldest first, and open automatically as the quota renews in the week of ${b.nextWeekKey}.`),
+        report.seat.rank <= 3 && b.rows.some((row) => row.deferredN)
+          ? table({
+            columns: [
+              { label: 'Span', render: (row) => row.name },
+              { label: 'Opened / cap', render: (row) => `${row.openedN}/${row.capN}` },
+              { label: 'Queued beyond budget', render: (row) => String(row.deferredN) },
+            ],
+            rows: b.rows.filter((row) => row.deferredN),
+            caption: 'Per-span escalation budget for the current ISO week',
+          })
+          : h('p', { class: 'muted' }, 'Per-span breakdown prints at director rank and below; above it, only these counts travel.'),
+        h('p', { class: 'muted' }, 'A span that must move a larger backlog this week can raise the declared budget in the Method panel — director or above, with a full-access seat. The budget is a convention, not a fitted number.')),
+    }) : null,
     card({
       title: 'The brief',
       subtitle: 'Identity-free. This is what travels upward unchanged.',
@@ -275,7 +302,7 @@ function unknownsPanel(ctx, report) {
       h('strong', null, row.title),
       h('span', { class: 'muted' }, `${row.origin === 'declared' ? 'Declared by a human' : `Harvested from a ${row.sourceType} record`} · owned at ${row.ownerName}`)) },
     { label: 'Class', render: (row) => kindBadge(row.className) },
-    { label: 'State', render: (row) => h('div', { class: 'stack-tight' }, stateBadge(row.state), row.expired && row.state !== 'expired' ? badge('past expiry', 'warn', 'The declared window has closed') : null) },
+    { label: 'State', render: (row) => h('div', { class: 'stack-tight' }, stateBadge(row.state), row.expired && row.state !== 'expired' ? badge('past expiry', 'warn', 'The declared window has closed') : null, row.deferred ? badge('deferred to next week', 'warn', 'Past the escalation age, but this span has already opened its declared weekly budget; the queued remainder opens as the quota renews') : null) },
     { label: 'Age', render: (row) => `${row.ageDays}d` },
     { label: 'Evidence day', render: (row) => row.evidencesOn || '—' },
     { label: 'Expires', render: (row) => row.expiresOn || '—' },
@@ -624,6 +651,7 @@ function methodPanel(ctx, report) {
     ['epistemicBlindFloor', 'Blind band (%)', 5, 95, 'Coverage below this reads as mostly blind.'],
     ['epistemicBlindDarkPct', 'Dark band (%)', 0, 40, 'Coverage at or below this reads as dark.'],
     ['epistemicReviewDays', 'Review horizon (days)', 3, 90, 'The review date on every governed finding this module opens.'],
+    ['epistemicEscalateMaxPerWeek', 'Weekly escalation budget (per span)', 1, 52, 'How many unread danger/defect escalations one span can open per ISO week (ADR-0117). The over-budget remainder stays queued and is printed with its renewal week — raise this deliberately to drain a backlog faster.'],
   ];
   const form = buildForm(fields.map(([name, label, min, max, help]) => ({
     name, label, type: 'number', min, max, value: conv[name], help,

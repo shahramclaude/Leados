@@ -47,6 +47,7 @@ import { LINK_ENTITY_TYPES, LINK_ENTITY_COLLECTIONS, resolveLinkedEntity } from 
 import {
   buildEpistemicReport,
   cohenKappa,
+  epistemicBriefText,
   epistemicCsvRows,
   harvestSignals,
   outcomeOfSubject,
@@ -81,6 +82,11 @@ function tree(overrides = {}) {
     epistemicBlindFloor: 55,
     epistemicBlindDarkPct: 5,
     epistemicReviewDays: 14,
+    // ADR-0117's bounded backlog policy is UNDER TEST in its own fixtures at
+    // the bottom of this file. Everywhere else the weekly escalation budget is
+    // declared wide open, so the rest of the ledger is measured unbounded and
+    // the two behaviours cannot confound each other.
+    epistemicEscalateMaxPerWeek: 52,
     epistemicAutoPropagate: true,
   };
   for (const key of Object.keys(state.settings)) {
@@ -121,7 +127,7 @@ function aged(state, { cases = [], goals = [], delegations = [] } = {}) {
   };
 }
 
-function harness(state) {
+function harness(state, clock = () => NOW) {
   const values = new Map([[STORAGE_KEY, JSON.stringify(state)]]);
   const storage = {
     getItem: (key) => (values.has(key) ? values.get(key) : null),
@@ -130,9 +136,9 @@ function harness(state) {
   };
   let seq = 0;
   const idFactory = (prefix) => `${prefix}-epi-${++seq}`;
-  const store = createStore({ storage, now: () => NOW, idFactory });
+  const store = createStore({ storage, now: clock, idFactory });
   store.load();
-  const api = createApi(store, { now: () => NOW, idFactory });
+  const api = createApi(store, { now: clock, idFactory });
   return { store, api };
 }
 
@@ -192,6 +198,8 @@ test('the normalizers are fail-closed: an answer without a day, a dismissal with
   assert.equal(settings.epistemicWindowDays, 14, 'clamped up to the declared minimum');
   assert.equal(settings.epistemicBlindFloor, 95, 'clamped down to the declared maximum');
   assert.equal(settings.epistemicPairFloor, 8, 'a non-number falls back to the declared default');
+  assert.equal(settings.epistemicEscalateMaxPerWeek, 5, 'the weekly escalation budget falls back to the declared default');
+  assert.equal(normalizeEpistemicSettings({ epistemicEscalateMaxPerWeek: 999 }).epistemicEscalateMaxPerWeek, 52, 'the weekly escalation budget is clamped to its declared band');
 });
 
 /* ------------------------------------------------------------- statistics */
@@ -793,4 +801,125 @@ test('an empty workspace renders the empty state and offers the harvest', () => 
   const text = node.textContent;
   assert.match(text, /Nothing unread, nothing declared/);
   assert.match(text, /Run the harvest now/);
+});
+
+/* --------------------------------------- ADR-0117: the bounded backlog */
+
+test('the bounded backlog policy opens one weekly batch per span and PRINTS the deferred remainder', async () => {
+  const state = tree({
+    state: {
+      cases: [1, 2, 3, 4, 5, 6, 7, 8].map((n) => ({
+        id: `case${n}`, title: `Risk ${n}`, kind: 'risk', status: 'open', ownerId: 'lead1',
+        openedOn: `2026-0${n}-01`, fmea: { severity: 7, probability: 5, detectability: 4 },
+      })),
+      settings: { ...tree().settings, epistemicEscalateMaxPerWeek: 3 },
+    },
+  });
+  const { store, api } = harness(state);
+  assert.equal(api.setActiveSeat('mgr1').ok, true);
+  const first = store.state;
+
+  // The weekly budget binds — not the per-invocation pile, not the ledger size.
+  // (Attribution is ADR-0103's: work named to lead1 is owned at the span that
+  // manages them — the same `responsibleNodeId` the Command Chain uses — so
+  // this queue is the MANAGING span's inbox, which is a frontline lead's own
+  // span whenever the lead actually holds a team, as in a real roster.)
+  const opened = first.decisions.filter((row) => /^Unread danger signal/.test(row.title));
+  assert.equal(opened.length, 3, 'one span opens its declared weekly budget of 3 and no more');
+  const markers = first.epistemicMarkers.filter((marker) => marker.kind === 'escalate');
+  assert.equal(markers.length, 3, 'one escalation marker per opened decision');
+  assert.ok(markers.every((marker) => marker.ownerSeatId === 'mgr1' && marker.weekKey === '2026-11-02'),
+    'each marker books the owning span and the ISO week it counted against');
+
+  // Oldest condition first: the January–March cases open; the newer five queue.
+  const unknownById = new Map(first.epistemicUnknowns.map((row) => [row.id, row]));
+  const openedSources = markers.map((marker) => unknownById.get(marker.unknownId)?.sourceId).sort();
+  assert.deepEqual(openedSources, ['case1', 'case2', 'case3'], 'the longest-waiting debt is bought back first');
+
+  // The remainder is deferred and PRINTED — a queue with a renewal week, not a silence.
+  const report = buildEpistemicReport(first, { now: NOW, settings: first.settings });
+  assert.equal(report.backlog.capN, 3);
+  assert.equal(report.backlog.openedN, 3);
+  assert.equal(report.backlog.eligibleN, 5, 'the five over-budget rows are exactly what still waits');
+  assert.equal(report.backlog.deferredN, 5);
+  assert.equal(report.backlog.weekKey, '2026-11-02');
+  assert.equal(report.backlog.nextWeekKey, '2026-11-09');
+  const lead1Row = report.backlog.rows.find((row) => row.seatKey === 'mgr1');
+  assert.ok(lead1Row, 'the span that owns the queue is named in its own reading');
+  assert.equal(lead1Row.deferredN, 5);
+  assert.equal(lead1Row.remainingN, 0);
+  assert.equal(report.ledger.filter((row) => row.deferred).length, 5, 'the queued rows are flagged on the ledger');
+
+  const brief = epistemicBriefText(report);
+  assert.match(brief.text, /5 escalation\(s\) deferred/);
+  assert.match(brief.text, /re-opening in the week of 2026-11-09/);
+  assert.ok(!/case\d|epm-|lead1|mgr1/.test(brief.text), 'the brief names no id and no person');
+
+  // A repeat scan in the same week opens nothing more and logs the deferral once.
+  const snapshot = (s) => JSON.stringify({
+    decisions: s.decisions.length, markers: s.epistemicMarkers.length,
+    unknowns: s.epistemicUnknowns.length, links: s.links.length,
+  });
+  const before = snapshot(first);
+  assert.equal(api.epistemicScan().ok, true);
+  assert.equal(snapshot(store.state), before, 'the bounded scan is idempotent: the queue is not "changed work"');
+  assert.equal(store.state.epistemicMarkers.filter((marker) => marker.kind === 'escalate-deferred').length, 1,
+    'one dated deferral marker per span per week, not one per pass');
+
+  // The Desk prints the queue and the Unknowns rows carry it — both axe-clean.
+  const host = document.getElementById('view');
+  for (const panel of ['desk', 'unknowns']) {
+    host.replaceChildren();
+    host.append(renderEpistemic({
+      api, state: store.state, now: NOW,
+      query: new URLSearchParams(`panel=${panel}`),
+      navigate() {}, refresh() {},
+    }));
+    if (panel === 'desk') assert.match(host.textContent, /Escalations deferred by the weekly budget/);
+    if (panel === 'unknowns') assert.match(host.textContent, /deferred to next week/);
+    const results = await axe.run(host, { rules: { 'color-contrast': { enabled: false } } });
+    assert.equal(results.violations.length, 0, `${panel}: ${results.violations.map((v) => v.id).join(', ')}`);
+  }
+});
+
+test('the weekly quota renews oldest-debt-first and never starves a second span', () => {
+  const tick = { at: NOW };
+  const caseRow = (n, owner, day) => ({
+    id: `case${n}`, title: `Risk ${n}`, kind: 'risk', status: 'open', ownerId: owner,
+    openedOn: `2026-01-0${day}`, fmea: { severity: 7, probability: 5, detectability: 4 },
+  });
+  const state = tree({
+    state: {
+      cases: [
+        caseRow(1, 'lead1', 1), caseRow(2, 'lead1', 2), caseRow(3, 'lead1', 3), caseRow(4, 'lead1', 4),
+        caseRow(5, 'dir1', 5), caseRow(6, 'dir1', 6),
+      ],
+      settings: { ...tree().settings, epistemicEscalateMaxPerWeek: 3 },
+    },
+  });
+  const { store, api } = harness(state, () => tick.at);
+  assert.equal(api.setActiveSeat('vp1').ok, true);
+
+  // Week one: each span spends its OWN budget. A full inbox at one span never
+  // starves a sibling span inside the same transaction. (Cases named to lead1
+  // are owned at mgr1's span; cases named to dir1 at vp1's — ADR-0103.)
+  let report = buildEpistemicReport(store.state, { now: tick.at, settings: store.state.settings });
+  const lead1 = report.backlog.rows.find((row) => row.seatKey === 'mgr1');
+  const dir1 = report.backlog.rows.find((row) => row.seatKey === 'vp1');
+  assert.ok(lead1 && dir1, 'both owning spans appear in the VP reading');
+  assert.equal(lead1.openedN, 3);
+  assert.equal(lead1.deferredN, 1);
+  assert.equal(dir1.openedN, 2);
+  assert.equal(dir1.deferredN, 0, 'a second span keeps its own quota');
+
+  // Week two: the quota renews and the queued debt is bought back, oldest first.
+  tick.at = new Date('2026-11-09T12:00:00.000Z');
+  assert.equal(api.epistemicScan().ok, true);
+  const escalations = store.state.decisions.filter((row) => /^Unread danger signal/.test(row.title));
+  assert.equal(escalations.length, 6, 'the deferred escalation opened when the week renewed, and only then');
+  report = buildEpistemicReport(store.state, { now: tick.at, settings: store.state.settings });
+  assert.equal(report.backlog.deferredN, 0);
+  assert.equal(report.backlog.weekKey, '2026-11-09');
+  assert.equal(store.state.epistemicMarkers.filter((marker) => marker.kind === 'escalate-deferred').length, 1,
+    'week two deferred nothing, so it logged nothing');
 });

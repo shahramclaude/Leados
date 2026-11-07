@@ -678,6 +678,50 @@ function inScope(seat, seatId) {
   return seatId === seat.id || (seat.scope && seat.scope.has(seatId));
 }
 
+/**
+ * ADR-0117 — the age of the CONDITION, not of our bookmark (the same age
+ * RULE-EPI-02 escalates on): a case open for sixty-five days is sixty-five days
+ * old on the day the harvest happens to look at it.
+ */
+export function unknownAgeDays(row, today) {
+  const since = (row && (row.evidencesOn || row.harvestedOn)) || null;
+  const age = since
+    ? Math.round((Date.parse(`${today}T00:00:00.000Z`) - Date.parse(`${since}T00:00:00.000Z`)) / 86400000)
+    : 0;
+  return Number.isFinite(age) ? age : 0;
+}
+
+/**
+ * ADR-0117 — how many RULE-EPI-02 escalations each owning span has already
+ * opened in the current ISO week. The marker ledger is the quota's bookkeeping:
+ * an escalation marker is written in the same transaction as the decision it
+ * opened, carries the span it counted against, and survives reload. Older
+ * markers carry no span and are resolved back through their unknown.
+ */
+export function escalationWeekOpenings(state, { now = new Date() } = {}) {
+  const week = weekKey(now);
+  const counts = new Map();
+  if (!week) return counts;
+  const unknowns = Array.isArray(state?.epistemicUnknowns) ? state.epistemicUnknowns : [];
+  const byId = new Map();
+  for (const row of unknowns) {
+    if (row && row.id) byId.set(row.id, row);
+  }
+  for (const marker of (Array.isArray(state?.epistemicMarkers) ? state.epistemicMarkers : [])) {
+    if (!marker || marker.kind !== 'escalate') continue;
+    const markerWeek = marker.weekKey || weekKey(marker.recordedOn);
+    if (!markerWeek || markerWeek !== week) continue;
+    let seatKey = marker.ownerSeatId || null;
+    if (!seatKey) {
+      const source = byId.get(marker.unknownId || marker.key);
+      seatKey = source && source.ownerSeatId ? source.ownerSeatId : null;
+    }
+    const key = seatKey || 'workspace';
+    counts.set(key, (counts.get(key) || 0) + 1);
+  }
+  return counts;
+}
+
 function emptyState(keys) {
   return Object.fromEntries(keys.map((key) => [key, 0]));
 }
@@ -715,6 +759,64 @@ export function buildEpistemicReport(state, { now = new Date(), settings = null 
     storedBySignal.set(key, row);
   }
 
+  /* ----------------------------- bounded escalation backlog (ADR-0117) */
+  // What RULE-EPI-02 will actually do next: stored, unopened danger/defect
+  // unknowns past the declared age that no escalate marker has opened yet,
+  // drained oldest-first within each span's declared weekly budget. The
+  // over-budget remainder is a QUEUE, printed here with the week it re-opens —
+  // never a silence and never a resolution.
+  const escalatedIds = new Set();
+  for (const marker of (Array.isArray(state?.epistemicMarkers) ? state.epistemicMarkers : [])) {
+    if (marker && marker.kind === 'escalate' && (marker.unknownId || marker.key)) {
+      escalatedIds.add(marker.unknownId || marker.key);
+    }
+  }
+  const backlogWeek = weekKey(now);
+  const openedBySeat = escalationWeekOpenings(state, { now });
+  const eligibleSorted = scopedStored
+    .filter((row) => row && row.state === 'unopened' && ['danger', 'defect'].includes(row.className)
+      && !escalatedIds.has(row.id) && unknownAgeDays(row, today) >= conventions.epistemicEscalateDays)
+    .sort((a, b) => String(a.evidencesOn || a.harvestedOn).localeCompare(String(b.evidencesOn || b.harvestedOn))
+      || String(a.harvestedOn).localeCompare(String(b.harvestedOn))
+      || String(a.id).localeCompare(String(b.id)));
+  const backlogBySeat = new Map();
+  for (const row of eligibleSorted) {
+    const seatKey = row.ownerSeatId || 'workspace';
+    if (!backlogBySeat.has(seatKey)) backlogBySeat.set(seatKey, []);
+    backlogBySeat.get(seatKey).push(row);
+  }
+  for (const seatKey of openedBySeat.keys()) {
+    if (!backlogBySeat.has(seatKey) && inScope(seat, seatKey === 'workspace' ? null : seatKey)) {
+      backlogBySeat.set(seatKey, []);
+    }
+  }
+  const deferredIds = new Set();
+  const backlogRows = [...backlogBySeat.entries()].map(([seatKey, rows]) => {
+    const openedN = openedBySeat.get(seatKey) || 0;
+    const remainingN = Math.max(0, conventions.epistemicEscalateMaxPerWeek - openedN);
+    for (const row of rows.slice(remainingN)) deferredIds.add(row.id);
+    return {
+      seatKey,
+      name: seatKey === 'workspace' ? 'the whole workspace' : (built.byId.get(seatKey)?.name || seatKey),
+      altitudeKey: seatKey === 'workspace' ? 'chief' : (built.byId.get(seatKey)?.altitudeKey || null),
+      rank: seatKey === 'workspace' ? 5 : (built.byId.get(seatKey)?.rank || 5),
+      openedN,
+      capN: conventions.epistemicEscalateMaxPerWeek,
+      remainingN,
+      eligibleN: rows.length,
+      deferredN: Math.max(0, rows.length - remainingN),
+    };
+  }).sort((a, b) => b.deferredN - a.deferredN || String(a.seatKey).localeCompare(String(b.seatKey)));
+  const backlog = {
+    weekKey: backlogWeek,
+    nextWeekKey: addDays(backlogWeek, 7),
+    capN: conventions.epistemicEscalateMaxPerWeek,
+    openedN: backlogRows.reduce((sum, row) => sum + row.openedN, 0),
+    eligibleN: eligibleSorted.length,
+    deferredN: deferredIds.size,
+    rows: backlogRows,
+  };
+
   const ledger = [];
   for (const signal of signals) {
     const key = `${signal.sourceType}:${signal.sourceId}|${signal.signalKey}`;
@@ -750,6 +852,7 @@ export function buildEpistemicReport(state, { now = new Date(), settings = null 
       ageDays: ageDays ?? 0,
       escalated,
       expired,
+      deferred: Boolean(existing) && deferredIds.has(existing.id),
       severity: existing ? existing.severity : signal.severity,
       answer: existing ? existing.answer : '',
       dismissReason: existing ? existing.dismissReason : '',
@@ -981,6 +1084,7 @@ export function buildEpistemicReport(state, { now = new Date(), settings = null 
     byStateMeta: UNKNOWN_STATES,
     escalateList: escalateList.slice(0, 40),
     expiredList: expiredList.slice(0, 40),
+    backlog,
     answerRate,
     calibration: {
       observationsN: observations.length,
@@ -1038,6 +1142,11 @@ export function epistemicBriefText(report) {
     s.medianAgeDays === null
       ? 'Age: no unknown is in scope.'
       : `Age: median ${s.medianAgeDays} day(s), oldest ${s.oldestAgeDays} day(s). ${s.escalateN} unopened signal(s) have passed the declared escalation age of ${report.conventions.epistemicEscalateDays} day(s).`,
+    report.backlog
+      ? (report.backlog.deferredN
+        ? `Escalation budget: ${report.backlog.openedN} of ${report.backlog.capN} opened per span in the ISO week of ${report.backlog.weekKey}; ${report.backlog.deferredN} escalation(s) deferred beyond the declared weekly budget, oldest first, re-opening in the week of ${report.backlog.nextWeekKey}. A deferral is a queue, not a resolution.`
+        : `Escalation budget: ${report.backlog.openedN} of ${report.backlog.capN} opened per span in the ISO week of ${report.backlog.weekKey}; nothing is deferred.`)
+      : null,
     report.answerRate.refused
       ? `Answer rate: REFUSED — ${report.answerRate.reason}`
       : `Answer rate: ${report.answerRate.pct}% of closed unknowns were answered rather than dismissed (95% interval ${report.answerRate.lowPct}–${report.answerRate.highPct}%).`,
@@ -1048,7 +1157,7 @@ export function epistemicBriefText(report) {
     `Evidence classes with no signal in the window: ${report.instruments.filter((row) => row.blind).map((row) => row.discipline).join('; ') || 'none — every declared class produced at least one signal'}. A class with no evidence is a blind instrument, not a clean one.`,
     'Coverage is an exact ratio over this workspace’s own records. Work nobody logged is invisible to it. No person is rated, ranked or named; suppressed cells are blank, never zero.',
   ];
-  return { ok: true, text: lines.join('\n') };
+  return { ok: true, text: lines.filter(Boolean).join('\n') };
 }
 
 export function epistemicCsvRows(report) {
