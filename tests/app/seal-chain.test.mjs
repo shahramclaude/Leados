@@ -112,8 +112,8 @@ test('1. seal settings normalize with safe defaults; no schema bump of its own',
   assert.equal(clamped.sealMode, 'auto', 'unknown mode falls back');
   const normalized = normalizeState({ ...createEmptyState(NOW.toISOString()), settings: { sealEnabled: true } }, { now: NOW });
   assert.equal(normalized.state.settings.sealEnabled, true);
-  assert.equal(normalized.state.schemaVersion, 115);
-  assert.equal(normalized.state.schemaVersion, 115);
+  assert.equal(normalized.state.schemaVersion, 116);
+  assert.equal(normalized.state.schemaVersion, 116);
 });
 
 /* ------------------------------------------------- 2-4. sealing behaviour */

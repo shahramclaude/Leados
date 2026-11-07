@@ -450,15 +450,15 @@ test('v75 -> v78 migrates additively and invents nothing', () => {
   assert.ok(applied.includes('75 → 76'));
   assert.ok(applied.includes('76 → 77'));
   assert.ok(applied.includes('77 → 78'));
-  assert.equal(v77.schemaVersion, 115);
-  assert.equal(v77.schemaVersion, 115);
+  assert.equal(v77.schemaVersion, 116);
+  assert.equal(v77.schemaVersion, 116);
   assert.deepEqual(v77.policyEvaluations, []);
   assert.deepEqual(v77.policyMarkers, []);
   assert.deepEqual(v77.reliabilityReadings, []);
   assert.deepEqual(v77.reliabilityMarkers, []);
   assert.deepEqual(v77.couplingReviews, []);
   assert.deepEqual(v77.couplingMarkers, []);
-  assert.equal(SCHEMA_VERSION, 115);
+  assert.equal(SCHEMA_VERSION, 116);
 });
 
 test('a marker captured on or after its outcome is demoted, never trusted', () => {

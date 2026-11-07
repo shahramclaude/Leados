@@ -112,6 +112,12 @@ export const LINK_ENTITY_TYPES = [
   // the `declares-absence-of` edge from it to the seat it covers the absence
   // of is the provenance, written in the same transaction as the declaration.
   'absenceplan',
+  // ADR-0127 (Schema v116): a cover acknowledgement is a first-class graph node —
+  // the `accepts-standby-for` edge from it to the cover declaration it answers is
+  // the provenance of consent, and it is written in the same transaction as the
+  // answer. It is NOT a second duty record: the declaration stays the only place
+  // a stand-in is named.
+  'standbyanswer',
   // Schema v44: an after-action lesson is independently navigable from the
   // dated workspace artifact offered as its corroboration.
   'lesson',
@@ -494,6 +500,7 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   case: 'cases',
   dutycover: 'dutyCovers',
   absenceplan: 'absencePlans',
+  standbyanswer: 'dutyStandbyAnswers',
   comparison: 'portfolioComparisons',
   lesson: null,
   decision: 'decisions',
@@ -1176,6 +1183,11 @@ export const LINK_RELATIONS = [
   // Vertical fan-out reuses the existing `rolls-up-to` relation — altitude
   // stays a dimension of the SAME spine, not a second hierarchy engine.
   'spans-work', 'governs-mandate', 'reads-span-mandate',
+  // ADR-0127 (Schema v116): a named cover ANSWERS the ask in a declared cover
+  // row. Deliberately distinct from ADR-0121's `prepares-for` (a person prepares
+  // for a duty): this one records that a specific person replied about a specific
+  // window, so the answer can be revoked without erasing the declaration.
+  'accepts-standby-for',
 
 ];
 

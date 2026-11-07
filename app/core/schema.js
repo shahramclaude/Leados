@@ -24,6 +24,8 @@ import { normalizeSeatIdentities, normalizeIdentityMarkers, normalizeIdentitySet
 // ADR-0121 (Schema v114): the Duty Coverage Register's fail-closed normalizers.
 import { normalizeDutyCovers, normalizeDutyCoverageMarkers, normalizeDutyCoverageSettings } from './domain/dutyCoverageSchema.js';
 import { normalizeAbsencePlans } from './domain/dutyAbsenceSchema.js';
+import { normalizeStandbyAnswers, normalizeDutyStandbySettings } from './domain/dutyStandbySchema.js';
+import { DUTY_STANDBY_BOUNDS, DUTY_STANDBY_DEFAULTS } from './domain/dutyStandbyRegistry.js';
 import { normalizePropagationLineage } from './domain/automationLineage.js';
 import { normalizeImpactExecutionSnapshot } from './domain/impactExecution.js';
 // ADR-0088: Hoshin Carryover Terminal records, idempotency markers, once-only
@@ -534,7 +536,7 @@ export {
 // workspace opens with an EMPTY absence ledger: no absence is scheduled at
 // upgrade time, because an absence invented at upgrade time would make every
 // cover in the span read as unavailable on dates no human declared.
-export const SCHEMA_VERSION = 115;
+export const SCHEMA_VERSION = 116;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -1881,6 +1883,12 @@ export const DEFAULT_SETTINGS = Object.freeze({
   // work counts as evidence a stand-in's access is real, and the share above
   // which one hand doing a duty's work reads as a single point of failure.
   ...normalizeDutyCoverageSettings({}),
+  // ADR-0127: cover acknowledgement — how many days a named cover has to answer
+  // before the ask reads OVERDUE rather than "waiting", and how far ahead the
+  // bounded standby window runs when the duty holder has declared no dated
+  // absence. Both printed, both clamped, both re-declarable by the same rank-4+/
+  // full-access seat that declares the register's other conventions.
+  ...normalizeDutyStandbySettings({}, DUTY_STANDBY_BOUNDS, DUTY_STANDBY_DEFAULTS),
 });
 
 export const COLLECTIONS = [
@@ -2370,6 +2378,14 @@ export const COLLECTIONS = [
   // Window availability, the cover-absent conflict and the cascade are DERIVED
   // on read from the declared covers and absence windows — never stored.
   'absencePlans',
+  // ADR-0127 (Schema v116): Cover acknowledgement. `dutyStandbyAnswers` holds ONLY
+  // the human answer a named cover gave about one declared cover row — accepted or
+  // declined, the bounded window it was given for, the answerer's own words, and
+  // the governed decision opened when the answer was a refusal. Whether a cover is
+  // awaiting, overdue, lapsed or accepted is DERIVED on read from that answer, the
+  // ask window and the declared response deadline — never stored, so a consent
+  // cannot drift from the dates it was given for, and cannot be extended by a read.
+  'dutyStandbyAnswers',
 
 ];
 
@@ -3067,6 +3083,7 @@ export function normalizeSettings(raw) {
     // stale horizon — clamped and printed, never fitted from the record.
     ...normalizeDiligenceSettings(s),
     ...normalizeDutyCoverageSettings(s),
+    ...normalizeDutyStandbySettings(s, DUTY_STANDBY_BOUNDS, DUTY_STANDBY_DEFAULTS),
     ...normalizeAgendaSettings(s),
     chainAdoptedHorizons: normalizeAdoptedHorizons(s.chainAdoptedHorizons, DECLARED_HORIZONS),
     chainAdoptedOn: /^\d{4}-\d{2}-\d{2}$/.test(String(s.chainAdoptedOn || '')) ? s.chainAdoptedOn : null,
@@ -7394,6 +7411,12 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // Resolved BEFORE links so the `declares-absence-of` provenance edge validates
   // against a real absence id.
   state.absencePlans = normalizeAbsencePlans(raw.absencePlans, warnings);
+  // ADR-0127: an answer is only ever the named cover's own. The normalizer sees
+  // the cover ledger at the same time so a hand-edited file cannot record consent
+  // on someone else's behalf, and a malformed answer is dropped rather than
+  // repaired into a plausible-looking yes. Resolved BEFORE links so the
+  // `accepts-standby-for` provenance edge validates against a real answer id.
+  state.dutyStandbyAnswers = normalizeStandbyAnswers(raw.dutyStandbyAnswers, state.dutyCovers, warnings);
   state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
   state.boardMarkers = normalizeBoardMarkers(raw.boardMarkers, warnings);
   // ADR-0085: packets and attested artefacts resolve before links so `carries`,
@@ -8195,6 +8218,23 @@ export const MIGRATIONS = {
     ...v114,
     schemaVersion: 115,
     absencePlans: Array.isArray(v114.absencePlans) ? v114.absencePlans : [],
+  }),
+  // ADR-0127: additive 115 → 116. An existing workspace holds declared covers it
+  // has never asked anyone to acknowledge, so the answer ledger starts EMPTY.
+  // "Nobody has answered yet" is a different claim from "everyone agreed", and
+  // back-filling an acceptance at upgrade time would fabricate the consent that
+  // this module exists to record. Every pre-existing cover therefore reads
+  // `awaiting` or `overdue` the moment the workspace opens, which is the truthful
+  // state: the ask has been outstanding since the day it was declared.
+  // The two new conventions are clamped in at upgrade time so the printed numbers
+  // exist before anyone re-declares them.
+  115: (v115) => ({
+    ...v115,
+    schemaVersion: 116,
+    dutyStandbyAnswers: Array.isArray(v115.dutyStandbyAnswers) ? v115.dutyStandbyAnswers : [],
+    settings: isPlainObject(v115.settings)
+      ? { ...v115.settings, ...normalizeDutyStandbySettings(v115.settings, DUTY_STANDBY_BOUNDS, DUTY_STANDBY_DEFAULTS) }
+      : { ...DEFAULT_SETTINGS },
   }),
   // ADR-0113: additive 111 → 112. An existing workspace is full of prompts it
   // never classified and has never filed one by hand, so both ledgers start

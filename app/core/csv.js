@@ -67,6 +67,7 @@ import { buildDiligenceReport, diligenceCsvRows } from './domain/diligence.js';
 // counts, and the concentration share — never a person, a name, a note or a
 // seat id. A refused rate is BLANK, never zero.
 import { buildDutyCoverageReport, dutyCoverageCsvRows } from './domain/dutyCoverage.js';
+import { standbyCsvRows, standbyExportBoard } from './domain/dutyStandby.js';
 // ADR-0109: CSV scope #103. Aggregate-only, identity-free, refusal-honest.
 import { jurCsvRows, JUR_CSV_COLUMNS } from './domain/jurisdiction.js';
 // ADR-0107: CSV scope #101. Aggregate-only, identity-free, refusal-honest.
@@ -1058,6 +1059,11 @@ export const CSV_EXPORTS = [
   { key: 'jurisdiction', label: 'Jurisdiction compiler (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'jurisdiction', description: 'One workspace row, one row per leadership rank, one row per priced governance route (coalition / escalate / redraw) and one row per declared convention: cross-branch objective counts, coalition sizes, escalation rungs, coordination-unit costs, Wilson attribution bounds, once-only Brier grades against a 0.5 base and every printed refusal. NO objective key, NO member record id, NO person, NO span label or id, NO title and NO note. A refused rate and a suppressed cell are BLANK rather than zero; suppression is not differential privacy.' },
 
   { key: 'duty-coverage', label: 'Duty coverage register (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'duty-coverage', description: 'One row per declared duty line under the active seat (duty key, band, open work, declared / eligible / exercised cover counts, eligible and refused candidate counts, top-hand concentration share, sole-handed flag), one register summary row, and one aggregate row per active absence plan in scope (seat rank, absence window, per-band exposure counts). NO person, NO name, NO seat id, NO span label, NO note, NO decision id, NO absence reason. The rate measures the REGISTER (named + eligible + exercised), never a person; a refused or thin cell is BLANK rather than zero.' },
+  // CSV scope #104 (Schema v116, ADR-0127): cover acknowledgement. Aggregate
+  // rows only — ranks, dates, derived standby states and counts. The named
+  // cover's identity never enters the row set, and an ask that has not been
+  // answered exports BLANK rate columns rather than zeros.
+  { key: 'cover-standby', label: 'Cover acknowledgement (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'cover-standby', description: 'One aggregate row per declared cover in the active seat’s span (holder rank, cover rank, ask window and its basis, derived standby state, days since the ask, the declared response deadline and days past it, the answer window and its age), one refused-only exposure row per duty line whose only declared covers declined, and one board summary row. NO person, NO name, NO seat id or label, NO duty label, NO note text, NO decision id. The acknowledged rate measures the REGISTER (the named person answered YES to this ask window), never a person’s willingness; an unanswered, lapsed or refused row is its own printed state and is BLANK in the rate column rather than zero.' },
   { key: 'outcome-learning', label: 'Outcome learning (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'outcome-learning', description: 'One workspace row, one row per child span, one calibration row and one method row: suppression-safe interval counts of frozen expectations, once-only grades, good/mixed outcomes and late loops; shrunk outside view with Wilson 95% interval, pooled Brier skill, one-sided conformal lateness bound with finite-sample coverage, direction and every refusal named. NO bundle id, NO case id, NO span id or label, NO person, NO title, NO note, NO proof pointer and NO individual grade. A refused rate and a suppressed cell are BLANK rather than zero.' },
   { key: 'diligence', label: 'Diligence ledger (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'diligence', description: 'One summary row (frontiers, settled, open, knowable, consulted, unconsulted, Wilson-bounded coverage, thin settled calls, dark classes and graded forecasts), one row per evidence class (knowable, consulted, share, exact Jeffreys Beta(1/2,1/2) 90% interval, dark verdict or a printed refusal), one row per leadership altitude (identity-free counts and a refused coverage), and one row per once-only Brier grade (claims, Brier, strictly-prior base Brier, skill and verdict). NO fact pointer, NO decision id, NO checklist id, NO person, NO span id, NO written consultation reason, NO forecast question and NO individual belief. A refused rate and a suppressed cell are BLANK rather than zero.' },
   { key: 'differencing-register', label: 'Publication register (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'differencing-register', description: 'One row per published module plus one workspace row: release counts, provably-safe / protected / determined counts, withheld-cell and equation counts, the last publication date and the two stationarity statistics. NO span label, NO span id, NO person, NO record title, NO amount, and NO recovered value \u2014 a determined value is disclosed as a coordinate on the screen, never exported as a figure. A refused rate is BLANK rather than zero.' },
@@ -6107,6 +6113,22 @@ export function buildScopeTable(state, scope, now) {
         'branch_seats_n', 'duties_n', 'branch_covered_n', 'branch_gap_n', 'branch_open_gap_n', 'branch_readiness_pct',
         'branch_withheld', 'branch_floor_n', 'branch_rate_floor_n',
         'branch_released_n', 'branch_released_seats_n', 'branch_withheld_n', 'branch_deferred_n', 'branch_pooled_pct', 'branch_mean_pct'];
+      const columns = keys.map((key) => ({ key, header: key }));
+      return { columns, rows };
+    }
+    case 'cover-standby': {
+      // CSV scope #104 (Schema v116, ADR-0127). Aggregate-only: the board is
+      // built under the active seat, and a cover's name never enters the row set —
+      // only ranks, dates, derived states and counts. A row that has not been
+      // accepted exports its rate columns BLANK, never 0, because "no answer yet"
+      // is not "zero per cent acknowledged".
+      const board = standbyExportBoard(state, { now, settings: state.settings || {} });
+      const rows = standbyCsvRows(board);
+      const keys = ['row_kind', 'scope', 'altitude', 'standby_state', 'holder_rank', 'cover_rank',
+        'cover_eligible', 'asserted_from', 'asserted_to', 'ask_basis', 'asked_on', 'days_since_asked',
+        'response_deadline_on', 'days_past_deadline', 'answered_on', 'answer_window_from',
+        'answer_window_to', 'answer_age_days', 'open_n', 'covers_n', 'rate_acknowledged_pct',
+        'refused_reason'];
       const columns = keys.map((key) => ({ key, header: key }));
       return { columns, rows };
     }
