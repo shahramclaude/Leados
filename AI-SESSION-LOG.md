@@ -1,3 +1,7 @@
+# 2026-11-07 — LeadOS bootstrap verification
+
+Origin identity check passed: `origin` is `https://github.com/shahramclaude/Leados.git`; work remains on `arena/0c5b959a-leados`. The root `NORTH_STAR.md` already exists and contains the binding doctrine. `ROADMAP.md` already exists with the requested Implemented, In Progress, Planned — Not Started, and Rejected (with one-line reason) sections; its roadmap items are altitude-tagged. `AI-SESSION-LOG.md` already existed; this dated entry confirms the bootstrap. No North Star or roadmap rewrite was needed. This bootstrap changed documentation only; no product code or tests were changed.
+
 ## 2026-11-06 — Session 156: Cross-week jurisdiction drift — the quarter stops being a snapshot (ADR-0115, Schema v112 unchanged)
 
 **What was built.** `#/jurisdiction?panel=drift` grades the ISO-week series of
