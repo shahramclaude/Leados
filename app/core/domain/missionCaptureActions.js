@@ -3,7 +3,9 @@ import { addDays, dayKey } from '../time.js';
 import { INTAKE_ENGINE_VERSION, toCaseInput } from './intake.js';
 import { activeSeat, buildSeats, canAct } from './seat.js';
 import { buildMission } from './mission.js';
-import { fingerprint } from './actionBundles.js';
+import { createStagedStore, fingerprint } from './actionBundles.js';
+import { captureBriefCase, captureBriefProposal, captureBriefReading } from './missionCaptureBrief.js';
+import { propagateCaseEvent } from './automation.js';
 import { cleanBundlePreview } from './actionBundleSchema.js';
 import { normalizeMissionCaptures, normalizeCommandEdits } from './missionCaptureSchema.js';
 import { analyzeCapture, captureInputFingerprint, captureReceiptText, captureSourceFingerprint, capturesForSeat, prepareCapturePlan, transactMissionCapture } from './missionCapture.js';
@@ -23,8 +25,52 @@ export function createMissionCaptureActions(store, { now, idFactory, createApi }
     const capture = (store.state.missionCaptures || []).find((c) => c.id === id);
     if (!capture) return { error: 'That capture no longer exists.' };
     if (capture.ownerSeatId !== seat.id) return { error: 'Only the seat that prepared this note may read or change it. Ancestors receive governed work, not the note.' };
-    return { capture, seat };
+    return { capture, seat, built };
   };
+  const briefAccess = (captureId, draftId = null) => {
+    const access = own(captureId);
+    if (access.error) return { error: access.error };
+    const right = canAct('prepare-comms', access.seat);
+    if (!right.allow) return { error: right.reason };
+    const source = captureBriefCase(store.state, access.capture, access.seat, access.built);
+    if (!source.ok) return { error: source.error };
+    const message = draftId === null ? null : (store.state.commsDrafts || []).find((d) => d.id === draftId && d.caseId === source.caseRecord.id);
+    if (draftId !== null && !message) return { error: 'That message is not part of this adopted case. A peer outbox is never available through a capture.' };
+    return { ...access, caseRecord: source.caseRecord, message };
+  };
+  // Run the existing outbox APIs inside the same staged/write+rule transaction.
+  // A rule failure cannot leave a sent or approved message without its case effects.
+  function briefCommand(captureId, draftId, method, data) {
+    const access = briefAccess(captureId, draftId);
+    if (access.error) return fail(access.error);
+    if (store.writeBlockReason || store.isLocked) return fail(store.writeBlockReason || 'Unlock the workspace first.');
+    if (data?.expectedRevision !== store.state.meta.revision) return fail('The case or message changed. Review its current text and try again.');
+    if (method === 'markCommsDraftSent' && (access.message.status !== 'approved' || data.reviewed !== true)) {
+      return fail('Approve the exact message and confirm you sent it outside LeadOS before recording it as sent.');
+    }
+    const before = store.state.meta.revision;
+    const oldErrors = new Set((store.state.events || []).map((e) => e.id));
+    const oldReceipts = new Set((store.state.propagationReceipts || []).map((r) => r.id));
+    const sourceEvents = []; const warningCount = store.warnings.length;
+    try {
+      store.update((draft, helpers) => {
+        const staged = createStagedStore(draft, helpers, { now: clock(), store });
+        const result = createApi(staged.staged, { now, idFactory })[method](draftId, data);
+        if (!result.ok) throw new Error(result.error);
+        sourceEvents.push(...staged.sourceEvents);
+      }, { type: 'mission.capture.brief_updated', entity: 'missioncapture', entityId: captureId,
+        summary: `Reviewed stakeholder message ${method === 'markCommsDraftSent' ? 'recorded as sent outside LeadOS' : method === 'approveCommsDraft' ? 'approved' : method === 'dismissCommsDraft' ? 'dismissed' : 'edited'} for an adopted case` }, {
+        sourceEvents,
+        afterRules: (draft) => {
+          const failures = (draft.events || []).filter((e) => !oldErrors.has(e.id) && e.type === 'automation.rule_error').length
+            + (draft.propagationReceipts || []).filter((r) => !oldReceipts.has(r.id)).length;
+          if (failures) throw new Error('A propagation rule failed; the message action and its case effects were rolled back.');
+        },
+      });
+    } catch (error) { store.warnings.splice(warningCount); return fail(error?.message || 'The message was not changed.'); }
+    if (store.state.meta.revision === before) return fail('The workspace blocked the write; the message was not changed.');
+    return saved({ id: draftId });
+  }
   function record(input, existing = null) {
     const m = buildMission(store.state, { now: clock() });
     if (!m.ok) return m;
@@ -184,6 +230,65 @@ export function createMissionCaptureActions(store, { now, idFactory, createApi }
       const access = own(captureId); if (access.error) return fail(access.error);
       return { ok: true, capture: capturesForSeat(store.state, access.seat.id, { now: clock() }).find((c) => c.id === captureId) };
     },
+    missionCaptureBriefRead(captureId) {
+      const access = briefAccess(captureId); if (access.error) return fail(access.error);
+      return { ...captureBriefReading(store.state, access.capture, access.seat, access.built), revision: store.state.meta.revision };
+    },
+    missionCaptureBriefPreview(captureId, input = {}) {
+      const access = briefAccess(captureId); if (access.error) return fail(access.error);
+      const plan = captureBriefProposal(store.state, access.capture, access.seat, access.built, input, clock());
+      if (!plan.ok) return plan;
+      return { ok: true, caseId: plan.caseId, caseTitle: plan.caseTitle, recipient: { ...plan.recipient },
+        quadrant: plan.quadrant, preview: plan.preview, fingerprint: plan.fingerprint, revision: plan.revision };
+    },
+    missionCaptureBriefDraft(captureId, input = {}) {
+      const access = briefAccess(captureId); if (access.error) return fail(access.error);
+      if (store.writeBlockReason || store.isLocked) return fail(store.writeBlockReason || 'Unlock the workspace first.');
+      if (input.reviewed !== true || input.expectedRevision !== store.state.meta.revision) return fail('Review the recipient and current case facts at this revision before creating a draft.');
+      const plan = captureBriefProposal(store.state, access.capture, access.seat, access.built, input, clock());
+      if (!plan.ok) return plan;
+      if (plan.fingerprint !== input.previewFingerprint) return fail('The reviewed recipient or case facts changed. Preview the exact message again.');
+      const actorId = idFactory('cstk');
+      const stakeholder = { ...plan.recipient, id: actorId };
+      const oldEvents = new Set((store.state.events || []).map((e) => e.id));
+      const oldReceipts = new Set((store.state.propagationReceipts || []).map((r) => r.id));
+      const before = store.state.meta.revision;
+      const warningCount = store.warnings.length;
+      let draftId = null;
+      try {
+        store.update((draft, { logEvent }) => {
+          const target = (draft.cases || []).find((c) => c.id === plan.caseId);
+          if (!target) throw new Error('The adopted source case disappeared before the briefing write.');
+          target.stakeholders = [...(target.stakeholders || []), stakeholder];
+          target.updatedAt = clock().toISOString();
+          // The normal case updater calls this same cross-module propagation
+          // before the post-commit rules. Keep its contract, including the
+          // register's exact-name `involves` edge, rather than a parallel list.
+          propagateCaseEvent(draft, target, { now: clock(), idFactory, logEvent, options: { stakeholders: target.stakeholders } });
+          logEvent({ type: 'mission.capture.brief_prepared', entity: 'missioncapture', entityId: captureId,
+            summary: 'Reviewed recipient attached to this adopted case; note stayed private and no message was sent' });
+        }, { type: 'case.updated', entity: 'case', entityId: plan.caseId,
+          summary: 'Reviewed real stakeholder added to an adopted case; shared case rules prepare the unsent brief' }, {
+          afterRules: (draft) => {
+            const failures = (draft.events || []).filter((e) => !oldEvents.has(e.id) && e.type === 'automation.rule_error').length
+              + (draft.propagationReceipts || []).filter((r) => !oldReceipts.has(r.id)).length;
+            if (failures) throw new Error('A propagation rule failed; the case and unsent brief were both rolled back.');
+            const message = (draft.commsDrafts || []).find((d) => d.caseId === plan.caseId && d.stakeholderKey === `id:${actorId}` && d.purpose === 'brief' && d.status === 'draft');
+            if (!message || message.subject !== plan.preview.subject || message.body !== plan.preview.body
+              || fingerprint(message.missing) !== fingerprint(plan.preview.missing)) {
+              throw new Error('The actual draft differs from the reviewed preview or was not created. The case and brief were rolled back.');
+            }
+            draftId = message.id;
+          },
+        });
+      } catch (error) { store.warnings.splice(warningCount); return fail(error?.message || 'The recipient and brief were not saved.'); }
+      if (store.state.meta.revision === before) return fail('The workspace blocked the write; no brief was created.');
+      return saved({ caseId: plan.caseId, draftId, stakeholderId: actorId });
+    },
+    missionCaptureBriefEdit(captureId, draftId, input = {}) { return briefCommand(captureId, draftId, 'editCommsDraft', input); },
+    missionCaptureBriefApprove(captureId, draftId, input = {}) { return briefCommand(captureId, draftId, 'approveCommsDraft', input); },
+    missionCaptureBriefSent(captureId, draftId, input = {}) { return briefCommand(captureId, draftId, 'markCommsDraftSent', input); },
+    missionCaptureBriefDismiss(captureId, draftId, input = {}) { return briefCommand(captureId, draftId, 'dismissCommsDraft', input); },
     missionCapturePrepare(input = {}) {
       const existing = input.captureId ? own(input.captureId) : null;
       if (existing?.error) return fail(existing.error);
