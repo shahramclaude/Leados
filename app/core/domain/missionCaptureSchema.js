@@ -1,7 +1,7 @@
 /** Schema v107: bounded, review-gated capture plans. Never infer an adoption. */
 import { BUNDLE_KINDS, BUNDLE_LIMITS } from './actionBundleRegistry.js';
 import { cleanBundlePreview } from './actionBundleSchema.js';
-import { CAPTURE_STATUSES, MISSION_LIMITS } from './missionRegistry.js';
+import { CAPTURE_STATUSES, MERGE_LIMITS, MISSION_LIMITS } from './missionRegistry.js';
 
 const object = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const text = (v, max = 200) => typeof v === 'string' ? v.trim().slice(0, max) : '';
@@ -89,6 +89,12 @@ export function normalizeCommandEdits(raw) {
   return Object.keys(out).length ? out : null;
 }
 
+export function normalizeMergeFromIds(raw, selfId = '') {
+  if (!Array.isArray(raw)) return [];
+  const ids = [...new Set(raw.map((v) => text(v, 80)).filter((v) => v && v !== selfId))].sort();
+  return ids.length >= MERGE_LIMITS.minMembers && ids.length <= MERGE_LIMITS.maxMembers ? ids : [];
+}
+
 /** Corrupt previews lose approval; they never become a silently trusted receipt. */
 export function normalizeMissionCaptures(raw, state = {}, warnings = [], { now = new Date() } = {}) {
   if (!Array.isArray(raw)) return [];
@@ -101,7 +107,13 @@ export function normalizeMissionCaptures(raw, state = {}, warnings = [], { now =
       || new Set(row.kinds).size !== row.kinds.length) {
       warnings.push('Mission captures: dropped a malformed plan; no note, owner or approval was inferred.'); continue;
     }
-    const expired = caseInput.reviewOn < today && !['adopted', 'dismissed'].includes(row.status);
+    const rowId = text(row.id, 80);
+    const mergeFromIds = normalizeMergeFromIds(row.mergeFromIds, rowId);
+    const dedupeFingerprint = hash(row.dedupeFingerprint);
+    if (Array.isArray(row.mergeFromIds) && row.mergeFromIds.length > 0 && (!mergeFromIds.length || !dedupeFingerprint)) {
+      warnings.push('Mission captures: dropped a malformed cross-span merge plan; constituent capture IDs or dedupe fingerprint were invalid.'); continue;
+    }
+    const expired = caseInput.reviewOn < today && !['adopted', 'merged', 'dismissed'].includes(row.status);
     if (expired) warnings.push('Mission captures: an expired proposal was returned to draft; revise its date and rehearse it.');
     let status = CAPTURE_STATUSES.includes(row.status) ? row.status : 'draft';
     if (expired) status = 'draft';
@@ -112,20 +124,26 @@ export function normalizeMissionCaptures(raw, state = {}, warnings = [], { now =
     }
     const caseId = text(row.caseId, 80) || null;
     const bundleId = text(row.bundleId, 80) || null;
+    const mergedIntoCaptureId = text(row.mergedIntoCaptureId, 80) || null;
     if (status === 'adopted' && (!caseId || !bundleId || !iso(row.adoptedAt) || !preview
       || !(state.cases || []).some((c) => c.id === caseId) || !(state.actionBundles || []).some((b) => b.id === bundleId))) {
       warnings.push('Mission captures: dropped an adoption whose case or bundle receipt is missing.'); continue;
     }
+    if (status === 'merged' && (!caseId || !bundleId || !mergedIntoCaptureId || mergedIntoCaptureId === rowId || !iso(row.adoptedAt)
+      || !(state.cases || []).some((c) => c.id === caseId) || !(state.actionBundles || []).some((b) => b.id === bundleId))) {
+      warnings.push('Mission captures: dropped a merged capture whose LCA case, bundle or parent consolidation receipt is missing.'); continue;
+    }
     if (status === 'dismissed' && !text(row.dismissReason)) {
       status = 'draft'; warnings.push('Mission captures: a dismissal without a reason was returned to draft.');
     }
-    seen.add(row.id);
+    seen.add(rowId);
     out.push({
-      id: text(row.id, 80), title: text(row.title, 180) || caseInput.title, sourceText: text(row.sourceText, MISSION_LIMITS.noteChars),
+      id: rowId, title: text(row.title, 180) || caseInput.title, sourceText: text(row.sourceText, MISSION_LIMITS.noteChars),
       ownerSeatId: text(row.ownerSeatId, 80), ownerId: text(row.ownerId, 80) || null, rank: row.rank, altitudeKey: text(row.altitudeKey, 40),
       reviewOn: day(row.reviewOn), status, caseInput, kinds: [...row.kinds], classification: classification(row.classification),
       commands: plan, commandEdits: normalizeCommandEdits(row.commandEdits), budgetId: text(row.budgetId, 80) || null, amount: finite(row.amount, 0, 1e12) ? row.amount : null,
       priorPct: integer(row.priorPct, 5, 95) ? row.priorPct : 70,
+      mergeFromIds, dedupeFingerprint: mergeFromIds.length || mergedIntoCaptureId ? dedupeFingerprint : '', mergedIntoCaptureId: status === 'merged' ? mergedIntoCaptureId : null,
       inputFingerprint: hash(row.inputFingerprint), sourceFingerprint: hash(row.sourceFingerprint), planFingerprint: hash(row.planFingerprint),
       baseRevision: integer(row.baseRevision, 0, 1e9) ? row.baseRevision : 0, evaluatedAt: iso(row.evaluatedAt), preview,
       caseId, bundleId, createdAt: iso(row.createdAt), updatedAt: iso(row.updatedAt) || iso(row.createdAt), adoptedAt: iso(row.adoptedAt), dismissedAt: iso(row.dismissedAt),

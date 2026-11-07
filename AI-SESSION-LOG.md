@@ -1,3 +1,53 @@
+## 2026-11-07 — Session 157: Cross-span capture merge — one constraint, one LCA-owned case (ADR-0116, Schema v112 unchanged)
+
+**What was built.** `#/mission?panel=capture` now detects when two or more
+subordinate spans across disjoint reporting branches prepare open captures
+describing the same operational constraint, and proposes **one consolidated,
+LCA-owned case and coordinated action bundle** with a 16-hex `dedupeFingerprint`
+and mandatory human confirmation (`missionCapturePrepareMerge` /
+`missionCaptureDismissMerge`). Constraint signatures (`missionCaptureMerge.js`)
+combine Fellegi–Sunter (1969) category blocking, Broder (1997) weighted Jaccard
+resemblance over roster-name-stripped one-way shingles (Schnell et al. 2009
+PPRL), and ADR-0113 `prepares-for` / goal lineage anchors. Routing uses
+associative N-way Lowest Common Ancestor (`multiSpanLowestCommonAncestor`) to
+enforce Jaques / Aghion–Tirole subsidiarity. Adopting a rehearsed consolidation
+creates one LCA-owned case (`involvedPersonIds = directBranchIds`, so
+`harvestWork` attributes ownership directly to the LCA seat), stages one
+reviewed action bundle (preserving ADR-0114 `commandEdits`), settles every
+constituent capture to `status: 'merged'` in the **same** atomic `store.update`
+write, and fans `RULE-MIS-01` `responds-to`, `coordinates` and `rolls-up-to`
+edges up the hierarchy from both the LCA merge capture and every constituent
+capture. Also registered `prepare-agenda` (`agendaFile`, `agendaWithdraw`,
+`agendaScan`) in `accessGateway.js`, closing a Session 153 enforced-seat gap.
+
+**Altitude(s) served.** PRIMARY: **Director (rank 3)** and **mid-manager
+(rank 2)** arbitrating shared cross-team / cross-unit constraints across
+subordinate leads and managers. **Frontline (rank 1)** receives identity-free
+`mergeAdvisory` collision notices (zero peer note, title or person leakage) and
+settled `merged` receipts. **VP (rank 4)** and **CEO / C-suite (rank 5)**
+arbitrate cross-division / enterprise merges with unit-title redaction above
+rank 3 (`titleWithheld: true`) and receive single-counted vertical roll-ups.
+
+**Why this altitude now.** Sessions 153 & 155 targeted frontline/mid-manager as
+primary and Session 156 targeted VP/CEO as primary, leaving Director (rank 3)
+without a primary surface since Session 152 while `[manager → director]
+Cross-span capture merge` stood as the #1 roadmap target.
+
+**Verified (one focused pass, actual results).**
+- `tests/app/command-flow-merge.test.mjs`: **5/5 PASS** (2-span & 3-span N-way LCA + subsidiarity + director adoption + `harvestWork` LCA ownership + `RULE-MIS-01` links + privacy invariants; VP budget + CEO enterprise merges with rank > 3 title redaction; ADR-0113 `prepares-for` lineage anchoring + false-positive refusal; human dismissal + stale-constituent invalidation + rule-failure atomic rollback; jsdom + axe-core at frontline & director).
+- Adjacent `command-flow-edit` (**10/10 PASS**), `mission-command-flow` (**9/9 PASS**), `standalone` (**7/7 PASS**); `LeadOS-standalone.html` rebuilt.
+- `npm run lint`: **PASS**. `npm run check:boundary`: **PASS** (555 app ES modules, 161 test suites, 23 doc checks, 0 leaks). `npm run check:links`: **PASS**.
+
+**Unverified / flagged.** Full 161-suite `npm test` **not run** (per the
+single-focused-pass mandate). Real-browser assistive-technology walkthrough
+**[UNVERIFIED]** (jsdom + axe-core ran). Shingle resemblance is heuristic, not
+causal proof of an identical root cause; seats remain workflow declarations, not
+authentication. No blockers.
+
+**Next up.** `[director → VP]` **Stakeholder-brief drafting from an adopted
+case** (or `[all altitudes]` **Bounded epistemic backlog policy** on
+`RULE-EPI-02`).
+
 ## 2026-11-06 — Session 156: Cross-week jurisdiction drift — the quarter stops being a snapshot (ADR-0115, Schema v112 unchanged)
 
 **What was built.** `#/jurisdiction?panel=drift` grades the ISO-week series of

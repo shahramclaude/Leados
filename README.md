@@ -1,3 +1,17 @@
+## 2026-11-07 — One constraint across spans, one LCA-owned case (Session 157, Schema v112 unchanged, [ADR-0116](./docs/adr/0116-cross-span-capture-merge.md), `#/mission?panel=capture`)
+
+When two or more leads or managers in separate branches describe the same
+constraint in Command Flow, their **Lowest Common Ancestor** (manager, director,
+VP or enterprise root) now receives a privacy-preserving consolidation proposal
+with a 16-hex `dedupeFingerprint` — built from Fellegi–Sunter category blocking,
+Broder weighted Jaccard over roster-name-stripped one-way shingles, and ADR-0113
+`prepares-for` / goal lineage edges — without ever copying raw notes, sentences
+or IC names across spans or upward. The LCA confirms (or declines with a
+recorded reason), edits every proposed action word-by-word (ADR-0114), rehearses
+in the disposable worker, and adopts **one** LCA-owned case + **one**
+coordinated bundle while settling constituent captures to `merged` with full
+`RULE-MIS-01` vertical provenance in the same atomic write.
+
 ## 2026-11-06 — Is the shape of the work changing? (Session 156, Schema v112 unchanged, [ADR-0115](./docs/adr/0115-cross-week-jurisdiction-drift.md), `#/jurisdiction?panel=drift`)
 
 A VP forecasting quarterly coordination risk and a chief reviewing

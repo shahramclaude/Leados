@@ -24,9 +24,10 @@ export const MISSION_DISCLOSURE = Object.freeze({
 });
 export function missionProfile(rank) { return MISSION_PROFILES[rank] || MISSION_PROFILES[1]; }
 
-/** ADR-0105: the same operating model, now reachable in one reviewed flow. */
-export const CAPTURE_STATUSES = Object.freeze(['draft', 'rehearsed', 'adopted', 'dismissed']);
+/** ADR-0105 / ADR-0116: the same operating model, now reachable in one reviewed flow and cross-span LCA merge. */
+export const CAPTURE_STATUSES = Object.freeze(['draft', 'rehearsed', 'adopted', 'merged', 'dismissed']);
 export const CAPTURE_SOURCE = Object.freeze('@case');
+export const MERGE_LIMITS = Object.freeze({ minMembers: 2, maxMembers: 8, minJaccard: 0.28, minSharedShingles: 2, maxShingles: 32 });
 export const CAPTURE_PLAYBOOK = Object.freeze({
   1: 'Turn a shift-level blocker into an owned checkpoint and a coaching conversation.',
   2: 'Coordinate the handoff: one decision, one owner, one assumption to test.',
@@ -35,3 +36,4 @@ export const CAPTURE_PLAYBOOK = Object.freeze({
   5: 'Steward the enterprise: a governed choice, accountable execution and board-visible provenance.',
 });
 export const CAPTURE_DISCLOSURE = 'The note and its classifier evidence stay at the seat that prepared them. Ancestors receive typed provenance and the resulting work through the existing disclosure ladder, never a copy of the note.';
+export const MERGE_DISCLOSURE = 'Cross-span merge proposals compare keyed one-way constraint shingles and graph lineage edges only. Raw notes, sentences and individual names never cross a peer boundary or travel upward.';
