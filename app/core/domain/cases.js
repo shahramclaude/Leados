@@ -3120,6 +3120,292 @@ export function resolveLinkedEntity(state, entityType, entityId) {
         },
       };
     }
+    /* ---------------------------------------------------------------- */
+    /* ADR-0130: the coverage-family and analytics-family nodes.          */
+    /*                                                                    */
+    /* Thirteen registered link types had no resolver case at all, so any */
+    /* propagation row naming one rendered as a broken reference and the  */
+    /* cross-module link CSV silently DROPPED the whole edge. Each case    */
+    /* below is written to the same disclosure rule the neighbouring cases */
+    /* follow: the graph label carries the record's neutral shape (its     */
+    /* kind, its dates, its state and its COUNTS) and never the content    */
+    /* that made the record worth protecting — no duty free text, no       */
+    /* cover's name, no set of diagnostic codes, no per-person figure.     */
+    /* ---------------------------------------------------------------- */
+    case 'dutycover': {
+      const rec = (state.dutyCovers || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      // A duty cover names a duty line and its state. The duty key is the
+      // holder's own structural vocabulary; the note and the revoke reason
+      // are free text and never travel on a shared label.
+      return {
+        type: 'dutycover',
+        id: rec.id,
+        title: `Duty cover · ${rec.dutyKey}`,
+        status: `${rec.status} · declared ${rec.declaredOn}`,
+        route: `#/duty-cover?panel=register`,
+        raw: {
+          id: rec.id,
+          dutyKey: rec.dutyKey,
+          status: rec.status,
+          declaredOn: rec.declaredOn,
+          revokedOn: rec.revokedOn || null,
+          verifiedOn: rec.verifiedOn || null,
+        },
+      };
+    }
+    case 'absenceplan': {
+      const rec = (state.absencePlans || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      // Absence is sensitive by default: the label carries the window and the
+      // state, never the reason, the note, or who the seat is.
+      return {
+        type: 'absenceplan',
+        id: rec.id,
+        title: `Declared absence · ${rec.from} → ${rec.to}`,
+        status: `${rec.status} · declared ${rec.declaredOn}`,
+        route: `#/duty-cover?panel=plan`,
+        raw: {
+          id: rec.id,
+          from: rec.from,
+          to: rec.to,
+          status: rec.status,
+          declaredOn: rec.declaredOn,
+          revokedOn: rec.revokedOn || null,
+        },
+      };
+    }
+    case 'standbyanswer': {
+      const rec = (state.dutyStandbyAnswers || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      // Consent is first-person and its words are the answerer's own; the
+      // graph gets the yes/no and the window, never the words.
+      return {
+        type: 'standbyanswer',
+        id: rec.id,
+        title: `Cover answer · ${rec.answer}`,
+        status: `${rec.status} · ${rec.windowFrom} → ${rec.windowTo}`,
+        route: '#/standby?panel=asked',
+        raw: {
+          id: rec.id,
+          answer: rec.answer,
+          status: rec.status,
+          windowFrom: rec.windowFrom,
+          windowTo: rec.windowTo,
+          answeredOn: rec.answeredOn,
+        },
+      };
+    }
+    case 'rehearsal': {
+      const rec = (state.dutyRehearsals || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      // A rehearsal attests an act on a date. Mode and outcome are declared
+      // vocabulary; the recorder's note is not projected.
+      return {
+        type: 'rehearsal',
+        id: rec.id,
+        title: `Cover rehearsal · ${rec.dutyKey} · ${rec.mode}`,
+        status: `${rec.outcome} · rehearsed ${rec.rehearsedOn}`,
+        route: '#/duty-cover?panel=plan',
+        raw: {
+          id: rec.id,
+          dutyKey: rec.dutyKey,
+          mode: rec.mode,
+          outcome: rec.outcome,
+          rehearsedOn: rec.rehearsedOn,
+          status: rec.status,
+        },
+      };
+    }
+    case 'branchask': {
+      const rec = (state.branchReadingAsks || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      // ADR-0129 keeps seat ids OFF the branch table so a withheld cell cannot
+      // be re-identified by walking the graph, and the stored ask carries no
+      // table position either — the position is resolved inside the reading
+      // panel against the acting seat's own children. So the label carries the
+      // ask's date and state and the requester's own words do not travel.
+      return {
+        type: 'branchask',
+        id: rec.id,
+        // No due date is printed here on purpose: the response window is a
+        // declared, clamped convention held by the reading panel, and a graph
+        // label that recomputed it from a raw setting would print a promise
+        // the register never made.
+        title: `Branch reading request · ${rec.askedOn}`,
+        status: `${rec.status} · asked ${rec.askedOn}`,
+        route: '#/duty-cover?panel=readings',
+        raw: {
+          id: rec.id,
+          askedOn: rec.askedOn,
+          status: rec.status,
+          withdrawnOn: rec.withdrawnOn || null,
+        },
+      };
+    }
+    case 'branchreading': {
+      const rec = (state.branchReadings || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      // The band and the day it was given; the branch leader's own words are
+      // not projected, and no count crosses this boundary.
+      return {
+        type: 'branchreading',
+        id: rec.id,
+        title: `Branch reading · ${rec.band}`,
+        status: `published ${rec.publishedOn} · ${rec.status}`,
+        route: '#/duty-cover?panel=readings',
+        raw: {
+          id: rec.id,
+          band: rec.band,
+          publishedOn: rec.publishedOn,
+          status: rec.status,
+        },
+      };
+    }
+    case 'premiseOutcome': {
+      const rec = (state.premiseOutcomes || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      // A settled assessment of a premise. The verdict and the date are the
+      // record's shape; the leader's note is not projected.
+      return {
+        type: 'premiseOutcome',
+        id: rec.id,
+        title: `Premise assessment · ${rec.verdict}`,
+        status: `settled ${rec.settledOn}`,
+        route: `#/premises?tab=calibration&outcome=${encodeURIComponent(rec.id)}`,
+        raw: {
+          id: rec.id,
+          premiseId: rec.premiseId || null,
+          verdict: rec.verdict,
+          settledOn: rec.settledOn,
+        },
+      };
+    }
+    case 'fitsnapshot': {
+      const rec = (state.fitSnapshots || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      // The book addresses a call by class and rank. No value, no currency
+      // amount and no decision title is projected.
+      return {
+        type: 'fitsnapshot',
+        id: rec.id,
+        title: `Authority snapshot · ${rec.classKey}`,
+        status: `rung ${rec.ownerRank} · frozen ${rec.frozenAt.slice(0, 10)}`,
+        route: '#/fit?panel=book',
+        raw: {
+          id: rec.id,
+          decisionId: rec.decisionId,
+          classKey: rec.classKey,
+          ownerRank: rec.ownerRank,
+          frozenAt: rec.frozenAt,
+          status: rec.status,
+        },
+      };
+    }
+    case 'fitproposal': {
+      const rec = (state.fitProposals || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      // A proposed delegation of one call to a lower rung. The ranks and the
+      // week; never the predicted saving or the grade note.
+      return {
+        type: 'fitproposal',
+        id: rec.id,
+        title: `Delegation proposal · to rung ${rec.toRank}`,
+        status: `${rec.status} · week ${rec.week}`,
+        route: '#/fit?panel=grade',
+        raw: {
+          id: rec.id,
+          decisionId: rec.decisionId,
+          toRank: rec.toRank,
+          week: rec.week,
+          proposedOn: rec.proposedOn,
+          status: rec.status,
+        },
+      };
+    }
+    case 'fitreading': {
+      const rec = (state.fitReadings || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      // A frozen span reading: counts and the rung, never a person.
+      return {
+        type: 'fitreading',
+        id: rec.id,
+        title: `Fit reading · rung ${rec.nodeRank}`,
+        status: `${rec.open} open · frozen ${rec.frozenAt.slice(0, 10)}`,
+        route: '#/fit?panel=ladder',
+        raw: {
+          id: rec.id,
+          nodeRank: rec.nodeRank,
+          open: rec.open,
+          priced: rec.priced,
+          frozenAt: rec.frozenAt,
+          status: rec.status,
+        },
+      };
+    }
+    case 'jurfinding': {
+      const rec = (state.jurFindings || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      // A governance finding names an objective KEY, not a title, and its
+      // verdict. No member record id and no span id crosses this boundary.
+      return {
+        type: 'jurfinding',
+        id: rec.id,
+        title: `Governance finding · ${rec.verdict}`,
+        status: `${rec.predictedOption || rec.refusalKey || 'unresolved'} · week ${rec.week}`,
+        route: `#/jurisdiction?panel=options`,
+        raw: {
+          id: rec.id,
+          objectiveKey: rec.objectiveKey,
+          week: rec.week,
+          verdict: rec.verdict,
+          frozenAt: rec.frozenAt,
+          status: rec.status,
+        },
+      };
+    }
+    case 'jurreading': {
+      const rec = (state.jurReadings || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      // The declared aggregate: cluster count and rung, nothing per person.
+      return {
+        type: 'jurreading',
+        id: rec.id,
+        title: `Jurisdiction reading · rung ${rec.nodeRank}`,
+        status: `${rec.clusters} cluster(s) · week ${rec.week}`,
+        route: '#/jurisdiction?panel=drift',
+        raw: {
+          id: rec.id,
+          nodeRank: rec.nodeRank,
+          week: rec.week,
+          clusters: rec.clusters,
+          frozenAt: rec.frozenAt,
+          status: rec.status,
+        },
+      };
+    }
+    case 'spanreading': {
+      const rec = (state.spanReadings || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      // A frozen discretion-calibration reading. It carries the declared
+      // coverage and the rung it measured, never an item or a person.
+      return {
+        type: 'spanreading',
+        id: rec.id,
+        title: `Discretion reading · ${rec.coveragePct}% coverage`,
+        status: `${rec.rungs.length} rung(s) · frozen ${rec.frozenOn}`,
+        route: '#/span-calibration?panel=readings',
+        raw: {
+          id: rec.id,
+          frozenOn: rec.frozenOn,
+          reviewOn: rec.reviewOn,
+          coveragePct: rec.coveragePct,
+          ladderSource: rec.ladderSource,
+          rungsN: rec.rungs.length,
+          quotedN: rec.quotedN,
+        },
+      };
+    }
     default:
       return null;
   }
