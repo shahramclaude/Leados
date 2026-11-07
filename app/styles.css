@@ -3229,6 +3229,9 @@ tr.is-focused td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
 .flow-history-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; text-align: left; padding: 12px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2); color: var(--ink); cursor: pointer; font: inherit; }
 .flow-history-row.is-selected { border-color: var(--accent); background: var(--accent-soft); }
 .flow-history-row small { color: var(--muted); font-size: 11px; }
+.flow-merge-candidates { border-top: 3px solid #d9a441; }
+.flow-merge-candidate { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel-2); }
+.flow-merge-brief { display: flex; flex-direction: column; gap: 10px; padding: 14px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--panel-2); align-content: flex-start; }
 @media (max-width: 900px) { .flow-compose-grid { grid-template-columns: 1fr; } }
 @media (max-width: 560px) { .flow-action-grid { grid-template-columns: 1fr; } .flow-history-row { grid-template-columns: 1fr; } .flow-steps { gap: 8px 14px; } }
 @media (prefers-reduced-motion: reduce) { .command-flow *, .command-flow *::before, .command-flow *::after { animation: none !important; transition: none !important; } }

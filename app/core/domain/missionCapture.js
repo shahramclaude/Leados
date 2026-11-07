@@ -12,16 +12,28 @@ import { BUNDLE_ADAPTERS, BUNDLE_LABELS, proposeBundle, validateBundleCommands }
 import { bundleInputFingerprint, bundlePreview, bundleSourceFingerprint, clone, createStagedStore, fingerprint, stageBundle } from './actionBundles.js';
 import { CAPTURE_SOURCE, MISSION_EVENTS, MISSION_LIMITS, missionProfile } from './missionRegistry.js';
 import { normalizeCaptureCaseInput } from './missionCaptureSchema.js';
+import { captureMergeAdvisoriesForSeat, evaluateMergeCluster } from './missionCaptureMerge.js';
 
-export const captureInputFingerprint = (c) => fingerprint({ version: 1, caseInput: c.caseInput, kinds: c.kinds, reviewOn: c.reviewOn, budgetId: c.budgetId, amount: c.amount, priorPct: c.priorPct, ownerSeatId: c.ownerSeatId, commandEdits: c.commandEdits || null });
+export const captureInputFingerprint = (c) => fingerprint({
+  version: 1, caseInput: c.caseInput, kinds: c.kinds, reviewOn: c.reviewOn, budgetId: c.budgetId,
+  amount: c.amount, priorPct: c.priorPct, ownerSeatId: c.ownerSeatId, commandEdits: c.commandEdits || null,
+  ...(c.mergeFromIds?.length ? { mergeFromIds: [...c.mergeFromIds].sort(), dedupeFingerprint: c.dedupeFingerprint || '' } : {}),
+});
 export function captureSourceFingerprint(state, c) {
   const ids = new Set([c.caseInput.ownerId, ...c.caseInput.involvedPersonIds]);
-  return fingerprint({
+  const payload = {
     people: (state.people || []).map((p) => ({ id: p.id, managerId: p.managerId, status: p.status, level: p.level, ...(ids.has(p.id) ? { talkingPoints: p.talkingPoints || [] } : {}) })),
     budgets: (state.budgets || []).filter((b) => b.id === c.budgetId),
     goals: (state.goals || []).filter((g) => g.id === c.caseInput.linkedGoalId),
     activeSeatId: state.settings?.activeSeatId || null, chainLeaderAltitude: state.settings?.chainLeaderAltitude,
-  });
+  };
+  if (c.mergeFromIds?.length) {
+    payload.mergeMembers = [...c.mergeFromIds].sort().map((id) => {
+      const m = (state.missionCaptures || []).find((r) => r.id === id);
+      return m ? { id: m.id, status: m.status, ownerSeatId: m.ownerSeatId, inputFingerprint: m.inputFingerprint, reviewOn: m.reviewOn } : { id, missing: true };
+    });
+  }
+  return fingerprint(payload);
 }
 
 /** Return a privacy-safe explanation, never an out-of-span person match. */
@@ -69,6 +81,16 @@ export function captureRollup(state, seatId, { now = new Date() } = {}) {
 export function prepareCapturePlan(state, capture, now = new Date()) {
   const caseInput = normalizeCaptureCaseInput(capture.caseInput);
   if (!caseInput || !capture.kinds?.length) return { ok: false, error: 'The capture needs a reviewed case and at least one action.' };
+  if (capture.mergeFromIds?.length) {
+    const cluster = evaluateMergeCluster(state, capture.mergeFromIds, { now });
+    if (!cluster.ok) return cluster;
+    if (cluster.lcaSeatId !== capture.ownerSeatId) {
+      return { ok: false, error: `Consolidate at the lowest common ancestor (${cluster.lcaLabel}), not at another altitude.` };
+    }
+    if (capture.dedupeFingerprint && cluster.dedupeFingerprint !== capture.dedupeFingerprint) {
+      return { ok: false, error: 'A constituent span capture changed since this merge was proposed. Prepare and rehearse the current cluster.' };
+    }
+  }
   const profile = missionProfile(capture.rank);
   if (capture.kinds.some((k) => !profile.commands.includes(k))) return { ok: false, error: 'An action is outside this altitude’s operating duties.' };
   if (capture.kinds.includes('comms')) return { ok: false, error: 'Register stakeholders on the case before preparing briefs. Command Flow never invents a recipient.' };
@@ -113,17 +135,31 @@ export function prepareCapturePlan(state, capture, now = new Date()) {
 
 /** Only the preparing seat receives the note. Work, not raw intake, travels up. */
 export function capturesForSeat(state, seatId, { now = new Date() } = {}) {
+  const advisories = captureMergeAdvisoriesForSeat(state, seatId, { now });
   return (state.missionCaptures || []).filter((c) => c.ownerSeatId === seatId).map((c) => ({
-    ...clone(c), stale: ['draft', 'rehearsed'].includes(c.status) && (c.baseRevision !== state.meta?.revision || c.evaluatedAt?.slice(0, 10) !== dayKey(now)),
+    ...clone(c),
+    stale: ['draft', 'rehearsed'].includes(c.status) && (c.baseRevision !== state.meta?.revision || c.evaluatedAt?.slice(0, 10) !== dayKey(now)
+      || (c.mergeFromIds?.length > 0 && Boolean(c.sourceFingerprint) && c.sourceFingerprint !== captureSourceFingerprint(state, c))),
     rollup: captureRollup(state, c.ownerSeatId, { now }).path,
+    mergeAdvisory: ['draft', 'rehearsed'].includes(c.status) ? advisories.get(c.id) || null : null,
   }));
 }
 
 export function captureReceiptText(state, capture) {
-  if (!capture || capture.status !== 'adopted') return 'This capture has not been adopted.';
+  if (!capture || !['adopted', 'merged'].includes(capture.status)) return 'This capture has not been adopted.';
   const bundle = (state.actionBundles || []).find((b) => b.id === capture.bundleId);
+  if (capture.status === 'merged') {
+    return [
+      '# LeadOS · Command Flow cross-span consolidation receipt', `Constituent capture: ${capture.id}`,
+      `Consolidated into LCA capture: ${capture.mergedIntoCaptureId}`, `Dedupe fingerprint: ${capture.dedupeFingerprint || 'n/a'}`,
+      `Case: ${capture.caseId}`, `Bundle: ${capture.bundleId}`, `Consolidated: ${capture.adoptedAt}`,
+      `Actions: ${(bundle?.commands || []).map((c) => BUNDLE_LABELS[c.kind]).join('; ')}`,
+      'Your raw note stayed at this preparing seat and was never copied upward; the common ancestor adopted one consolidated case.',
+    ].join('\n');
+  }
   return [
     '# LeadOS · Command Flow receipt', `Capture: ${capture.id}`, `Case: ${capture.caseId}`, `Bundle: ${capture.bundleId}`,
+    ...(capture.mergeFromIds?.length ? [`Consolidated constituent captures: ${capture.mergeFromIds.length}`, `Dedupe fingerprint: ${capture.dedupeFingerprint}`] : []),
     `Adopted: ${capture.adoptedAt}`, `Review: ${capture.reviewOn}`, `Input fingerprint: ${capture.inputFingerprint}`,
     `Actions: ${(bundle?.commands || []).map((c) => BUNDLE_LABELS[c.kind]).join('; ')}`,
     'One transaction: case registration, reviewed actions, shared rule propagation and vertical provenance.',
@@ -179,7 +215,20 @@ export function transactMissionCapture(store, captureId, { expectedRevision, rev
       bundle.outputs = actions.outputs;
       const target = draft.missionCaptures.find((c) => c.id === captureId);
       Object.assign(target, { status: 'adopted', caseId, bundleId, adoptedAt: now.toISOString(), updatedAt: now.toISOString() });
-      target.history.push({ at: now.toISOString(), type: 'adopted', summary: 'One atomic case, action and propagation receipt.' });
+      target.history.push({ at: now.toISOString(), type: 'adopted', summary: target.mergeFromIds?.length ? `Consolidated ${target.mergeFromIds.length} cross-span captures into one LCA-owned case and action receipt.` : 'One atomic case, action and propagation receipt.' });
+      if (target.mergeFromIds?.length) {
+        for (const memberId of target.mergeFromIds) {
+          const member = draft.missionCaptures.find((c) => c.id === memberId);
+          if (!member || !['draft', 'rehearsed'].includes(member.status)) {
+            throw new Error('A constituent span capture is no longer open for consolidation. Everything was rolled back.');
+          }
+          Object.assign(member, {
+            status: 'merged', mergedIntoCaptureId: captureId, dedupeFingerprint: target.dedupeFingerprint || '',
+            caseId, bundleId, adoptedAt: now.toISOString(), updatedAt: now.toISOString(),
+          });
+          member.history = [...(member.history || []), { at: now.toISOString(), type: 'merged', summary: `Consolidated into LCA case ${caseId}; raw note stayed at this preparing seat.` }].slice(-60);
+        }
+      }
       result = { bundle, actions };
     }, { type: MISSION_EVENTS.CAPTURE_ADOPTED, entity: 'missioncapture', entityId: captureId, summary: 'Reviewed situation adopted: case, coordinated actions and hierarchy provenance in one transaction' }, {
       sourceEvents,

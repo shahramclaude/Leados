@@ -11,20 +11,30 @@ export function missionRule(draft, ctx = {}) {
     const capture = (draft.missionCaptures || []).find((r) => r.id === ctx.event.entityId);
     if (!capture || capture.status !== 'adopted' || !capture.caseId || !capture.bundleId) return [];
     const effects = [];
-    const add = (targetType, targetId, relation, summary) => {
-      const result = ensureEntityLink(draft, { sourceType: 'missioncapture', sourceId: capture.id, targetType, targetId, relation,
+    const built = buildSeats(draft, { now: ctx.now, settings: draft.settings });
+    const addFrom = (sourceId, targetType, targetId, relation, summary) => {
+      const result = ensureEntityLink(draft, { sourceType: 'missioncapture', sourceId, targetType, targetId, relation,
         ruleId: MISSION_RULES.ROLLUP, summary }, { idFactory: ctx.idFactory, todayStr: dayKey(ctx.now), nowIso: ctx.now.toISOString() });
       if (result.created) effects.push({ ruleId: MISSION_RULES.ROLLUP, action: 'linked', targetType, targetId, summary });
     };
-    add('case', capture.caseId, 'responds-to', 'The reviewed source case created in this capture transaction.');
-    add('bundle', capture.bundleId, 'coordinates', 'The atomic action bundle adopted with the source case.');
-    const built = buildSeats(draft, { now: ctx.now, settings: draft.settings });
-    let cursor = capture.ownerSeatId; const seen = new Set();
-    while (cursor && !seen.has(cursor) && seen.size < 16) {
-      seen.add(cursor);
-      if (cursor === LEADER_ID || built.byId.has(cursor)) add('person', cursor, 'rolls-up-to', 'Hierarchy provenance only. The source note and classifier evidence remain at the preparing seat.');
-      if (cursor === LEADER_ID) break;
-      cursor = built.chain.nodes.get(cursor)?.parentId || LEADER_ID;
+    const fanUp = (sourceId, startSeatId) => {
+      let cursor = startSeatId; const seen = new Set();
+      while (cursor && !seen.has(cursor) && seen.size < 16) {
+        seen.add(cursor);
+        if (cursor === LEADER_ID || built.byId.has(cursor)) addFrom(sourceId, 'person', cursor, 'rolls-up-to', 'Hierarchy provenance only. The source note and classifier evidence remain at the preparing seat.');
+        if (cursor === LEADER_ID) break;
+        cursor = built.chain.nodes.get(cursor)?.parentId || LEADER_ID;
+      }
+    };
+    addFrom(capture.id, 'case', capture.caseId, 'responds-to', 'The reviewed source case created in this capture transaction.');
+    addFrom(capture.id, 'bundle', capture.bundleId, 'coordinates', 'The atomic action bundle adopted with the source case.');
+    fanUp(capture.id, capture.ownerSeatId);
+    for (const memberId of capture.mergeFromIds || []) {
+      const member = (draft.missionCaptures || []).find((r) => r.id === memberId && r.status === 'merged');
+      if (!member) continue;
+      addFrom(member.id, 'case', capture.caseId, 'responds-to', 'Constituent cross-span capture consolidated into this LCA-owned case; raw note stays at the preparing seat.');
+      addFrom(member.id, 'bundle', capture.bundleId, 'coordinates', 'Constituent cross-span capture coordinated by the LCA action bundle.');
+      fanUp(member.id, member.ownerSeatId);
     }
     return effects;
   }

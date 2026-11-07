@@ -1,3 +1,27 @@
+## 2026-11-07 — Cross-span constraints stop spawning duplicate local cases (Session 157, Schema v112 unchanged, [ADR-0116](./docs/adr/0116-cross-span-capture-merge.md), `#/mission?panel=capture`)
+
+**Implemented [Director (rank 3) and mid-manager (rank 2) primary; frontline (rank 1) advisories/settlement and VP / CEO (ranks 4–5) cross-division consolidation + vertical roll-up].**
+Closed the #1 roadmap target (`Cross-span capture merge`, the largest remaining Command Flow UX gap) and served **Director (rank 3)** as primary for the first time since Session 152 (after frontline/manager Sessions 153–155 and VP/CEO Session 156). No schema bump, no new collection, no new rule ID.
+
+- **[director (rank 3) & mid-manager (rank 2) primary]** Arbitrating cross-team bottlenecks across disjoint reporting branches: `missionCaptureMerge.js` links open constituent captures via Fellegi–Sunter (1969) category blocking, Broder (1997) weighted Jaccard resemblance over roster-name-stripped one-way shingles (Schnell et al. 2009 PPRL), and ADR-0113 `prepares-for` / goal lineage anchors, routing exclusively to the associative N-way Lowest Common Ancestor (`multiSpanLowestCommonAncestor`, Jaques / Aghion–Tirole subsidiarity). Human confirmation stages, edits word-by-word (ADR-0114), rehearses in the disposable worker and adopts **one** LCA-owned case + **one** coordinated action bundle, or declines with a recorded reason (`missionCaptureDismissMerge`).
+- **[frontline (rank 1) & preparing seats]** Identity-free `mergeAdvisory` on own open captures (`dedupeFingerprint`, LCA label, peer-span count — zero sibling note, title or person leak) and automatic atomic settlement to `status: 'merged'` (`mergedIntoCaptureId`, `caseId`, `bundleId`) with downloadable consolidation receipt.
+- **[VP (rank 4) & CEO / C-suite (rank 5)]** Cross-division and enterprise LCA merges withhold child `unit` titles above rank 3 (`titleWithheld: true`), unlock `budget` envelopes at VP, and receive single-counted LCA work in `suppressHierarchy` plus `RULE-MIS-01` `responds-to` / `coordinates` / `rolls-up-to` provenance from both the LCA merge capture and every merged constituent capture. Also closed a Session 153 gateway gap by registering `prepare-agenda` (`agendaFile`, `agendaWithdraw`, `agendaScan`) in `accessGateway.js`.
+- **Altitude coverage map (updated Session 157):**
+  - *Frontline (rank 1):* Active — identity-free cross-span collision advisories, `merged` receipt settlement, and `prepare-agenda` gateway access under enforced seats (Session 157); primary in 153/155.
+  - *Mid-manager (rank 2):* **Active — PRIMARY this session**: sibling-team LCA merge confirmation, reviewed command editing and single-case consolidation across frontline leads (Session 157).
+  - *Director (rank 3):* **Active — PRIMARY this session** (first director-primary ship since Session 152): multi-span N-way LCA consolidation across managers, unit-detail proposal inspection, premise/decision arbitration and refusal reason ledger (Session 157).
+  - *VP / Executive (rank 4):* Active — cross-division LCA merge with unit-title redaction and capital envelope commitment, plus automatic roll-up from subordinate consolidations (Session 157); primary in 156.
+  - *CEO / C-suite (rank 5):* Active — enterprise root LCA consolidation with title redaction and full `RULE-MIS-01` vertical provenance (Session 157); primary in 156.
+
+**Verification (one focused pass).** New `command-flow-merge` **5/5**; adjacent `command-flow-edit` **10/10** + `mission-command-flow` **9/9** + `standalone` **7/7**; `npm run lint` PASS; `npm run check:boundary` PASS (555 modules / 161 suites / 23 doc checks, 0 leaks); `npm run check:links` PASS; `LeadOS-standalone.html` rebuilt. Full canonical suite **not run**. Real-browser AT walkthrough **[UNVERIFIED]**. Seats remain workflow declarations, not authentication.
+
+**Next targets, altitude-tagged.**
+- [director → VP] **Stakeholder-brief drafting from an adopted case** — reviewed stakeholder communications wired from adopted cases/consolidations without inventing recipients.
+- [all altitudes] **Bounded epistemic backlog policy**: cap `RULE-EPI-02` decisions opened per transaction per span per ISO week, remainder deferred and printed.
+- [all altitudes] **Multi-span LCA repair in `chain.js`**: audit the ~80 callers of `lowestCommonAncestor`; align the shared helper with associative N-way reduction and a parity test.
+- [VP → CEO] **Portfolio rehearsal comparison** across competing intervention bundles.
+- [all altitudes] Authenticated identity + tenant boundary (standing top item).
+
 ## 2026-11-06 — The quarters stop being snapshots (Session 156, Schema v112 unchanged, [ADR-0115](./docs/adr/0115-cross-week-jurisdiction-drift.md), `#/jurisdiction?panel=drift`)
 
 **Implemented [VP / executive and CEO / C-suite primary; every other altitude through the same scoped surface and hierarchy roll-up].**
@@ -56,7 +80,7 @@ suite **not run**. Real-browser AT walkthrough **[UNVERIFIED]**. Seats remain
 workflow declarations, not authentication.
 
 **Next targets, altitude-tagged.**
-- [manager → director] **Cross-span capture merge** — two leads describing the same constraint should propose one LCA-owned case with a dedupe fingerprint and human confirmation (now buildable on ADR-0113's lineage edges). Still the largest Command Flow UX gap.
+- [manager → director] ~~**Cross-span capture merge**~~ **DONE (Session 157, ADR-0116, `#/mission?panel=capture`)** — privacy-preserving shingle + ADR-0113 lineage linkage, associative N-way LCA routing, human confirmation/dismissal, and atomic `merged` settlement.
 - [all altitudes] **Bounded epistemic backlog policy**: cap `RULE-EPI-02` decisions opened per transaction per span per ISO week, remainder deferred and printed.
 - [all altitudes] **Multi-span LCA repair in `chain.js`**: audit the callers of `lowestCommonAncestor`; fix the shared helper with a parity test.
 - [director → VP] Stakeholder-brief drafting from an adopted case; [VP → CEO] portfolio rehearsal comparison.
