@@ -145,7 +145,7 @@ function harness(state, clock = () => NOW) {
 /* ------------------------------------------------------------------ schema */
 
 test('Schema v105 migrates additively: empty ledgers, declared conventions, nothing back-filled', () => {
-  assert.equal(SCHEMA_VERSION, 113);
+  assert.equal(SCHEMA_VERSION, 114);
   const base = createEmptyState(NOW_ISO);
   const legacy = { ...base, schemaVersion: 104 };
   delete legacy.epistemicUnknowns;
@@ -155,7 +155,7 @@ test('Schema v105 migrates additively: empty ledgers, declared conventions, noth
   legacy.settings = { ...base.settings };
   delete legacy.settings.epistemicWindowDays;
   const migrated = migrate(legacy);
-  assert.equal(migrated.raw.schemaVersion, 112);
+  assert.equal(migrated.raw.schemaVersion, 114);
   assert.deepEqual(migrated.raw.epistemicUnknowns, []);
   assert.deepEqual(migrated.raw.epistemicObservations, []);
   assert.deepEqual(migrated.raw.epistemicGrades, []);
@@ -698,7 +698,7 @@ test('the conventions are director+ AND full access; the reads are seat-scoped',
 });
 
 test('the brief is identity-free, the CSV carries no identifier, and a refused rate exports BLANK', () => {
-  assert.equal(CSV_EXPORTS.length, 102);
+  assert.equal(CSV_EXPORTS.length, 103);
   const scope = CSV_EXPORTS.find((row) => row.key === 'epistemic');
   assert.ok(scope, 'CSV scope #99 is registered');
   assert.match(scope.description, /NO unknown id/);

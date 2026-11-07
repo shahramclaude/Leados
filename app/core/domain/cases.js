@@ -104,6 +104,10 @@ export const MENDELOW_QUADRANTS = {
  */
 export const LINK_ENTITY_TYPES = [
   'case',
+  // ADR-0121 (Schema v114): a declared duty cover is a first-class graph node —
+  // the `prepares-for` edge from it to the person it answers for is the
+  // provenance, and it is written in the same transaction as the declaration.
+  'dutycover',
   // Schema v44: an after-action lesson is independently navigable from the
   // dated workspace artifact offered as its corroboration.
   'lesson',
@@ -484,6 +488,7 @@ export const LINK_ENTITY_TYPES = [
  */
 export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   case: 'cases',
+  dutycover: 'dutyCovers',
   comparison: 'portfolioComparisons',
   lesson: null,
   decision: 'decisions',

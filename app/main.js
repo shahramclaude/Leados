@@ -257,6 +257,9 @@ import { scepticAttentionCount } from './core/domain/sceptic.js';
 import { renderSeal } from './views/seal.js';
 import { sealAttentionCount } from './core/domain/sealChain.js';
 import { renderIdentity } from './views/identity.js';
+// ADR-0121: who answers for each duty line when the seat holder is absent.
+import { renderDutyCover } from './views/dutyCover.js';
+import { dutyCoverageAttentionCount } from './core/domain/dutyCoverage.js';
 import { identityAttentionCount } from './core/domain/identity.js';
 
 function safeDecode(segment) {
@@ -484,6 +487,8 @@ export const NAV = [
   { section: 'Governance', items: [
     // ADR-0086: the boundary that explains itself, at every altitude.
     { route: 'disclosure', label: 'Disclosure Console', icon: '◑', badge: 'disclosure' },
+    // ADR-0121: who answers for each declared duty line when the holder is out.
+    { route: 'duty-cover', label: 'Duty coverage', icon: '⛨', badge: 'dutyCoverage' },
   ] },
 ];
 
@@ -539,6 +544,7 @@ const RENDERERS = {
   authorityCalibration: (ctx) => renderAuthorityCalibration(ctx),
   seal: (ctx) => renderSeal(ctx),
   identity: (ctx) => renderIdentity(ctx),
+  'duty-cover': (ctx) => renderDutyCover(ctx),
   people: (ctx) => renderPeople(ctx),
   person: (ctx, segments) => renderPerson(ctx, safeDecode(segments[1])),
   onboarding: (ctx) => renderOnboarding(ctx),
@@ -702,6 +708,10 @@ export function parseRoute(hash) {
     'seal': 'seal', 'seals': 'seal', 'audit-chain': 'seal', 'attestation': 'seal',
     'identity': 'identity', 'attested-commits': 'identity', 'seat-identity': 'identity',
     'credential': 'identity', 'authorship': 'identity', 'assurance-ladder': 'identity',
+    // ADR-0121: the Duty Coverage Register. Not 'handover' (Leader Continuity)
+    // and not 'seat' (the Altitude Lens) — this is its own question.
+    'duty-cover': 'duty-cover', 'duty-coverage': 'duty-cover', 'duty-cover-register': 'duty-cover',
+    'cover-register': 'duty-cover', 'stand-in': 'duty-cover', 'deputy-register': 'duty-cover',
     'succession': 'succession', 'bench': 'succession', 'leadership-bench': 'succession',
     'key-person': 'succession', 'key-person-risk': 'succession',
     'bench-strength': 'succession', 'bus-factor': 'succession', 'min-cut': 'succession',
@@ -1166,6 +1176,8 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       // ADR-0082: the badge counts chain breaks only — a valid chain is not noise.
       seal: sealAttentionCount(state),
       identity: identityAttentionCount(state, { now: at, settings: state.settings }),
+      // ADR-0121: duty lines carrying open work with no eligible, exercised cover.
+      dutyCoverage: dutyCoverageAttentionCount(state, { now: at, settings: state.settings }),
       // Schema v32: drafts written from case facts that still await a human.
       comms: (state.commsDrafts || []).filter((d) => d && d.status === 'draft').length,
       due: dueMeetings(state, at, state.settings).length,
@@ -1711,6 +1723,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       settings: 'Settings',
       prep: '1:1 prep sheet',
       'agenda-ledger': '1:1 agenda ledger',
+      'duty-cover': 'Duty coverage — for every duty line this altitude (and the spans below it) is supposed to perform: who is declared answerable when the holder is absent, whether that person’s altitude can reach the duty at all, whether their access has ever been exercised on a dated record, which duty carries open work with nobody behind it, and where one hand is carrying a duty alone',
     };
     return labels[route] || 'LeadOS';
   }

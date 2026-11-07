@@ -25,6 +25,11 @@ const groups = [
   ['approve-capital', 'addBudgetLine updateBudgetLine recordBudgetActual releaseBudgetLine deleteBudgetLine'],
   ['coordinate-intervention', 'createActionBundle updateActionBundle saveActionBundlePreview commitActionBundle withdrawActionBundle archiveActionBundle missionCapturePrepare missionCapturePrepareMerge missionCaptureDismissMerge saveMissionCapturePreview missionCaptureCommit missionCaptureDismiss missionCaptureWithdraw executionScan setExecutionAutoPropagate'],
   ['prepare-agenda', 'agendaFile agendaWithdraw agendaScan'],
+  // ADR-0121: declaring who answers for a duty when the seat holder is absent.
+  // Every method is declared (deny-by-default); the action additionally enforces
+  // that the declaring seat HOLDS the duty or sits above it in the same branch,
+  // and refuses an ineligible candidate with the printed reason.
+  ['declare-duty-cover', 'dutyCoverageDesignate dutyCoverageRevoke dutyCoverageScan'],
   ['declare-seat', 'setActiveSeat scanSeats'],
   // ADR-0087: the Board Room. Every method is declared; an unknown name still
   // fails closed. Committing a pack is the chief's right; reading it is enterprise.
@@ -117,6 +122,9 @@ const groups = [
   // require a full-access seat. Reads are seat-scoped SAFE_READS below.
   ['record-diligence-consult', 'diligenceConsult diligenceForecast diligenceScan'],
   ['govern-diligence', 'diligenceSetConventions'],
+  // ADR-0121: re-declaring the exercise window and concentration threshold
+  // re-prices every duty line at once, so it is rank 4-5 with a full-access seat.
+  ['govern-duty-cover', 'dutyCoverageSetConventions'],
   ['record-fit', 'fitScan fitClassify'],
   ['govern-fit', 'fitSetConventions'],
   // ADR-0109 / ADR-0111: the Jurisdiction Compiler's writes and scoped reads.
@@ -180,6 +188,7 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 'hindsightAttentionCount', 'hindsightBriefText', 'hindsightConventions', 'hindsightCsvRows', 'hindsightReport', 'hindsightSettings',
 'epistemicAttentionCount', 'epistemicBriefText', 'epistemicConventions', 'epistemicCsvRows', 'epistemicPreview', 'epistemicReport', 'epistemicSettings',
 'diligenceAttentionCount', 'diligenceBriefText', 'diligenceConventions', 'diligenceCsvRows', 'diligencePreview', 'diligenceReport', 'diligenceSettings',
+'dutyCoverageAttentionCount', 'dutyCoverageBriefText', 'dutyCoverageCandidates', 'dutyCoverageCsvRows', 'dutyCoverageReport', 'dutyCoverageSettings',
 // ADR-0108: the Decision-Fit Ledger's read surface. Registered here because a
 // module whose reads are absent from SAFE_READS is unreadable under enforcement
 // while its writes are still gated — the reading half of the feature would

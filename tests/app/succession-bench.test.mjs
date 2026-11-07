@@ -170,7 +170,7 @@ function bootDocument() {
 /* ---------------------------------------------------------------- 1. schema */
 
 test('1. Schema v83 is additive and fail-closed', () => {
-  assert.equal(SCHEMA_VERSION, 113);
+  assert.equal(SCHEMA_VERSION, 114);
   assert.equal(typeof MIGRATIONS[82], 'function', 'the 82→83 migration exists');
   const upgraded = MIGRATIONS[82]({ schemaVersion: 82, people: [] });
   assert.equal(upgraded.schemaVersion, 83);
