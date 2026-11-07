@@ -1609,4 +1609,111 @@ export function successionBrief(report, now = new Date()) {
   return lines.join('\n');
 }
 
+/**
+ * A seat-scoped, counts-only JSON export pack for the succession terminal.
+ *
+ * Unlike `successionBrief` (a text brief for pasting into a board pack), this
+ * is a structured JSON object that a chief can hand to an auditor, a board
+ * secretary, or another system. It carries the same identity-free contract:
+ * no person name, no individual rating, no individual cover name, no span
+ * node ID. Every figure is a count, a rate withheld below its floor, or a
+ * printed refusal.
+ *
+ * The pack is deliberately narrow. It contains only what a chief can defend
+ * in front of a board: how many spans were read, how many were measurable,
+ * how many have certified gaps, what the enterprise certification says, and
+ * what the diffusion index shows. It does not contain the per-span detail
+ * (blanket days, concentration shares, flow-test edges) because that detail
+ * belongs to the span's own altitude, not to the enterprise.
+ *
+ * `seat` is the declaring seat (or null for the undeclared operator view).
+ * When a seat is provided, the pack records the seat's altitude and whether
+ * the projection was enforced, so an auditor can see which altitude the
+ * counts were scoped to.
+ */
+export function successionExportPack(report, { now = new Date(), seat = null, schemaVersion = null } = {}) {
+  const c = report.counts;
+  const pack = {
+    app: 'LeadOS',
+    module: 'succession',
+    exportedAt: new Date(now).toISOString(),
+    schemaVersion: schemaVersion ?? 'unknown',
+    seatScope: {
+      altitude: seat?.altitude || report.chain?.leader?.altitude || 'enterprise',
+      altitudeLabel: seat?.altitude
+        ? (report.chain?.leader ? report.chain.leader.altitudeLabel : seat.altitude)
+        : 'Undeclared operator view — whole chain, no altitude filter',
+      enforced: Boolean(seat && !seat.fullAccess),
+      seatId: seat?.id || null,
+    },
+    counts: {
+      spansN: c.spansN,
+      measuredN: c.measuredN,
+      certifiedN: c.certifiedN,
+      concentratedN: c.concentratedN,
+      coveredN: c.coveredN,
+      unmeasuredN: c.unmeasuredN,
+      membersN: c.membersN,
+      itemsN: c.itemsN,
+      blockedItemsN: c.blockedItemsN,
+      unlinkedPairs: c.unlinkedPairs,
+      sharedItemN: c.sharedItemN,
+      unownedWork: c.unownedWork,
+    },
+    altitudes: report.altitudes.map((row) => ({
+      altitude: row.altitude,
+      rank: row.rank,
+      spansN: row.spansN,
+      membersN: row.membersN,
+      itemsN: row.itemsN,
+      blockedItemsN: row.blockedItemsN,
+      certifiedN: row.certifiedN,
+      concentratedN: row.concentratedN,
+      coveredN: row.coveredN,
+      unmeasuredN: row.unmeasuredN,
+    })),
+    certification: {
+      pIndependence: report.certification.pIndependence,
+      pLower: report.certification.pLower,
+      reviewOn: report.certification.reviewOn,
+      refused: report.certification.refused,
+    },
+    diffusion: {
+      share: report.diffusion.share,
+      degradedN: report.diffusion.degradedN,
+      measuredN: report.diffusion.measuredN,
+      spanN: report.diffusion.spanN,
+      refused: report.diffusion.refused,
+    },
+    skill: report.skill
+      ? {
+        brier: report.skill.brier,
+        n: report.skill.n,
+        refused: report.skill.refused,
+      }
+      : { brier: null, n: 0, refused: 'No settled readings to grade.' },
+    method: {
+      blanket: 'Collective blanket model — union of dated commitments held by span members.',
+      concentration: 'Herfindahl–Hirschman concentration with inverse-HHI effective holders and Shannon entropy.',
+      flow: 'Maximum-flow / minimum-cut feasibility on an evidence-only eligibility graph (Dinic).',
+      untested: 'Lindley–Smith single-sample acceptance for untested benches.',
+      disclosure: 'Identity-free by construction: no person name, no individual rating, no individual cover name. Counts only above rank 2.',
+    },
+    refusals: [],
+  };
+
+  // Collect refusals from certification, diffusion, and skill
+  if (report.certification.refused) pack.refusals.push(`Certification: ${report.certification.refused}`);
+  if (report.diffusion.refused) pack.refusals.push(`Diffusion: ${report.diffusion.refused}`);
+  if (report.skill?.refused) pack.refusals.push(`Skill: ${report.skill.refused}`);
+
+  // Count spans with no measured handover record
+  const untestedSpans = report.spans.filter((s) => s.quotable && !s.handovers?.tested).length;
+  if (untestedSpans > 0) {
+    pack.counts.untestedSpansN = untestedSpans;
+  }
+
+  return pack;
+}
+
 export { SUCCESSION_PREMISE };

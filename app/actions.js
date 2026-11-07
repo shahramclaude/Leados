@@ -175,6 +175,7 @@ import {
   IMPACT_ALPHAS,
   IMPACT_INTERVENTION_IDS,
   normalizeTalkingPoints,
+  SCHEMA_VERSION,
 } from './core/schema.js';
 import { buildReviewEvidence, calibrateReview, reviewReadiness, validPeriod } from './core/domain/reviews.js';
 import {
@@ -487,6 +488,7 @@ import {
   gradeSuccessionReading as gradeSuccessionReadingCore,
   successionBrief,
   successionConventions,
+  successionExportPack,
   successionReport,
   successionView,
 } from './core/domain/succession.js';
@@ -18559,6 +18561,20 @@ export function createApi(store, options = {}) {
     return successionBrief(successionRead(), clock());
   }
 
+  /**
+   * Export a seat-scoped, counts-only JSON pack of the succession report.
+   * Identity-free by construction: no person name, no individual rating, no
+   * individual cover name. Every figure is a count, a withheld rate, or a
+   * printed refusal.
+   */
+  function successionExportPackFn(options = {}) {
+    const now = clock();
+    const report = successionRead(options);
+    const seat = options?.seat || null;
+    const pack = successionExportPack(report, { now, seat, schemaVersion: SCHEMA_VERSION });
+    return JSON.stringify(pack, null, 2);
+  }
+
   /** Deprivation exposure, per declared currency. Never invents a price. */
   function successionExposure(options = {}) {
     return deprivationExposure(successionRead(), { reviewDays: options?.reviewDays ?? null, now: clock() });
@@ -19630,6 +19646,7 @@ export function createApi(store, options = {}) {
     // claim rather than a readiness rating.
     successionRead,
     successionBriefText,
+    successionExportPackFn,
     successionExposure,
     freezeSuccessionReading,
     gradeSuccessionReadingNow,
