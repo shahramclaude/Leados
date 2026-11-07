@@ -128,3 +128,116 @@ export function renderCaptureBriefs(ctx, capture) {
           h('button', { class: 'btn btn-tiny btn-ghost', type: 'button', onClick: () => messageDialog(ctx, capture, reading, row, 'dismiss') }, 'Dismiss')) : null))
         : [h('p', { class: 'muted small' }, 'No messages yet. Add a named stakeholder to prepare the first unsent draft.')])) });
 }
+
+/* --------------------------------------------------------------------------
+ * ADR-0119 — register-backed bulk selection (Session 161).
+ *
+ * The single-recipient dialog above retypes what the register already holds. This
+ * panel reads the register instead: every active record is judged against this
+ * seat's span and this case, and lands in `eligible` / `already-on-case` /
+ * `refused` with the reason printed. Selection is by register ID, so two people
+ * who share a name stay two people. Preview evaluates the WHOLE set; the write is
+ * one transaction and one shared case event, and the existing rules author the
+ * text exactly as they do for a single recipient.
+ * -------------------------------------------------------------------------- */
+
+const stateBadge = (row) => row.state === 'eligible' ? badge('Eligible', 'good')
+  : row.state === 'already-on-case' ? badge('On this case', 'neutral') : badge('Refused', 'bad');
+
+function bulkRow(row, onToggle, selected) {
+  const box = h('input', { type: 'checkbox', id: `flow-bulk-${row.registerId}`, disabled: row.state !== 'eligible',
+    checked: row.state === 'eligible' && selected.has(row.registerId),
+    onChange: () => onToggle(row.registerId, box.checked) });
+  return h('div', { class: 'flow-bulk-row' },
+    h('label', { class: 'check-row', for: box.id }, box,
+      h('span', null, h('strong', null, row.name),
+        row.role ? ` · ${row.role}` : '', row.org ? ` · ${row.org}` : '',
+        row.nameCollision ? h('small', { class: 'tiny muted' }, ' — name shared with another register record; this row is selected by its register id') : null)),
+    h('div', { class: 'row-gap wrap' }, stateBadge(row),
+      badge(`power ${row.power} × interest ${row.interest}`, 'neutral'), badge(row.stance, row.stance === 'blocker' || row.stance === 'skeptical' ? 'warn' : 'neutral'),
+      row.quadrant ? badge(row.quadrant, 'info') : null),
+    row.state === 'eligible' ? null : h('p', { class: 'tiny muted' }, row.reason));
+}
+
+function bulkBriefDialog(ctx, capture) {
+  const reading = ctx.api.missionCaptureBriefCandidates(capture.id);
+  if (!reading.ok) { toast(reading.error, 'bad'); return; }
+  const selected = new Set();
+  const error = errorLine();
+  const previewBox = h('div', { class: 'flow-brief-preview', hidden: true });
+  const acknowledge = h('input', { id: 'flow-bulk-reviewed', type: 'checkbox', disabled: true });
+  const summary = h('p', { class: 'small muted' });
+  let shown = null;
+  const refreshSummary = () => {
+    summary.textContent = `${selected.size} of ${reading.counts.eligible} eligible register person(s) selected. `
+      + `${reading.counts.attached} already on this case · ${reading.counts.refused} refused by span or salience. `
+      + `Case headroom: ${reading.headroom} of ${reading.cap} stakeholder slots.`;
+  };
+  const onToggle = (id, on) => {
+    if (on) selected.add(id); else selected.delete(id);
+    shown = null; previewBox.hidden = true; previewBox.replaceChildren(); acknowledge.checked = false;
+    acknowledge.disabled = true; submit.disabled = true; refreshSummary(); error.textContent = '';
+  };
+  const submit = h('button', { class: 'btn btn-primary', type: 'button', disabled: true, onClick: () => {
+    if (!shown || !acknowledge.checked) return;
+    const result = ctx.api.missionCaptureBriefBulkDraft(capture.id, { recipientIds: [...selected],
+      expectedRevision: shown.revision, previewFingerprint: shown.fingerprint, reviewed: true });
+    if (!result.ok) { error.textContent = result.error; return; }
+    dialog.close();
+    toast(result.warning || `${result.count} unsent brief(s) created in one case transaction. Review each before approving — nothing is sent.`, result.warning ? 'bad' : 'good');
+    ctx.refresh();
+  } }, 'Create unsent drafts for the reviewed audience');
+
+  const rows = reading.rows.slice().sort((a, b) => {
+    const order = { eligible: 0, 'already-on-case': 1, refused: 2 };
+    return (order[a.state] - order[b.state]) || String(a.name).localeCompare(String(b.name));
+  });
+
+  const form = h('form', { class: 'stack-sm', onSubmit: (event) => {
+    event.preventDefault();
+    const result = ctx.api.missionCaptureBriefBulkPreview(capture.id, { recipientIds: [...selected] });
+    if (!result.ok) { shown = null; previewBox.hidden = true; error.textContent = result.error; return; }
+    error.textContent = ''; shown = result;
+    previewBox.replaceChildren(
+      h('h4', null, `One reviewed audience of ${result.count}`),
+      h('p', { class: 'muted small' }, result.missingUnion.length
+        ? `Unconfirmed case facts across this audience: ${result.missingUnion.join(', ')}. They stay labelled in each draft, never invented.`
+        : 'No required case facts are missing for this audience.'),
+      ...result.recipients.map((r) => h('article', { class: 'flow-bulk-preview' },
+        h('div', { class: 'row-gap wrap' }, h('strong', null, `${r.name} · ${r.quadrant}`), badge(r.stance, 'neutral'),
+          r.nameCollision ? badge('shared name', 'warn') : null),
+        h('p', { class: 'tiny muted' }, `${Math.round(r.preview.readiness * 100)}% of required case facts recorded · from register assessment dated ${r.assessedOn?.slice(0, 10) || 'undated'}`),
+        h('strong', null, r.preview.subject), h('pre', { class: 'flow-brief-body' }, r.preview.body))),
+      h('p', { class: 'tiny muted' }, 'Preview only. One atomic case update attaches all recipients and the existing rules create exactly these drafts. Nothing is sent, and each message is still approved one at a time.'));
+    previewBox.hidden = false; acknowledge.disabled = false; acknowledge.checked = false; submit.disabled = true;
+  } },
+  h('p', { class: 'muted small' }, 'Recipients are read from the Stakeholder Influence Register, not typed. A registered person outside your operating span is refused with the boundary named. Power, interest and stance are the register’s own dated assessment; edit them there to change who qualifies.'),
+  h('div', { class: 'flow-bulk-list' }, ...rows.map((row) => bulkRow(row, onToggle, selected))),
+  summary, error,
+  h('button', { class: 'btn btn-ghost', type: 'submit', disabled: false }, 'Preview the selected audience'),
+  previewBox,
+  h('label', { class: 'check-row', for: 'flow-bulk-reviewed' }, acknowledge,
+    h('span', null, 'I reviewed every recipient and every message above. This creates unsent drafts on the same case, not sent messages, and no approval is granted by it.')),
+  submit);
+  acknowledge.addEventListener('change', () => { submit.disabled = !shown || !acknowledge.checked; });
+  refreshSummary();
+  const dialog = openModal({ title: 'Brief a reviewed audience from the register', body: form, size: 'lg' });
+}
+
+/** Add the bulk entry point to the adopted-case brief card. */
+export function renderCaptureBriefBulk(ctx, capture) {
+  const reading = ctx.api.missionCaptureBriefCandidates(capture.id);
+  if (!reading.ok) return banner({ tone: 'caution', title: 'Register audience unavailable', body: reading.error });
+  if (!reading.counts.total) {
+    return banner({ tone: 'info', title: 'No register records yet',
+      body: 'Bulk briefing reads the Stakeholder Influence Register. Record the people this case touches there first — the register keeps their power, interest and stance dated, and this panel refuses anyone outside your span.' });
+  }
+  return card({ className: 'flow-briefs-bulk', title: 'Brief an audience · from the register',
+    subtitle: `${reading.counts.eligible} eligible · ${reading.counts.attached} on this case · ${reading.counts.refused} refused · ${reading.headroom} of ${reading.cap} slots free`,
+    body: h('div', { class: 'stack-sm' },
+      h('p', { class: 'muted small' }, 'Select several register people at once instead of retyping them one by one. Every candidate is derived from the register and your span: an actor outside your operating span, or one Mendelow power × interest does not qualify for an individual brief, is printed as refused with the reason. Your selection is assessed as a whole, written in one case transaction, and each resulting message is still approved individually.'),
+      reading.atCap
+        ? banner({ tone: 'caution', title: 'Case stakeholder list is full', body: `This case holds its ${reading.cap}-entry maximum. Remove or archive an audience member on the case before adding more.` })
+        : h('button', { class: 'btn btn-primary', type: 'button', disabled: !reading.counts.eligible,
+          onClick: () => bulkBriefDialog(ctx, capture) }, reading.counts.eligible ? `Choose from ${reading.counts.eligible} eligible register person(s)` : 'No register person qualifies for this case yet'))});
+}
