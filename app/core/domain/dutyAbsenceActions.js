@@ -35,7 +35,7 @@ import { ensureEntityLink } from './automation.js';
 import { activeSeat, buildSeats, canAct } from './seat.js';
 import { harvestWork, LEADER_ID } from './chain.js';
 import {
-  absenceWindowPlan, dutyAbsenceRollup, buildDutyCoverageReport,
+  absenceWindowPlan, absenceConcurrency, dutyAbsenceRollup, buildDutyCoverageReport,
 } from './dutyCoverage.js';
 import {
   activeAbsenceFor, parseAbsenceWindow, overlaps,
@@ -140,25 +140,43 @@ export function createDutyAbsenceActions(store, { now, idFactory }) {
         ? `${exposed} of ${plan.summary.dutiesN} duty line(s) this seat holds have NO available cover during ${windowText}` + (exposedOpen ? ` — ${exposedOpen} of them carry open work.` : '.')
         : `Every duty line this seat holds has an available cover during ${windowText}.`;
 
+      const row = {
+        id: rowId,
+        seatId: seat.id,
+        from: window.from,
+        to: window.to,
+        reason,
+        note,
+        decisionId,
+        declaredBySeatId: seat.fullAccess ? null : seat.id,
+        declaredOn: today,
+        declaredAt: at.toISOString(),
+        status: 'active',
+        revokedOn: null,
+        revokedAt: null,
+        revokeReason: '',
+        version: DUTY_ABSENCE_ENGINE_VERSION,
+      };
+      // ADR-0123: what does THIS declaration change about the span's overlap?
+      // Graded against a hypothetical state (the row is not written yet) so the
+      // governed decision opened below records the concurrency the declaration
+      // creates — on the record, at the moment it is created.
+      const concurrency = absenceConcurrency(
+        { ...store.state, absencePlans: [row, ...plans()] },
+        built,
+        seat,
+        { now: clock(), settings: settings(), items },
+      );
+      const worst = concurrency.windows
+        .slice()
+        .sort((a, b) => b.count - a.count || b.exposedOpenN - a.exposedOpenN || (a.from < b.from ? -1 : 1))[0] || null;
+      const concurrencyLine = worst
+        ? `Concurrency: this window overlaps ${worst.count - 1} other declared absence(s) in this span. On ${worst.from} → ${worst.to}, ${worst.count} seat(s) are absent at once, ${worst.exposedN} duty line(s) have no available cover on those shared dates (${worst.exposedOpenN} carrying open work), and ${worst.singleCovers.length} declared cover(s) would be the only answerable person for two or more absent seats.`
+        : `Concurrency: ${concurrency.refused || 'no other declared absence in this span shares a date with this window.'} The overlap is graded from the declared windows on every read, never stored.`;
+
       store.update((draft) => {
         draft.absencePlans = Array.isArray(draft.absencePlans) ? draft.absencePlans : [];
-        draft.absencePlans.unshift({
-          id: rowId,
-          seatId: seat.id,
-          from: window.from,
-          to: window.to,
-          reason,
-          note,
-          decisionId,
-          declaredBySeatId: seat.fullAccess ? null : seat.id,
-          declaredOn: today,
-          declaredAt: at.toISOString(),
-          status: 'active',
-          revokedOn: null,
-          revokedAt: null,
-          revokeReason: '',
-          version: DUTY_ABSENCE_ENGINE_VERSION,
-        });
+        draft.absencePlans.unshift(row);
         // The graph, not a second table: the plan DECLARES THE ABSENCE OF the
         // seat that will not be at it. Same spine as every other declaration.
         ensureEntityLink(draft, {
@@ -178,6 +196,7 @@ export function createDutyAbsenceActions(store, { now, idFactory }) {
           question: [
             `${seat.name} (${seat.label}) declared an absence ${windowText}: ${reason}`,
             exposureLine,
+            concurrencyLine,
             'What remains open is whether every exposed duty line has a declared, available stand-in on those dates. The register derives availability from the declared windows and exercise from dated records; this decision records the exposure the absence creates and asks the seat to close it before the window opens, not after.',
           ].join(' '),
           date: today,
@@ -221,9 +240,20 @@ export function createDutyAbsenceActions(store, { now, idFactory }) {
         type: DUTY_ABSENCE_EVENTS.DECLARE,
         entity: 'absenceplan',
         entityId: rowId,
-        summary: `Absence declared: ${seat.label} absent ${windowText}. ${exposed} of ${plan.summary.dutiesN} duty line(s) exposed.`.slice(0, 300),
+        summary: `Absence declared: ${seat.label} absent ${windowText}. ${exposed} of ${plan.summary.dutiesN} duty line(s) exposed. ${concurrency.windows.length ? `${concurrency.windows.length} concurrent window(s), ${concurrency.summary.exposedOpenN} line(s) with open work uncovered on the shared dates, ${concurrency.summary.singleCoverN} single-cover point(s).` : 'No concurrent window.'}`.slice(0, 300),
       });
-      return saved({ id: rowId, decisionId, window, summary: plan.summary });
+      return saved({
+        id: rowId,
+        decisionId,
+        window,
+        summary: plan.summary,
+        concurrency: {
+          windowsN: concurrency.windows.length,
+          maxConcurrent: concurrency.summary.maxConcurrent,
+          exposedOpenN: concurrency.summary.exposedOpenN,
+          singleCoverN: concurrency.summary.singleCoverN,
+        },
+      });
     },
 
     /** Withdraw a declared absence, with the reason recorded. Append-only. */
@@ -268,13 +298,23 @@ export function createDutyAbsenceActions(store, { now, idFactory }) {
       const items = harvestWork(store.state, built.chain, { now: clock(), settings: settings() });
       const rollup = dutyAbsenceRollup(store.state, built, seat, { now: clock(), settings: settings(), items });
       const report = buildDutyCoverageReport(store.state, { now: clock(), settings: settings() });
+      const conc = report.absences.concurrency;
       store.update(() => {}, {
         type: DUTY_ABSENCE_EVENTS.SCAN,
         entity: 'workspace',
         entityId: '',
-        summary: `Absence plans re-derived: ${report.absences.own ? 1 : 0} own, ${rollup.rows.length} in span, ${report.absences.exposedOpenN} duty line(s) with open work and no available cover on the absence dates. Nothing was scheduled.`.slice(0, 300),
+        summary: `Absence plans re-derived: ${report.absences.own ? 1 : 0} own, ${rollup.rows.length} in span, ${report.absences.exposedOpenN} duty line(s) with open work and no available cover on the absence dates. Concurrency: ${conc.refused ? `refused — ${conc.refused}` : `${conc.summary.windowsN} overlapping window(s), at most ${conc.summary.maxConcurrent} seats at once, ${conc.summary.singleCoverN} single-cover point(s)`}. Nothing was scheduled.`.slice(0, 300),
       });
-      return saved({ exposedOpenN: report.absences.exposedOpenN, inSpanN: rollup.rows.length });
+      return saved({
+        exposedOpenN: report.absences.exposedOpenN,
+        inSpanN: rollup.rows.length,
+        concurrency: {
+          windowsN: conc.summary.windowsN,
+          maxConcurrent: conc.summary.maxConcurrent,
+          singleCoverN: conc.summary.singleCoverN,
+          refused: conc.refused,
+        },
+      });
     },
   };
 }

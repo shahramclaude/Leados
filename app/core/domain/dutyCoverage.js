@@ -55,7 +55,11 @@ import { normalizeDutyCoverageSettings, makeDutyId } from './dutyCoverageSchema.
 import {
   activeAbsenceFor, overlaps, parseAbsenceWindow,
 } from './dutyAbsenceSchema.js';
-import { DUTY_ABSENCE_LIMITS } from './dutyAbsenceRegistry.js';
+import {
+  DUTY_ABSENCE_LIMITS,
+  DUTY_CONCURRENCY_ENGINE_VERSION,
+  DUTY_CONCURRENCY_PREMISE,
+} from './dutyAbsenceRegistry.js';
 
 /* ------------------------------------------------------------------ helpers */
 
@@ -486,6 +490,268 @@ export function dutyAbsenceRollup(state, built, seat, { now = new Date(), settin
   };
 }
 
+/* ============================================================ concurrency */
+
+/**
+ * Maximal date ranges on which at least two declared windows of `participants`
+ * are live at once. Boundaries are the day each window opens and the day after
+ * it closes, so the sweep is over inclusive ISO day keys and never depends on
+ * the clock. Adjacent ranges with the same participant set are merged, because
+ * "lead1 out 5–7, lead2 out 5–9" is ONE window with a stable cast, not three.
+ */
+function concurrencyIntervals(participants) {
+  const points = new Set();
+  for (const p of participants) {
+    points.add(p.from);
+    points.add(addDays(p.to, 1));
+  }
+  const sorted = [...points].filter(Boolean).sort();
+  const raw = [];
+  for (let i = 0; i < sorted.length - 1; i += 1) {
+    const from = sorted[i];
+    const to = addDays(sorted[i + 1], -1);
+    if (!from || !to || from > to) continue;
+    const active = participants.filter((p) => p.from <= from && p.to >= from);
+    if (active.length < 2) continue;
+    const key = active.map((p) => p.seatId).sort().join('|');
+    const prev = raw[raw.length - 1];
+    if (prev && prev.key === key && addDays(prev.to, 1) === from) {
+      prev.to = to;
+      continue;
+    }
+    raw.push({ from, to, key, active });
+  }
+  return raw;
+}
+
+/**
+ * Concurrent absence exposure (ADR-0123).
+ *
+ * The per-absence plan answers "is THIS seat's cover present on THESE dates?".
+ * A director reviewing a holiday week asks a different question:
+ *
+ *     "Three seats are out the same week — which duty lines lose their cover
+ *      on the shared dates, and is one person the only declared cover for two
+ *      of them?"
+ *
+ * Both halves are DERIVED from the declared absence windows and the declared
+ * covers. Nothing is stored, nothing is scheduled, and no cover is assigned:
+ * the sweep prints the overlap, the exposed lines on the shared dates and the
+ * cover who would be the single answerable person for more than one absent
+ * seat. Above the manager altitude a cover's name is withheld (rank ≤ 2
+ * convention, ADR-0121/ADR-0125 seam); counts, seats and refusals survive.
+ *
+ * Refusals are printed, never zeroed: no absence declared, one absence, or
+ * declared windows that never share a date each read as a printed refusal —
+ * "nothing to grade" is not the same claim as "no collision will happen".
+ */
+export function absenceConcurrency(state, built, seat, { now = new Date(), settings = null, items = null } = {}) {
+  const effective = settings || state?.settings || {};
+  const allItems = items || harvestWork(state, built.chain, { now, settings: effective });
+  const namesVisible = seat.fullAccess || (seat.rank ?? 1) <= 2;
+
+  const participants = [];
+  for (const plan of Array.isArray(state?.absencePlans) ? state.absencePlans : []) {
+    if (!plan || plan.status !== 'active' || !plan.seatId) continue;
+    const node = built.byId.get(plan.seatId);
+    if (!node) continue;
+    const inScope = seat.fullAccess || plan.seatId === seat.id || seat.scope.has(plan.seatId);
+    if (!inScope) continue;
+    const window = parseAbsenceWindow(plan);
+    if (!window) continue;
+    participants.push({
+      seatId: plan.seatId,
+      node,
+      from: window.from,
+      to: window.to,
+      reason: plan.reason || '',
+      self: plan.seatId === seat.id,
+    });
+  }
+  participants.sort((a, b) => (a.from < b.from ? -1 : a.from > b.from ? 1 : (a.seatId < b.seatId ? -1 : 1)));
+
+  const result = {
+    engineVersion: DUTY_CONCURRENCY_ENGINE_VERSION,
+    premise: DUTY_CONCURRENCY_PREMISE,
+    namesVisible,
+    scope: {
+      seatId: seat.id,
+      label: seat.label,
+      rank: seat.rank,
+      altitudeKey: seat.altitudeKey,
+      fullAccess: Boolean(seat.fullAccess),
+    },
+    participants: participants.map((p) => ({
+      seatId: p.seatId,
+      label: p.node.label,
+      rank: p.node.rank,
+      altitudeKey: p.node.altitudeKey,
+      from: p.from,
+      to: p.to,
+      days: (daysBetween(p.from, p.to) ?? 0) + 1,
+      self: p.self,
+      reason: namesVisible ? p.reason : null,
+    })),
+    windows: [],
+    summary: {
+      participantsN: participants.length,
+      windowsN: 0,
+      deferredWindowsN: 0,
+      maxConcurrent: 0,
+      seatsInOverlapN: 0,
+      exposedWindowsN: 0,
+      exposedN: 0,
+      exposedOpenN: 0,
+      singleCoverN: 0,
+    },
+    refused: null,
+  };
+
+  if (!participants.length) {
+    result.refused = 'No active absence plan is declared in this seat’s span, so no concurrent absence can be graded. An empty ledger is not evidence that absences will not collide.';
+    return result;
+  }
+  if (participants.length === 1) {
+    result.refused = 'Only one active absence plan sits in this seat’s span: a concurrency window needs at least two declared windows that share a date. Overlap is not graded from one declaration.';
+    return result;
+  }
+
+  const raw = concurrencyIntervals(participants);
+  if (!raw.length) {
+    result.refused = `${participants.length} absence plans are declared in this span, but no two windows share a date. Adjacency is not overlap: the exposure of concurrent absence is left ungraded rather than reported as clear.`;
+    return result;
+  }
+
+  const capped = raw.slice(0, DUTY_ABSENCE_LIMITS.concurrentWindowCap);
+  result.summary.deferredWindowsN = raw.length - capped.length;
+  const seatsOut = new Set();
+
+  for (const w of capped) {
+    const usedLabels = new Map();
+    const refFor = (node) => {
+      if (namesVisible) return node.name || node.label;
+      const n = (usedLabels.get(node.label) || 0) + 1;
+      usedLabels.set(node.label, n);
+      return `${node.label} ${n}`;
+    };
+    const seats = [];
+    const soleMap = new Map();
+    const conflictMap = new Map();
+    let exposedN = 0;
+    let exposedOpenN = 0;
+
+    for (const p of w.active) {
+      seatsOut.add(p.seatId);
+      const planForWindow = absenceWindowPlan(
+        state, built, p.node, { from: w.from, to: w.to },
+        { now, settings: effective, items: allItems, depth: 1 },
+      );
+      let seatExposed = 0;
+      let seatExposedOpen = 0;
+      for (const row of planForWindow.rows) {
+        if (row.windowBand === 'gap' || row.windowBand === 'cover-absent' || row.windowBand === 'ineligible') {
+          seatExposed += 1;
+          if (row.openN > 0) seatExposedOpen += 1;
+        }
+        // A duty line with exactly ONE available, eligible cover is the only
+        // place a single point of failure can hide: two such lines belonging
+        // to two different absent seats share that one person.
+        const available = row.covers.filter((c) => c.available && c.eligible);
+        if (available.length === 1) {
+          const cover = available[0];
+          const rec = soleMap.get(cover.coverId)
+            || { coverId: cover.coverId, name: cover.name, label: cover.label, rank: cover.rank, dutiesN: 0, seatIds: new Set() };
+          rec.dutiesN += 1;
+          rec.seatIds.add(p.seatId);
+          soleMap.set(cover.coverId, rec);
+        }
+        for (const conflict of row.conflicts) {
+          const rec = conflictMap.get(conflict.coverId)
+            || { coverId: conflict.coverId, name: conflict.name, label: conflict.label, from: conflict.from, to: conflict.to, seatsN: 0 };
+          rec.seatsN += 1;
+          conflictMap.set(conflict.coverId, rec);
+        }
+      }
+      exposedN += seatExposed;
+      exposedOpenN += seatExposedOpen;
+      seats.push({
+        seatId: p.seatId,
+        ref: refFor(p.node),
+        label: p.node.label,
+        rank: p.node.rank,
+        altitudeKey: p.node.altitudeKey,
+        self: p.self,
+        from: p.from,
+        to: p.to,
+        exposedN: seatExposed,
+        exposedOpenN: seatExposedOpen,
+      });
+    }
+
+    const singleCovers = [...soleMap.values()]
+      .filter((c) => c.seatIds.size >= 2)
+      .map((c) => ({
+        coverId: namesVisible ? c.coverId : null,
+        name: namesVisible ? c.name : null,
+        label: c.label,
+        rank: c.rank,
+        dutiesN: c.dutiesN,
+        seatsN: c.seatIds.size,
+        refs: [...c.seatIds].map((id) => seats.find((s) => s.seatId === id)?.ref).filter(Boolean),
+      }))
+      .sort((a, b) => b.seatsN - a.seatsN || b.dutiesN - a.dutiesN);
+
+    const conflicts = [...conflictMap.values()]
+      .map((c) => ({
+        coverId: namesVisible ? c.coverId : null,
+        name: namesVisible ? c.name : null,
+        label: c.label,
+        from: c.from,
+        to: c.to,
+        seatsN: c.seatsN,
+      }))
+      .sort((a, b) => b.seatsN - a.seatsN);
+
+    const count = w.active.length;
+    const days = (daysBetween(w.from, w.to) ?? 0) + 1;
+    const band = exposedOpenN > 0 ? 'open-exposed' : exposedN > 0 ? 'exposed' : singleCovers.length ? 'concentrated' : 'covered';
+    const coverText = singleCovers.length
+      ? ` ${singleCovers.length} declared cover(s) would be the ONLY answerable person for more than one absent seat: ${singleCovers
+        .map((c) => `${c.label} for ${c.seatsN} absent seats (${c.refs.join(', ')})`).join('; ')}.`
+      : '';
+    const reasons = {
+      'open-exposed': `${count} seats are absent at once ${w.from} → ${w.to} (${days} day(s)). ${exposedN} of their duty line(s) have no available, eligible cover on those shared dates and ${exposedOpenN} of them carry open work right now.${coverText}`,
+      exposed: `${count} seats are absent at once ${w.from} → ${w.to} (${days} day(s)). ${exposedN} duty line(s) have no available cover on those dates; none of them carries open work today, which is not the same as being safe.${coverText}`,
+      concentrated: `${count} seats are absent at once ${w.from} → ${w.to} (${days} day(s)). Every duty line has an available cover, but the cover is not always a different person — see the single point(s) below.${coverText}`,
+      covered: `${count} seats are absent at once ${w.from} → ${w.to} (${days} day(s)). Every duty line has an available, genuinely distinct cover. This is a register reading, not a forecast.`,
+    };
+
+    result.windows.push({
+      from: w.from,
+      to: w.to,
+      days,
+      count,
+      band,
+      reason: reasons[band],
+      seats,
+      exposedN,
+      exposedOpenN,
+      conflicts,
+      singleCovers,
+    });
+  }
+
+  const windows = result.windows;
+  result.summary.windowsN = windows.length;
+  result.summary.maxConcurrent = windows.reduce((max, w) => Math.max(max, w.count), 0);
+  result.summary.seatsInOverlapN = seatsOut.size;
+  result.summary.exposedWindowsN = windows.filter((w) => w.exposedN > 0).length;
+  result.summary.exposedN = windows.reduce((sum, w) => sum + w.exposedN, 0);
+  result.summary.exposedOpenN = windows.reduce((sum, w) => sum + w.exposedOpenN, 0);
+  result.summary.singleCoverN = windows.reduce((sum, w) => sum + w.singleCovers.length, 0);
+  return result;
+}
+
 /**
  * The report's dated section: the seat's own active absence (with its window
  * plan) plus every absence in the span below, counts-only above the manager
@@ -522,6 +788,10 @@ function buildAbsenceSection(state, built, seat, { now, settings, items }) {
     })),
     exposedN: (ownSummary ? ownSummary.exposedN : 0) + inSpan.exposedN,
     exposedOpenN: (ownSummary ? ownSummary.exposedOpenN : 0) + inSpan.exposedOpenN,
+    // ADR-0123: the overlap reading travels with the register at every
+    // altitude, so a director's unit and a chief's enterprise receive the same
+    // derived windows without a second store or a second computation.
+    concurrency: absenceConcurrency(state, built, seat, { now, settings, items }),
   };
 }
 
@@ -667,6 +937,7 @@ export function buildDutyCoverageReport(state, { now = new Date(), settings = nu
       dutyCoverageExerciseDays: [7, 180],
       dutyCoverageConcentrationPct: [50, 100],
       dutyAbsenceMaxSpanDays: DUTY_ABSENCE_LIMITS.maxSpanDays,
+      dutyConcurrencyWindowCap: DUTY_ABSENCE_LIMITS.concurrentWindowCap,
     },
     summary: {
       dutiesN: total,
@@ -715,6 +986,18 @@ export function dutyCoverageBriefText(report) {
   const absenceTotal = (report.absences?.own ? 1 : 0) + (report.absences?.inSpan?.length || 0);
   if (absenceTotal) {
     lines.push(`Dated absence plans: ${absenceTotal} active in this span — ${report.absences.exposedOpenN} duty line(s) carry open work with no available cover on the absence dates. Availability is derived from the declared windows, never stored.`);
+  }
+  // ADR-0123: concurrency is printed as its own reading, with its own refusal.
+  const conc = report.absences?.concurrency;
+  if (conc && conc.summary.participantsN > 0) {
+    if (conc.refused) {
+      lines.push(`Concurrent absence: refused — ${conc.refused}`);
+    } else {
+      lines.push(`Concurrent absence: ${conc.summary.windowsN} overlapping window(s) in this span, at most ${conc.summary.maxConcurrent} seats absent at once — ${conc.summary.exposedN} duty line(s) have no available cover on the shared dates, ${conc.summary.exposedOpenN} of them carrying open work, and ${conc.summary.singleCoverN} single-cover point(s) where one person is the only answerable cover for two or more absent seats.`);
+      if (conc.summary.deferredWindowsN) {
+        lines.push(`  · ${conc.summary.deferredWindowsN} further overlapping window(s) were not graded: the concurrency sweep is capped at ${report.bounds.dutyConcurrencyWindowCap} window(s).`);
+      }
+    }
   }
   const comparison = report.branchCoverage;
   if (comparison) {

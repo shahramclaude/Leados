@@ -308,6 +308,87 @@ function rollupCard(ctx, rollup, namesShown) {
   });
 }
 
+/* ------------------------------------ ADR-0123: concurrent absence exposure */
+
+const concurrencyBandBadge = (band) => {
+  if (band === 'covered') return badge('distinct covers', 'good', 'Every duty line has an available cover that is not shared with another absent seat');
+  if (band === 'concentrated') return badge('one cover, several absences', 'warn', 'A declared cover is the only answerable person for two or more absent seats');
+  if (band === 'exposed') return badge('no cover on shared dates', 'bad', 'A duty line has no available cover while the seats are out together');
+  return badge('open work uncovered', 'bad', 'A duty line with open work has no available cover on the shared dates');
+};
+
+function concurrencyCard(concurrency) {
+  if (!concurrency) return null;
+  const s = concurrency.summary;
+  if (!s.participantsN) {
+    return card({
+      title: 'Concurrent absence exposure',
+      body: emptyState({
+        title: 'No dated absence is declared in this span yet',
+        body: concurrency.refused || 'Concurrency is graded from declared absence windows. With none on the record there is nothing to sweep — which is not a claim that absences will not collide.',
+      }),
+    });
+  }
+  if (concurrency.refused) {
+    return card({
+      title: 'Concurrent absence exposure — refused',
+      subtitle: 'The sweep prints its refusal rather than a reassuring zero.',
+      body: h('div', { class: 'stack' },
+        banner({ tone: 'warn', title: 'Concurrency could not be graded', body: concurrency.refused }),
+        table({
+          caption: 'Declared absence windows in this span',
+          columns: [
+            { label: 'Seat', render: (p) => `${p.label} (rank ${p.rank})` },
+            { label: 'Window', render: (p) => `${p.from} → ${p.to}` },
+            { label: 'Days', render: (p) => String(p.days) },
+            { label: 'Includes this seat', render: (p) => (p.self ? 'yes' : 'no') },
+          ],
+          rows: concurrency.participants,
+          emptyMessage: 'No absences.',
+        })),
+    });
+  }
+  return card({
+    title: `Concurrent absence exposure — ${s.windowsN} overlapping window(s)`,
+    subtitle: concurrency.premise,
+    body: h('div', { class: 'stack' },
+      h('div', { class: 'stat-grid' },
+        stat({ label: 'Windows', value: String(s.windowsN), hint: `${s.participantsN} declared absence(s) swept` }),
+        stat({ label: 'Most seats out at once', value: String(s.maxConcurrent), tone: s.maxConcurrent > 2 ? 'bad' : '', hint: `${s.seatsInOverlapN} distinct seat(s) appear in an overlap` }),
+        stat({ label: 'Open work, no cover', value: String(s.exposedOpenN), tone: s.exposedOpenN ? 'bad' : 'good', hint: `${s.exposedN} exposed duty line(s) across the windows` }),
+        stat({ label: 'Single-cover points', value: String(s.singleCoverN), tone: s.singleCoverN ? 'bad' : 'good', hint: 'one person is the only answerable cover for 2+ absent seats' })),
+      table({
+        caption: 'Overlapping absence windows',
+        columns: [
+          { label: 'Shared dates', render: (w) => `${w.from} → ${w.to}` },
+          { label: 'Days', render: (w) => String(w.days) },
+          { label: 'Seats out', render: (w) => w.seats.map((x) => x.ref).join(', ') },
+          { label: 'Reading', render: (w) => concurrencyBandBadge(w.band) },
+          { label: 'Exposed lines', render: (w) => String(w.exposedN) },
+          { label: 'Open, exposed', render: (w) => String(w.exposedOpenN) },
+          { label: 'Single cover', render: (w) => String(w.singleCovers.length) },
+        ],
+        rows: concurrency.windows,
+        emptyMessage: 'No overlap.',
+      }),
+      ...concurrency.windows.map((w) => h('div', { class: 'stack-xs' },
+        h('p', { class: 'field-label' }, `${w.from} → ${w.to} — ${w.seats.map((x) => x.ref).join(', ')}`),
+        h('p', { class: 'muted small' }, w.reason),
+        w.singleCovers.length
+          ? h('ul', { class: 'plain-list' }, ...w.singleCovers.map((c) => h('li', { class: 'muted small' },
+            `${concurrency.namesVisible ? (c.name || c.label) : c.label} (rank ${c.rank}) would be the only answerable cover for ${c.dutiesN} duty line(s) across ${c.seatsN} absent seats — ${c.refs.join(', ')}. Declaring a second cover for one of those lines removes the single point of failure; the register will not assign one.`)))
+          : null,
+        w.conflicts.length
+          ? h('ul', { class: 'plain-list' }, ...w.conflicts.map((c) => h('li', { class: 'muted small' },
+            `${concurrency.namesVisible ? (c.name || c.label) : c.label} is themselves absent ${c.from} → ${c.to} — a declared cover who cannot answer on the shared dates.`)))
+          : null)),
+      s.deferredWindowsN
+        ? banner({ tone: 'warn', title: `${s.deferredWindowsN} further overlapping window(s) were not graded`, body: 'The concurrency sweep is capped so a large ledger cannot be summarised into one comfortable number. Grading the remainder needs a narrower span or fewer simultaneous absences.' })
+        : null,
+      h('p', { class: 'muted small' }, 'Derived on every read from the declared absence windows and the declared covers: nothing here is stored, scheduled or auto-assigned. Adjacency is not overlap — windows that merely touch are not counted. Above the manager altitude a cover is named by rank and seat only.')),
+  });
+}
+
 function planPanel(ctx, report) {
   const result = ctx.api.dutyAbsencePlan?.();
   if (!result || result.ok === false) {
@@ -335,13 +416,15 @@ function planPanel(ctx, report) {
           plan ? windowPlanCard(ctx, plan, namesShown) : null),
       })
       : planningFormCard(ctx, namesShown),
+    concurrencyCard(report.absences?.concurrency),
     rollupCard(ctx, rollup, namesShown),
     card({
       title: 'What is declared, and what is derived',
       body: h('ul', { class: 'plain-list' },
         h('li', null, h('strong', null, 'Declared:'), ' the absence window itself — two ISO dates, the reason the seat holder wrote, and the governed decision naming what stops. A human declares an absence; nothing schedules one.'),
         h('li', null, h('strong', null, 'Derived on every read:'), ' whether each declared cover is AVAILABLE on the window’s dates (a cover with their own absence overlapping the window is not), the window band per duty line, and the cascade — whether an absent cover’s own absence is covered.'),
-        h('li', null, h('strong', null, 'Refused:'), ' a stored availability flag, an engine-assigned absence and a “covered during the window” tick. Availability is a function of two declared windows; a stored copy would drift the moment either window changed.'),
+        h('li', null, h('strong', null, 'Concurrency (ADR-0123):'), ' overlapping absence windows are swept from the same declared dates. The sweep prints the shared dates, the duty lines with no available cover on them, and the cover who would be the only answerable person for two or more absent seats — the single point of failure a per-absence reading cannot show. Adjacency is not overlap, and above the manager altitude the cover is named by rank and seat only.'),
+        h('li', null, h('strong', null, 'Refused:'), ' a stored availability flag, an engine-assigned absence, an auto-assigned second cover and a “covered during the window” tick. Availability is a function of two declared windows; a stored copy would drift the moment either window changed.'),
         h('li', null, h('strong', null, 'Schema v115 is additive.'), ' An upgraded workspace opens with an empty absence ledger — “no absence has been declared here yet”, which is not the same claim as “every absence is covered”.')),
     }),
   );
