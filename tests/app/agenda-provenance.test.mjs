@@ -285,9 +285,9 @@ test('a logged 1:1 with the covered topic turns a filed line into a receipt — 
 /* -------------------------------------------------------------- schema v112 */
 
 test('schema v112 is additive: an existing workspace gets empty ledgers and declared conventions', () => {
-  assert.equal(SCHEMA_VERSION, 112);
+  assert.equal(SCHEMA_VERSION, 113);
   const migrated = migrate({ schemaVersion: 111, people: [{ id: 'p1', name: 'A' }], settings: { leaderName: 'Dana' } });
-  assert.deepEqual(migrated.applied, ['111 → 112']);
+  assert.deepEqual(migrated.applied, ['111 → 112', '112 → 113']);
   assert.equal(migrated.raw.schemaVersion, 112);
   assert.deepEqual(migrated.raw.agendaEntries, [], 'no filing is invented at upgrade time');
   assert.deepEqual(migrated.raw.agendaMarkers, []);

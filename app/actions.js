@@ -37,6 +37,10 @@ import { createJurisdictionActions } from './core/domain/jurisdictionActions.js'
 // ADR-0113: the 1:1 agenda provenance ledger. Two human commands (file a line,
 // withdraw a line); every status, share and receipt rate is re-derived on read.
 import { createAgendaActions } from './core/domain/agendaProvenanceActions.js';
+// ADR-0118: comparing two rehearsed responses and recording the arbitration is a
+// VP/chief command on the same guarded bus and the same post-commit spine as
+// every other terminal.
+import { createComparisonActions } from './core/domain/comparisonActions.js';
 import { createSpanCalibrationActions } from './core/domain/spanCalibrationActions.js';
 // ADR-0092: the Differencing Defender's API mixin — the publication register is a
 // command boundary like every other module's.
@@ -19753,6 +19757,10 @@ export function createApi(store, options = {}) {
   // ADR-0113: the 1:1 agenda ledger. Filing is a human command inside the seat's
   // own detail boundary; receipts are derived from the 1:1 a human logged.
   Object.assign(api, createAgendaActions(store, { now: clock, idFactory: id }));
+  // ADR-0118: the only write is RECORD-ARBITRATION; the receipt, the governed
+  // decision, the two `rehearses` edges and the vertical roll-up land in one
+  // atomic transaction performed by this mixin plus RULE-CMP-01.
+  Object.assign(api, createComparisonActions(store, { now: clock, idFactory: id, createApi }));
   // ADR-0100: the Discretion Calibrator. Freezing measures the record and changes
   // nothing; only a dated, full-access adoption moves the ladder, and the spine
   // registers the reading, opens any falsified-rung decision and grades due

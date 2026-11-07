@@ -55,7 +55,7 @@ const clone = (v) => JSON.parse(JSON.stringify(v));
 
 /** Every route `app/main.js` can render (kept in sync by assertion 2). */
 const RENDERER_ROUTES = [
-  'assurance', 'today', 'mission', 'intake', 'routing', 'concordance', 'responses', 'bundles',
+  'assurance', 'today', 'mission', 'intake', 'routing', 'concordance', 'responses', 'bundles', 'compare',
   'attribution', 'counterfactual', 'reliability', 'supply', 'solvency', 'sceptic', 'comms',
   'insights', 'chain', 'seat', 'succession', 'mandates', 'authorityCalibration', 'seal', 'people',
   'person', 'onboarding', 'oneonones', 'feedback', 'goals', 'delegations', 'growth', 'readiness',
@@ -208,7 +208,7 @@ function seatsOrThrow(state) {
 /* --------------------------------------------------------------- 1. schema */
 
 test('schema v90 migrates additively and refuses malformed or stale grants', () => {
-  assert.equal(SCHEMA_VERSION, 112);
+  assert.equal(SCHEMA_VERSION, 113);
   const old = { schemaVersion: 89, settings: { leaderName: 'Keep' }, cases: [{ id: 'keep' }], disclosureGrants: [{ id: 'existing' }] };
   const migrated = migrate(old);
   assert.equal(migrated.raw.schemaVersion, SCHEMA_VERSION);

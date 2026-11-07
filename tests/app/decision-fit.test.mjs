@@ -72,7 +72,7 @@ function edges(state, relation) {
 /* --------------------------------------------------------- 1. storage */
 
 test('v110 is additive: four empty collections, declared conventions, zero back-fill', () => {
-  assert.equal(SCHEMA_VERSION, 112);
+  assert.equal(SCHEMA_VERSION, 113);
   const empty = createEmptyState(NOW.toISOString());
   assert.deepEqual(empty.fitSnapshots, []);
   assert.deepEqual(empty.fitProposals, []);
@@ -88,7 +88,7 @@ test('v110 is additive: four empty collections, declared conventions, zero back-
 
   const migrated = migrate({ schemaVersion: 109, settings: {}, people: [], decisions: [] });
   assert.equal(migrated.raw.schemaVersion, 112);
-  assert.equal(migrated.applied.at(-1), '111 → 112');
+  assert.equal(migrated.applied.at(-1), '112 → 113');
   // Nothing is invented for a workspace that never used the module.
   assert.deepEqual(migrated.raw.fitSnapshots, []);
   assert.deepEqual(migrated.raw.fitProposals, []);

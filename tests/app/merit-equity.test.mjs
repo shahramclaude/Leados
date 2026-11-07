@@ -178,7 +178,7 @@ function seedCycle(api, fixtureValue = fixture(), overrides = {}) {
 /* ------------------------------------------------------------- migration */
 
 test('v50 → v51 is additive: no band, no cycle and no pay figure is invented', () => {
-  assert.equal(SCHEMA_VERSION, 112);
+  assert.equal(SCHEMA_VERSION, 113);
   const v50 = {
     schemaVersion: 50,
     settings: { teamName: 'Existing team' },
@@ -188,7 +188,7 @@ test('v50 → v51 is additive: no band, no cycle and no pay figure is invented',
   };
   const migrated = migrate(v50);
   assert.equal(migrated.raw.schemaVersion, 112);
-  assert.equal(migrated.applied.at(-1), '111 → 112', 'the whole chain runs to the current schema');
+  assert.equal(migrated.applied.at(-1), '112 → 113', 'the whole chain runs to the current schema');
   assert.equal(migrated.raw.schemaVersion, 112);
   assert.deepEqual(migrated.raw.compBands, []);
   assert.deepEqual(migrated.raw.meritCycles, []);

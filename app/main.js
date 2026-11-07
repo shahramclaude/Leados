@@ -109,6 +109,8 @@ import { renderClearing } from './views/clearing.js';
 import { clearingAttentionCount } from './core/domain/clearing.js';
 import { renderResponses } from './views/responses.js';
 import { renderActionBundles } from './views/actionBundles.js';
+import { renderComparison } from './views/comparison.js';
+import { comparisonAttentionCount } from './core/domain/portfolioComparison.js';
 import { bundleAttentionCount } from './core/domain/actionBundles.js';
 import { renderComms } from './views/comms.js';
 import { renderInsights } from './views/insights.js';
@@ -335,6 +337,10 @@ export const NAV = [
     { route: 'today', label: 'Today', icon: '◎' },
     { route: 'responses', label: 'Response studio', icon: '⌁', badge: 'responses' },
     { route: 'bundles', label: 'Action bundles', icon: '⊞', badge: 'bundles' },
+    // ADR-0118: two reviewed responses, replayed from ONE frozen revision, with
+    // the declared commitments, the collision list and the Pareto refusal in
+    // front of the VP/chief who must arbitrate between them.
+    { route: 'compare', label: 'Rehearsal comparison', icon: '⇄', badge: 'compare' },
     { route: 'attribution', label: 'Outcome attribution', icon: '⚖', badge: 'attribution' },
     { route: 'counterfactual', label: 'Counterfactual policy', icon: '⟲', badge: 'counterfactual' },
     { route: 'intake', label: 'Intake triage', icon: '⌖', badge: 'intake' },
@@ -517,6 +523,7 @@ const RENDERERS = {
   clearing: (ctx) => renderClearing(ctx),
   responses: (ctx) => renderResponses(ctx),
   bundles: (ctx) => renderActionBundles(ctx),
+  compare: (ctx) => renderComparison(ctx),
   attribution: (ctx) => renderSettlement(ctx),
   counterfactual: (ctx) => renderCounterfactual(ctx),
   reliability: (ctx) => renderReliability(ctx),
@@ -1083,6 +1090,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       intake: pendingIntakeDrafts(state, at).length,
       responses: responseAttentionCount(state, at),
       bundles: bundleAttentionCount(state, at),
+      compare: comparisonAttentionCount(state, at),
       attribution: settlementAttentionCount(state, at, state.settings),
       counterfactual: counterfactualAttentionCount(state, at),
       reliability: reliabilityAttentionCount(state, at),
@@ -1626,6 +1634,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       differencing: 'Differencing defender — a table can be safe while a series of tables is not: every published aggregate audited as one exact integer system across releases, seats and modules, the cheapest suppression pattern that determines nothing chosen before publication, and a publication refused when no pattern can make it safe',
       responses: 'Response studio — rehearse and adopt a coordinated leadership response',
       bundles: 'Action bundles — review, adopt and safely withdraw coordinated work',
+      compare: 'Portfolio rehearsal comparison — two reviewed responses replayed from ONE frozen revision: declared spend, owned work, briefs and software footprints side by side, where they collide, and Pareto dominance over declared criteria (or an explicit refusal to rank). The VP/chief records the arbitration in writing; no benefit score, probability or automatic choice exists anywhere in the module.',
       attribution: 'Outcome attribution — Earned Schedule, clearance bottlenecks and variance settlement',
       counterfactual: 'Counterfactual policy — would another policy have scored better than the way you decided?',
       reliability: 'Measurement reliability — how much of what you believe about your team survives its own measurement error?',

@@ -92,6 +92,7 @@ import {
 } from './domain/confidenceSchema.js';
 import { normalizeResponsePlans } from './domain/responseSchema.js';
 import { normalizeActionBundles } from './domain/actionBundleSchema.js';
+import { normalizePortfolioComparisons } from './domain/portfolioComparison.js';
 import { normalizeSettlements } from './domain/settlementSchema.js';
 import {
   normalizePolicyEvaluations,
@@ -513,7 +514,7 @@ export {
 // older blob simply opens on the undeclared operator view. A version bump here
 // would have forced 78 test files to be rewritten for zero user benefit; the
 // honest choice is to add nothing to migrate.
-export const SCHEMA_VERSION = 112;
+export const SCHEMA_VERSION = 113;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -2321,6 +2322,14 @@ export const COLLECTIONS = [
   // re-derived on read from the person record and the logged 1:1.
   'agendaEntries',
   'agendaMarkers',
+  // ADR-0118 (Schema v113): the Portfolio Rehearsal Comparison ledger. One
+  // record per human arbitration between two responses that were BOTH replayed
+  // through production commands from the same frozen revision: the declared
+  // commitment vector, the actual software footprints, where the two collide,
+  // the Pareto verdict (or its refusal), the written rationale and the governed
+  // decision it opened. No benefit score, no probability and no ranking is ever
+  // stored: dominance is re-derived on read from the validated vector.
+  'portfolioComparisons',
 
 ];
 
@@ -7080,6 +7089,12 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // Schema v73: response receipts resolve after intake and cases, before links.
   state.responsePlans = normalizeResponsePlans(raw.responsePlans, state, now, warnings);
   state.actionBundles = normalizeActionBundles(raw.actionBundles, state, now, warnings);
+  // ADR-0118: portfolio rehearsal comparisons resolve AFTER their bundles and
+  // decisions, so a receipt can only be kept when the two candidates and the
+  // arbitration it names still exist. A receipt whose rationale, bundles or
+  // decision is missing is DROPPED with a warning — never repaired into a
+  // comparison a reader might treat as evidence of a deliberation.
+  state.portfolioComparisons = normalizePortfolioComparisons(raw.portfolioComparisons, state, now, warnings, { collections: COLLECTIONS });
   // Schema v75: loop settlement & attribution receipts resolve before links so
   // `settles-loop`, `exonerates-delivery` and `flags-bottleneck` edges validate.
   state.settlements = normalizeSettlements(raw.settlements, state, now, warnings);
@@ -8089,6 +8104,18 @@ export const MIGRATIONS = {
     settings: isPlainObject(v110.settings)
       ? { ...v110.settings, ...normalizeJurSettings(v110.settings) }
       : { ...DEFAULT_SETTINGS },
+  }),
+  // ADR-0118: additive 112 → 113. An existing workspace has reviewed action
+  // bundles and rehearsed them one at a time, but it has never recorded a
+  // side-by-side arbitration, so the ledger starts EMPTY — "no portfolio
+  // response has been compared here yet", which is a different claim from
+  // "every choice between alternatives was justified". Nothing is back-filled:
+  // a comparison is only valid for the revision and day it was rehearsed on, so
+  // inventing one at upgrade time would fabricate evidence that never existed.
+  112: (v112) => ({
+    ...v112,
+    schemaVersion: 113,
+    portfolioComparisons: Array.isArray(v112.portfolioComparisons) ? v112.portfolioComparisons : [],
   }),
   // ADR-0113: additive 111 → 112. An existing workspace is full of prompts it
   // never classified and has never filed one by hand, so both ledgers start

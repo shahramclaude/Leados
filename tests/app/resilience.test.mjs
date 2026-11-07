@@ -592,7 +592,7 @@ test('RULE-RES-01..06 + atomic same-transaction cascade into Decision Tempo RULE
 
 test('Schema v29 migration, historical Bus Factor rewind, CSV #29 safety, clearDemo & audited defect regressions', () => {
   // Schema v29 migration
-  assert.equal(SCHEMA_VERSION, 112);
+  assert.equal(SCHEMA_VERSION, 113);
   const migrated = migrate({
     schemaVersion: 28,
     settings: { tempoAutoPropagate: false, tempoDelegatedMaxDays: 4 },

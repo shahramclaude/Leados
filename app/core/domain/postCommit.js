@@ -197,6 +197,11 @@ import { clearingRule } from './clearingRules.js';
 // Altitude is a dimension of this one spine, not a second engine. Inert unless
 // a decision is committed or an explicit scan runs.
 import { diligenceRule } from './diligenceRules.js';
+// ADR-0118 (Schema v113): the Portfolio Rehearsal Comparison's graph node — the
+// two candidate responses, the arbitration it informed and one `rolls-up-to`
+// edge per leadership rung, all in the SAME atomic transaction as the receipt.
+// It writes LINKS only, so it never competes with the work-producing rules.
+import { comparisonRule } from './comparisonRules.js';
 import { decisionFitRule } from './decisionFitRules.js';
 // ADR-0109: the Jurisdiction Compiler. Registered immediately after the
 // Decision-Fit Ledger and BEFORE the Attention Market's final work-producing
@@ -750,6 +755,10 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // automatic boundary change), grades due forecasts once out of sample, and
   // freezes identity-free span readings. Marker-idempotent, bounded, pausable.
   jurisdictionRule,
+  // ADR-0118: a recorded portfolio arbitration becomes a graph node (both
+  // candidates + the decision + one roll-up edge per ancestor) in the same
+  // transaction. Idempotent by construction: `ensureEntityLink` is exact.
+  comparisonRule,
   attentionMarketRule,
   // ADR-0077: the Succession Terminal (bench certification). Runs before the
   // Operating Seat because its certificate edges are provenance the seat's

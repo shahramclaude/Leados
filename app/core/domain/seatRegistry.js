@@ -251,6 +251,14 @@ export const RECORD_POLICIES = Object.freeze({
   // verdicts and counts — never a person, a 1:1 or a rating — but they are the
   // pack, and the pack is not handed below the executive floor.
   boardMemos: { classKey: 'enterprise', label: 'Board disclosure memos', route: '#/board' },
+  // ADR-0118: a portfolio arbitration carries two candidate responses' declared
+  // spend, owned work, footprints and the reasoning behind the call. That is
+  // portfolio material — readable in detail from the VP rung up, and never
+  // handed to a span that cannot author the commitment in the first place. The
+  // detail ceiling stays at 5 because the CHIEF is a primary user of this screen:
+  // rolling it to "aggregate only" above rank 4 would hide the comparison from
+  // the seat the feature exists for.
+  portfolioComparisons: { classKey: 'portfolio', detailCeiling: 5, label: 'Portfolio rehearsal comparisons', route: '#/compare' },
 });
 
 /** Resolve a collection to its full, frozen policy (never undefined). */
@@ -312,6 +320,11 @@ const ENTERPRISE_ROUTES = Object.freeze([
   // ADR-0084: the board line is enterprise material. The executive altitude may
   // READ it; committing and freezing the pack is the chief's own act right.
   'board',
+  // ADR-0118: comparing two reviewed responses and arbitrating between them is
+  // the VP's and the chief's own act. A director reads the ledger of their own
+  // span elsewhere; this screen opens at rank 4 so the comparison is never a
+  // frontline screen with an executive's numbers on it.
+  'compare',
 ]);
 
 /**
@@ -451,6 +464,11 @@ export const ACTION_RIGHTS = Object.freeze({
   // handler additionally requires the full-access root seat.
   'record-outcome-learning': { minRank: 1, maxRank: 5, label: 'Scan the outcome-learning ledger or pre-register one reviewed probability' },
   'govern-outcome-learning': { minRank: 4, maxRank: 5, label: 'Re-declare the outcome-learning conventions' },
+  // ADR-0118: a portfolio arbitration commits capital, work and messaging across
+  // several spans at once, and the comparison it rests on is portfolio material.
+  // VP and chief only — a director may fund a function, but comparing two
+  // cross-division responses and choosing between them is the executive act.
+  'compare-responses': { minRank: 4, maxRank: 5, label: 'Compare and arbitrate between reviewed portfolio responses' },
   // ADR-0084: authoring the operating model is an org-design act — it declares
   // how every position at a level spends its week and prices structural change.
   // The same right that edits a reporting line authors the model of the lines.

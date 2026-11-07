@@ -124,6 +124,7 @@ import { reputationalCapitalRule } from './reputationalCapitalRules.js';
 import { hindsightRule } from './hindsightRules.js';
 import { epistemicRule } from './epistemicRules.js';
 import { diligenceRule } from './diligenceRules.js';
+import { comparisonRule } from './comparisonRules.js';
 import { decisionFitRule } from './decisionFitRules.js';
 import { jurisdictionRule } from './jurisdictionRules.js';
 import { cadenceRule } from './cadenceRules.js';
@@ -697,6 +698,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     writes: ['diligenceChecklists', 'diligenceConsults', 'diligenceGrades', 'diligenceMarkers', 'decisions', 'links'],
     emits: [],
     scansWorkspace: true,
+  },
+  {
+    rule: comparisonRule,
+    module: 'comparisonRules.js',
+    purpose: 'RULE-CMP-01 registers a recorded portfolio arbitration as a graph node in the SAME atomic transaction as the receipt: one `rehearses` edge to each of the two candidate responses that were replayed from the same frozen revision, one `informs` edge to the governed decision the human recorded, and one `rolls-up-to` edge per leadership rung above the recording seat (frontline → manager → director → VP → chief). It writes LINKS ONLY: it never edits the receipt, never adopts either response, never chooses for the human, never rates a response or a person and never invents a benefit score. Idempotent by construction — `ensureEntityLink` is exact on (source, target, relation) — so a rescan or a re-run cannot duplicate an edge and no marker ledger is needed. It never scans the workspace and is inert unless a `comparison.recorded` event arrives.',
+    writes: ['links'],
+    emits: [],
+    scansWorkspace: false,
   },
   {
     rule: decisionFitRule,

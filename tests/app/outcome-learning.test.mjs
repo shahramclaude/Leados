@@ -105,7 +105,7 @@ test('outside view refuses a thin record and shrinks a thick one toward 50%', ()
 });
 
 test('conventions clamp, and every normalizer fails closed on a corrupt row', () => {
-  assert.equal(SCHEMA_VERSION, 112);
+  assert.equal(SCHEMA_VERSION, 113);
   const c = normalizeOutcomeSettings({ outcomeMinGrades: 999, outcomeConformalCoverage: 5, outcomeAutoLearn: false });
   assert.equal(c.outcomeMinGrades, 25); assert.equal(c.outcomeConformalCoverage, 0.95); assert.equal(c.outcomeAutoLearn, false);
   const warnings = [];
