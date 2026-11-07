@@ -1,3 +1,18 @@
+## 2026-11-07 — Compare continuity across branches (Session 164, Schema v114 unchanged)
+
+**Implemented [CEO / C-suite PRIMARY; director and VP use the same span-scoped comparison].** A chief reviewing cross-division continuity exposure could see one overall duty-register rate but not whether its composition concealed uneven coverage between direct leadership branches. `#/duty-cover` now compares the existing register by direct branch: covered/total, uncovered and open-work gaps, plus pooled versus equally weighted branch readiness (Yule–Simpson aggregation). The chief's own lines are excluded explicitly; at least two populated branches are required for a comparison. Branch numbers are anonymous, ephemeral, and not division identifiers; this is a descriptive register reading, not an absence forecast or an automatic cover assignment. It reads the same declarations, harvested cross-module work, exercised-cover logic and reporting tree as ADR-0121; its decisions and `rolls-up-to` provenance remain on the shared spine. No new schema, event or rules.
+
+**Altitude coverage map (updated Session 164):**
+- *Frontline (rank 1):* creates and exercises duty cover locally; primary in 153/155/159/163.
+- *Mid-manager (rank 2):* own-span register and declarations; primary in 154/157/162.
+- *Director (rank 3):* direct-branch comparison scoped to their unit; primary in 157/158/161.
+- *VP (rank 4):* direct-branch comparison scoped to their function; primary in 156/158/161.
+- *CEO / C-suite (rank 5):* **PRIMARY** — compare uneven enterprise branch coverage without manually aggregating duty lines; primary in 156/160/164.
+
+**Verified.** Focused `duty-branch-comparison` test passed: real declaration and hierarchy link, exercised cover, unequal branch rates, scoped VP refusal, reload and chief desk rendering. Standalone rebuilt. The row-by-row partition guard was tightened after that test and is **[UNVERIFIED]**; full suite and real-browser accessibility are **[UNVERIFIED]**. Existing register report also returns unredacted `gaps`, `thin`, `ineligible`, and seat objects even above rank 2; the new branch projection does not include them, but the broader report-level privacy boundary needs repair **[FLAGGED]**. Seats are not authentication; anonymous branch labels do not provide statistical disclosure protection.
+
+**Next targets.** [director / VP] Repair the flagged duty-coverage report privacy boundary, preserving the permitted own-seat workflows; [all altitudes] authenticated identity and tenant boundary remains the standing foundational item. A dated absence plan remains open [frontline → manager].
+
 ## 2026-11-07 — Who answers for each duty when the holder is absent (Session 163, Schema v114, [ADR-0121](./docs/adr/0121-duty-coverage-register.md), `#/duty-cover`)
 
 **Implemented [frontline (rank 1) PRIMARY; mid-manager, director, VP and CEO read the same register at their own altitude].** The real duty: a shift lead calls in sick on a Tuesday and the ordinary question — *which of my duties stops, and does the person who would pick it up know, have the span, and have used their access?* — had no answer anywhere in the product. Frontline took priority because the Session-162 coverage map put it last-served (no primary ship since Session 159) while manager (162), director/VP (161) and CEO (160) had each been served since.

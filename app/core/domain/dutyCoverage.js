@@ -306,6 +306,44 @@ export function dutiesForSeat(seat) {
   return Array.isArray(seat.duties) ? seat.duties : [];
 }
 
+/** Compare direct leadership branches without copying identities or records upward.
+ * Each duty is assigned once to its nearest direct branch; the active seat's
+ * own duties are excluded. Rates are descriptive register coverage, not risk
+ * predictions. Branch numbers are ephemeral and are not organisational IDs.
+ */
+function branchCoverage(built, seat, rows) {
+  if (seat.fullAccess || seat.readOnly || (seat.rank ?? 0) < 3) return null;
+  const children = seat.childSeatIds.map((id) => built.byId.get(id)).filter(Boolean)
+    .sort((a, b) => a.id.localeCompare(b.id));
+  const branches = children.map((child, i) => {
+    const branchRows = rows.filter((row) => row.seat.id === child.id || child.scope.has(row.seat.id));
+    const total = branchRows.length;
+    const covered = branchRows.filter((row) => row.reading.band === 'covered').length;
+    return {
+      label: `Branch ${i + 1} · ${child.label}`,
+      dutiesN: total, coveredN: covered,
+      gapN: branchRows.filter((row) => row.reading.band === 'gap').length,
+      openGapN: branchRows.filter((row) => row.reading.band === 'gap' && row.reading.openN > 0).length,
+      readinessPct: total ? round1(covered * 100 / total) : null,
+    };
+  });
+  const ownN = rows.filter((row) => row.seat.id === seat.id).length;
+  // Check each row, rather than only the totals: an omission and a duplicate
+  // could otherwise cancel out and make a broken partition look complete.
+  const partitioned = rows.every((row) => row.seat.id === seat.id
+    ? !children.some((child) => child.id === row.seat.id || child.scope.has(row.seat.id))
+    : children.filter((child) => child.id === row.seat.id || child.scope.has(row.seat.id)).length === 1);
+  if (!partitioned) return { branches: [], ownN, refusal: 'The reporting tree did not partition this register; comparison refused.' };
+  const eligible = branches.filter((branch) => branch.dutiesN > 0);
+  const total = eligible.reduce((sum, branch) => sum + branch.dutiesN, 0);
+  const covered = eligible.reduce((sum, branch) => sum + branch.coveredN, 0);
+  return {
+    branches, ownN, refusal: eligible.length < 2 ? 'At least two branches with declared duty lines are needed for comparison.' : null,
+    pooledPct: total ? round1(covered * 100 / total) : null,
+    meanPct: eligible.length ? round1(eligible.reduce((sum, branch) => sum + branch.coveredN / branch.dutiesN, 0) * 100 / eligible.length) : null,
+  };
+}
+
 /**
  * Read the whole register for one seat. `projection` carries the counts every
  * altitude reads: a frontline lead sees their own five duties with names,
@@ -392,6 +430,7 @@ export function buildDutyCoverageReport(state, { now = new Date(), settings = nu
       scopeN: seat.scopeN,
     },
     namesVisible,
+    branchCoverage: branchCoverage(built, seat, rows),
     conventions: conv,
     bounds: {
       dutyCoverageExerciseDays: [7, 180],
@@ -441,6 +480,11 @@ export function dutyCoverageBriefText(report) {
     `${s.openGapN} duty line(s) carrying open work have no cover at all.`,
     s.soleHandedN ? `${s.soleHandedN} duty line(s) are 100%-concentrated in one hand at or above the declared ${report.conventions.dutyCoverageConcentrationPct}% share.` : 'No duty line is concentrated in a single hand above the declared share.',
   ];
+  const comparison = report.branchCoverage;
+  if (comparison) {
+    if (comparison.refusal) lines.push(`Branch comparison refused: ${comparison.refusal}`);
+    else lines.push(`Direct branches: pooled register readiness ${comparison.pooledPct}%; mean branch readiness ${comparison.meanPct}%. ${comparison.ownN} own duty line(s) excluded. These are descriptive register measures, not forecasts.`);
+  }
   if (report.refusals.length) {
     lines.push(`Printed refusals (${report.refusals.length}):`);
     for (const refusal of report.refusals.slice(0, 8)) lines.push(`  · ${refusal.reason}`);
