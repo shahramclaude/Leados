@@ -7,6 +7,7 @@ import { activeSeat, buildSeats, canAct, canSee, recordPeople } from './seat.js'
 import { responsibleNodeId } from './chain.js';
 import { routeVerdict } from './seatRegistry.js';
 import { validateMissionCommands } from './mission.js';
+import { captureBriefCase } from './missionCaptureBrief.js';
 import { postureFor } from './disclosure.js';
 import { DISCLOSURE_POSTURES } from './disclosureRegistry.js';
 import { activeIdentitySession } from './identitySession.js';
@@ -18,7 +19,7 @@ const groups = [
   ['open-decision', 'addDecision updateDecision decideDecision reviewDecision withdrawBundleDecision addGoal updateGoal checkInGoal addKeyResult removeKeyResult'],
   ['delegate', 'addDelegation updateDelegation checkInDelegation completeDelegation returnDelegation redelegateReturnedOutcome setActionOwner'],
   ['test-assumption', 'addPremise updatePremise recordPremiseEvidence reviewPremise recordPremiseOutcome withdrawBundlePremise'],
-  ['prepare-comms', 'approveCommsDraft editCommsDraft markCommsDraftSent dismissCommsDraft'],
+  ['prepare-comms', 'approveCommsDraft editCommsDraft markCommsDraftSent dismissCommsDraft missionCaptureBriefDraft missionCaptureBriefEdit missionCaptureBriefApprove missionCaptureBriefSent missionCaptureBriefDismiss'],
   ['set-disclosure-floor', 'setMissionFloor'],
   ['offer-authority', 'proposeMandate acceptMandate deliverMandate verifyMandate returnMandate revokeMandate scanMandates'],
   ['approve-capital', 'addBudgetLine updateBudgetLine recordBudgetActual releaseBudgetLine deleteBudgetLine'],
@@ -192,7 +193,7 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // enforcement while its writes are still gated.
 'agendaRead', 'agendaPlan', 'agendaRollUp', 'agendaBriefText', 'agendaCsvRows', 'agendaAttentionCount', 'agendaSettings',
 'outcomeAttentionCount', 'outcomeBriefText', 'outcomeConventions', 'outcomeCsvRows', 'outcomeRead', 'outcomeReceipt', 'outcomeSignals',
-'prospectiveAttentionCount', 'prospectiveBriefText', 'prospectiveCsvRows', 'prospectiveRead', 'robustAllocationAttentionCount', 'robustAllocationBriefText', 'robustAllocationCsvRows', 'robustAllocationRead', 'clearingAttentionCount', 'clearingBriefText', 'clearingCsvRows', 'clearingRead', 'clearingSolvePreview', 'identityAttentionCount', 'identityBriefText', 'identityCompareCheckpoint', 'identityCsvRows', 'identityRead', 'identityVerify', 'mandateBriefText', 'mandateRead', 'missionArchive', 'missionBriefText', 'missionCommit', 'missionCreateIntervention', 'missionFreezeBrief', 'missionHandoffText', 'missionOpenCase', 'missionRead', 'missionScan', 'missionExecutionReceipt', 'missionCaptureAnalyze', 'missionCaptureMergeCandidates', 'missionCaptureRead', 'missionCaptureReceipt', 'missionWithdraw', 'operatingModelAttentionCount', 'operatingModelBriefText', 'operatingModelCsvRows', 'operatingModelNorms', 'operatingModelRead', 'operatingModelWorkTypes', 'previewMandate', 'routingAnalyze', 'routingAttentionCount', 'routingBriefText', 'routingCalibration', 'routingCsvRows', 'routingRead', 'saveMissionPreview', 'sealBriefText', 'sealRead', 'sealVerify', 'seatBriefText', 'seatRead', 'setActiveSeat', 'strategyCycleBriefText', 'strategyCycleCsvRows', 'strategyCycleRead', 'valueStreamBriefText', 'valueStreamCsvRows', 'valueStreamRead', 'valueStreamReallocationPreview']);
+'prospectiveAttentionCount', 'prospectiveBriefText', 'prospectiveCsvRows', 'prospectiveRead', 'robustAllocationAttentionCount', 'robustAllocationBriefText', 'robustAllocationCsvRows', 'robustAllocationRead', 'clearingAttentionCount', 'clearingBriefText', 'clearingCsvRows', 'clearingRead', 'clearingSolvePreview', 'identityAttentionCount', 'identityBriefText', 'identityCompareCheckpoint', 'identityCsvRows', 'identityRead', 'identityVerify', 'mandateBriefText', 'mandateRead', 'missionArchive', 'missionBriefText', 'missionCommit', 'missionCreateIntervention', 'missionFreezeBrief', 'missionHandoffText', 'missionOpenCase', 'missionRead', 'missionScan', 'missionExecutionReceipt', 'missionCaptureAnalyze', 'missionCaptureMergeCandidates', 'missionCaptureRead', 'missionCaptureReceipt', 'missionCaptureBriefRead', 'missionCaptureBriefPreview', 'missionWithdraw', 'operatingModelAttentionCount', 'operatingModelBriefText', 'operatingModelCsvRows', 'operatingModelNorms', 'operatingModelRead', 'operatingModelWorkTypes', 'previewMandate', 'routingAnalyze', 'routingAttentionCount', 'routingBriefText', 'routingCalibration', 'routingCsvRows', 'routingRead', 'saveMissionPreview', 'sealBriefText', 'sealRead', 'sealVerify', 'seatBriefText', 'seatRead', 'setActiveSeat', 'strategyCycleBriefText', 'strategyCycleCsvRows', 'strategyCycleRead', 'valueStreamBriefText', 'valueStreamCsvRows', 'valueStreamRead', 'valueStreamReallocationPreview']);
 const refusal = (reason) => ({ ok: false, code: 'scope-refusal', error: reason, field: 'scope' });
 
 /** ADR-0087: under enforcement, boundary-management commands stay reachable
@@ -220,6 +221,16 @@ function bundleSourceAllowed(state, sourceId, seat, built) {
   if (!c) return false;
   if (canSee(c, 'cases', seat, built).allow === 'full') return true;
   return seat.rank >= 3 && responsibleNodeId(built.chain, recordPeople(c)) === seat.id;
+}
+// A director/VP/chief who adopted an LCA-owned case may review its specific
+// outbox drafts even when the generic unit-detail ceiling would show counts
+// only. The capture and its case are the explicit provenance boundary; never
+// widen a peer's outbox or grant unrestricted case editing.
+function adoptedCaseBriefAllowed(state, message, seat, built) {
+  if (!message?.caseId || seat.rank < 3) return false;
+  return (state.missionCaptures || []).some((capture) => capture.ownerSeatId === seat.id
+    && capture.status === 'adopted' && capture.caseId === message.caseId
+    && captureBriefCase(state, capture, seat, built).ok);
 }
 function bundleFor(state, name, args) {
   if (name === 'createActionBundle') return args[0];
@@ -270,8 +281,9 @@ export function guardApiCall(state, name, args, nowMs = undefined) {
       if (!c || !bundleSourceAllowed(state, b.sourceId, seat, built)) return refusal('The intervention source is outside this seat’s detail boundary.');
     } else {
       const record = (state[collection] || []).find((r) => r.id === args[0]);
-      if (!record || canSee(record, collection, seat, built).allow !== 'full') return refusal('The target record is missing or outside this seat’s detail boundary.');
-      if (!recordPeople(record).length && !seat.isLeader) {
+      const adoptedBrief = collection === 'commsDrafts' && adoptedCaseBriefAllowed(state, record, seat, built);
+      if (!record || (canSee(record, collection, seat, built).allow !== 'full' && !adoptedBrief)) return refusal('The target record is missing or outside this seat’s detail boundary.');
+      if (!recordPeople(record).length && !seat.isLeader && !adoptedBrief) {
         const inScopedBundle = (state.actionBundles || []).some((b) => b.outputs?.some((o) => o.id === record.id)
           && (state.cases || []).some((c) => c.id === b.sourceId && canSee(c, 'cases', seat, built).allow === 'full'));
         if (!inScopedBundle) return refusal('Unowned work belongs to the enterprise root. A subordinate seat cannot mutate it without a scoped source contract.');

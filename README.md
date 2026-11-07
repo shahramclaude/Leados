@@ -1,3 +1,7 @@
+## 2026-11-07 — Stakeholder briefs from adopted Command Flow cases (Session 158, `#/mission?panel=capture`)
+
+After adopting a case or a cross-span consolidation, the **owning director, VP or chief** can select **Preview & draft for a named recipient**. Enter a real name and role, assess power/interest (1–5) and stance, preview the exact case-sourced brief, acknowledge its gaps, then create an **unsent** draft. Review/edit/approve/dismiss it on the same case card; **Record external delivery** only after sending the approved text elsewhere. Editing revokes approval. The ordinary case automation links exact-name matches to the stakeholder register and rolls the case up the reporting tree; other seats cannot read the preparing note or its private outbox. No email is sent and the local operating seat is not authentication. For multiple recipients, repeat the reviewed flow; bulk selection remains in progress.
+
 ## 2026-11-07 — One constraint across spans, one LCA-owned case (Session 157, Schema v112 unchanged, [ADR-0116](./docs/adr/0116-cross-span-capture-merge.md), `#/mission?panel=capture`)
 
 When two or more leads or managers in separate branches describe the same
