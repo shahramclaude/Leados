@@ -155,8 +155,7 @@ test('schema v82 is additive: two collections, no rewrite, and a probability-fre
   assert.equal(migrated.raw.people.length, 1, 'no existing record is touched');
 
   const normalized = normalizeState(migrated.raw, { now: NOW });
-  assert.equal(normalized.state.schemaVersion, 112);
-  assert.equal(normalized.state.schemaVersion, 112);
+  assert.equal(normalized.state.schemaVersion, SCHEMA_VERSION);
 
   const warnings = [];
   const readings = normalizeChainReadings([

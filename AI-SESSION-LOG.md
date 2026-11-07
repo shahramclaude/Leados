@@ -1,3 +1,15 @@
+## 2026-11-07 — Session 162: One ownership meet for every span (Schema v113 unchanged, ADR-0120)
+
+**Built / altitudes.** Mid-manager PRIMARY: a manager triaging a blocker across several team leads now assigns it to the lowest accountable manager instead of the first lead's branch. Frontline, director, VP and CEO use the same corrected shared meet. Coverage priority came from Session 161's map: manager last primary 157, frontline 159, CEO 160, director/VP 161.
+
+**Missing → implemented.** `chain.js#lowestCommonAncestor` stopped at the first pair. It now associatively reduces the binary meet over every de-duplicated id, preserves unknown-id/root fallback, terminates repaired cycles and does not truncate deep lines. Capture merge's compatibility name is the exact shared export; jurisdiction's former workaround delegates to it. Targeted canonical inventory: 20 executable sites in 16 files (19 variable-cardinality, one fixed pair), not the older ~80 estimate. No schema bump, collection, rule or historical rewrite. Existing case automation and `RULE-AR-01` carry the corrected owner into mitigation and vertical receipts.
+
+**Verified (one focused pass).** Initial combined run 60/68: one export wiring mistake, one fixture expectation, five merge failures caused by the export, two pre-existing v112 pins. One consolidated correction; failed suites reran 37/37 PASS. Adjacent altitude-router + value-stream 31/31 PASS in the initial run. New suite includes the real manager note → case → `RULE-DEL-01` mitigation → `RULE-AR-01` roll-up → reload, with peer access denied. Lint PASS; boundary PASS (563 modules / 165 suites / 23 doc checks); standalone rebuilt 9,226,680 bytes / 562 modules / v113 and 7/7 PASS.
+
+**Unverified / flagged.** Full canonical suite not run; real-browser AT walkthrough [UNVERIFIED]. No whole-repository audit. Historical confirmed plans/receipts stay as recorded; derived reads may correct their owner. Seats are still local workflow declarations, not authenticated tenant boundaries. Blockers: none after the single correction pass.
+
+**Next up.** Standing authenticated identity + tenant boundary item; coverage now prioritizes frontline (last primary 159), beginning with a shift-lead sign-in / own-span access slice.
+
 ## 2026-11-07 — Session 161: One reviewed audience, one transaction (Schema v113 unchanged, ADR-0119, `#/mission?panel=capture`)
 
 **Built / altitudes.** Director (rank 3) and VP / executive (rank 4) are PRIMARY: the director who arbitrated a cross-team constraint now briefs four real sponsors in one sitting; the VP briefs an enterprise audience of six across divisions. Frontline and mid-manager continue to file, merge and hand up the case whose audience is briefed; the CEO uses the same scoped adapter on an owned enterprise case. Closed the Session-158 `In Progress` remainder (`[director → VP] Scoped bulk selection on the adopted-case brief path`), the oldest open roadmap item.

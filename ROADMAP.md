@@ -1,3 +1,24 @@
+## 2026-11-07 — One ownership meet for every span (Session 162, Schema v113 unchanged, [ADR-0120](./docs/adr/0120-shared-multi-span-ownership.md))
+
+**Implemented [mid-manager (rank 2) PRIMARY; frontline, director, VP and CEO on the same shared meet].** Closed the oldest open item, `Multi-span LCA repair in chain.js`. The real duty: a manager triages a blocker across several team leads and assigns the mitigation to the lowest accountable manager instead of leaving another team's work with the first lead.
+
+- **The defect.** `lowestCommonAncestor` returned the first pair's ancestor, not the ancestor of every affected branch. Intake, work harvesting, disclosure, governed-work attribution and value-stream carryover inherited it. Capture merge and jurisdiction carried separate workarounds.
+- **The repair.** The shared helper now reduces the binary tree meet across the complete de-duplicated set: order/grouping invariant, idempotent, cycle-terminating, no silent depth truncation. `multiSpanLowestCommonAncestor` is the exact shared export; `commonAncestorOfAll` delegates to it. Framework: graph-theoretic LCA (Tarjan 1979) as span-of-consequence / subsidiarity.
+- **Targeted inventory, not a repo re-audit.** 20 executable invocation sites in 16 canonical files; 19 can receive more than two ids, one value-stream contract is intentionally a pair. The older ~80 estimate was not reproduced. Table and limits in ADR-0120.
+- **Connected, not isolated.** Existing `case.created` automation and `RULE-AR-01` consume the corrected owner. A verified manager note wrote one case, one manager-owned mitigation and typed director/VP roll-up edges in one transaction, survived reload and refused a peer manager. No schema bump, new collection, new rule or historical receipt rewrite.
+- **Altitude coverage map (updated Session 162):**
+  - *Frontline (rank 1):* Active — local blockers keep their lead; cross-team work rises correctly. Primary in 159.
+  - *Mid-manager (rank 2):* **PRIMARY** — cross-lead blocker triage and mitigation ownership now consider every team. Primary in 162 (previous 157).
+  - *Director (rank 3):* Active — cross-manager coalitions and roll-ups use the same meet. Primary in 161.
+  - *VP / executive (rank 4):* Active — cross-division ownership/mediation uses the same meet. Primary in 161.
+  - *CEO / C-suite (rank 5):* Active — enterprise root fallback and vertical receipts unchanged. Primary in 160.
+
+**Verification (one focused pass).** First combined run: 60/68 passed; failures were one compatibility-export wiring mistake, one wrong fixture expectation, five merge failures from that export, and two pre-existing stale v112 schema pins. One consolidated correction; the four failed suites then passed **37/37**. Adjacent altitude-router + value-stream suites passed **31/31** in the first run. `npm run lint` PASS; `npm run check:boundary` PASS (563 modules / 165 suites / 23 doc checks); standalone rebuilt (9,226,680 bytes / 562 modules / schema v113), standalone **7/7**. Full canonical suite and real-browser AT walkthrough **[UNVERIFIED]**. Seats remain workflow declarations, not authentication.
+
+**Next targets, altitude-tagged.**
+- [all altitudes] **Authenticated identity + tenant boundary** remains the standing top roadmap item. Coverage now puts **frontline** first (last primary 159): start with a real shift-lead sign-in / own-span access slice, not an executive-only admin screen; do not claim enterprise isolation from a local seat selector.
+- Historical receipts are not back-filled; a corrected derived owner is not a new human approval.
+
 ## 2026-11-07 — One reviewed audience, one transaction: register-backed bulk briefing (Session 161, Schema v113 unchanged, [ADR-0119](./docs/adr/0119-register-backed-bulk-briefing.md), `#/mission?panel=capture`)
 
 **Implemented [director (rank 3) and VP / executive (rank 4) PRIMARY; frontline, manager and CEO on the same scoped adapter].** Closed the Session-158 `In Progress` remainder — `[director → VP] Scoped bulk selection on the adopted-case brief path` — which had been the oldest open item since Session 160 recorded it as such. The real duty: the director who has just arbitrated a cross-team constraint briefs four real sponsors in one sitting, and the VP briefs six across divisions, each with a different stance and each owed different words.
