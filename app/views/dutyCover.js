@@ -20,6 +20,7 @@ import { serializeCsv } from '../core/csv.js';
 import { DUTY_BRANCH_DISCLOSURE_PREMISE, DUTY_COVERAGE_PANELS, DUTY_PREMISE } from '../core/domain/dutyCoverageRegistry.js';
 import { DUTY_ABSENCE_PREMISE } from '../core/domain/dutyAbsenceRegistry.js';
 import { DUTY_REHEARSAL_MODES, DUTY_REHEARSAL_MODE_LABELS, DUTY_REHEARSAL_PREMISE } from '../core/domain/dutyRehearsalRegistry.js';
+import { BRANCH_READING_BAND_LABELS, BRANCH_READING_PREMISE, BRANCH_READING_STATE_LABELS } from '../core/domain/branchReadingRegistry.js';
 
 const PANELS = DUTY_COVERAGE_PANELS;
 const CSV_COLUMNS = ['row_kind', 'scope', 'altitude', 'duty_key', 'band', 'open_n',
@@ -30,7 +31,12 @@ const CSV_COLUMNS = ['row_kind', 'scope', 'altitude', 'duty_key', 'band', 'open_
   'absence_rehearsed_n', 'absence_rehearsal_gaps_n',
   'branch_seats_n', 'duties_n', 'branch_covered_n', 'branch_gap_n', 'branch_open_gap_n', 'branch_readiness_pct',
   'branch_withheld', 'branch_floor_n', 'branch_rate_floor_n',
-  'branch_released_n', 'branch_released_seats_n', 'branch_withheld_n', 'branch_deferred_n', 'branch_pooled_pct', 'branch_mean_pct'];
+  'branch_released_n', 'branch_released_seats_n', 'branch_withheld_n', 'branch_deferred_n', 'branch_pooled_pct', 'branch_mean_pct',
+  // ADR-0129: the hand-off's derived state on the cell, plus its counts. A cell
+  // nobody asked about exports BLANK, never 0 and never "fine".
+  'branch_reading_state', 'branch_reading_band', 'branch_reading_asked_on', 'branch_reading_published_on',
+  'branch_reading_published_n', 'branch_reading_declined_n', 'branch_reading_outstanding_n',
+  'branch_reading_lapsed_n', 'branch_reading_not_asked_n'];
 
 let apiRef = null;
 /** Scratch for the planning form's preview window (a read, never a write). */
@@ -630,6 +636,275 @@ function planPanel(ctx, report) {
   );
 }
 
+/* ------------------------------------------------- ADR-0129: branch readings */
+
+const bandTone = (band) => (band === 'holding' ? 'good' : band === 'exposed' ? 'bad' : band === 'thin' ? 'warn' : 'neutral');
+
+function requestReadingDialog(ctx, reading, pos) {
+  const form = buildForm([
+    {
+      name: 'note', label: 'Why do you need this branch’s own reading?', type: 'textarea', value: '', rows: 3,
+      help: 'Sent to the branch’s own leader with the request. Name what you are deciding and why the withheld cell is not enough — they are being asked to disclose something about their own people.',
+    },
+  ]);
+  openModal({
+    title: 'Request a branch reading',
+    description: `The cell for ${reading.label} is withheld at the declared disclosure floor, so this table prints no figure for it. Its own leader can publish the BAND their register grades into — holding, thin, exposed or cannot say — with their own words, on a dated day. You receive the band and the words; no count crosses. The reading lapses after the declared validity window and can be asked for again.`,
+    body: h('div', { class: 'stack' }, form.node, h('p', { class: 'muted small' }, BRANCH_READING_PREMISE)),
+    footer: [
+      h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => closeAllModals() }, 'Cancel'),
+      h('button', {
+        class: 'btn btn-primary', type: 'button',
+        onClick: () => {
+          const result = ctx.api.branchReadingRequest({ branchPos: pos, note: form.getValues().note });
+          if (!notify(result, 'Reading requested. The cell now shows who owes an answer and by when.')) return;
+          closeAllModals();
+          ctx.refresh();
+        },
+      }, 'Send the request'),
+    ],
+  });
+}
+
+function withdrawReadingDialog(ctx, reading) {
+  const form = buildForm([
+    { name: 'reason', label: 'Why does the question no longer stand?', type: 'textarea', value: '', rows: 3, help: 'Append-only: the ask is marked withdrawn with this reason and never deleted.' },
+  ]);
+  openModal({
+    title: 'Withdraw a branch reading request',
+    description: `Asked on ${reading.askedOn}${reading.responseBy ? `, answer expected by ${reading.responseBy}` : ''}. Withdrawing returns the cell to “not asked” — it does not restore any figure.`,
+    body: form.node,
+    footer: [
+      h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => closeAllModals() }, 'Cancel'),
+      h('button', {
+        class: 'btn btn-primary', type: 'button',
+        onClick: () => {
+          const result = ctx.api.branchReadingWithdraw({ id: reading.askId, reason: form.getValues().reason });
+          if (!notify(result, 'Request withdrawn.')) return;
+          closeAllModals();
+          ctx.refresh();
+        },
+      }, 'Withdraw the request'),
+    ],
+  });
+}
+
+function publishReadingDialog(ctx, ask) {
+  const preview = ask.preview;
+  const form = buildForm([
+    {
+      name: 'note', label: 'Put the reading in your own words', type: 'textarea', value: '', rows: 4,
+      help: 'Sent to the seat that asked, verbatim. The band below is computed from your own register and frozen with today’s date — it is not a field you can set.',
+    },
+  ]);
+  openModal({
+    title: 'Publish this branch’s reading',
+    description: 'You are answering for your own branch. The counts stay in this seat’s register; the band and your words are the whole disclosure.',
+    body: h('div', { class: 'stack' },
+      preview
+        ? h('div', { class: 'stack-xs' },
+          h('p', null, `Your register grades today as ${badge(preview.bandLabel, bandTone(preview.band))}.`),
+          h('p', { class: 'muted small' }, `${preview.why} (${preview.dutiesN} duty line(s): ${preview.holdingN} holding, ${preview.thinN} thin, ${preview.exposedN} exposed or no cover.)`),
+          h('p', { class: 'muted small' }, 'Those counts are shown to YOU, here, so you know exactly what you are publishing. Only the band and your words travel.'))
+        : h('p', { class: 'muted' }, 'No preview is available for this seat.'),
+      form.node),
+    footer: [
+      h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => closeAllModals() }, 'Cancel'),
+      h('button', {
+        class: 'btn btn-primary', type: 'button',
+        onClick: () => {
+          const result = ctx.api.branchReadingPublish({ id: ask.id, note: form.getValues().note });
+          if (!notify(result, `Reading published (${result.band}).`)) return;
+          closeAllModals();
+          ctx.refresh();
+        },
+      }, 'Publish the reading'),
+    ],
+  });
+}
+
+function declineReadingDialog(ctx, ask) {
+  const form = buildForm([
+    { name: 'reason', label: 'Why are you declining?', type: 'textarea', value: '', rows: 4, help: 'Sent to the seat that asked, verbatim. Declining is an answer: it is recorded, printed and counted, and it opens no governed decision against you.' },
+  ]);
+  openModal({
+    title: 'Decline a branch reading request',
+    description: 'A refusal is recorded as a refusal, not as a blank cell — the requesting seat sees that the reading was declined and why, rather than assuming the branch is fine or that nobody asked.',
+    body: form.node,
+    footer: [
+      h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => closeAllModals() }, 'Cancel'),
+      h('button', {
+        class: 'btn btn-primary', type: 'button',
+        onClick: () => {
+          const result = ctx.api.branchReadingDecline({ id: ask.id, reason: form.getValues().reason });
+          if (!notify(result, 'Declined, with your reason recorded.')) return;
+          closeAllModals();
+          ctx.refresh();
+        },
+      }, 'Decline the request'),
+    ],
+  });
+}
+
+function revokeReadingDialog(ctx, ask) {
+  const form = buildForm([
+    { name: 'reason', label: 'Why does this reading no longer stand?', type: 'textarea', value: '', rows: 3, help: 'Append-only. The cell falls back to asked or overdue rather than keeping a band you no longer stand behind.' },
+  ]);
+  openModal({
+    title: 'Revoke a published reading',
+    description: 'The requesting seat is reading this band as your branch’s condition. Revoking removes it from their table.',
+    body: form.node,
+    footer: [
+      h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => closeAllModals() }, 'Cancel'),
+      h('button', {
+        class: 'btn btn-primary', type: 'button',
+        onClick: () => {
+          const result = ctx.api.branchReadingRevoke({ readingId: ask.answer.id, reason: form.getValues().reason });
+          if (!notify(result, 'Reading revoked.')) return;
+          closeAllModals();
+          ctx.refresh();
+        },
+      }, 'Revoke the reading'),
+    ],
+  });
+}
+
+/** The desk's reading cell: what the withheld cell is currently holding, and the one act open on it. */
+function readingCell(ctx, reading, pos) {
+  if (!reading) return h('span', { class: 'muted small' }, '—');
+  const label = BRANCH_READING_STATE_LABELS[reading.state] || reading.state;
+  const askAgain = h('button', {
+    class: 'btn btn-small', type: 'button',
+    onClick: () => requestReadingDialog(ctx, reading, pos),
+  }, reading.state === 'not-asked' ? 'Request reading' : 'Request again');
+  if (reading.state === 'not-asked') {
+    return h('div', { class: 'stack-xs' }, badge('not asked', 'warn', reading.why), askAgain);
+  }
+  if (reading.state === 'asked' || reading.state === 'overdue') {
+    return h('div', { class: 'stack-xs' },
+      badge(label, reading.state === 'overdue' ? 'bad' : 'neutral', reading.why),
+      h('span', { class: 'muted small' }, reading.state === 'overdue' ? `${reading.daysPast} day(s) past ${reading.responseBy}` : `answer expected by ${reading.responseBy}`),
+      h('button', {
+        class: 'btn btn-ghost btn-small', type: 'button',
+        onClick: () => withdrawReadingDialog(ctx, reading),
+      }, 'Withdraw'));
+  }
+  if (reading.state === 'published') {
+    return h('div', { class: 'stack-xs' },
+      badge(reading.bandLabel, bandTone(reading.band), reading.why),
+      h('span', { class: 'muted small' }, `published ${reading.publishedOn} · valid until ${reading.why.match(/valid until (\d{4}-\d{2}-\d{2})/)?.[1] || 'the declared window'}`),
+      reading.note ? h('span', { class: 'muted small' }, `“${reading.note}”`) : null);
+  }
+  if (reading.state === 'lapsed') {
+    return h('div', { class: 'stack-xs' },
+      badge('reading lapsed', 'bad', reading.why),
+      h('span', { class: 'muted small' }, `${reading.bandLabel || 'reading'} published ${reading.publishedOn} — past the declared validity`),
+      askAgain);
+  }
+  if (reading.state === 'declined') {
+    return h('div', { class: 'stack-xs' },
+      badge('declined', 'warn', reading.why),
+      h('span', { class: 'muted small' }, `declined ${reading.answeredOn}${reading.note ? `: “${reading.note}”` : ''}`),
+      askAgain);
+  }
+  return h('div', { class: 'stack-xs' }, badge('withdrawn', 'neutral', reading.why), askAgain);
+}
+
+function readingsPanel(ctx, report) {
+  const board = ctx.api.branchReadingBoard?.();
+  if (!board?.ok) {
+    return card({
+      title: 'Branch readings could not be read',
+      body: emptyState({ title: 'The hand-off is unavailable at this seat', body: board?.error || 'No reading board is available.' }),
+    });
+  }
+  const summaries = board.summary;
+  const consequence = report.branchCoverage?.readings || null;
+  return h('div', { class: 'stack' },
+    card({
+      title: `Readings asked of this seat — ${board.seat.label}`,
+      subtitle: 'Every request addressed to this seat as a branch’s own leader, with the exact window it is about. Publishing sends a BAND computed from this seat’s register and your own words; the counts stay here.',
+      body: board.askedOfMe.length
+        ? h('div', { class: 'stack' }, ...board.askedOfMe.map((ask) => card({
+          title: `${ask.askedByLabel} asked for a reading on ${ask.askedOn}`,
+          subtitle: ask.state === 'overdue'
+            ? `Overdue: the declared response window closed on ${ask.responseBy}, ${ask.daysPast} day(s) ago.`
+            : (ask.canAnswer ? `An answer is expected by ${ask.responseBy}.` : ask.why),
+          body: h('div', { class: 'stack' },
+            h('p', null, `“${ask.note}”`),
+            ask.preview
+              ? h('div', { class: 'stat-grid' },
+                stat({ label: 'Band this register grades', value: ask.preview.bandLabel, hint: ask.preview.why }),
+                stat({ label: 'Duty lines', value: String(ask.preview.dutiesN), hint: `${ask.preview.holdingN} holding · ${ask.preview.thinN} thin · ${ask.preview.exposedN} exposed` }),
+                stat({ label: 'What travels', value: 'band + words', hint: 'no count, no rate, no per-duty figure' }))
+              : null,
+            ask.answer
+              ? h('p', { class: 'muted small' }, `Answered ${ask.answer.answeredOn}: ${ask.answer.answer === 'declined' ? 'declined' : `published “${ask.answer.bandLabel}”`} — “${ask.answer.note}”`)
+              : null),
+          actions: [
+            ask.canAnswer
+              ? h('button', { class: 'btn btn-primary btn-small', type: 'button', onClick: () => publishReadingDialog(ctx, ask) }, 'Publish the branch reading')
+              : null,
+            ask.canAnswer
+              ? h('button', { class: 'btn btn-ghost btn-small', type: 'button', onClick: () => declineReadingDialog(ctx, ask) }, 'Decline, with a reason')
+              : null,
+            ask.answer && ask.answer.answer === 'published'
+              ? h('button', { class: 'btn btn-ghost btn-small', type: 'button', onClick: () => revokeReadingDialog(ctx, ask) }, 'Revoke this reading')
+              : null,
+          ].filter(Boolean),
+        })))
+        : emptyState({
+          title: 'No reading has been requested of this seat',
+          body: 'A branch reading is asked of a branch by the seat whose own table withholds its cell. Nothing is owed here today — and nothing has been silently answered in your name either.',
+        }),
+    }),
+    card({
+      title: 'Readings this seat has asked for',
+      subtitle: 'One row per request made from this seat, with the derived state and the branch’s answer. Nothing is chased, escalated or auto-assigned.',
+      body: h('div', { class: 'stack' },
+        h('div', { class: 'stat-grid' },
+          stat({ label: 'Outstanding', value: String(board.askedOfSpan.filter((a) => a.state === 'asked' || a.state === 'overdue').length), hint: `${board.askedOfSpan.filter((a) => a.state === 'overdue').length} past the declared response window` }),
+          stat({ label: 'Published', value: String(board.askedOfSpan.filter((a) => a.state === 'published').length), hint: 'band + words received; no figure crossed' }),
+          stat({ label: 'Declined', value: String(board.askedOfSpan.filter((a) => a.state === 'declined').length), hint: 'an answer, printed with its reason' }),
+          stat({ label: 'Lapsed', value: String(board.askedOfSpan.filter((a) => a.state === 'lapsed').length), hint: `older than the declared ${board.conventions.dutyCoverageReadingValidDays}-day validity` })),
+        h('p', { class: 'muted small' }, `Response window ${board.conventions.dutyCoverageReadingResponseDays} day(s); reading validity ${board.conventions.dutyCoverageReadingValidDays} day(s). Both are declared, printed and re-declarable only by a rank-4+ full-access seat.`),
+        table({
+          caption: 'Branch reading requests from this seat',
+          columns: [
+            { label: 'Branch', render: (r) => `${r.targetLabel}${r.targetRank ? ` · rank ${r.targetRank}` : ''}` },
+            { label: 'Asked', render: (r) => r.askedOn },
+            { label: 'Answer by', render: (r) => r.responseBy || '—' },
+            { label: 'State', render: (r) => badge(r.stateLabel, r.state === 'published' ? 'good' : r.state === 'overdue' || r.state === 'lapsed' ? 'bad' : r.state === 'declined' ? 'warn' : 'neutral', r.why) },
+            { label: 'Band', render: (r) => (r.bandLabel ? badge(r.bandLabel, bandTone(r.band)) : '—') },
+            { label: 'The branch’s words', render: (r) => (r.answerNote ? `“${r.answerNote}”` : (r.note ? `asked: “${r.note}”` : '')) },
+            {
+              label: 'Open act', render: (r) => (r.canWithdraw
+                ? h('button', { class: 'btn btn-ghost btn-small', type: 'button', onClick: () => withdrawReadingDialog(ctx, r) }, 'Withdraw')
+                : '—'),
+            },
+          ],
+          rows: board.askedOfSpan,
+          emptyMessage: 'This seat has not asked any branch for a reading.',
+        })),
+      actions: consequence
+        ? [h('a', { class: 'btn btn-small', href: '#/duty-cover?panel=desk' }, 'Back to the branch table')]
+        : [],
+    }),
+    card({
+      title: 'What a branch reading is, and what it refuses to be',
+      body: h('div', { class: 'stack' },
+        h('p', null, BRANCH_READING_PREMISE),
+        h('ul', { class: 'plain-list' },
+          h('li', null, h('strong', null, 'The band is derived, never typed.'), ' The publish command computes it from the publisher’s own register and freezes it with the day. No field in any form can set a reassuring band.'),
+          h('li', null, h('strong', null, 'Only a band and words cross.'), ' The counts behind the band stay in the branch’s own register, which is the whole reason the cell was withheld.'),
+          h('li', null, h('strong', null, 'A reading lapses.'), ' It is valid for the declared window and then prints LAPSED; the chief must ask again, because a reading about last month is not today’s condition.'),
+          h('li', null, h('strong', null, 'A decline is an answer.'), ' It is recorded, printed with its reason and counted — and it opens no governed decision. A refusal that escalates itself is not a refusal.'),
+          h('li', null, h('strong', null, 'Nothing is chased.'), ' No reminder, no auto-reassignment, no escalation. An ask past its window is printed as overdue so the chief knows to walk over.')),
+      ),
+    }),
+  );
+}
+
 /* ------------------------------------------------------------------ panels */
 
 function dutyCard(ctx, row, namesShown) {
@@ -739,6 +1014,7 @@ function deskPanel(ctx, report) {
             { label: 'No cover', render: (r) => (r.suppressed ? 'WITHHELD' : String(r.gapN)) },
             { label: 'Open work, no cover', render: (r) => (r.suppressed ? 'WITHHELD' : String(r.openGapN)) },
             { label: 'Why the cell is blank', render: (r) => r.refused || '' },
+            { label: 'Reading from the branch', render: (r) => (r.suppressed ? readingCell(ctx, r.reading, r.pos) : h('span', { class: 'muted small' }, 'released')) },
           ],
           rows: report.branchCoverage.branches,
           emptyMessage: 'No direct leadership branches in this seat.',
@@ -747,7 +1023,10 @@ function deskPanel(ctx, report) {
           ? h('p', { class: 'muted small' }, `${report.branchCoverage.deferredN} further branch(es) are not compared: the table is capped at ${report.conventions.dutyCoverageBranchCap}. The cap is declared, and the remainder is counted rather than silently dropped.`)
           : null,
         h('p', { class: 'muted small' }, DUTY_BRANCH_DISCLOSURE_PREMISE),
-        h('p', { class: 'muted small' }, 'A missing or unexercised declaration is not evidence that an absence will cause failure. Ask the relevant leaders to review their own registers; no cover is assigned here.')),
+        report.branchCoverage.readings
+          ? h('p', { class: 'muted small' }, `${report.branchCoverage.readings.cellsN} withheld cell(s): ${report.branchCoverage.readings.publishedN} have a published reading (${report.branchCoverage.readings.bands.holding} holding, ${report.branchCoverage.readings.bands.thin} thin, ${report.branchCoverage.readings.bands.exposed} exposed, ${report.branchCoverage.readings.bands.unknown} cannot say), ${report.branchCoverage.readings.declinedN} were declined, ${report.branchCoverage.readings.outstandingN} are outstanding (${report.branchCoverage.readings.overdueN} overdue) and ${report.branchCoverage.readings.notAskedN} have never been asked. Open the readings panel to ask, answer or withdraw.`)
+          : null,
+        h('p', { class: 'muted small' }, 'A missing or unexercised declaration is not evidence that an absence will cause failure. Ask the relevant leaders to review their own registers; no cover is assigned here. The withheld-cell hand-off lives on the Branch readings panel.')),
     }) : null,
     report.absences?.own || (report.absences?.inSpan?.length || 0)
       ? card({
@@ -933,6 +1212,8 @@ function methodPanel(ctx, report) {
           stat({ label: 'Branch cell floor', value: `${conventions.dutyCoverageBranchFloorN}`, hint: `a branch cell below this many duty lines is WITHHELD, not printed small; bounds ${report.bounds.dutyCoverageBranchFloorN.join('–')}` }),
           stat({ label: 'Branch rate floor', value: `${conventions.dutyCoverageBranchRateFloorN}`, hint: `a per-branch rate is quoted only at or above this many duty lines; bounds ${report.bounds.dutyCoverageBranchRateFloorN.join('–')}` }),
           stat({ label: 'Branches compared', value: `${conventions.dutyCoverageBranchCap}`, hint: `the table is capped and the remainder counted; bounds ${report.bounds.dutyCoverageBranchCap.join('–')}` }),
+          stat({ label: 'Reading response window', value: `${conventions.dutyCoverageReadingResponseDays}d`, hint: `how long a branch leader has to answer a reading request; bounds ${report.bounds.dutyCoverageReadingResponseDays.join('–')}` }),
+          stat({ label: 'Reading validity', value: `${conventions.dutyCoverageReadingValidDays}d`, hint: `a published band is DERIVED, frozen on the day, and lapses after this; bounds ${report.bounds.dutyCoverageReadingValidDays.join('–')}` }),
           stat({ label: 'Covers per duty', value: '3', hint: 'a duty is not a committee; the cap is declared, not discovered' })),
         editable
           ? h('div', { class: 'row-actions' },
@@ -945,6 +1226,8 @@ function methodPanel(ctx, report) {
                   { name: 'dutyCoverageBranchFloorN', label: 'Branch disclosure floor (contributing seats per cell)', type: 'number', min: 2, max: 25, value: conventions.dutyCoverageBranchFloorN },
                   { name: 'dutyCoverageBranchRateFloorN', label: 'Branch rate floor (contributing seats before a rate prints)', type: 'number', min: 2, max: 40, value: conventions.dutyCoverageBranchRateFloorN },
                   { name: 'dutyCoverageBranchCap', label: 'Branches compared per table', type: 'number', min: 4, max: 64, value: conventions.dutyCoverageBranchCap },
+                  { name: 'dutyCoverageReadingResponseDays', label: 'Branch reading response window (days)', type: 'number', min: 1, max: 30, value: conventions.dutyCoverageReadingResponseDays },
+                  { name: 'dutyCoverageReadingValidDays', label: 'Branch reading validity (days before it lapses)', type: 'number', min: 7, max: 180, value: conventions.dutyCoverageReadingValidDays },
                 ]);
                 openModal({
                   title: 'Re-declare the duty-coverage conventions',
@@ -962,6 +1245,8 @@ function methodPanel(ctx, report) {
                           dutyCoverageBranchFloorN: Number(v.dutyCoverageBranchFloorN),
                           dutyCoverageBranchRateFloorN: Number(v.dutyCoverageBranchRateFloorN),
                           dutyCoverageBranchCap: Number(v.dutyCoverageBranchCap),
+                          dutyCoverageReadingResponseDays: Number(v.dutyCoverageReadingResponseDays),
+                          dutyCoverageReadingValidDays: Number(v.dutyCoverageReadingValidDays),
                         });
                         if (!notify(result, 'Conventions re-declared.')) return;
                         closeAllModals();
@@ -981,6 +1266,7 @@ function methodPanel(ctx, report) {
         h('li', null, h('strong', null, 'Derived on every read:'), ' the duty’s span holder, the eligible pool and its refusals, whether the cover has exercised access, and who actually carried the work.'),
         h('li', null, h('strong', null, 'Refused:'), ' a coverage score for a person, an automation that assigns a stand-in, and a “verified” tick-box. A tick would be a second, decaying record of a fact the workspace can re-derive.'),
         h('li', null, h('strong', null, 'Withheld, not zeroed:'), ' a direct-branch cell below the declared disclosure floor, and one further released cell beside it, so the blank cannot be recovered by subtracting the released cells from a known total. This is primary + complementary suppression, not differential privacy.'),
+        h('li', null, h('strong', null, 'A withheld cell is not a closed question.'), ' ADR-0129 gives it a governed hand-off: the branch’s own leader publishes the BAND their own register grades into, with their own words — the band is derived by the register and never typed, no count crosses, the reading lapses after its declared validity, and a decline is recorded as an answer with no decision opened against the person. The withheld figure stays withheld either way.'),
         h('li', null, h('strong', null, 'Schema v114 is additive.'), ' An upgraded workspace starts with an empty cover ledger — “no duty here has a declared cover yet”, which is not the same claim as “every duty is covered”.')),
     }),
     card({
@@ -1009,7 +1295,8 @@ export function renderDutyCover(ctx) {
       : panel === 'gaps' ? gapsPanel(ctx, report)
         : panel === 'concentration' ? concentrationPanel(ctx, report)
           : panel === 'plan' ? planPanel(ctx, report)
-            : methodPanel(ctx, report);
+            : panel === 'readings' ? readingsPanel(ctx, report)
+              : methodPanel(ctx, report);
 
   return h('div', { class: 'stack duty-cover-view' },
     pageHeader({

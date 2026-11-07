@@ -68,6 +68,13 @@ import {
 import {
   buildWindowExerciseIndex, windowExerciseFor, redactWindowExercise, summarizeWindowExercise,
 } from './dutyWindowExercise.js';
+// ADR-0129: the branch reading hand-off. The register keeps the DERIVED state
+// of every ask (asked / overdue / published / declined / lapsed / withdrawn) on
+// the withheld cell it belongs to, and the band vocabulary the leader's answer
+// is drawn from. Nothing here stores a state; it is re-derived from the two
+// ledgers and today on every read.
+import { activeAnswerForAsk, deriveReadingState, latestAskFor } from './branchReadingSchema.js';
+import { BRANCH_READING_BAND_LABELS, BRANCH_READING_PREMISE, BRANCH_READING_STATE_LABELS } from './branchReadingRegistry.js';
 
 /* ------------------------------------------------------------------ helpers */
 
@@ -1161,7 +1168,46 @@ function buildAbsenceSection(state, built, seat, { now, settings, items }) {
  * own duties are excluded. Rates are descriptive register coverage, not risk
  * predictions. Branch numbers are ephemeral and are not organisational IDs.
  */
-function branchCoverage(built, seat, rows, conventions = null) {
+/**
+ * ADR-0129 — the band a register grades into, for the branch reading hand-off.
+ *
+ * Four coarse states over the WHOLE branch, computed from the rows of the seat
+ * whose register is being read. The counts are returned so the publisher can be
+ * shown exactly what their band means before they publish it; the counts are
+ * never stored and never leave the publishing seat's own surface. Only the band
+ * travels, which is the coarsest statement that still carries the signal.
+ */
+export function branchReadingBandFromRows(rows) {
+  const list = Array.isArray(rows) ? rows : [];
+  const dutiesN = list.length;
+  if (!dutiesN) {
+    return {
+      band: 'unknown', dutiesN: 0, exposedN: 0, thinN: 0, holdingN: 0,
+      why: 'This seat declares no duty line, so there is no register to read and no band to publish. The honest answer is “cannot say”, not a reassuring default.',
+    };
+  }
+  const exposedN = list.filter((r) => r?.reading?.band === 'gap' || r?.reading?.band === 'ineligible').length;
+  const thinN = list.filter((r) => r?.reading?.band === 'thin').length;
+  const holdingN = list.filter((r) => r?.reading?.band === 'covered').length;
+  if (exposedN) {
+    return {
+      band: 'exposed', dutiesN, exposedN, thinN, holdingN,
+      why: `${exposedN} of ${dutiesN} duty line(s) have nobody answerable, or a declared cover that cannot answer at this altitude.`,
+    };
+  }
+  if (thinN) {
+    return {
+      band: 'thin', dutiesN, exposedN, thinN, holdingN,
+      why: `Every duty line has an eligible cover, but ${thinN} of ${dutiesN} have no recorded exercise inside the declared window — declared and unexercised is not covered.`,
+    };
+  }
+  return {
+    band: 'holding', dutiesN, exposedN, thinN, holdingN,
+    why: `All ${dutiesN} duty line(s) carry an eligible cover whose access has been exercised inside the declared window.`,
+  };
+}
+
+function branchCoverage(built, seat, rows, conventions = null, readingInput = null) {
   if (seat.fullAccess || seat.readOnly || (seat.rank ?? 0) < 3) return null;
   const conv = conventions || normalizeDutyCoverageSettings({});
   const floor = conv.dutyCoverageBranchFloorN;
@@ -1195,6 +1241,14 @@ function branchCoverage(built, seat, rows, conventions = null) {
       // position and a label, and a privacy test elsewhere in the suite pins
       // that. Suppression is tracked by index, not by publishing the key.
       idx: i,
+      // `seatId` is internal only (stripped below): it is what the reading
+      // hand-off is keyed on, and the acting seat is the branch's own ancestor.
+      // The ROW carries only the table POSITION (`pos`), which is already the
+      // number printed in its label: ADR-0129's ask is addressed to "branch 2 of
+      // my table" and resolved to a seat inside the action, so no node id ever
+      // travels on a branch row (the schema-v114 privacy pin holds).
+      seatId: child.id,
+      pos: i + 1,
       label: `Branch ${i + 1} · ${child.label}`,
       seatsN, dutiesN: total, coveredN: covered,
       gapN: branchRows.filter((row) => row.reading.band === 'gap').length,
@@ -1223,12 +1277,46 @@ function branchCoverage(built, seat, rows, conventions = null) {
     }
   }
 
+  // ADR-0129: the reading a withheld cell is holding — the chief's own ask and
+  // the branch leader's answer, both re-derived here. A released cell carries
+  // `reading: null`: there is nothing to ask for when the figure is printed.
+  const cellReading = (branchSeatId) => {
+    if (!readingInput) return null;
+    const ask = latestAskFor(readingInput.asks, seat.id, branchSeatId);
+    const answer = ask ? activeAnswerForAsk(readingInput.answers, ask.id) : null;
+    const derived = deriveReadingState(ask, answer, {
+      today: readingInput.today,
+      responseDays: readingInput.responseDays,
+      validDays: readingInput.validDays,
+    });
+    return {
+      state: derived.state,
+      stateLabel: BRANCH_READING_STATE_LABELS[derived.state] || derived.state,
+      // The ask id is the ASKER's own record id — not a person id, not a node
+      // id — and it is what the withdraw button needs. The target seat is the
+      // branch the asker just addressed; the withheld FIGURE stays null.
+      askId: ask ? ask.id : null,
+      askedOn: derived.askedOn ?? null,
+      responseBy: derived.responseBy ?? null,
+      askNote: derived.askNote ?? null,
+      daysLeft: derived.daysLeft ?? null,
+      daysPast: derived.daysPast ?? null,
+      answeredOn: derived.answeredOn ?? null,
+      publishedOn: derived.publishedOn ?? null,
+      band: derived.band ?? null,
+      bandLabel: derived.band ? (BRANCH_READING_BAND_LABELS[derived.band] || derived.band) : null,
+      note: derived.answerNote ?? null,
+      why: derived.why,
+    };
+  };
+
   const branches = graded.map((b) => {
     const hidden = withheld.has(b.idx);
     const belowRateFloor = !hidden && ((b.seatsN > 0 && b.seatsN < rateFloor) || b.dutiesN < rateFloor);
     return {
       ...b,
       suppressed: hidden,
+      reading: hidden ? cellReading(b.seatId) : null,
       complementary: b.idx === complementary,
       // A withheld cell prints NO figure — not a zero, and not a lower/upper
       // bound a reader can sum. Its seat and duty counts survive because the
@@ -1247,7 +1335,7 @@ function branchCoverage(built, seat, rows, conventions = null) {
     };
   });
 
-  const out = branches.map(({ idx, ...rest }) => rest);
+  const out = branches.map(({ idx, seatId, ...rest }) => rest);
   const released = out.filter((b) => !b.suppressed && b.dutiesN > 0);
   const eligibleN = branches.filter((b) => b.dutiesN > 0).length;
   const total = released.reduce((sum, b) => sum + b.dutiesN, 0);
@@ -1279,9 +1367,39 @@ function branchCoverage(built, seat, rows, conventions = null) {
         ? `The mean is quoted over the ${rateable.length} released branch(es) only; ${withheld.size} withheld cell(s) are excluded and the figure is not the whole table.`
         : null));
 
+  // ADR-0129: the hand-off's own counts, over exactly the withheld cells. A
+  // released cell is not "not asked" — it was never withheld, so there is no
+  // question to ask and it is not counted as a silence.
+  const readingRows = out.map((b) => b.reading).filter(Boolean);
+  const countState = (s) => readingRows.filter((r) => r.state === s).length;
+  const bandCount = (band) => readingRows.filter((r) => r.state === 'published' && r.band === band).length;
+  const readings = readingInput
+    ? {
+      cellsN: withheld.size,
+      notAskedN: countState('not-asked'),
+      askedN: countState('asked'),
+      overdueN: countState('overdue'),
+      publishedN: countState('published'),
+      declinedN: countState('declined'),
+      lapsedN: countState('lapsed'),
+      withdrawnN: countState('withdrawn'),
+      outstandingN: countState('asked') + countState('overdue'),
+      bands: {
+        holding: bandCount('holding'),
+        thin: bandCount('thin'),
+        exposed: bandCount('exposed'),
+        unknown: bandCount('unknown'),
+      },
+      responseDays: readingInput.responseDays,
+      validDays: readingInput.validDays,
+      premise: BRANCH_READING_PREMISE,
+    }
+    : null;
+
   return {
     branches: out, ownN, floor, rateFloor,
     suppressedN: withheld.size, releasedN: released.length, deferredN, releasedSeatsN: allSeatsN,
+    readings,
     // Quoted only when nothing is withheld, so the two numbers always describe
     // the same table (Yule–Simpson composition guard, printed beside them).
     pooledPct: pooledRefused || !total ? null : round1((covered * 100) / total),
@@ -1393,7 +1511,16 @@ export function buildDutyCoverageReport(state, { now = new Date(), settings = nu
       scopeN: seat.scopeN,
     },
     namesVisible,
-    branchCoverage: branchCoverage(built, seat, rows, conv),
+    // ADR-0129: the two reading ledgers are read here, under the SAME seat and
+    // the SAME day as the table they annotate, so a cell's state and the
+    // window it is judged against can never disagree.
+    branchCoverage: branchCoverage(built, seat, rows, conv, {
+      asks: Array.isArray(state?.branchReadingAsks) ? state.branchReadingAsks : [],
+      answers: Array.isArray(state?.branchReadings) ? state.branchReadings : [],
+      today: dayKey(now),
+      responseDays: conv.dutyCoverageReadingResponseDays,
+      validDays: conv.dutyCoverageReadingValidDays,
+    }),
     absences: buildAbsenceSection(state, built, seat, { now, settings: effective, items }),
     conventions: conv,
     bounds: {
@@ -1402,6 +1529,8 @@ export function buildDutyCoverageReport(state, { now = new Date(), settings = nu
       dutyCoverageBranchFloorN: [2, 25],
       dutyCoverageBranchRateFloorN: [2, 40],
       dutyCoverageBranchCap: [4, 64],
+      dutyCoverageReadingResponseDays: [1, 30],
+      dutyCoverageReadingValidDays: [7, 180],
       dutyAbsenceMaxSpanDays: DUTY_ABSENCE_LIMITS.maxSpanDays,
       dutyConcurrencyWindowCap: DUTY_ABSENCE_LIMITS.concurrentWindowCap,
       dutyCoverLoadCap: DUTY_COVER_LOAD_LIMITS.coverCap,
@@ -1493,6 +1622,16 @@ export function dutyCoverageBriefText(report) {
         : `mean of branch rates NOT QUOTED (${comparison.meanRefused})`;
       lines.push(`Direct branches: ${released.length} cell(s) released, ${withheld.length} withheld at the declared disclosure floor of ${comparison.floor} contributing seat(s). ${rate}. ${mean}. ${comparison.ownN} own duty line(s) excluded. These are descriptive register measures, not forecasts.`);
       if (comparison.deferredN) lines.push(`  · ${comparison.deferredN} further branch(es) were not compared: the table is capped at ${report.conventions.dutyCoverageBranchCap}.`);
+      // ADR-0129: the hand-off's counts. No label, no band attribution, no
+      // figure — the bands are counts across withheld cells, not a statement
+      // about any one branch.
+      const rd = comparison.readings;
+      if (rd && rd.cellsN) {
+        lines.push(`Branch readings for withheld cells: ${rd.cellsN} cell(s) withheld — ${rd.publishedN} published (bands: ${rd.bands.holding} holding, ${rd.bands.thin} thin, ${rd.bands.exposed} exposed, ${rd.bands.unknown} cannot say), ${rd.declinedN} declined with a reason recorded, ${rd.outstandingN} outstanding (${rd.overdueN} past the declared ${rd.responseDays}-day response window), ${rd.lapsedN} lapsed past the declared ${rd.validDays}-day validity, ${rd.notAskedN} never asked. A band is the branch leader’s own statement about their own register, frozen on the day it was given; no figure from it is quoted here and the counts behind it stay in that branch.`);
+        if (rd.notAskedN && rd.publishedN === 0 && rd.declinedN === 0) {
+          lines.push('  · No withheld cell has been asked for a reading yet. The table prints no figure for them, and a blank cell is not a clean bill of health — the signal was never requested.');
+        }
+      }
       lines.push('  · A per-branch rate is a statement about the few people inside that branch: cells below the floor are withheld and one further cell is withheld beside them. This is primary + complementary suppression, not differential privacy.');
     }
   }
@@ -1604,6 +1743,12 @@ export function dutyCoverageCsvRows(report) {
         branch_withheld: b.suppressed ? 'yes' : 'no',
         branch_floor_n: branch.floor,
         branch_rate_floor_n: branch.rateFloor,
+        // ADR-0129: the hand-off's derived state on the cell it belongs to.
+        // BLANK, never 0 and never "fine", for a cell nobody has asked about.
+        branch_reading_state: b.reading?.state || '',
+        branch_reading_band: b.reading?.band || '',
+        branch_reading_asked_on: b.reading?.askedOn || '',
+        branch_reading_published_on: b.reading?.publishedOn || '',
         refused_reason: b.refused ? b.refused.slice(0, 200) : '',
       });
     }
@@ -1620,6 +1765,12 @@ export function dutyCoverageCsvRows(report) {
       branch_mean_pct: branch.meanPct === null ? '' : branch.meanPct,
       branch_floor_n: branch.floor,
       branch_rate_floor_n: branch.rateFloor,
+      // ADR-0129: BLANK (not 0) whenever the table is absent for this seat.
+      branch_reading_published_n: branch.readings ? branch.readings.publishedN : '',
+      branch_reading_declined_n: branch.readings ? branch.readings.declinedN : '',
+      branch_reading_outstanding_n: branch.readings ? branch.readings.outstandingN : '',
+      branch_reading_lapsed_n: branch.readings ? branch.readings.lapsedN : '',
+      branch_reading_not_asked_n: branch.readings ? branch.readings.notAskedN : '',
       refused_reason: branch.pooledRefused ? String(branch.pooledRefused).slice(0, 200) : '',
     });
   }
@@ -1631,7 +1782,27 @@ export function dutyCoverageAttentionCount(state, { now = new Date(), settings =
     const seat = activeSeat(built);
     if (seat.fullAccess) return 0;
     const report = buildDutyCoverageReport(state, { now, settings });
-    return report.summary.openGapN + report.summary.ineligibleN;
+    let count = report.summary.openGapN + report.summary.ineligibleN;
+    // ADR-0129: the hand-off reaches the daily read. An ask still inside its
+    // declared response window is a normal Monday and is NOT counted; a
+    // request past its deadline that the acting seat OWES an answer is, and so
+    // is a reading on the acting seat's own table that has gone stale — a
+    // published band nobody renewed is a signal that has quietly expired.
+    const conv = normalizeDutyCoverageSettings(settings || state?.settings || {});
+    const today = dayKey(now);
+    const asks = Array.isArray(state?.branchReadingAsks) ? state.branchReadingAsks : [];
+    const answers = Array.isArray(state?.branchReadings) ? state.branchReadings : [];
+    for (const ask of asks) {
+      if (!ask || (ask.targetSeatId !== seat.id && ask.askedBySeatId !== seat.id)) continue;
+      const derived = deriveReadingState(ask, activeAnswerForAsk(answers, ask.id), {
+        today,
+        responseDays: conv.dutyCoverageReadingResponseDays,
+        validDays: conv.dutyCoverageReadingValidDays,
+      });
+      if (ask.targetSeatId === seat.id && derived.state === 'overdue') count += 1;
+      if (ask.askedBySeatId === seat.id && derived.state === 'lapsed') count += 1;
+    }
+    return count;
   } catch {
     return 0;
   }

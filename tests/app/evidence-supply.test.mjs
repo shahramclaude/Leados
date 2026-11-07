@@ -79,7 +79,7 @@ const clone = (v) => JSON.parse(JSON.stringify(v));
 /* ------------------------------------------------------------------ */
 
 test('schema v79 is additive and invents no plan, task or grade', () => {
-  assert.equal(SCHEMA_VERSION, 117);
+  assert.equal(SCHEMA_VERSION, 118);
   const v78 = { ...createEmptyState(NOW.toISOString()), schemaVersion: 78 };
   delete v78.supplyPlans;
   delete v78.supplyMarkers;
@@ -88,7 +88,7 @@ test('schema v79 is additive and invents no plan, task or grade', () => {
   assert.deepEqual(migrated.raw.supplyPlans, []);
   assert.deepEqual(migrated.raw.supplyMarkers, []);
   const normalized = normalizeState(migrated.raw, { now: NOW });
-  assert.equal(normalized.state.schemaVersion, 117);
+  assert.equal(normalized.state.schemaVersion, 118);
   assert.deepEqual(normalized.state.supplyPlans, []);
 });
 

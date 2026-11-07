@@ -50,6 +50,11 @@ import { createDutyStandbyActions } from './core/domain/dutyStandbyActions.js';
 // counts for an absence is derived inside ADR-0125's window-exercise index,
 // never stored.
 import { createDutyRehearsalActions } from './core/domain/dutyRehearsalActions.js';
+// ADR-0129: the branch reading hand-off. Two ledgers (the chief's ask, the
+// branch leader's answer), two seat-scoped commands each, and one read that
+// shows both chairs. The band a publish carries is DERIVED inside the action
+// from the publisher's own register and frozen with the day — never an input.
+import { createBranchReadingActions } from './core/domain/branchReadingActions.js';
 // ADR-0118: comparing two rehearsed responses and recording the arbitration is a
 // VP/chief command on the same guarded bus and the same post-commit spine as
 // every other terminal.
@@ -19791,6 +19796,7 @@ export function createApi(store, options = {}) {
   Object.assign(api, createDutyAbsenceActions(store, { now: clock, idFactory: id }));
   Object.assign(api, createDutyStandbyActions(store, { now: clock, idFactory: id }));
   Object.assign(api, createDutyRehearsalActions(store, { now: clock, idFactory: id }));
+  Object.assign(api, createBranchReadingActions(store, { now: clock, idFactory: id }));
   // ADR-0118: the only write is RECORD-ARBITRATION; the receipt, the governed
   // decision, the two `rehearses` edges and the vertical roll-up land in one
   // atomic transaction performed by this mixin plus RULE-CMP-01.

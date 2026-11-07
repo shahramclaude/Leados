@@ -125,6 +125,14 @@ export const LINK_ENTITY_TYPES = [
   // exercise verdict: whether it counts is re-derived from the preparation
   // window on every read.
   'rehearsal',
+  // ADR-0129 (Schema v118): a branch reading request and its answer are
+  // first-class graph nodes — the `requests-reading-from` edge from the ask to
+  // the branch's leader, and the `answers-reading-ask` edge from the answer to
+  // the ask, are the provenance of the hand-off and are written in the same
+  // transaction. Neither is a second register: the branch's own rows stay the
+  // only place its figures live, and only the band crosses.
+  'branchask',
+  'branchreading',
   // Schema v44: an after-action lesson is independently navigable from the
   // dated workspace artifact offered as its corroboration.
   'lesson',
@@ -509,6 +517,8 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   absenceplan: 'absencePlans',
   standbyanswer: 'dutyStandbyAnswers',
   rehearsal: 'dutyRehearsals',
+  branchask: 'branchReadingAsks',
+  branchreading: 'branchReadings',
   comparison: 'portfolioComparisons',
   lesson: null,
   decision: 'decisions',
@@ -1202,6 +1212,12 @@ export const LINK_RELATIONS = [
   // seat that was there recorded the cover practising the duty on a dated day,
   // so the attestation can be revoked without erasing the declaration.
   'attests-rehearsal-of',
+  // ADR-0129 (Schema v118): a request for a reading is addressed to the branch
+  // whose cell is withheld. Distinct from every edge above because it names no
+  // duty and no figure: it says a seat one level up asked a specific branch for
+  // its OWN reading, and the answer edge records what that branch published or
+  // declined. The withheld figure never travels on either edge.
+  'requests-reading-from', 'answers-reading-ask',
 
 ];
 

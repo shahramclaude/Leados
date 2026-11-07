@@ -178,5 +178,12 @@ export function normalizeDutyCoverageSettings(settings = {}) {
     dutyCoverageBranchFloorN: clampInt(s.dutyCoverageBranchFloorN, ...DUTY_COVERAGE_BOUNDS.dutyCoverageBranchFloorN, d.dutyCoverageBranchFloorN),
     dutyCoverageBranchRateFloorN: clampInt(s.dutyCoverageBranchRateFloorN, ...DUTY_COVERAGE_BOUNDS.dutyCoverageBranchRateFloorN, d.dutyCoverageBranchRateFloorN),
     dutyCoverageBranchCap: clampInt(s.dutyCoverageBranchCap, ...DUTY_COVERAGE_BOUNDS.dutyCoverageBranchCap, d.dutyCoverageBranchCap),
+    // ADR-0129: how long a branch leader has to answer a reading request, and
+    // how long a published reading stands before it lapses. Clamped, printed,
+    // and re-declarable only by the rank-4+/full-access seat that declares the
+    // disclosure floors — the two are the same governance question: how little
+    // the enterprise is allowed to know, and for how long it may keep knowing it.
+    dutyCoverageReadingResponseDays: clampInt(s.dutyCoverageReadingResponseDays, ...DUTY_COVERAGE_BOUNDS.dutyCoverageReadingResponseDays, d.dutyCoverageReadingResponseDays),
+    dutyCoverageReadingValidDays: clampInt(s.dutyCoverageReadingValidDays, ...DUTY_COVERAGE_BOUNDS.dutyCoverageReadingValidDays, d.dutyCoverageReadingValidDays),
   };
 }

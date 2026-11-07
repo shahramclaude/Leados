@@ -80,6 +80,10 @@ export const DUTY_COVERAGE_PANELS = Object.freeze([
   Object.freeze({ key: 'gaps', label: 'Gaps & refusals' }),
   Object.freeze({ key: 'concentration', label: 'Concentration' }),
   Object.freeze({ key: 'plan', label: 'Absence plan' }),
+  // ADR-0129: the governed hand-off that restores the signal a withheld cell
+  // costs the chief. Both chairs in one panel: what was asked of me, and what I
+  // have asked of my own span.
+  Object.freeze({ key: 'readings', label: 'Branch readings' }),
   Object.freeze({ key: 'method', label: 'Method' }),
 ]);
 
@@ -126,6 +130,20 @@ export const DUTY_COVERAGE_DEFAULTS = Object.freeze({
   dutyCoverageBranchRateFloorN: 4,
   // How many child spans the comparison table will render in one read.
   dutyCoverageBranchCap: 24,
+  // ADR-0129: the response window a branch leader is given to answer a reading
+  // request, and how long a published reading stands before it LAPSES. Both are
+  // printed, both are clamped, and both are re-declarable only by the same
+  // rank-4+ full-access seat that declares the disclosure floors above.
+  //
+  // Five working days: a reading is a considered statement about a branch, not
+  // a reflex, and a deadline short enough to fire on a leave week teaches
+  // people to answer with the reassuring band.
+  dutyCoverageReadingResponseDays: 5,
+  // Thirty days: long enough that a chief is not re-asking every fortnight,
+  // short enough that a reading about last month is not read as today's
+  // condition. A stale band is more dangerous than a blank cell, because it
+  // looks like a signal.
+  dutyCoverageReadingValidDays: 30,
 });
 
 export const DUTY_COVERAGE_BOUNDS = Object.freeze({
@@ -134,6 +152,8 @@ export const DUTY_COVERAGE_BOUNDS = Object.freeze({
   dutyCoverageBranchFloorN: [2, 25],
   dutyCoverageBranchRateFloorN: [2, 40],
   dutyCoverageBranchCap: [4, 64],
+  dutyCoverageReadingResponseDays: [1, 30],
+  dutyCoverageReadingValidDays: [7, 180],
 });
 
 export const DUTY_PREMISE = 'A duty with no named, capable, exercised stand-in is a duty one absence away from stopping. LeadOS can name the cover because it already knows the reporting tree, the duty table and the dated work records — but it will not invent a stand-in: declaring cover is a dated human act, and every gap prints the reason it is a gap instead of a reassuring blank.';

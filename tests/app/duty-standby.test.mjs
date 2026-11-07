@@ -156,10 +156,10 @@ const boardAt = (state, seatId) => {
 /* --------------------------------------------------------------- 1. schema */
 
 test('schema v116 is additive and convergent; consent given by a third party is dropped', () => {
-  assert.equal(SCHEMA_VERSION, 117);
+  assert.equal(SCHEMA_VERSION, 118);
   const migrated = migrate({ schemaVersion: 115, people: [{ id: 'p1', name: 'A' }], settings: { leaderName: 'Dana' } });
-  assert.deepEqual(migrated.applied, ['115 → 116', '116 → 117']);
-  assert.equal(migrated.raw.schemaVersion, 117);
+  assert.deepEqual(migrated.applied, ['115 → 116', '116 → 117', '117 → 118']);
+  assert.equal(migrated.raw.schemaVersion, 118);
   assert.deepEqual(migrated.raw.dutyStandbyAnswers, [], 'nobody has answered at upgrade time');
   assert.equal(migrated.raw.settings.dutyStandbyResponseDays, DUTY_STANDBY_DEFAULTS.dutyStandbyResponseDays);
   assert.equal(migrated.raw.settings.dutyStandbyWindowDays, DUTY_STANDBY_DEFAULTS.dutyStandbyWindowDays);

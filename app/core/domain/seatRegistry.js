@@ -153,6 +153,12 @@ export const RECORD_POLICIES = Object.freeze({
   // evidence for; above the manager altitude the plan prints counts, modes and
   // attestation strength rather than names or notes.
   dutyRehearsals: { classKey: 'unit', label: 'Dated cover rehearsal records', route: '#/duty-cover?panel=plan' },
+  // ADR-0129: a branch reading is a disclosure about a POSITION's span, given by
+  // the seat that holds it to the seat one level above — so it is unit class,
+  // and above the manager altitude nothing here is re-printed as a person's name
+  // (the band and the leader's words are the disclosure; there is no figure).
+  branchReadingAsks: { classKey: 'unit', label: 'Branch reading requests', route: '#/duty-cover?panel=readings' },
+  branchReadings: { classKey: 'unit', label: 'Published branch readings', route: '#/duty-cover?panel=readings' },
   agendaMarkers: { classKey: 'individual', label: 'Agenda ledger rule markers', route: '#/agenda-ledger' },
   feedback: { classKey: 'individual', label: 'Feedback', route: '#/feedback' },
   conflicts: { classKey: 'individual', label: 'Conflict records', route: '#/conflicts' },
@@ -413,6 +419,16 @@ export const ACTION_RIGHTS = Object.freeze({
   // by the schema on reload, because an attestation by a seat with no position
   // at the duty is an invented observation.
   'attest-duty-rehearsal': { minRank: 1, maxRank: 5, label: 'Record a dated cover rehearsal for a duty line' },
+  // ADR-0129: asking a direct branch for a reading is a director-and-above act —
+  // only rank 3 and up is ever shown the branch table whose cells can be
+  // withheld, so only those seats can be holding the question. The action
+  // additionally requires the target to be a DIRECT branch of the asking seat.
+  'request-branch-reading': { minRank: 3, maxRank: 5, label: 'Request a reading from a direct branch' },
+  // Answering is the branch's own act, at whatever altitude that branch's
+  // leader sits (a manager under a director as much as a director under a
+  // chief). Open by rank at every altitude; the action refuses any seat that is
+  // not the one the ask named, and the schema refuses it again on reload.
+  'answer-branch-reading': { minRank: 1, maxRank: 5, label: 'Answer a branch reading request as that branch’s leader' },
   'log-oneonone': { minRank: 1, maxRank: 2, label: 'Log a 1:1' },
   'log-feedback': { minRank: 1, maxRank: 2, label: 'Give feedback' },
   'log-conflict': { minRank: 1, maxRank: 2, label: 'Log a conflict' },

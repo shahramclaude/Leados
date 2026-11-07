@@ -502,7 +502,7 @@ test('negotiations CSV scope exports analytical rows honestly and survives round
 /* ------------------------------------------------------------------ schema */
 
 test('Schema v23: v22 workspaces migrate additively and negotiation records repair, never invent', () => {
-  assert.equal(SCHEMA_VERSION, 117);
+  assert.equal(SCHEMA_VERSION, 118);
   const v22 = {
     schemaVersion: 22,
     people: [{ id: 'p1', name: 'Ada', status: 'active', startDate: '2025-01-01' }],
@@ -515,7 +515,7 @@ test('Schema v23: v22 workspaces migrate additively and negotiation records repa
   assert.ok(migrated.applied.includes('22 → 23'), 'v23 negotiation step still in the additive chain');
   const { state, warnings } = normalizeState(migrated.raw, { now: NOW });
   assert.deepEqual(state.negotiations, [], 'a v22 workspace simply starts with no negotiations');
-  assert.equal(state.schemaVersion, 117);
+  assert.equal(state.schemaVersion, 118);
   assert.deepEqual(warnings, []);
 
   const dirty = normalizeState({
@@ -555,7 +555,7 @@ test('Schema v23: v22 workspaces migrate additively and negotiation records repa
 
 test('empty workspace carries the v23 negotiation collection and a no-op re-normalization', () => {
   const empty = createEmptyState();
-  assert.equal(empty.schemaVersion, 117);
+  assert.equal(empty.schemaVersion, 118);
   assert.deepEqual(empty.negotiations, []);
   const once = normalizeState(empty, { now: NOW }).state;
   const twice = normalizeState(JSON.parse(JSON.stringify(once)), { now: NOW }).state;

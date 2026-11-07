@@ -398,7 +398,7 @@ test('the tag payload refuses retired bets, closed records and non-numeric effor
 /* --------------------------------------------------------------- 4. schema */
 
 test('Schema v42 adds empty strategy collections and additive migration invents nothing', () => {
-  assert.equal(SCHEMA_VERSION, 117);
+  assert.equal(SCHEMA_VERSION, 118);
   const empty = createEmptyState(NOW.toISOString());
   assert.deepEqual(empty.strategyBets, []);
   assert.deepEqual(empty.strategyTags, []);
@@ -408,8 +408,8 @@ test('Schema v42 adds empty strategy collections and additive migration invents 
   assert.equal(DEFAULT_SETTINGS.strategyDriftWindowDays, 28);
 
   const migrated = migrate({ schemaVersion: 41, people: [], cases: [] });
-  assert.equal(migrated.raw.schemaVersion, 117);
-  assert.equal(migrated.raw.schemaVersion, 117);
+  assert.equal(migrated.raw.schemaVersion, 118);
+  assert.equal(migrated.raw.schemaVersion, 118);
   assert.deepEqual(migrated.raw.strategyBets, []);
   assert.deepEqual(migrated.raw.strategyTags, []);
 });

@@ -51,9 +51,9 @@ function rehearsed(env, id) {
 function adopted(env, id) { const result = env.api.missionCaptureCommit(id, env.store.state.meta.revision, true); assert.equal(result.ok, true, result.error); return result; }
 
 test('v107 is additive and fail-closed: no historical note is invented, corrupt approval loses authority', () => {
-  assert.equal(SCHEMA_VERSION, 117);
+  assert.equal(SCHEMA_VERSION, 118);
   const old = { schemaVersion: 106, settings: { leaderName: 'Keep' }, cases: [{ id: 'keep-case' }] };
-  const migrated = migrate(old); assert.equal(migrated.raw.schemaVersion, 117); assert.deepEqual(migrated.raw.missionCaptures, []); assert.equal(migrated.raw.cases[0].id, 'keep-case');
+  const migrated = migrate(old); assert.equal(migrated.raw.schemaVersion, 118); assert.deepEqual(migrated.raw.missionCaptures, []); assert.equal(migrated.raw.cases[0].id, 'keep-case');
   assert.deepEqual(migrate(migrated.raw).applied, []);
   const env = setup(); const id = prepare(env); rehearsed(env, id);
   const raw = clone(env.store.state); raw.missionCaptures[0].preview = { failureCount: 4 };
