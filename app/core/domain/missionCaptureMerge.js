@@ -20,7 +20,7 @@
  *    the smallest span containing every affected branch.
  */
 import { addDays, dayKey } from '../time.js';
-import { LEADER_ID } from './chain.js';
+import { LEADER_ID, lowestCommonAncestor } from './chain.js';
 import { buildSeats } from './seat.js';
 import { fingerprint } from './actionBundles.js';
 import { INTAKE_CATEGORIES } from './intake.js';
@@ -59,23 +59,12 @@ function ancestorsOf(chain, id) {
   return out;
 }
 
-function pairLowestCommonAncestor(chain, a, b) {
-  const pathA = ancestorsOf(chain, a);
-  const setB = new Set(ancestorsOf(chain, b));
-  return pathA.find((id) => setB.has(id)) || LEADER_ID;
-}
-
 /**
- * Associative N-way Lowest Common Ancestor across >= 1 chain nodes.
- * Unlike a single-pass pair check against `ids[0]`, pairwise reduction holds
- * when three or more spans meet at a higher rung (e.g., two leads under mgr1
- * plus a third lead under mgr2 -> dir1).
+ * Compatibility name for ADR-0116 callers. ADR-0120 moved the associative
+ * N-way meet into chain.js so capture consolidation and ordinary work ownership
+ * cannot disagree. This is the same function, not a second implementation.
  */
-export function multiSpanLowestCommonAncestor(chain, ids) {
-  const clean = [...new Set((ids || []).filter((id) => chain?.nodes?.has(id)))];
-  if (!clean.length) return LEADER_ID;
-  return clean.slice(1).reduce((acc, id) => pairLowestCommonAncestor(chain, acc, id), clean[0]);
-}
+export { lowestCommonAncestor as multiSpanLowestCommonAncestor };
 
 /** True iff two seats sit on distinct, non-nested branches of the reporting tree. */
 export function disjointBranches(chain, seatA, seatB) {
@@ -345,7 +334,7 @@ export function evaluateMergeCluster(state, memberCaptureIds, { now = new Date()
     return { ok: false, error: 'These captures do not meet the cross-span constraint resemblance or lineage threshold.' };
   }
 
-  const lcaSeatId = multiSpanLowestCommonAncestor(seats.chain, members.map((m) => m.ownerSeatId));
+  const lcaSeatId = lowestCommonAncestor(seats.chain, members.map((m) => m.ownerSeatId));
   const lcaSeat = lcaSeatId === LEADER_ID ? seats.operatorSeat : seats.byId.get(lcaSeatId);
   const lcaNode = seats.chain.nodes.get(lcaSeatId);
   const lcaRank = lcaSeat?.rank || 5;

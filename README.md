@@ -1,3 +1,7 @@
+## 2026-11-07 — Cross-team work reaches the right manager (Session 162, Schema v113 unchanged, [ADR-0120](./docs/adr/0120-shared-multi-span-ownership.md))
+
+Routing and ownership now consider **every** affected team, not just the first pair. A blocker naming people under several leads is assigned to their lowest common manager; the existing case automation creates the mitigation and rolls the receipt up to director/VP with altitude-appropriate disclosure. Capture merge and jurisdiction use the same shared computation. No setup or schema change. Historical approvals are not rewritten, and choosing a local seat is still not signing in.
+
 ## 2026-11-07 — Stakeholder briefs from adopted Command Flow cases (Session 158, `#/mission?panel=capture`)
 
 After adopting a case or a cross-span consolidation, the **owning director, VP or chief** can select **Preview & draft for a named recipient**. Enter a real name and role, assess power/interest (1–5) and stance, preview the exact case-sourced brief, acknowledge its gaps, then create an **unsent** draft. Review/edit/approve/dismiss it on the same case card; **Record external delivery** only after sending the approved text elsewhere. Editing revokes approval. The ordinary case automation links exact-name matches to the stakeholder register and rolls the case up the reporting tree; other seats cannot read the preparing note or its private outbox. No email is sent and the local operating seat is not authentication. For multiple recipients, repeat the reviewed flow; bulk selection remains in progress.

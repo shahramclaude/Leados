@@ -30,7 +30,7 @@
 
 import { addDays, dayKey, weekKey } from '../time.js';
 import {
-  buildChain, responsibleNodeId, managerNodeId, LEADER_ID,
+  buildChain, responsibleNodeId, managerNodeId, lowestCommonAncestor, LEADER_ID,
 } from './chain.js';
 import { recordPeople, buildSeats, activeSeat, canSee } from './seat.js';
 import { altitudeRank } from './chainRegistry.js';
@@ -383,36 +383,12 @@ export function branchChildOf(chain, lca, spanId) {
 }
 
 /**
- * The TRUE lowest common ancestor of ALL spans. chain.js's
- * `lowestCommonAncestor` returns on the FIRST pair it can resolve, so with
- * three or more spans whose first two share a branch it reports that branch
- * instead of the ancestor that actually covers every span. A jurisdiction
- * compiler cannot understate the coalition by pricing a phantom sub-branch.
- * We intersect the full ancestor chain of every span and return the DEEPEST
- * node in the first span's chain that all of them share.
+ * Compatibility name for the Jurisdiction Compiler's coalition boundary.
+ * ADR-0120: the shared chain meet now considers every span, so the local
+ * workaround is retired. Every module prices the same accountable ancestor.
  */
 export function commonAncestorOfAll(chain, spanIds) {
-  const ids = [...new Set((spanIds || []).filter((id) => id && chain.nodes.has(id)))];
-  if (!ids.length) return LEADER_ID;
-  const inclusive = (id) => {
-    const out = [];
-    const seen = new Set();
-    let cursor = id;
-    while (cursor && !seen.has(cursor) && out.length < JUR_LIMITS.ancestorsCap) {
-      seen.add(cursor);
-      out.push(cursor);
-      const parent = managerNodeId(chain, cursor);
-      if (!parent || parent === cursor) break;
-      cursor = parent;
-    }
-    return out;
-  };
-  const first = inclusive(ids[0]);
-  const sets = ids.map((id) => new Set(inclusive(id)));
-  for (const candidate of first) {
-    if (sets.every((set) => set.has(candidate))) return candidate;
-  }
-  return LEADER_ID;
+  return lowestCommonAncestor(chain, spanIds);
 }
 
 /**

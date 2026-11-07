@@ -89,7 +89,7 @@ test('v111 is additive, declared, fail-closed and invents no jurisdiction fact',
   assert.ok(jurConventions(empty.settings).jurRedrawUnits > 0, 'a redraw with zero cost would always win');
 
   const migrated = migrate({ schemaVersion: 109, settings: {}, people: [], decisions: [] });
-  assert.equal(migrated.raw.schemaVersion, 112);
+  assert.equal(migrated.raw.schemaVersion, SCHEMA_VERSION);
   assert.equal(migrated.applied.at(-1), '112 → 113');
   assert.deepEqual(migrated.raw.jurFindings, []);
   assert.deepEqual(migrated.raw.jurReadings, []);

@@ -373,31 +373,38 @@ function parentNodeId(chain, id) {
   return node?.parentId || LEADER_ID;
 }
 
-/** Deepest node that is an ancestor-or-self of every id in `ids`. */
-export function lowestCommonAncestor(chain, ids) {
-  const clean = [...new Set((ids || []).filter((id) => chain.nodes.has(id)))];
-  if (!clean.length) return LEADER_ID;
-  if (clean.length === 1) return clean[0];
-  const ancestorsOf = (id) => {
-    const out = [];
-    let cursor = id;
-    const guard = new Set();
-    while (cursor && !guard.has(cursor)) {
-      guard.add(cursor);
-      out.push(cursor);
-      cursor = parentNodeId(chain, cursor);
-    }
-    return out;
-  };
-  const first = ancestorsOf(clean[0]);
-  for (const other of clean.slice(1)) {
-    const set = new Set(ancestorsOf(other));
-    for (let i = 0; i < first.length; i += 1) {
-      if (!set.has(first[i])) continue;
-      return first[i];
-    }
+/** Inclusive ancestry, nearest first. A malformed loop falls back to the root. */
+function ancestorPath(chain, id) {
+  const path = [];
+  const seen = new Set();
+  let cursor = chain.nodes.has(id) ? id : LEADER_ID;
+  while (cursor && !seen.has(cursor)) {
+    seen.add(cursor);
+    path.push(cursor);
+    cursor = parentNodeId(chain, cursor);
   }
-  return LEADER_ID;
+  if (path[path.length - 1] !== LEADER_ID) path.push(LEADER_ID);
+  return path;
+}
+
+/** The binary meet on a rooted tree: commutative, associative and idempotent. */
+function pairLowestCommonAncestor(chain, a, b) {
+  const path = ancestorPath(chain, a);
+  const other = new Set(ancestorPath(chain, b));
+  return path.find((id) => other.has(id)) || LEADER_ID;
+}
+
+/**
+ * Deepest node that is an ancestor-or-self of EVERY id, not just the first pair.
+ * Reduce the binary meet across the complete set so grouping and input order
+ * cannot change ownership. Unknown ids retain the existing root-fallback
+ * contract; duplicates do not create extra work. No depth is silently discarded.
+ * ADR-0120: this is the sole N-way ownership computation for every altitude.
+ */
+export function lowestCommonAncestor(chain, ids) {
+  const clean = [...new Set((ids || []).filter((id) => chain?.nodes?.has(id)))];
+  if (!clean.length) return LEADER_ID;
+  return clean.slice(1).reduce((owner, id) => pairLowestCommonAncestor(chain, owner, id), clean[0]);
 }
 
 /** The leader responsible for a person: their manager, or the workspace leader. */
