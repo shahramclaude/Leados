@@ -378,6 +378,34 @@ export function buildDutyCoverageReport(state, { now = new Date(), settings = nu
 
   // The enterprise reading is deliberately counts-only: the same table, with
   // each duty's owner seat described and no person named below it.
+  // Above rank 2 the register prints counts, seats and refusals — never a
+  // person's name for a cover. Below it, the lead needs the actual names.
+  const namesVisible = seat.fullAccess || (seat.rank ?? 1) <= 2;
+  const redactSeat = (seatObj) => {
+    if (!seatObj) return seatObj;
+    if (namesVisible) return seatObj;
+    return { id: seatObj.id, name: null, label: seatObj.label, rank: seatObj.rank, altitudeKey: seatObj.altitudeKey };
+  };
+  const redactReading = (reading) => {
+    if (namesVisible) return reading;
+    return {
+      ...reading,
+      covers: reading.covers.map((c) => ({ ...c, coverId: null, name: null, label: c.rank === null ? null : `Rank ${c.rank} cover`, note: null, declaredBySeatId: null, decisionId: null })),
+      candidates: [],
+      eligibleCandidates: reading.eligibleCandidates.map((c) => ({ personId: null, name: null, label: c.label, rank: c.rank, eligible: true, reason: c.reason, isSelf: c.isSelf })),
+      ineligibleCandidates: reading.ineligibleCandidates.map((c) => ({ personId: null, name: null, label: c.label, rank: c.rank, eligible: false, reason: c.reason, isSelf: c.isSelf })),
+      concentration: {
+        ...reading.concentration,
+        rows: reading.concentration.rows.map((h) => ({ personId: null, name: null, n: h.n, sharePct: h.sharePct })),
+        top: reading.concentration.top ? { personId: null, name: null, n: reading.concentration.top.n, sharePct: reading.concentration.top.sharePct } : null,
+      },
+    };
+  };
+  const redactRow = (row) => {
+    if (namesVisible) return row;
+    return { seat: redactSeat(row.seat), reading: redactReading(row.reading) };
+  };
+
   const perSeat = new Map();
   for (const row of rows) {
     const key = row.seat.id;
@@ -389,29 +417,12 @@ export function buildDutyCoverageReport(state, { now = new Date(), settings = nu
   }
   const seatRows = [...perSeat.values()].sort((a, b) => b.rank - a.rank || String(a.name).localeCompare(String(b.name)));
 
-  const gaps = rows.filter((r) => r.reading.band === 'gap');
-  const thin = rows.filter((r) => r.reading.band === 'thin');
-  const ineligible = rows.filter((r) => r.reading.band === 'ineligible');
-  const unexercisedDutyGaps = rows.filter((r) => r.reading.openN > 0 && r.reading.band === 'gap');
-
-  // Above rank 2 the register prints counts, seats and refusals — never a
-  // person's name for a cover. Below it, the lead needs the actual names.
-  const namesVisible = seat.fullAccess || (seat.rank ?? 1) <= 2;
-  const redactedRows = namesVisible ? rows : rows.map((row) => ({
-    ...row,
-    reading: {
-      ...row.reading,
-      covers: row.reading.covers.map((c) => ({ ...c, coverId: null, name: null, label: c.rank === null ? null : `Rank ${c.rank} cover` })),
-      candidates: [],
-      eligibleCandidates: row.reading.eligibleCandidates.map((c) => ({ personId: null, name: null, label: c.label, rank: c.rank, eligible: true, reason: c.reason, isSelf: c.isSelf })),
-      ineligibleCandidates: row.reading.ineligibleCandidates.map((c) => ({ personId: null, name: null, label: c.label, rank: c.rank, eligible: false, reason: c.reason, isSelf: c.isSelf })),
-      concentration: {
-        ...row.reading.concentration,
-        rows: row.reading.concentration.rows.map((h) => ({ personId: null, name: null, n: h.n, sharePct: h.sharePct })),
-        top: row.reading.concentration.top ? { personId: null, name: null, n: row.reading.concentration.top.n, sharePct: row.reading.concentration.top.sharePct } : null,
-      },
-    },
-  }));
+  const redactedRows = rows.map(redactRow);
+  const effectiveRows = namesVisible ? rows : redactedRows;
+  const gaps = effectiveRows.filter((r) => r.reading.band === 'gap');
+  const thin = effectiveRows.filter((r) => r.reading.band === 'thin');
+  const ineligible = effectiveRows.filter((r) => r.reading.band === 'ineligible');
+  const unexercisedDutyGaps = effectiveRows.filter((r) => r.reading.openN > 0 && r.reading.band === 'gap');
 
   const readinessPct = total ? round1((coveredN / total) * 100) : null;
   const interval = total ? wilsonInterval(coveredN, total) : null;
