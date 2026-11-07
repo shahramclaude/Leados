@@ -98,3 +98,49 @@ export const DUTY_ABSENCE_PREMISE = 'An absence is a date range, not a feeling: 
 export const DUTY_CONCURRENCY_ENGINE_VERSION = 'duty-concurrency-2026.11-v1';
 
 export const DUTY_CONCURRENCY_PREMISE = 'Two absences on the same dates are not two absences: they are one window with less capacity. The register sweeps the declared windows, prints every shared date range, and names the cover who would be the only answerable person for more than one absent seat — a single point of failure that no per-absence reading can show.';
+
+/**
+ * COVER CAPACITY INSIDE THE SHARED WINDOW (ADR-0124)
+ * --------------------------------------------------
+ * ADR-0123 prints the single point of failure — one person declared as the
+ * only cover for two or more absent seats. It deliberately said nothing about
+ * whether that person has room for the work. A manager approving a week's
+ * cover is the seat who must answer that, and the workspace already holds the
+ * evidence: the open work items inside each duty line's span, harvested by the
+ * SAME shared harvester that drives the chain, the register and the roll-up.
+ *
+ * DECLARED: nothing new. The absence windows, the covers and the duty table
+ * are already declared. The capacity envelope is DERIVED from the peak open
+ * work any seat in this span is currently carrying — a revealed upper bound,
+ * not a fitted productivity constant and not an invented WIP target. Little's
+ * Law (1961) is the reason work-in-progress is the unit, and the reason the
+ * reading refuses when no open work exists: zero observed work is not spare
+ * capacity.
+ *
+ * DERIVED, never stored: the cover's own open work, the open work inherited
+ * from the absent seats they alone would answer for, the overlap between them
+ * (counted once, because an ancestor's span already contains the descendant's
+ * work), the union, the ratio against the observed envelope and the band. A
+ * stored verdict would drift the moment one case, one delegation or one
+ * absence window changed.
+ *
+ * WHY NO NEW RULE / EVENT / SCHEMA: this is a read-side projection of the same
+ * concurrency sweep. The governed decision, the audit event, the upward brief
+ * and the duty-absence scan already carry that sweep; the capacity reading
+ * travels with it rather than opening a second automation path.
+ */
+export const DUTY_COVER_LOAD_ENGINE_VERSION = 'duty-cover-load-2026.11-v1';
+
+export const DUTY_COVER_LOAD_PREMISE = 'A named cover is not spare capacity. On the shared dates the register counts the open work the cover already carries, the open work they alone would inherit from the absent seats, and the items that sit in both spans — once, not twice — then grades the union against the highest open-work load any seat in this span is actually carrying today. With no open work on the record there is no envelope, and the reading refuses instead of printing a reassuring zero.';
+
+export const DUTY_COVER_LOAD_LIMITS = Object.freeze({
+  /** Distinct available covers graded per overlap window. The remainder is
+   *  counted and printed as deferred, never folded into a comfortable number. */
+  coverCap: 24,
+});
+
+export const DUTY_COVER_LOAD_REFUSALS = Object.freeze({
+  noEnvelope: 'No comparable seat in this span currently carries a recorded open work item inside its declared duty lines, so the record contains no observed capacity envelope. Zero open work is not spare capacity: the reading refuses rather than grading against an invented limit.',
+  noComparableSeat: 'The reporting tree holds no other seat at or below this cover’s altitude inside this span, so there is no like-for-like load to compare against and the reading refuses.',
+  noDuties: 'This cover holds no declared duty line in the reporting tree, so their own workload has no denominator and a capacity reading would be a guess.',
+});

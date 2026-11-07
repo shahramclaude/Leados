@@ -173,6 +173,15 @@ export function createDutyAbsenceActions(store, { now, idFactory }) {
       const concurrencyLine = worst
         ? `Concurrency: this window overlaps ${worst.count - 1} other declared absence(s) in this span. On ${worst.from} → ${worst.to}, ${worst.count} seat(s) are absent at once, ${worst.exposedN} duty line(s) have no available cover on those shared dates (${worst.exposedOpenN} carrying open work), and ${worst.singleCovers.length} declared cover(s) would be the only answerable person for two or more absent seats.`
         : `Concurrency: ${concurrency.refused || 'no other declared absence in this span shares a date with this window.'} The overlap is graded from the declared windows on every read, never stored.`;
+      // ADR-0124: the governed decision opened by this declaration records the
+      // capacity of the covers who would answer on the shared dates, from the
+      // SAME hypothetical-state read as the overlap itself.
+      const capacityLine = worst
+        ? `Cover capacity: ${worst.capacity.gradedN} available cover(s) graded on the shared dates against a like-for-like revealed envelope of up to ${worst.capacity.envelopeN} open work item(s) among ${worst.capacity.envelopeSeatsN} comparable seat(s); ${worst.capacity.overEnvelopeN} would carry more than that peak (largest ${worst.capacity.maxCombinedN}), ${worst.capacity.refusedN} refused. ${worst.capacity.refusal || 'The union counts each open item once, including work already inside the cover’s own span; no capacity verdict is stored.'}`
+        : 'Cover capacity: no shared date range was graded, so no cover load is claimed.';
+      const loadedSingleCovers = worst
+        ? worst.singleCovers.filter((c) => c.capacity && c.capacity.band === 'over-envelope').length
+        : 0;
 
       store.update((draft) => {
         draft.absencePlans = Array.isArray(draft.absencePlans) ? draft.absencePlans : [];
@@ -197,6 +206,7 @@ export function createDutyAbsenceActions(store, { now, idFactory }) {
             `${seat.name} (${seat.label}) declared an absence ${windowText}: ${reason}`,
             exposureLine,
             concurrencyLine,
+            capacityLine,
             'What remains open is whether every exposed duty line has a declared, available stand-in on those dates. The register derives availability from the declared windows and exercise from dated records; this decision records the exposure the absence creates and asks the seat to close it before the window opens, not after.',
           ].join(' '),
           date: today,
@@ -240,7 +250,7 @@ export function createDutyAbsenceActions(store, { now, idFactory }) {
         type: DUTY_ABSENCE_EVENTS.DECLARE,
         entity: 'absenceplan',
         entityId: rowId,
-        summary: `Absence declared: ${seat.label} absent ${windowText}. ${exposed} of ${plan.summary.dutiesN} duty line(s) exposed. ${concurrency.windows.length ? `${concurrency.windows.length} concurrent window(s), ${concurrency.summary.exposedOpenN} line(s) with open work uncovered on the shared dates, ${concurrency.summary.singleCoverN} single-cover point(s).` : 'No concurrent window.'}`.slice(0, 300),
+        summary: `Absence declared: ${seat.label} absent ${windowText}. ${exposed} of ${plan.summary.dutiesN} duty line(s) exposed. ${concurrency.windows.length ? `${concurrency.windows.length} concurrent window(s), ${concurrency.summary.exposedOpenN} line(s) with open work uncovered on the shared dates, ${concurrency.summary.singleCoverN} single-cover point(s).` : 'No concurrent window.'} Cover capacity: ${concurrency.coverLoad.gradedN} graded, ${concurrency.coverLoad.overEnvelopeN} over the observed envelope (${concurrency.coverLoad.envelopeN} items), ${loadedSingleCovers} single-cover point(s) over it.`.slice(0, 300),
       });
       return saved({
         id: rowId,
@@ -252,6 +262,13 @@ export function createDutyAbsenceActions(store, { now, idFactory }) {
           maxConcurrent: concurrency.summary.maxConcurrent,
           exposedOpenN: concurrency.summary.exposedOpenN,
           singleCoverN: concurrency.summary.singleCoverN,
+          coverLoad: {
+            gradedN: concurrency.coverLoad.gradedN,
+            overEnvelopeN: concurrency.coverLoad.overEnvelopeN,
+            refusedN: concurrency.coverLoad.refusedN,
+            envelopeN: concurrency.coverLoad.envelopeN,
+            maxCombinedN: concurrency.coverLoad.maxCombinedN,
+          },
         },
       });
     },
@@ -303,7 +320,7 @@ export function createDutyAbsenceActions(store, { now, idFactory }) {
         type: DUTY_ABSENCE_EVENTS.SCAN,
         entity: 'workspace',
         entityId: '',
-        summary: `Absence plans re-derived: ${report.absences.own ? 1 : 0} own, ${rollup.rows.length} in span, ${report.absences.exposedOpenN} duty line(s) with open work and no available cover on the absence dates. Concurrency: ${conc.refused ? `refused — ${conc.refused}` : `${conc.summary.windowsN} overlapping window(s), at most ${conc.summary.maxConcurrent} seats at once, ${conc.summary.singleCoverN} single-cover point(s)`}. Nothing was scheduled.`.slice(0, 300),
+        summary: `Absence plans re-derived: ${report.absences.own ? 1 : 0} own, ${rollup.rows.length} in span, ${report.absences.exposedOpenN} duty line(s) with open work and no available cover on the absence dates. Concurrency: ${conc.refused ? `refused — ${conc.refused}` : `${conc.summary.windowsN} overlapping window(s), at most ${conc.summary.maxConcurrent} seats at once, ${conc.summary.singleCoverN} single-cover point(s)`}. Cover capacity: ${conc.coverLoad.gradedN} graded, ${conc.coverLoad.overEnvelopeN} over the ${conc.coverLoad.envelopeN}-item observed envelope. Nothing was scheduled.`.slice(0, 300),
       });
       return saved({
         exposedOpenN: report.absences.exposedOpenN,
@@ -313,6 +330,13 @@ export function createDutyAbsenceActions(store, { now, idFactory }) {
           maxConcurrent: conc.summary.maxConcurrent,
           singleCoverN: conc.summary.singleCoverN,
           refused: conc.refused,
+          coverLoad: {
+            gradedN: conc.coverLoad.gradedN,
+            overEnvelopeN: conc.coverLoad.overEnvelopeN,
+            refusedN: conc.coverLoad.refusedN,
+            envelopeN: conc.coverLoad.envelopeN,
+            refusal: conc.coverLoad.refusal,
+          },
         },
       });
     },

@@ -317,6 +317,15 @@ const concurrencyBandBadge = (band) => {
   return badge('open work uncovered', 'bad', 'A duty line with open work has no available cover on the shared dates');
 };
 
+/* ADR-0124: the cover's own open work plus the work inherited from the absent
+ * seats, graded against the peak open-work load actually observed in the span. */
+const coverLoadBandBadge = (band) => {
+  if (band === 'over-envelope') return badge('past observed load', 'bad', 'More open work than any seat in this span is carrying today');
+  if (band === 'at-envelope') return badge('no recorded headroom', 'warn', 'Exactly matches the observed envelope');
+  if (band === 'within-envelope') return badge('inside observed load', 'good', 'Inside the peak open-work load observed in this span');
+  return badge('capacity refused', 'warn', 'The reading refuses rather than treating zero as spare capacity');
+};
+
 function concurrencyCard(concurrency) {
   if (!concurrency) return null;
   const s = concurrency.summary;
@@ -356,7 +365,8 @@ function concurrencyCard(concurrency) {
         stat({ label: 'Windows', value: String(s.windowsN), hint: `${s.participantsN} declared absence(s) swept` }),
         stat({ label: 'Most seats out at once', value: String(s.maxConcurrent), tone: s.maxConcurrent > 2 ? 'bad' : '', hint: `${s.seatsInOverlapN} distinct seat(s) appear in an overlap` }),
         stat({ label: 'Open work, no cover', value: String(s.exposedOpenN), tone: s.exposedOpenN ? 'bad' : 'good', hint: `${s.exposedN} exposed duty line(s) across the windows` }),
-        stat({ label: 'Single-cover points', value: String(s.singleCoverN), tone: s.singleCoverN ? 'bad' : 'good', hint: 'one person is the only answerable cover for 2+ absent seats' })),
+        stat({ label: 'Single-cover points', value: String(s.singleCoverN), tone: s.singleCoverN ? 'bad' : 'good', hint: 'one person is the only answerable cover for 2+ absent seats' }),
+        stat({ label: 'Covers past observed load', value: String(s.coverLoadOverN), tone: s.coverLoadOverN ? 'bad' : 'good', hint: `envelope ${concurrency.coverLoad?.envelopeN ?? 0} open item(s); largest graded union ${s.coverLoadMaxN}` })),
       table({
         caption: 'Overlapping absence windows',
         columns: [
@@ -371,12 +381,38 @@ function concurrencyCard(concurrency) {
         rows: concurrency.windows,
         emptyMessage: 'No overlap.',
       }),
+      table({
+        caption: 'Cover capacity on the shared dates (ADR-0124)',
+        columns: [
+          { label: 'Shared dates', render: (r) => r.window },
+          { label: 'Available cover', render: (r) => (concurrency.namesVisible ? (r.name || r.label) : `${r.label} (rank ${r.rank})`) },
+          { label: 'Own open', render: (r) => String(r.ownN) },
+          { label: 'Inherited', render: (r) => String(r.inheritedN) },
+          { label: 'In both spans', render: (r) => String(r.overlapN) },
+          { label: 'Distinct union', render: (r) => String(r.combinedN) },
+          { label: 'Observed envelope', render: (r) => String(r.envelopeN) },
+          { label: 'Ratio', render: (r) => (r.ratio === null ? 'refused' : `${r.ratio}×`) },
+          { label: 'Reading', render: (r) => coverLoadBandBadge(r.band) },
+          { label: 'Absent seats', render: (r) => r.refs.join(', ') || 'none' },
+        ],
+        rows: concurrency.windows.flatMap((w) => w.coverLoads.map((c) => ({ ...c, window: `${w.from} → ${w.to}` }))),
+        emptyMessage: 'No available, eligible cover was declared for a duty line in a shared window.',
+      }),
+      concurrency.coverLoad?.refusal
+        ? banner({ tone: 'warn', title: 'Cover capacity could not be graded', body: concurrency.coverLoad.refusal })
+        : null,
+      s.coverLoadDeferredN
+        ? banner({ tone: 'warn', title: `${s.coverLoadDeferredN} further available cover(s) were not graded`, body: `The capacity sweep is capped at ${concurrency.coverLoad?.coverCap ?? 24} covers per window so a large ledger cannot be compressed into one comfortable number. The remainder is counted, not hidden.` })
+        : null,
       ...concurrency.windows.map((w) => h('div', { class: 'stack-xs' },
         h('p', { class: 'field-label' }, `${w.from} → ${w.to} — ${w.seats.map((x) => x.ref).join(', ')}`),
         h('p', { class: 'muted small' }, w.reason),
         w.singleCovers.length
           ? h('ul', { class: 'plain-list' }, ...w.singleCovers.map((c) => h('li', { class: 'muted small' },
-            `${concurrency.namesVisible ? (c.name || c.label) : c.label} (rank ${c.rank}) would be the only answerable cover for ${c.dutiesN} duty line(s) across ${c.seatsN} absent seats — ${c.refs.join(', ')}. Declaring a second cover for one of those lines removes the single point of failure; the register will not assign one.`)))
+            `${concurrency.namesVisible ? (c.name || c.label) : c.label} (rank ${c.rank}) would be the only answerable cover for ${c.dutiesN} duty line(s) across ${c.seatsN} absent seats — ${c.refs.join(', ')}. Declaring a second cover for one of those lines removes the single point of failure; the register will not assign one. ${c.capacity ? `Capacity: ${c.capacity.band.replace(/-/g, ' ')}, ${c.capacity.combinedN} distinct open item(s) against an envelope of ${c.capacity.envelopeN}. ${c.capacity.reason}` : 'Capacity: refused — no reading is stored.'}`)))
+          : null,
+        w.coverLoads.length
+          ? h('ul', { class: 'plain-list' }, ...w.coverLoads.map((c) => h('li', { class: 'muted small' }, c.reason)))
           : null,
         w.conflicts.length
           ? h('ul', { class: 'plain-list' }, ...w.conflicts.map((c) => h('li', { class: 'muted small' },
@@ -385,7 +421,7 @@ function concurrencyCard(concurrency) {
       s.deferredWindowsN
         ? banner({ tone: 'warn', title: `${s.deferredWindowsN} further overlapping window(s) were not graded`, body: 'The concurrency sweep is capped so a large ledger cannot be summarised into one comfortable number. Grading the remainder needs a narrower span or fewer simultaneous absences.' })
         : null,
-      h('p', { class: 'muted small' }, 'Derived on every read from the declared absence windows and the declared covers: nothing here is stored, scheduled or auto-assigned. Adjacency is not overlap — windows that merely touch are not counted. Above the manager altitude a cover is named by rank and seat only.')),
+      h('p', { class: 'muted small' }, 'Derived on every read from the declared absence windows, the declared covers and the open work the shared harvester already holds: nothing here is stored, scheduled or auto-assigned. Cover capacity counts each open item once (work inside the cover’s own span is not added twice) and grades the union against the highest open-work load any seat in this span is carrying today — a revealed envelope, not a productivity constant. Adjacency is not overlap, and above the manager altitude a cover is named by rank and seat only.')),
   });
 }
 
@@ -424,6 +460,7 @@ function planPanel(ctx, report) {
         h('li', null, h('strong', null, 'Declared:'), ' the absence window itself — two ISO dates, the reason the seat holder wrote, and the governed decision naming what stops. A human declares an absence; nothing schedules one.'),
         h('li', null, h('strong', null, 'Derived on every read:'), ' whether each declared cover is AVAILABLE on the window’s dates (a cover with their own absence overlapping the window is not), the window band per duty line, and the cascade — whether an absent cover’s own absence is covered.'),
         h('li', null, h('strong', null, 'Concurrency (ADR-0123):'), ' overlapping absence windows are swept from the same declared dates. The sweep prints the shared dates, the duty lines with no available cover on them, and the cover who would be the only answerable person for two or more absent seats — the single point of failure a per-absence reading cannot show. Adjacency is not overlap, and above the manager altitude the cover is named by rank and seat only.'),
+        h('li', null, h('strong', null, 'Cover capacity (ADR-0124):'), ' on the shared dates, the cover’s own open work and the open work they alone would inherit are counted as one set union (items already inside the cover’s own span are not added twice) and graded against the peak open-work load actually observed in this span. With no open work on the record there is no envelope and the reading refuses; a duty line with several available covers is printed as shared rather than split by guess.'),
         h('li', null, h('strong', null, 'Refused:'), ' a stored availability flag, an engine-assigned absence, an auto-assigned second cover and a “covered during the window” tick. Availability is a function of two declared windows; a stored copy would drift the moment either window changed.'),
         h('li', null, h('strong', null, 'Schema v115 is additive.'), ' An upgraded workspace opens with an empty absence ledger — “no absence has been declared here yet”, which is not the same claim as “every absence is covered”.')),
     }),
