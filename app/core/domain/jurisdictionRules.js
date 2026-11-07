@@ -34,7 +34,15 @@
  *    `reads-span-mandate` edge and one `rolls-up-to` edge per ancestor. Above
  *    rank 2 the reading carries NO objective key, NO member id and NO person.
  *
- * All four are bounded, marker-idempotent and pausable by `jurAutoPropagate`;
+ *  RULE-JUR-05 DRIFT (ADR-0115). On the explicit `jur.drift` command only, a
+ *    distribution-free conformal band grades the ISO-week series of cross-branch
+ *    share and median coalition size over the readings RULE-JUR-04 froze. A
+ *    published band crossing opens EXACTLY ONE governed decision per ISO week,
+ *    with one `rolls-up-to` edge per executive ancestor seat in the same
+ *    transaction. Refused below the declared week floor; never interpolates an
+ *    unsampled week, never redraws a boundary, never accepts itself.
+ *
+ * All five are bounded, marker-idempotent and pausable by `jurAutoPropagate`;
  * an explicit `jur.scan` always runs every pass. The rule is ROOT-EVENT GATED:
  * engine-derived `decision.created` events (the ~88 other rules' audit output)
  * never wake detection, so a scan cannot price itself — the exact regression
@@ -44,6 +52,9 @@
 import { addDays, dayKey, weekKey } from '../time.js';
 import { ensureEntityLink } from './automation.js';
 import { buildChain, managerNodeId, LEADER_ID } from './chain.js';
+import { altitudeRank } from './chainRegistry.js';
+import { jurDriftEnterprise } from './jurisdictionDrift.js';
+import { JUR_DRIFT_LIMITS, JUR_DRIFT_OPTIONS } from './jurisdictionDriftRegistry.js';
 import {
   buildJurisdictionBook, jurConventions, jurGradeFinding, jurSpanRollUp,
   jurAttentionCount as jurAttentionRead, goalPointerStatus,
@@ -52,7 +63,7 @@ import {
   JUR_ENGINE_VERSION, JUR_EVENTS, JUR_LIMITS, JUR_RULE_IDS, JUR_SETTLEMENT_EVENTS,
   JUR_TRIGGER_PREFIX, JUR_WORK_EVENTS, JUR_GOVERNANCE_OPTIONS, JUR_OPTION_KEYS,
   JUR_REFUSALS, findingKey, governedDecisionMarker, governanceDecisionMarker,
-  governanceMarker, readingKey,
+  governanceMarker, readingKey, driftMarker, driftDecisionMarker,
 } from './jurisdictionRegistry.js';
 
 const ancestorsOf = (chain, nodeId, cap = JUR_LIMITS.ancestorsCap) => {
@@ -329,6 +340,7 @@ function rollUpPass(draft, ctx, out, conventions, book) {
       frozenAt: ctx.now.toISOString(),
       reviewOn: addDays(dayKey(ctx.now), conventions.jurReviewDays),
       clusters: roll.clusters,
+      objectives: roll.objectives,
       crossBranch: roll.crossBranch,
       priced: roll.suppressed ? null : roll.priced,
       governed: roll.suppressed ? null : roll.governed,
@@ -354,6 +366,84 @@ function rollUpPass(draft, ctx, out, conventions, book) {
 }
 
 /* ------------------------------------------------------------------ */
+/* 5. DRIFT (ADR-0115) — cross-week conformal GOVERNANCE               */
+/* ------------------------------------------------------------------ */
+
+/**
+ * The readings RULE-JUR-04 just froze are the ONLY input. A published band
+ * crossing opens exactly ONE governed, marker-idempotent decision per ISO week,
+ * owned at the enterprise lead, with one `rolls-up-to` edge per executive
+ * ancestor seat IN THE SAME ATOMIC TRANSACTION. It never moves a reporting
+ * line, never edits a reading, never accepts itself and never prices its own
+ * audit output back as work (`[RULE-JUR-05:...]` is excluded by the harvest).
+ */
+function driftPass(draft, ctx, out, conventions, book) {
+  const report = jurDriftEnterprise(draft, { now: ctx.now, settings: ctx.settings || draft.settings || {} });
+  const week = weekKey(ctx.now);
+  if (report.verdict !== 'drift') {
+    note(ctx, out, JUR_RULE_IDS.DRIFT, 'no-drift', 'jurisdiction', week,
+      `Cross-week drift scan: ${report.verdict}${report.reason ? ` (${report.reason})` : ''}; ${report.windowN} frozen week(s). No governed decision opened.`);
+    return;
+  }
+  const marker = driftMarker(week);
+  if (markerHas(draft, marker)) {
+    note(ctx, out, JUR_RULE_IDS.DRIFT, 'already-governed', 'jurisdiction', week,
+      'One governed drift decision per ISO week; this week is already on the ledger.');
+    return;
+  }
+  draft.decisions = Array.isArray(draft.decisions) ? draft.decisions : [];
+  const decisionId = ctx.idFactory('dec');
+  const metrics = [...new Set(report.outside.map((o) => o.metric))].join(' + ');
+  const share = report.bands.share;
+  const coalition = report.bands.coalition;
+  const leaderName = book.chain.nodes.get(LEADER_ID)?.name || 'the enterprise lead';
+  const options = JUR_DRIFT_OPTIONS.map((o) => ({
+    id: ctx.idFactory('dopt'),
+    label: `${o.key}: ${o.label}`,
+    pros: o.question,
+    cons: o.note,
+  }));
+  draft.decisions.push({
+    id: decisionId,
+    title: `Cross-week jurisdiction drift: ${metrics} outside its conformal band`,
+    question: `${driftDecisionMarker(week)} ${report.windowN} frozen ISO weeks in the look-back `
+      + `(${report.gapWeeks} unsampled week(s)). The newest change in ${metrics} is ${report.direction}: `
+      + `cross-branch share Δ ${share.currentDelta ?? '—'} pp against a declared bound ${share.bound ?? '—'} pp `
+      + `(k=${share.k ?? '—'}, n=${share.m}, achieved coverage ${share.coverageBound ?? '—'}); `
+      + `median coalition size Δ ${coalition.currentDelta ?? '—'} against bound ${coalition.bound ?? '—'}. `
+      + `This week's pooled share is ${report.latest?.pooledPct ?? '—'}% and the mean of unit rates is `
+      + `${report.latest?.meanUnitPct ?? '—'}% (composition gap ${report.latest?.compositionGapPct ?? '—'} pp). `
+      + `A band crossing is an anomaly under DECLARED exchangeability, not a causal finding. `
+      + `Choose one. The engine never redraws a boundary, never changes a reading and never accepts this decision.`,
+    date: dayKey(ctx.now),
+    reversibility: 'reversible',
+    driver: leaderName,
+    approver: leaderName,
+    contributors: '', informed: '',
+    options,
+    chosen: '', rationale: '', premiseIds: [],
+    forecastProbability: null,
+    decidedOn: null, reviewOn: addDays(dayKey(ctx.now), conventions.jurReviewDays),
+    reviewedOn: null, outcome: 'pending', outcomeNotes: '', portfolioNotes: [],
+    createdAt: ctx.now.toISOString(),
+  });
+  addMarker(draft, marker);
+  // Vertical roll-up: every executive/chief seat can see the enterprise drift
+  // ask. Bounded, typed edges, same transaction as the decision.
+  const peopleIds = new Set((Array.isArray(draft.people) ? draft.people : []).map((p) => p?.id).filter(Boolean));
+  const execIds = [...book.chain.nodes.values()]
+    .filter((n) => altitudeRank(n.altitude) >= 4 && peopleIds.has(n.id))
+    .map((n) => n.id)
+    .slice(0, JUR_DRIFT_LIMITS.rollUpEdges);
+  for (const id of execIds) {
+    link(draft, ctx, 'decision', decisionId, 'person', id,
+      'rolls-up-to', JUR_RULE_IDS.DRIFT, 'Cross-week jurisdiction drift decision rolled up');
+  }
+  note(ctx, out, JUR_RULE_IDS.DRIFT, 'governed', 'decision', decisionId,
+    `Opened one governed cross-week drift decision for ${metrics} outside its conformal band`);
+}
+
+/* ------------------------------------------------------------------ */
 /* the rule                                                            */
 /* ------------------------------------------------------------------ */
 
@@ -367,7 +457,8 @@ export function jurisdictionRule(draft, ctx = {}) {
     idFactoryArgs: { idFactory, todayStr: dayKey(now), nowIso: now.toISOString() },
   };
   const rootEvent = ctx.derived !== true;
-  const explicit = event.type === JUR_EVENTS.SCAN || event.type === JUR_EVENTS.CONVENTIONS;
+  const explicit = event.type === JUR_EVENTS.SCAN || event.type === JUR_EVENTS.CONVENTIONS
+    || event.type === JUR_EVENTS.DRIFT;
   const own = event.type.startsWith(JUR_TRIGGER_PREFIX);
   const workEvent = rootEvent && JUR_WORK_EVENTS.includes(event.type);
   const settlementEvent = rootEvent && JUR_SETTLEMENT_EVENTS.includes(event.type);
@@ -388,6 +479,9 @@ export function jurisdictionRule(draft, ctx = {}) {
   if (fullPass) {
     governPass(draft, runCtx, out, conventions, book);
     rollUpPass(draft, runCtx, out, conventions, book);
+    // ADR-0115: only the named drift command grades the cross-week series and
+    // may open its governed decision. An ordinary `jur.scan` is unchanged.
+    if (event.type === JUR_EVENTS.DRIFT) driftPass(draft, runCtx, out, conventions, book);
   }
   return out;
 }

@@ -1,3 +1,11 @@
+## 2026-11-06 · Session 156: Cross-week Jurisdiction Drift ([ADR-0115](./docs/adr/0115-cross-week-jurisdiction-drift.md) · Schema v112 unchanged)
+
+- **New capability (VP/chief primary, every altitude scoped):** `#/jurisdiction?panel=drift` grades the ISO-week series of cross-branch share and median coalition size over `RULE-JUR-04`'s frozen, identity-free span readings with a distribution-free split-conformal band (Vovk 2005; `k = ceil((n+1)·coverage)`, achieved coverage printed). Prints the pooled rate `Σcross-branch/Σobjectives` beside the mean of unit rates with their composition gap (Yule/Simpson). Refused below four frozen weeks, refused for `k > n`, refused for an incomplete series; unsampled weeks are counted gaps, never zero or interpolated.
+- **Data:** `buildJurisdictionBook` exposes `allClusters`; `jurSpanRollUp` returns and `normalizeJurReadings` round-trips a **nullable** `objectives` denominator. Pre-ADR-0115 readings refuse their share rather than back-filling. No schema bump, no migration, no new collection, no new CSV scope.
+- **Automation:** `RULE-JUR-05` (a fifth pass inside `jurisdictionRule`, 90-rule/90-contract parity unchanged) runs on the named `jurDriftScan` command only. A published crossing opens exactly ONE governed, marker-idempotent decision per ISO week with `rolls-up-to` edges to executive seats in the same atomic transaction; engine output excluded from the harvest. `jur.scan` unchanged.
+- **Registry:** `jurDriftScan` under `record-jurisdiction`; `jurDriftRead` / `jurDriftCsvRows` / `jurDriftBriefText` registered `SAFE_READS`. Three declared, clamped conventions join the existing full-access re-declaration command.
+- **Tests:** new `jurisdiction-drift` 10/10; adjacent jurisdiction + redraw suites, lint, boundary, links, standalone rebuild + standalone suite recorded in `AI-SESSION-LOG.md`. Real-browser AT walkthrough [UNVERIFIED]. Seats remain workflow declarations, not authentication.
+
 ## 2026-11-06 · Session 155: Reviewed command editing ([ADR-0114](./docs/adr/0114-reviewed-command-editing.md) · Schema v112 unchanged)
 
 - **New capability:** every Command Flow action is now editable word-by-word

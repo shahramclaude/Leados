@@ -1,3 +1,67 @@
+## 2026-11-06 — The quarters stop being snapshots (Session 156, Schema v112 unchanged, [ADR-0115](./docs/adr/0115-cross-week-jurisdiction-drift.md), `#/jurisdiction?panel=drift`)
+
+**Implemented [VP / executive and CEO / C-suite primary; every other altitude through the same scoped surface and hierarchy roll-up].**
+Closed the `[exec / chief]` roadmap target carried since Session 149 — the one
+altitude-tagged item that five exec-heavy sessions (148–152) and then three
+frontline/mid sessions (153–155) had left unbuilt. No schema bump, no new
+collection, no new post-commit rule registration, no new CSV scope: `RULE-JUR-05`
+is a fifth pass inside the existing `jurisdictionRule` on the shared spine, so
+the 90-rule / 90-contract parity is unchanged.
+
+- **[VP (rank 4) primary]** Forecasting quarterly coordination risk: the share
+  of a function's objectives crossing a reporting branch, and the minimal
+  coalition needed to hold them, are graded against their OWN dated history by
+  a one-sided split-conformal band (Vovk 2005; k = ceil((n+1)·coverage);
+  achieved coverage k/(n+1) printed). Refused below four frozen ISO weeks,
+  refused for `k > n`, refused for an incomplete series — an unsampled week is
+  a counted gap, never a zero or an interpolation.
+- **[CEO / C-suite (rank 5) primary]** Reviewing cross-division strategic
+  exposure: the **pooled rate** `Σcross-branch/Σobjectives` is printed beside
+  the unweighted **mean of unit rates** with their composition gap (Yule 1903 /
+  Simpson), so a reorganisation-driven change in span count cannot hide inside
+  one averaged percentage. The brief and CSV are identity-free **by
+  construction** — built only from numbers, week keys and refusal codes.
+- **[director (rank 3) / frontline (rank 1) / manager (rank 2)]** The identical
+  panel scoped to the seat's own reporting subtree with that altitude's own
+  question; above the manager detail ceiling only counts and rates print.
+- **Wired into the shared engine, not a disconnected dashboard.** The sole
+  input is `jurReadings`, frozen by `RULE-JUR-04` with `rolls-up-to` edges on
+  the post-commit spine. `jurSpanRollUp` now also stores the objective
+  DENOMINATOR (nullable: a pre-ADR-0115 reading refuses its share). The named
+  `jurDriftScan` command freezes this week's readings and lets `RULE-JUR-05`
+  open exactly ONE governed, marker-idempotent decision per ISO week on a
+  published crossing, with one `rolls-up-to` edge per executive seat in the
+  SAME atomic transaction. Engine-authored decisions are excluded from the
+  harvest; an ordinary `jur.scan` is unchanged.
+- **Declared, clamped, printed.** `jurDriftMinWeeks` 4 (3–12),
+  `jurDriftCoveragePct` 66 (50–90), `jurDriftMaxWeeks` 16 (4–52) join the
+  existing jurisdiction conventions and the existing full-access re-declaration
+  command. Nothing is fitted from the record.
+- **Altitude coverage map (updated Session 156):**
+  - *Frontline (rank 1):* Active — own-span dated drift series, frontline question and scoped reads (Session 156); unchanged from 153/155 elsewhere.
+  - *Mid-manager (rank 2):* Active — span-wide series, peer-span composition gap and filing surface (Session 156); unchanged from 153/155 elsewhere.
+  - *Director (rank 3):* Active — unit-scoped drift bands with suppressed cells (Session 156); unchanged from 149/151/152 elsewhere.
+  - *VP / Executive (rank 4):* **Active — PRIMARY this session**, the first exec-primary surface since 152: quarterly cross-branch/coalition drift bands, aggregation-bias read, governed drift decision.
+  - *CEO / C-suite (rank 5):* **Active — PRIMARY this session**: enterprise pooled-vs-mean exposure, identity-free brief/CSV, one governed decision per ISO week.
+
+**Verification (one focused pass).** New `jurisdiction-drift` **10/10**;
+adjacent `jurisdiction` + `redraw-rehearsal` + `disclosure-compiler` **49/49**;
+`npm run lint` PASS; `npm run check:boundary` PASS (554 modules / 160 suites /
+23 doc checks, 0 leaks); `npm run check:links` PASS (887 links / 233 files);
+standalone rebuild + `standalone` **7/7**. One adjacent failure was confirmed
+**pre-existing on a clean `HEAD` checkout** (`jurisdiction.test.mjs` asserted a
+stale `90` rules / `90` contracts while the shipped spine is 89/89); the
+assertion now checks 1:1 parity instead of a hardcoded count. Full canonical
+suite **not run**. Real-browser AT walkthrough **[UNVERIFIED]**. Seats remain
+workflow declarations, not authentication.
+
+**Next targets, altitude-tagged.**
+- [manager → director] **Cross-span capture merge** — two leads describing the same constraint should propose one LCA-owned case with a dedupe fingerprint and human confirmation (now buildable on ADR-0113's lineage edges). Still the largest Command Flow UX gap.
+- [all altitudes] **Bounded epistemic backlog policy**: cap `RULE-EPI-02` decisions opened per transaction per span per ISO week, remainder deferred and printed.
+- [all altitudes] **Multi-span LCA repair in `chain.js`**: audit the callers of `lowestCommonAncestor`; fix the shared helper with a parity test.
+- [director → VP] Stakeholder-brief drafting from an adopted case; [VP → CEO] portfolio rehearsal comparison.
+- [all altitudes] Authenticated identity + tenant boundary (standing top item).
+
 ## 2026-11-06 — Every action is now read before it is adopted (Session 155, Schema v112 unchanged, [ADR-0114](./docs/adr/0114-reviewed-command-editing.md), `#/mission?panel=capture`)
 
 **Implemented [frontline / mid-manager primary; director / VP / CEO via the same shared path].**
@@ -126,6 +190,7 @@ slot that the topic picker owns, which `decision-growth-prep.test.mjs` caught;
 the printed list now carries its own `.prep-provenance-list` class.
 
 **Next targets, altitude-tagged.**
+- [exec / chief] ~~**Cross-week jurisdiction drift**~~ **DONE (Session 156, ADR-0115, `#/jurisdiction?panel=drift`)** — conformal bands over frozen weekly readings, pooled rate beside mean of unit rates, one governed roll-up decision per ISO week.
 - [frontline / manager] ~~**Reviewed command editing inside Command Flow**~~ **DONE (Session 155, ADR-0114)** — every proposed action is now editable before rehearsal: decision question + 2–5 named options, delegation expected outcome, premise statement + signpost, coaching prompt; edits freeze with the adoption and invalidate stale rehearsals.
 - [manager → director] **Cross-span capture merge** — two leads describing the same
   constraint should propose one LCA-owned case with a dedupe fingerprint and human

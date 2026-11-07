@@ -1,3 +1,81 @@
+## 2026-11-06 — Session 156: Cross-week jurisdiction drift — the quarter stops being a snapshot (ADR-0115, Schema v112 unchanged)
+
+**What was built.** `#/jurisdiction?panel=drift` grades the ISO-week series of
+cross-branch share and median coalition size over `RULE-JUR-04`'s frozen,
+identity-free span readings. A one-sided split-conformal band (Vovk 2005;
+`k = ceil((n+1)·coverage)`, achieved coverage `k/(n+1)` printed beside the
+nominal one) refuses below four frozen weeks, refuses `k > n` rather than
+`+∞`, refuses an incomplete series and counts unsampled weeks as gaps. The
+**pooled rate** `Σcross-branch/Σobjectives` is printed beside the unweighted
+**mean of unit rates** with their composition gap (Yule 1903 / Simpson), so a
+reorg-driven change in span count cannot hide in one averaged percentage. The
+brief and CSV are identity-free **by construction** (numbers, week keys and
+refusal codes only). No new collection, migration, rule registration or CSV
+scope.
+
+**Altitude(s) served.** PRIMARY: **VP / executive (rank 4)** forecasting
+quarterly coordination risk and **CEO / C-suite (rank 5)** reviewing
+cross-division strategic exposure — the exec/chief altitudes had had no primary
+surface since Session 152, and this `[exec / chief]` target had sat on the
+roadmap since Session 149. Director (rank 3), frontline (rank 1) and
+mid-manager (rank 2) get the identical panel scoped to their own reporting
+subtree with their own printed question. Every altitude uses one surface, one
+engine and the same roll-up.
+
+**Why this altitude now.** Sessions 148–152 were five consecutive
+director-and-above instruments; 153–155 were frontline/mid-manager primary,
+with the coverage map saying exec/chief were "unchanged from 148–152
+elsewhere". The roadmap's own hierarchy rule gives the neglected altitude
+priority; no steering line overrode it.
+
+**Wired into the shared engine, not isolated.** The sole input is `jurReadings`,
+frozen on the post-commit spine with `rolls-up-to` edges. `jurSpanRollUp` now
+stores a **nullable** objective denominator (a pre-ADR-0115 reading refuses its
+share rather than back-filling). `RULE-JUR-05` is a fifth pass inside the
+existing `jurisdictionRule` (89 rules / 89 contracts unchanged): the named
+`jurDriftScan` command freezes this week's readings, and a published crossing
+opens exactly ONE governed, marker-idempotent decision per ISO week with typed
+`rolls-up-to` edges to executive seats in the same atomic transaction. Its
+`[RULE-JUR-05:...]` marker keeps it out of the harvest; `jur.scan` is unchanged.
+`jurDriftScan` joins `record-jurisdiction`; three reads are `SAFE_READS`. Three
+declared, clamped conventions join the existing full-access re-declaration
+command.
+
+**Verified (one focused pass, actual results).**
+- `tests/app/jurisdiction-drift.test.mjs`: **10/10 PASS** (storage/round-trip, hand-computed conformal band incl. `k > n` refusal, aggregation bias, altitude scoping, identity-free brief/CSV, RULE-JUR-05 governance + idempotence + roll-up, access registry, jsdom + axe at three altitudes).
+- Adjacent `jurisdiction` + `redraw-rehearsal` + `disclosure-compiler`: **49/49 PASS**.
+- `npm run lint`: **PASS**. `npm run check:boundary`: **PASS** — 554 app ES modules, 160 test suites, 23 documentation checks, 0 leaks. `npm run check:links`: **PASS** — 887 internal links / 233 markdown files.
+- `npm run verify:standalone`: **PASS** — 7/7; `LeadOS-standalone.html` rebuilt.
+- `node --check` on all 10 new/modified app modules: **PASS**.
+
+**One adjacent failure, honestly resolved.** `jurisdiction.test.mjs` asserted
+`90` rules / `90` contracts while the shipped spine is 89/89. Reproduced on a
+clean `git archive HEAD` checkout (11/12, same failure) — **pre-existing**, not
+a regression. Corrected the assertion to check 1:1 parity against
+`DEFAULT_POST_COMMIT_RULES.length` instead of a stale hardcoded count.
+
+**Unverified / flagged.** Full 160-suite canonical `npm test` **not run**
+(per the fast-execution mandate; prior sessions note jsdom/a11y timeouts on the
+full run). Real-browser assistive-technology walkthrough **[UNVERIFIED]** —
+axe-core in jsdom is what ran. A band crossing is an anomaly under **declared**
+exchangeability, not a causal finding; nested spans overlap through shared
+objectives and the pooled rate is count-weighted, both printed on the panel.
+Median coalition size is a median of span medians, labelled as such. Local
+seats remain workflow declarations, not authentication. No blocker.
+
+**Changed files.** New: `app/core/domain/jurisdictionDrift.js`,
+`app/core/domain/jurisdictionDriftRegistry.js`,
+`tests/app/jurisdiction-drift.test.mjs`,
+`docs/adr/0115-cross-week-jurisdiction-drift.md`. Modified:
+`app/core/domain/{jurisdiction,jurisdictionRegistry,jurisdictionSchema,jurisdictionRules,jurisdictionActions,accessGateway,propagationContracts}.js`,
+`app/views/jurisdiction.js`, `tests/app/jurisdiction.test.mjs`,
+`LeadOS-standalone.html`, `docs/adr/INDEX.md`, `ROADMAP.md`, `README.md`,
+`CHANGELOG.md`, `AI-SESSION-LOG.md`.
+
+**Next up.** [manager → director] **Cross-span capture merge** on ADR-0113's
+lineage edges — still the largest Command Flow UX gap, and the top roadmap
+target.
+
 ## 2026-11-06 — Session 155: Reviewed command editing — the words are read before the button is pressed
 
 **What was built.** Command Flow now lets the reviewer edit every proposed action's

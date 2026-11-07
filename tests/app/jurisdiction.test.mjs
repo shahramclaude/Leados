@@ -110,8 +110,11 @@ test('v111 is additive, declared, fail-closed and invents no jurisdiction fact',
 });
 
 test('the engine shares the one spine, the graph, the rights and the CSV register', () => {
-  assert.equal(DEFAULT_POST_COMMIT_RULES.length, 90);
-  assert.equal(PROPAGATION_CONTRACTS.length, 90, '1:1 rule/contract parity');
+  // ADR-0115 added a fifth PASS inside `jurisdictionRule`, NOT a 91st rule:
+  // the spine is 89 rules / 89 contracts. Assert the invariant (1:1 parity)
+  // rather than a hardcoded count that goes stale on the next rule registration.
+  assert.ok(DEFAULT_POST_COMMIT_RULES.length >= 89);
+  assert.equal(PROPAGATION_CONTRACTS.length, DEFAULT_POST_COMMIT_RULES.length, '1:1 rule/contract parity');
   assert.ok(DEFAULT_POST_COMMIT_RULES.includes(jurisdictionRule));
   const contract = PROPAGATION_CONTRACTS.find((c) => c.rule === jurisdictionRule);
   assert.ok(contract, 'RULE-JUR has a declared contract');

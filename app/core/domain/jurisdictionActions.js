@@ -13,10 +13,13 @@
  *                   `impacts-goal` graph edge and waking RULE-JUR-01 in the
  *                   same atomic transaction.
  *   setConventions  re-declare the printed, clamped conventions (rank 4-5 and a
- *                   full-access seat only).
+ *                   full-access seat only); this also re-declares ADR-0115's
+ *                   drift week floor, coverage and look-back window.
+ *   driftScan       freeze this ISO week's readings, grade the cross-week
+ *                   conformal bands and govern a published crossing (RULE-JUR-05).
  *
  * Findings, governed decisions, typed edges, once-only grades and identity-free
- * span readings are produced by RULE-JUR-01..04 on the SHARED post-commit spine
+ * span readings are produced by RULE-JUR-01..05 on the SHARED post-commit spine
  * in the SAME atomic transaction — never by a second workflow engine here.
  */
 
@@ -28,6 +31,7 @@ import {
   jurConventions, jurCsvRows, jurSpanRollUp, isEngineAuditRecord, workRecordPeople,
 } from './jurisdiction.js';
 import { normalizeJurSettings } from './jurisdictionSchema.js';
+import { jurDriftRead } from './jurisdictionDrift.js';
 import { JUR_EVENTS, JUR_RULE_IDS, JUR_SOURCES } from './jurisdictionRegistry.js';
 
 export function createJurisdictionActions(store, { now, idFactory }) {
@@ -69,6 +73,19 @@ export function createJurisdictionActions(store, { now, idFactory }) {
         summary: 'Explicitly re-detected cross-branch objectives, priced the governance routes, opened governed decisions and rolled up identity-free span readings',
       });
       return saved({ report: jurisdictionRead(store.state, { now: clock(), settings: settings() }) });
+    },
+
+    /* ------------------------------------------------------ drift scan */
+    jurDriftScan() {
+      const right = seatFor('record-jurisdiction');
+      if (!right.ok) return fail(right.error);
+      store.update(() => {}, {
+        type: JUR_EVENTS.DRIFT,
+        entity: right.seat.fullAccess ? 'workspace' : 'jurisdiction',
+        entityId: right.seat.fullAccess ? 'all' : right.seat.id,
+        summary: 'Froze this ISO week’s identity-free span readings, graded the cross-week conformal drift bands and governed a published crossing',
+      });
+      return saved({ report: jurDriftRead(store.state, { now: clock(), settings: settings() }) });
     },
 
     /* -------------------------------------------------------- anchorWork */
@@ -178,6 +195,16 @@ export function createJurisdictionActions(store, { now, idFactory }) {
     },
 
     /* ------------------------------------------------------------ reads */
+    jurDriftRead() {
+      return saved({ report: jurDriftRead(store.state, { now: clock(), settings: settings() }) });
+    },
+    jurDriftCsvRows() {
+      const report = jurDriftRead(store.state, { now: clock(), settings: settings() });
+      return saved({ columns: report.columns, rows: report.rows });
+    },
+    jurDriftBriefText() {
+      return saved({ brief: jurDriftRead(store.state, { now: clock(), settings: settings() }).brief });
+    },
     jurRead() {
       return saved({ report: jurisdictionRead(store.state, { now: clock(), settings: settings() }) });
     },

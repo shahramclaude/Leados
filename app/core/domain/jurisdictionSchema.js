@@ -144,6 +144,11 @@ export function normalizeJurReadings(rows, warnings = []) {
     };
     out.push({
       id, nodeId, nodeRank, week, frozenAt, reviewOn, clusters,
+      // ADR-0115: the denominator of the cross-branch SHARE. Additive and
+      // NULLABLE: a reading frozen before v112's drift reader has no objective
+      // count, and the drift reader refuses that week's share rather than
+      // back-filling a number. No schema bump — old rows round-trip unchanged.
+      objectives: nullableInt(raw.objectives),
       crossBranch: nullableInt(raw.crossBranch) ?? 0,
       priced: nullableInt(raw.priced),
       governed: nullableInt(raw.governed),
