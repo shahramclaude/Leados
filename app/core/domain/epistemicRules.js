@@ -14,7 +14,13 @@
  *    the declared escalation age opens exactly ONE governed decision per unknown,
  *    ever, owned at the span that owns it and naming the record, the age and the
  *    two honest routes (read it, or dismiss it with a reason). This is the rule
- *    that turns "we never noticed" into a named decision with an owner.
+ *    that turns "we never noticed" into a named decision with an owner. Since
+ *    ADR-0117 it is also the bounded backlog policy: at most
+ *    `epistemicEscalateMaxPerWeek` escalations open per owning span per ISO week
+ *    (oldest condition first, every transaction respecting the week's remaining
+ *    quota), and the over-budget remainder stays queued and is PRINTED — a
+ *    deferral marker per span per week and a live count on the Desk — rather
+ *    than flooding a span's decision inbox faster than any human can read it.
  *
  *  RULE-EPI-03 EXPIRE. A harvested unknown whose declared evidence-bound expiry
  *    has passed with no human answer is marked `expired` and opens ONE governed
@@ -44,8 +50,10 @@ import {
   buildEpistemicReport,
   cohenKappa,
   calibrationVerdict,
+  escalationWeekOpenings,
   harvestSignals,
   scoreObservation,
+  unknownAgeDays,
 } from './epistemic.js';
 import { epistemicConventions } from './epistemicSchema.js';
 import {
@@ -232,20 +240,40 @@ function harvestPass(draft, ctx, out, conventions) {
 function escalatePass(draft, ctx, out, conventions, budget) {
   if (!Array.isArray(draft.epistemicUnknowns)) return 0;
   const today = dayKey(ctx.now);
+  const week = weekKey(ctx.now) || today;
+  // ADR-0117: the bounded backlog policy. Each owning span may open at most
+  // `epistemicEscalateMaxPerWeek` escalations per ISO week — a WIP limit on the
+  // escalation inbox (Anderson's bounded work-in-progress; Reinertsen's
+  // small-batch economics) so a large harvested backlog drains as a weekly
+  // batch a human can read, instead of opening six governed decisions on every
+  // unrelated save until the queue is empty. The counts come from the marker
+  // ledger, so EVERY transaction in the week shares one quota — including an
+  // explicit scan — and a decision can never open twice for the same unknown.
+  const cap = conventions.epistemicEscalateMaxPerWeek;
+  const openedBySeat = escalationWeekOpenings(draft, { now: ctx.now });
+  const deferredBySeat = new Map();
   let openedN = 0;
   const ordered = [...draft.epistemicUnknowns]
     .filter((row) => row && row.state === 'unopened' && ['danger', 'defect'].includes(row.className))
-    .sort((a, b) => String(a.harvestedOn).localeCompare(String(b.harvestedOn)));
+    // Oldest condition first: the debt that has waited longest is the first the
+    // week's batch buys back, and what the quota defers is the newest arrival.
+    .sort((a, b) => String(a.evidencesOn || a.harvestedOn).localeCompare(String(b.evidencesOn || b.harvestedOn))
+      || String(a.harvestedOn).localeCompare(String(b.harvestedOn))
+      || String(a.id).localeCompare(String(b.id)));
   for (const row of ordered) {
     if (budget.remaining <= 0) break;
     // The age that matters is the age of the CONDITION, not of our bookmark: a
     // case open for sixty-five days is escalated on the day it is harvested,
     // because the organisation has already waited two months to look at it.
-    const since = row.evidencesOn || row.harvestedOn;
-    const age = since ? Math.round((Date.parse(`${today}T00:00:00.000Z`) - Date.parse(`${since}T00:00:00.000Z`)) / 86400000) : 0;
-    if (!Number.isFinite(age) || age < conventions.epistemicEscalateDays) continue;
+    const age = unknownAgeDays(row, today);
+    if (age < conventions.epistemicEscalateDays) continue;
     const marker = epistemicMarkerId('escalate', row.id);
     if (markersOf(draft).some((m) => m && m.id === marker)) continue;
+    const seatKey = row.ownerSeatId || 'workspace';
+    if ((openedBySeat.get(seatKey) || 0) >= cap) {
+      deferredBySeat.set(seatKey, (deferredBySeat.get(seatKey) || 0) + 1);
+      continue;
+    }
     const decision = decisionRecord(ctx, {
       title: `Unread ${row.className} signal, ${age} day(s) old: read it or dismiss it`,
       question: [
@@ -259,7 +287,7 @@ function escalatePass(draft, ctx, out, conventions, budget) {
         ['Dismiss it with a reason', 'Honest when the signal is noise — the record was wrong, not the reader.', 'Counts against the answer rate, permanently, and the reason is kept.'],
       ],
       reviewOn: addDays(today, conventions.epistemicReviewDays),
-      rationale: `RULE-EPI-02: an unopened ${row.className} signal harvested on ${row.harvestedOn} passed the declared escalation age of ${conventions.epistemicEscalateDays} day(s). One governed decision per unknown, ever.`,
+      rationale: `RULE-EPI-02: an unopened ${row.className} signal harvested on ${row.harvestedOn} passed the declared escalation age of ${conventions.epistemicEscalateDays} day(s). One governed decision per unknown, ever, opened inside this span's declared weekly escalation budget of ${cap}.`,
     });
     if (!Array.isArray(draft.decisions)) draft.decisions = [];
     draft.decisions.push(decision);
@@ -267,13 +295,30 @@ function escalatePass(draft, ctx, out, conventions, budget) {
       'The escalation tracks the unknown it asks to be read.');
     addMarker(draft, ctx, {
       id: marker, kind: 'escalate', key: row.id, unknownId: row.id, decisionId: decision.id,
+      ownerSeatId: row.ownerSeatId || null, weekKey: week,
       note: `Unopened ${row.className} signal, ${age} day(s) old.`,
     });
     row.updatedAt = ctx.now.toISOString();
     openedN += 1;
+    openedBySeat.set(seatKey, (openedBySeat.get(seatKey) || 0) + 1);
     budget.remaining -= 1;
     note(ctx, out, EPISTEMIC_RULE_IDS.ESCALATE, 'created', 'decision', decision.id,
       `Opened one governed decision for an unopened ${row.className} signal ${age} day(s) old.`);
+  }
+  // The remainder is deferred, never dropped: one dated deferral marker per
+  // span per ISO week (so a repeat pass cannot re-log it) and a live count with
+  // its renewal week on the Desk. A deferral is a queue, not a resolution.
+  for (const [seatKey, deferredN] of deferredBySeat) {
+    const added = addMarker(draft, ctx, {
+      id: epistemicMarkerId('escalate-deferred', `${seatKey}|${week}`),
+      kind: 'escalate-deferred', key: `${seatKey}|${week}`, weekKey: week,
+      ownerSeatId: seatKey === 'workspace' ? null : seatKey,
+      note: `RULE-EPI-02 deferred ${deferredN} escalation(s) beyond the declared weekly budget of ${cap} for this span.`,
+    });
+    if (added) {
+      note(ctx, out, EPISTEMIC_RULE_IDS.ESCALATE, 'deferred', 'epistemic', 'backlog',
+        `Deferred ${deferredN} escalation(s) beyond the declared weekly budget of ${cap} for one span; they stay queued, oldest first, and open as the weekly quota renews.`);
+    }
   }
   return openedN;
 }
@@ -469,12 +514,15 @@ export function epistemicRule(draft, ctx = {}) {
     idFactory: typeof ctx.idFactory === 'function' ? ctx.idFactory : ((prefix) => `${prefix}-${Date.now()}`),
   };
   const out = [];
-  // An AUTOMATIC pass is bounded: the spine runs on every commit, and a module
-  // that opened six governed decisions on every unrelated write would bury the
-  // workspace. An EXPLICIT scan is the operator asking for the whole ledger, so
-  // it is bounded by the ledger's own size instead — otherwise a scan would take
-  // one pass per six findings and the same scan run twice would keep finding
-  // work, which reads as non-idempotence even though every marker is correct.
+  // Two bounds, deliberately separate. The PER-PASS budget is the spine-cost
+  // governor: the spine runs on every commit, and a module that opened six
+  // governed decisions on every unrelated write would bury the workspace; an
+  // explicit scan pays the ledger's own size instead, so a scan does not take
+  // one pass per six findings and read as non-idempotence. The PER-SPAN WEEKLY
+  // budget (ADR-0117, in `escalatePass`) is the workload governor: it binds
+  // every transaction — scans included — so the escalation inbox of any one
+  // span grows by at most `epistemicEscalateMaxPerWeek` per ISO week, and the
+  // over-budget remainder is deferred and printed rather than dropped.
   // (Hindsight refuses to lock these findings either way: audit output is not
   // operational work. See RULE-HND-01 and `epistemicFindingIds`.)
   const explicitScan = event.type === EPISTEMIC_EVENTS.SCAN;

@@ -1815,6 +1815,10 @@ export const DEFAULT_SETTINGS = Object.freeze({
   epistemicBlindFloor: 55,
   epistemicBlindDarkPct: 5,
   epistemicReviewDays: 14,
+  // ADR-0117: the bounded backlog policy — how many RULE-EPI-02 escalations
+  // one owning span may open per ISO week. The over-budget remainder stays
+  // queued and is printed (count + renewal week), never silently dropped.
+  epistemicEscalateMaxPerWeek: 5,
   epistemicAutoPropagate: true,
   // ADR-0104: the Diligence Ledger. `diligenceKnowableFloor` refuses a coverage
   // rate below that many frozen knowable facts; `diligenceCoverageFloorPct` is

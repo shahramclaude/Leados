@@ -86,6 +86,7 @@ export function normalizeEpistemicSettings(raw) {
     epistemicBlindFloor: clampPct(s.epistemicBlindFloor, B.epistemicBlindFloor[0], B.epistemicBlindFloor[1], d.epistemicBlindFloor),
     epistemicBlindDarkPct: clampPct(s.epistemicBlindDarkPct, B.epistemicBlindDarkPct[0], B.epistemicBlindDarkPct[1], d.epistemicBlindDarkPct),
     epistemicReviewDays: clampInt(s.epistemicReviewDays, B.epistemicReviewDays[0], B.epistemicReviewDays[1], d.epistemicReviewDays),
+    epistemicEscalateMaxPerWeek: clampInt(s.epistemicEscalateMaxPerWeek, B.epistemicEscalateMaxPerWeek[0], B.epistemicEscalateMaxPerWeek[1], d.epistemicEscalateMaxPerWeek),
     epistemicAutoPropagate: s.epistemicAutoPropagate !== false,
   };
 }
@@ -356,6 +357,10 @@ export function normalizeEpistemicMarkers(raw) {
       decisionId: clean(row.decisionId, 100) || null,
       observationId: clean(row.observationId, 100) || null,
       weekKey: clean(row.weekKey, 20) || null,
+      // ADR-0117: the owning span an escalation counted against, so the weekly
+      // budget survives a reload. Older markers carry none and are resolved
+      // back to their unknown's owner on read.
+      ownerSeatId: clean(row.ownerSeatId, 100) || null,
       recordedOn: day(row.recordedOn),
       note: clean(row.note, 300),
     });

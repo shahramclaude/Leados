@@ -349,7 +349,7 @@ export function createEpistemicActions(store, { now, idFactory }) {
         type: EPISTEMIC_EVENTS.SCAN,
         entity: right.seat.fullAccess ? 'workspace' : 'epistemic',
         entityId: right.seat.fullAccess ? 'all' : right.seat.id,
-        summary: 'Explicitly re-harvested the record, escalated ageing unknowns, expired the unanswered ones and re-graded every frozen belief',
+        summary: 'Explicitly re-harvested the record, escalated this week’s bounded batch of ageing unknowns (the over-budget remainder stays queued and is printed), expired the unanswered ones and re-graded every frozen belief',
       });
       return saved({ report: report() });
     },

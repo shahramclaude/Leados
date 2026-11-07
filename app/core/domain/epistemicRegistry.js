@@ -324,6 +324,15 @@ export const EPISTEMIC_DEFAULTS = Object.freeze({
   epistemicBlindFloor: 0.55,        // coverage below which a class is 'partly blind'
   epistemicBlindDarkPct: 5,         // coverage at/below which a class is 'dark'
   epistemicReviewDays: 14,          // horizon on a governed finding
+  // ADR-0117: the bounded backlog policy. At most this many RULE-EPI-02
+  // escalations open per owning span per ISO week — a WIP limit on one span's
+  // escalation inbox (Anderson's bounded work-in-progress; Reinertsen's
+  // small-batch economics), so a large harvested backlog drains as a weekly
+  // batch a human can actually read instead of flooding every save. The
+  // over-budget remainder stays queued and is PRINTED (count + renewal week),
+  // never silently dropped. Every transaction respects the week's remaining
+  // quota, so the weekly bound also bounds each transaction.
+  epistemicEscalateMaxPerWeek: 5,   // per-span weekly escalation budget (ADR-0117)
   epistemicAutoPropagate: true,     // pausable; an explicit scan always runs
 });
 
@@ -337,11 +346,14 @@ export const EPISTEMIC_BOUNDS = Object.freeze({
   epistemicBlindFloor: Object.freeze([5, 95]),
   epistemicBlindDarkPct: Object.freeze([0, 40]),
   epistemicReviewDays: Object.freeze([3, 90]),
+  epistemicEscalateMaxPerWeek: Object.freeze([1, 52]),
 });
 
 export const EPISTEMIC_RULE_IDS = Object.freeze({
   HARVEST: 'RULE-EPI-01',   // harvest record signals into unknowns, one rolls-up-to per ancestor
-  ESCALATE: 'RULE-EPI-02',  // an unopened danger past the declared age opens ONE governed decision
+  ESCALATE: 'RULE-EPI-02',  // an unopened danger past the declared age opens ONE governed decision,
+                            // bounded to the declared weekly budget per span (ADR-0117); the
+                            // over-budget remainder is deferred and printed, never dropped
   EXPIRE: 'RULE-EPI-03',    // declared expiry passes with no human answer -> escalated, never resolved
   GAP: 'RULE-EPI-04',       // a span whose beliefs over-predict good outcomes opens ONE calibration review
   GRADE: 'RULE-EPI-05',     // grade a frozen belief observation once against the record's own outcome
