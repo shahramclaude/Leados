@@ -14,7 +14,7 @@
  *      undeclared operator seat has no duty lines and the readiness rate is
  *      REFUSED rather than printed as a zero.
  *   3. The eligible pool is the reporting tree, printed with reasons: the seat
- *      itself and its ancestors are offered; a rank BELOW the seat is refused
+ *      itself is refused and its ancestors are offered; a rank BELOW the seat is refused
  *      with the Jaques reason; a peer is never offered at all.
  *   4. A declaration is one atomic transaction: the cover row, ONE
  *      `prepares-for` edge to the person, ONE governed decision naming the
@@ -211,7 +211,8 @@ test('the eligible pool rises through the tree and refuses a lower rank with its
   const coach = seat.duties.find((d) => d.key === 'coach');
   const candidates = dutyCandidates(normalized, built, seat, coach);
   const byId = new Map(candidates.map((c) => [c.personId, c]));
-  assert.ok(byId.get('lead1')?.eligible, 'the seat itself may rehearse its own absence');
+  assert.equal(byId.get('lead1')?.eligible, false, 'the absent holder cannot be their own stand-in');
+  assert.match(byId.get('lead1').reason, /cannot cover their own absence/);
   assert.ok(byId.get('mgr1')?.eligible, 'the manager above is an ancestor cover');
   assert.ok(byId.get('dir1')?.eligible);
   assert.ok(byId.get('vp1')?.eligible);
@@ -230,6 +231,39 @@ test('the eligible pool rises through the tree and refuses a lower rank with its
   assert.equal(lead1Row.eligible, false);
   assert.match(lead1Row.reason, /BELOW rank 2/);
   assert.match(lead1Row.reason, /Jaques 1956/);
+});
+
+test('self-cover is refused and legacy self-declarations cannot inflate manager or upward readiness', () => {
+  const state = normalizeState({ ...fixture(), settings: { ...fixture().settings, activeSeatId: 'mgr1' } }, { now: NOW }).state;
+  const h = boot(state);
+  const before = h.store.state.dutyCovers.length;
+  const rejected = h.api.dutyCoverageDesignate({ dutyId: 'mgr1|throughput', coverId: 'mgr1', note: 'I will cover this duty.' });
+  assert.equal(rejected.ok, false);
+  assert.match(rejected.error, /cannot cover their own absence/);
+  assert.equal(h.store.state.dutyCovers.length, before);
+
+  // An old validly stored declaration is retained, but must not count even
+  // when the holder has recent recorded work in their span.
+  const legacy = normalizeState({ ...state,
+    dutyCovers: [{ id: 'legacy-self', dutyId: 'mgr1|throughput', coverId: 'mgr1', note: 'Legacy self declaration', declaredOn: '2027-06-01', declaredAt: NOW.toISOString(), status: 'active' }],
+    oneOnOnes: [{ id: 'exercise-self', personId: 'lead1', status: 'held', date: '2027-06-29' }],
+  }, { now: NOW }).state;
+  const manager = buildDutyCoverageReport(legacy, { now: NOW });
+  const row = manager.rows.find((r) => r.reading.dutyId === 'mgr1|throughput').reading;
+  assert.equal(row.covers[0].exercised, true);
+  assert.equal(row.covers[0].eligible, false);
+  assert.equal(row.band, 'ineligible');
+  assert.match(row.bandReason, /cannot cover their own absence/);
+  assert.equal(legacy.dutyCovers[0].id, 'legacy-self');
+  const director = buildDutyCoverageReport({ ...legacy, settings: { ...legacy.settings, activeSeatId: 'dir1' } }, { now: NOW });
+  const rolled = director.rows.find((r) => r.reading.dutyId === 'mgr1|throughput').reading;
+  assert.equal(rolled.band, 'ineligible');
+  assert.equal(rolled.covers[0].name, null);
+  assert.ok(director.ineligible.some((r) => r.reading.dutyId === 'mgr1|throughput'));
+  assert.match(dutyCoverageBriefText(director), /ineligible cover/);
+  const loaded = boot(legacy);
+  assert.equal(loaded.api.dutyCoverageRevoke({ id: 'legacy-self', reason: 'Cannot cover my own absence' }).ok, true);
+  assert.equal(loaded.api.dutyCoverageReport().report.rows.find((r) => r.reading.dutyId === 'mgr1|throughput').reading.band, 'gap');
 });
 
 /* ------------------------------------------------- 4-6. the declaration act */

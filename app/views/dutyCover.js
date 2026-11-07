@@ -145,7 +145,7 @@ function dutyCard(ctx, row, namesShown) {
       h('p', { class: 'muted small' }, r.bandReason),
       h('div', { class: 'stat-grid' },
         stat({ label: 'Open work', value: String(r.openN), hint: r.oldestOn ? `oldest open since ${r.oldestOn}` : 'nothing open in this duty line today' }),
-        stat({ label: 'Eligible candidates', value: String(r.eligibleCandidates.length), hint: `${r.ineligibleCandidates.length} refused below this altitude` }),
+        stat({ label: 'Eligible candidates', value: String(r.eligibleCandidates.length), hint: `${r.ineligibleCandidates.length} refused (including the duty holder)` }),
         stat({ label: 'Declared covers', value: String(r.covers.length), hint: `${r.exercisedCoversN} exercised inside the window` }),
         stat({
           label: 'Top hand', value: r.concentration.top ? pctText(r.concentration.top.sharePct) : '—',
@@ -258,7 +258,7 @@ function deskPanel(ctx, report) {
       body: h('ul', { class: 'plain-list' },
         h('li', null, h('strong', null, 'The duty table is already declared.'), ' This screen does not invent duties: it reads ADR-0075’s altitude table and asks the one question the table could not answer — who is answerable when the holder is absent.'),
         h('li', null, h('strong', null, '“Exercised” is derived, never ticked.'), ' A cover counts as live only when that person recorded work inside the duty’s span inside the declared window. A declaration nobody exercises prints as “thin”, not “covered”.'),
-        h('li', null, h('strong', null, 'A duty rises, it never falls sideways.'), ' Candidates are the seat itself, a higher-ranked span inside it, or a reporting-tree ancestor. Peers are never offered and a lower rank is refused with the reason printed (Jaques 1956; Aghion & Tirole 1997).'),
+        h('li', null, h('strong', null, 'A duty rises, it never falls sideways.'), ' Candidates include a higher-ranked span inside it or a reporting-tree ancestor. The holder cannot cover their own absence; peers are never offered and a lower rank is refused with the reason printed (Jaques 1956; Aghion & Tirole 1997).'),
         h('li', null, h('strong', null, 'One declaration, one transaction.'), ' The cover, its `prepares-for` edge, the governed decision naming the consequence and one `rolls-up-to` edge per ancestor all commit atomically through the shared spine.')),
     }),
   );

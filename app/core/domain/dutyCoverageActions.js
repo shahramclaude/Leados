@@ -223,7 +223,7 @@ export function createDutyCoverageActions(store, { now, idFactory }) {
           informed: '',
           options: [
             { id: idFactory('opt'), label: 'Confirm the cover and have the stand-in open the duty’s records once before the absence', pros: 'Turns a declaration into evidence: the register will read the cover as exercised on the first recorded work inside the span.', cons: 'Costs the stand-in a short session now rather than a slow discovery on the day.' },
-            { id: idFactory('opt'), label: 'Declare cover with a peer or the level above instead', pros: 'Ancestor cover needs no new access and rises to the span that owns the LCA (subsidiarity).', cons: 'Moves the duty’s horizon up a rank; the level above must have the time on the day.' },
+            { id: idFactory('opt'), label: 'Declare cover with an eligible person at the level above instead', pros: 'Ancestor cover needs no new access and rises to the span that owns the LCA (subsidiarity).', cons: 'Moves the duty’s horizon up a rank; the level above must have the time on the day.' },
             { id: idFactory('opt'), label: 'Let the duty lapse during the absence and record the delay', pros: 'Honest when the absence is short and the work can wait.', cons: `${reading.openN} open item(s) in this duty line carry the wait; the register keeps printing the gap.` },
           ],
           chosen: '',

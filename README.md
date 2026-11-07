@@ -1,6 +1,6 @@
 ## 2026-11-07 — Branch continuity comparison (Session 164)
 
-On `#/duty-cover`, director, VP and chief seats can compare their direct leadership branches' duty-register coverage, uncovered lines and open-work gaps. The pooled rate and mean branch rate are shown separately; branch numbers are anonymous and can change with the roster. This describes recorded coverage, not the probability of disruption. Seat selection is not authentication, and the broader register report's existing privacy boundary is flagged in the roadmap.
+On `#/duty-cover`, director, VP and chief seats can compare their direct leadership branches' duty-register coverage, uncovered lines and open-work gaps. The pooled rate and mean branch rate are shown separately; branch numbers are anonymous and can change with the roster. This describes recorded coverage, not the probability of disruption. Duty holders cannot be their own absence cover; legacy self-declarations remain visible as ineligible until revoked. The register does not yet plan dated absences or verify availability. Seat selection is not authentication; small anonymous branches can be inferable.
 
 ## 2026-11-07 — Cross-team work reaches the right manager (Session 162, Schema v113 unchanged, [ADR-0120](./docs/adr/0120-shared-multi-span-ownership.md))
 
