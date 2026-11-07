@@ -25,6 +25,7 @@ import { normalizeSeatIdentities, normalizeIdentityMarkers, normalizeIdentitySet
 import { normalizeDutyCovers, normalizeDutyCoverageMarkers, normalizeDutyCoverageSettings } from './domain/dutyCoverageSchema.js';
 import { normalizeAbsencePlans } from './domain/dutyAbsenceSchema.js';
 import { normalizeStandbyAnswers, normalizeDutyStandbySettings } from './domain/dutyStandbySchema.js';
+import { normalizeDutyRehearsals } from './domain/dutyRehearsalSchema.js';
 import { DUTY_STANDBY_BOUNDS, DUTY_STANDBY_DEFAULTS } from './domain/dutyStandbyRegistry.js';
 import { normalizePropagationLineage } from './domain/automationLineage.js';
 import { normalizeImpactExecutionSnapshot } from './domain/impactExecution.js';
@@ -536,7 +537,7 @@ export {
 // workspace opens with an EMPTY absence ledger: no absence is scheduled at
 // upgrade time, because an absence invented at upgrade time would make every
 // cover in the span read as unavailable on dates no human declared.
-export const SCHEMA_VERSION = 116;
+export const SCHEMA_VERSION = 117;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -2386,6 +2387,15 @@ export const COLLECTIONS = [
   // ask window and the declared response deadline — never stored, so a consent
   // cannot drift from the dates it was given for, and cannot be extended by a read.
   'dutyStandbyAnswers',
+  // ADR-0128 (Schema v117): Explicit rehearsal records. `dutyRehearsals` holds ONLY
+  // the dated human attestation that a declared cover practised a specific duty
+  // line on a specific day — the mode, the outcome (ready, or gaps found and named
+  // in the recorder's words), the seat that was there to observe it, and the
+  // governed decision a gaps outcome opened. Whether a rehearsal counts for a
+  // given absence is DERIVED on read from the preparation window, the outcome and
+  // today (ADR-0125's index) — never stored, so a certification cannot drift from
+  // the window it was run for, and a drill that found gaps never becomes a badge.
+  'dutyRehearsals',
 
 ];
 
@@ -7417,6 +7427,14 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // repaired into a plausible-looking yes. Resolved BEFORE links so the
   // `accepts-standby-for` provenance edge validates against a real answer id.
   state.dutyStandbyAnswers = normalizeStandbyAnswers(raw.dutyStandbyAnswers, state.dutyCovers, warnings);
+  // ADR-0128: a rehearsal is only ever attested by a seat that could have been
+  // there — the holder, the cover, or a leadership ancestor of the holder. The
+  // normalizer sees the cover ledger AND the roster at the same time so a
+  // hand-edited file cannot invent an observer, a rehearsal cannot be recorded
+  // before it happened, and a malformed attestation is dropped rather than
+  // repaired into plausible-looking evidence. Resolved BEFORE links so the
+  // `attests-rehearsal-of` provenance edge validates against a real row id.
+  state.dutyRehearsals = normalizeDutyRehearsals(raw.dutyRehearsals, state.dutyCovers, state.people, warnings);
   state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
   state.boardMarkers = normalizeBoardMarkers(raw.boardMarkers, warnings);
   // ADR-0085: packets and attested artefacts resolve before links so `carries`,
@@ -8235,6 +8253,20 @@ export const MIGRATIONS = {
     settings: isPlainObject(v115.settings)
       ? { ...v115.settings, ...normalizeDutyStandbySettings(v115.settings, DUTY_STANDBY_BOUNDS, DUTY_STANDBY_DEFAULTS) }
       : { ...DEFAULT_SETTINGS },
+  }),
+  // ADR-0128: additive 116 → 117. An existing workspace may hold declared covers
+  // whose exercise was only ever INFERRED from dated work, but no cover has an
+  // explicit rehearsal attestation, so the ledger starts EMPTY. "No rehearsal was
+  // recorded here yet" is a different claim from "every cover is rehearsed", and
+  // back-filling an attestation at upgrade time would fabricate the observation
+  // this module exists to record. Every pre-existing exercise reading therefore
+  // stays exactly what ADR-0125 made it — inferred, and printed as inferred —
+  // until a seat that was there records the practice itself. Nothing to clamp:
+  // the module adds no convention, only a ledger and two derived statuses.
+  116: (v116) => ({
+    ...v116,
+    schemaVersion: 117,
+    dutyRehearsals: Array.isArray(v116.dutyRehearsals) ? v116.dutyRehearsals : [],
   }),
   // ADR-0113: additive 111 → 112. An existing workspace is full of prompts it
   // never classified and has never filed one by hand, so both ledgers start

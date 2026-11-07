@@ -212,9 +212,9 @@ test('declaring an absence puts pre-window exercise on the governed decision and
   assert.equal(declared.ok, true, declared.error);
   assert.equal(declared.exercise.validCoversN, 1);
   const decision = store.state.decisions.find((d) => d.id === declared.decisionId);
-  assert.match(decision.question, /Pre-window exercise: 1 available cover\(s\) have duty-specific evidence/);
+  assert.match(decision.question, /Pre-window exercise: 0 available cover\(s\) hold an explicit rehearsal record .* and 1 have inferred duty-specific evidence/);
   const event = store.state.events.find((e) => e.type === 'dutyAbsence.declared' && e.entityId === declared.id);
-  assert.match(event.summary, /Pre-window exercise: 1 valid cover\(s\)/);
+  assert.match(event.summary, /Pre-window exercise: 0 rehearsed by explicit record, 1 valid on inferred work/);
 
   const scanned = api.dutyAbsenceScan();
   assert.equal(scanned.ok, true, scanned.error);

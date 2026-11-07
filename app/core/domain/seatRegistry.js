@@ -148,6 +148,11 @@ export const RECORD_POLICIES = Object.freeze({
   // ADR-0127: an acknowledgement names a person as the answerer, so it carries
   // the same individual-detail ceiling as the cover ledger it answers.
   dutyStandbyAnswers: { classKey: 'unit', label: 'Cover acknowledgements', route: '#/standby?panel=asked' },
+  // ADR-0128: a rehearsal record attests practice of a POSITION's duty by a
+  // named cover, so it carries the same unit class as the cover ledger it is
+  // evidence for; above the manager altitude the plan prints counts, modes and
+  // attestation strength rather than names or notes.
+  dutyRehearsals: { classKey: 'unit', label: 'Dated cover rehearsal records', route: '#/duty-cover?panel=plan' },
   agendaMarkers: { classKey: 'individual', label: 'Agenda ledger rule markers', route: '#/agenda-ledger' },
   feedback: { classKey: 'individual', label: 'Feedback', route: '#/feedback' },
   conflicts: { classKey: 'individual', label: 'Conflict records', route: '#/conflicts' },
@@ -401,6 +406,13 @@ export const ACTION_RIGHTS = Object.freeze({
   // may answer, only for dates inside the ask, and never twice over. Reading the
   // outgoing board is scoped to the spans the seat already governs.
   'answer-duty-standby': { minRank: 1, maxRank: 5, label: 'Answer a standby ask as the named cover' },
+  // ADR-0128: recording a rehearsal is the act of a seat that WAS THERE — the
+  // duty holder (a frontline lead as much as a chief), a leadership ancestor of
+  // the holder, or the cover themselves. Open at every altitude by rank; the
+  // position check is enforced in the action AND re-checked against the roster
+  // by the schema on reload, because an attestation by a seat with no position
+  // at the duty is an invented observation.
+  'attest-duty-rehearsal': { minRank: 1, maxRank: 5, label: 'Record a dated cover rehearsal for a duty line' },
   'log-oneonone': { minRank: 1, maxRank: 2, label: 'Log a 1:1' },
   'log-feedback': { minRank: 1, maxRank: 2, label: 'Give feedback' },
   'log-conflict': { minRank: 1, maxRank: 2, label: 'Log a conflict' },

@@ -1,20 +1,21 @@
 #!/usr/bin/env node
 /**
  * scripts/sweep-schema-pins.mjs — mechanical schema-pin sweep for the
- * v114 → v115 bump (ADR-0122, Session 167).
+ * v116 → v117 bump (ADR-0128, Session 174).
  *
  * Updates, in every tests/app/*.test.mjs:
- *   SCHEMA_VERSION, 114            → SCHEMA_VERSION, 115
- *   schemaVersion, 114             → schemaVersion, 115
- *   '113 → 114']                   → '113 → 114', '114 → 115']   (migration chains)
- *   .at(-1), '112 → 113', '113 → 114' → .at(-1), '114 → 115'    (the whole-chain
- *                                    pin; the old expected value was wrong —
- *                                    the chain always ran to the current schema)
+ *   SCHEMA_VERSION, 116            → SCHEMA_VERSION, 117
+ *   schemaVersion, 116             → schemaVersion, 117
+ *   '115 → 116']                   → '115 → 116', '116 → 117']   (migration chains)
+ *   applied.at(-1), '114 → 115', '115 → 116'
+ *                                  → applied.at(-1), '116 → 117'
  *
- * The `.at(-1)` form was asserting the SECOND-to-last step as the expected value
- * (a pre-existing bug: `assert.equal(actual, expected, message)` had the
- * expected and message swapped). The sweep corrects it to the current last
- * step, which is what the message already claims.
+ * The `.at(-1)` form is the same pre-existing bug the v114 → v115 sweep
+ * documented: `assert.equal(actual, expected, message)` with the NEW last step
+ * inserted into the MESSAGE slot instead of the expected slot, so the
+ * assertion compared at(-1) against the SECOND-to-last step and failed. The
+ * sweep corrects it to the current last step, which is what the trailing
+ * message ("the whole chain runs to the current schema") already claims.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -31,18 +32,12 @@ for (const file of files) {
   const src = fs.readFileSync(file, 'utf8');
   let out = src;
   let n = 0;
-  out = out.replace(/SCHEMA_VERSION, 114/g, () => { n++; return 'SCHEMA_VERSION, 115'; });
-  out = out.replace(/schemaVersion, 114/g, () => { n++; return 'schemaVersion, 115'; });
-  out = out.replace(new RegExp(`'113 ${ARROW} 114']`, 'g'), () => { n++; return `'113 ${ARROW} 114', '114 ${ARROW} 115']`; });
-  // The whole-chain pin: actual=applied.at(-1), expected was wrongly '112 → 113'.
-  out = out.replace(new RegExp(`applied.at\\(-1\\), '112 ${ARROW} 113', '113 ${ARROW} 114'`, 'g'), () => { n++; return `applied.at(-1), '114 ${ARROW} 115'`; });
-  out = out.replace(new RegExp(`applied.at\\(-1\\), '112 ${ARROW} 113', '113 ${ARROW} 114'\\)`, 'g'), () => { n++; return `applied.at(-1), '114 ${ARROW} 115')`; });
-  // Stale whole-chain pins: expected value frozen at an old last step.
-  out = out.replace(new RegExp(`applied\\.at\\(-1\\), '108 ${ARROW} 109'`, 'g'), () => { n++; return `applied.at(-1), '114 ${ARROW} 115'`; });
-  // Stale normalized-state pins: assert.equal(x.schemaVersion, 112) → 115.
-  out = out.replace(/schemaVersion, 112\)/g, () => { n++; return 'schemaVersion, 115)'; });
-  // Stale chain ending frozen below the current schema (board-room ends at 111 → 112).
-  out = out.replace(new RegExp(`'111 ${ARROW} 112']`, 'g'), () => { n++; return `'111 ${ARROW} 112', '112 ${ARROW} 113', '113 ${ARROW} 114', '114 ${ARROW} 115']`; });
+  out = out.replace(/SCHEMA_VERSION, 116/g, () => { n++; return 'SCHEMA_VERSION, 117'; });
+  out = out.replace(/schemaVersion, 116/g, () => { n++; return 'schemaVersion, 117'; });
+  out = out.replace(new RegExp(`'115 ${ARROW} 116']`, 'g'), () => { n++; return `'115 ${ARROW} 116', '116 ${ARROW} 117']`; });
+  // The whole-chain pin with the new step in the wrong slot: expected was
+  // frozen at '114 → 115' while the message slot carried '115 → 116'.
+  out = out.replace(new RegExp(`applied\\.at\\(-1\\), '114 ${ARROW} 115', '115 ${ARROW} 116'`, 'g'), () => { n++; return `applied.at(-1), '116 ${ARROW} 117'`; });
   if (out !== src) {
     fs.writeFileSync(file, out);
     touched += 1;

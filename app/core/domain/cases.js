@@ -118,6 +118,13 @@ export const LINK_ENTITY_TYPES = [
   // answer. It is NOT a second duty record: the declaration stays the only place
   // a stand-in is named.
   'standbyanswer',
+  // ADR-0128 (Schema v117): an explicit rehearsal record is a first-class graph
+  // node — the `attests-rehearsal-of` edge from it to the cover declaration it
+  // is evidence for is the provenance of the practice, written in the same
+  // transaction as the attestation. It is NOT a second cover record and NOT an
+  // exercise verdict: whether it counts is re-derived from the preparation
+  // window on every read.
+  'rehearsal',
   // Schema v44: an after-action lesson is independently navigable from the
   // dated workspace artifact offered as its corroboration.
   'lesson',
@@ -501,6 +508,7 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   dutycover: 'dutyCovers',
   absenceplan: 'absencePlans',
   standbyanswer: 'dutyStandbyAnswers',
+  rehearsal: 'dutyRehearsals',
   comparison: 'portfolioComparisons',
   lesson: null,
   decision: 'decisions',
@@ -1188,6 +1196,12 @@ export const LINK_RELATIONS = [
   // for a duty): this one records that a specific person replied about a specific
   // window, so the answer can be revoked without erasing the declaration.
   'accepts-standby-for',
+  // ADR-0128 (Schema v117): a dated rehearsal ATTESTS the practice of the cover
+  // declaration it is evidence for. Distinct from `prepares-for` (a person
+  // prepares) and `accepts-standby-for` (a person answered): this edge says a
+  // seat that was there recorded the cover practising the duty on a dated day,
+  // so the attestation can be revoked without erasing the declaration.
+  'attests-rehearsal-of',
 
 ];
 

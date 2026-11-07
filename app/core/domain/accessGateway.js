@@ -39,6 +39,12 @@ const groups = [
   // action refuses any other seat, and both reads are seat-scoped adapters that
   // never widen a peer's inbox or a peer's outgoing asks.
   ['answer-duty-standby', 'dutyStandbyAcknowledge dutyStandbyDecline dutyStandbyRevoke dutyStandbyScan dutyStandbySetConventions'],
+  // ADR-0128: explicit rehearsal records. Recording, revoking and scanning are
+  // declared commands (deny-by-default under a seat); the action additionally
+  // enforces that the recording seat holds the duty, IS the cover, or sits
+  // above the holder in the same reporting chain. The ledger read is a
+  // seat-scoped SAFE_READ below.
+  ['attest-duty-rehearsal', 'dutyRehearsalRecord dutyRehearsalRevoke dutyRehearsalScan'],
   ['declare-seat', 'setActiveSeat scanSeats'],
   // ADR-0087: the Board Room. Every method is declared; an unknown name still
   // fails closed. Committing a pack is the chief's right; reading it is enterprise.
@@ -208,6 +214,11 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // under enforcement while its writes are still gated, which would hide the ask
 // from exactly the person being asked.
 'dutyStandbyForMe', 'dutyStandbyBoard', 'dutyStandbySettings',
+// ADR-0128: the rehearsal ledger's read surface. Registered here for the same
+// reason as every module above — a read absent from SAFE_READS is unreadable
+// under enforcement while its writes are still gated, which would hide the
+// rehearsal evidence from exactly the plan panel that grades it.
+'dutyRehearsalList',
 // ADR-0108: the Decision-Fit Ledger's read surface. Registered here because a
 // module whose reads are absent from SAFE_READS is unreadable under enforcement
 // while its writes are still gated — the reading half of the feature would
