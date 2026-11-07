@@ -70,6 +70,10 @@ export const DUTY_ABSENCE_LIMITS = Object.freeze({
   /** Text clamps. */
   reasonChars: 300,
   noteChars: 300,
+  /** Overlapping windows the concurrency read will grade in one pass. A span
+   *  with more simultaneous absences than this is not summarised into a
+   *  comfortable number: the remainder is counted and printed as deferred. */
+  concurrentWindowCap: 24,
 });
 
 /**
@@ -79,3 +83,18 @@ export const DUTY_ABSENCE_LIMITS = Object.freeze({
  * than reassuring the reader.
  */
 export const DUTY_ABSENCE_PREMISE = 'An absence is a date range, not a feeling: the register grades every duty line the seat holds against the exact days the seat will not be there — and it prints the conflict out loud when the declared cover is themselves absent on those dates.';
+
+/**
+ * CONCURRENT ABSENCE EXPOSURE (ADR-0123)
+ * --------------------------------------
+ * The register grades one absence against the declared covers. It does not
+ * grade the everyday case a manager and a director actually manage: two or
+ * three seats out on the SAME dates, and the declared cover for both of them
+ * is one person — or is themselves one of the absentees. Concurrency is
+ * DERIVED from the declared windows, never stored and never scheduled: the
+ * reading names the overlap, counts the exposed duty lines and prints the
+ * single point of failure instead of averaging it away.
+ */
+export const DUTY_CONCURRENCY_ENGINE_VERSION = 'duty-concurrency-2026.11-v1';
+
+export const DUTY_CONCURRENCY_PREMISE = 'Two absences on the same dates are not two absences: they are one window with less capacity. The register sweeps the declared windows, prints every shared date range, and names the cover who would be the only answerable person for more than one absent seat — a single point of failure that no per-absence reading can show.';
