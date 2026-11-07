@@ -59,11 +59,16 @@ import {
   DUTY_ABSENCE_LIMITS,
   DUTY_CONCURRENCY_ENGINE_VERSION,
   DUTY_CONCURRENCY_PREMISE,
+  DUTY_COVER_LOAD_ENGINE_VERSION,
+  DUTY_COVER_LOAD_PREMISE,
+  DUTY_COVER_LOAD_LIMITS,
+  DUTY_COVER_LOAD_REFUSALS,
 } from './dutyAbsenceRegistry.js';
 
 /* ------------------------------------------------------------------ helpers */
 
 const round1 = (n) => Math.round(n * 10) / 10;
+const round2 = (n) => Math.round(n * 100) / 100;
 const clamp01 = (n) => Math.min(1, Math.max(0, n));
 
 /** Wilson (1927) score interval — the same estimator the rest of the product uses. */
@@ -416,6 +421,7 @@ export function absenceWindowPlan(state, built, seat, window, { now = new Date()
       label: reading.label,
       question: reading.question,
       routes: reading.routes,
+      sources: reading.sources,
       openN: reading.openN,
       oldestOn: reading.oldestOn,
       band: reading.band,
@@ -487,6 +493,162 @@ export function dutyAbsenceRollup(state, built, seat, { now = new Date(), settin
     rows,
     exposedN: rows.reduce((sum, r) => sum + r.summary.exposedN, 0),
     exposedOpenN: rows.reduce((sum, r) => sum + r.summary.exposedOpenN, 0),
+  };
+}
+
+/* =============================== ADR-0124: cover capacity in a shared window */
+
+/**
+ * One open work item, keyed ONCE. `harvestWork` already emits only open items;
+ * the key is stable across duty lines and across seats, which is exactly what
+ * stops the same case being counted twice when two absent leads hold the same
+ * duty source, or when an ancestor cover's span already contains a descendant's
+ * case (Simpson 1951 — the composition of the parts is not their sum).
+ */
+const workKey = (item) => `${item.type}:${item.entityId ?? item.title}`;
+
+function workInSpan(item, seat) {
+  const people = Array.isArray(item.people) ? item.people : [];
+  return people.some((pid) => seat.scope.has(pid))
+    || Boolean(item.ownerNodeId && seat.scope.has(item.ownerNodeId));
+}
+
+function openWorkKeys(seat, duty, items) {
+  const out = new Set();
+  for (const item of dutyItems(items, duty)) {
+    if (workInSpan(item, seat)) out.add(workKey(item));
+  }
+  return out;
+}
+
+/** Distinct open work items inside ONE seat's span and declared duty lines. */
+function openWorkForSeat(seat, items) {
+  const out = new Set();
+  for (const duty of dutiesForSeat(seat)) {
+    for (const key of openWorkKeys(seat, duty, items)) out.add(key);
+  }
+  return out;
+}
+
+/**
+ * The comparison set for the REVEALED capacity envelope. Little's Law (1961)
+ * makes work-in-progress the unit; the number is a reading of observed work,
+ * not a productivity constant fitted to a person and not a WIP target imported
+ * from the differently denominated funded-plan ledger.
+ *
+ * The envelope itself is chosen PER COVER in `buildCoverLoads`: the peak own
+ * open work among the seats in this span at or below that cover's altitude,
+ * excluding the cover. Comparing a manager's load to a chief's whole-span load
+ * would be a composition error (Simpson 1951; Greenland/Robins/Pearl 1999) —
+ * the chief's duty lines legitimately see more work simply because their span
+ * contains everyone. Like-for-like, or an explicit refusal.
+ */
+export function coverLoadEnvelope(built, seat, items) {
+  const loads = new Map();
+  for (const s of built.seats) {
+    if (s.isLeader || s.reachable === false) continue;
+    if (!seat.fullAccess && s.id !== seat.id && !seat.scope.has(s.id)) continue;
+    loads.set(s.id, { id: s.id, rank: s.rank, n: openWorkForSeat(s, items).size });
+  }
+  return { loads, seatsN: loads.size };
+}
+
+/**
+ * Grade every available, eligible cover of ONE overlap window. `assignments`
+ * is derived inside the sweep (never stored): the sole-answerable duty lines'
+ * open work, the shared lines that must not be attributed to one person, and
+ * the absent seats each cover would stand in for.
+ *
+ * The identity wall is applied AT CONSTRUCTION: above rank 2 the cover's name
+ * and id are nulled before the reason text is built, so neither the card, the
+ * brief, the governed decision nor JSON.stringify(report) can carry them.
+ */
+function buildCoverLoads({ built, window, items, assignments, seats, namesVisible, envelope }) {
+  const refById = new Map(seats.map((s) => [s.seatId, s.ref]));
+  const ids = [...assignments.keys()].sort();
+  const gradedIds = ids.slice(0, DUTY_COVER_LOAD_LIMITS.coverCap);
+  const deferredCoversN = ids.length - gradedIds.length;
+  const rows = [];
+  const byId = new Map();
+  for (const coverId of gradedIds) {
+    const a = assignments.get(coverId);
+    const coverSeat = built.byId.get(coverId) || null;
+    const display = namesVisible ? (a.name || a.label) : a.label;
+    const ownKeys = coverSeat ? openWorkForSeat(coverSeat, items) : new Set();
+    const ownN = ownKeys.size;
+    const inheritedN = a.inherited.size;
+    let overlapN = 0;
+    for (const key of a.inherited) if (ownKeys.has(key)) overlapN += 1;
+    const combinedN = ownN + inheritedN - overlapN;
+    // Like-for-like: a chief's whole-span load is not a fair envelope for a
+    // manager. The cover is excluded, so the reading asks whether THIS seat
+    // would carry more open work than the busiest comparable seat in the span.
+    const comparable = [...envelope.loads.values()].filter((x) => x.id !== coverId && x.rank <= a.rank);
+    const peakN = comparable.reduce((max, x) => Math.max(max, x.n), 0);
+    const peersN = comparable.length;
+    const refs = [...a.seatIds].map((id) => refById.get(id)).filter(Boolean).sort();
+    const refusal = !coverSeat || !dutiesForSeat(coverSeat).length
+      ? DUTY_COVER_LOAD_REFUSALS.noDuties
+      : (!peersN ? DUTY_COVER_LOAD_REFUSALS.noComparableSeat : (peakN === 0 ? DUTY_COVER_LOAD_REFUSALS.noEnvelope : null));
+    const band = refusal ? 'refused' : (combinedN > peakN ? 'over-envelope' : (combinedN === peakN ? 'at-envelope' : 'within-envelope'));
+    const ratio = refusal ? null : round2(combinedN / peakN);
+    const basis = `${display} (rank ${a.rank}) would be answerable for ${combinedN} distinct open work item(s) ${window.from} → ${window.to}: ${ownN} in their own duty lines, ${inheritedN} inherited from ${a.seatIds.size} absent seat(s) (${refs.join(', ') || 'none'}), and ${overlapN} of those already inside their own span — counted once, not twice.`;
+    const shared = a.sharedLinesN
+      ? ` ${a.sharedLinesN} further duty line(s) have more than one available cover; their open work is not attributed to one person because no split is declared.`
+      : '';
+    const comparableText = `the peak ${peakN}-item open-work load among ${peersN} comparable seat(s) at or below this cover’s altitude`;
+    const verdict = refusal
+      ? ` Cover capacity refused — ${refusal}`
+      : (band === 'over-envelope'
+        ? ` That is ${ratio}× ${comparableText}: this seat would carry more open work than the busiest comparable seat in this span today. The register will not call that spare capacity.`
+        : (band === 'at-envelope'
+          ? ` That exactly matches ${comparableText} (${ratio}×): there is no recorded headroom.`
+          : ` That is ${ratio}× ${comparableText}. The envelope reads today's open work, not effort estimates, calendar load, or arrivals before the window opens.`));
+    rows.push({
+      coverId: namesVisible ? coverId : null,
+      name: namesVisible ? a.name : null,
+      label: a.label,
+      rank: a.rank,
+      ownN,
+      inheritedN,
+      overlapN,
+      combinedN,
+      envelopeN: peakN,
+      peersN,
+      ratio,
+      band,
+      reason: `${basis}${shared}${verdict}`,
+      soleLinesN: a.soleLinesN,
+      sharedLinesN: a.sharedLinesN,
+      seatsN: a.seatIds.size,
+      refs,
+    });
+    byId.set(coverId, rows[rows.length - 1]);
+  }
+  const bandCount = (b) => rows.filter((r) => r.band === b).length;
+  rows.sort((x, y) => {
+    const rank = (b) => (b === 'over-envelope' ? 0 : b === 'at-envelope' ? 1 : b === 'within-envelope' ? 2 : 3);
+    return rank(x.band) - rank(y.band) || y.combinedN - x.combinedN || String(x.label).localeCompare(String(y.label));
+  });
+  const maxEnvelopeN = rows.reduce((max, r) => Math.max(max, r.envelopeN), 0);
+  const maxPeersN = rows.reduce((max, r) => Math.max(max, r.peersN), 0);
+  return {
+    rows,
+    byId,
+    summary: {
+      envelopeN: maxEnvelopeN,
+      envelopeSeatsN: maxPeersN,
+      gradedN: rows.length,
+      overEnvelopeN: bandCount('over-envelope'),
+      atEnvelopeN: bandCount('at-envelope'),
+      withinEnvelopeN: bandCount('within-envelope'),
+      refusedN: bandCount('refused'),
+      deferredCoversN,
+      maxCombinedN: rows.reduce((max, r) => Math.max(max, r.combinedN), 0),
+      refusal: rows.length && rows.every((r) => r.band === 'refused') && maxEnvelopeN === 0
+        ? DUTY_COVER_LOAD_REFUSALS.noEnvelope
+        : null,
+    },
   };
 }
 
@@ -569,6 +731,10 @@ export function absenceConcurrency(state, built, seat, { now = new Date(), setti
     });
   }
   participants.sort((a, b) => (a.from < b.from ? -1 : a.from > b.from ? 1 : (a.seatId < b.seatId ? -1 : 1)));
+  // ADR-0124: one revealed envelope per reading, derived from the same open
+  // work the register already harvests. It does not depend on the dates, so it
+  // is computed once and reused by every overlap window.
+  const envelope = coverLoadEnvelope(built, seat, allItems);
 
   const result = {
     engineVersion: DUTY_CONCURRENCY_ENGINE_VERSION,
@@ -603,6 +769,30 @@ export function absenceConcurrency(state, built, seat, { now = new Date(), setti
       exposedN: 0,
       exposedOpenN: 0,
       singleCoverN: 0,
+      coverLoadGradedN: 0,
+      coverLoadOverN: 0,
+      coverLoadRefusedN: 0,
+      coverLoadDeferredN: 0,
+      coverLoadMaxN: 0,
+    },
+    // ADR-0124: the capacity reading travels WITH the concurrency sweep at
+    // every altitude, so a manager's decision and a chief's roll-up quote the
+    // same derived figure rather than a second store or a second computation.
+    coverLoad: {
+      engineVersion: DUTY_COVER_LOAD_ENGINE_VERSION,
+      premise: DUTY_COVER_LOAD_PREMISE,
+      coverCap: DUTY_COVER_LOAD_LIMITS.coverCap,
+      seatsN: envelope.seatsN,
+      envelopeN: 0,
+      envelopeSeatsN: 0,
+      gradedN: 0,
+      overEnvelopeN: 0,
+      atEnvelopeN: 0,
+      withinEnvelopeN: 0,
+      refusedN: 0,
+      deferredCoversN: 0,
+      maxCombinedN: 0,
+      refusal: null,
     },
     refused: null,
   };
@@ -637,6 +827,10 @@ export function absenceConcurrency(state, built, seat, { now = new Date(), setti
     const seats = [];
     const soleMap = new Map();
     const conflictMap = new Map();
+    // ADR-0124: the work each available, eligible cover would be answerable
+    // for on these shared dates. Sets, not counts: the same case reaches two
+    // duty lines and two seats and must be counted exactly once.
+    const coverAssignments = new Map();
     let exposedN = 0;
     let exposedOpenN = 0;
 
@@ -665,6 +859,20 @@ export function absenceConcurrency(state, built, seat, { now = new Date(), setti
           rec.seatIds.add(p.seatId);
           soleMap.set(cover.coverId, rec);
         }
+        // Only a SOLE available cover inherits the line's open work. A line
+        // with several covers is printed as shared and never split by guess.
+        for (const cover of available) {
+          const rec = coverAssignments.get(cover.coverId) || {
+            name: cover.name, label: cover.label, rank: cover.rank,
+            inherited: new Set(), seatIds: new Set(), soleLinesN: 0, sharedLinesN: 0,
+          };
+          if (available.length === 1) {
+            rec.soleLinesN += 1;
+            for (const key of openWorkKeys(p.node, { sources: row.sources }, allItems)) rec.inherited.add(key);
+          } else rec.sharedLinesN += 1;
+          rec.seatIds.add(p.seatId);
+          coverAssignments.set(cover.coverId, rec);
+        }
         for (const conflict of row.conflicts) {
           const rec = conflictMap.get(conflict.coverId)
             || { coverId: conflict.coverId, name: conflict.name, label: conflict.label, from: conflict.from, to: conflict.to, seatsN: 0 };
@@ -688,6 +896,22 @@ export function absenceConcurrency(state, built, seat, { now = new Date(), setti
       });
     }
 
+    // ADR-0124: grade every available cover of this shared window against the
+    // revealed envelope BEFORE the single-cover findings are redacted, so the
+    // capacity travels with the finding rather than as a separate table.
+    const load = buildCoverLoads({
+      built, window: w, items: allItems, assignments: coverAssignments,
+      seats, namesVisible, envelope,
+    });
+    const capacityFor = (coverId) => {
+      const r = load.byId.get(coverId);
+      if (!r) return null;
+      return {
+        band: r.band, ownN: r.ownN, inheritedN: r.inheritedN, overlapN: r.overlapN,
+        combinedN: r.combinedN, envelopeN: r.envelopeN, ratio: r.ratio, reason: r.reason,
+      };
+    };
+
     const singleCovers = [...soleMap.values()]
       .filter((c) => c.seatIds.size >= 2)
       .map((c) => ({
@@ -698,6 +922,7 @@ export function absenceConcurrency(state, built, seat, { now = new Date(), setti
         dutiesN: c.dutiesN,
         seatsN: c.seatIds.size,
         refs: [...c.seatIds].map((id) => seats.find((s) => s.seatId === id)?.ref).filter(Boolean),
+        capacity: capacityFor(c.coverId),
       }))
       .sort((a, b) => b.seatsN - a.seatsN || b.dutiesN - a.dutiesN);
 
@@ -719,11 +944,14 @@ export function absenceConcurrency(state, built, seat, { now = new Date(), setti
       ? ` ${singleCovers.length} declared cover(s) would be the ONLY answerable person for more than one absent seat: ${singleCovers
         .map((c) => `${c.label} for ${c.seatsN} absent seats (${c.refs.join(', ')})`).join('; ')}.`
       : '';
+    const capacityText = load.summary.overEnvelopeN
+      ? ` Cover capacity: ${load.summary.overEnvelopeN} available cover(s) would be answerable for more open work than the ${load.summary.envelopeN}-item observed envelope for this span (largest ${load.summary.maxCombinedN}).`
+      : (load.summary.refusal ? ` Cover capacity refused: ${load.summary.refusal}` : '');
     const reasons = {
-      'open-exposed': `${count} seats are absent at once ${w.from} → ${w.to} (${days} day(s)). ${exposedN} of their duty line(s) have no available, eligible cover on those shared dates and ${exposedOpenN} of them carry open work right now.${coverText}`,
-      exposed: `${count} seats are absent at once ${w.from} → ${w.to} (${days} day(s)). ${exposedN} duty line(s) have no available cover on those dates; none of them carries open work today, which is not the same as being safe.${coverText}`,
-      concentrated: `${count} seats are absent at once ${w.from} → ${w.to} (${days} day(s)). Every duty line has an available cover, but the cover is not always a different person — see the single point(s) below.${coverText}`,
-      covered: `${count} seats are absent at once ${w.from} → ${w.to} (${days} day(s)). Every duty line has an available, genuinely distinct cover. This is a register reading, not a forecast.`,
+      'open-exposed': `${count} seats are absent at once ${w.from} → ${w.to} (${days} day(s)). ${exposedN} of their duty line(s) have no available, eligible cover on those shared dates and ${exposedOpenN} of them carry open work right now.${coverText}${capacityText}`,
+      exposed: `${count} seats are absent at once ${w.from} → ${w.to} (${days} day(s)). ${exposedN} duty line(s) have no available cover on those dates; none of them carries open work today, which is not the same as being safe.${coverText}${capacityText}`,
+      concentrated: `${count} seats are absent at once ${w.from} → ${w.to} (${days} day(s)). Every duty line has an available cover, but the cover is not always a different person — see the single point(s) below.${coverText}${capacityText}`,
+      covered: `${count} seats are absent at once ${w.from} → ${w.to} (${days} day(s)). Every duty line has an available, genuinely distinct cover. This is a register reading, not a forecast.${capacityText}`,
     };
 
     result.windows.push({
@@ -738,6 +966,8 @@ export function absenceConcurrency(state, built, seat, { now = new Date(), setti
       exposedOpenN,
       conflicts,
       singleCovers,
+      coverLoads: load.rows,
+      capacity: load.summary,
     });
   }
 
@@ -749,6 +979,25 @@ export function absenceConcurrency(state, built, seat, { now = new Date(), setti
   result.summary.exposedN = windows.reduce((sum, w) => sum + w.exposedN, 0);
   result.summary.exposedOpenN = windows.reduce((sum, w) => sum + w.exposedOpenN, 0);
   result.summary.singleCoverN = windows.reduce((sum, w) => sum + w.singleCovers.length, 0);
+  result.coverLoad.gradedN = windows.reduce((sum, w) => sum + w.capacity.gradedN, 0);
+  result.coverLoad.envelopeN = windows.reduce((max, w) => Math.max(max, w.capacity.envelopeN), 0);
+  result.coverLoad.envelopeSeatsN = windows.reduce((max, w) => Math.max(max, w.capacity.envelopeSeatsN), 0);
+  result.coverLoad.overEnvelopeN = windows.reduce((sum, w) => sum + w.capacity.overEnvelopeN, 0);
+  result.coverLoad.atEnvelopeN = windows.reduce((sum, w) => sum + w.capacity.atEnvelopeN, 0);
+  result.coverLoad.withinEnvelopeN = windows.reduce((sum, w) => sum + w.capacity.withinEnvelopeN, 0);
+  result.coverLoad.refusedN = windows.reduce((sum, w) => sum + w.capacity.refusedN, 0);
+  result.coverLoad.deferredCoversN = windows.reduce((sum, w) => sum + w.capacity.deferredCoversN, 0);
+  result.coverLoad.maxCombinedN = windows.reduce((max, w) => Math.max(max, w.capacity.maxCombinedN), 0);
+  result.coverLoad.refusal = result.coverLoad.gradedN > 0
+    && result.coverLoad.refusedN === result.coverLoad.gradedN
+    && result.coverLoad.envelopeN === 0
+    ? DUTY_COVER_LOAD_REFUSALS.noEnvelope
+    : null;
+  result.summary.coverLoadGradedN = result.coverLoad.gradedN;
+  result.summary.coverLoadOverN = result.coverLoad.overEnvelopeN;
+  result.summary.coverLoadRefusedN = result.coverLoad.refusedN;
+  result.summary.coverLoadDeferredN = result.coverLoad.deferredCoversN;
+  result.summary.coverLoadMaxN = result.coverLoad.maxCombinedN;
   return result;
 }
 
@@ -938,6 +1187,7 @@ export function buildDutyCoverageReport(state, { now = new Date(), settings = nu
       dutyCoverageConcentrationPct: [50, 100],
       dutyAbsenceMaxSpanDays: DUTY_ABSENCE_LIMITS.maxSpanDays,
       dutyConcurrencyWindowCap: DUTY_ABSENCE_LIMITS.concurrentWindowCap,
+      dutyCoverLoadCap: DUTY_COVER_LOAD_LIMITS.coverCap,
     },
     summary: {
       dutiesN: total,
@@ -996,6 +1246,14 @@ export function dutyCoverageBriefText(report) {
       lines.push(`Concurrent absence: ${conc.summary.windowsN} overlapping window(s) in this span, at most ${conc.summary.maxConcurrent} seats absent at once — ${conc.summary.exposedN} duty line(s) have no available cover on the shared dates, ${conc.summary.exposedOpenN} of them carrying open work, and ${conc.summary.singleCoverN} single-cover point(s) where one person is the only answerable cover for two or more absent seats.`);
       if (conc.summary.deferredWindowsN) {
         lines.push(`  · ${conc.summary.deferredWindowsN} further overlapping window(s) were not graded: the concurrency sweep is capped at ${report.bounds.dutyConcurrencyWindowCap} window(s).`);
+      }
+      // ADR-0124: counts only, no name and no cover id — the same identity-free
+      // contract the rest of the upward brief already carries.
+      const load = conc.coverLoad;
+      if (load) {
+        lines.push(`Cover capacity on the shared dates: ${load.gradedN} available cover(s) graded against a like-for-like revealed envelope (largest ${load.envelopeN} open work item(s) among ${load.envelopeSeatsN} comparable seat(s)) — ${load.overEnvelopeN} would carry more than that peak (largest ${load.maxCombinedN} item(s)), ${load.refusedN} refused. The union counts each open item once, including items already inside the cover's own span.`);
+        if (load.refusal) lines.push(`  · Cover capacity refusal: ${load.refusal}`);
+        if (load.deferredCoversN) lines.push(`  · ${load.deferredCoversN} further available cover(s) were not graded: the capacity sweep is capped at ${report.bounds.dutyCoverLoadCap} cover(s) per window.`);
       }
     }
   }
