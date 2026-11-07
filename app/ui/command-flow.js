@@ -3,7 +3,7 @@ import { h, toast, openModal } from './dom.js';
 import { badge, banner, card, emptyState, table } from './components.js';
 import { downloadText } from './download.js';
 import { runMissionCaptureRehearsal } from './response-worker.js';
-import { renderCaptureBriefs } from './command-flow-brief.js';
+import { renderCaptureBriefBulk, renderCaptureBriefs } from './command-flow-brief.js';
 import { BUNDLE_LABELS } from '../core/domain/actionBundleRegistry.js';
 import { CAPTURE_DISCLOSURE, CAPTURE_PLAYBOOK, MERGE_DISCLOSURE } from '../core/domain/missionRegistry.js';
 import { addDays, dayKey } from '../core/time.js';
@@ -309,7 +309,7 @@ function approval(ctx, report, selected) {
     return h('div', { class: 'stack-sm' }, card({ title: isMerge ? `Adopted consolidated LCA case (${selected.mergeFromIds.length} spans)` : 'Adopted as one transaction', subtitle: `Case ${selected.caseId} · bundle ${selected.bundleId}${isMerge ? ` · dedupe ${selected.dedupeFingerprint.slice(0, 8)}` : ''}`, body: h('div', { class: 'stack-sm' },
       banner({ tone: 'good', title: 'The case, actions and hierarchy provenance share one receipt', body: isMerge ? 'All constituent captures were settled to merged in the same atomic write. The decision remains unchosen; no message was sent.' : 'The decision remains unchosen. Work remains open until people deliver it. No message was sent.' }),
       h('div', { class: 'form-actions' }, h('a', { class: 'btn btn-primary', href: `#/cases?case=${encodeURIComponent(selected.caseId)}` }, 'Open the case'), h('a', { class: 'btn btn-ghost', href: `#/bundles?bundle=${encodeURIComponent(selected.bundleId)}` }, 'Open action receipt'), receiptDownloadButton(ctx, selected), bundle?.withdrawable ? h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => withdraw(ctx, selected) }, 'Withdraw untouched actions') : null)) }),
-    report.seat.rank >= 3 ? renderCaptureBriefs(ctx, selected) : null);
+    report.seat.rank >= 3 ? h('div', { class: 'stack-sm' }, renderCaptureBriefBulk(ctx, selected), renderCaptureBriefs(ctx, selected)) : null);
   }
   if (selected.status === 'dismissed') return banner({ tone: 'info', title: 'Proposal dismissed', body: selected.dismissReason });
   const p = selected.preview;

@@ -3261,3 +3261,9 @@ details[open] > .nav-summary::after { content: '▾'; }
 .nav-catalogue .nav-item { font-size: 13px; padding-block: 6px; }
 .execution-panel .stat-row { flex-wrap: wrap; }
 .execution-panel code { overflow-wrap: anywhere; }
+
+/* ADR-0119: register-backed bulk audience selection on an adopted case. */
+.flow-briefs-bulk { border-top: 3px solid var(--accent-2, var(--accent)); }
+.flow-bulk-list { display: flex; flex-direction: column; gap: 8px; max-height: 46vh; overflow-y: auto; padding: 4px; }
+.flow-bulk-row { display: flex; flex-direction: column; gap: 6px; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel-2); }
+.flow-bulk-preview { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel-2); }

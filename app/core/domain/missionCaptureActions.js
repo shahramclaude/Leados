@@ -5,6 +5,9 @@ import { activeSeat, buildSeats, canAct } from './seat.js';
 import { buildMission } from './mission.js';
 import { createStagedStore, fingerprint } from './actionBundles.js';
 import { captureBriefCase, captureBriefProposal, captureBriefReading } from './missionCaptureBrief.js';
+// ADR-0119: the register-backed bulk selection is a pure reading of the register
+// plus one atomic attach. It creates no draft, link or message of its own.
+import { BRIEF_BULK_LIMITS, briefBulkProposal, briefCandidates } from './missionCaptureBriefBulk.js';
 import { propagateCaseEvent } from './automation.js';
 import { cleanBundlePreview } from './actionBundleSchema.js';
 import { normalizeMissionCaptures, normalizeCommandEdits } from './missionCaptureSchema.js';
@@ -284,6 +287,87 @@ export function createMissionCaptureActions(store, { now, idFactory, createApi }
       } catch (error) { store.warnings.splice(warningCount); return fail(error?.message || 'The recipient and brief were not saved.'); }
       if (store.state.meta.revision === before) return fail('The workspace blocked the write; no brief was created.');
       return saved({ caseId: plan.caseId, draftId, stakeholderId: actorId });
+    },
+    /**
+     * ADR-0119 — the eligible audience, derived from the register.
+     *
+     * Every active register record is judged against this seat's span and this
+     * case and lands in exactly one of three states with a printed reason. The
+     * leader chooses register IDs from this list; nothing is typed in by hand,
+     * which is what makes the boundary a property of the record rather than of
+     * the person's typing.
+     */
+    missionCaptureBriefCandidates(captureId) {
+      const access = briefAccess(captureId); if (access.error) return fail(access.error);
+      return { ...briefCandidates(store.state, access.caseRecord, access.seat, { now: clock() }), revision: store.state.meta.revision };
+    },
+    /** Preview the whole selected set as ONE reviewed transaction. Writes nothing. */
+    missionCaptureBriefBulkPreview(captureId, input = {}) {
+      const access = briefAccess(captureId); if (access.error) return fail(access.error);
+      return briefBulkProposal(store.state, access.caseRecord, access.seat, input, { now: clock() });
+    },
+    /**
+     * Attach the reviewed set to the SAME case in one atomic transaction.
+     *
+     * The ordinary `propagateCaseEvent` runs once, so `RULE-STK-01` writes one
+     * exact-name `involves` edge per register match and `RULE-COMMS-01` renders
+     * one unsent brief per qualifying recipient — the bulk path creates no
+     * message of its own. If any rule fails, or if the drafts the rules produced
+     * do not match the exact bodies the human reviewed, the entire case update
+     * rolls back: no partial audience is ever left behind.
+     */
+    missionCaptureBriefBulkDraft(captureId, input = {}) {
+      const access = briefAccess(captureId); if (access.error) return fail(access.error);
+      if (store.writeBlockReason || store.isLocked) return fail(store.writeBlockReason || 'Unlock the workspace first.');
+      if (input.reviewed !== true || input.expectedRevision !== store.state.meta.revision) {
+        return fail('Review the selected audience and the exact current case facts at this revision before creating drafts.');
+      }
+      const plan = briefBulkProposal(store.state, access.caseRecord, access.seat, input, { now: clock() });
+      if (!plan.ok) return plan;
+      if (plan.fingerprint !== input.previewFingerprint) return fail('The reviewed audience or case facts changed. Preview the exact messages again.');
+      const actorIds = plan.recipients.map(() => idFactory('cstk'));
+      const stakeholders = plan.recipients.map((r, i) => ({ ...r.stub, id: actorIds[i] }));
+      const oldEvents = new Set((store.state.events || []).map((e) => e.id));
+      const oldReceipts = new Set((store.state.propagationReceipts || []).map((r) => r.id));
+      const before = store.state.meta.revision;
+      const warningCount = store.warnings.length;
+      const draftIds = [];
+      try {
+        store.update((draft, { logEvent }) => {
+          const target = (draft.cases || []).find((c) => c.id === plan.caseId);
+          if (!target) throw new Error('The adopted source case disappeared before the briefing write.');
+          target.stakeholders = [...(target.stakeholders || []), ...stakeholders];
+          target.updatedAt = clock().toISOString();
+          propagateCaseEvent(draft, target, { now: clock(), idFactory, logEvent, options: { stakeholders: target.stakeholders } });
+          logEvent({ type: 'mission.capture.brief_prepared', entity: 'missioncapture', entityId: captureId,
+            summary: `Reviewed audience of ${stakeholders.length} attached to this adopted case in one transaction; note stayed private and no message was sent` });
+        }, { type: 'case.updated', entity: 'case', entityId: plan.caseId,
+          summary: `Reviewed audience of ${stakeholders.length} added to an adopted case; shared case rules prepare one unsent brief each` }, {
+          afterRules: (draft) => {
+            const failures = (draft.events || []).filter((e) => !oldEvents.has(e.id) && e.type === 'automation.rule_error').length
+              + (draft.propagationReceipts || []).filter((r) => !oldReceipts.has(r.id)).length;
+            if (failures) throw new Error('A propagation rule failed; the case and every unsent brief were rolled back.');
+            // The rules are the author of the text. Compare what they produced with
+            // what the human read, recipient by recipient, and refuse any drift.
+            for (let i = 0; i < stakeholders.length; i += 1) {
+              const expected = plan.recipients[i];
+              const message = (draft.commsDrafts || []).find((d) => d.caseId === plan.caseId
+                && d.stakeholderKey === `id:${actorIds[i]}` && d.purpose === 'brief' && d.status === 'draft');
+              if (!message) throw new Error(`No unsent brief was created for ${expected.name}. The whole audience was rolled back.`);
+              if (message.subject !== expected.preview.subject || message.body !== expected.preview.body
+                || fingerprint(message.missing) !== fingerprint(expected.preview.missing)) {
+                throw new Error(`The actual draft for ${expected.name} differs from the reviewed preview. The whole audience was rolled back.`);
+              }
+              draftIds.push(message.id);
+            }
+            if ((draft.cases.find((c) => c.id === plan.caseId).stakeholders || []).length > BRIEF_BULK_LIMITS.caseStakeholderCap) {
+              throw new Error('The case exceeded its stakeholder ceiling during propagation. The whole audience was rolled back.');
+            }
+          },
+        });
+      } catch (error) { store.warnings.splice(warningCount); return fail(error?.message || 'The audience was not saved.'); }
+      if (store.state.meta.revision === before) return fail('The workspace blocked the write; no briefs were created.');
+      return saved({ caseId: plan.caseId, draftIds, stakeholderIds: actorIds, count: stakeholders.length });
     },
     missionCaptureBriefEdit(captureId, draftId, input = {}) { return briefCommand(captureId, draftId, 'editCommsDraft', input); },
     missionCaptureBriefApprove(captureId, draftId, input = {}) { return briefCommand(captureId, draftId, 'approveCommsDraft', input); },
