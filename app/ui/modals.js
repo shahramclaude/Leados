@@ -15,7 +15,7 @@ import {
   linkedDelegationForWill,
   unlinkedDelegationsForPerson,
 } from '../core/domain/growth.js';
-import { PULSE_DIMENSIONS, PULSE_LABELS, PULSE_PROMPTS, LEVEL_LABELS, LEVELS, READINESS_LABELS, READINESS, normalizeTalkingPoints } from '../core/schema.js';
+import { PULSE_DIMENSIONS, PULSE_LABELS, PULSE_PROMPTS, LEVEL_LABELS, LEVELS, READINESS_LABELS, READINESS, applyTalkingPointPolicy } from '../core/schema.js';
 import { addDays, dayKey, formatDate } from '../core/time.js';
 import { personOptions } from './options.js';
 import { SELF_REFLECTION_PROMPTS, MANAGER_PROMPTS, REVIEW_RATINGS, REVIEW_RATING_LABELS } from '../core/domain/reviews.js';
@@ -29,6 +29,7 @@ import {
   CATEGORY_LABELS,
 } from '../core/domain/onboarding.js';
 import { tenureDays } from '../core/domain/people.js';
+import { TALKING_QUEUE_CAP } from '../core/domain/talkingPointPolicy.js';
 
 function submitter(api, build) {
   return (values, form, close) => {
@@ -114,16 +115,33 @@ export function openPersonDialog(ctx, { person = null } = {}) {
         rows: 3,
         value: (person?.talkingPoints || []).join('\n'),
         placeholder: 'One per line — what they have asked to discuss.',
-        help: 'You are the scribe: this app has no employee login, so record what they raised. Listed first on the printable prep sheet.',
+        help: `You are the scribe: record what they raised. The waiting list holds ${TALKING_QUEUE_CAP} unique lines; resolve any overflow before saving. Listed first on the printable prep sheet.`,
       },
     ],
-    onSubmit: submitter(
-      (payload) => (isEdit ? ctx.api.updatePerson(person.id, payload) : ctx.api.addPerson(payload)),
-      (v) => ({
-        ...v,
-        talkingPoints: normalizeTalkingPoints(String(v.talkingPoints || '').split('\n')),
-      }),
-    ),
+    onSubmit: (values, form, close) => {
+      form.clearErrors();
+      // Preview the very same policy as the action, but do not discard anything
+      // before it can be reported. Keep the entire input editable on refusal.
+      const talkingPoints = String(values.talkingPoints || '').split('\n');
+      const queue = applyTalkingPointPolicy(talkingPoints);
+      if (queue.droppedN) {
+        const examples = queue.dropped.slice(0, 5).map((line) => `“${line.text}”`).join('; ');
+        const remainder = queue.droppedN > 5 ? `; and ${queue.droppedN - 5} more` : '';
+        form.setFieldError('talkingPoints', `${queue.sentence} Would not be stored: ${examples}${remainder}. Edit the list to fit before saving.`);
+        form.field('talkingPoints')?.focus();
+        return false;
+      }
+      const payload = { ...values, talkingPoints };
+      const result = isEdit ? ctx.api.updatePerson(person.id, payload) : ctx.api.addPerson(payload);
+      if (!result.ok) {
+        if (result.field) form.setFieldError(result.field, result.error);
+        toast(result.error, 'bad');
+        return false;
+      }
+      close();
+      if (result.warning) toast(result.warning, 'bad');
+      return true;
+    },
   });
 }
 
