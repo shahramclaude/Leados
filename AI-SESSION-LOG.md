@@ -1,3 +1,13 @@
+## 2026-11-08 — Session 186: don't allocate against missing budget evidence
+
+**Built / altitudes.** Director and VP PRIMARY, CEO aggregate consumer. The existing seat-scoped span budget roll-up now withholds currency and branch headroom when an attributable envelope lacks a ceiling, a spent actual or an open-line price; reasons and known recorded forecast subtotals appear in the panel and ledger, with the identity-free brief noting unpriced envelopes. The existing `evaluateBudget`, finance actions, event automation and hierarchy-derived attribution remain the sources; no new storage or rule. Director/VP were next in the coverage rotation (last primary 183).
+
+**Verified.** `node --test tests/app/budget-exposure.test.mjs` 14/14, including independent branches/currencies, real VP-authorized writes and budget event, recovery when gaps are filled, brief/ledger and jsdom view. First pass failed on a director-rank capital write in the test; corrected the fixture to use the existing VP floor. `npm run build:standalone` succeeded (9,550,861 bytes, v118).
+
+**Flagged / blockers.** The evaluator counts unpriced planned and committed lines together, so either conservatively blocks headroom even though priced pipeline is excluded from forecast-at-completion. Per-envelope cards and other finance readers were not changed. Full suite, standalone execution, real-browser AT and broader automation propagation [UNVERIFIED]. Seats are not authentication. No blocker for this slice.
+
+**Next:** frontline / mid-manager shared automation writer retention; authenticated identity + tenant boundary remains foundational.
+
 ## 2026-11-08 — Session 185: reconcile the board's repeated exposures with the work actually opened (Schema v118 unchanged, ADR-0137)
 
 **Built / altitude.** CEO / C-suite PRIMARY. The Board Room Cycle queue now shows whether each currently failing carried claim is `uncovered`, `undecided`, `review-due`, `decided`, or `reviewed`. It reads the real `RULE-BRD-01` decisions via existing `decision —escalates-from→ boardmemo` edges plus the exact claim assertion; no title/person guess and no new storage or automation. A newer failing pack cannot borrow coverage from an older decision. Actions open the unresolved/review-due decision or the memo Reconcile path. Response counts reach the ledger download, identity-free brief and aggregate CSV. CEO was next in Session 184's altitude map (last primary 182).

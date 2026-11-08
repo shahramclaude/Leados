@@ -1,3 +1,15 @@
+## 2026-11-08 — Refuse budget headroom when evidence is missing (Session 186, Schema v118 unchanged, `#/finance?panel=span`)
+
+**Implemented — director / VP PRIMARY; CEO reads the same limitation in aggregate.** The director allocating across teams and VP forecasting across divisions must not mistake unrecorded costs for available budget. Session 185's coverage map made director/VP next (last primary 183). The existing span roll-up computed ceiling minus a partial forecast even when spend had no actual or an open line had no price; a positive figure was not reliable headroom.
+
+The currency and branch readers now leave headroom blank with a counted reason when any attributable envelope has a missing ceiling, spent actual or open-line price. Known forecast subtotals remain visible and are labeled recorded; the panel, downloadable ledger and identity-free brief convey the limitation. The existing evaluator counts unpriced planned lines together with committed lines: the roll-up therefore **conservatively** withholds headroom for either, even though priced planned pipeline is outside forecast-at-completion. Existing seat scoping, finance writes, post-commit events and hierarchy-derived roll-up are reused; no schema, automation rule or new stored data. Per-envelope finance cards and other finance consumers are unchanged and may still show their existing remaining calculation alongside their warnings.
+
+**Altitude coverage map (Session 186):** frontline last primary 184; mid-manager last primary 184; **director / VP primary 186**; CEO / C-suite last primary 185. Next rotation: **frontline / mid-manager**.
+
+**Verified:** `node --test tests/app/budget-exposure.test.mjs` **14/14**, including missing actuals and unpriced committed/planned lines, independent currencies and branches, real VP-authorized finance writes and event, headroom recovery, API ledger/brief and jsdom rendering. First run failed because the test attempted a capital write at director rank; switching to VP fixed it. Standalone rebuilt (9,550,861 bytes, v118). Full suite, standalone execution, real-browser AT and broader cross-module propagation **[UNVERIFIED]**. Seats are workflow declarations, not authentication.
+
+**Next targets:** [frontline / mid-manager → all] shared automation writer retention (Session 184, in progress below); [all altitudes] authenticated identity + tenant boundary (standing foundational item).
+
 ## 2026-11-08 — A carried board claim now shows whether its correction is governed, chosen, or overdue (Session 185, Schema v118 unchanged, [ADR-0137](./docs/adr/0137-board-response-reconciliation.md), `#/board?panel=cycle`)
 
 **Implemented — CEO / C-suite PRIMARY; every altitude reading the Board Room receives the same identity-free reconciliation.** The real duty: a chief at a repeat board review must distinguish a persistent enterprise exposure with no current governed response from one whose correction is chosen but whose outcome review is due. CEO took priority because Session 184 named this rung next (last primary 182; frontline/mid 184; director/VP 183).

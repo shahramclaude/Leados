@@ -249,7 +249,7 @@ const EXPOSURE_BAND_LABEL = {
   [BUDGET_EXPOSURE_BANDS.over]: 'Over ceiling',
   [BUDGET_EXPOSURE_BANDS.pipeline]: 'Pipeline breach',
   [BUDGET_EXPOSURE_BANDS.watch]: 'Watch zone',
-  [BUDGET_EXPOSURE_BANDS.within]: 'Within ceiling',
+  [BUDGET_EXPOSURE_BANDS.within]: 'Within recorded ceiling',
   [BUDGET_EXPOSURE_BANDS.untracked]: 'Tracking only',
 };
 
@@ -318,7 +318,7 @@ function renderSpanExposure(ctx, exposure, seat) {
     { key: 'actuals', label: 'Recorded actuals', render: (row) => formatMoney(row.currency, row.actuals) },
     { key: 'committed', label: 'Open commitments', render: (row) => formatMoney(row.currency, row.committed) },
     { key: 'planned', label: 'Planned pipeline', render: (row) => formatMoney(row.currency, row.planned) },
-    { key: 'forecast', label: 'Forecast at completion', render: (row) => formatMoney(row.currency, row.forecast) },
+    { key: 'forecast', label: 'Recorded forecast at completion', render: (row) => formatMoney(row.currency, row.forecast) },
     { key: 'position', label: 'Position', render: positionCell },
     { key: 'flags', label: 'Flags', render: (row) => h('div', { class: 'row-actions' }, row.breaches ? badge(`${row.breaches} breach`, 'bad') : null, row.evidenceDebt ? badge(`${row.evidenceDebt} evidence debt`, 'warn') : null, row.untracked ? badge(`${row.untracked} untracked`, 'neutral') : null) },
   ];
@@ -331,7 +331,7 @@ function renderSpanExposure(ctx, exposure, seat) {
       label: 'Position by currency',
       render: (row) => h('div', { class: 'stack-sm' }, ...(row.currencies.length
         ? row.currencies.map((cell) => h('div', { class: 'small' },
-          `${cell.currency}: forecast ${formatMoney(cell.currency, cell.forecast)} · `,
+          `${cell.currency}: recorded forecast ${formatMoney(cell.currency, cell.forecast)} · `,
           positionCell(cell)))
         : [h('span', { class: 'muted small' }, '—')])),
     },
@@ -373,7 +373,7 @@ function renderSpanExposure(ctx, exposure, seat) {
     ),
     card({
       title: 'Position by currency',
-      subtitle: 'One currency at a time. Nothing is converted, and nothing is pooled across envelopes of different currencies.',
+      subtitle: 'One currency at a time. Recorded forecasts exclude missing amounts. Headroom is blank when ceilings, actuals or open-line prices are missing (including planned lines). Nothing is converted or pooled across currencies.',
       actions: [badge(`${exposure.detail === 'aggregate' ? 'Counts & bands' : 'Full detail'}`, 'neutral', 'The disclosure level this seat is handed for portfolio material.')],
       body: exposure.currencies.length
         ? table({ columns: currencyColumns, rows: exposure.currencies, caption: 'Span position by currency' })

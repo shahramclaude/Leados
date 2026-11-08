@@ -1,3 +1,7 @@
+## 2026-11-08 — Budget headroom needs evidence
+
+In `#/finance?panel=span`, currency and branch headroom is blank when an attributable envelope has no ceiling, a spent line has no actual, or an open line has no price. Recorded forecast subtotals remain visible; the ledger and brief carry the limitation. Unpriced planned lines also conservatively block headroom, although priced planned pipeline is separate from forecast-at-completion. This does not change the individual envelope cards or the existing finance actions. No setup or schema change.
+
 ## 2026-11-08 — Review 1:1 topics before they are lost
 
 When adding or editing a person, an overfull 1:1 waiting list now stays in the dialog instead of silently dropping lines. The inline message identifies lines that would not fit; edit the list before saving. The existing 12-unique-line policy keeps the person's topics first and newer engine prompts next; duplicate and 200-character normalization still apply. The saved list uses the existing person action and automation. No setup or schema change.
