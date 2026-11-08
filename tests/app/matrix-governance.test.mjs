@@ -332,6 +332,36 @@ test('RULE-MTX-01 triggers on operational commits, links unique joint apex, skip
   assert.equal((matrixDraft.links || []).filter((l) => l.ruleId === 'RULE-MTX-01').length, 0, 'ended line prunes stale fan-out and apex links');
 });
 
+test('matrix cap reports distinct missing links exactly and scans converge', () => {
+  const cases = Array.from({ length: 61 }, (_, i) => ({
+    id: `cap-${i}`, title: 'Shared work', status: 'open', severity: 5,
+    personId: 'sam', ownerId: 'sam', involvedPersonIds: ['sam', 'kim'],
+    openedOn: '2026-10-10', createdAt: STAMP,
+  }));
+  const draft = workspace([
+    line('h-sam', 'sam', 'engdir', 'functional', 60, ['priority']),
+    line('l-sam', 'sam', 'pmdir', 'project', 40, ['priority']),
+    line('h-kim', 'kim', 'engdir', 'functional', 60, ['priority']),
+    line('l-kim', 'kim', 'pmdir', 'project', 40, ['priority']),
+  ], { cases });
+  let seq = 0;
+  const logs = [];
+  const ctx = { now: NOW, idFactory: (p) => `${p}-${++seq}`,
+    event: { type: 'matrix.scan' }, logEvent: (event) => logs.push(event) };
+  const first = matrixRule(draft, ctx);
+  // 61 distinct cases × (two managers + one joint apex) = 183 links.
+  assert.equal(draft.links.length, 120);
+  const deferred = first.find((e) => e.action === 'deferred');
+  assert.match(deferred.summary, /^63 distinct link/);
+  assert.ok(logs.some((e) => e.summary.includes(deferred.summary)));
+  assert.match(draft.matrixMarkers.at(-1).detail, /63 links deferred/);
+  const second = matrixRule(draft, { ...ctx, revision: 2 });
+  assert.equal(draft.links.length, 183);
+  assert.equal(new Set(draft.links.map((l) => JSON.stringify([l.sourceType, l.sourceId, l.targetId, l.relation]))).size, 183);
+  assert.equal(second.some((e) => e.action === 'deferred'), false);
+  assert.match(draft.matrixMarkers.at(-1).detail, /0 links deferred/);
+});
+
 /* ------------------- 4. Board Room cross-check, partition seam & line seat */
 
 test('Board Room keeps 0 discrepancies in single-chain, fires matrix-authority-vs-tree in matrix, resolves line-only VP, and adds no person names', () => {

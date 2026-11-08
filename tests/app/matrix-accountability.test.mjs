@@ -316,7 +316,7 @@ test('RULE-MTX-01 fans one work item to EVERY manager in a person’s reporting 
   const targets = new Set(fanOut.map((l) => l.targetId));
   assert.ok(targets.has('pmdir'), 'the project manager sees the work');
   assert.ok(targets.has('engdir'), 'and so does the home-line manager');
-  assert.ok(out.some((e) => /every manager in the reporting set/.test(e.summary)));
+  assert.ok(out.some((e) => /roll-up link\(s\)/.test(e.summary)));
 });
 
 test('RULE-MTX-01 is INERT in a single-chain workspace', () => {
