@@ -894,6 +894,10 @@ export function boardCsvRows(state = {}, { now = new Date(), settings = null, me
     unverified_streak: null,
     transition: '',
     move_pp: null,
+    response_state: '',
+    response_uncovered_packs: continuity?.counts?.responseUncoveredPacks ?? 0,
+    response_undecided: continuity?.counts?.responseUndecided ?? 0,
+    response_review_due: continuity?.counts?.responseReviewDue ?? 0,
   }];
   if (!read.evaluation) return rows;
   for (const row of read.evaluation.rows) {
@@ -923,6 +927,10 @@ export function boardCsvRows(state = {}, { now = new Date(), settings = null, me
       unverified_streak: carriedByKey.get(row.key)?.unverifiedStreak ?? 0,
       transition: carriedByKey.get(row.key)?.transition || '',
       move_pp: Number.isFinite(carriedByKey.get(row.key)?.movePp) ? carriedByKey.get(row.key).movePp : null,
+      response_state: carriedByKey.get(row.key)?.response?.state || '',
+      response_uncovered_packs: carriedByKey.get(row.key)?.response?.uncoveredPacks ?? 0,
+      response_undecided: carriedByKey.get(row.key)?.response?.undecided ?? 0,
+      response_review_due: carriedByKey.get(row.key)?.response?.reviewDue ?? 0,
     });
   }
   return rows;
