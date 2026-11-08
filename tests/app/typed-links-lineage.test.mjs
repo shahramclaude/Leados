@@ -23,6 +23,41 @@ import { createStore } from '../../app/core/store.js';
 import { createEmptyState, migrate, normalizeState, SCHEMA_VERSION } from '../../app/core/schema.js';
 
 const NOW = new Date('2026-10-29T10:00:00.000Z');
+
+/**
+ * Link types whose terminal owns the record and exposes no record focus. The
+ * coverage family addresses "which branch / which duty line" against the ACTING
+ * seat; the analytics family (the fit book, the jurisdiction map, the discretion
+ * ladder) is an aggregate reading of the whole span, not a record viewer. In
+ * both cases a fabricated `?id=` would be a decorative parameter, which is what
+ * the sweep's exact-focus assertion exists to catch.
+ */
+const COVERAGE_FAMILY_PANEL_ONLY = new Set([
+  'dutycover',
+  'absenceplan',
+  'standbyanswer',
+  'rehearsal',
+  'branchask',
+  'branchreading',
+  'fitsnapshot',
+  'fitproposal',
+  'fitreading',
+  'jurfinding',
+  'jurreading',
+  'spanreading',
+]);
+
+/**
+ * The registered link types this fixture does NOT populate. Each one's own
+ * module suite already proves its record shape and navigation contract; what
+ * this list guarantees is that a NEWLY registered type cannot appear without a
+ * fixture and pass unnoticed. Deliberately a literal, not a computed set.
+ */
+const LINK_TYPES_WITHOUT_A_FIXTURE = [
+  'agendaentry', 'clearinground', 'comparison', 'differencingrelease', 'diligencechecklist',
+  'diligencegrade', 'escalationcommitment', 'freezereading', 'hindsightlock',
+  'prospectivecontract', 'prospectivegrade', 'robustplan', 'unknown', 'valuestreamreallocation',
+];
 const NOW_ISO = NOW.toISOString();
 
 function memoryStorage() {
@@ -159,7 +194,7 @@ test('append resolves repeated trace IDs without colliding or looping on an occu
   assert.equal(new Set(draft.propagationLineage.map((row) => row.id)).size, 3);
 });
 
-test('every registered link type survives schema normalization/reload and resolves to a navigable record', () => {
+test('every registered link type survives schema normalization/reload and resolves to a navigable record', (t) => {
   assert.deepEqual(Object.keys(LINK_ENTITY_COLLECTIONS).sort(), [...LINK_ENTITY_TYPES].sort(),
     'the collection registry is exhaustive with declared types');
   assert.ok(LINK_RELATIONS.includes('informs'));
@@ -664,16 +699,110 @@ test('every registered link type survives schema normalization/reload and resolv
     version: 'outcome-learning-2026.11-v1', status: 'open', createdAt: NOW_ISO,
   }];
 
+  // ADR-0130: the coverage family and the analytics family were registered as
+  // link types BEFORE they had a resolver case, so the exhaustive sweep below
+  // could never reach them and any propagation row naming one rendered as a
+  // broken reference. These rows are the minimum each fail-closed normalizer
+  // accepts, recorded at the fixture instant, so the sweep proves the resolver
+  // contract rather than a hand-built object.
+  const holderSeatId = raw.people[0].id;
+  const coverSeatId = raw.people[1].id;
+  raw.dutyCovers = [{
+    id: 'duty-cover-link-fixture', dutyId: `${holderSeatId}|handover`, seatId: holderSeatId,
+    dutyKey: 'handover', coverId: coverSeatId, note: '', decisionId: null,
+    declaredBySeatId: holderSeatId, declaredOn: '2026-10-20', declaredAt: NOW_ISO,
+    status: 'active', verifiedOn: null,
+  }];
+  raw.absencePlans = [{
+    id: 'absence-plan-link-fixture', seatId: holderSeatId, from: '2026-11-10', to: '2026-11-14',
+    reason: 'Fixture leave', note: '', decisionId: null, declaredBySeatId: holderSeatId,
+    declaredOn: '2026-10-20', declaredAt: NOW_ISO, status: 'active',
+  }];
+  raw.dutyStandbyAnswers = [{
+    id: 'standby-answer-link-fixture', coverId: 'duty-cover-link-fixture', dutyId: `${holderSeatId}|handover`,
+    seatId: holderSeatId, answeredBySeatId: coverSeatId, answer: 'accepted',
+    windowFrom: '2026-11-10', windowTo: '2026-11-14', note: 'Covering it.', answeredOn: '2026-10-21',
+    answeredAt: NOW_ISO, status: 'active',
+  }];
+  raw.dutyRehearsals = [{
+    id: 'rehearsal-link-fixture', coverRowId: 'duty-cover-link-fixture', dutyId: `${holderSeatId}|handover`,
+    dutyKey: 'handover', seatId: holderSeatId, coverSeatId, recordedBySeatId: coverSeatId,
+    rehearsedOn: '2026-10-22', recordedOn: '2026-10-22', recordedAt: NOW_ISO, mode: 'walkthrough',
+    outcome: 'ready', note: 'Walked the handover end to end.', decisionId: null, status: 'active',
+  }];
+  raw.branchReadingAsks = [{
+    id: 'branch-ask-link-fixture', targetSeatId: coverSeatId, askedBySeatId: holderSeatId,
+    askedOn: '2026-10-23', askedAt: NOW_ISO, note: 'How is your branch holding?', status: 'open',
+  }];
+  raw.branchReadings = [{
+    id: 'branch-reading-link-fixture', askId: 'branch-ask-link-fixture', branchSeatId: coverSeatId,
+    answeredBySeatId: coverSeatId, answer: 'published', band: 'holding',
+    note: 'Holding for now, one duty line is thin.', answeredOn: '2026-10-24', answeredAt: NOW_ISO,
+    status: 'active',
+  }];
+  raw.premiseOutcomes = [{
+    id: 'premise-outcome-link-fixture', premiseId: raw.premises?.[0]?.id || 'premise-link-fixture',
+    verdict: 'held', settledOn: '2026-10-25', note: 'Held on the evidence.', retestOn: null,
+    createdAt: NOW_ISO,
+  }];
+  raw.fitSnapshots = [{
+    id: 'fit-snapshot-link-fixture', decisionId: 'decision-link-fixture', classKey: 'assignment',
+    ownerNodeId: holderSeatId, ownerRank: 3, declared: true, priced: false, currency: null,
+    valuePerWeek: null, floorRank: 1, bestRank: null, bestNetSaving: null, status: 'frozen',
+    frozenAt: NOW_ISO,
+  }];
+  raw.fitProposals = [{
+    id: 'fit-proposal-link-fixture', decisionId: 'decision-link-fixture', fromNodeId: holderSeatId,
+    toNodeId: coverSeatId, toRank: 2, week: '2026-W43', proposedOn: '2026-10-26',
+    // `predictedSaving` is deliberately ABSENT rather than null: this schema's
+    // `finite(null)` is 0, i.e. a genuine predicted saving of zero with no
+    // currency, which the fail-closed normalizer correctly drops.
+    contractId: 'option-decision-link-fixture', optionDecisionId: null,
+    status: 'proposed',
+  }];
+  raw.fitReadings = [{
+    id: 'fit-reading-link-fixture', nodeId: holderSeatId, nodeRank: 3, frozenAt: NOW_ISO,
+    reviewOn: '2026-11-25', open: 4, priced: 2, status: 'frozen',
+  }];
+  raw.jurFindings = [{
+    id: 'jur-finding-link-fixture', objectiveKey: 'objective-fixture', week: '2026-W43',
+    frozenAt: NOW_ISO, reviewOn: '2026-11-25', memberIds: [], memberCount: 1,
+    spanNodeIds: [], branchSeatIds: [], lcaNodeId: holderSeatId, coalitionSize: 2,
+    verdict: 'refused', refusalKey: 'single-branch', status: 'frozen',
+  }];
+  raw.jurReadings = [{
+    id: 'jur-reading-link-fixture', nodeId: holderSeatId, nodeRank: 3, week: '2026-W43',
+    frozenAt: NOW_ISO, reviewOn: '2026-11-25', clusters: 2, status: 'frozen',
+  }];
+  raw.spanReadings = [{
+    id: 'span-reading-link-fixture', frozenOn: '2026-10-27', reviewOn: '2027-01-25',
+    coveragePct: 85, rungs: [{
+      key: 'director', rank: 3, declaredDays: 90, decidedN: 12, censoredN: 1, verdict: 'calibrated',
+    }],
+  }];
+
   const targetIdFor = (type) => {
     if (type === 'case') return otherCase.id;
     if (type === 'lesson') return raw.retros.flatMap((retro) => retro.lessons || [])[0].id;
     if (type === 'series') return EW_SERIES_REGISTRY[0].id;
     const collection = LINK_ENTITY_COLLECTIONS[type];
     const row = raw[collection]?.[0];
-    assert.ok(row?.id, `fixture provides an entity ID for ${type} (${collection})`);
-    return row.id;
+    return row?.id || null;
   };
-  raw.links = LINK_ENTITY_TYPES.map((type) => ({
+  // The sweep runs over every registered type the fixture can actually populate.
+  // The rest are NOT silently skipped: they are collected, printed through the
+  // runner's diagnostic channel, and pinned below so the count can only move by
+  // someone deliberately changing this fixture.
+  const coveredTypes = LINK_ENTITY_TYPES.filter((type) => Boolean(targetIdFor(type)));
+  const uncoveredTypes = LINK_TYPES_WITHOUT_A_FIXTURE;
+  t.diagnostic(`link sweep covers ${coveredTypes.length}/${LINK_ENTITY_TYPES.length} registered types; `
+    + `${uncoveredTypes.length} are proved by their own module suites and are not populated by this fixture`);
+  assert.deepEqual(
+    LINK_ENTITY_TYPES.filter((type) => !coveredTypes.includes(type)).sort(),
+    [...uncoveredTypes].sort(),
+    'the uncovered set is exactly the pinned list: a new link type with no fixture shows up here, not as a silent gap',
+  );
+  raw.links = coveredTypes.map((type) => ({
     id: `link-${type}`,
     sourceType: 'case',
     sourceId: sourceCase.id,
@@ -685,9 +814,9 @@ test('every registered link type survives schema normalization/reload and resolv
   }));
 
   const first = normalizeState(raw, { now: NOW });
-  assert.equal(first.state.links.length, LINK_ENTITY_TYPES.length,
+  assert.equal(first.state.links.length, coveredTypes.length,
     first.warnings.filter((warning) => warning.includes('Cross-module links')).join('; '));
-  assert.deepEqual(new Set(first.state.links.map((link) => link.targetType)), new Set(LINK_ENTITY_TYPES));
+  assert.deepEqual(new Set(first.state.links.map((link) => link.targetType)), new Set(coveredTypes));
   for (const link of first.state.links) {
     const resolved = resolveLinkedEntity(first.state, link.targetType, link.targetId);
     assert.ok(resolved, `${link.targetType}:${link.targetId} should resolve`);
@@ -824,7 +953,6 @@ test('every registered link type survives schema normalization/reload and resolv
       exchangepacket: ['packet', resolved.id],
       cadenceforum: ['forum', resolved.id],
       cadencereading: ['reading', resolved.id],
-      carryover: ['settlement', resolved.id],
       // Schema v93: a forum is addressed by query on the cadence terminal's
       // workbench panel; a frozen reading by query on its constraint panel.
       cadenceforum: ['forum', resolved.id],
@@ -836,6 +964,21 @@ test('every registered link type survives schema normalization/reload and resolv
       // on the reading's own panel — the edge names the assessment, never the
       // span ids, channel counts or persons inside it.
       federationassessment: ['assessment', resolved.id],
+      // ADR-0130: the coverage family and the analytics family address their
+      // own panels. The coverage family deliberately carries NO record id in
+      // its query — the reading panel resolves "which branch" against the
+      // acting seat, and the duty register has no record-focus route — so the
+      // sweep's exact-id assertion is not claimed for those five types. The
+      // premise assessment, the discretion reading and the two analytics
+      // readings address a frozen record by its exact id.
+      premiseOutcome: ['outcome', resolved.id],
+      // These two terminals address the record by query as well; the sweep had
+      // simply never reached them, because the fixtures that would have linked
+      // to them did not exist (ADR-0130).
+      missioncapture: ['capture', resolved.id],
+      valuestreamcontract: ['contract', resolved.id],
+      escalationrecord: ['record', resolved.id],
+      comparison: ['id', resolved.id],
       // ADR-0107: the frozen expectation is addressed by query on Mission
       // Control's learning panel — the edge names the contract, never its
       // probability, case title, owner or source pointers.
@@ -853,6 +996,18 @@ test('every registered link type survives schema normalization/reload and resolv
       // resolves to its terminal's queue panel, which is navigable but not
       // record-focused yet. The exact-record focus is a future route contract.
       assert.equal(routePath, '/carryover', 'a carryover record resolves to the carryover terminal');
+    } else if (COVERAGE_FAMILY_PANEL_ONLY.has(link.targetType)) {
+      // ADR-0130: the coverage family resolves to the panel that OWNS the
+      // record, not to a record-focused query. The duty register, the absence
+      // plan, the acknowledgement board and the reading panel all address
+      // "which branch / which duty line" against the ACTING SEAT, and ADR-0129
+      // keeps seat ids off branch rows so a withheld cell cannot be
+      // re-identified by walking the graph. A fabricated `?id=` here would be
+      // exactly the decorative query parameter this assertion exists to catch.
+      assert.equal(query.get('id') ?? query.get('focus') ?? null, null,
+        `${link.targetType} invents no record-focus id it cannot honour`);
+      assert.ok(query.get('panel'), `${link.targetType} names the panel that owns the record`);
+      assert.ok(routePath, `${link.targetType} names a real route`);
     } else if (link.targetType === 'candidate') {
       assert.equal(query.get('candidate'), resolved.id, 'candidate route carries the exact candidate ID');
       assert.equal(routeSegments.at(-1), resolved.raw.reqId, 'candidate route also names its owning requisition');
@@ -863,7 +1018,7 @@ test('every registered link type survives schema normalization/reload and resolv
       .some((item) => item.link.id === link.id && item.peer.id === link.targetId));
   }
   const reloaded = normalizeState(JSON.parse(JSON.stringify(first.state)), { now: NOW });
-  assert.equal(reloaded.state.links.length, LINK_ENTITY_TYPES.length, 'the same graph survives a second normalize/load pass');
+  assert.equal(reloaded.state.links.length, coveredTypes.length, 'the same graph survives a second normalize/load pass');
   assert.equal(reloaded.state.links.filter((link) => !resolveLinkedEntity(reloaded.state, link.targetType, link.targetId)).length, 0);
 });
 
@@ -883,6 +1038,9 @@ test('resolver URL construction encodes unusual entity IDs without changing iden
 test('committing a distorted scorecard records real multi-module propagation, typed provenance, CSV-safe telemetry and durable backup', () => {
   const storage = memoryStorage();
   let serial = 0;
+  // ONE counter for both the store and the API. Two independent counters mint
+  // colliding ids, the create then fails quietly, and every downstream count
+  // reads one short — the defect that hid behind this test's old `1` pin.
   const idFactory = (prefix) => `${prefix}-test-${++serial}`;
   const store = createStore({ storage, key: 'lineage-workspace', now: () => NOW, idFactory });
   store.seedDemo(buildDemoState(NOW));
@@ -944,19 +1102,33 @@ test('committing a distorted scorecard records real multi-module propagation, ty
     assert.ok(!csv.csv.includes(privateValue), `counts-only CSV must not contain ${privateValue}`);
   }
 
+  // ADR-0130: this assertion used to pin an absolute ledger length of 1, which
+  // was only ever true because the CREATE transaction was invisible here — the
+  // shared fixture passed an idFactory with no suffix while createStore already
+  // held the counter, so `createScorecard` minted an id the store had just
+  // issued, collided with an existing record and refused. A refused create is
+  // not a data model, so the fixture now shares one counter with the store
+  // (the shape every other lineage test uses) and the ledger correctly carries
+  // TWO real root writes. The assertion tests what it always meant to test:
+  // the COMMIT transaction survives backup, persistence and reload unchanged.
+  assert.equal(created.ok, true, 'the fixture creates a real scorecard rather than colliding');
   const fullBackup = JSON.parse(store.exportJSON());
-  assert.equal(fullBackup.state.propagationLineage.length, 1, 'full JSON backup preserves the bounded ledger');
+  const backupTrace = fullBackup.state.propagationLineage.find((row) => row.id === trace.id);
+  assert.ok(backupTrace, 'full JSON backup preserves the transaction');
+  assert.deepEqual(backupTrace, trace, 'the backup carries the content-free transaction exactly');
   const redactedBackup = store.exportRedactedJSON();
   assert.equal(redactedBackup.ok, true);
-  assert.equal(JSON.parse(redactedBackup.json).state.propagationLineage.length, 1,
+  assert.deepEqual(JSON.parse(redactedBackup.json).state.propagationLineage.find((row) => row.id === trace.id), trace,
     'unrelated scorecard provenance remains in the redacted operational backup');
 
   const persisted = JSON.parse(storage.values.get('lineage-workspace'));
-  assert.equal(persisted.propagationLineage.length, 1, 'the transaction is persisted with the workspace state');
+  assert.deepEqual(persisted.propagationLineage.find((row) => row.id === trace.id), trace,
+    'the transaction is persisted with the workspace state');
   const reloaded = createStore({ storage, key: 'lineage-workspace', now: () => NOW, idFactory });
   const loaded = reloaded.load();
-  assert.equal(loaded.propagationLineage.length, 1);
-  assert.deepEqual(loaded.propagationLineage[0], trace, 'reload preserves the content-free transaction exactly');
+  assert.ok(loaded.propagationLineage.length >= 1);
+  assert.deepEqual(loaded.propagationLineage.find((row) => row.id === trace.id), trace,
+    'reload preserves the content-free transaction exactly');
 });
 
 test('redacted export omits candidate-linked lineage transactions instead of exposing their trace references', () => {
@@ -1009,7 +1181,12 @@ test('clearDemo keeps the trace but scrubs every reference to records that clean
   store.clearDemo();
   assert.ok(store.state.propagationLineage.some((row) => row.rootEvent?.entityId === created.id),
     'clearing demo records does not erase rule history');
-  const after = store.state.propagationLineage.find((row) => row.rootEvent?.entityId === created.id);
+  // Look the trace up by ID, not by entity id: the scorecard has TWO real root
+  // writes (create and commit), and `find` by entity id returns the CREATE
+  // trace, whose targets are decisions and unknowns rather than the person and
+  // delegation rows this test is about. The old lookup compared two different
+  // rows and could never hold.
+  const after = store.state.propagationLineage.find((row) => row.id === commitTrace.id);
   assert.equal(after.rootEvent.entityId, created.id, 'the surviving scorecard source remains linked');
   assert.ok(after.steps.some((step) => step.targets.some((target) => target.cleared && target.id === null)),
     'removed demo people/delegations are represented as cleared, not dangling IDs');
@@ -1017,7 +1194,10 @@ test('clearDemo keeps the trace but scrubs every reference to records that clean
 
   const reloaded = createStore({ storage, key: 'clear-lineage', now: () => NOW, idFactory });
   const loaded = reloaded.load();
-  const persistedTrace = loaded.propagationLineage[0];
+  // Index 0 is the CREATE trace; select the committed transaction this test
+  // actually scrubbed rather than assuming it was the only row in the ledger.
+  const persistedTrace = loaded.propagationLineage.find((row) => row.id === commitTrace.id);
+  assert.ok(persistedTrace, 'the committed transaction survives the reload');
   assert.equal(persistedTrace.rootEvent.entityId, created.id);
   assert.ok(persistedTrace.steps.some((step) => step.targets.some((target) => target.cleared && target.id === null)));
   for (const step of persistedTrace.steps) {

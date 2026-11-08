@@ -25,7 +25,16 @@ const isObject = (v) => v && typeof v === 'object' && !Array.isArray(v);
 const text = (v, max = 200) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
 const iso = (v) => (typeof v === 'string' && Number.isFinite(Date.parse(v)) ? new Date(v).toISOString() : null);
 const day = (v) => (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) && iso(v)?.slice(0, 10) === v ? v : null);
-const finite = (v) => { const n = Number(v); return Number.isFinite(n) ? n : null; };
+// `Number(null)` is 0, so a plain finite() check reads an ABSENT figure as a
+// declared zero. That broke this schema's own round trip: a proposal with no
+// predicted saving was written with `predictedSaving: null`, read back as 0,
+// and then dropped for "a saving with no currency" — so the record survived one
+// load and vanished on the next. Absent means absent.
+const finite = (v) => {
+  if (v === null || v === undefined || v === '') return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+};
 const int = (v) => { const n = Number(v); return Number.isInteger(n) ? n : null; };
 const rank = (v) => (Number.isInteger(v) && v >= 1 && v <= 5 ? v : null);
 
