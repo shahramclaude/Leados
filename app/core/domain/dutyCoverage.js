@@ -53,7 +53,12 @@ import {
   DUTY_HANDOVER_DIGEST_ENGINE_VERSION,
   DUTY_HANDOVER_DIGEST_PREMISE,
   DUTY_PREMISE,
+  DUTY_READING_ROLLUP_ENGINE_VERSION,
+  DUTY_READING_ROLLUP_PREMISE,
+  SPAN_READINGS_CSV_COLUMNS,
 } from './dutyCoverageRegistry.js';
+
+export { SPAN_READINGS_CSV_COLUMNS };
 import { normalizeDutyCoverageSettings, makeDutyId } from './dutyCoverageSchema.js';
 import {
   activeAbsenceFor, overlaps, parseAbsenceWindow,
@@ -1541,6 +1546,200 @@ function branchCoverage(built, seat, rows, conventions = null, readingInput = nu
   };
 }
 
+/* ------------------------------------------------------------------------- */
+/* ADR-0133 — the span-wide branch-reading roll-up (Session 180)             */
+/* ------------------------------------------------------------------------- */
+
+const READING_ROLLUP_STATES = ['asked', 'overdue', 'published', 'declined', 'lapsed', 'withdrawn'];
+const READING_ROLLUP_ATTENTION = ['overdue', 'lapsed', 'declined', 'withdrawn'];
+// Goldratt constraint-first dispatching: the oldest overdue ask is the binding
+// constraint, then the stale readings, then the terminal ones, then the asks
+// still inside their window ordered by the earliest deadline.
+const READING_ROLLUP_PRIORITY = { overdue: 0, lapsed: 1, declined: 2, withdrawn: 3, asked: 4, published: 5 };
+
+function emptyReadingCounts() {
+  return {
+    actsN: 0, attentionN: 0, askedN: 0, overdueN: 0, publishedN: 0,
+    declinedN: 0, lapsedN: 0, withdrawnN: 0,
+  };
+}
+
+function addReadingCount(counts, state) {
+  counts.actsN += 1;
+  if (READING_ROLLUP_ATTENTION.includes(state)) counts.attentionN += 1;
+  const key = `${state}N`;
+  if (key in counts) counts[key] += 1;
+}
+
+/**
+ * READ MODEL over the two append-only, automation-fed ADR-0129 ledgers. Every
+ * ask and answer is written by one atomic `store.update` with a `rolls-up-to`
+ * edge for each ancestor span; until now the only reader of those edges was the
+ * asker's OWN one-level table. This projects the same derived state machine
+ * onto the WHOLE span of the acting seat, grouped by that seat's own direct
+ * branches: a director two levels down whose reading lapsed is no longer dark.
+ *
+ * Nothing is stored, assigned, reminded or opened. The ledgers are the only
+ * input; `deriveReadingState` is the SAME derivation the desk uses, under the
+ * SAME day and the SAME declared windows, so the two readings cannot disagree.
+ * Above rank 2 there is no name, note, band, person id, seat id or record id on
+ * any row — only counts, a rank (a position number), an ephemeral branch
+ * position, dates and the derived state.
+ *
+ * Only seats with a branch table (rank >= 3) read this roll-up: below that
+ * there is no withheld cell to govern, so a roll-up would be an invented view.
+ */
+export function spanReadingRollup(state, built, seat, { now = new Date(), settings = null } = {}) {
+  if (!state || !built || !seat) return null;
+  if (seat.fullAccess || seat.readOnly || (seat.rank ?? 0) < 3) return null;
+  const conv = normalizeDutyCoverageSettings(settings || state.settings || {});
+  const today = dayKey(now);
+  const asks = Array.isArray(state.branchReadingAsks) ? state.branchReadingAsks : [];
+  const answers = Array.isArray(state.branchReadings) ? state.branchReadings : [];
+  const rowCap = DUTY_COVERAGE_LIMITS.readingRollupRowCap;
+  const allChildren = seat.childSeatIds.map((id) => built.byId.get(id)).filter(Boolean)
+    .sort((a, b) => a.id.localeCompare(b.id));
+  const cap = conv.dutyCoverageBranchCap;
+  const children = allChildren.slice(0, cap);
+  const deferredBranchesN = Math.max(0, allChildren.length - children.length);
+
+  const branches = children.map((child, i) => ({
+    pos: i + 1, label: `Branch ${i + 1}`, _desks: new Set(), ...emptyReadingCounts(),
+  }));
+  const own = { _desks: new Set(), ...emptyReadingCounts() };
+  const summary = {
+    ...emptyReadingCounts(),
+    desksN: 0, branchesN: children.length, deferredBranchesN, ownN: 0,
+    outsideN: 0, unpartitionedN: 0, orphanedN: 0, deferredActsN: 0,
+    queueN: 0, deferredN: 0,
+  };
+  const desks = new Set();
+  const awaiting = [];
+
+  for (const ask of asks) {
+    if (!ask || !ask.id) continue;
+    const askerId = String(ask.askedBySeatId || '');
+    // A hand-off belongs to THIS span only when its asker is the acting seat or
+    // a seat inside its span. A sibling's or an ancestor's ask is not ours to
+    // read — the roll-up edge is upward, never sideways.
+    if (askerId !== seat.id && !seat.scope.has(askerId)) { summary.outsideN += 1; continue; }
+    const asker = built.byId.get(askerId);
+    if (!asker) { summary.orphanedN += 1; continue; }
+    let cell = own;
+    let pos = 0; // 0 = the acting seat's own desk, not one of its branches
+    if (askerId !== seat.id) {
+      const hits = [];
+      allChildren.forEach((child, i) => {
+        if (child.id === askerId || child.scope.has(askerId)) hits.push(i);
+      });
+      // The same partition discipline as ADR-0126: a row must fall in exactly
+      // one direct branch. An ambiguous ledger row is counted and excluded,
+      // never silently attributed.
+      if (hits.length !== 1) { summary.unpartitionedN += 1; continue; }
+      if (hits[0] >= cap) { summary.deferredActsN += 1; continue; }
+      cell = branches[hits[0]];
+      pos = hits[0] + 1;
+    }
+    const derived = deriveReadingState(ask, activeAnswerForAsk(answers, ask.id), {
+      today,
+      responseDays: conv.dutyCoverageReadingResponseDays,
+      validDays: conv.dutyCoverageReadingValidDays,
+    });
+    addReadingCount(cell, derived.state);
+    addReadingCount(summary, derived.state);
+    cell._desks.add(askerId);
+    desks.add(askerId);
+    if (askerId === seat.id) summary.ownN += 1;
+    // A published reading is the one state that needs nobody. Everything else
+    // is on the governed review queue, oldest constraint first.
+    if (derived.state !== 'published') {
+      awaiting.push({
+        branchPos: pos,
+        deskRank: asker.rank ?? null,
+        state: derived.state,
+        stateLabel: BRANCH_READING_STATE_LABELS[derived.state] || derived.state,
+        askedOn: derived.askedOn ?? null,
+        responseBy: derived.responseBy ?? null,
+        publishedOn: derived.publishedOn ?? null,
+        answeredOn: derived.answeredOn ?? null,
+        daysPast: derived.daysPast ?? null,
+        daysLeft: derived.daysLeft ?? null,
+        ageDays: derived.ageDays ?? null,
+        _order: awaiting.length,
+      });
+    }
+  }
+  summary.desksN = desks.size;
+  awaiting.sort((a, b) => {
+    const p = (READING_ROLLUP_PRIORITY[a.state] ?? 9) - (READING_ROLLUP_PRIORITY[b.state] ?? 9);
+    if (p) return p;
+    if (a.state === 'overdue') return (b.daysPast ?? 0) - (a.daysPast ?? 0) || a._order - b._order;
+    if (a.state === 'lapsed') return (b.ageDays ?? 0) - (a.ageDays ?? 0) || a._order - b._order;
+    if (a.state === 'asked') return (a.daysLeft ?? 0) - (b.daysLeft ?? 0) || a._order - b._order;
+    return String(a.askedOn || '').localeCompare(String(b.askedOn || '')) || a._order - b._order;
+  });
+  summary.queueN = awaiting.length;
+  summary.deferredN = Math.max(0, awaiting.length - rowCap);
+  const queue = awaiting.slice(0, rowCap).map(({ _order, ...rest }) => rest);
+  const branchRows = branches.map(({ _desks, ...rest }) => ({ ...rest, desksN: _desks.size }));
+  const ownRow = Object.fromEntries(Object.entries(own).filter(([k]) => k !== '_desks'));
+  ownRow.desksN = own._desks.size;
+
+  const refusals = [
+    'This roll-up counts governed hand-offs that were actually written to the two ledgers. A withheld cell nobody asked about leaves no ledger row and cannot appear here; that silence is visible only on the seat’s own table, and a blank is not a clean bill of health.',
+  ];
+  if (!summary.actsN) refusals.push('No governed branch-reading hand-off is recorded anywhere in this span. The honest answer is “no hand-off recorded”, not “everything is fine”.');
+  if (summary.outsideN) refusals.push(`${summary.outsideN} hand-off(s) belong to another span and are not read here: the roll-up edge travels upward, never sideways.`);
+  if (summary.unpartitionedN) refusals.push(`${summary.unpartitionedN} ledger row(s) could not be placed in exactly one direct branch and are excluded rather than attributed by guesswork.`);
+  if (summary.orphanedN) refusals.push(`${summary.orphanedN} ledger row(s) name an asker no longer in the reporting tree and are excluded.`);
+  if (deferredBranchesN) refusals.push(`${deferredBranchesN} further direct branch(es) were not rolled up: the table is capped at ${cap}.`);
+  if (summary.deferredActsN) refusals.push(`${summary.deferredActsN} hand-off(s) inside those deferred branches are counted as deferred, not printed.`);
+  if (summary.deferredN) refusals.push(`${summary.deferredN} further review row(s) are counted but not printed: the queue is capped at ${rowCap} row(s).`);
+
+  return {
+    engineVersion: DUTY_READING_ROLLUP_ENGINE_VERSION,
+    premise: DUTY_READING_ROLLUP_PREMISE,
+    seatRank: seat.rank, // a position number, not an identity
+    today, rowCap,
+    conventions: {
+      responseDays: conv.dutyCoverageReadingResponseDays,
+      validDays: conv.dutyCoverageReadingValidDays,
+      branchCap: cap,
+    },
+    states: READING_ROLLUP_STATES,
+    summary,
+    branches: branchRows,
+    own: ownRow,
+    queue,
+    refusals,
+  };
+}
+
+/** Aggregate-only CSV cells for the roll-up: BLANK, never 0, when it is absent. */
+function spanReadingsCsvCells(roll) {
+  const empty = {};
+  for (const key of SPAN_READINGS_CSV_COLUMNS) empty[key] = '';
+  if (!roll) return empty;
+  const s = roll.summary;
+  return {
+    span_reading_acts_n: s.actsN,
+    span_reading_desks_n: s.desksN,
+    span_reading_branches_n: s.branchesN,
+    span_reading_own_n: s.ownN,
+    span_reading_attention_n: s.attentionN,
+    span_reading_overdue_n: s.overdueN,
+    span_reading_lapsed_n: s.lapsedN,
+    span_reading_declined_n: s.declinedN,
+    span_reading_withdrawn_n: s.withdrawnN,
+    span_reading_asked_n: s.askedN,
+    span_reading_published_n: s.publishedN,
+    span_reading_queue_n: s.queueN,
+    span_reading_deferred_n: s.deferredN,
+    span_reading_outside_n: s.outsideN,
+    span_reading_refused: roll.refusals.length ? String(roll.refusals[0]).slice(0, 200) : '',
+  };
+}
+
 /**
  * Read the whole register for one seat. `projection` carries the counts every
  * altitude reads: a frontline lead sees their own five duties with names,
@@ -1648,6 +1847,10 @@ export function buildDutyCoverageReport(state, { now = new Date(), settings = nu
       responseDays: conv.dutyCoverageReadingResponseDays,
       validDays: conv.dutyCoverageReadingValidDays,
     }),
+    // ADR-0133: the SAME two ledgers, read back across the WHOLE span of this
+    // seat rather than only its own one-level table. Derived under the same day,
+    // the same seat tree and the same declared windows as branchCoverage above.
+    spanReadings: spanReadingRollup(state, built, seat, { now, settings: effective }),
     absences: buildAbsenceSection(state, built, seat, { now, settings: effective, items }),
     conventions: conv,
     bounds: {
@@ -1770,6 +1973,17 @@ export function dutyCoverageBriefText(report) {
       lines.push('  · A per-branch rate is a statement about the few people inside that branch: cells below the floor are withheld and one further cell is withheld beside them. This is primary + complementary suppression, not differential privacy.');
     }
   }
+  // ADR-0133: the span-wide roll-up travels upward as counts only. No name,
+  // note, band, person id, seat id or record id crosses above rank 2 — a VP
+  // forecasting continuity can see WHERE the signal is dark without ever being
+  // handed a statement about a named person below them.
+  const span = report.spanReadings;
+  if (span) {
+    const s = span.summary;
+    lines.push(`Span reading roll-up (governed hand-offs anywhere in this span): ${s.actsN} hand-off(s) from ${s.desksN} leadership seat(s) across ${s.branchesN} direct branch(es) — ${s.attentionN} need a human now (${s.overdueN} overdue, ${s.lapsedN} lapsed, ${s.declinedN} declined, ${s.withdrawnN} withdrawn), ${s.askedN} inside the declared ${span.conventions.responseDays}-day response window, ${s.publishedN} published. ${s.ownN} sit on this seat’s own desk; ${s.queueN} are on the governed review queue, oldest overdue ask first. These are counts of dated acts, not ratings of people.`);
+    if (s.deferredN) lines.push(`  · ${s.deferredN} further review row(s) are counted but not printed: the queue is capped at ${span.rowCap} row(s).`);
+    for (const refusal of span.refusals.slice(0, 3)) lines.push(`  · ${refusal}`);
+  }
   if (report.refusals.length) {
     lines.push(`Printed refusals (${report.refusals.length}):`);
     for (const refusal of report.refusals.slice(0, 8)) lines.push(`  · ${refusal.reason}`);
@@ -1805,10 +2019,15 @@ export function dutyCoverageCsvRows(report) {
       refused_reason: r.band === 'gap' || r.band === 'thin' || r.band === 'ineligible' ? r.bandReason.slice(0, 200) : '',
     });
   }
+  const spanCsv = spanReadingsCsvCells(report.spanReadings);
   rows.push({
     row_kind: 'register',
     scope,
     altitude: report.seat.altitudeKey || '',
+    // ADR-0133: the span-wide reading roll-up rides the ONE aggregate register
+    // row that every seat exports. BLANK (not 0) below rank 3, where no
+    // withheld cell exists to govern. No new row kind, no new CSV export spec.
+    ...spanCsv,
     duty_key: '',
     band: '',
     open_n: report.summary.openGapN,
@@ -1896,6 +2115,7 @@ export function dutyCoverageCsvRows(report) {
       row_kind: 'branch-summary',
       scope,
       altitude: report.seat.altitudeKey || '',
+      ...spanCsv,
       band: '',
       branch_released_n: branch.releasedN,
       branch_released_seats_n: branch.releasedSeatsN,
