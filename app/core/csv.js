@@ -66,7 +66,7 @@ import { buildDiligenceReport, diligenceCsvRows } from './domain/diligence.js';
 // ADR-0121: CSV scope #104. The duty register as rows: duty key, band, cover
 // counts, and the concentration share — never a person, a name, a note or a
 // seat id. A refused rate is BLANK, never zero.
-import { buildDutyCoverageReport, dutyCoverageCsvRows } from './domain/dutyCoverage.js';
+import { buildDutyCoverageReport, dutyCoverageCsvRows, SPAN_READINGS_CSV_COLUMNS } from './domain/dutyCoverage.js';
 import { standbyCsvRows, standbyExportBoard } from './domain/dutyStandby.js';
 // ADR-0109: CSV scope #103. Aggregate-only, identity-free, refusal-honest.
 import { jurCsvRows, JUR_CSV_COLUMNS } from './domain/jurisdiction.js';
@@ -6118,7 +6118,9 @@ export function buildScopeTable(state, scope, now) {
         // counts. BLANK — never 0, never "fine" — for a cell nobody asked about.
         'branch_reading_state', 'branch_reading_band', 'branch_reading_asked_on', 'branch_reading_published_on',
         'branch_reading_published_n', 'branch_reading_declined_n', 'branch_reading_outstanding_n',
-        'branch_reading_lapsed_n', 'branch_reading_not_asked_n'];
+        'branch_reading_lapsed_n', 'branch_reading_not_asked_n',
+        // ADR-0133: span-wide reading roll-up counts, BLANK below rank 3.
+        ...SPAN_READINGS_CSV_COLUMNS];
       const columns = keys.map((key) => ({ key, header: key }));
       return { columns, rows };
     }

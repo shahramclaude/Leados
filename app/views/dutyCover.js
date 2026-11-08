@@ -18,7 +18,7 @@ import { downloadText } from '../ui/download.js';
 import { pageHeader, card, stat, badge, banner, tabs, emptyState, table } from '../ui/components.js';
 import { recordFocus, isFocused, focusRowProps, focusCardClass, focusAbsentNote } from '../ui/recordFocus.js';
 import { serializeCsv } from '../core/csv.js';
-import { DUTY_BRANCH_DISCLOSURE_PREMISE, DUTY_COVERAGE_PANELS, DUTY_HANDOVER_DIGEST_PREMISE, DUTY_PREMISE } from '../core/domain/dutyCoverageRegistry.js';
+import { DUTY_BRANCH_DISCLOSURE_PREMISE, DUTY_COVERAGE_PANELS, DUTY_HANDOVER_DIGEST_PREMISE, DUTY_PREMISE, DUTY_READING_ROLLUP_PREMISE, SPAN_READINGS_CSV_COLUMNS } from '../core/domain/dutyCoverageRegistry.js';
 import { DUTY_ABSENCE_PREMISE } from '../core/domain/dutyAbsenceRegistry.js';
 import { DUTY_REHEARSAL_MODES, DUTY_REHEARSAL_MODE_LABELS, DUTY_REHEARSAL_PREMISE } from '../core/domain/dutyRehearsalRegistry.js';
 import { BRANCH_READING_BAND_LABELS, BRANCH_READING_PREMISE, BRANCH_READING_STATE_LABELS } from '../core/domain/branchReadingRegistry.js';
@@ -39,7 +39,10 @@ const CSV_COLUMNS = ['row_kind', 'scope', 'altitude', 'duty_key', 'band', 'open_
   // nobody asked about exports BLANK, never 0 and never "fine".
   'branch_reading_state', 'branch_reading_band', 'branch_reading_asked_on', 'branch_reading_published_on',
   'branch_reading_published_n', 'branch_reading_declined_n', 'branch_reading_outstanding_n',
-  'branch_reading_lapsed_n', 'branch_reading_not_asked_n'];
+  'branch_reading_lapsed_n', 'branch_reading_not_asked_n',
+  // ADR-0133: the span-wide roll-up counts, on the existing row kinds. One
+  // shared list keeps the Desk download and the workspace export in step.
+  ...SPAN_READINGS_CSV_COLUMNS];
 
 let apiRef = null;
 /** Scratch for the planning form's preview window (a read, never a write). */
@@ -1051,6 +1054,74 @@ function handoverDigestCard(ctx, digest) {
   });
 }
 
+/* ADR-0133: the director / VP span-wide reading roll-up. The engine has
+ * already derived, scoped and redacted it; this card only prints counts and the
+ * bounded review queue. No name, note, band, person id or record id crosses
+ * above rank 2 — only a rank number and an anonymous branch position. */
+function spanReadingsCard(roll) {
+  if (!roll) return null;
+  const s = roll.summary;
+  const stateCell = (n) => String(n);
+  return card({
+    title: `Continuity signal across the whole span — ${s.attentionN} governed hand-off(s) need a human`,
+    subtitle: `${s.actsN} dated hand-off(s) from ${s.desksN} leadership seat(s) across ${s.branchesN} direct branch(es), read from the two append-only reading ledgers. ${s.ownN} sit on this seat’s own desk. The oldest overdue ask is listed first; a published reading is the one state that needs nobody.`,
+    body: h('div', { class: 'stack' },
+      h('p', { class: 'muted small' }, DUTY_READING_ROLLUP_PREMISE),
+      s.attentionN
+        ? banner({
+          tone: 'warn',
+          title: `${s.attentionN} hand-off(s) in this span have gone dark or terminal`,
+          body: `${s.overdueN} overdue · ${s.lapsedN} lapsed · ${s.declinedN} declined · ${s.withdrawnN} withdrawn. A branch two levels down can let a reading lapse without this seat ever seeing it on its own one-level table. This is a governed review queue — nothing is assigned, chased, reminded or opened, and a decline stays a legitimate answer.`,
+        })
+        : h('p', { class: 'muted small' }, 'No governed hand-off in this span is overdue, lapsed, declined or withdrawn. That is a statement about the dated acts on the ledger, not a claim that every withheld cell has a reading.'),
+      h('div', { class: 'stat-grid' },
+        stat({ label: 'Hand-offs in span', value: String(s.actsN), hint: `${s.desksN} leadership seat(s) wrote them · ${s.outsideN} outside this span are not read` }),
+        stat({ label: 'Need a human', value: String(s.attentionN), tone: s.attentionN ? 'bad' : 'good', hint: 'overdue + lapsed + declined + withdrawn' }),
+        stat({ label: 'Inside the window', value: String(s.askedN), hint: `asked, answer expected inside the declared ${roll.conventions.responseDays}-day window` }),
+        stat({ label: 'Published', value: String(s.publishedN), hint: `valid for ${roll.conventions.validDays} day(s); a July reading is not a September reading` }),
+        stat({ label: 'On your own desk', value: String(s.ownN), hint: 'also on the Branch readings panel — this card adds the desks below you' }),
+        stat({ label: 'Review queue', value: String(s.queueN), hint: `bounded at ${roll.rowCap} row(s); ${s.deferredN} counted but not printed` })),
+      table({
+        caption: 'Reading hand-off states by this seat’s direct branches — counts only, branch numbers are anonymous positions',
+        rows: roll.branches,
+        emptyMessage: 'No direct leadership branches in this seat.',
+        columns: [
+          { label: 'Branch', render: (r) => r.label },
+          { label: 'Desks', render: (r) => stateCell(r.desksN) },
+          { label: 'Hand-offs', render: (r) => stateCell(r.actsN) },
+          { label: 'Overdue', render: (r) => stateCell(r.overdueN) },
+          { label: 'Lapsed', render: (r) => stateCell(r.lapsedN) },
+          { label: 'Declined', render: (r) => stateCell(r.declinedN) },
+          { label: 'Answered', render: (r) => stateCell(r.publishedN) },
+        ],
+      }),
+      table({
+        caption: 'Governed review queue — oldest overdue ask first, then the earliest deadline; identity-free above rank 2',
+        rows: roll.queue,
+        emptyMessage: 'Nothing is on the review queue: every recorded hand-off either has a valid published reading or is inside its declared window.',
+        columns: [
+          { label: 'Branch', render: (r) => (r.branchPos ? `Branch ${r.branchPos}` : 'Own desk') },
+          { label: 'Desk rank', render: (r) => (r.deskRank === null ? '—' : `rank ${r.deskRank}`) },
+          { label: 'State', render: (r) => badge(r.stateLabel, r.state === 'overdue' || r.state === 'lapsed' ? 'bad' : 'warn') },
+          { label: 'Asked', render: (r) => r.askedOn || '—' },
+          { label: 'Answer by', render: (r) => r.responseBy || '—' },
+          { label: 'Age / lateness', render: (r) => (r.state === 'overdue' ? `${r.daysPast} day(s) past` : r.state === 'lapsed' ? `${r.ageDays} day(s) old` : r.state === 'asked' ? `${r.daysLeft} day(s) left` : r.publishedOn || r.answeredOn || '—') },
+        ],
+      }),
+      s.deferredBranchesN
+        ? h('p', { class: 'muted small' }, `${s.deferredBranchesN} further direct branch(es) were not rolled up: the table is capped at ${roll.conventions.branchCap}. The remainder is counted, not silently dropped.`)
+        : null,
+      s.deferredN
+        ? h('p', { class: 'muted small' }, `${s.deferredN} further review row(s) are counted but not printed: the queue is capped at ${roll.rowCap} row(s). The full count travels in the brief and the aggregate CSV counts.`)
+        : null,
+      h('ul', { class: 'plain-list' }, ...roll.refusals.slice(0, 6).map((reason) => h('li', { class: 'muted small' }, reason))),
+      h('div', { class: 'row-actions' },
+        h('a', { class: 'btn btn-ghost btn-small', href: '#/duty-cover?panel=readings' }, 'Open the Branch readings panel'),
+        h('span', { class: 'muted small' }, 'Only the seat that was asked may answer; a roll-up never answers for a seat below it.')),
+      h('p', { class: 'muted small' }, 'Counts, a rank (a position number), an anonymous branch position, dates and derived states only. No name, note, band, person id, seat id or record id crosses above rank 2. The navigation badge is deliberately unchanged: this is a governed review queue, not a second obligation on the person who owes the answer.')),
+  });
+}
+
 function deskPanel(ctx, report) {
   const s = report.summary;
   const brief = ctx.api.dutyCoverageBriefText?.();
@@ -1087,9 +1158,11 @@ function deskPanel(ctx, report) {
         stat({ label: 'Open work with no cover', value: String(s.openGapN), tone: s.openGapN ? 'bad' : 'good', hint: 'a duty carrying open items and answerable by nobody' }),
         stat({ label: 'Single-hand duties', value: String(s.soleHandedN), tone: s.soleHandedN ? 'bad' : '', hint: `one hand carries ≥ ${report.conventions.dutyCoverageConcentrationPct}% of the recorded work` }),
         stat({ label: 'Handover checks', value: String(report.absences?.handoverDigest?.summary?.checksN ?? 0), tone: report.absences?.handoverDigest?.summary?.checksN ? 'warn' : 'good', hint: 'inference-only covers on unended absence windows · review prompt, not a badge' }),
+        stat({ label: 'Span reading gaps', value: String(report.spanReadings?.summary?.attentionN ?? 0), tone: report.spanReadings?.summary?.attentionN ? 'warn' : 'good', hint: 'governed branch-reading hand-offs anywhere in this span that are overdue, lapsed, declined or withdrawn · review queue, not a badge' }),
         stat({ label: 'Exercise window', value: `${report.conventions.dutyCoverageExerciseDays}d`, hint: `since ${s.windowStart}; re-declarable by a rank-4+ full-access seat` })),
     }),
     handoverDigestCard(ctx, report.absences?.handoverDigest),
+    spanReadingsCard(report.spanReadings),
     report.branchCoverage ? card({
       title: 'Continuity across direct branches',
       subtitle: `Each duty line belongs to one direct leadership branch; your own duties are excluded. Branch numbers are anonymous and may change when the roster changes. They are not division names. A cell below the declared floor of ${report.branchCoverage.floor} duty line(s) is withheld, and an additional cell may be withheld to reduce recovery by subtraction from a parent total.`,
@@ -1386,6 +1459,7 @@ function methodPanel(ctx, report) {
         h('li', null, h('strong', null, 'Withheld, not zeroed:'), ' a direct-branch cell below the declared disclosure floor, and one further released cell beside it, so the blank cannot be recovered by subtracting the released cells from a known total. This is primary + complementary suppression, not differential privacy.'),
         h('li', null, h('strong', null, 'A withheld cell is not a closed question.'), ' ADR-0129 gives it a governed hand-off: the branch’s own leader publishes the BAND their own register grades into, with their own words — the band is derived by the register and never typed, no count crosses, the reading lapses after its declared validity, and a decline is recorded as an answer with no decision opened against the person. The withheld figure stays withheld either way.'),
         h('li', null, h('strong', null, 'Handover checks (ADR-0132):'), ' the Desk lists available, eligible covers whose only evidence inside an unended absence’s preparation window is inferred work. One row is one cover × duty × absence; open work on the duty comes first, then the earliest preparation cutoff (constraint-first dispatching, Goldratt). It is a review prompt, not a readiness verdict and not a person score. The existing rehearsal act clears a ready check; a gaps rehearsal opens its own governed decision. Counts roll up into the brief and the existing absence CSV rows; names and person ids do not cross above rank 2. The navigation badge is deliberately unchanged.'),
+        h('li', null, h('strong', null, 'Span reading roll-up (ADR-0133):'), ' the two append-only branch-reading ledgers are written once, on the shared event spine, with a roll-up edge for every ancestor span. The Desk now reads those edges back across the WHOLE span, not only this seat’s own one-level table: every governed hand-off is re-derived under the same day and the same declared windows, grouped by this seat’s own direct branches, and the ones needing a human are listed oldest-overdue-first (constraint-first dispatching, Goldratt). A director two levels down whose reading lapsed is no longer dark to the VP above them. Counts travel into the identity-free brief and the existing register / branch-summary CSV rows; no name, note, band, person id or record id crosses above rank 2. Nothing is assigned, reminded or opened, a decline stays a legitimate answer, and the navigation badge is unchanged. A withheld cell nobody asked about leaves no ledger row, so this roll-up refuses to count silence as health.'),
         h('li', null, h('strong', null, 'Schema v114 is additive.'), ' An upgraded workspace starts with an empty cover ledger — “no duty here has a declared cover yet”, which is not the same claim as “every duty is covered”.')),
     }),
     card({

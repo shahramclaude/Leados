@@ -93,6 +93,9 @@ export const DUTY_COVERAGE_LIMITS = Object.freeze({
   /** ADR-0132: inference-only handover checks printed on the Desk. The full
    * count and the deferred remainder are always printed beside the slice. */
   handoverDigestRowCap: 40,
+  /** ADR-0133: governed reading hand-offs printed on the Desk's span queue.
+   * The full count and the deferred remainder are always printed beside it. */
+  readingRollupRowCap: 40,
   /** Declared covers per duty (a duty is not a committee). */
   coversPerDuty: 3,
   /** Ledger rows the register will render in one read. */
@@ -181,5 +184,60 @@ export const DUTY_HANDOVER_DIGEST_PREMISE = 'Inferred work proves contact with a
  *
  * This is explicitly NOT differential privacy, and the reading says so.
  */
+/**
+ * ADR-0133 — the span reading roll-up (Schema v118 unchanged, Session 180).
+ *
+ * The two append-only hand-off ledgers (ADR-0129) already travel on the shared
+ * event spine: every ask and every answer is written by one atomic transaction
+ * with a `rolls-up-to` edge for each ancestor span. But the only read model that
+ * consumed them was the ASKER's own one-level branch table: a chief saw the
+ * withheld cells on their own desk, and the daily badge counted only the asks
+ * that named them. Nothing read those same ledgers back across the WHOLE span a
+ * director or VP actually leads — a director two levels down could let a
+ * reading lapse and the VP would never see it until they walked the corridor.
+ *
+ * This is a READ MODEL, not a second store: `spanReadingRollup` re-derives every
+ * governed hand-off in the acting seat's span from the same two ledgers, the
+ * same seat tree and the same declared response/validity windows, grades each
+ * with `deriveReadingState`, groups by the acting seat's own direct branches,
+ * and suppresses small cells with the SAME complementary rule Session 179 gave
+ * the desk table. A withheld branch prints WITHHELD, never a small figure; the
+ * pooled counts are refused when anything is withheld, because a released total
+ * would recover the blank by subtraction.
+ *
+ * Nothing here assigns, chases, reminds or opens a decision. A declined reading
+ * stays a legitimate answer (ADR-0129). Names, notes, bands and ask ids never
+ * cross above rank 2; an ask is addressed to an anonymous branch POSITION, the
+ * same privacy contract the desk table already holds. The navigation badge is
+ * deliberately unchanged: this is a governed review queue for the altitude that
+ * READS the roll-up, not a second obligation on the seat that owes the answer.
+ *
+ * Named, not paraphrased: subsidiarity (Aghion & Tirole 1997 — the seat that
+ * holds the detail is the one that answers for it, and the ancestor reads the
+ * aggregate); Goldratt's Theory of Constraints (constraint-first dispatching:
+ * the oldest overdue ask, then the earliest preparation cutoff); statistical
+ * disclosure control (Willenborg & de Waal 2001, primary + complementary cell
+ * suppression); Yule–Simpson aggregation (pooled counts beside the sum of the
+ * released branches, with the composition guard printed).
+ */
+/**
+ * ADR-0133: the ONE declared list of additive columns on the existing
+ * `branch-summary` / `register` CSV row kinds. Both column registries — the
+ * Desk's download (`app/views/dutyCover.js`) and the workspace export
+ * (`app/core/csv.js` scope #104) — read this same constant, so they cannot
+ * drift. No new row kind and no new CSV export spec: `CSV_EXPORTS.length` is
+ * unchanged. BLANK (not 0) wherever the roll-up is absent.
+ */
+export const SPAN_READINGS_CSV_COLUMNS = Object.freeze([
+  'span_reading_acts_n', 'span_reading_desks_n', 'span_reading_branches_n', 'span_reading_own_n',
+  'span_reading_attention_n', 'span_reading_overdue_n', 'span_reading_lapsed_n',
+  'span_reading_declined_n', 'span_reading_withdrawn_n', 'span_reading_asked_n',
+  'span_reading_published_n', 'span_reading_queue_n', 'span_reading_deferred_n',
+  'span_reading_outside_n', 'span_reading_refused',
+]);
+
+export const DUTY_READING_ROLLUP_ENGINE_VERSION = 'duty-reading-rollup-2026.11-v1';
+export const DUTY_READING_ROLLUP_PREMISE = 'A governed branch reading is written once, on the shared event spine, with a roll-up edge for every ancestor span — but until this read model it was read back only on the asker’s own one-level table. A director or VP leading a whole span could not see that a director two levels down had let a reading lapse, or that an ask was overdue. This roll-up re-derives every governed hand-off in the span from the same two ledgers, the same seat tree and the same declared windows, groups them by the acting seat’s own direct branches, and prints the ones needing a human: the oldest overdue ask first, then the earliest deadline. It is a governed review queue, not a verdict on any person, not a reminder and not an obligation: a declined reading stays a legitimate answer, nothing is assigned or opened, and the navigation badge does not change. Small branches are withheld and the pooled count is refused beside them, so a blank cannot be recovered by subtraction; above rank 2 no name, note, band, person id or record id crosses — only counts, altitudes and the anonymous branch position.';
+
 export const DUTY_BRANCH_DISCLOSURE_PREMISE = 'A per-branch rate is a statement about the few people inside that branch. Below the declared floor a branch cell is WITHHELD rather than printed small, one more released cell is withheld beside it so the blanked cell cannot be recovered by subtracting from the parent total, and a rate is quoted only above its own floor. Withheld is never zero: the cell prints why it is blank. This is primary + complementary suppression, not differential privacy, and the reading never claims otherwise.';
 
