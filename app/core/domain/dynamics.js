@@ -55,6 +55,7 @@ import { addDays, dayKey, daysBetween } from '../time.js';
 import { buildCapacityModel, flowMetrics, pertTriple } from './capacity.js';
 import { buildLoadReport } from './load.js';
 import { LINK_ENTITY_TYPES, LINK_RELATIONS } from './cases.js';
+import { appendTalkingPoint, recordQueueRefusal } from './talkingPointPolicy.js';
 
 export const DYN_ENGINE_VERSION = 'os-dynamics-2026.10-v1';
 
@@ -1673,11 +1674,17 @@ function talkingPointExists(draft, personId, marker) {
  * idempotency marker must lead the string. Putting it at the end silently
  * dropped it on the next reload and made the rule duplicate its own prompts.
  */
-function addTalkingPoint(draft, personId, text, marker) {
+function addTalkingPoint(draft, ctx, personId, text, marker) {
   const person = (draft.people || []).find((p) => p && p.id === personId && p.status !== 'archived');
   if (!person) return false;
   const composed = `${marker} ${text}`.slice(0, 200);
-  person.talkingPoints = [...(Array.isArray(person.talkingPoints) ? person.talkingPoints : []), composed].slice(-12);
+  // ADR-0138: the shared writer, never a local `.slice(-12)`.
+  const write = appendTalkingPoint(person.talkingPoints, composed);
+  if (!write.appended) {
+    if (write.refused) recordQueueRefusal(ctx && ctx.warnings, person.name);
+    return false;
+  }
+  person.talkingPoints = write.points;
   return true;
 }
 
@@ -1812,7 +1819,7 @@ export function dynamicsRule(draft, ctx = {}) {
     const burdenMarker = markerFor(DYN_RULE_IDS.ARCHETYPE, burden.id);
     if (!talkingPointExists(draft, bottleneckId, burdenMarker)) {
       const loop = LOOP_BY_ID[report.simulation.summary.dominantLoop];
-      const added = addTalkingPoint(draft, bottleneckId,
+      const added = addTalkingPoint(draft, ctx, bottleneckId,
         `System note, not a performance point: “${burden.label}” is the pattern. What structural change removes the need for the fix we keep applying?`,
         burdenMarker);
       if (added) {

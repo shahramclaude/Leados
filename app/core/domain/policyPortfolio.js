@@ -86,6 +86,7 @@ import {
   pooledCheckpointSkill,
   scoreCheckpoint,
 } from './checkpointScoring.js';
+import { appendTalkingPoint, recordQueueRefusal } from './talkingPointPolicy.js';
 
 // The scoring primitives live in a dependency-free module so the schema
 // normalizer can re-derive them without an import cycle. Re-exported here
@@ -1401,7 +1402,10 @@ export function policyPortfolioRule(draft, ctx = {}) {
         const person = (draft.people || []).find((p) => p && p.id === ownerId && p.status !== 'archived');
         if (person) {
           const text = `${practiceMarker} Portfolio review, not a performance point: which lever actually moved, which part of the gain was one mechanism, and what we would stop funding?`.slice(0, 200);
-          person.talkingPoints = [...(Array.isArray(person.talkingPoints) ? person.talkingPoints : []), text].slice(-12);
+          // ADR-0138: the shared writer, never a local `.slice(-12)`.
+          const write = appendTalkingPoint(person.talkingPoints, text);
+          if (write.appended) person.talkingPoints = write.points;
+          else if (write.refused) recordQueueRefusal(ctx && ctx.warnings, person.name);
           note(ctx, CAP_RULE_IDS.COMMIT, 'updated', 'person', ownerId,
             'Queued a blameless portfolio-review talking point for the owner', out);
         }

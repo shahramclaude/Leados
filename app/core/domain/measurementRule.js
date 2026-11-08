@@ -35,12 +35,12 @@ import {
   scorecardEquilibrium,
   scorecardIntegrity,
 } from './measurement.js';
+import { appendTalkingPoint, recordQueueRefusal } from './talkingPointPolicy.js';
 
 export const SCORECARD_COMMITTED_EVENT = 'scorecard.committed';
 export const SCORECARD_OBSERVED_EVENT = 'scorecard.observed';
 
 const MAX_DELEGATIONS = 2;
-const MAX_TOPICS = 12;
 
 function marker(tag) {
   return `[${tag}]`;
@@ -108,12 +108,18 @@ function delegationRecord(ctx, { personId, title, expectedOutcome, support, dueO
   };
 }
 
-function addTalkingPoint(person, text, tag) {
+function addTalkingPoint(person, ctx, text, tag) {
   if (!person) return false;
   const token = marker(tag);
-  person.talkingPoints = Array.isArray(person.talkingPoints) ? person.talkingPoints : [];
-  if (person.talkingPoints.some((row) => String(row).includes(token))) return false;
-  person.talkingPoints = [...person.talkingPoints, `${text} ${token}`.slice(0, 200)].slice(-MAX_TOPICS);
+  const list = Array.isArray(person.talkingPoints) ? person.talkingPoints : [];
+  if (list.some((row) => String(row).includes(token))) return false;
+  // ADR-0138: the shared writer applies the one declared retention policy.
+  const write = appendTalkingPoint(list, `${text} ${token}`.slice(0, 200));
+  if (!write.appended) {
+    if (write.refused) recordQueueRefusal(ctx && ctx.warnings, person.name);
+    return false;
+  }
+  person.talkingPoints = write.points;
   return true;
 }
 
@@ -268,7 +274,7 @@ function redesignPropagation(draft, ctx) {
           summary: 'Opened one owned delegation to baseline the uncounted work.',
         });
       }
-      if (owner && addTalkingPoint(owner, `Which part of “${card.title}” would you least want us to optimise?`, tag)) {
+      if (owner && addTalkingPoint(owner, ctx, `Which part of “${card.title}” would you least want us to optimise?`, tag)) {
         effects.push({
           ruleId: MEASUREMENT_RULE_IDS.REDESIGN,
           action: 'updated',

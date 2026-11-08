@@ -46,6 +46,7 @@ import {
   observeFidelity,
 } from './fidelity.js';
 import { buildImplementationSnapshot } from './fidelitySchema.js';
+import { appendTalkingPoint, recordQueueRefusal } from './talkingPointPolicy.js';
 
 export const FIDELITY_DECLARED_EVENT = 'fidelity.declared';
 export const FIDELITY_UPDATED_EVENT = 'fidelity.updated';
@@ -61,7 +62,6 @@ export const FIDELITY_RULE_IDS = Object.freeze({
   STUDY_SNAPSHOT: 'RULE-FID-05',
 });
 
-const MAX_TOPICS = 12;
 
 function marker(tag) {
   return `[${tag}]`;
@@ -129,12 +129,18 @@ function delegationRecord(ctx, { personId, title, expectedOutcome, support, dueO
   };
 }
 
-function addTalkingPoint(person, text, tag) {
+function addTalkingPoint(person, ctx, text, tag) {
   if (!person) return false;
   const token = marker(tag);
-  person.talkingPoints = Array.isArray(person.talkingPoints) ? person.talkingPoints : [];
-  if (person.talkingPoints.some((row) => String(row).includes(token))) return false;
-  person.talkingPoints = [...person.talkingPoints, `${text} ${token}`.slice(0, 220)].slice(-MAX_TOPICS);
+  const list = Array.isArray(person.talkingPoints) ? person.talkingPoints : [];
+  if (list.some((row) => String(row).includes(token))) return false;
+  // ADR-0138: the shared writer applies the one declared retention policy.
+  const write = appendTalkingPoint(list, `${text} ${token}`.slice(0, 220));
+  if (!write.appended) {
+    if (write.refused) recordQueueRefusal(ctx && ctx.warnings, person.name);
+    return false;
+  }
+  person.talkingPoints = write.points;
   return true;
 }
 
@@ -257,7 +263,7 @@ function disagreementPrompt(draft, ctx, plan, reading) {
     || ownerFor(draft, plan);
   const tag = `FID:${plan.id}:${worst.key}`;
   const text = `On “${plan.title.slice(0, 60)}” your ${FIDELITY_STAGE_BY_KEY[worst.key]?.label.toLowerCase() || worst.key} reading and the records disagree (${(AGREEMENT_LABELS[worst.agreement] || '').toLowerCase()}). Which deliveries never got logged?`;
-  if (addTalkingPoint(person, text, tag)) {
+  if (addTalkingPoint(person, ctx, text, tag)) {
     effects.push({
       ruleId: FIDELITY_RULE_IDS.DISAGREEMENT,
       action: 'updated',
@@ -361,7 +367,7 @@ function underDeliveredPropagation(draft, ctx, plan, reading) {
       targetId: task.id,
       summary: `Opened one owned remediation task on ${weakest?.label?.toLowerCase() || 'delivery'}.`,
     });
-    if (addTalkingPoint(owner, `What made “${plan.title.slice(0, 50)}” hard to deliver at the planned dose?`, tag)) {
+    if (addTalkingPoint(owner, ctx, `What made “${plan.title.slice(0, 50)}” hard to deliver at the planned dose?`, tag)) {
       effects.push({
         ruleId: FIDELITY_RULE_IDS.UNDER_DELIVERED,
         action: 'updated',

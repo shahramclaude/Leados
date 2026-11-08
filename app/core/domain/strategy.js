@@ -65,6 +65,7 @@
 
 import { addDays, dayKey, daysBetween, daysSince, round } from '../time.js';
 import { OPEN_CASE_STATUSES } from './cases.js';
+import { appendTalkingPoint, recordQueueRefusal } from './talkingPointPolicy.js';
 
 export const SCO_ENGINE_VERSION = 'strategy-coherence-2026.10-v1';
 
@@ -1320,7 +1321,10 @@ export function strategyRule(draft, ctx = {}) {
       const practiceMarker = markerFor(`${SCO_RULE_IDS.ADOPT}-review`, bet.id);
       if (owner && !talkingPointExists(draft, owner.id, practiceMarker)) {
         const textLine = `${practiceMarker} Bet review, not a performance point: what did we learn that we could only have learned by funding this, and what would make us stop?`.slice(0, 200);
-        owner.talkingPoints = [...(Array.isArray(owner.talkingPoints) ? owner.talkingPoints : []), textLine].slice(-12);
+        // ADR-0138: the shared writer, never a local `.slice(-12)`.
+        const write = appendTalkingPoint(owner.talkingPoints, textLine);
+        if (write.appended) owner.talkingPoints = write.points;
+        else if (write.refused) recordQueueRefusal(ctx && ctx.warnings, owner.name);
         note(ctx, SCO_RULE_IDS.ADOPT, 'updated', 'person', owner.id,
           'Queued a blameless bet-review talking point for the owner', out);
       }
@@ -1434,10 +1438,16 @@ export function strategyRule(draft, ctx = {}) {
     const owner = (draft.people || []).find((p) => p && p.id === bet.ownerId && p.status !== 'archived');
     const practiceMarker = markerFor(`${SCO_RULE_IDS.VERDICT}-review`, bet.id);
     if (owner && !talkingPointExists(draft, owner.id, practiceMarker)) {
-      owner.talkingPoints = [...(Array.isArray(owner.talkingPoints) ? owner.talkingPoints : []),
-        `${practiceMarker} Stop-rule review, not a performance point: what did the rule tell us, and what would we do differently at the start?`.slice(0, 200)].slice(-12);
-      note(ctx, SCO_RULE_IDS.VERDICT, 'updated', 'person', owner.id,
-        'Queued a blameless stop-rule review talking point', out);
+      // ADR-0138: the shared writer, never a local `.slice(-12)`.
+      const write = appendTalkingPoint(owner.talkingPoints,
+        `${practiceMarker} Stop-rule review, not a performance point: what did the rule tell us, and what would we do differently at the start?`.slice(0, 200));
+      if (write.appended) {
+        owner.talkingPoints = write.points;
+        note(ctx, SCO_RULE_IDS.VERDICT, 'updated', 'person', owner.id,
+          'Queued a blameless stop-rule review talking point', out);
+      } else if (write.refused) {
+        recordQueueRefusal(ctx && ctx.warnings, owner.name);
+      }
     }
   }
 

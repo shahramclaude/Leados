@@ -48,6 +48,7 @@ import {
   scoreDesignPrediction,
   simulateDesign,
 } from './orgDesign.js';
+import { appendTalkingPoint, recordQueueRefusal } from './talkingPointPolicy.js';
 
 export const ORG_DECLARED_EVENT = 'orgdesign.declared';
 export const ORG_UPDATED_EVENT = 'orgdesign.updated';
@@ -64,7 +65,6 @@ export const ORG_RULE_IDS = Object.freeze({
   SCORE: 'RULE-ORD-05',
 });
 
-const MAX_TOPICS = 12;
 const MAX_MOVED_PROMPTS = 3;
 const MAX_LINKS = 40;
 
@@ -138,14 +138,20 @@ const TALKING_POINT_MAX = 240;
  * would be re-added on every scan, which is the exact alert-fatigue failure the
  * marker exists to prevent.
  */
-function addTalkingPoint(person, text, tag) {
+function addTalkingPoint(person, ctx, text, tag) {
   if (!person) return false;
   const token = marker(tag);
-  person.talkingPoints = Array.isArray(person.talkingPoints) ? person.talkingPoints : [];
-  if (person.talkingPoints.some((row) => String(row).includes(token))) return false;
+  const list = Array.isArray(person.talkingPoints) ? person.talkingPoints : [];
+  if (list.some((row) => String(row).includes(token))) return false;
   const budget = Math.max(0, TALKING_POINT_MAX - token.length - 1);
   const trimmed = text.length > budget ? `${text.slice(0, Math.max(0, budget - 1)).trimEnd()}…` : text;
-  person.talkingPoints = [...person.talkingPoints, `${trimmed} ${token}`].slice(-MAX_TOPICS);
+  // ADR-0138: the shared writer applies the one declared retention policy.
+  const write = appendTalkingPoint(list, `${trimmed} ${token}`);
+  if (!write.appended) {
+    if (write.refused) recordQueueRefusal(ctx && ctx.warnings, person.name);
+    return false;
+  }
+  person.talkingPoints = write.points;
   return true;
 }
 
@@ -314,6 +320,7 @@ function movedPropagation(draft, ctx, design, simulation) {
     const tag = `ORD-MOVED:${design.id}:${row.personId}`;
     const added = addTalkingPoint(
       person,
+      ctx,
       `Their reporting line or depth changed under “${design.label}”. Ask what they lost in the change — standing, a sponsor, a clear route to their next role — before assuming the new line is only an improvement. This is a conversation, not a performance note.`,
       tag,
     );

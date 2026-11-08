@@ -53,6 +53,7 @@
  */
 
 import { LINK_ENTITY_TYPES, LINK_RELATIONS, FORBIDDEN_LINK_TYPES } from './cases.js';
+import { appendTalkingPoint, recordQueueRefusal } from './talkingPointPolicy.js';
 
 /* ------------------------------------------------------------------ */
 /* Constants                                                           */
@@ -1023,10 +1024,16 @@ function talkingPointExists(draft, personId, marker) {
   const p = (draft.people || []).find((x) => x.id === personId);
   return Boolean(p && (p.talkingPoints || []).some((t) => String(t).includes(marker)));
 }
-function addTalkingPoint(draft, personId, text, marker) {
+function addTalkingPoint(draft, context, personId, text, marker) {
   const p = (draft.people || []).find((x) => x.id === personId);
   if (!p || talkingPointExists(draft, personId, marker)) return false;
-  p.talkingPoints = [...(Array.isArray(p.talkingPoints) ? p.talkingPoints : []), `${text} ${marker}`].slice(-30);
+  // ADR-0138: the shared writer applies the declared retention policy.
+  const write = appendTalkingPoint(p.talkingPoints, `${text} ${marker}`);
+  if (!write.appended) {
+    if (write.refused) recordQueueRefusal(context && context.warnings, p.name);
+    return false;
+  }
+  p.talkingPoints = write.points;
   return true;
 }
 /** Every 1:1 talking point this rule owns, so staleness can be reconciled. */
@@ -1136,7 +1143,7 @@ export function networkRule(draft, ctx = {}) {
     if (!orgMarkersByPerson.has(kp.id)) orgMarkersByPerson.set(kp.id, []);
     orgMarkersByPerson.get(kp.id).push(tpMarker);
     if (!talkingPointExists(draft, kp.id, tpMarker)) {
-      addTalkingPoint(draft, kp.id,
+      addTalkingPoint(draft, context, kp.id,
         `[Influence network] You are a load-bearing connector (betweenness ${kp.betweenness}). Rehearse how to hand off context and grow a verified backup — this is about resilience, not performance.`, tpMarker);
       pushProp('RULE-ORG-02', 'updated', 'person', kp.id, `Queued a blameless cross-training 1:1 talking point`);
     }
@@ -1186,7 +1193,7 @@ export function networkRule(draft, ctx = {}) {
     if (!orgMarkersByPerson.has(iso.id)) orgMarkersByPerson.set(iso.id, []);
     orgMarkersByPerson.get(iso.id).push(marker);
     if (!talkingPointExists(draft, iso.id, marker)) {
-      addTalkingPoint(draft, iso.id,
+      addTalkingPoint(draft, context, iso.id,
         `[Influence network] ${iso.name} has no recorded collaboration tie. Use the next 1:1 to check whether they feel connected, informed and able to get help — a blameless inclusion check-in.`, marker);
       pushProp('RULE-ORG-04', 'updated', 'person', iso.id, `Queued a blameless isolation check-in 1:1 talking point`);
     }
@@ -1198,7 +1205,7 @@ export function networkRule(draft, ctx = {}) {
       if (!orgMarkersByPerson.has(b.id)) orgMarkersByPerson.set(b.id, []);
       orgMarkersByPerson.get(b.id).push(marker);
       if (!talkingPointExists(draft, b.id, marker)) {
-        addTalkingPoint(draft, b.id,
+        addTalkingPoint(draft, context, b.id,
           `[Influence network] You broker a large share of cross-team flow (betweenness ${b.betweenness}). Discuss distributing a few connections and confirm the load is sustainable — a coordination risk, not a rating.`, marker);
         pushProp('RULE-ORG-05', 'updated', 'person', b.id, `Queued a blameless broker-load 1:1 talking point`);
       }

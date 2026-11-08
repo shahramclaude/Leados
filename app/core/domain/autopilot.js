@@ -18,6 +18,7 @@ import {
   AUTOPILOT_LIMITS, AUTOPILOT_SOURCE_BY_ID, AUTOPILOT_ACTION_BY_ID,
   AUTOPILOT_SOURCES, defaultAction, defaultCondition, sourceForEvent, sourceFacts, sourceRecord,
 } from './autopilotRegistry.js';
+import { appendTalkingPoint, recordQueueRefusal } from './talkingPointPolicy.js';
 
 export const AUTOPILOT_SCAN_EVENT = 'autopilot.scan';
 const clone = (value) => JSON.parse(JSON.stringify(value));
@@ -134,8 +135,14 @@ function executeAction(draft, policy, sourceType, record, action, key, ctx) {
   if (action.type === 'coaching') {
     const person = draft.people.find((p) => p.id === action.resolvedOwnerId);
     if (person.talkingPoints.some((t) => t.includes(token))) return result(action.type, 'reused', person.id);
-    if (person.talkingPoints.length >= 12) return result(action.type, 'blocked', person.id, 'The 1:1 prompt queue is full; existing prompts were not overwritten.');
-    person.talkingPoints.push(`${action.text} ${token}`.slice(0, 200));
+    // ADR-0138: the shared writer decides, so a full queue is a bounded refusal
+    // that removes nothing rather than a local length check.
+    const queueWrite = appendTalkingPoint(person.talkingPoints, `${action.text} ${token}`.slice(0, 200));
+    if (!queueWrite.appended) {
+      if (queueWrite.refused) recordQueueRefusal(ctx && ctx.warnings, person.name);
+      return result(action.type, 'blocked', person.id, 'The 1:1 prompt queue is full; existing prompts were not overwritten.');
+    }
+    person.talkingPoints = queueWrite.points;
     link(ctx, draft, policy, sourceType, record.id, 'person', person.id, 'coaches');
     return result(action.type, 'created', person.id);
   }

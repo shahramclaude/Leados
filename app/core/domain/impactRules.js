@@ -41,6 +41,7 @@ import { addDays, dayKey } from '../time.js';
 import { IMPACT_INTERVENTION_TYPES, IMPACT_STATUSES } from '../schema.js';
 import { VERDICTS, evaluateStudy, gradeOf, studyHorizonEnd } from './impact.js';
 import { FIDELITY_UNDEREXPOSED, observeFidelity } from './fidelity.js';
+import { appendTalkingPoint, recordQueueRefusal } from './talkingPointPolicy.js';
 
 const IMPACT_INTERVENTION_BY_ID = Object.fromEntries(IMPACT_INTERVENTION_TYPES.map((t) => [t.id, t]));
 
@@ -272,10 +273,16 @@ export function impactRule(draft, ctx = {}) {
         if (!person) continue;
         const token = marker('RULE-IMP-03', `${study.id}-${pid}`);
         if (talkingPointExists(person, token)) continue;
-        person.talkingPoints = [
-          ...(Array.isArray(person.talkingPoints) ? person.talkingPoints : []),
-          `Blameless check-in on a process, not a person: the ${String(study.title).slice(0, 60)} intervention did not move ${evaluation.vitalLabel || 'the metric'} as expected. Ask what made it hard to use in practice — the failure is almost always in the mechanism, not in the people. ${token}`,
-        ].slice(-30);
+        {
+          // ADR-0138: the shared writer, never a local `.slice(-30)`.
+          const write = appendTalkingPoint(person.talkingPoints,
+            `Blameless check-in on a process, not a person: the ${String(study.title).slice(0, 60)} intervention did not move ${evaluation.vitalLabel || 'the metric'} as expected. Ask what made it hard to use in practice — the failure is almost always in the mechanism, not in the people. ${token}`);
+          if (!write.appended) {
+            if (write.refused) recordQueueRefusal(ctx && ctx.warnings, person.name);
+            continue;
+          }
+          person.talkingPoints = write.points;
+        }
         pushProp('RULE-IMP-03', 'prompted', 'person', pid, `Added a blameless process check-in prompt after a contradicted study`);
       }
     }

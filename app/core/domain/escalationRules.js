@@ -34,6 +34,7 @@ import {
   ESCALATION_LIMITS,
   ESCALATION_RULE_IDS,
 } from './escalationRegistry.js';
+import { appendTalkingPoint, recordQueueRefusal } from './talkingPointPolicy.js';
 
 const ESCALATION_TRIGGER_SET = new Set(Object.values(ESCALATION_EVENTS));
 
@@ -99,14 +100,20 @@ function decisionExists(draft, tag) {
   );
 }
 
-function addBoundedTalkingPoint(draft, personId, text, tag) {
+function addBoundedTalkingPoint(draft, context, personId, text, tag) {
   const person = (draft.people || []).find((p) => p && p.id === personId && p.status !== 'archived');
   if (!person) return false;
   const pts = Array.isArray(person.talkingPoints) ? person.talkingPoints : [];
   if (pts.some((t) => String(t).includes(tag))) return false;
-  // `normalizeTalkingPoints` slices at 200 chars; bound text so `tag` survives reload.
+  // `normalizeTalkingPoints` slices at 200 chars; bound text so `tag` survives
+  // reload. ADR-0138: the shared writer applies the declared retention policy.
   const maxBody = Math.max(40, 198 - tag.length);
-  person.talkingPoints = [...pts, `${clampStr(text, maxBody)} ${tag}`].slice(-30);
+  const write = appendTalkingPoint(pts, `${clampStr(text, maxBody)} ${tag}`);
+  if (!write.appended) {
+    if (write.refused) recordQueueRefusal(context && context.warnings, person.name);
+    return false;
+  }
+  person.talkingPoints = write.points;
   return true;
 }
 
@@ -387,7 +394,7 @@ export function escalationRule(draft, ctx = {}) {
         `Opened an intervention-rate commitment decision for ${row.label} (yield ${row.yield.pct}%).`);
     }
 
-    if (addBoundedTalkingPoint(draft, row.seatId,
+    if (addBoundedTalkingPoint(draft, hookCtx, row.seatId,
       `A question about how we work, not about anyone's judgement: ${settled} escalations came to this span and only ${row.changedN} ended differently from the proposal. Which of these could you decide outright if you knew I would back you?`,
       tag)) {
       noteEffect(hookCtx, out, ESCALATION_RULE_IDS.PURE_OVERHEAD, 'talking-point', 'person', row.seatId,

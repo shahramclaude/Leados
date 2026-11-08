@@ -42,6 +42,7 @@ import {
   leaderDemandInventory,
   scoreDrillRecord,
 } from './leaderContinuity.js';
+import { appendTalkingPoint, recordQueueRefusal } from './talkingPointPolicy.js';
 
 export const CONTINUITY_COVER_EVENT = 'continuity.cover.requested';
 export const CONTINUITY_DRILL_EVENT = 'continuity.drill.closed';
@@ -49,7 +50,6 @@ export const CONTINUITY_SCAN_EVENT = 'continuity.scan';
 export const CONTINUITY_DELEGATION_RETURNED_EVENT = 'delegation.returned';
 
 const MAX_DELEGATIONS = 4;
-const MAX_TOPICS = 12;
 
 const RELATION_BY_SOURCE = Object.freeze({
   decision: 'decides',
@@ -308,14 +308,16 @@ function commissionCover(draft, ctx) {
   for (const { delegation, action } of delegations) {
     const person = (draft.people || []).find((p) => p.id === delegation.personId);
     if (!person) continue;
-    // Never evict an employee's waiting topics to make room for an automatic prompt.
-    person.talkingPoints = Array.isArray(person.talkingPoints) ? person.talkingPoints : [];
-    if (person.talkingPoints.length >= MAX_TOPICS) {
+    // ADR-0138: never evict an employee's waiting topics to make room for an
+    // automatic prompt — the shared writer is the one that enforces it.
+    const topic = `[LCS:${hashOf(marker).slice(0, 6)}] You are holding ${CONTINUITY_KIND_LABELS[action.stallKind].toLowerCase()} cover during ${windowStart} → ${windowEnd}. What would you escalate rather than decide? (Not a performance conversation.)`;
+    const queueWrite = appendTalkingPoint(person.talkingPoints, topic.slice(0, 200));
+    if (!queueWrite.appended) {
+      if (queueWrite.refused) recordQueueRefusal(ctx && ctx.warnings, person.name);
       effects.push({ ruleId: CONTINUITY_RULE_IDS.COVER, action: 'skipped', targetType: 'person', targetId: person.id, summary: 'Talking-point queue is full; no existing topic was removed. The cover delegation still exists.' });
       continue;
     }
-    const topic = `[LCS:${hashOf(marker).slice(0, 6)}] You are holding ${CONTINUITY_KIND_LABELS[action.stallKind].toLowerCase()} cover during ${windowStart} → ${windowEnd}. What would you escalate rather than decide? (Not a performance conversation.)`;
-    person.talkingPoints.push(topic.slice(0, 200));
+    person.talkingPoints = queueWrite.points;
     effects.push({ ruleId: CONTINUITY_RULE_IDS.COVER, action: 'updated', targetType: 'person', targetId: person.id, summary: 'Queued one blameless cover-briefing prompt.' });
   }
 
@@ -467,10 +469,12 @@ function recoverReturnedCoverDelegation(draft, ctx, returned) {
 
     const person = (draft.people || []).find((p) => p && p.id === best.deputy.personId);
     if (person) {
-      person.talkingPoints = Array.isArray(person.talkingPoints) ? person.talkingPoints : [];
-      if (person.talkingPoints.length < MAX_TOPICS) {
-        const topic = `[LCS-BACKUP:${hashOf(returned.id).slice(0, 6)}] Stepping in as backup cover for ${windowStart} → ${windowEnd} (${returned.title}). Confirm what you can hold and what must escalate.`;
-        person.talkingPoints.push(topic.slice(0, 200));
+      const topic = `[LCS-BACKUP:${hashOf(returned.id).slice(0, 6)}] Stepping in as backup cover for ${windowStart} → ${windowEnd} (${returned.title}). Confirm what you can hold and what must escalate.`;
+      // ADR-0138: the shared writer applies the one declared retention policy.
+      const queueWrite = appendTalkingPoint(person.talkingPoints, topic.slice(0, 200));
+      if (queueWrite.appended) person.talkingPoints = queueWrite.points;
+      else if (queueWrite.refused) recordQueueRefusal(ctx && ctx.warnings, person.name);
+      if (queueWrite.appended) {
         effects.push({
           ruleId: CONTINUITY_RULE_IDS.EXECUTION,
           action: 'updated',

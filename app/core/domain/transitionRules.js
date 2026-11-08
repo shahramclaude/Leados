@@ -47,6 +47,7 @@
 import { addDays, dayKey } from '../time.js';
 import { ensureEntityLink } from './automation.js';
 import { TRANSITION_CONVENTIONS, transitionReading } from './transition.js';
+import { appendTalkingPoint, recordQueueRefusal } from './talkingPointPolicy.js';
 
 export const TRANSITION_DECLARED_EVENT = 'transition.declared';
 export const TRANSITION_UPDATED_EVENT = 'transition.updated';
@@ -64,7 +65,6 @@ export const TRANSITION_RULE_IDS = Object.freeze({
   DEPARTURE: 'RULE-TRN-06',
 });
 
-const MAX_TOPICS = 12;
 const MAX_HANDOVERS = 6;
 const MAX_SURVIVOR_PROMPTS = 3;
 
@@ -133,12 +133,18 @@ function delegationRecord(ctx, { personId, title, expectedOutcome, support, dueO
   };
 }
 
-function addTalkingPoint(person, text, tag) {
+function addTalkingPoint(person, ctx, text, tag) {
   if (!person) return false;
   const token = marker(tag);
-  person.talkingPoints = Array.isArray(person.talkingPoints) ? person.talkingPoints : [];
-  if (person.talkingPoints.some((row) => String(row).includes(token))) return false;
-  person.talkingPoints = [...person.talkingPoints, `${text} ${token}`.slice(0, 240)].slice(-MAX_TOPICS);
+  const list = Array.isArray(person.talkingPoints) ? person.talkingPoints : [];
+  if (list.some((row) => String(row).includes(token))) return false;
+  // ADR-0138: the shared writer applies the one declared retention policy.
+  const write = appendTalkingPoint(list, `${text} ${token}`.slice(0, 240));
+  if (!write.appended) {
+    if (write.refused) recordQueueRefusal(ctx && ctx.warnings, person.name);
+    return false;
+  }
+  person.talkingPoints = write.points;
   return true;
 }
 
@@ -388,6 +394,7 @@ function survivorPropagation(draft, ctx, program, reading) {
     const tag = `TRN-SURVIVOR:${program.id}:${row.personId}`;
     const added = addTalkingPoint(
       person,
+      ctx,
       `Survivor load after “${program.label}”: recorded ownership rose ${row.increasePct}% because the exiting work landed here. Ask what should stop before assuming it all absorbs — this is a capacity conversation, not a performance one.`,
       tag,
     );
