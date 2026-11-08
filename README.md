@@ -1,3 +1,7 @@
+## 2026-11-08 — Review 1:1 topics before they are lost
+
+When adding or editing a person, an overfull 1:1 waiting list now stays in the dialog instead of silently dropping lines. The inline message identifies lines that would not fit; edit the list before saving. The existing 12-unique-line policy keeps the person's topics first and newer engine prompts next; duplicate and 200-character normalization still apply. The saved list uses the existing person action and automation. No setup or schema change.
+
 ## 2026-11-08 — The inference-only handover digest (Session 178, Schema v118 unchanged, [ADR-0132](./docs/adr/0132-inference-only-handover-digest.md))
 
 On `#/duty-cover?panel=desk`, frontline leads and mid-managers now get a daily **Handover checks** queue: available, eligible covers on unended absence windows whose only pre-window evidence is inferred work, with no explicit rehearsal. One row is one cover × duty × absence, ordered by open work on the duty then the earliest preparation cutoff. The existing **Record rehearsal** act clears a ready check; a gaps rehearsal opens its own governed decision; revocation or a changed window re-derives the queue. The Desk prints up to 40 rows and always counts the remainder. Counts roll up into the identity-free brief and the existing absence CSV rows; above the manager altitude names and person ids are withheld. The navigation badge is deliberately unchanged — this is a review prompt, not a readiness verdict, and it schedules or assigns nothing. No setup or schema change.

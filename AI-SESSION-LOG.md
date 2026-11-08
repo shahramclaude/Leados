@@ -1,3 +1,13 @@
+## 2026-11-08 — Session 184: review the 1:1 waiting-list cap before saving
+
+**Built / altitude.** Frontline and mid-manager PRIMARY: when capturing or editing a person's 1:1 topics, the dialog now uses the existing queue policy to refuse overflow before any write, names up to five refused lines plus the remaining count, focuses the accessible inline error, and retains the entire editable input. After the leader resolves overflow, the usual person action, event and shared automation run; action warnings are displayed. This fixes the dialog's premature normalization, which prevented the action from ever reporting lost lines. Session 183 identified these altitudes as next (last primary 181). Existing hierarchy/agenda readers remain unchanged; new roll-up behavior was not asserted.
+
+**Verified.** `node --test tests/app/person-dialog-queue.test.mjs` 1/1: jsdom create/edit refusal, preserved values, inline error and focus, duplicate handling, successful real action saves and person events. Initial attempt failed on a missing import; one fix made the focused pass green. `npm run build:standalone` succeeded (9,545,536 bytes, schema v118). Full suite, standalone execution, real-browser AT and hierarchy propagation [UNVERIFIED].
+
+**Flagged / blocker.** Existing rule-local `.slice(-30)` writes may discard earlier topics during large cascades before the shared normalizer can report them; code-inspection finding, end-to-end behavior [UNVERIFIED]. Shared writer repair remains In Progress in ROADMAP. The existing 200-character per-line limit and deduplication remain. Seats remain workflow declarations, not authentication. No blocker to this scoped dialog fix.
+
+**Next:** CEO / C-suite scoped priority (most-neglected altitude); authenticated identity and tenant boundary remain foundational.
+
 ## 2026-11-08 — Session 183: the span budget exposure roll-up — money is a position per currency, an authority per branch, and a queue (Schema v118 unchanged, ADR-0136, `#/finance?panel=span`)
 
 **Built / altitudes.** Director (rank 3) and VP / executive (rank 4) PRIMARY; CEO / C-suite reads the same roll-up as counts, currency totals and bands; frontline and mid-manager are refused at the portfolio floor with the reason printed. The duty served: a director allocating one fixed envelope across four teams, and a VP forecasting quarterly exposure across divisions — *what is my span's position in each currency, which branch is carrying the overrun, and where is the ledger too unsound to forecast from?* Director/VP took priority because the Session-182 coverage map named them the next rotation (last primary 180; frontline/mid 181, CEO 182).
