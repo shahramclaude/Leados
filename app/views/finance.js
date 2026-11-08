@@ -9,8 +9,9 @@
  * gap — never a zero. All writes go through ctx.api.
  */
 
-import { h, confirmDialog, toast } from '../ui/dom.js';
-import { pageHeader, card, stat, badge, emptyState, table, progressBar, banner } from '../ui/components.js';
+import { h, confirmDialog, toast, openModal, closeAllModals } from '../ui/dom.js';
+import { pageHeader, card, stat, badge, emptyState, table, progressBar, banner, tabs } from '../ui/components.js';
+import { downloadText } from '../ui/download.js';
 import { formatDate } from '../core/time.js';
 import {
   BUDGET_CATEGORY_LABELS,
@@ -24,6 +25,13 @@ import {
   sourceCompletion,
   summarizeBudget,
 } from '../core/domain/finance.js';
+import {
+  BUDGET_EXPOSURE_BANDS,
+  BUDGET_EXPOSURE_FLOORS,
+  BUDGET_EXPOSURE_METHOD,
+  buildBudgetExposure,
+  budgetExposureText,
+} from '../core/domain/budgetExposure.js';
 import { resolveLinkedEntity } from '../core/domain/cases.js';
 import {
   openBudgetActualDialog,
@@ -98,7 +106,49 @@ function calibrationCard(ctx) {
   });
 }
 
+const FINANCE_PANELS = [
+  { key: 'envelopes', label: 'Envelopes' },
+  { key: 'span', label: 'Span exposure' },
+];
+
+function financePanelTabs(ctx, panel, { envelopes = undefined, queue = undefined } = {}) {
+  return tabs({
+    ariaLabel: 'Budget & finance views',
+    active: panel,
+    items: FINANCE_PANELS.map((item) => ({
+      key: item.key,
+      label: item.label,
+      count: item.key === 'envelopes' ? envelopes : queue,
+    })),
+    onSelect: (key) => ctx.navigate(key === 'envelopes' ? '#/finance' : '#/finance?panel=span'),
+  });
+}
+
+/** Downloads are allowed to fail in a browser; then the ledger stays copyable. */
+function downloadOrCopy({ filename, text, title }) {
+  if (downloadText({ filename, text, mime: 'text/plain' })) {
+    toast('Span exposure ledger downloaded.', 'good');
+    return;
+  }
+  const copy = h('textarea', { class: 'input', rows: 16, readonly: true }, text);
+  openModal({
+    title,
+    body: h('div', { class: 'stack' }, h('p', null, 'This browser refused the file download. The ledger is below; select and copy it.'), copy),
+    footer: [h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => closeAllModals() }, 'Close')],
+  });
+  copy.focus();
+  copy.select();
+}
+
 export function renderFinance(ctx) {
+  const panel = ctx.query?.get?.('panel') === 'span' ? 'span' : 'envelopes';
+  const seat = ctx.seatContext?.seat || null;
+  const built = ctx.seatContext?.built || null;
+  // One evaluator, two readings: the exposure re-evaluates the SAME envelopes
+  // through `evaluateBudget` with the SAME watch convention and the same day as
+  // the envelope list, so the panel and the roll-up cannot disagree.
+  const exposure = buildBudgetExposure(ctx.state, { now: ctx.now, seat, built });
+  if (panel === 'span') return renderSpanExposure(ctx, exposure, seat);
   const rollup = budgetsRollup(ctx.state, ctx.now);
   const requested = ctx.query.get('filter');
   const filter = FILTERS.includes(requested) ? requested : 'active';
@@ -129,6 +179,7 @@ export function renderFinance(ctx) {
       subtitle: 'One ledger for the money question — what envelope you have, what is already committed against it, what has actually landed, and whether the forecast breaches. Breaches open a DACI trade-off automatically; completed funded work prompts for evidenced actuals.',
       actions: [button('Create budget envelope', () => openBudgetDialog(ctx), true)],
     }),
+    financePanelTabs(ctx, panel, { envelopes: rollup.all.length, queue: exposure.queue.length + exposure.queueDeferred }),
     ctx.persistError
       ? card({ body: h('p', { class: 'text-warn small' }, `Changes are not being saved: ${ctx.persistError}`) })
       : null,
@@ -183,6 +234,194 @@ export function renderFinance(ctx) {
         }),
     calibrationCard(ctx),
     frameworkCard(),
+  );
+}
+
+const EXPOSURE_BAND_TONE = {
+  [BUDGET_EXPOSURE_BANDS.over]: 'bad',
+  [BUDGET_EXPOSURE_BANDS.pipeline]: 'caution',
+  [BUDGET_EXPOSURE_BANDS.watch]: 'warn',
+  [BUDGET_EXPOSURE_BANDS.within]: 'good',
+  [BUDGET_EXPOSURE_BANDS.untracked]: 'neutral',
+};
+
+const EXPOSURE_BAND_LABEL = {
+  [BUDGET_EXPOSURE_BANDS.over]: 'Over ceiling',
+  [BUDGET_EXPOSURE_BANDS.pipeline]: 'Pipeline breach',
+  [BUDGET_EXPOSURE_BANDS.watch]: 'Watch zone',
+  [BUDGET_EXPOSURE_BANDS.within]: 'Within ceiling',
+  [BUDGET_EXPOSURE_BANDS.untracked]: 'Tracking only',
+};
+
+function positionCell(row) {
+  if (row.headroom === null) {
+    return h('span', { class: 'muted small' }, `Blank — ${row.headroomReason || 'no ceiling'}`);
+  }
+  if (row.headroom < 0) return h('strong', null, `Over by ${formatMoney(row.currency, Math.abs(row.headroom))}`);
+  return h('span', null, `Headroom ${formatMoney(row.currency, row.headroom)}`);
+}
+
+/**
+ * `#/finance?panel=span` — the roll-up. Rendered from `buildBudgetExposure`, so
+ * the currency position, the branch attribution and the review queue are one
+ * reading of one evaluation, not three screens that can drift apart.
+ */
+function renderSpanExposure(ctx, exposure, seat) {
+  const enforced = Boolean(seat && !seat.fullAccess);
+  const canRead = !exposure.refused;
+  const ledger = canRead ? budgetExposureText(exposure) : '';
+  const header = pageHeader({
+    eyebrow: 'Finance & budgetary control',
+    title: 'Span budget exposure',
+    subtitle: enforced
+      ? `${seat.label} (rank ${seat.rank}): the money position of the span you answer for, per currency, attributed to the branch that holds the authority — and the queue of envelopes that need a decision.`
+      : 'No operating seat is declared, so this reading covers the WHOLE WORKSPACE, not a span. Declare a seat on the Altitude Lens to read it as a director, VP or chief.',
+    actions: [h('button', {
+      class: 'btn btn-ghost',
+      type: 'button',
+      disabled: !canRead,
+      onClick: () => downloadOrCopy({ filename: `leados-span-budget-exposure-${exposure.asOf || 'today'}.txt`, text: ledger, title: 'Copy span exposure ledger' }),
+    }, 'Download ledger'), h('a', { class: 'btn btn-ghost', href: '#/finance' }, 'Back to envelopes')],
+  });
+
+  if (exposure.refused) {
+    return h('div', { class: 'page' },
+      header,
+      financePanelTabs(ctx, 'span', { envelopes: undefined, queue: undefined }),
+      banner({ tone: 'bad', title: 'No money reading is available at this seat', body: exposure.refusals.join(' ') }),
+      card({
+        title: 'Why the blank is the correct answer',
+        body: h('div', { class: 'prose small' },
+          h('p', null, `Portfolio-level capital is disclosed from rank ${BUDGET_EXPOSURE_FLOORS.portfolioRank} upward. A blank reading is not a zero position: nothing was measured, and printing a zero would be a fake number.`),
+          h('p', { class: 'muted' }, 'The Altitude Lens shows what each rung is owed, and the operating seat can be changed there.')),
+      }),
+    );
+  }
+
+  const queueRows = exposure.queue.map((row, index) => ({
+    key: row.budgetId,
+    index: index + 1,
+    branch: row.branchPosition ? `Branch ${row.branchPosition}` : row.branchLabel,
+    branchLabel: row.branchLabel,
+    envelope: row.name || '—',
+    currency: row.currency,
+    band: row.band,
+    bandLabel: EXPOSURE_BAND_LABEL[row.band] || row.band,
+    figure: row.ceiling === null ? '—' : `${formatMoney(row.currency, row.forecast)} of ${formatMoney(row.currency, row.ceiling)}`,
+    why: row.reasons.map((r) => r.text).join(' '),
+  }));
+
+  const currencyColumns = [
+    { key: 'currency', label: 'Currency' },
+    { key: 'cover', label: 'Ceilings declared', render: (row) => `${row.ceilingsCovered} of ${row.envelopes} envelope(s)` },
+    { key: 'ceiling', label: 'Declared ceilings', render: (row) => formatMoney(row.currency, row.ceiling) },
+    { key: 'actuals', label: 'Recorded actuals', render: (row) => formatMoney(row.currency, row.actuals) },
+    { key: 'committed', label: 'Open commitments', render: (row) => formatMoney(row.currency, row.committed) },
+    { key: 'planned', label: 'Planned pipeline', render: (row) => formatMoney(row.currency, row.planned) },
+    { key: 'forecast', label: 'Forecast at completion', render: (row) => formatMoney(row.currency, row.forecast) },
+    { key: 'position', label: 'Position', render: positionCell },
+    { key: 'flags', label: 'Flags', render: (row) => h('div', { class: 'row-actions' }, row.breaches ? badge(`${row.breaches} breach`, 'bad') : null, row.evidenceDebt ? badge(`${row.evidenceDebt} evidence debt`, 'warn') : null, row.untracked ? badge(`${row.untracked} untracked`, 'neutral') : null) },
+  ];
+
+  const branchColumns = [
+    { key: 'branch', label: 'Branch', render: (row) => h('div', null, h('strong', null, row.position ? `Branch ${row.position}` : row.label), row.position ? h('span', { class: 'muted small' }, ` · ${row.label}`) : null) },
+    { key: 'envelopes', label: 'Envelopes' },
+    {
+      key: 'position',
+      label: 'Position by currency',
+      render: (row) => h('div', { class: 'stack-sm' }, ...(row.currencies.length
+        ? row.currencies.map((cell) => h('div', { class: 'small' },
+          `${cell.currency}: forecast ${formatMoney(cell.currency, cell.forecast)} · `,
+          positionCell(cell)))
+        : [h('span', { class: 'muted small' }, '—')])),
+    },
+    { key: 'breaches', label: 'Breaches', render: (row) => (row.breaches ? badge(`${row.breaches}`, 'bad') : h('span', { class: 'muted' }, '0')) },
+  ];
+
+  const queueColumns = [
+    { key: 'index', label: '#', className: 'mono' },
+    { key: 'branch', label: 'Branch' },
+    { key: 'envelope', label: exposure.detail === 'aggregate' ? 'Envelope (withheld)' : 'Envelope' },
+    { key: 'currency', label: 'Currency' },
+    { key: 'band', label: 'Band', render: (row) => badge(row.bandLabel, EXPOSURE_BAND_TONE[row.band] || 'neutral') },
+    { key: 'figure', label: exposure.detail === 'aggregate' ? 'Amount (withheld)' : 'Forecast of ceiling' },
+    { key: 'why', label: 'Why it is here' },
+  ];
+
+  return h('div', { class: 'page' },
+    header,
+    financePanelTabs(ctx, 'span', { envelopes: undefined, queue: exposure.queue.length + exposure.queueDeferred }),
+    ctx.persistError
+      ? card({ body: h('p', { class: 'text-warn small' }, `Changes are not being saved: ${ctx.persistError}`) })
+      : null,
+    exposure.counts.breaches
+      ? banner({
+        tone: 'warn',
+        title: `${exposure.counts.breaches} envelope(s) forecast a breach`,
+        body: 'The roll-up does not net them against headroom anywhere else. Offsetting one cost centre with another’s slack is a transfer of authority nobody approved — it is a decision for this seat, not a line the arithmetic may draw.',
+      })
+      : null,
+    !exposure.counts.active
+      ? banner({ tone: 'info', title: 'Nothing has been measured in this span', body: 'A blank reading is not a zero position: there is no active envelope to evaluate. Create an envelope, or record commitments against the one the span already has.' })
+      : null,
+    h('div', { class: 'stat-row' },
+      stat({ label: 'Active envelopes', value: exposure.counts.active, hint: `${exposure.counts.measured} with a declared ceiling` }),
+      stat({ label: 'Forecast breaches', value: exposure.counts.breaches, tone: exposure.counts.breaches ? 'bad' : '', hint: 'actuals + open commitments over ceiling' }),
+      stat({ label: 'Watch zone', value: exposure.counts.watches, tone: exposure.counts.watches ? 'warn' : '', hint: 'at or above the declared watch share' }),
+      stat({ label: 'Evidence debt', value: exposure.counts.evidenceDebt, tone: exposure.counts.evidenceDebt ? 'warn' : '', hint: 'spend with no recorded actual' }),
+      stat({ label: 'Direct branches', value: exposure.counts.branches, hint: `${exposure.counts.attributed} envelope(s) attributed` }),
+    ),
+    card({
+      title: 'Position by currency',
+      subtitle: 'One currency at a time. Nothing is converted, and nothing is pooled across envelopes of different currencies.',
+      actions: [badge(`${exposure.detail === 'aggregate' ? 'Counts & bands' : 'Full detail'}`, 'neutral', 'The disclosure level this seat is handed for portfolio material.')],
+      body: exposure.currencies.length
+        ? table({ columns: currencyColumns, rows: exposure.currencies, caption: 'Span position by currency' })
+        : emptyState({ title: 'No attributable currency', body: 'No active envelope in this span has an owner that resolves to a branch or to your own desk. Unowned envelopes are counted below and deliberately excluded from every total.' }),
+    }),
+    card({
+      title: 'By branch — the authority holder',
+      subtitle: 'A variance belongs to the cost centre that holds the authority, which is why this is a table of branches and not one grand total.',
+      body: exposure.branches.length
+        ? table({ columns: branchColumns, rows: exposure.branches, caption: 'Span budget position by branch' })
+        : emptyState({ title: 'No branch holds an envelope', body: 'Every attributable envelope belongs to your own desk. Assign an owner in a branch and it appears here.' }),
+    }),
+    card({
+      title: 'Review queue',
+      subtitle: `Bounded at ${exposure.limits.queue} rows, worst first: a breach outranks a pipeline breach, which outranks the watch zone, which outranks an unsound ledger.`,
+      body: queueRows.length
+        ? h('div', { class: 'stack-sm' },
+          table({ columns: queueColumns, rows: queueRows, caption: 'Bounded budget review queue' }),
+          exposure.queueDeferred ? h('p', { class: 'muted small' }, `${exposure.queueDeferred} further row(s) sit beyond the queue cap; they remain in the envelopes view.`) : null)
+        : h('p', { class: 'small muted' }, 'No envelope in this span needs a decision: every readable envelope is inside its ceiling and its ledger is complete.'),
+    }),
+    exposure.excluded.length
+      ? card({
+        title: `Counted and excluded (${exposure.excluded.length})`,
+        subtitle: 'An excluded envelope is not a zero and not a hidden breach: it is not attributable to this span, and the reason is printed.',
+        body: table({
+          caption: 'Envelopes counted but excluded from the span totals',
+          columns: [
+            { key: 'bucket', label: 'Bucket', render: (row) => ({ unowned: 'Enterprise root', 'out-of-span': 'Another span', ambiguous: 'Ambiguous owner' })[row.bucket] || row.bucket },
+            { key: 'currency', label: 'Currency' },
+            { key: 'ceiling', label: 'Ceiling', render: (row) => (row.hasCeiling ? 'declared' : 'tracking only') },
+            { key: 'breach', label: 'Breach', render: (row) => (row.breach ? badge('yes', 'bad') : h('span', { class: 'muted' }, 'no')) },
+            { key: 'reason', label: 'Reason' },
+          ],
+          rows: exposure.excluded,
+        }),
+      })
+      : null,
+    card({
+      title: 'Refusals and limits',
+      subtitle: 'What this reading will not tell you, printed instead of implied.',
+      body: h('ul', { class: 'evidence-list small' }, ...exposure.refusals.map((reason) => h('li', null, reason))),
+    }),
+    card({
+      title: 'How this roll-up is computed',
+      subtitle: 'Named methods, the same ones the envelopes view uses.',
+      body: h('div', { class: 'prose small' }, ...BUDGET_EXPOSURE_METHOD.map((method) => h('p', null, h('strong', null, `${method.name}: `), method.why))),
+    }),
   );
 }
 
