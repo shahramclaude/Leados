@@ -1,3 +1,8 @@
+## 2026-11-08 · Session 178: The inference-only handover digest ([ADR-0132](./docs/adr/0132-inference-only-handover-digest.md) · Schema v118 unchanged)
+
+- **New capability (frontline / mid-manager primary; every altitude scoped):** `#/duty-cover?panel=desk` lists inference-only cover checks on unended absence windows, bounded to 40 printed rows with the full count and deferred remainder. Ordered by duty open work then preparation cutoff; the existing rehearsal transaction clears/changes the queue; counts roll up into brief, existing absence CSV columns and scan events. No new collection, rule, event, convention or schema bump; badge unchanged.
+- **Tests:** new `duty-handover-digest` 5/5 + adjacent rehearsal/absence/window-exercise 31/31; lint, boundary, links, standalone rebuild and standalone 7/7 PASS. Full canonical suite and real-browser AT [UNVERIFIED]. Seats remain workflow declarations, not authentication.
+
 ## 2026-11-07 · Session 159: The bounded epistemic backlog ([ADR-0117](./docs/adr/0117-bounded-epistemic-backlog.md) · Schema v112 unchanged)
 
 - **New capability (frontline primary; every altitude on the same spine):** `RULE-EPI-02` escalations are bounded to a declared weekly budget per owning span (`epistemicEscalateMaxPerWeek`, default 5, clamped 1–52, director+ **and** full access). Oldest condition first; every transaction in the ISO week shares one quota (marker bookkeeping: escalation markers now carry `ownerSeatId` + `weekKey`), scans included — revising ADR-0103's scan-opens-everything semantics while the scan still harvests, expires, re-grades and still runs when auto-propagation is off.

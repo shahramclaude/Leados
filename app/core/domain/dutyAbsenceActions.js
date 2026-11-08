@@ -322,16 +322,18 @@ export function createDutyAbsenceActions(store, { now, idFactory }) {
       const rollup = dutyAbsenceRollup(store.state, built, seat, { now: clock(), settings: settings(), items });
       const report = buildDutyCoverageReport(store.state, { now: clock(), settings: settings() });
       const conc = report.absences.concurrency;
+      const handover = report.absences.handoverDigest?.summary || null;
       store.update(() => {}, {
         type: DUTY_ABSENCE_EVENTS.SCAN,
         entity: 'workspace',
         entityId: '',
-        summary: `Absence plans re-derived: ${report.absences.own ? 1 : 0} own, ${rollup.rows.length} in span, ${report.absences.exposedOpenN} open uncovered. Pre-window exercise: ${report.absences.exercise?.validLinesN ?? 0} valid line(s), ${report.absences.exercise?.thinLinesN ?? 0} thin, ${report.absences.exercise?.rehearsedCoversN ?? 0} cover(s) rehearsed by explicit record, ${report.absences.exercise?.gapsCoversN ?? 0} rehearsal(s) found gaps. Concurrency: ${conc.refused ? 'refused' : `${conc.summary.windowsN} window(s), max ${conc.summary.maxConcurrent} seats, ${conc.summary.singleCoverN} single-cover point(s)`}. Cover capacity: ${conc.coverLoad.gradedN} graded, ${conc.coverLoad.overEnvelopeN} over envelope. Nothing was scheduled.`.slice(0, 300),
+        summary: `Absence plans re-derived: ${report.absences.own ? 1 : 0} own, ${rollup.rows.length} in span, ${report.absences.exposedOpenN} open uncovered. Pre-window exercise: ${report.absences.exercise?.validLinesN ?? 0} valid line(s), ${report.absences.exercise?.thinLinesN ?? 0} thin, ${report.absences.exercise?.rehearsedCoversN ?? 0} cover(s) rehearsed by explicit record, ${report.absences.exercise?.gapsCoversN ?? 0} rehearsal(s) found gaps. Handover: ${handover?.checksN ?? 0} inference-only check(s), ${handover?.cutoffPassedN ?? 0} past cutoff. Concurrency: ${conc.refused ? 'refused' : `${conc.summary.windowsN} window(s), max ${conc.summary.maxConcurrent}, ${conc.summary.singleCoverN} single-cover`}. Capacity: ${conc.coverLoad.gradedN} graded, ${conc.coverLoad.overEnvelopeN} over. Nothing scheduled.`.slice(0, 300),
       });
       return saved({
         exposedOpenN: report.absences.exposedOpenN,
         inSpanN: rollup.rows.length,
         exercise: report.absences.exercise,
+        handover,
         concurrency: {
           windowsN: conc.summary.windowsN,
           maxConcurrent: conc.summary.maxConcurrent,

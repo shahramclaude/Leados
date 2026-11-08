@@ -18,7 +18,7 @@ import { downloadText } from '../ui/download.js';
 import { pageHeader, card, stat, badge, banner, tabs, emptyState, table } from '../ui/components.js';
 import { recordFocus, isFocused, focusRowProps, focusCardClass, focusAbsentNote } from '../ui/recordFocus.js';
 import { serializeCsv } from '../core/csv.js';
-import { DUTY_BRANCH_DISCLOSURE_PREMISE, DUTY_COVERAGE_PANELS, DUTY_PREMISE } from '../core/domain/dutyCoverageRegistry.js';
+import { DUTY_BRANCH_DISCLOSURE_PREMISE, DUTY_COVERAGE_PANELS, DUTY_HANDOVER_DIGEST_PREMISE, DUTY_PREMISE } from '../core/domain/dutyCoverageRegistry.js';
 import { DUTY_ABSENCE_PREMISE } from '../core/domain/dutyAbsenceRegistry.js';
 import { DUTY_REHEARSAL_MODES, DUTY_REHEARSAL_MODE_LABELS, DUTY_REHEARSAL_PREMISE } from '../core/domain/dutyRehearsalRegistry.js';
 import { BRANCH_READING_BAND_LABELS, BRANCH_READING_PREMISE, BRANCH_READING_STATE_LABELS } from '../core/domain/branchReadingRegistry.js';
@@ -30,6 +30,8 @@ const CSV_COLUMNS = ['row_kind', 'scope', 'altitude', 'duty_key', 'band', 'open_
   'absence_seat_rank', 'absence_from', 'absence_to', 'absence_duties_n', 'absence_covered_n',
   'absence_thin_n', 'absence_cover_absent_n', 'absence_ineligible_n', 'absence_gap_n', 'absence_exposed_open_n',
   'absence_rehearsed_n', 'absence_rehearsal_gaps_n',
+  // ADR-0132: inference-only handover counts on the existing absence row kind.
+  'absence_handover_checks_n', 'absence_handover_open_work_n', 'absence_handover_cutoff_passed_n',
   'branch_seats_n', 'duties_n', 'branch_covered_n', 'branch_gap_n', 'branch_open_gap_n', 'branch_readiness_pct',
   'branch_withheld', 'branch_floor_n', 'branch_rate_floor_n',
   'branch_released_n', 'branch_released_seats_n', 'branch_withheld_n', 'branch_deferred_n', 'branch_pooled_pct', 'branch_mean_pct',
@@ -1000,6 +1002,55 @@ function dutyCard(ctx, row, namesShown) {
   });
 }
 
+/* ADR-0132: the seat's daily handover triage. One row is one cover × duty ×
+ * unended absence whose only in-window evidence is inferred work. The engine
+ * has already scoped and redacted it; this card only prints and offers the
+ * existing ADR-0128 rehearsal act to a seat positioned to record it. */
+function handoverDigestCard(ctx, digest) {
+  if (!digest) return null;
+  const s = digest.summary;
+  if (!s.checksN) {
+    return card({
+      title: 'Handover checks — inference-only covers',
+      body: emptyState({
+        title: 'No inference-only cover needs a handover check',
+        body: 'No available, eligible cover on an unended absence window is resting on inferred work alone. This is not a claim that every handover was rehearsed: gaps, missing evidence and ended windows keep their own states elsewhere.',
+      }),
+    });
+  }
+  return card({
+    title: `Handover checks — ${s.checksN} inference-only cover check(s)`,
+    subtitle: `${s.windowsN} unended absence window(s) · ${s.openWorkChecksN} check(s) on duty lines carrying open work · ${s.cutoffPassedN} past the preparation cutoff. Ordered by open work, then earliest cutoff.`,
+    body: h('div', { class: 'stack' },
+      h('p', { class: 'muted small' }, DUTY_HANDOVER_DIGEST_PREMISE),
+      s.cutoffPassedN
+        ? banner({ tone: 'warn', title: `${s.cutoffPassedN} check(s) are already past the preparation cutoff`, body: 'The absence has started or the pre-window cutoff has passed. A rehearsal recorded now is still a dated human act, but it cannot back-date readiness; the row keeps printing until the evidence or the window changes.' })
+        : null,
+      table({
+        caption: 'Inference-only handover checks, scoped to this seat',
+        rows: digest.rows,
+        emptyMessage: 'No check is printed in this slice.',
+        columns: [
+          { label: 'Duty', render: (r) => h('span', null, h('strong', null, r.dutyLabel), h('span', { class: 'muted small' }, ` · ${r.holderName ? `${r.holderName} (${r.holderLabel})` : r.holderLabel}`)) },
+          { label: 'Cover', render: (r) => (digest.namesVisible ? (r.coverName || r.coverLabel || '—') : `Name withheld · ${r.coverLabel || `rank ${r.coverRank}`}`) },
+          { label: 'Absence', render: (r) => `${r.from} → ${r.to}` },
+          { label: 'Prepare by', render: (r) => h('span', null, r.preparationTo, r.cutoffPassed ? badge('cutoff passed', 'warn') : badge(`${Math.max(0, r.startsInDays)}d to start`, 'neutral')) },
+          { label: 'Inferred evidence', render: (r) => `${r.evidenceOn || '—'}${r.evidenceType ? ` · ${r.evidenceType}` : ''}` },
+          { label: 'Open work', render: (r) => String(r.openN) },
+          { label: 'Act', render: (r) => h('span', { class: 'row-actions' },
+            h('a', { class: 'btn btn-ghost btn-small', href: `#/duty-cover?panel=plan&plan=${encodeURIComponent(r.planId)}` }, 'Open plan'),
+            r.canRecord
+              ? h('button', { class: 'btn btn-small', type: 'button', onClick: () => rehearsalDialog(ctx, { id: r.coverRowId, name: r.coverName, label: r.coverLabel, dutyLabel: r.dutyLabel }) }, 'Record rehearsal')
+              : h('span', { class: 'muted small' }, 'Holder, cover or leader above records')) },
+        ],
+      }),
+      s.deferredN
+        ? h('p', { class: 'muted small' }, `${s.deferredN} further check(s) are counted but not printed: the Desk digest is capped at ${s.rowCap} row(s). The full count travels in the brief and the per-absence CSV counts; nothing is silently dropped.`)
+        : null,
+      h('p', { class: 'muted small' }, 'A check clears when a ready rehearsal is recorded, the cover or absence is revoked, the roster changes, or the window ends. A gaps rehearsal leaves this queue and opens its own governed decision. Nothing here assigns a cover, sends a reminder or changes the navigation badge.')),
+  });
+}
+
 function deskPanel(ctx, report) {
   const s = report.summary;
   const brief = ctx.api.dutyCoverageBriefText?.();
@@ -1035,8 +1086,10 @@ function deskPanel(ctx, report) {
         stat({ label: 'Register readiness', value: pctText(s.readinessPct), tone: s.readinessPct === null ? '' : (s.readinessPct >= 70 ? 'good' : 'bad'), hint: s.interval ? `Wilson 95% ${s.interval.low}–${s.interval.high}% · measures the REGISTER, not a person` : 'refused: no declared duty line' }),
         stat({ label: 'Open work with no cover', value: String(s.openGapN), tone: s.openGapN ? 'bad' : 'good', hint: 'a duty carrying open items and answerable by nobody' }),
         stat({ label: 'Single-hand duties', value: String(s.soleHandedN), tone: s.soleHandedN ? 'bad' : '', hint: `one hand carries ≥ ${report.conventions.dutyCoverageConcentrationPct}% of the recorded work` }),
+        stat({ label: 'Handover checks', value: String(report.absences?.handoverDigest?.summary?.checksN ?? 0), tone: report.absences?.handoverDigest?.summary?.checksN ? 'warn' : 'good', hint: 'inference-only covers on unended absence windows · review prompt, not a badge' }),
         stat({ label: 'Exercise window', value: `${report.conventions.dutyCoverageExerciseDays}d`, hint: `since ${s.windowStart}; re-declarable by a rank-4+ full-access seat` })),
     }),
+    handoverDigestCard(ctx, report.absences?.handoverDigest),
     report.branchCoverage ? card({
       title: 'Continuity across direct branches',
       subtitle: `Each duty line belongs to one direct leadership branch; your own duties are excluded. Branch numbers are anonymous and may change when the roster changes. They are not division names. A cell below the declared floor of ${report.branchCoverage.floor} duty line(s) is withheld, and one released cell is withheld beside each of them so nothing is recoverable by subtraction.`,
@@ -1332,6 +1385,7 @@ function methodPanel(ctx, report) {
         h('li', null, h('strong', null, 'Refused:'), ' a coverage score for a person, an automation that assigns a stand-in, and a “verified” tick-box. A tick would be a second, decaying record of a fact the workspace can re-derive.'),
         h('li', null, h('strong', null, 'Withheld, not zeroed:'), ' a direct-branch cell below the declared disclosure floor, and one further released cell beside it, so the blank cannot be recovered by subtracting the released cells from a known total. This is primary + complementary suppression, not differential privacy.'),
         h('li', null, h('strong', null, 'A withheld cell is not a closed question.'), ' ADR-0129 gives it a governed hand-off: the branch’s own leader publishes the BAND their own register grades into, with their own words — the band is derived by the register and never typed, no count crosses, the reading lapses after its declared validity, and a decline is recorded as an answer with no decision opened against the person. The withheld figure stays withheld either way.'),
+        h('li', null, h('strong', null, 'Handover checks (ADR-0132):'), ' the Desk lists available, eligible covers whose only evidence inside an unended absence’s preparation window is inferred work. One row is one cover × duty × absence; open work on the duty comes first, then the earliest preparation cutoff (constraint-first dispatching, Goldratt). It is a review prompt, not a readiness verdict and not a person score. The existing rehearsal act clears a ready check; a gaps rehearsal opens its own governed decision. Counts roll up into the brief and the existing absence CSV rows; names and person ids do not cross above rank 2. The navigation badge is deliberately unchanged.'),
         h('li', null, h('strong', null, 'Schema v114 is additive.'), ' An upgraded workspace starts with an empty cover ledger — “no duty here has a declared cover yet”, which is not the same claim as “every duty is covered”.')),
     }),
     card({

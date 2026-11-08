@@ -50,6 +50,8 @@ import { addDays, dayKey, daysBetween } from '../time.js';
 import {
   DUTY_BRANCH_DISCLOSURE_PREMISE,
   DUTY_COVERAGE_LIMITS,
+  DUTY_HANDOVER_DIGEST_ENGINE_VERSION,
+  DUTY_HANDOVER_DIGEST_PREMISE,
   DUTY_PREMISE,
 } from './dutyCoverageRegistry.js';
 import { normalizeDutyCoverageSettings, makeDutyId } from './dutyCoverageSchema.js';
@@ -518,6 +520,7 @@ export function dutyAbsenceRollup(state, built, seat, { now = new Date(), settin
       exerciseIndexes.set(absentSeat.id, buildWindowExerciseIndex(state, built, absentSeat, { now, settings: effective, duties: dutiesForSeat(absentSeat) }));
     }
     const planForSeat = absenceWindowPlan(state, built, absentSeat, { from: plan.from, to: plan.to }, { now, settings: effective, items: allItems, depth: 1, windowExerciseIndex: exerciseIndexes.get(absentSeat.id), namesVisible });
+    const handoverChecks = handoverChecksForPlan(planForSeat, plan, { built, seat, now, namesVisible });
     rows.push({
       // ADR-0131: the plan record's own id, so a typed `declares-absence-of`
       // edge can focus this exact row. A record id, never a person id — the
@@ -531,6 +534,10 @@ export function dutyAbsenceRollup(state, built, seat, { now = new Date(), settin
       to: plan.to,
       reason: plan.reason,
       summary: planForSeat.summary,
+      // ADR-0132: additive, derived from the SAME plan just built. The digest
+      // merges these rows; the CSV carries only the per-plan summary.
+      handoverChecks,
+      handover: summarizeHandoverChecks(handoverChecks),
     });
   }
   rows.sort((a, b) => (a.from < b.from ? -1 : a.from > b.from ? 1 : a.label.localeCompare(b.label)));
@@ -1094,6 +1101,111 @@ export function absenceConcurrency(state, built, seat, { now = new Date(), setti
   return result;
 }
 
+/* =============================== ADR-0132: inference-only handover digest */
+
+/** May this seat record the rehearsal? Mirrors ADR-0128's positioned-observer
+ * rule without importing the action layer into the pure read model. */
+function positionedToRecord(built, seat, holderId, coverId) {
+  if (seat.readOnly) return false;
+  if (seat.id === holderId || seat.id === coverId) return true;
+  let cursor = built.chain.nodes.get(holderId)?.parentId || null;
+  let guard = 0;
+  while (cursor && guard < 16) {
+    if (cursor === seat.id) return true;
+    if (cursor === LEADER_ID) break;
+    cursor = built.chain.nodes.get(cursor)?.parentId || null;
+    guard += 1;
+  }
+  return false;
+}
+
+/**
+ * One triage row per cover × duty × absence whose ONLY in-window evidence is
+ * inferred work (`windowExercise.status === 'valid'`). A ready rehearsal, a
+ * gaps finding, missing/stale evidence, an absent cover and an ineligible cover
+ * are deliberately not this queue: they already have their own honest states.
+ *
+ * Identity is redacted at construction, not in the view: above rank 2 there is
+ * no holder name, no cover name and no person id. The cover-row id addresses the
+ * declaration (ADR-0131), never the person. No absence reason, cover note or
+ * rehearsal note is copied into the digest.
+ */
+export function handoverChecksForPlan(plan, record, { built, seat, now = new Date(), namesVisible = false } = {}) {
+  if (!plan || !record || !record.id || record.to < dayKey(now)) return [];
+  const holder = built.byId.get(record.seatId);
+  const today = dayKey(now);
+  const out = [];
+  for (const row of plan.rows || []) {
+    for (const cover of row.covers || []) {
+      const exercise = cover.windowExercise;
+      // A gaps rehearsal is explicit evidence with its own governed decision,
+      // even when inferred work still grades `valid`; it is not inference-only.
+      if (!cover.available || !cover.eligible || exercise?.status !== 'valid' || exercise.gapsRehearsal) continue;
+      const evidence = exercise.evidence || exercise.lastEvidence || null;
+      out.push({
+        id: `${record.id}:${cover.id}`,
+        planId: record.id,
+        coverRowId: cover.id,
+        dutyId: row.dutyId,
+        dutyKey: row.key,
+        dutyLabel: row.label,
+        holderLabel: holder?.label || 'a seat no longer in this roster',
+        holderName: namesVisible ? (holder?.name || null) : null,
+        coverLabel: cover.label || (cover.rank === null ? null : `Rank ${cover.rank} cover`),
+        coverName: namesVisible ? cover.name : null,
+        coverRank: cover.rank,
+        from: record.from,
+        to: record.to,
+        startsInDays: daysBetween(today, record.from),
+        preparationFrom: exercise.from,
+        preparationTo: exercise.to,
+        cutoffPassed: exercise.to < today,
+        evidenceOn: evidence?.day || null,
+        evidenceType: evidence?.typeLabel || null,
+        evidenceSourceId: namesVisible ? (evidence?.sourceId || null) : null,
+        openN: row.openN,
+        canRecord: positionedToRecord(built, seat, record.seatId, cover.coverId),
+      });
+    }
+  }
+  return out;
+}
+
+export function summarizeHandoverChecks(checks) {
+  const list = Array.isArray(checks) ? checks : [];
+  return {
+    checksN: list.length,
+    openWorkChecksN: list.filter((c) => c.openN > 0).length,
+    cutoffPassedN: list.filter((c) => c.cutoffPassed).length,
+    recordableN: list.filter((c) => c.canRecord).length,
+    windowsN: new Set(list.map((c) => c.planId)).size,
+  };
+}
+
+/** Merge already-computed per-plan checks into the seat's bounded digest. No
+ * second harvest, no second plan build, no stored queue and no new rule. */
+export function buildHandoverDigest(checks, { namesVisible = false } = {}) {
+  const all = [...(Array.isArray(checks) ? checks : [])].sort((a, b) =>
+    b.openN - a.openN
+    || a.preparationTo.localeCompare(b.preparationTo)
+    || a.from.localeCompare(b.from)
+    || a.id.localeCompare(b.id));
+  const cap = DUTY_COVERAGE_LIMITS.handoverDigestRowCap;
+  const rows = all.slice(0, cap);
+  return {
+    engineVersion: DUTY_HANDOVER_DIGEST_ENGINE_VERSION,
+    premise: DUTY_HANDOVER_DIGEST_PREMISE,
+    namesVisible,
+    rows,
+    summary: {
+      ...summarizeHandoverChecks(all),
+      shownN: rows.length,
+      deferredN: Math.max(0, all.length - rows.length),
+      rowCap: cap,
+    },
+  };
+}
+
 /**
  * The report's dated section: the seat's own active absence (with its window
  * plan) plus every absence in the span below, counts-only above the manager
@@ -1105,9 +1217,15 @@ function buildAbsenceSection(state, built, seat, { now, settings, items }) {
   const own = activeAbsenceFor(state?.absencePlans, seat.fullAccess ? null : seat.id);
   const inSpan = dutyAbsenceRollup(state, built, seat, { now, settings, items });
   const namesVisible = seat.fullAccess || (seat.rank ?? 1) <= 2;
-  const ownSummary = own
-    ? absenceWindowPlan(state, built, seat, { from: own.from, to: own.to }, { now, settings, items, depth: 0, namesVisible }).summary
+  const ownPlan = own
+    ? absenceWindowPlan(state, built, seat, { from: own.from, to: own.to }, { now, settings, items, depth: 0, namesVisible })
     : null;
+  const ownSummary = ownPlan?.summary || null;
+  const ownHandoverChecks = handoverChecksForPlan(ownPlan, own, { built, seat, now, namesVisible });
+  const handoverDigest = buildHandoverDigest([
+    ...ownHandoverChecks,
+    ...inSpan.rows.flatMap((r) => r.handoverChecks || []),
+  ], { namesVisible });
   const exercise = { gradedCoversN: 0, validCoversN: 0, rehearsedCoversN: 0, gapsCoversN: 0, attestedRehearsalsN: 0, selfReportedRehearsalsN: 0, staleCoversN: 0, missingCoversN: 0, futureCoversN: 0, lateCoversN: 0, validLinesN: 0, thinLinesN: 0 };
   for (const summary of [ownSummary, ...inSpan.rows.map((r) => r.summary)]) {
     const e = summary?.exercise || {};
@@ -1122,6 +1240,7 @@ function buildAbsenceSection(state, built, seat, { now, settings, items }) {
         reason: namesVisible ? own.reason : null,
         declaredOn: own.declaredOn,
         summary: ownSummary,
+        handover: summarizeHandoverChecks(ownHandoverChecks),
       }
       : null,
     inSpan: inSpan.rows.map((r) => ({
@@ -1132,7 +1251,9 @@ function buildAbsenceSection(state, built, seat, { now, settings, items }) {
       to: r.to,
       reason: namesVisible ? r.reason : null,
       summary: r.summary,
+      handover: r.handover,
     })),
+    handoverDigest,
     exposedN: (ownSummary ? ownSummary.exposedN : 0) + inSpan.exposedN,
     exposedOpenN: (ownSummary ? ownSummary.exposedOpenN : 0) + inSpan.exposedOpenN,
     // ADR-0125: the same date-valid exercise counts roll up with the dated
@@ -1590,6 +1711,14 @@ export function dutyCoverageBriefText(report) {
     if (exercise) {
       lines.push(`Pre-window cover exercise: ${exercise.validLinesN} duty line(s) have duty-specific evidence recorded by today inside the preparation window ending the day before absence starts; ${exercise.thinLinesN} read thin. Cover statuses: ${exercise.rehearsedCoversN} rehearsed by explicit dated record (${exercise.attestedRehearsalsN} holder/supervisor-attested, ${exercise.selfReportedRehearsalsN} self-reported), ${exercise.validCoversN} valid on inferred work, ${exercise.gapsCoversN} rehearsal(s) found gaps, ${exercise.staleCoversN} stale, ${exercise.missingCoversN} missing, ${exercise.futureCoversN} future-dated, ${exercise.lateCoversN} after cutoff.`);
     }
+    // ADR-0132: the triage queue rolls up as counts only. A check is one
+    // cover × duty × unended absence whose only in-window evidence is inferred
+    // work; it is a prompt to review, not a finding that the cover is unready.
+    const handover = report.absences?.handoverDigest?.summary;
+    if (handover) {
+      lines.push(`Handover checks (inference-only covers): ${handover.checksN} across ${handover.windowsN} unended absence window(s) — ${handover.openWorkChecksN} on duty lines carrying open work, ${handover.cutoffPassedN} already past the preparation cutoff. These covers have valid inferred evidence but no explicit ready rehearsal for the window; review them before relying on the handover. This is a review queue, not a readiness verdict.`);
+      if (handover.deferredN) lines.push(`  · ${handover.deferredN} further check(s) are counted but not printed on the Desk: the digest is capped at ${handover.rowCap} row(s).`);
+    }
   }
   // ADR-0123: concurrency is printed as its own reading, with its own refusal.
   const conc = report.absences?.concurrency;
@@ -1696,10 +1825,10 @@ export function dutyCoverageCsvRows(report) {
   // reason text. The seat's rank is a position number, not an identity.
   const absenceRows = [];
   if (report.absences?.own) {
-    absenceRows.push({ seatId: report.seat.id, label: report.seat.label, rank: report.seat.rank, from: report.absences.own.from, to: report.absences.own.to, summary: report.absences.own.summary });
+    absenceRows.push({ seatId: report.seat.id, label: report.seat.label, rank: report.seat.rank, from: report.absences.own.from, to: report.absences.own.to, summary: report.absences.own.summary, handover: report.absences.own.handover });
   }
   for (const a of report.absences?.inSpan || []) {
-    absenceRows.push({ seatId: a.seatId, label: a.label, rank: a.rank, from: a.from, to: a.to, summary: a.summary });
+    absenceRows.push({ seatId: a.seatId, label: a.label, rank: a.rank, from: a.from, to: a.to, summary: a.summary, handover: a.handover });
   }
   for (const a of absenceRows) {
     rows.push({
@@ -1723,6 +1852,11 @@ export function dutyCoverageCsvRows(report) {
       // than inferred work, and how many rehearsals found gaps. Counts only.
       absence_rehearsed_n: a.summary.exercise?.rehearsedCoversN ?? '',
       absence_rehearsal_gaps_n: a.summary.exercise?.gapsCoversN ?? '',
+      // ADR-0132: per-plan inference-only handover counts. No person, no seat
+      // id, no record id and no free text; an ended window exports zero checks.
+      absence_handover_checks_n: a.handover?.checksN ?? '',
+      absence_handover_open_work_n: a.handover?.openWorkChecksN ?? '',
+      absence_handover_cutoff_passed_n: a.handover?.cutoffPassedN ?? '',
       refused_reason: '',
     });
   }
