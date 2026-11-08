@@ -107,6 +107,12 @@ import { DEFAULT_POST_COMMIT_RULES, MAX_REPLAY_EVENT_BUDGET } from './core/domai
 // ADR-0076: the Operating Seat — an enforced, altitude-aware access boundary
 // and a vertical roll-up derived live from the reporting tree (no new schema).
 import { seatReport, buildSeats, activeSeat, canAct } from './core/domain/seat.js';
+// ADR-0141: the declared matrix lines are handed to the seat engine at the two
+// places the seat is RESOLVED (the read model and the seat-declaration guard).
+// Without this a project manager who holds people only on a declared line has
+// no seat at all, so choosing them as the operating seat made the workspace
+// read-only and their own fanned work unreadable.
+import { matrixLineScopeFor } from './core/domain/matrix.js';
 import { SEAT_EVENTS, SEAT_PREMISE, UNDECLARED_SEAT } from './core/domain/seatRegistry.js';
 import { normalizeSeatId } from './core/domain/seatSchema.js';
 import { normalizeResponsePlans, RESPONSE_PLAN_CAP, validateResponseAssumptions } from './core/domain/responseSchema.js';
@@ -18171,7 +18177,8 @@ export function createApi(store, options = {}) {
 
   /** The whole-workspace, altitude-aware read model. Pure: no write. */
   function seatRead() {
-    return seatReport(store.state, { now: clock(), settings: store.state.settings || {} });
+    const settings = store.state.settings || {};
+    return seatReport(store.state, { now: clock(), settings, lineScope: matrixLineScopeFor(store.state, { now: clock(), settings }) });
   }
 
   /**
@@ -18187,7 +18194,11 @@ export function createApi(store, options = {}) {
     if (requested !== null && normalized === null) {
       return fail('That seat identifier is not valid. Choose a leadership position from the roster.', 'seatId');
     }
-    const built = buildSeats(store.state, { now: clock(), settings: store.state.settings || {} });
+    const built = buildSeats(store.state, {
+      now: clock(),
+      settings: store.state.settings || {},
+      lineScope: matrixLineScopeFor(store.state, { now: clock(), settings: store.state.settings || {} }),
+    });
     if (normalized !== null && normalized !== UNDECLARED_SEAT && !built.byId.has(normalized)) {
       return fail('That seat is not a leadership position in the current roster. Declare a real seat, or return to the operator view.', 'seatId');
     }

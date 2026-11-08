@@ -135,6 +135,14 @@ function overviewPanel(ctx, r) {
           kv('Decision question', d.decisionQuestion || '—'),
           kv('Unit of discretion', altitude?.unitLabel || '—'),
           kv('People in this span', String(d.scopeN)),
+          // ADR-0141: the matrix reading of the same span. Absent (not zero)
+          // when the workspace declares no additional reporting line.
+          d.lineScopeN > 0
+            ? kv('People on a declared line', `${d.lineScopeN} across ${d.lineCount} line(s) — ${d.lineKinds.join(', ')}`)
+            : null,
+          d.lineScopeN > 0
+            ? kv('Span under the matrix', `${d.matrixScopeN} people (${d.matrixScopeN - d.scopeN} the reporting tree does not reach)`)
+            : null,
           kv('Direct child spans', String(d.spanN)),
           kv('Evidence floor', `${d.floorN} observations`),
           kv('Disclosure', d.disclosure.reason),
@@ -149,6 +157,14 @@ function overviewPanel(ctx, r) {
       stat({ label: 'Severity load', value: String(d.counts.severityLoad), hint: 'weighted units, not people' }),
       stat({ label: 'Oldest item', value: d.counts.oldestAgeDays === null ? '—' : `${d.counts.oldestAgeDays}d`, hint: 'age of the work' }),
       stat({ label: 'Detail withheld', value: String(d.counts.withheldDetailN), hint: 'counts only above the ceiling' }),
+      d.lineScopeN > 0
+        ? stat({
+          label: 'Only via a declared line',
+          value: String(d.counts.viaLineN),
+          hint: `of ${d.counts.openN} — hidden by a single-chain seat`,
+          tone: d.counts.viaLineN ? 'warn' : '',
+        })
+        : null,
     ),
     h('h2', { class: 'section-title' }, `The ${d.label}’s duties — routes filtered by the permission engine`),
     dutyCards.length ? h('div', { class: 'grid-2' }, ...dutyCards)
