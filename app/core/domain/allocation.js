@@ -51,6 +51,7 @@
 
 import { addDays, dayKey, daysBetween } from '../time.js';
 import { PORTFOLIO_HORIZONS, PORTFOLIO_HORIZON_LABELS, pertTriple } from './capacity.js';
+import { appendTalkingPoint, recordQueueRefusal } from './talkingPointPolicy.js';
 
 export const ALLOC_ENGINE_VERSION = 'allocation-2026.10-v1';
 
@@ -450,10 +451,17 @@ function talkingPointExists(draft, personId, marker) {
   return Boolean(p && (p.talkingPoints || []).some((t) => String(t).includes(marker)));
 }
 
-function addTalkingPoint(draft, personId, text, marker) {
+function addTalkingPoint(draft, ctx, personId, text, marker) {
   const p = (draft.people || []).find((x) => x && x.id === personId && x.status !== 'archived');
   if (!p) return false;
-  p.talkingPoints = [...(Array.isArray(p.talkingPoints) ? p.talkingPoints : []), `${text} ${marker}`].slice(-30);
+  // ADR-0138: the shared writer, never a local `.slice(-30)`, so a prompt this
+  // rule writes cannot delete a topic the person raised.
+  const write = appendTalkingPoint(p.talkingPoints, `${text} ${marker}`);
+  if (!write.appended) {
+    if (write.refused) recordQueueRefusal(ctx && ctx.warnings, p.name);
+    return false;
+  }
+  p.talkingPoints = write.points;
   return true;
 }
 
@@ -602,7 +610,7 @@ export function allocationRule(draft, ctx = {}) {
     if (eventItem.horizon === 'exploratory' && eventItem.decision === 'funded' && eventItem.status === 'open'
       && ownerValid(draft, eventItem.ownerId) && !talkingPointExists(draft, eventItem.ownerId, betMarker)) {
       const when = eventItem.targetOn ? `by ${eventItem.targetOn}` : 'at the first checkpoint';
-      const added = addTalkingPoint(draft, eventItem.ownerId,
+      const added = addTalkingPoint(draft, ctx, eventItem.ownerId,
         `Bet check for “${clampText(eventItem.title, 120)}”: this is exploratory, so agree the learning checkpoint now — what would we need to see ${when} to keep funding it, and what result would make us stop?`,
         betMarker);
       if (added) {
@@ -649,7 +657,7 @@ export function allocationRule(draft, ctx = {}) {
     if (eventItem.decision === 'funded' && eventItem.status === 'open' && !isValidHorizon(eventItem.horizon)
       && eventItem.kind !== 'capacity-reserve'
       && ownerValid(draft, eventItem.ownerId) && !talkingPointExists(draft, eventItem.ownerId, classifyMarker)) {
-      const added = addTalkingPoint(draft, eventItem.ownerId,
+      const added = addTalkingPoint(draft, ctx, eventItem.ownerId,
         `Classify “${clampText(eventItem.title, 120)}”: is this Core (optimise what exists), Adjacent (nearby ground) or Exploratory (a new bet)? Until funded work is classified, the allocation mix cannot be measured.`,
         classifyMarker);
       if (added) {

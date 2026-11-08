@@ -38,6 +38,7 @@
 import { addDays, dayKey } from '../time.js';
 import { ensureEntityLink } from './automation.js';
 import { fairnessReading } from './comp.js';
+import { appendTalkingPoint, recordQueueRefusal } from './talkingPointPolicy.js';
 
 export const COMP_DECLARED_EVENT = 'comp.cycle.declared';
 export const COMP_UPDATED_EVENT = 'comp.cycle.updated';
@@ -55,7 +56,6 @@ export const COMP_RULE_IDS = Object.freeze({
 /** The window a frozen prediction is scored over: one year from the effective date. */
 export const COMP_OUTCOME_HORIZON_DAYS = 365;
 
-const MAX_TOPICS = 12;
 
 function marker(tag) {
   return `[${tag}]`;
@@ -123,12 +123,19 @@ function delegationRecord(ctx, { personId, title, expectedOutcome, support, dueO
   };
 }
 
-function addTalkingPoint(person, text, tag) {
+function addTalkingPoint(person, ctx, text, tag) {
   if (!person) return false;
   const token = marker(tag);
-  person.talkingPoints = Array.isArray(person.talkingPoints) ? person.talkingPoints : [];
-  if (person.talkingPoints.some((row) => String(row).includes(token))) return false;
-  person.talkingPoints = [...person.talkingPoints, `${text} ${token}`.slice(0, 240)].slice(-MAX_TOPICS);
+  const list = Array.isArray(person.talkingPoints) ? person.talkingPoints : [];
+  if (list.some((row) => String(row).includes(token))) return false;
+  // ADR-0138: the shared writer, never a local `.slice(-MAX_TOPICS)`, so an
+  // automatic prompt can never delete a topic the person raised.
+  const write = appendTalkingPoint(list, `${text} ${token}`.slice(0, 240));
+  if (!write.appended) {
+    if (write.refused) recordQueueRefusal(ctx && ctx.warnings, person.name);
+    return false;
+  }
+  person.talkingPoints = write.points;
   return true;
 }
 
@@ -303,7 +310,7 @@ function fairnessPropagation(draft, ctx, cycle, reading) {
         summary: 'Opened one owned task for the mechanism evidence.',
       });
     }
-    if (addTalkingPoint(owner, `Before we communicate “${cycle.label}”: what does our own benchmark say about the flagged segment, and are we ready to answer it?`, tag)) {
+    if (addTalkingPoint(owner, ctx, `Before we communicate “${cycle.label}”: what does our own benchmark say about the flagged segment, and are we ready to answer it?`, tag)) {
       effects.push({
         ruleId: COMP_RULE_IDS.FAIRNESS,
         action: 'updated',

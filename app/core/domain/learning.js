@@ -65,6 +65,7 @@
  */
 
 import { addDays, dayKey, daysBetween, round } from '../time.js';
+import { appendTalkingPoint, recordQueueRefusal } from './talkingPointPolicy.js';
 
 export const AAR_ENGINE_VERSION = 'after-action-2026.10-v1';
 
@@ -1515,10 +1516,16 @@ export function learningRule(draft, ctx = {}) {
         if (person) {
           person.talkingPoints = Array.isArray(person.talkingPoints) ? person.talkingPoints : [];
           if (!person.talkingPoints.some((line) => String(line).includes(talkMarker))) {
-            person.talkingPoints = [...person.talkingPoints,
-              `${talkMarker} Learning follow-up, not a performance point: does the change we agreed after “${clampText(retro.subjectLabel, 60)}” actually exist yet, and what is in its way?`.slice(0, 200)].slice(-12);
-            note(ctx, AAR_RULE_IDS.ACTION, 'updated', 'person', person.id,
-              'Queued a blameless follow-up talking point for the lesson owner', out);
+            // ADR-0138: the shared writer, never a local `.slice(-12)`.
+            const write = appendTalkingPoint(person.talkingPoints,
+              `${talkMarker} Learning follow-up, not a performance point: does the change we agreed after “${clampText(retro.subjectLabel, 60)}” actually exist yet, and what is in its way?`.slice(0, 200));
+            if (write.appended) {
+              person.talkingPoints = write.points;
+              note(ctx, AAR_RULE_IDS.ACTION, 'updated', 'person', person.id,
+                'Queued a blameless follow-up talking point for the lesson owner', out);
+            } else if (write.refused) {
+              recordQueueRefusal(ctx && ctx.warnings, person.name);
+            }
           }
         }
       }

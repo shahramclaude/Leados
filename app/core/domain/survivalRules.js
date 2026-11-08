@@ -80,6 +80,7 @@ import {
   routeForSource,
   survivalReport,
 } from './survival.js';
+import { appendTalkingPoint, recordQueueRefusal } from './talkingPointPolicy.js';
 
 export const SURVIVAL_RULE_VERSION = 1;
 
@@ -100,7 +101,6 @@ export const SURVIVAL_EVENTS = Object.freeze({
   SCAN: 'survival.scan',
 });
 
-const MAX_TOPICS = 40;
 const MAX_TASKS_PER_READING = 5;
 
 function str(value, fallback = '') {
@@ -128,14 +128,20 @@ function note(reading, ctx, source, text) {
   if (reading.notes.length > 20) reading.notes.splice(0, reading.notes.length - 20);
 }
 
-function talkingPoint(draft, personId, text, tag) {
+function talkingPoint(draft, ctx, personId, text, tag) {
   const person = (draft.people || []).find((row) => row && row.id === personId);
   if (!person) return false;
   const token = `[${tag}]`;
-  person.talkingPoints = Array.isArray(person.talkingPoints) ? person.talkingPoints : [];
-  if (person.talkingPoints.some((row) => String(row).includes(token))) return false;
+  const list = Array.isArray(person.talkingPoints) ? person.talkingPoints : [];
+  if (list.some((row) => String(row).includes(token))) return false;
   const trimmed = String(text).slice(0, 200);
-  person.talkingPoints = [...person.talkingPoints, `${trimmed} ${token}`].slice(-MAX_TOPICS);
+  // ADR-0138: the shared writer applies the one declared retention policy.
+  const write = appendTalkingPoint(list, `${trimmed} ${token}`);
+  if (!write.appended) {
+    if (write.refused) recordQueueRefusal(ctx && ctx.warnings, person.name);
+    return false;
+  }
+  person.talkingPoints = write.points;
   return true;
 }
 

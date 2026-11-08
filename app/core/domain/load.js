@@ -67,6 +67,7 @@ import {
   projectPersonGraph,
   resolveTieFloor,
 } from './orgNetwork.js';
+import { appendTalkingPoint, recordQueueRefusal } from './talkingPointPolicy.js';
 
 export const LOAD_ENGINE_VERSION = 'cognitive-load-2026.10-v1';
 
@@ -604,7 +605,7 @@ function talkingPointExists(draft, personId, marker) {
   return Boolean(p && (p.talkingPoints || []).some((t) => String(t).includes(marker)));
 }
 
-function addTalkingPoint(draft, personId, text, marker) {
+function addTalkingPoint(draft, ctx, personId, text, marker) {
   const p = (draft.people || []).find((x) => x && x.id === personId && x.status !== 'archived');
   if (!p) return false;
   // normalizeTalkingPoints truncates each point to 200 characters on every
@@ -613,7 +614,15 @@ function addTalkingPoint(draft, personId, text, marker) {
   // sliced off and silently duplicating the prompt on the next scan.
   const maxText = 200 - marker.length - 1;
   const safeText = clampText(text, Math.max(40, maxText));
-  p.talkingPoints = [...(Array.isArray(p.talkingPoints) ? p.talkingPoints : []), `${safeText} ${marker}`].slice(-30);
+  // ADR-0138: no local cap. The shared writer applies the declared retention
+  // policy, so this write can never displace a topic the person raised, and a
+  // refused write is reported instead of being reported as a queued prompt.
+  const write = appendTalkingPoint(p.talkingPoints, `${safeText} ${marker}`);
+  if (!write.appended) {
+    if (write.refused) recordQueueRefusal(ctx && ctx.warnings, p.name);
+    return false;
+  }
+  p.talkingPoints = write.points;
   return true;
 }
 
@@ -792,7 +801,7 @@ export function loadRule(draft, ctx = {}) {
     const marker02 = `[${LOAD_RULE_IDS.WIP}:${person.personId}]`;
     if (person.queue.wip > wipLimit) {
       if (!talkingPointExists(draft, person.personId, marker02)) {
-        const added = addTalkingPoint(draft, person.personId,
+        const added = addTalkingPoint(draft, ctx, person.personId,
           `WIP check: ${person.queue.wip} open funded commitments vs the ${wipLimit}-item convention. Little's Law: more threads means longer waits on each. Let's pause one so something finishes — stop starting, start finishing.`,
           marker02);
         if (added) note(ctx, LOAD_RULE_IDS.WIP, 'updated', 'person', person.personId,
@@ -811,7 +820,7 @@ export function loadRule(draft, ctx = {}) {
       && person.mc.overloadProbability !== null;
     if (sizeCondition) {
       if (!talkingPointExists(draft, person.personId, marker03)) {
-        const added = addTalkingPoint(draft, person.personId,
+        const added = addTalkingPoint(draft, ctx, person.personId,
           `Size check: within the WIP limit, the Monte Carlo still puts P(overload) at ${Math.round(person.mc.overloadProbability * 100)}%. Split the largest thread or re-baseline its dates to recorded throughput.`,
           marker03);
         if (added) note(ctx, LOAD_RULE_IDS.SIZE, 'updated', 'person', person.personId,
@@ -832,7 +841,7 @@ export function loadRule(draft, ctx = {}) {
         .find((p) => p && p.id === person.managerId && p.status !== 'archived');
       const targetId = manager ? manager.id : person.personId;
       if (personActive(draft, targetId) && !talkingPointExists(draft, targetId, marker04)) {
-        const added = addTalkingPoint(draft, targetId,
+        const added = addTalkingPoint(draft, ctx, targetId,
           `Protect the learning curve: ${clampText(person.name, 40)} is still ramping (${person.germane.rampKey}, factor ${person.germane.rampFactor}) yet sits in the ${LOAD_BAND_LABELS[person.band].toLowerCase()} band. What commitment can we move so learning time is protected?`,
           marker04);
         if (added) note(ctx, LOAD_RULE_IDS.GERMANE, 'updated', 'person', targetId,

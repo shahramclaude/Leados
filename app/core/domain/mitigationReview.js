@@ -9,6 +9,7 @@ import {
   analyzeMitigationRobustness, robustnessDecision,
   robustnessEvidenceKey, robustnessMarker, ROBUSTNESS_EVENT, ROBUSTNESS_RULE_ID,
 } from './mitigationRobustness.js';
+import { appendTalkingPoint, recordQueueRefusal } from './talkingPointPolicy.js';
 
 export function mitigationReviewRule(draft, ctx = {}) {
   if (ctx.event?.type !== ROBUSTNESS_EVENT) return [];
@@ -83,11 +84,12 @@ export function mitigationReviewRule(draft, ctx = {}) {
       ruleId: ROBUSTNESS_RULE_ID, summary: 'Human-requested numeric mitigation evidence gate; no mitigation applied.' }, linkCtx);
   }
   const topic = `[ROB:${decision.id}] What evidence would change our mitigation choice? Check the shared horizon and exposure denominator, not who to blame.`;
-  // Never evict an employee's waiting topics to fit an automatic prompt.
-  owner.talkingPoints = Array.isArray(owner.talkingPoints) ? owner.talkingPoints : [];
-  const coached = owner.talkingPoints.length < 12;
+  // ADR-0138: never evict an employee's waiting topics to fit an automatic
+  // prompt — the shared writer refuses instead, and the refusal is printed.
+  const queueWrite = appendTalkingPoint(owner.talkingPoints, topic.slice(0, 200));
+  const coached = queueWrite.appended;
   if (coached) {
-    owner.talkingPoints.push(topic.slice(0, 200));
+    owner.talkingPoints = queueWrite.points;
     ensureEntityLink(draft, { sourceType: 'case', sourceId: source.id, targetType: 'person', targetId: owner.id,
       relation: 'coaches', ruleId: ROBUSTNESS_RULE_ID, summary: 'Blameless evidence-gathering prompt; never a performance rating.' }, linkCtx);
   }

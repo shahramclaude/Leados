@@ -45,6 +45,12 @@
  *      can print it. "No silent failures" is a technical baseline in
  *      NORTH_STAR.md, and a truncated queue is a failure whether or not the
  *      caller looks.
+ *   5. Writes go through ONE door (`appendTalkingPoint`, ADR-0138). ADR-0134
+ *      wired the storage layer and the ledger to this policy but left every
+ *      rule opening its own door with `.slice(-30)`; those local caps could
+ *      delete a topic the person raised, and the refusal that should have been
+ *      printed was replaced by a silent deletion. A writer that cannot honour
+ *      the policy now refuses, changes nothing, and reports.
  *
  * Pure module: no storage, no clock, no DOM. The engine marker grammar is
  * imported from the agenda ledger's registry so the two cannot drift.
@@ -116,6 +122,131 @@ export function retainQueue(lines, cap = TALKING_QUEUE_CAP) {
     droppedPersonN: dropped.filter((d) => !d.engine).length,
     atCap: list.length >= (Number.isFinite(cap) && cap > 0 ? Math.floor(cap) : TALKING_QUEUE_CAP),
   };
+}
+
+/**
+ * THE SHARED WRITER — the one door a rule may use to add a 1:1 prompt.
+ *
+ * Why this exists. ADR-0134 declared the policy and wired the STORAGE layer and
+ * the LEDGER to it, but every rule that writes a prompt still opened its own
+ * door: `person.talkingPoints = [...pts, prompt].slice(-30)`. Those writers are
+ * the policy's contract, and they broke it. `.slice(-30)` is a blind newest-wins
+ * cut at a number no reader has ever seen, and because a person's own topics
+ * sit at the FRONT of the list they are the first thing it deletes:
+ *
+ *   in-memory draft after a session (the writers' own 30-line ceiling)
+ *     ['My mother is ill and I need to talk about leave',   ← theirs
+ *      'I want a clearer promotion path',                   ← theirs
+ *      …, 27 older engine prompts]
+ *   after ONE engine write (`.slice(-30)`)
+ *     ['I want a clearer promotion path', …, 27 older prompts, new prompt]
+ *      ← their first topic is GONE, and no warning was raised
+ *
+ * Reproduced against the shipped `loadRule` before this function existed: the
+ * write returned success, the findings list recorded a queued prompt, and the
+ * leader's queue silently lost the single most important line on it.
+ *
+ * The writer therefore applies the DECLARED policy at write time instead of
+ * inventing a second cap, and it RETURNS what happened so a rule can refuse
+ * honestly rather than claiming a write that did not land:
+ *
+ *   { points,      the array to store (unchanged unless appended)
+ *     appended,    true only when the new line is in `points`
+ *     refused,     true when the queue has no room the policy will give up
+ *     duplicate,   true when the line was already on the list
+ *     reason,      'empty' | 'duplicate' | 'queue-held-by-person-raised' | null
+ *     displaced,   lines the write removed to make room (usually one engine prompt)
+ *     cap, atCap }
+ *
+ * A refused write is a true no-op: nothing is added AND nothing is removed. The
+ * alternative — accepting the prompt and letting the reload take a topic — is
+ * the defect this closes.
+ */
+export function appendTalkingPoint(lines, line, cap = TALKING_QUEUE_CAP) {
+  const limit = Number.isFinite(cap) && cap > 0 ? Math.floor(cap) : TALKING_QUEUE_CAP;
+  const list = Array.isArray(lines) ? lines : [];
+  const text = typeof line === 'string' ? line.trim() : '';
+  const base = {
+    points: list,
+    appended: false,
+    refused: false,
+    duplicate: false,
+    reason: null,
+    cap: limit,
+    atCap: list.length >= limit,
+    displaced: [],
+    displacedN: 0,
+    displacedEngineN: 0,
+    displacedPersonN: 0,
+  };
+  if (!text) return { ...base, reason: 'empty' };
+  const key = text.toLowerCase();
+  if (list.some((existing) => typeof existing === 'string' && existing.trim().toLowerCase() === key)) {
+    return { ...base, duplicate: true, reason: 'duplicate' };
+  }
+  const candidate = [...list, text];
+  const keep = survivorIndices(candidate, limit);
+  if (!keep.has(candidate.length - 1)) {
+    // Every slot is claimed by a topic the person raised. Their words outrank an
+    // engine prompt by the declared policy, so the prompt is refused — and the
+    // caller is expected to print that, not to bury it.
+    return { ...base, refused: true, reason: 'queue-held-by-person-raised', atCap: true };
+  }
+  const points = candidate.filter((_, index) => keep.has(index));
+  const displaced = [];
+  candidate.forEach((existing, index) => {
+    if (index === candidate.length - 1) return;
+    if (!keep.has(index)) displaced.push({ text: existing, index, engine: isEngineAuthored(existing) });
+  });
+  return {
+    ...base,
+    points,
+    appended: true,
+    atCap: points.length >= limit,
+    displaced,
+    displacedN: displaced.length,
+    displacedEngineN: displaced.filter((d) => d.engine).length,
+    displacedPersonN: displaced.filter((d) => !d.engine).length,
+  };
+}
+
+/**
+ * The refusal channel. A refused write must be REPORTED; but a rule re-fires on
+ * every transaction while its condition holds, so an unbounded stream of
+ * identical lines would be its own failure mode. This records at most one line
+ * per person per transaction and at most `QUEUE_REFUSAL_WARNING_CAP` named
+ * people, with the remainder counted in one printed line — the same bounded,
+ * honest-remainder convention the rest of the workspace uses.
+ *
+ * State is derived entirely from the warnings array the store already shares
+ * across a transaction, so nothing is stored and nothing drifts.
+ */
+export const QUEUE_REFUSAL_WARNING_CAP = 3;
+
+const REFUSAL_STEM = '1:1 waiting list:';
+const NAMED_REFUSAL = /^1:1 waiting list: .+ — /;
+const REMAINDER_REFUSAL = /^1:1 waiting list: (\d+) further (?:person|people)/;
+
+export function recordQueueRefusal(warnings, personLabel, cap = TALKING_QUEUE_CAP) {
+  if (!Array.isArray(warnings)) return false;
+  const limit = Number.isFinite(cap) && cap > 0 ? Math.floor(cap) : TALKING_QUEUE_CAP;
+  const name = typeof personLabel === 'string' && personLabel.trim()
+    ? personLabel.trim().slice(0, 60)
+    : 'A person';
+  const mine = `${REFUSAL_STEM} ${name} —`;
+  // One line per person per transaction, however many rules tried.
+  if (warnings.some((w) => typeof w === 'string' && w.startsWith(mine))) return false;
+  const named = warnings.filter((w) => typeof w === 'string' && NAMED_REFUSAL.test(w)).length;
+  const remainderAt = warnings.findIndex((w) => typeof w === 'string' && REMAINDER_REFUSAL.test(w));
+  if (named >= QUEUE_REFUSAL_WARNING_CAP) {
+    const seen = remainderAt >= 0 ? Number(warnings[remainderAt].match(REMAINDER_REFUSAL)[1]) : 0;
+    const line = `${REFUSAL_STEM} ${seen + 1} further ${seen + 1 === 1 ? 'person' : 'people'} also had a prompt refused this pass, because their list is filled by topics they raised.`;
+    if (remainderAt >= 0) warnings[remainderAt] = line;
+    else warnings.push(line);
+    return true;
+  }
+  warnings.push(`${mine} their list is full (${limit} lines) of topics they raised, so an engine prompt raised in this pass was not queued. Nothing was removed — resolving one of their topics frees the next slot.`);
+  return true;
 }
 
 /**

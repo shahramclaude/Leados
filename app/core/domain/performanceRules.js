@@ -44,6 +44,7 @@ import {
   assessConcern,
   conventionsFromSettings,
 } from './performance.js';
+import { appendTalkingPoint, recordQueueRefusal } from './talkingPointPolicy.js';
 
 export const PERFORMANCE_RULE_VERSION = 1;
 
@@ -64,7 +65,6 @@ export const PERFORMANCE_EVENTS = Object.freeze({
   SCAN: 'performance.scan',
 });
 
-const MAX_TOPICS = 40;
 
 function str(value, fallback = '') {
   return typeof value === 'string' && value ? value : fallback;
@@ -103,16 +103,22 @@ function note(concern, ctx, source, text) {
   if (concern.notes.length > 20) concern.notes.splice(0, concern.notes.length - 20);
 }
 
-function talkingPoint(draft, personId, text, tag) {
+function talkingPoint(draft, ctx, personId, text, tag) {
   const person = (draft.people || []).find((row) => row && row.id === personId);
   if (!person) return false;
   const token = `[${tag}]`;
-  person.talkingPoints = Array.isArray(person.talkingPoints) ? person.talkingPoints : [];
-  if (person.talkingPoints.some((row) => String(row).includes(token))) return false;
+  const list = Array.isArray(person.talkingPoints) ? person.talkingPoints : [];
+  if (list.some((row) => String(row).includes(token))) return false;
   // Marker appended before the slice: the earlier version of a rule in this
   // codebase truncated after the marker and re-appended forever.
   const trimmed = String(text).slice(0, 200);
-  person.talkingPoints = [...person.talkingPoints, `${trimmed} ${token}`].slice(-MAX_TOPICS);
+  // ADR-0138: the shared writer applies the one declared retention policy.
+  const write = appendTalkingPoint(list, `${trimmed} ${token}`);
+  if (!write.appended) {
+    if (write.refused) recordQueueRefusal(ctx && ctx.warnings, person.name);
+    return false;
+  }
+  person.talkingPoints = write.points;
   return true;
 }
 
@@ -215,7 +221,7 @@ function ensureExpectation(draft, ctx, concern) {
       'Opened one owned task to record and communicate the missing expectation.'));
   }
   if (concern.personId) {
-    const added = talkingPoint(draft, concern.personId,
+    const added = talkingPoint(draft, ctx, concern.personId,
       'Before anything else: say what good looks like and by when, then ask them to play it back. Record the date.',
       tag);
     if (added) effects.push(effect(PERFORMANCE_RULE_IDS.EXPECTATION, 'updated', 'person', concern.personId,
@@ -255,7 +261,7 @@ function ensureVoice(draft, ctx, concern) {
       'Opened one owned task to hold the missing two-way conversation.'));
   }
   if (concern.personId) {
-    const added = talkingPoint(draft, concern.personId,
+    const added = talkingPoint(draft, ctx, concern.personId,
       'Ask, do not tell: “What do you see from where you sit? What is getting in the way? What would help?” Write their answer in their words.',
       tag);
     if (added) effects.push(effect(PERFORMANCE_RULE_IDS.VOICE, 'updated', 'person', concern.personId,

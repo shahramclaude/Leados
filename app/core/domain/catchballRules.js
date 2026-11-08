@@ -29,6 +29,7 @@ import {
   CATCHBALL_LIMITS,
   CATCHBALL_RULE_IDS,
 } from './catchballRegistry.js';
+import { appendTalkingPoint, recordQueueRefusal } from './talkingPointPolicy.js';
 
 // ADR-0085: a stop-rule carryover creates its receiving pact inside the
 // valuestream.reallocated transaction. Consuming that same event is what makes
@@ -99,14 +100,20 @@ function decisionHasTag(draft, tag) {
   );
 }
 
-function addBoundedTalkingPoint(draft, personId, text, tag) {
+function addBoundedTalkingPoint(draft, context, personId, text, tag) {
   const person = (draft.people || []).find((p) => p && p.id === personId && p.status !== 'archived');
   if (!person) return false;
   const pts = Array.isArray(person.talkingPoints) ? person.talkingPoints : [];
   if (pts.some((t) => String(t).includes(tag))) return false;
-  // `normalizeTalkingPoints` slices at 200 chars; bound text so `tag` survives reload.
+  // `normalizeTalkingPoints` slices at 200 chars; bound text so `tag` survives
+  // reload. ADR-0138: the shared writer applies the declared retention policy.
   const maxBody = Math.max(40, 198 - tag.length);
-  person.talkingPoints = [...pts, `${clampStr(text, maxBody)} ${tag}`].slice(-30);
+  const write = appendTalkingPoint(pts, `${clampStr(text, maxBody)} ${tag}`);
+  if (!write.appended) {
+    if (write.refused) recordQueueRefusal(context && context.warnings, person.name);
+    return false;
+  }
+  person.talkingPoints = write.points;
   return true;
 }
 
@@ -342,6 +349,7 @@ export function catchballRule(draft, ctx = {}) {
     const tpTag = `[HK-TP:${wm.id}]`;
     if (wm.toSeatId && addBoundedTalkingPoint(
       draft,
+      hookCtx,
       wm.toSeatId,
       `Catchball Watermelon check on "${wm.title}": headline ${wm.headlinePct}% vs bottleneck ${wm.weakestLinkPct ?? wm.laggingPct}% — surface what needs de-scoping.`,
       tpTag,

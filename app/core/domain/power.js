@@ -39,6 +39,7 @@ import {
   LINK_ENTITY_TYPES,
   LINK_RELATIONS,
 } from './cases.js';
+import { appendTalkingPoint, recordQueueRefusal } from './talkingPointPolicy.js';
 
 /* ------------------------------------------------------------------ */
 /* 0. Version, constants & rule registry                               */
@@ -948,10 +949,16 @@ function talkingPointExists(draft, personId, marker) {
   const p = (draft.people || []).find((x) => x.id === personId);
   return Boolean(p && (p.talkingPoints || []).some((t) => String(t).includes(marker)));
 }
-function addTalkingPoint(draft, personId, text, marker) {
+function addTalkingPoint(draft, context, personId, text, marker) {
   const p = (draft.people || []).find((x) => x.id === personId);
   if (!p || talkingPointExists(draft, personId, marker)) return false;
-  p.talkingPoints = [...(Array.isArray(p.talkingPoints) ? p.talkingPoints : []), `${text} ${marker}`].slice(-30);
+  // ADR-0138: the shared writer applies the declared retention policy.
+  const write = appendTalkingPoint(p.talkingPoints, `${text} ${marker}`);
+  if (!write.appended) {
+    if (write.refused) recordQueueRefusal(context && context.warnings, p.name);
+    return false;
+  }
+  p.talkingPoints = write.points;
   return true;
 }
 
@@ -1129,7 +1136,7 @@ export function powerRule(draft, ctx = {}) {
       const newDel = draft.delegations[draft.delegations.length - 1];
       link(game, 'delegation', newDel.id, 'stabilises', `Incentive-alignment outreach ${delMarker}`, 'RULE-PWR-03');
       pushProp('RULE-PWR-03', 'created', 'delegation', newDel.id, `Opened blameless alignment delegation (transfer ≈ ${analysis.alignment.alignmentCost}) for “${game.title}”`);
-      addTalkingPoint(draft, game.ownerId,
+      addTalkingPoint(draft, context, game.ownerId,
         `[War room] Rehearse the incentive-alignment conversation for “${game.title}”: ${script.ask}`, delMarker);
       pushProp('RULE-PWR-03', 'updated', 'person', game.ownerId, `Queued a blameless 1:1 alignment talking point`);
     }
@@ -1140,7 +1147,7 @@ export function powerRule(draft, ctx = {}) {
     const confident = analysis.confidenceBand === 'high' && !analysis.stress?.needsReview;
     if (ownerValid && inEntityScope) {
       if (needsVerify && !confident && !talkingPointExists(draft, game.ownerId, verifyMarker)) {
-        const added = addTalkingPoint(draft, game.ownerId,
+        const added = addTalkingPoint(draft, context, game.ownerId,
           `[War room] Verify the payoff estimates for “${game.title}” before committing — robustness ${analysis.robustness.relativeRobustness} (${analysis.robustness.band}).${analysis.stress ? ` Stress bound ±${analysis.stress.radius}; fixed transfer ${analysis.stress.transferFeasible ? "feasible" : "NOT feasible"}. Confirm the bound and coalition commitments, not an employee rating.` : ""}`, verifyMarker);
         if (added) pushProp('RULE-PWR-04', 'updated', 'person', game.ownerId, `Queued an estimate-verification 1:1 talking point`);
       } else if ((!needsVerify || confident) && talkingPointExists(draft, game.ownerId, verifyMarker)) {

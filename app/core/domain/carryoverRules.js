@@ -58,6 +58,7 @@ import {
   CARRYOVER_RULE_IDS,
   CARRYOVER_STATUSES,
 } from './carryoverRegistry.js';
+import { appendTalkingPoint, recordQueueRefusal } from './talkingPointPolicy.js';
 
 const CO_TRIGGER_SET = new Set([CATCHBALL_EVENTS.GRADED, CARRYOVER_EVENTS.SCAN, 'decision.made', 'strategy.bet.retired', 'strategy.verdict.recorded']);
 
@@ -132,13 +133,18 @@ function decisionResolvedWithTag(draft, tag) {
   );
 }
 
-function addBoundedTalkingPoint(draft, personId, text, tag) {
+function addBoundedTalkingPoint(draft, context, personId, text, tag) {
   const person = (draft.people || []).find((p) => p && p.id === personId && p.status !== 'archived');
   if (!person) return false;
   const pts = Array.isArray(person.talkingPoints) ? person.talkingPoints : [];
   if (pts.some((t) => String(t).includes(tag))) return false;
-  const maxBody = Math.max(40, 198 - tag.length);
-  person.talkingPoints = [...pts, `${clampStr(text, maxBody)} ${tag}`].slice(-30);
+  // ADR-0138: the shared writer applies the declared retention policy.
+  const write = appendTalkingPoint(pts, `${clampStr(text, Math.max(40, 198 - tag.length))} ${tag}`);
+  if (!write.appended) {
+    if (write.refused) recordQueueRefusal(context && context.warnings, person.name);
+    return false;
+  }
+  person.talkingPoints = write.points;
   return true;
 }
 
@@ -423,6 +429,7 @@ export function carryoverRule(draft, ctx = {}) {
                 const reTag = `[CO-REAFF:${betId}]`;
                 if (bet.ownerId && addBoundedTalkingPoint(
                   draft,
+                  hookCtx,
                   bet.ownerId,
                   `Carryover reaffirmation on "${clampStr(bet.title, 70)}": name the new causal hypothesis and the observation that would falsify it next cycle.`,
                   reTag,
@@ -573,6 +580,7 @@ export function carryoverRule(draft, ctx = {}) {
           const reTag = `[CO-REAFF:${betId}]`;
           if (bet.ownerId && addBoundedTalkingPoint(
             draft,
+            hookCtx,
             bet.ownerId,
             `Carryover reaffirmation on “${clampStr(bet.title, 70)}”: name the new causal hypothesis and the observation that would falsify it next cycle.`,
             reTag,

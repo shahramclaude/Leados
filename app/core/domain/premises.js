@@ -68,6 +68,7 @@ import { decisionValueTerms } from './decisionTempo.js';
 import { evaluateBudget } from './finance.js';
 import { buildLoadReport } from './load.js';
 import { pertTriple } from './capacity.js';
+import { appendTalkingPoint, recordQueueRefusal } from './talkingPointPolicy.js';
 
 export const PREMISE_ENGINE_VERSION = 'premise-sentinel-2026.10-v1';
 
@@ -1153,14 +1154,17 @@ function talkingPointExists(draft, personId, marker) {
   return Boolean(person && (person.talkingPoints || []).some((t) => String(t).includes(marker)));
 }
 
-function addTalkingPoint(draft, personId, text, marker) {
+function addTalkingPoint(draft, ctx, personId, text, marker) {
   const person = (draft.people || []).find((p) => p && p.id === personId && p.status !== 'archived');
   if (!person) return false;
   const maxText = 200 - marker.length - 1;
-  person.talkingPoints = [
-    ...(Array.isArray(person.talkingPoints) ? person.talkingPoints : []),
-    `${clean(text, Math.max(40, maxText))} ${marker}`,
-  ].slice(-30);
+  // ADR-0138: the shared writer, never a local `.slice(-30)`.
+  const write = appendTalkingPoint(person.talkingPoints, `${clean(text, Math.max(40, maxText))} ${marker}`);
+  if (!write.appended) {
+    if (write.refused) recordQueueRefusal(ctx && ctx.warnings, person.name);
+    return false;
+  }
+  person.talkingPoints = write.points;
   return true;
 }
 
@@ -1302,7 +1306,7 @@ function openBreachDecision(draft, premise, evaluation, runCtx, out, ctx) {
       `Queued one owner-routed signpost verification for “${clean(premise.title, 70)}”`, out);
     if (!talkingPointExists(draft, owner.id, marker)) {
       const text = `Premise check: “${clean(premise.title, 55)}” moved to ${evaluation.posteriorPct}% belief. What did we learn, and which hedge would let the decision survive if the premise stays broken?`;
-      if (addTalkingPoint(draft, owner.id, text, marker)) {
+      if (addTalkingPoint(draft, ctx, owner.id, text, marker)) {
         note(ctx, PREMISE_RULE_IDS.BREACH, 'updated', 'person', owner.id,
           `Queued a blameless signpost-breach talking point for ${clean(owner.name, 60)}`, out);
       }
@@ -1432,7 +1436,7 @@ export function premiseRule(draft, ctx = {}) {
       || (draft.people || []).find((p) => p && p.status !== 'archived');
     if (target && overdue && !talkingPointExists(draft, target.id, reviewMarker)) {
       const text = `Signpost review overdue for “${clean(premise.title, 55)}” (due ${premise.reviewBy}). Reaffirm, retire or revise the premise with dated evidence.`;
-      if (addTalkingPoint(draft, target.id, text, reviewMarker)) {
+      if (addTalkingPoint(draft, ctx, target.id, text, reviewMarker)) {
         note(ctx, PREMISE_RULE_IDS.REVIEW, 'updated', 'person', target.id,
           `Queued an overdue signpost-review prompt for “${clean(premise.title, 60)}”`, out);
       }

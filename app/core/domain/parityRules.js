@@ -11,6 +11,7 @@ import { addDays, dayKey, weekKey } from '../time.js';
 import { ensureEntityLink } from './automation.js';
 import { parityConventionsFromSettings, parityReport } from './parity.js';
 import { PARITY_MARKERS_CAP } from './paritySchema.js';
+import { appendTalkingPoint, recordQueueRefusal } from './talkingPointPolicy.js';
 
 export const PARITY_RULE_VERSION = 1;
 
@@ -40,7 +41,6 @@ const EXPLICIT_TRIGGERS = new Set([
   PARITY_EVENTS.FROZEN,
 ]);
 
-const MAX_TOPICS = 40;
 
 function makeIdFactory(ctx) {
   if (typeof ctx.idFactory === 'function') return ctx.idFactory;
@@ -67,14 +67,20 @@ function linkEdge(draft, spec, linkOpts) {
   return ensureEntityLink(draft, spec, linkOpts);
 }
 
-function appendTalkingPoint(draft, personId, text, tag) {
+function writeTalkingPoint(draft, ctx, personId, text, tag) {
   const person = (draft.people || []).find((p) => p && p.id === personId && p.status !== 'archived');
   if (!person) return false;
   const token = `[${tag}]`;
-  person.talkingPoints = Array.isArray(person.talkingPoints) ? person.talkingPoints : [];
-  if (person.talkingPoints.some((row) => String(row).includes(token))) return false;
+  const list = Array.isArray(person.talkingPoints) ? person.talkingPoints : [];
+  if (list.some((row) => String(row).includes(token))) return false;
   const trimmed = String(text).slice(0, Math.max(20, 198 - token.length));
-  person.talkingPoints = [...person.talkingPoints, `${trimmed} ${token}`].slice(-MAX_TOPICS);
+  // ADR-0138: the shared writer applies the one declared retention policy.
+  const write = appendTalkingPoint(list, `${trimmed} ${token}`);
+  if (!write.appended) {
+    if (write.refused) recordQueueRefusal(ctx && ctx.warnings, person.name);
+    return false;
+  }
+  person.talkingPoints = write.points;
   return true;
 }
 
@@ -262,8 +268,9 @@ export function parityRule(draft, ctx = {}) {
       const tag = `${PARITY_RULE_IDS.BENCH}:${week}:${bench.personId}`;
       if (hasMarker(markers, tag)) continue;
       addMarker(markers, tag);
-      const added = appendTalkingPoint(
+      const added = writeTalkingPoint(
         draft,
+        ctx,
         bench.personId,
         `Career & sponsorship check-in: ${bench.evidenceCount}/5 readiness evidence signals are recorded — discuss growth scope and succession visibility`,
         tag,
@@ -293,8 +300,9 @@ export function parityRule(draft, ctx = {}) {
     if (hasMarker(markers, tag)) continue;
     addMarker(markers, tag);
 
-    const prompted = appendTalkingPoint(
+    const prompted = writeTalkingPoint(
       draft,
+      ctx,
       fringe.personId,
       'Leader parity check-in: listen on current priorities, blockers, and recent wins — restore steady 1:1 & specific SBI cadence',
       tag,
@@ -346,8 +354,9 @@ export function parityRule(draft, ctx = {}) {
     if (hasMarker(markers, tag)) continue;
     addMarker(markers, tag);
 
-    appendTalkingPoint(
+    writeTalkingPoint(
       draft,
+      ctx,
       row.personId,
       `Accountability first: close or renegotiate ${row.overdueOpen} overdue leader commitment(s) owed to ${row.name} before adding new asks`,
       tag,
