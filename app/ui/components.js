@@ -31,10 +31,12 @@ export function stat({ label, value, hint, tone = '', action = null }) {
   );
 }
 
-export function card({ title = null, subtitle = null, actions = [], body, className = '', id = null }) {
+export function card({ title = null, subtitle = null, actions = [], body, className = '', id = null, attrs = null }) {
   return h(
     'section',
-    { class: `card ${className}`, ...(id ? { id } : {}) },
+    // `attrs` is the same passthrough `table()` offers its rows (ADR-0131):
+    // data-* anchors and aria-current for exact-record focus, nothing else.
+    { class: `card ${className}`, ...(id ? { id } : {}), ...(attrs || {}) },
     title || actions.length
       ? h(
           'div',

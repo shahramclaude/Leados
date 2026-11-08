@@ -3143,7 +3143,9 @@ export function resolveLinkedEntity(state, entityType, entityId) {
         id: rec.id,
         title: `Duty cover · ${rec.dutyKey}`,
         status: `${rec.status} · declared ${rec.declaredOn}`,
-        route: `#/duty-cover?panel=register`,
+        // ADR-0131: the register honours `?cover=` against the acting seat's
+        // own scoped rows — the id addresses the declaration, never a person.
+        route: `#/duty-cover?panel=register&cover=${encodeURIComponent(rec.id)}`,
         raw: {
           id: rec.id,
           dutyKey: rec.dutyKey,
@@ -3164,7 +3166,9 @@ export function resolveLinkedEntity(state, entityType, entityId) {
         id: rec.id,
         title: `Declared absence · ${rec.from} → ${rec.to}`,
         status: `${rec.status} · declared ${rec.declaredOn}`,
-        route: `#/duty-cover?panel=plan`,
+        // ADR-0131: the plan panel honours `?plan=` on the seat's own absence
+        // and on every rolled-up row in its span; the reason text never travels.
+        route: `#/duty-cover?panel=plan&plan=${encodeURIComponent(rec.id)}`,
         raw: {
           id: rec.id,
           from: rec.from,
@@ -3185,7 +3189,9 @@ export function resolveLinkedEntity(state, entityType, entityId) {
         id: rec.id,
         title: `Cover answer · ${rec.answer}`,
         status: `${rec.status} · ${rec.windowFrom} → ${rec.windowTo}`,
-        route: '#/standby?panel=asked',
+        // ADR-0131: the acknowledgement board honours `?answer=`; the words
+        // stay in the board, addressed against the acting seat.
+        route: `#/standby?panel=asked&answer=${encodeURIComponent(rec.id)}`,
         raw: {
           id: rec.id,
           answer: rec.answer,
@@ -3206,7 +3212,9 @@ export function resolveLinkedEntity(state, entityType, entityId) {
         id: rec.id,
         title: `Cover rehearsal · ${rec.dutyKey} · ${rec.mode}`,
         status: `${rec.outcome} · rehearsed ${rec.rehearsedOn}`,
-        route: '#/duty-cover?panel=plan',
+        // ADR-0131: the rehearsal ledger honours `?rehearsal=` on the rows the
+        // seat may read; the recorder's note is still never projected here.
+        route: `#/duty-cover?panel=plan&rehearsal=${encodeURIComponent(rec.id)}`,
         raw: {
           id: rec.id,
           dutyKey: rec.dutyKey,
@@ -3234,7 +3242,11 @@ export function resolveLinkedEntity(state, entityType, entityId) {
         // the register never made.
         title: `Branch reading request · ${rec.askedOn}`,
         status: `${rec.status} · asked ${rec.askedOn}`,
-        route: '#/duty-cover?panel=readings',
+        // ADR-0131: the readings panel honours `?ask=` on both chairs. The ask
+        // id is the graph node's own id — still NO seat id and NO table
+        // position travels (ADR-0129), and the panel resolves the row against
+        // the acting seat, so a peer learns nothing by holding the link.
+        route: `#/duty-cover?panel=readings&ask=${encodeURIComponent(rec.id)}`,
         raw: {
           id: rec.id,
           askedOn: rec.askedOn,
@@ -3247,17 +3259,24 @@ export function resolveLinkedEntity(state, entityType, entityId) {
       const rec = (state.branchReadings || []).find((row) => row && row.id === entityId);
       if (!rec) return null;
       // The band and the day it was given; the branch leader's own words are
-      // not projected, and no count crosses this boundary.
+      // not projected, and no count crosses this boundary. The ledger stores
+      // the day as `answeredOn` (branchReadingSchema); reading `publishedOn`
+      // off the raw row printed `published undefined` — fixed here at the
+      // source while the case gained its record focus (ADR-0131).
       return {
         type: 'branchreading',
         id: rec.id,
-        title: `Branch reading · ${rec.band}`,
-        status: `published ${rec.publishedOn} · ${rec.status}`,
-        route: '#/duty-cover?panel=readings',
+        // A declined reading has no band by construction; print the answer
+        // word rather than the string "null".
+        title: `Branch reading · ${rec.band || rec.answer}`,
+        status: `${rec.answer === 'published' ? 'published' : rec.answer} ${rec.answeredOn} · ${rec.status}`,
+        // ADR-0131: `?reading=` focuses the answer on whichever chair holds it.
+        // The id addresses the reading record; no count and no seat id crosses.
+        route: `#/duty-cover?panel=readings&reading=${encodeURIComponent(rec.id)}`,
         raw: {
           id: rec.id,
           band: rec.band,
-          publishedOn: rec.publishedOn,
+          publishedOn: rec.answeredOn ?? null,
           status: rec.status,
         },
       };

@@ -26,19 +26,20 @@ const NOW = new Date('2026-10-29T10:00:00.000Z');
 
 /**
  * Link types whose terminal owns the record and exposes no record focus. The
- * coverage family addresses "which branch / which duty line" against the ACTING
- * seat; the analytics family (the fit book, the jurisdiction map, the discretion
- * ladder) is an aggregate reading of the whole span, not a record viewer. In
- * both cases a fabricated `?id=` would be a decorative parameter, which is what
- * the sweep's exact-focus assertion exists to catch.
+ * ANALYTICS family (the fit book, the jurisdiction map, the discretion ladder)
+ * is an aggregate reading of the whole span, not a record viewer — a fabricated
+ * `?id=` there would be a decorative parameter, which is what the sweep's
+ * exact-focus assertion exists to catch.
+ *
+ * ADR-0131 (Session 177): the six COVERAGE-family types left this list. Their
+ * terminals now honour an exact record id (`?cover=`, `?plan=`, `?answer=`,
+ * `?rehearsal=`, `?ask=`, `?reading=`) against the acting seat's own scoped
+ * rows, so the sweep asserts the encoded focus id for them like every other
+ * record-focused type. The branch ask still carries NO seat id and NO table
+ * position — the focus is the ask record's own id, which the graph already
+ * projects (ADR-0129).
  */
 const COVERAGE_FAMILY_PANEL_ONLY = new Set([
-  'dutycover',
-  'absenceplan',
-  'standbyanswer',
-  'rehearsal',
-  'branchask',
-  'branchreading',
   'fitsnapshot',
   'fitproposal',
   'fitreading',
@@ -964,13 +965,16 @@ test('every registered link type survives schema normalization/reload and resolv
       // on the reading's own panel — the edge names the assessment, never the
       // span ids, channel counts or persons inside it.
       federationassessment: ['assessment', resolved.id],
-      // ADR-0130: the coverage family and the analytics family address their
-      // own panels. The coverage family deliberately carries NO record id in
-      // its query — the reading panel resolves "which branch" against the
-      // acting seat, and the duty register has no record-focus route — so the
-      // sweep's exact-id assertion is not claimed for those five types. The
-      // premise assessment, the discretion reading and the two analytics
-      // readings address a frozen record by its exact id.
+      // ADR-0131: the coverage family's terminals now honour an exact record
+      // id against the acting seat's scoped rows, so the sweep asserts the
+      // encoded focus for all six. The analytics family remains panel-only
+      // (an aggregate reading, not a record viewer).
+      dutycover: ['cover', resolved.id],
+      absenceplan: ['plan', resolved.id],
+      standbyanswer: ['answer', resolved.id],
+      rehearsal: ['rehearsal', resolved.id],
+      branchask: ['ask', resolved.id],
+      branchreading: ['reading', resolved.id],
       premiseOutcome: ['outcome', resolved.id],
       // These two terminals address the record by query as well; the sweep had
       // simply never reached them, because the fixtures that would have linked
@@ -997,13 +1001,13 @@ test('every registered link type survives schema normalization/reload and resolv
       // record-focused yet. The exact-record focus is a future route contract.
       assert.equal(routePath, '/carryover', 'a carryover record resolves to the carryover terminal');
     } else if (COVERAGE_FAMILY_PANEL_ONLY.has(link.targetType)) {
-      // ADR-0130: the coverage family resolves to the panel that OWNS the
-      // record, not to a record-focused query. The duty register, the absence
-      // plan, the acknowledgement board and the reading panel all address
-      // "which branch / which duty line" against the ACTING SEAT, and ADR-0129
-      // keeps seat ids off branch rows so a withheld cell cannot be
-      // re-identified by walking the graph. A fabricated `?id=` here would be
+      // ADR-0130/0131: the ANALYTICS family resolves to the panel that OWNS
+      // the reading, not to a record-focused query — the fit book, the
+      // jurisdiction map and the discretion ladder are aggregate readings of
+      // the whole span, not record viewers. A fabricated `?id=` here would be
       // exactly the decorative query parameter this assertion exists to catch.
+      // (The coverage family left this branch in ADR-0131: its terminals now
+      // honour the exact ids asserted above.)
       assert.equal(query.get('id') ?? query.get('focus') ?? null, null,
         `${link.targetType} invents no record-focus id it cannot honour`);
       assert.ok(query.get('panel'), `${link.targetType} names the panel that owns the record`);
