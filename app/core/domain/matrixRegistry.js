@@ -69,6 +69,16 @@ export const MATRIX_RIGHT_KEYS = Object.freeze(MATRIX_RIGHTS.map((r) => r.key));
  */
 export const MATRIX_HOME_RIGHTS_DEFAULT = Object.freeze(['performance', 'pay', 'absence']);
 
+/**
+ * Operational rights decide what a person works on day to day (`priority`,
+ * `assignment`, `technical`). When two managers both claim one, the conflict
+ * climbs out of both spans to their joint apex in the reporting DAG.
+ * Stewardship rights (`performance`, `pay`, `absence`) govern the employment
+ * relationship and belong to the home line unless explicitly split.
+ */
+export const MATRIX_OPERATIONAL_RIGHTS = Object.freeze(['priority', 'assignment', 'technical']);
+export const MATRIX_STEWARDSHIP_RIGHTS = Object.freeze(['performance', 'pay', 'absence']);
+
 const RIGHT_BY_KEY = new Map(MATRIX_RIGHTS.map((r) => [r.key, r]));
 export function matrixRight(key) {
   return RIGHT_BY_KEY.get(String(key || '').trim()) || null;
@@ -181,6 +191,7 @@ export const MATRIX_PANELS = Object.freeze([
   Object.freeze({ key: 'lines', label: 'Lines', hint: 'Every declared reporting line, dated and dated out.' }),
   Object.freeze({ key: 'rights', label: 'Rights', hint: 'Who decides what, for each person on more than one line.' }),
   Object.freeze({ key: 'seats', label: 'Seats', hint: 'Whose line the work actually reaches — and who the roster cannot seat.' }),
+  Object.freeze({ key: 'governance', label: 'Governance', hint: 'Executive view: joint-apex escalations, cross-axis coupling and structural checks.' }),
   Object.freeze({ key: 'queue', label: 'Review', hint: 'The bounded queue, worst first.' }),
   Object.freeze({ key: 'method', label: 'Method', hint: 'What is declared, what is derived, and what is refused.' }),
 ]);
@@ -229,6 +240,18 @@ export const MATRIX_METHOD = Object.freeze([
     name: 'Statistical disclosure control',
     why: 'Above the declared detail ceiling a manager row is disclosed as a count and a band. A person’s allocation is item detail about an individual; an organisation-level total is an aggregate.',
   },
+  {
+    name: 'Common-agency escalation tax (Bernheim & Whinston, 1986; Galbraith, 1971)',
+    why: 'When multiple principals hold the same operational right (priority, assignment, technical direction) or govern the same work item, neither line can settle the trade-off alone. The conflict climbs to their lowest joint apex in the reporting graph.',
+  },
+  {
+    name: 'Minimal common ancestors in a matrix DAG',
+    why: 'A tree has one lowest common ancestor for any two spans; a matrix DAG can have two incomparable minimal ancestors (a diamond tie). All minimal ancestors are named and none is picked silently — guessing one owner is a structural lie.',
+  },
+  {
+    name: 'Cross-axis structural coupling (Simon, 1962; Brooks, 1975)',
+    why: 'A person on two lines couples two managerial spans into shared failure modes. Coupling is counted as distinct span-pairs and Wilson-bounded workspace shares (refused below the cell floor), never collapsed into a composite score or a rating of any person.',
+  },
 ]);
 
 /**
@@ -251,4 +274,6 @@ export const MATRIX_CSV_COLUMNS = Object.freeze([
   'manager_withheld', 'right_key', 'right_state', 'right_holders_n',
   'share_state', 'share_total_h', 'finding', 'band', 'withheld', 'withheld_reason',
   'line_scope_n', 'line_only_n', 'line_work_n', 'line_work_shared_n', 'seat_state',
+  'apex_contested_n', 'apex_operational_contested_n', 'apex_shared_work_n',
+  'apex_ambiguous_n', 'coupled_span_pairs_n', 'governance_alert_n',
 ]);

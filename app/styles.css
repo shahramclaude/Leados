@@ -3092,6 +3092,7 @@ tr.is-focused td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
   display: grid; grid-template-columns: 1fr 36px 1fr; gap: 10px; align-items: start;
   padding: 10px 12px; border-radius: 10px; background: var(--surface-2, #f7f9fc);
 }
+.board-crosscheck h3,
 .board-crosscheck h4 { margin: 0 0 4px; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted, #5b677a); }
 .board-crosscheck p { margin: 0 0 2px; font-size: 0.9rem; }
 .board-crosscheck-sep { text-align: center; font-size: 1.1rem; color: var(--muted, #5b677a); padding-top: 14px; }

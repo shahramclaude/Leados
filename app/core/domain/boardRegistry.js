@@ -238,6 +238,15 @@ export const BOARD_CROSS_CHECKS = Object.freeze([
     statement: 'The seal proves the record was not altered after it was written. It says nothing about whether any claim in it was ever examined. Both must hold for the memo to be relied on.',
     route: '#/sceptic',
   }),
+  Object.freeze({
+    key: 'matrix-authority-vs-tree',
+    label: 'A clean tree can hide an unbalanced or contested matrix',
+    left: 'authority-hold',
+    right: 'matrix-governance',
+    rightModule: 'Matrix accountability & governance',
+    statement: 'Single-chain authority or bench readings can pass their thresholds while secondary reporting lines carry contested operational rights, unbalanced capacity splits, unseated line holders, diamond-apex ties or tree-hidden open work.',
+    route: '#/matrix?panel=governance',
+  }),
 ]);
 
 /**
