@@ -88,7 +88,7 @@ function linkOnce(draft, ctx, sourceType, sourceId, targetType, targetId, relati
     { sourceType, sourceId, targetType, targetId, relation, ruleId, summary: clampStr(summary, 280) },
     { idFactory: ctx.idFactory, todayStr: dayKey(ctx.now), nowIso: ctx.now.toISOString() },
   );
-  return Boolean(result && result.created);
+  return result;
 }
 
 function recordMarker(draft, ctx, key, kind, summary) {
@@ -210,57 +210,62 @@ export function matrixRule(draft, ctx = {}) {
   let edgesWritten = 0;
   let apexEdgesWritten = 0;
   let skippedByCap = 0;
+  let rejected = 0;
   const ambiguousPeople = new Set();
-
+  // A work item may name multiple people held by the same manager. Count and
+  // write distinct edges, not iterations or items, including after the cap.
+  const candidates = new Map();
   for (const item of items) {
-    if (edgesWritten >= MATRIX_LIMITS.fanoutEdges) { skippedByCap += 1; continue; }
-    if (!item.entityId || String(item.entityId).startsWith('cadence-')) continue;
+    if (!item.entityId || String(item.entityId).startsWith('cadence-') || item.sensitive) continue;
     const touched = (item.people || []).filter((id) => extraManagers.has(id));
     if (!touched.length) continue;
-    if (item.sensitive) continue;
     const sourceType = item.type === 'case' ? 'case' : item.type;
     for (const personId of touched) {
       ambiguousPeople.add(personId);
       for (const managerId of extraManagers.get(personId)) {
-        if (edgesWritten >= MATRIX_LIMITS.fanoutEdges) { skippedByCap += 1; continue; }
         const line = (matrix.linesByPerson.get(personId) || []).find((l) => l.managerId === managerId);
         const kindLabel = matrixLineKind(line?.kind)?.label || 'reporting';
-        if (linkOnce(
-          draft, hookCtx,
-          sourceType, item.entityId,
-          'person', managerId,
-          'rolls-up-to',
-          MATRIX_RULE_IDS.FANOUT,
-          `This ${item.typeLabel || item.type} touches someone on more than one line; it rolls up through the ${kindLabel} line as well as the home line.`,
-        )) {
-          edgesWritten += 1;
-        }
+        const key = edgeKey(sourceType, item.entityId, managerId, 'rolls-up-to');
+        if (!candidates.has(key)) candidates.set(key, {
+          sourceType, sourceId: item.entityId, targetId: managerId, relation: 'rolls-up-to',
+          summary: `This ${item.typeLabel || item.type} touches someone on more than one line; it rolls up through the ${kindLabel} line as well as the home line.`,
+        });
       }
     }
   }
-
   for (const { sourceType, item, apexId } of apexTargets) {
-    if (edgesWritten + apexEdgesWritten >= MATRIX_LIMITS.fanoutEdges) { skippedByCap += 1; continue; }
-    const apexLabel = apexId === LEADER_ID ? 'the workspace leader' : 'the joint apex in the reporting DAG';
-    if (linkOnce(
-      draft, hookCtx,
-      sourceType, item.entityId,
-      'person', apexId,
-      'escalates-to',
-      MATRIX_RULE_IDS.FANOUT,
-      `Shared across ${item.siteN} accountable managers; unresolved trade-offs escalate to ${apexLabel}.`,
-    )) {
-      apexEdgesWritten += 1;
+    const key = edgeKey(sourceType, item.entityId, apexId, 'escalates-to');
+    if (!candidates.has(key)) candidates.set(key, {
+      sourceType, sourceId: item.entityId, targetId: apexId, relation: 'escalates-to',
+      summary: `Shared across ${item.siteN} accountable managers; unresolved trade-offs escalate to ${apexId === LEADER_ID ? 'the workspace leader' : 'the joint apex in the reporting DAG'}.`,
+    });
+  }
+  const existingKeys = new Set((draft.links || [])
+    .filter((edge) => edge?.targetType === 'person')
+    .map((edge) => edgeKey(edge.sourceType, edge.sourceId, edge.targetId, edge.relation)));
+  for (const [key, candidate] of candidates) {
+    if (existingKeys.has(key)) continue;
+    if (edgesWritten + apexEdgesWritten >= MATRIX_LIMITS.fanoutEdges) {
+      skippedByCap += 1;
+      continue;
+    }
+    const result = linkOnce(draft, hookCtx, candidate.sourceType, candidate.sourceId,
+      'person', candidate.targetId, candidate.relation, MATRIX_RULE_IDS.FANOUT, candidate.summary);
+    if (result?.created) {
+      if (candidate.relation === 'rolls-up-to') edgesWritten += 1;
+      else apexEdgesWritten += 1;
+    } else if (!result?.link) {
+      rejected += 1;
     }
   }
 
   if (edgesWritten) {
     noteEffect(hookCtx, out, MATRIX_RULE_IDS.FANOUT, 'rolled-up', 'workspace', 'matrix',
-      `Fanned ${edgesWritten} work item(s) to every manager in the reporting set of ${ambiguousPeople.size} person(s) on more than one line.`);
+      `Wrote ${edgesWritten} roll-up link(s) for work touching ${ambiguousPeople.size} person(s) on multiple lines; see any deferred or rejected links below.`);
   }
   if (apexEdgesWritten) {
     noteEffect(hookCtx, out, MATRIX_RULE_IDS.FANOUT, 'escalated-to-apex', 'workspace', 'matrix',
-      `Linked ${apexEdgesWritten} shared multi-line work item(s) to their unique joint apex in the reporting DAG.`);
+      `Wrote ${apexEdgesWritten} joint-apex link(s) for shared multi-line work.`);
   }
   if (ambiguousApexN) {
     noteEffect(hookCtx, out, MATRIX_RULE_IDS.FANOUT, 'ambiguous-apex', 'workspace', 'matrix',
@@ -272,11 +277,16 @@ export function matrixRule(draft, ctx = {}) {
   }
   if (skippedByCap) {
     noteEffect(hookCtx, out, MATRIX_RULE_IDS.FANOUT, 'deferred', 'workspace', 'matrix',
-      `${skippedByCap} further item(s) were not fanned this pass — the declared per-transaction cap is ${MATRIX_LIMITS.fanoutEdges}. They are counted, not dropped.`);
+      `${skippedByCap} distinct link(s) remain unwritten after the per-transaction cap of ${MATRIX_LIMITS.fanoutEdges}. A later scan or operational change can retry them.`);
+  }
+
+  if (rejected) {
+    noteEffect(hookCtx, out, MATRIX_RULE_IDS.FANOUT, 'rejected', 'workspace', 'matrix',
+      `${rejected} distinct link(s) were rejected by the shared link validator; they were not written.`);
   }
 
   recordMarker(draft, hookCtx, `fanout|${dayKey(now)}|${event.type}|${ctx.revision ?? ''}`, 'fanout',
-    `Matrix fan-out: ${edgesWritten} roll-up edge(s), ${apexEdgesWritten} apex edge(s), ${removed} pruned, ${ambiguousApexN} ambiguous tie(s), ${ambiguousPeople.size} multi-line person(s), ${sensitiveSkipped} sensitive counted only.`);
+    `Matrix fan-out: ${edgesWritten} roll-up edge(s), ${apexEdgesWritten} apex edge(s), ${removed} pruned, ${ambiguousApexN} ambiguous tie(s), ${ambiguousPeople.size} multi-line person(s), ${sensitiveSkipped} sensitive counted only, ${skippedByCap} links deferred, ${rejected} rejected.`);
 
   return out;
 }

@@ -2610,3 +2610,13 @@ Meanwhile `RULE-MTX-01` (ADR-0140) had already fanned that same work to her.
 
 **Next targets.** [frontline / mid-manager] next hierarchy rotation; [matrix, all altitudes] audit remaining tree-scoped modules (`budgetExposure`, `jurisdiction`, `succession`, `accessGateway` payload helpers) and matrix line acceptance; [all altitudes] authenticated identity + tenant isolation.
 
+
+# 2026-11-08 — Session 192: exact matrix fan-out cap accounting
+
+**Scope and choice.** Frontline/mid-manager × matrix, using existing shared post-commit `RULE-MTX-01` and hierarchy links. Session 191's map gave these altitudes priority. Capped fan-out previously counted skipped items or iterations as items even when several links were missing, and could claim every manager was reached before the backlog was cleared. Single-chain remains inert. Broader matrix parity remains In Progress.
+
+**Built.** Deduplicate candidate edges, exclude existing links before the write cap, report exact distinct deferred edges and shared-link-validator rejections, and retry on subsequent scans or operational commits. Event and marker report the counts. No schema change, no scheduled retry. Added a planned decision-latency / escalation-aging ledger (survival analysis; frontline through CEO, single-chain and matrix) to the roadmap.
+
+**Verified.** After one fix to an adjacent test's obsolete message assertion, focused `matrix-governance`, `matrix-accountability`, and `matrix-line-seat` tests passed 44/44; targeted ESLint passed. For 61 shared cases, expected 183 unique edges: first pass wrote 120 and reported 63 deferred, second pass reached 183 and reported no deferral; in-memory event and marker summaries matched the computed counts. **[UNVERIFIED]** persistence/reload and actual browser display parity; full suite and real-browser accessibility. No assertion of 100% reliability.
+
+**Next:** director / VP × matrix read-model parity; authenticated identity and tenant isolation remain foundational.
