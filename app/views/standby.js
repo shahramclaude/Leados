@@ -24,6 +24,7 @@
 import { h, toast, openModal, closeAllModals, buildForm } from '../ui/dom.js';
 import { downloadText } from '../ui/download.js';
 import { pageHeader, card, stat, badge, banner, tabs, emptyState, table } from '../ui/components.js';
+import { recordFocus, isFocused, focusRowProps, focusCardClass, focusAbsentNote } from '../ui/recordFocus.js';
 import { serializeCsv } from '../core/csv.js';
 import { DUTY_STANDBY_PREMISE, DUTY_STANDBY_BOUNDS } from '../core/domain/dutyStandbyRegistry.js';
 
@@ -162,20 +163,26 @@ function forMePanel(ctx) {
   const board = result.board;
   const s = board.summary;
   const open = board.rows.filter((r) => r.state !== 'accepted');
+  // ADR-0131: the cover's own chair honours the same `?answer=` focus.
+  const answerFocus = recordFocus(ctx.query, 'answer', board.rows, (row) => row.answer?.id || null);
+  const absentNote = focusAbsentNote(answerFocus, 'standby answer');
   if (!board.rows.length) {
-    return card({
-      title: 'Nobody has named you as a stand-in',
-      subtitle: 'This is the chair the product was missing: when someone declares you answerable for their duty, the ask appears here.',
-      body: h('div', { class: 'stack' },
-        emptyState({
-          title: board.refusal || 'No open ask',
-          body: 'A cover declaration is an ask, not an answer. When a leader names you as the person answerable for a duty line, you will be able to accept it for specific dates — or refuse it, with a reason, and have that refusal open a governed decision instead of quietly becoming a blank.',
-          action: h('a', { class: 'btn btn-primary', href: '#/duty-cover?panel=plan' }, 'See the duty register'),
-        }),
-        h('p', { class: 'muted small' }, DUTY_STANDBY_PREMISE)),
-    });
+    return h('div', { class: 'stack' },
+      absentNote ? banner({ tone: 'warn', title: 'The linked record is not here', body: absentNote }) : null,
+      card({
+        title: 'Nobody has named you as a stand-in',
+        subtitle: 'This is the chair the product was missing: when someone declares you answerable for their duty, the ask appears here.',
+        body: h('div', { class: 'stack' },
+          emptyState({
+            title: board.refusal || 'No open ask',
+            body: 'A cover declaration is an ask, not an answer. When a leader names you as the person answerable for a duty line, you will be able to accept it for specific dates — or refuse it, with a reason, and have that refusal open a governed decision instead of quietly becoming a blank.',
+            action: h('a', { class: 'btn btn-primary', href: '#/duty-cover?panel=plan' }, 'See the duty register'),
+          }),
+          h('p', { class: 'muted small' }, DUTY_STANDBY_PREMISE)),
+      }));
   }
   return h('div', { class: 'stack' },
+    absentNote ? banner({ tone: 'warn', title: 'The linked record is not here', body: absentNote }) : null,
     open.length
       ? banner({
         tone: open.some((r) => r.state === 'overdue') ? 'bad' : 'warn',
@@ -199,6 +206,8 @@ function forMePanel(ctx) {
     ...board.rows.map((row) => card({
       title: `${row.dutyLabel} — ${row.holderName || row.holderLabel}`,
       subtitle: row.dutyQuestion,
+      className: focusCardClass(answerFocus, row.answer?.id),
+      attrs: { ...(row.answer?.id ? { 'data-answer-id': row.answer.id } : {}), ...(isFocused(answerFocus, row.answer?.id) ? { 'aria-current': 'true' } : {}) },
       actions: [stateBadge(row.state)],
       body: h('div', { class: 'stack' },
         h('p', { class: 'muted small' }, row.stateReason),
@@ -220,6 +229,33 @@ function forMePanel(ctx) {
   );
 }
 
+/**
+ * ADR-0131: an answer record lives in TWO chairs — the holder's board and the
+ * cover's own "For me" list. The resolver routes to the board; when the acting
+ * seat is the cover, the record is in the other chair, and the honest move is
+ * a printed pointer carrying the same focus, never a fabricated highlight.
+ */
+function answerFocusBanner(ctx, focus, board) {
+  if (focus?.state !== 'absent') return null;
+  const mine = ctx.api.dutyStandbyForMe?.();
+  const inMyChair = mine?.ok && (mine.board.rows || []).some((r) => r.answer?.id === focus.id);
+  if (inMyChair) {
+    return banner({
+      tone: 'info',
+      title: 'That answer is yours — it lives in your own chair',
+      body: 'The link names an answer YOU gave. This board shows the covers named in your span; your own answers are on “For me”.',
+      actions: [h('a', { class: 'btn btn-small', href: `#/standby?panel=for-me&answer=${encodeURIComponent(focus.id)}` }, 'Open it in For me')],
+    });
+  }
+  // The board prints its first 40 rows worst-state-first; an answer in the
+  // deferred remainder is in scope but not on screen. Say that, rather than
+  // implying the record sits outside the seat's span.
+  const note = board?.deferredN
+    ? `The link named standby answer “${focus.id}”, which is not among the ${board.rows.length} rows printed here. ${board.deferredN} further cover(s) are deferred by the board's row cap, and the answer may sit among them — or outside your span, revoked, or no longer in the ledger. Nothing was widened to find it.`
+    : focusAbsentNote(focus, 'standby answer');
+  return banner({ tone: 'warn', title: 'The linked record is not here', body: note });
+}
+
 function askedPanel(ctx) {
   const result = ctx.api.dutyStandbyBoard?.();
   if (!result || result.ok === false) {
@@ -228,8 +264,10 @@ function askedPanel(ctx) {
   const board = result.board;
   const s = board.summary;
   const rows = board.rows;
+  const answerFocus = recordFocus(ctx.query, 'answer', rows, (row) => row.answer?.id || null);
+  const focusBanner = answerFocusBanner(ctx, answerFocus, board);
   if (!rows.length) {
-    return card({
+    return h('div', { class: 'stack' }, focusBanner, card({
       title: 'No declared cover in this span',
       subtitle: 'This board answers one question: of the covers named in your span, who has answered?',
       body: emptyState({
@@ -237,9 +275,10 @@ function askedPanel(ctx) {
         body: 'Declare a cover on the duty register first. The moment one is declared, this board asks that person to accept or refuse a bounded window — and prints who has not answered instead of counting their silence as readiness.',
         action: h('a', { class: 'btn btn-primary', href: '#/duty-cover?panel=gaps' }, 'Go to the duty register'),
       }),
-    });
+    }));
   }
   return h('div', { class: 'stack' },
+    focusBanner,
     card({
       title: 'Who has answered the asks you named',
       subtitle: `Ask window is derived from each holder’s declared absence, or a bounded ${board.conventions.dutyStandbyWindowDays}-day forward window when none is declared. An answer is expected within ${board.conventions.dutyStandbyResponseDays} day(s) of the declaration.`,
@@ -274,7 +313,7 @@ function askedPanel(ctx) {
             { label: 'Open work', render: (r) => String(r.openN) },
             { label: 'Why', render: (r) => h('span', { class: 'muted small' }, r.stateReason) },
           ],
-          rows,
+          rows: rows.map((row) => ({ ...row, ...focusRowProps(answerFocus, row.answer?.id || null, 'data-answer-id') })),
           emptyMessage: 'No declared covers.',
         }),
         board.deferredN

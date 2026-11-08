@@ -519,6 +519,10 @@ export function dutyAbsenceRollup(state, built, seat, { now = new Date(), settin
     }
     const planForSeat = absenceWindowPlan(state, built, absentSeat, { from: plan.from, to: plan.to }, { now, settings: effective, items: allItems, depth: 1, windowExerciseIndex: exerciseIndexes.get(absentSeat.id), namesVisible });
     rows.push({
+      // ADR-0131: the plan record's own id, so a typed `declares-absence-of`
+      // edge can focus this exact row. A record id, never a person id — the
+      // same id the graph resolver already projects.
+      id: plan.id,
       seatId: plan.seatId,
       label: absentSeat.label,
       rank: absentSeat.rank,

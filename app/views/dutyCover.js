@@ -16,6 +16,7 @@
 import { h, toast, openModal, closeAllModals, buildForm } from '../ui/dom.js';
 import { downloadText } from '../ui/download.js';
 import { pageHeader, card, stat, badge, banner, tabs, emptyState, table } from '../ui/components.js';
+import { recordFocus, isFocused, focusRowProps, focusCardClass, focusAbsentNote } from '../ui/recordFocus.js';
 import { serializeCsv } from '../core/csv.js';
 import { DUTY_BRANCH_DISCLOSURE_PREMISE, DUTY_COVERAGE_PANELS, DUTY_PREMISE } from '../core/domain/dutyCoverageRegistry.js';
 import { DUTY_ABSENCE_PREMISE } from '../core/domain/dutyAbsenceRegistry.js';
@@ -252,7 +253,15 @@ function rehearsalsCard(ctx) {
   const result = ctx.api.dutyRehearsalList?.();
   if (!result || result.ok === false) return null;
   const { rows, namesVisible, summary } = result;
+  // ADR-0131: `?rehearsal=` focuses one attestation. The ledger prints the 40
+  // most recent rows; if the linked record is older, it is brought into view
+  // rather than silently missed — the link must land on the exact row.
+  const rehearsalFocus = recordFocus(ctx.query, 'rehearsal', rows, (row) => row.id);
+  const absentNote = focusAbsentNote(rehearsalFocus, 'rehearsal record');
   const shown = rows.slice(0, 40);
+  const focusedOutsideSlice = rehearsalFocus.matched && !shown.some((r) => r.id === rehearsalFocus.id)
+    ? rows.find((r) => r.id === rehearsalFocus.id) : null;
+  if (focusedOutsideSlice) shown.unshift(focusedOutsideSlice);
   return card({
     title: `Explicit rehearsal records — ${summary.activeN} active`,
     subtitle: 'Practice somebody recorded, not practice inferred. A ready rehearsal inside the preparation window grades ABOVE dated-work evidence; a rehearsal that found GAPS keeps the line thin and opens a governed decision instead.',
@@ -263,6 +272,8 @@ function rehearsalsCard(ctx) {
       }, 'Scan'),
     ],
     body: h('div', { class: 'stack' },
+      absentNote ? banner({ tone: 'warn', title: 'The linked record is not here', body: absentNote }) : null,
+      focusedOutsideSlice ? h('p', { class: 'muted small' }, 'The linked rehearsal is older than the 40 most recent records; it is printed first so the link lands on the exact row.') : null,
       h('div', { class: 'stat-grid' },
         stat({ label: 'Ready', value: String(summary.readyN), tone: summary.readyN ? 'good' : '', hint: `${summary.attestedN} holder/supervisor-attested · ${summary.selfReportedN} self-reported` }),
         stat({ label: 'Gaps found', value: String(summary.gapsN), tone: summary.gapsN ? 'bad' : 'good', hint: 'each opened a governed decision naming what must change before the window' }),
@@ -282,7 +293,7 @@ function rehearsalsCard(ctx) {
               ? h('button', { class: 'btn btn-ghost btn-small', type: 'button', onClick: () => rehearsalRevokeDialog(ctx, r) }, 'Revoke')
               : h('span', { class: 'muted small' }, r.status === 'revoked' ? `revoked ${r.revokedOn || ''}` : '—')) },
           ],
-          rows: shown,
+          rows: shown.map((row) => ({ ...row, ...focusRowProps(rehearsalFocus, row.id, 'data-rehearsal-id') })),
           emptyMessage: 'No rehearsal recorded yet.',
         })
         : emptyState({
@@ -437,6 +448,8 @@ function planningFormCard(ctx, namesShown) {
 }
 
 function rollupCard(ctx, rollup, namesShown) {
+  // ADR-0131: the same `?plan=` focus reaches the rolled-up rows.
+  const planFocus = recordFocus(ctx.query, 'plan', rollup?.rows || [], (row) => row.id);
   if (!rollup?.rows?.length) {
     return card({
       title: 'Absences in this span',
@@ -461,11 +474,11 @@ function rollupCard(ctx, rollup, namesShown) {
           { label: 'Cover absent', render: (r) => String(r.summary.coverAbsentN) },
           { label: 'No cover', render: (r) => String(r.summary.gapN) },
           { label: 'Open, exposed', render: (r) => String(r.summary.exposedOpenN) },
-          { label: 'Pre-window evidence', render: (r) => `${r.summary.exercise?.rehearsedCoversN ?? 0} rehearsed / ${r.summary.exercise?.validCoversN ?? 0} valid / ${r.summary.exercise?.gapsCoversN ?? 0} gaps / ${r.summary.exercise?.thinLinesN ?? 0} thin` },
-        ],
-        rows: rollup.rows,
-        emptyMessage: 'No absences.',
-      }),
+            { label: 'Pre-window evidence', render: (r) => `${r.summary.exercise?.rehearsedCoversN ?? 0} rehearsed / ${r.summary.exercise?.validCoversN ?? 0} valid / ${r.summary.exercise?.gapsCoversN ?? 0} gaps / ${r.summary.exercise?.thinLinesN ?? 0} thin` },
+          ],
+          rows: rollup.rows.map((row) => ({ ...row, ...focusRowProps(planFocus, row.id, 'data-plan-id') })),
+          emptyMessage: 'No absences.',
+        }),
       rollup.exposedOpenN
         ? banner({ tone: 'bad', title: `${rollup.exposedOpenN} duty line(s) below this seat carry open work with no available cover on the absence dates`, body: 'This is not a scoring failure; it is an unrecorded stand-in on specific dates. Declaring cover is a dated human act, and the exposure prints until one is declared or the window passes.' })
         : null),
@@ -598,11 +611,20 @@ function planPanel(ctx, report) {
   }
   const { window, plan, own, rollup } = result;
   const namesShown = report.namesVisible;
+  // ADR-0131: `?plan=` addresses ONE absence record — the seat's own card or
+  // one rolled-up row. Both sets are already seat-scoped by the engine, so a
+  // plan outside the span prints the honest absent note instead of widening.
+  const planRows = [...(own ? [own] : []), ...(rollup?.rows || [])];
+  const planFocus = recordFocus(ctx.query, 'plan', planRows, (row) => row.id);
+  const absentNote = focusAbsentNote(planFocus, 'absence plan');
   return h('div', { class: 'stack' },
+    absentNote ? banner({ tone: 'warn', title: 'The linked record is not here', body: absentNote }) : null,
     own
       ? card({
         title: `Declared absence — ${own.from} → ${own.to}`,
         subtitle: own.reason,
+        className: focusCardClass(planFocus, own.id),
+        id: `absence-plan-${own.id}`,
         actions: [
           h('button', { class: 'btn btn-ghost btn-small', type: 'button', onClick: () => absenceRevokeDialog(ctx, own) }, 'Revoke'),
         ],
@@ -820,13 +842,28 @@ function readingsPanel(ctx, report) {
   }
   const summaries = board.summary;
   const consequence = report.branchCoverage?.readings || null;
+  // ADR-0131: `?ask=` / `?reading=` focus one record on whichever chair holds
+  // it. Both chairs are resolved against the ACTING seat by the engine, so a
+  // peer holding the link sees the absent note, never the sibling's ask —
+  // and still no seat id or table position travels on the row (ADR-0129).
+  const askFocus = recordFocus(ctx.query, 'ask',
+    [...board.askedOfMe, ...board.askedOfSpan], (row) => row.id);
+  const readingFocus = recordFocus(ctx.query, 'reading',
+    [...board.askedOfMe.map((a) => a.answer), ...board.askedOfSpan.map((a) => ({ id: a.answerId }))],
+    (row) => row?.id || null);
+  const absentNote = focusAbsentNote(askFocus, 'branch reading request') || focusAbsentNote(readingFocus, 'branch reading');
   return h('div', { class: 'stack' },
+    absentNote ? banner({ tone: 'warn', title: 'The linked record is not here', body: absentNote }) : null,
     card({
       title: `Readings asked of this seat — ${board.seat.label}`,
       subtitle: 'Every request addressed to this seat as a branch’s own leader, with the exact window it is about. Publishing sends a BAND computed from this seat’s register and your own words; the counts stay here.',
       body: board.askedOfMe.length
-        ? h('div', { class: 'stack' }, ...board.askedOfMe.map((ask) => card({
-          title: `${ask.askedByLabel} asked for a reading on ${ask.askedOn}`,
+        ? h('div', { class: 'stack' }, ...board.askedOfMe.map((ask) => {
+          const selected = isFocused(askFocus, ask.id) || isFocused(readingFocus, ask.answer?.id);
+          return card({
+            className: selected ? 'lineage-selected' : '',
+            attrs: { 'data-ask-id': ask.id, ...(ask.answer?.id ? { 'data-reading-id': ask.answer.id } : {}), ...(selected ? { 'aria-current': 'true' } : {}) },
+            title: `${ask.askedByLabel} asked for a reading on ${ask.askedOn}`,
           subtitle: ask.state === 'overdue'
             ? `Overdue: the declared response window closed on ${ask.responseBy}, ${ask.daysPast} day(s) ago.`
             : (ask.canAnswer ? `An answer is expected by ${ask.responseBy}.` : ask.why),
@@ -852,7 +889,8 @@ function readingsPanel(ctx, report) {
               ? h('button', { class: 'btn btn-ghost btn-small', type: 'button', onClick: () => revokeReadingDialog(ctx, ask) }, 'Revoke this reading')
               : null,
           ].filter(Boolean),
-        })))
+          });
+        }))
         : emptyState({
           title: 'No reading has been requested of this seat',
           body: 'A branch reading is asked of a branch by the seat whose own table withholds its cell. Nothing is owed here today — and nothing has been silently answered in your name either.',
@@ -883,7 +921,16 @@ function readingsPanel(ctx, report) {
                 : '—'),
             },
           ],
-          rows: board.askedOfSpan,
+          rows: board.askedOfSpan.map((row) => {
+            // One row can be addressed by the ask OR by its answer; either
+            // focus selects the same row, and the row carries both anchors.
+            const selected = isFocused(askFocus, row.id) || isFocused(readingFocus, row.answerId);
+            return {
+              ...row,
+              className: selected ? 'lineage-selected' : '',
+              attrs: { 'data-ask-id': row.id, ...(row.answerId ? { 'data-reading-id': row.answerId } : {}), ...(selected ? { 'aria-current': 'true' } : {}) },
+            };
+          }),
           emptyMessage: 'This seat has not asked any branch for a reading.',
         })),
       actions: consequence
@@ -1066,8 +1113,26 @@ function deskPanel(ctx, report) {
 
 function registerPanel(ctx, report) {
   const rows = report.rows;
-  if (!rows.length) return card({ title: 'Nothing to register', body: emptyState({ title: 'No declared duty line', body: 'Declare an operating seat to populate the duty register.' }) });
+  // ADR-0131: a typed edge names ONE cover declaration. The row that carries
+  // it is selected; the id survives the above-rank-2 redaction (it addresses
+  // the declaration, never the person), so focus works at every altitude.
+  const coverFocus = recordFocus(ctx.query, 'cover', rows, (row) => (row.reading.covers || []).map((c) => c.id));
+  const absentNote = focusAbsentNote(coverFocus, 'cover declaration');
+  if (!rows.length) {
+    return h('div', { class: 'stack' },
+      absentNote ? banner({ tone: 'warn', title: 'The linked record is not here', body: absentNote }) : null,
+      card({ title: 'Nothing to register', body: emptyState({ title: 'No declared duty line', body: 'Declare an operating seat to populate the duty register.' }) }));
+  }
+  const focusedRows = rows.map((row) => {
+    const ids = (row.reading.covers || []).map((c) => c.id);
+    const focusId = coverFocus.matched && ids.includes(coverFocus.id) ? coverFocus.id : null;
+    return {
+      ...row,
+      ...focusRowProps(coverFocus, focusId, 'data-cover-id', { attrs: { 'data-duty-id': row.reading.dutyId } }),
+    };
+  });
   return h('div', { class: 'stack' },
+    absentNote ? banner({ tone: 'warn', title: 'The linked record is not here', body: absentNote }) : null,
     card({
       title: 'Duty lines and their covers',
       subtitle: report.namesVisible
@@ -1093,7 +1158,7 @@ function registerPanel(ctx, report) {
           { label: 'Top hand', render: (row) => (row.reading.concentration.top ? pctText(row.reading.concentration.top.sharePct) : '—') },
           { label: 'Act', render: (row) => h('button', { class: 'btn btn-ghost btn-small', type: 'button', disabled: !row.reading.eligibleCandidates.length, onClick: () => designateDialog(ctx, row) }, row.reading.covers.length ? 'Add cover' : 'Declare cover') },
         ],
-        rows,
+        rows: focusedRows,
         emptyMessage: 'No duty lines.',
       }),
     }),
