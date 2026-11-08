@@ -196,6 +196,15 @@ function obligationRule(draft, ctx, evaluation, conv) {
     } else if (owner?.altitudeKey) {
       effects.push(effect(BOARD_RULES.OBLIGATION, 'noted', 'boardmemo', memo.id,
         `“${row.label}” fails at the ${owner.label} altitude — a rank, not a person, so no obligation was delegated. The decision carries the ownership question.`));
+    } else if (row.partition?.suppression?.refused) {
+      // ADR-0139. Every cell of this claim's decomposition is withheld because
+      // the published claim total would determine them, so `worstOwner` has no
+      // figure to point at. Naming a span here would route the board's obligation
+      // off a number the board was never shown. The decision still opens — the
+      // FAILING verdict is the claim's own, decided on its full denominator — and
+      // it carries the ownership question instead of a guessed owner.
+      effects.push(effect(BOARD_RULES.OBLIGATION, 'noted', 'boardmemo', memo.id,
+        `“${row.label}” fails at claim level, but its span decomposition is WITHHELD below the cell floor, so no span is named as the owner. The decision carries the ownership question: no obligation is routed off a figure the board was not shown.`));
     }
   }
   return effects;

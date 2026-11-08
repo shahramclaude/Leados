@@ -200,7 +200,16 @@ function columnCell(col, row) {
 }
 
 function columnHead(col) {
-  return h('th', { scope: 'col', class: col.className || '', style: col.width ? `width:${col.width}` : null }, col.label || '');
+  // An unlabelled column is usually an ACTION column (a button per row). A bare
+  // `<th>` there is an a11y failure (`empty-table-header`), so an empty label is
+  // rendered as a visually-hidden, still-meaningful name. The visual design is
+  // unchanged because `.sr-only` is already visually hidden.
+  const label = col.label || '';
+  return h(
+    'th',
+    { scope: 'col', class: col.className || '', style: col.width ? `width:${col.width}` : null },
+    label ? label : h('span', { class: 'sr-only' }, 'Actions'),
+  );
 }
 
 export function table({ columns, rows, caption = '', emptyMessage = 'Nothing here yet.' }) {

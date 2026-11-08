@@ -976,7 +976,7 @@ export const CSV_EXPORTS = [
   // CSV scope #80 (Schema v91, ADR-0085). Aggregate-only board claim ledger: one
   // workspace row and one row per declared claim. No memo id, no operator, no
   // note, no span name and no person. A refused figure is BLANK, never zero.
-  { key: 'board-claims', label: 'Board claims (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'board-claims', description: 'One workspace row and one row per declared board claim: verdict, point estimate, interval bounds, declared threshold and direction, observation count, materiality, post-hoc flag, disclosure tag, memo counts, attestation state, the memo fingerprint, and the carry-forward read across frozen packs (packs the claim was looked at in, whether it is carried, why, both streaks, the transition class and the last movement in percentage points). NO memo id, NO operator, NO free text, NO span or person name. Every refused or withheld figure is BLANK rather than zero.' },
+  { key: 'board-claims', label: 'Board claims (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'board-claims', description: 'One workspace row and one row per declared board claim: verdict, point estimate, interval bounds, declared threshold and direction, observation count, materiality, post-hoc flag, disclosure tag, memo counts, attestation state, the memo fingerprint, and the carry-forward read across frozen packs (packs the claim was looked at in, whether it is carried, why, both streaks, the transition class and the last movement in percentage points). NO memo id, NO operator, NO free text, NO span or person name. Every refused or withheld figure is BLANK rather than zero. ADR-0139 adds the span decomposition\u2019s own suppression as counts and words: cells_total, cells_withheld, partition_state and partition_floor. A suppressed cell\u2019s figure and its label never enter this export.' },
   // CSV scope #81 (Schema v92, ADR-0086). One row per declared module at the
   // exporting seat: the posture it holds and the boundary that set it. Aggregate
   // cells only — a count, a rate or a currency total. No record id, name, note,
@@ -5961,6 +5961,13 @@ export function buildScopeTable(state, scope, now) {
         { key: 'unverified_streak', header: 'unverified_streak' },
         { key: 'transition', header: 'transition' },
         { key: 'move_pp', header: 'move_pp' },
+        // ADR-0139: the span decomposition's own cell suppression, as counts and
+        // words only. A suppressed cell's figure never enters this export, and
+        // neither does its label.
+        { key: 'cells_total', header: 'cells_total' },
+        { key: 'cells_withheld', header: 'cells_withheld' },
+        { key: 'partition_state', header: 'partition_state' },
+        { key: 'partition_floor', header: 'partition_floor' },
       ];
       return { columns, rows };
     }
