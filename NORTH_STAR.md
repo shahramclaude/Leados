@@ -19,6 +19,44 @@ Every module should draw on real frameworks from: engineering (root-cause analys
 ## Organizational hierarchy mandate
 Every module must eventually support role-appropriate views across the full chain of command (frontline → mid-manager → director → VP → CEO), with data/insights automatically rolling up in a form suited to each level — no manual re-entry, no one-size-fits-all dashboard.
 
+## Matrix leadership mandate (binding — added 2026-11-08)
+LeadOS must natively model and support **matrix organisational structures**: an
+employee with several reporting lines at once — a functional manager, a project
+or product manager, and cross-functional leads — not only a single chain of
+command. This is not a variation to be accommodated; it is the normal shape of
+any organisation above a few hundred people, and a product that only understands
+trees silently misreports every one of them.
+
+Every duty, dashboard and roll-up must therefore be correct when a user has more
+than one manager and belongs to more than one team. Specifically: a roll-up must
+never count the same person twice, never drop a person because their second line
+was invisible to it, never invent an allocation that no human agreed to, and
+never silently pick one of several managers as the owner of a piece of work —
+where ownership is genuinely ambiguous the system names the ambiguity and
+reports it. `person.managerId` remains the home line and the source of truth;
+the matrix layer is built OVER the existing hierarchy engine, never as a second
+one, and a workspace that declares no additional line must behave exactly as it
+did before. Evidence: `app/core/domain/matrix*.js`,
+`docs/adr/0140-matrix-accountability-ledger.md`, `#/matrix`.
+
+## Bulletproof reliability mandate (binding — added 2026-11-08)
+The application must be **100% trustworthy for real leadership decisions**: no
+silent failures, no data loss, no corrupted roll-ups, and **no deviation between
+what is displayed and what is actually stored or computed — ever**. "Good
+enough", "mostly working" and "it rounds to the right answer" are explicitly
+rejected as standards.
+
+Where a figure cannot be supported by the record it is **refused with a printed
+reason**, never rendered as a zero, a blank that reads as reassurance, or a
+plausible default. Where a total is printed, the system must be able to prove
+that the total is the sum of the rows it printed — and must say when it cannot.
+Two distinct claims must never be collapsed into one reassuring word: *the
+figures add up* and *the printed figures are the computed figures* are different
+facts and are reported separately. Refusals, caps and withheld cells are always
+counted and explained, never dropped. Evidence: the reconciliation contract in
+`app/core/domain/matrix.js` (`balances` vs `auditClean`), the fail-closed
+normalizers in `app/core/schema.js`, `npm run check:boundary`.
+
 ## Cross-module automation mandate
 A unified case/event/decision data model should trigger automatic, parallel updates across all relevant modules (coaching, risk, finance, stakeholder, decision log, etc.) via a generalized event-driven engine — not one-off hardcoded links.
 

@@ -131,10 +131,10 @@ function firstSignal(plan) {
 /* --------------------------------------------------------------- 1. schema */
 
 test('schema v117 is additive and convergent; an observation nobody was positioned to make is dropped', () => {
-  assert.equal(SCHEMA_VERSION, 118);
+  assert.equal(SCHEMA_VERSION, 119);
   const migrated = migrate({ schemaVersion: 116, people: [{ id: 'p1', name: 'A' }], settings: { leaderName: 'Dana' } });
-  assert.deepEqual(migrated.applied, ['116 → 117', '117 → 118']);
-  assert.equal(migrated.raw.schemaVersion, 118);
+  assert.deepEqual(migrated.applied, ['116 → 117', '117 → 118', '118 → 119']);
+  assert.equal(migrated.raw.schemaVersion, 119);
   assert.deepEqual(migrated.raw.dutyRehearsals, [], 'no attestation is invented at upgrade time');
   assert.equal(migrated.raw.settings.leaderName, 'Dana', 'existing settings survive an additive bump');
   assert.deepEqual(migrate(migrated.raw).applied, [], 'convergence, not a loop');

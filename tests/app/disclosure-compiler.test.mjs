@@ -112,6 +112,10 @@ const RENDERER_ROUTES = [
   // NOT `agenda`, which is an existing alias for `cadence` — taking that slug
   // silently rewrote the route to the wrong renderer.)
   'agenda-ledger',
+  // ADR-0140: the Matrix Accountability Ledger declares its own manifest row
+  // (adapter-scoped, so a seat sees its own span's allocations), so the
+  // catalogue and the shell stay one route for one route.
+  'matrix',
 ];
 
 /** Sentinel-bearing roster: every person, span and private note is traceable. */
@@ -208,7 +212,7 @@ function seatsOrThrow(state) {
 /* --------------------------------------------------------------- 1. schema */
 
 test('schema v90 migrates additively and refuses malformed or stale grants', () => {
-  assert.equal(SCHEMA_VERSION, 118);
+  assert.equal(SCHEMA_VERSION, 119);
   const old = { schemaVersion: 89, settings: { leaderName: 'Keep' }, cases: [{ id: 'keep' }], disclosureGrants: [{ id: 'existing' }] };
   const migrated = migrate(old);
   assert.equal(migrated.raw.schemaVersion, SCHEMA_VERSION);

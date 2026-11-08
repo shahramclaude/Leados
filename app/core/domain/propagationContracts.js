@@ -100,6 +100,7 @@ import { parityRule } from './parityRules.js';
 // ADR-0076: the derived vertical roll-up declares its contract like every
 // other rule on the spine. It is inert unless a seat is explicitly declared.
 import { seatRule } from './seatRules.js';
+import { matrixRule } from './matrixRules.js';
 import { sealRule } from './sealRules.js';
 // ADR-0092: the Differencing Defender declares its contract like every other rule.
 import { differencingRule } from './differencingRules.js';
@@ -769,6 +770,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'envoyRules.js',
     purpose: 'RULE-ENV-01 writes one `carries` edge from an ingested packet to the receiving leadership span AND every ancestor of it, in the same atomic transaction as the ingestion, so a span’s attested pack is visible at each altitude in the form that altitude may hold; RULE-ENV-02 opens exactly ONE governed DACI reconciliation decision per divergent origin record per ISO week and links it to the packet (`reconciles`) — the local record is never overwritten by a foreign packet; RULE-ENV-03 opens ONE governed review when a verified packet’s own attested open-critical share clears the declared floor and records an advisory marker below the 3-item floor where no share may be published. Every figure in every decision comes from the packet’s own attestation. Marker-idempotent, pausable by envoyAutoPropagate, an explicit scan always runs, and no rule edits a foreign record, rates a person or accepts an unverified packet.',
     writes: ['exchangeMarkers', 'decisions', 'links'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: matrixRule,
+    module: 'matrixRules.js',
+    purpose: 'RULE-MTX-01 fans one typed `rolls-up-to` edge from every open work item to EVERY manager in the reporting set of each person it touches who is accountable to more than one manager — the project, product, cross-functional and administrative lines the primary `person.managerId` tree does not contain — so the second manager sees the work in the SAME atomic transaction as the declaration that created the line. It runs immediately before the Operating Seat so one commit carries both fans. Idempotent by exact-edge uniqueness, marker-ledgered, pausable by matrixAutoPropagate, and INERT in a single-chain workspace: a workspace that declares no additional line gains no edges and no decisions. A confidential source contributes a count and never an edge, because a second manager is not a wider audience for a sensitive people record. It never edits a reporting line, an allocation, a roster record or a decision right, never resolves which of two managers OWNS an item (it names both and the ledger prints the ambiguity), and never asserts that work moved.',
+    writes: ['links', 'matrixMarkers'],
     emits: [],
     scansWorkspace: true,
   },

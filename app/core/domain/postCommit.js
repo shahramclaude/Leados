@@ -126,6 +126,7 @@ import { carryoverRule } from './carryoverRules.js';
 // cascade has been negotiated and writes forum provenance, the constraint
 // escalation and the agenda-fit gap before the market rebalances attention.
 import { cadenceRule } from './cadenceRules.js';
+import { matrixRule } from './matrixRules.js';
 
 
 // ADR-0087: the Operating Cadence Clock. Reads the finished queue after the
@@ -765,6 +766,12 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // boundary must then be able to explain — a bench decision opened here reaches
   // the level above through the seat's roll-up in the SAME transaction.
   successionRule,
+  // ADR-0140: the Matrix fan-out (RULE-MTX-01). Immediately BEFORE the Operating
+  // Seat, because the seat fans work up the PRIMARY tree and this rule adds the
+  // managers the primary tree does not contain — running it first means one
+  // transaction carries both, and the seat's own roll-up then sees a graph that
+  // already knows the second line. Inert in a single-chain workspace.
+  matrixRule,
   // ADR-0076: the Operating Seat (vertical roll-up + enforced boundaries).
   // It reads the finished record after every module has propagated, then fans
   // each open item up every leadership ancestor in the reporting tree with one

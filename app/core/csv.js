@@ -67,6 +67,8 @@ import { buildDiligenceReport, diligenceCsvRows } from './domain/diligence.js';
 // counts, and the concentration share — never a person, a name, a note or a
 // seat id. A refused rate is BLANK, never zero.
 import { buildDutyCoverageReport, dutyCoverageCsvRows, SPAN_READINGS_CSV_COLUMNS } from './domain/dutyCoverage.js';
+// ADR-0140: the Matrix Accountability Ledger's aggregate-only export.
+import { buildMatrixReport, matrixCsvRows, MATRIX_CSV_HEADER } from './domain/matrix.js';
 import { standbyCsvRows, standbyExportBoard } from './domain/dutyStandby.js';
 // ADR-0109: CSV scope #103. Aggregate-only, identity-free, refusal-honest.
 import { jurCsvRows, JUR_CSV_COLUMNS } from './domain/jurisdiction.js';
@@ -6112,6 +6114,15 @@ export function buildScopeTable(state, scope, now) {
       // identity-free aggregate; BLANK for every refusal and suppressed cell.
       const rows = jurCsvRows(state, { now, settings: state.settings || {} });
       const columns = JUR_CSV_COLUMNS.map((key) => ({ key, header: key }));
+      return { columns, rows };
+    }
+    case 'matrix': {
+      // CSV scope #105 (Schema v119, ADR-0140). Aggregate-only: a manager row
+      // is named only when it clears the declared cell floor, a person is never
+      // named at all, and a refused figure is BLANK — never 0, never "fine".
+      const report = buildMatrixReport(state, { now, settings: state.settings || {} });
+      const rows = matrixCsvRows(report);
+      const columns = MATRIX_CSV_HEADER.map((key) => ({ key, header: key }));
       return { columns, rows };
     }
     case 'duty-coverage': {

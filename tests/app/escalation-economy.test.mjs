@@ -79,14 +79,14 @@ const esc = (toSeatId = 'mgr', extra = {}) => ({
 /* ------------------------------------------------------- 1. schema & spine */
 
 test('v94 migration, fail-closed records, graph vocabulary and spine parity', () => {
-  assert.equal(SCHEMA_VERSION, 118);
+  assert.equal(SCHEMA_VERSION, 119);
   const migrated = migrate({ schemaVersion: 93, settings: { leaderName: 'Keep' }, people: [] });
-  assert.deepEqual(migrated.applied, ['93 → 94', '94 → 95', '95 → 96', '96 → 97', '97 → 98', '98 → 99', '99 → 100', '100 → 101', '101 → 102', '102 → 103', '103 → 104', '104 → 105', '105 → 106', '106 → 107', '107 → 108', '108 → 109', '109 → 110', '110 → 111', '111 → 112', '112 → 113', '113 → 114', '114 → 115', '115 → 116', '116 → 117', '117 → 118']);
+  assert.deepEqual(migrated.applied, ['93 → 94', '94 → 95', '95 → 96', '96 → 97', '97 → 98', '98 → 99', '99 → 100', '100 → 101', '101 → 102', '102 → 103', '103 → 104', '104 → 105', '105 → 106', '106 → 107', '107 → 108', '108 → 109', '109 → 110', '110 → 111', '111 → 112', '112 → 113', '113 → 114', '114 → 115', '115 → 116', '116 → 117', '117 → 118', '118 → 119']);
   assert.deepEqual(migrated.raw.escalationRecords, []);
   assert.deepEqual(migrated.raw.escalationCommitments, []);
   assert.equal(migrated.raw.settings.leaderName, 'Keep');
   const afterCatchball = migrate({ schemaVersion: 92, catchballPacts: [{ id: 'keep-pact' }], settings: {} });
-  assert.deepEqual(afterCatchball.applied, ['92 → 93', '93 → 94', '94 → 95', '95 → 96', '96 → 97', '97 → 98', '98 → 99', '99 → 100', '100 → 101', '101 → 102', '102 → 103', '103 → 104', '104 → 105', '105 → 106', '106 → 107', '107 → 108', '108 → 109', '109 → 110', '110 → 111', '111 → 112', '112 → 113', '113 → 114', '114 → 115', '115 → 116', '116 → 117', '117 → 118']);
+  assert.deepEqual(afterCatchball.applied, ['92 → 93', '93 → 94', '94 → 95', '95 → 96', '96 → 97', '97 → 98', '98 → 99', '99 → 100', '100 → 101', '101 → 102', '102 → 103', '103 → 104', '104 → 105', '105 → 106', '106 → 107', '107 → 108', '108 → 109', '109 → 110', '110 → 111', '111 → 112', '112 → 113', '113 → 114', '114 → 115', '115 → 116', '116 → 117', '117 → 118', '118 → 119']);
   assert.equal(afterCatchball.raw.catchballPacts[0].id, 'keep-pact');
 
   const warnings = [];

@@ -1,0 +1,977 @@
+/**
+ * app/core/domain/matrix.js — the Matrix Accountability Ledger (ADR-0140,
+ * Schema v119, `#/matrix`).
+ *
+ * THE DUTY. A frontline lead in a matrix has a functional manager, a project
+ * manager and a product lead, and each of those three believes — correctly, from
+ * where they sit — that they are that person's manager. The duty the workspace
+ * has never served is the one that only exists when there is more than one line:
+ *
+ *   - For the PERSON: "I am accountable to three people. What am I actually on
+ *     the hook for, and does it add up to more than me?"
+ *   - For each MANAGER: "This person is mine — but so is she three other
+ *     people's. What share of her do I actually hold, and who else is pulling?"
+ *   - For the ENTERPRISE: "Add up every manager's span. Does it equal the
+ *     headcount, or did the matrix count the same person twice?"
+ *
+ * The third question is the one no single-chain tool can answer, because a tree
+ * cannot ask it. It is also the one that decides whether the first two numbers
+ * can be trusted.
+ *
+ * WHY THIS IS THE RIGHT MODEL
+ * ---------------------------
+ * The home line is `person.managerId` — the tree the whole workspace already
+ * rolls up through, and this module does not replace or fork it. `buildMatrix`
+ * wraps `buildChain` and ADDS the declared additional lines on top, so every
+ * existing roll-up keeps working unchanged on a workspace that declares no
+ * matrix lines at all. Additional lines are dated, kind-typed and carry an
+ * allocation in whole hundredths of a person.
+ *
+ * HONESTY BOUNDARIES ENFORCED IN CODE, NOT PROSE
+ * ----------------------------------------------
+ *  - A line with no declared allocation is UNDECLARED, never zero. A zero would
+ *    let the total close on a guess.
+ *  - A person on exactly ONE line is not a split: the whole person belongs to
+ *    that one manager, derived by arithmetic and labelled `sole-line`. A person
+ *    on two lines with one allocation missing owns NOTHING to anyone until the
+ *    hole is filled — that is a guess, and this module does not make it.
+ *  - Allocations are integers. Every total printed here is an integer sum that
+ *    reconciles EXACTLY, so "the roll-up adds up" is a fact, not a rounding.
+ *  - Netting is refused: over-allocation on one line is not offset by
+ *    under-allocation on another.
+ *  - A line that would close a loop is REFUSED and reported, never repaired.
+ *    Inventing a reporting line is inventing an accountability.
+ *  - Above the declared detail ceiling a manager row is disclosed as a count
+ *    and a band, never as a named person with a named allocation.
+ *
+ * Pure module: no DOM, no storage, no clock beyond the injected `now`.
+ */
+
+import { buildChain, LEADER_ID } from './chain.js';
+import { buildSeats, activeSeat } from './seat.js';
+import { dayKey, daysBetween } from '../time.js';
+import {
+  MATRIX_CSV_COLUMNS,
+  MATRIX_ENGINE_VERSION,
+  MATRIX_FINDINGS,
+  MATRIX_FLOORS,
+  MATRIX_HOME_RIGHTS_DEFAULT,
+  MATRIX_LIMITS,
+  MATRIX_METHOD,
+  MATRIX_PANELS,
+  MATRIX_PRIMARY_KIND,
+  MATRIX_RIGHTS,
+  MATRIX_RIGHT_STATE_LABELS,
+  MATRIX_RIGHT_STATES,
+  MATRIX_SHARE_STATE_LABELS,
+  MATRIX_SHARE_STATES,
+  matrixFindingRank,
+  matrixLineKind,
+} from './matrixRegistry.js';
+import { normalizeMatrixSettings, shareHToDisplay } from './matrixSchema.js';
+
+const FULL_H = 100;
+
+function isPlainObject(value) {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function pad2(n) {
+  return String(Math.abs(n) % 100).padStart(2, '0');
+}
+
+export function formatShareH(hundredths) {
+  if (!Number.isInteger(hundredths)) return null;
+  const sign = hundredths < 0 ? '-' : '';
+  return `${sign}${Math.trunc(Math.abs(hundredths) / 100)}.${pad2(hundredths)}`;
+}
+
+/** Signed hundredths as a signed display string, e.g. +0.40 / -0.15. */
+export function formatDeltaH(hundredths) {
+  if (!Number.isInteger(hundredths)) return null;
+  if (hundredths === 0) return '0.00';
+  const sign = hundredths > 0 ? '+' : '-';
+  return `${sign}${Math.trunc(Math.abs(hundredths) / 100)}.${pad2(hundredths)}`;
+}
+
+/* --------------------------------------------------------------- the graph */
+
+/**
+ * Build the matrix graph over the existing tree.
+ *
+ * Returns, for every person, the ordered set of lines they are actively
+ * accountable through, plus the ancestor/descendant closure across ALL lines —
+ * the two structures every matrix roll-up needs and a tree cannot give.
+ */
+export function buildMatrix(state, { now = new Date(), settings = null } = {}) {
+  const effective = settings || state?.settings || null;
+  const conv = normalizeMatrixSettings(effective || {});
+  const chain = buildChain(state, { now, settings: effective });
+  const today = dayKey(now);
+
+  const people = Array.from(chain.byId.values());
+  const roster = new Map(people.map((p) => [p.id, p]));
+  const nodes = new Map();
+  for (const person of people) {
+    nodes.set(person.id, {
+      id: person.id,
+      name: person.name,
+      role: person.role,
+      team: person.team,
+      altitude: person.altitude,
+      depth: person.depth,
+      managerIds: [],
+      lines: [],
+      ancestors: new Set(),
+      descendants: new Set(),
+    });
+  }
+  // The workspace leader is a manager who holds no roster record.
+  if (!nodes.has(LEADER_ID)) {
+    nodes.set(LEADER_ID, {
+      id: LEADER_ID, name: chain.nodes.get(LEADER_ID)?.name || 'You', role: 'Workspace leader',
+      team: '', altitude: chain.nodes.get(LEADER_ID)?.altitude || null, depth: 0,
+      managerIds: [], lines: [], ancestors: new Set(), descendants: new Set(),
+    });
+  }
+
+  const defects = [];
+  const lines = [];
+  const rawLines = Array.isArray(state?.reportingLines) ? state.reportingLines : [];
+  const ordered = [...rawLines].sort((a, b) => String(a.id).localeCompare(String(b.id)));
+
+  const isActiveWindow = (line) => Boolean(line.fromISO && line.fromISO <= today
+    && (!line.toISO || line.toISO >= today));
+
+  /* 1. Sort the declared rows: a row naming the SAME manager as
+        `person.managerId` is the home line's ALLOCATION, not a second line. It
+        records what share of the person the home line owns and which rights it
+        holds; it never creates an edge, because the roster already records that
+        edge and storing it twice is how two copies drift apart. */
+  const homeAllocation = new Map();
+  const additional = [];
+  for (const raw of ordered) {
+    const person = roster.get(raw.personId);
+    const manager = raw.managerId === LEADER_ID ? nodes.get(LEADER_ID) : roster.get(raw.managerId);
+    if (!person) { defects.push({ defect: 'missing-person', lineId: raw.id, personId: raw.personId, managerId: raw.managerId, kind: raw.kind, detail: 'The line names a person who is not on the active roster.' }); continue; }
+    if (!manager) { defects.push({ defect: 'missing-manager', lineId: raw.id, personId: raw.personId, managerId: raw.managerId, kind: raw.kind, detail: 'The line names a manager who is not on the active roster.' }); continue; }
+    if (raw.personId === raw.managerId) { defects.push({ defect: 'self-line', lineId: raw.id, personId: raw.personId, managerId: raw.managerId, kind: raw.kind, detail: 'A person cannot report to themselves.' }); continue; }
+    if (raw.shareInvalid) { defects.push({ defect: 'bad-share', lineId: raw.id, personId: raw.personId, managerId: raw.managerId, kind: raw.kind, detail: 'The declared allocation could not be read as a whole number of hundredths between 0 and 100.' }); continue; }
+    if (raw.toISO && raw.fromISO && raw.toISO < raw.fromISO) { defects.push({ defect: 'bad-window', lineId: raw.id, personId: raw.personId, managerId: raw.managerId, kind: raw.kind, detail: 'The line ends before it starts.' }); continue; }
+
+    const homeManagerId = person.rawManagerId || LEADER_ID;
+    if (raw.managerId === homeManagerId) {
+      if (homeAllocation.has(raw.personId)) {
+        defects.push({ defect: 'duplicate', lineId: raw.id, personId: raw.personId, managerId: raw.managerId, kind: raw.kind, detail: 'This person already has a declared allocation for their home line.' });
+        continue;
+      }
+      if (!isActiveWindow(raw)) continue;
+      homeAllocation.set(raw.personId, raw);
+      continue;
+    }
+    additional.push(raw);
+  }
+
+  /* 2. The home line: `person.managerId` exactly as the rest of the workspace
+        reads it, carrying the declared allocation when there is one. */
+  const homeEdges = [];
+  for (const person of people) {
+    const managerId = person.rawManagerId || LEADER_ID;
+    if (managerId === person.id) {
+      defects.push({ defect: 'self-line', lineId: null, personId: person.id, managerId, kind: MATRIX_PRIMARY_KIND, detail: 'The roster records this person as their own manager.' });
+      continue;
+    }
+    if (managerId !== LEADER_ID && !roster.has(managerId)) {
+      defects.push({ defect: 'missing-manager', lineId: null, personId: person.id, managerId, kind: MATRIX_PRIMARY_KIND, detail: 'The home line names a manager who is not on the active roster.' });
+      continue;
+    }
+    const alloc = homeAllocation.get(person.id) || null;
+    const declaredRights = Array.isArray(alloc?.rights) ? alloc.rights : [];
+    homeEdges.push({
+      id: `home:${person.id}`,
+      personId: person.id,
+      managerId,
+      kind: MATRIX_PRIMARY_KIND,
+      role: 'primary',
+      shareH: alloc ? alloc.shareH : null,
+      shareInvalid: false,
+      // The home line is PRESUMED to hold the three rights that in every real
+      // matrix belong to the functional manager until someone says otherwise.
+      // A presumption is printed as a presumption, and the moment any line
+      // declares one of them the presumption is outvoted into a contest — which
+      // is the truth about that decision, not a bug.
+      rights: [...new Set([...MATRIX_HOME_RIGHTS_DEFAULT, ...declaredRights])],
+      presumedRights: MATRIX_HOME_RIGHTS_DEFAULT.filter((r) => !declaredRights.includes(r)),
+      declarationId: alloc ? alloc.id : null,
+      note: alloc?.note || '',
+      fromISO: alloc?.fromISO || null,
+      toISO: alloc?.toISO || null,
+      source: 'roster',
+      active: true,
+    });
+  }
+
+  /* 3. Declared additional lines, rejected one at a time for a stated reason. */
+  const declared = [];
+  for (const raw of additional) {
+    declared.push({
+      id: raw.id,
+      personId: raw.personId,
+      managerId: raw.managerId,
+      kind: raw.kind,
+      role: 'secondary',
+      shareH: raw.shareH,
+      shareInvalid: false,
+      rights: Array.isArray(raw.rights) ? raw.rights : [],
+      presumedRights: [],
+      declarationId: raw.id,
+      fromISO: raw.fromISO,
+      toISO: raw.toISO,
+      note: raw.note || '',
+      source: 'declared',
+      active: isActiveWindow(raw),
+      endedAt: raw.endedAt || null,
+      endReason: raw.endReason || '',
+    });
+  }
+
+  /* 3. Wire the DAG, refusing any edge that would close a loop. A cycle is not
+       repaired by dropping a person: the offending LINE is refused and named. */
+  const addEdge = (line) => {
+    const person = nodes.get(line.personId);
+    const manager = nodes.get(line.managerId);
+    if (!person || !manager) return false;
+    if (line.managerId === line.personId) return false;
+    if (line.managerId === line.personId || person.managerIds.includes(line.managerId)) return false;
+    // A loop closes exactly when the manager is already below the person.
+    if (line.managerId !== LEADER_ID && person.descendants.has(line.managerId)) {
+      defects.push({ defect: 'cycle', lineId: line.id, personId: line.personId, managerId: line.managerId, kind: line.kind, detail: 'This line would make each of the two people accountable to the other.' });
+      return false;
+    }
+    person.managerIds.push(line.managerId);
+    person.lines.push(line);
+    lines.push(line);
+    const gained = new Set([line.managerId, ...(manager.ancestors || new Set())]);
+    const touch = [line.personId, ...person.descendants];
+    for (const nodeId of touch) {
+      const node = nodes.get(nodeId);
+      if (!node) continue;
+      for (const ancestorId of gained) node.ancestors.add(ancestorId);
+    }
+    const below = new Set([line.personId, ...person.descendants]);
+    for (const ancestorId of [line.managerId, ...manager.ancestors]) {
+      const node = nodes.get(ancestorId);
+      if (!node) continue;
+      for (const descendantId of below) node.descendants.add(descendantId);
+    }
+    return true;
+  };
+
+  for (const line of homeEdges) addEdge(line);
+  for (const line of declared) if (line.active) addEdge(line);
+
+  const activeLines = new Map();
+  for (const line of lines) {
+    if (!activeLines.has(line.personId)) activeLines.set(line.personId, []);
+    activeLines.get(line.personId).push(line);
+  }
+
+  return {
+    engineVersion: MATRIX_ENGINE_VERSION,
+    chain,
+    nodes,
+    roster,
+    lines,
+    linesByPerson: activeLines,
+    inactiveLines: declared.filter((l) => !l.active),
+    defects,
+    conventions: conv,
+    today,
+    now,
+  };
+}
+
+/* ------------------------------------------------------------- allocations */
+
+/**
+ * Resolve one person's allocation.
+ *
+ * `shareState` is undeclared when the person has more than one active line and
+ * at least one of them carries no allocation: the split is then genuinely
+ * unknown and the person is attributed to NOBODY rather than split evenly.
+ */
+export function personAllocation(matrix, personId) {
+  const lines = matrix.linesByPerson.get(personId) || [];
+  const active = lines.filter((l) => l.active !== false);
+  const node = matrix.nodes.get(personId);
+  if (!node || !active.length) {
+    return {
+      personId,
+      name: node?.name || personId,
+      lines: [],
+      lineN: 0,
+      declaredN: 0,
+      totalH: null,
+      shareState: MATRIX_SHARE_STATES.undeclared,
+      shareSource: 'no-line',
+      deviationH: null,
+      managerIds: [],
+      multiLine: false,
+    };
+  }
+  const declaredN = active.filter((l) => Number.isInteger(l.shareH)).length;
+  const soleLine = active.length === 1;
+  const allDeclared = soleLine || declaredN === active.length;
+
+  /* A person on exactly ONE line is not a split: the whole person belongs to
+     that one manager, and 100 is derived by arithmetic, not invented. A person
+     on two or more lines with a hole in them belongs to NOBODY — filling the
+     hole evenly would be an agreement nobody made. */
+  // The attribution is ALL OR NOTHING. When the split is incomplete, not one
+  // line of it is attributed — attributing the lines that DO carry a number
+  // while refusing the person's total would give a manager a figure the ledger
+  // has already said it cannot support, and the fan-out would no longer equal
+  // the person table. The declared values stay on the row and stay visible.
+  const resolved = active.map((line) => {
+    if (!allDeclared) return { ...line, effectiveShareH: null, shareSource: 'refused' };
+    if (Number.isInteger(line.shareH)) {
+      return { ...line, effectiveShareH: line.shareH, shareSource: 'declared' };
+    }
+    return { ...line, effectiveShareH: FULL_H, shareSource: 'sole-line' };
+  });
+
+  let totalH = null;
+  let shareSource = 'declared';
+  if (!allDeclared) {
+    totalH = null;
+    shareSource = 'refused';
+  } else {
+    totalH = resolved.reduce((acc, l) => acc + (Number.isInteger(l.effectiveShareH) ? l.effectiveShareH : 0), 0);
+    if (resolved.some((l) => l.shareSource === 'sole-line')) shareSource = 'sole-line';
+  }
+
+  let shareState = MATRIX_SHARE_STATES.undeclared;
+  let deviationH = null;
+  if (totalH !== null) {
+    deviationH = totalH - FULL_H;
+    const tol = matrix.conventions.matrixBalanceHundredths;
+    if (deviationH > tol) shareState = MATRIX_SHARE_STATES.over;
+    else if (deviationH < -tol) shareState = MATRIX_SHARE_STATES.under;
+    else shareState = MATRIX_SHARE_STATES.balanced;
+  }
+
+  return {
+    personId,
+    name: node.name,
+    role: node.role,
+    altitude: node.altitude,
+    lines: resolved.map((l) => ({
+      lineId: l.id,
+      declarationId: l.declarationId || (l.role === 'primary' ? null : l.id),
+      managerId: l.managerId,
+      managerName: matrix.nodes.get(l.managerId)?.name || l.managerId,
+      kind: l.kind,
+      kindLabel: matrixLineKind(l.kind)?.label || l.kind,
+      role: l.role,
+      shareH: l.effectiveShareH,
+      shareDisplay: shareHToDisplay(l.effectiveShareH),
+      declaredShareH: Number.isInteger(l.shareH) ? l.shareH : null,
+      shareSource: l.shareSource,
+      rights: l.rights || [],
+      presumedRights: l.presumedRights || [],
+      fromISO: l.fromISO,
+      toISO: l.toISO,
+      note: l.note,
+    })),
+    lineN: active.length,
+    declaredN,
+    totalH,
+    totalDisplay: formatShareH(totalH),
+    shareState,
+    shareStateLabel: MATRIX_SHARE_STATE_LABELS[shareState],
+    shareSource,
+    deviationH,
+    deviationDisplay: formatDeltaH(deviationH),
+    managerIds: active.map((l) => l.managerId),
+    multiLine: active.length > 1,
+  };
+}
+
+export function matrixAllocations(matrix) {
+  const out = [];
+  for (const personId of matrix.roster.keys()) out.push(personAllocation(matrix, personId));
+  out.sort((a, b) => a.name.localeCompare(b.name) || a.personId.localeCompare(b.personId));
+  return out;
+}
+
+/**
+ * THE RECONCILIATION.
+ *
+ * Two identities, both exact integer equalities, both printed and both asserted
+ * in the suite:
+ *
+ *   (1) netErrorH === Σ over resolved people of (totalH − 100)
+ *   (2) Σ over managers of attributedH === Σ over resolved people of totalH
+ *
+ * (1) says the headline deviation is the sum of the per-person deviations — no
+ * number appears in the total that is not in the table. (2) says the fan-out
+ * across every manager neither double-counts a person nor loses one.
+ */
+export function matrixReconciliation(matrix, allocations) {
+  const people = allocations || matrixAllocations(matrix);
+  const resolved = people.filter((p) => p.totalH !== null);
+  const undeclared = people.filter((p) => p.totalH === null);
+
+  const assertedH = resolved.reduce((acc, p) => acc + p.totalH, 0);
+  const expectedH = FULL_H * resolved.length;
+  const netErrorH = assertedH - expectedH;
+  const sumOfDeviationsH = resolved.reduce((acc, p) => acc + (p.totalH - FULL_H), 0);
+
+  const managerH = new Map();
+  for (const person of resolved) {
+    for (const line of person.lines) {
+      // `personAllocation` resolves every line to its EFFECTIVE share (a sole
+      // line owns the whole person); this reads that resolved value and never
+      // the raw declaration, so the fan-out and the person table cannot differ.
+      if (!Number.isInteger(line.shareH)) continue;
+      managerH.set(line.managerId, (managerH.get(line.managerId) || 0) + line.shareH);
+    }
+  }
+  const fanOutH = [...managerH.values()].reduce((acc, h) => acc + h, 0);
+
+  const overN = resolved.filter((p) => p.shareState === MATRIX_SHARE_STATES.over).length;
+  const underN = resolved.filter((p) => p.shareState === MATRIX_SHARE_STATES.under).length;
+  const balancedN = resolved.filter((p) => p.shareState === MATRIX_SHARE_STATES.balanced).length;
+  const soleLineN = resolved.filter((p) => p.shareSource === 'sole-line').length;
+
+  return {
+    peopleN: people.length,
+    lineN: matrix.lines.length,
+    secondaryLineN: matrix.lines.filter((l) => l.role === 'secondary').length,
+    multiLineN: people.filter((p) => p.multiLine).length,
+    resolvedN: resolved.length,
+    undeclaredN: undeclared.length,
+    soleLineN,
+    assertedH,
+    assertedDisplay: formatShareH(assertedH),
+    expectedH,
+    expectedDisplay: formatShareH(expectedH),
+    netErrorH,
+    netErrorDisplay: formatDeltaH(netErrorH),
+    sumOfDeviationsH,
+    // TWO SEPARATE CLAIMS, deliberately never collapsed into one word.
+    //  `balances`   the allocations ADD UP: every attributable person's shares
+    //               total exactly 100, so the organisation's declared
+    //               accountability equals its headcount. A ledger can be
+    //               perfectly audited and still not balance — Otto at 130% is
+    //               reported truthfully and still leaves the roll-up +0.30 out.
+    //  `auditClean` what is PRINTED is what is COMPUTED: the headline error is
+    //               the sum of the printed per-person deviations, and the
+    //               manager fan-out equals the person total exactly.
+    // Calling the first "reconciles" would let a reader hear "it adds up" from
+    // a number that does not.
+    identityHolds: netErrorH === sumOfDeviationsH,
+    fanOutH,
+    fanOutIdentical: fanOutH === assertedH,
+    balances: netErrorH === 0,
+    auditClean: netErrorH === sumOfDeviationsH && fanOutH === assertedH,
+    overN,
+    underN,
+    balancedN,
+    managerN: managerH.size,
+  };
+}
+
+/* ----------------------------------------------------------- manager spans */
+
+/**
+ * Every manager's attributed span across ALL their lines. `directN` counts the
+ * people who report to this manager on any line; `attributedH` is the share of
+ * those people they actually hold; `sharedN` is how many of those people are
+ * ALSO on somebody else's line — the number a tree cannot produce.
+ */
+export function matrixManagerSpans(matrix, allocations) {
+  const people = allocations || matrixAllocations(matrix);
+  const rows = [];
+  const ids = new Set();
+  for (const person of people) for (const line of person.lines) ids.add(line.managerId);
+
+  for (const managerId of ids) {
+    const node = matrix.nodes.get(managerId);
+    const direct = people.filter((p) => p.managerIds.includes(managerId));
+    const attributedH = direct.reduce((acc, p) => {
+      const line = p.lines.find((l) => l.managerId === managerId);
+      return acc + (Number.isInteger(line?.shareH) ? line.shareH : 0);
+    }, 0);
+    const shareOfDirect = direct.filter((p) => p.multiLine).length;
+    const undeclaredN = direct.filter((p) => p.totalH === null).length;
+    const overN = direct.filter((p) => p.shareState === MATRIX_SHARE_STATES.over).length;
+    rows.push({
+      managerId,
+      name: node?.name || managerId,
+      role: node?.role || '',
+      isLeader: managerId === LEADER_ID,
+      directN: direct.length,
+      attributedH,
+      attributedDisplay: formatShareH(attributedH),
+      sharedN: shareOfDirect,
+      undeclaredN,
+      overN,
+      descendantN: node?.descendants?.size || 0,
+      // Withholding is a property of the ROW, decided at disclosure time.
+      withheld: false,
+      withheldReason: '',
+    });
+  }
+  rows.sort((a, b) => b.attributedH - a.attributedH || b.directN - a.directN || a.name.localeCompare(b.name));
+  return rows;
+}
+
+/* ----------------------------------------------------------- decision rights */
+
+/**
+ * RAPID/RACI decision rights, attributed per line. A right held by two managers
+ * is a conflict the STRUCTURE created; a right held by nobody is a gap the
+ * structure created. The module records both and adjudicates neither.
+ */
+export function matrixRightsRows(matrix, allocations) {
+  const people = allocations || matrixAllocations(matrix);
+  const rows = [];
+  for (const person of people) {
+    if (!person.multiLine) continue;
+    for (const right of MATRIX_RIGHTS) {
+      const holders = person.lines.filter((l) => (l.rights || []).includes(right.key));
+      let state = MATRIX_RIGHT_STATES.unowned;
+      if (holders.length > 1) state = MATRIX_RIGHT_STATES.contested;
+      else if (holders.length === 1) state = MATRIX_RIGHT_STATES.held;
+      rows.push({
+        personId: person.personId,
+        personName: person.name,
+        rightKey: right.key,
+        rightLabel: right.label,
+        question: right.question,
+        state,
+        stateLabel: MATRIX_RIGHT_STATE_LABELS[state],
+        holderIds: holders.map((l) => l.managerId),
+        holderNames: holders.map((l) => l.managerName),
+        holdersN: holders.length,
+      });
+    }
+  }
+  rows.sort((a, b) => {
+    const order = { contested: 0, unowned: 1, held: 2 };
+    return order[a.state] - order[b.state]
+      || a.personName.localeCompare(b.personName)
+      || a.rightKey.localeCompare(b.rightKey);
+  });
+  return rows;
+}
+
+export function matrixRightsSummary(rows) {
+  const contested = rows.filter((r) => r.state === MATRIX_RIGHT_STATES.contested);
+  const unowned = rows.filter((r) => r.state === MATRIX_RIGHT_STATES.unowned);
+  const held = rows.filter((r) => r.state === MATRIX_RIGHT_STATES.held);
+  const byRight = new Map(MATRIX_RIGHTS.map((r) => [r.key, { key: r.key, label: r.label, contested: 0, unowned: 0, held: 0 }]));
+  for (const row of rows) {
+    const bucket = byRight.get(row.rightKey);
+    if (!bucket) continue;
+    bucket[row.state] += 1;
+  }
+  return {
+    rowN: rows.length,
+    contestedN: contested.length,
+    unownedN: unowned.length,
+    heldN: held.length,
+    contestedPeopleN: new Set(contested.map((r) => r.personId)).size,
+    unownedPeopleN: new Set(unowned.map((r) => r.personId)).size,
+    byRight: [...byRight.values()],
+  };
+}
+
+/* ---------------------------------------------------------------- findings */
+
+export function matrixFindings(matrix, { allocations, rightsRows, spans } = {}) {
+  const people = allocations || matrixAllocations(matrix);
+  const rights = rightsRows || matrixRightsRows(matrix, people);
+  const expiringDays = matrix.conventions.matrixExpiringDays;
+  const out = [];
+
+  for (const person of people) {
+    if (person.shareState === MATRIX_SHARE_STATES.over) {
+      out.push({
+        finding: 'over-committed',
+        personId: person.personId,
+        personName: person.name,
+        severity: person.deviationH,
+        detail: `Declared allocations total ${person.totalDisplay} — ${formatDeltaH(person.deviationH)} beyond the one person who has to carry them.`,
+        managers: person.managerIds.length,
+      });
+    } else if (person.shareState === MATRIX_SHARE_STATES.under) {
+      out.push({
+        finding: 'under-allocated',
+        personId: person.personId,
+        personName: person.name,
+        severity: -person.deviationH,
+        detail: `Declared allocations total ${person.totalDisplay} — ${formatDeltaH(person.deviationH)} of this person is accountable to nobody.`,
+        managers: person.managerIds.length,
+      });
+    } else if (person.shareState === MATRIX_SHARE_STATES.undeclared) {
+      out.push({
+        finding: 'undeclared-share',
+        personId: person.personId,
+        personName: person.name,
+        severity: person.lineN,
+        detail: `${person.lineN} active lines, ${person.lineN - person.declaredN} with no declared allocation. Nothing is attributed rather than split by guesswork.`,
+        managers: person.managerIds.length,
+      });
+    }
+  }
+
+  const contested = rights.filter((r) => r.state === MATRIX_RIGHT_STATES.contested);
+  const byPersonContested = new Map();
+  for (const row of contested) {
+    if (!byPersonContested.has(row.personId)) byPersonContested.set(row.personId, []);
+    byPersonContested.get(row.personId).push(row);
+  }
+  for (const [personId, rows] of byPersonContested) {
+    out.push({
+      finding: 'contested-right',
+      personId,
+      personName: rows[0].personName,
+      severity: rows.length,
+      detail: `${rows.length} decision right(s) held by more than one manager: ${rows.map((r) => r.rightLabel).join(', ')}.`,
+      managers: new Set(rows.flatMap((r) => r.holderIds)).size,
+    });
+  }
+
+  const unowned = rights.filter((r) => r.state === MATRIX_RIGHT_STATES.unowned);
+  const byPersonUnowned = new Map();
+  for (const row of unowned) {
+    if (!byPersonUnowned.has(row.personId)) byPersonUnowned.set(row.personId, []);
+    byPersonUnowned.get(row.personId).push(row);
+  }
+  for (const [personId, rows] of byPersonUnowned) {
+    out.push({
+      finding: 'unowned-right',
+      personId,
+      personName: rows[0].personName,
+      severity: rows.length,
+      detail: `${rows.length} decision right(s) nobody holds: ${rows.map((r) => r.rightLabel).join(', ')}.`,
+      managers: people.find((p) => p.personId === personId)?.managerIds.length || 0,
+    });
+  }
+
+  for (const line of matrix.lines) {
+    if (!line.toISO) continue;
+    const remaining = daysBetween(matrix.today, line.toISO);
+    if (remaining < 0 || remaining > expiringDays) continue;
+    out.push({
+      finding: 'expiring',
+      personId: line.personId,
+      personName: matrix.nodes.get(line.personId)?.name || line.personId,
+      severity: expiringDays - remaining,
+      detail: `The ${matrixLineKind(line.kind)?.label || line.kind} line to ${matrix.nodes.get(line.managerId)?.name || line.managerId} ends on ${line.toISO} (${remaining} day(s)).`,
+      managers: 1,
+    });
+  }
+
+  for (const person of people) {
+    if (!person.multiLine) continue;
+    out.push({
+      finding: 'multi-line',
+      personId: person.personId,
+      personName: person.name,
+      severity: 0,
+      detail: `Accountable to ${person.lineN} managers at once — every roll-up that touches this person fans to all of them.`,
+      managers: person.lineN,
+    });
+  }
+
+  out.sort((a, b) => matrixFindingRank(a.finding) - matrixFindingRank(b.finding)
+    || b.severity - a.severity
+    || a.personName.localeCompare(b.personName)
+    || a.personId.localeCompare(b.personId));
+
+  const total = out.length;
+  const carried = out.slice(0, MATRIX_LIMITS.queue);
+  return { rows: carried, total, carriedN: carried.length, remainderN: Math.max(0, total - carried.length) };
+}
+
+/* ------------------------------------------------------------------ report */
+
+function withholdManagerRows(rows, seat, matrix) {
+  const aboveCeiling = Boolean(seat) && !seat.fullAccess && Number(seat.rank) >= MATRIX_FLOORS.detailRank;
+  return rows.map((row) => {
+    if (!aboveCeiling) return row;
+    return {
+      ...row,
+      name: null,
+      role: null,
+      withheld: true,
+      withheldReason: `Above the declared detail ceiling (rank ${seat.rank}), a manager’s allocation is item detail; counts and the attributed total survive.`,
+    };
+  });
+}
+
+/**
+ * The full report. Everything is re-derived on read; nothing is stored.
+ */
+export function buildMatrixReport(state, { now = new Date(), settings = null } = {}) {
+  const effective = settings || state?.settings || null;
+  const matrix = buildMatrix(state, { now, settings: effective });
+  const built = buildSeats(state, { now, settings: effective });
+  const seat = activeSeat(built);
+
+  const allocationsAll = matrixAllocations(matrix);
+  const scope = seat?.fullAccess ? null : new Set([...(seat?.scope || [])]);
+  const inScope = (personId) => !scope || scope.has(personId);
+  const allocations = allocationsAll.filter((p) => inScope(p.personId));
+
+  const reconciliation = matrixReconciliation(matrix, allocations);
+  const spansAll = matrixManagerSpans(matrix, allocations);
+  const spans = withholdManagerRows(spansAll, seat, matrix).slice(0, MATRIX_LIMITS.managers);
+  const spansRemainderN = Math.max(0, spansAll.length - spans.length);
+  const rightsAll = matrixRightsRows(matrix, allocations);
+  const rightsSummary = matrixRightsSummary(rightsAll);
+  const findings = matrixFindings(matrix, { allocations, rightsRows: rightsAll, spans: spansAll });
+  const people = allocations.slice(0, MATRIX_LIMITS.people);
+  const peopleRemainderN = Math.max(0, allocations.length - people.length);
+
+  const expiringN = findings.rows.filter((f) => f.finding === 'expiring').length;
+
+  return {
+    engineVersion: MATRIX_ENGINE_VERSION,
+    method: MATRIX_METHOD,
+    panels: MATRIX_PANELS,
+    findings: MATRIX_FINDINGS,
+    conventions: {
+      balanceHundredths: matrix.conventions.matrixBalanceHundredths,
+      expiringDays: matrix.conventions.matrixExpiringDays,
+      autoPropagate: matrix.conventions.matrixAutoPropagate,
+      linesPerPerson: MATRIX_LIMITS.linesPerPerson,
+      queueCap: MATRIX_LIMITS.queue,
+      managerCap: MATRIX_LIMITS.managers,
+      peopleCap: MATRIX_LIMITS.people,
+      detailRank: MATRIX_FLOORS.detailRank,
+    },
+    seat: {
+      id: seat?.id || null,
+      label: seat?.label || 'Undeclared operator view',
+      rank: seat?.rank ?? null,
+      fullAccess: Boolean(seat?.fullAccess),
+    },
+    today: matrix.today,
+    reconciliation,
+    people,
+    peopleRemainderN,
+    spans,
+    spansRemainderN,
+    rights: rightsAll,
+    rightsSummary,
+    findings,
+    expiringN,
+    defects: matrix.defects,
+    inactiveLines: matrix.inactiveLines,
+    limits: MATRIX_LIMITS,
+  };
+}
+
+/** Attention badge: the count the shell shows before the leader opens the page. */
+export function matrixAttentionCount(state, { now = new Date(), settings = null } = {}) {
+  try {
+    const report = buildMatrixReport(state, { now, settings: settings || state?.settings || null });
+    const r = report.reconciliation;
+    return r.undeclaredN + r.overN + report.rightsSummary.contestedN + report.defects.length;
+  } catch {
+    return 0;
+  }
+}
+
+/* -------------------------------------------------------------- csv + brief */
+
+function aggregateBand(row) {
+  if (row.undeclaredN > 0) return 'has-undeclared';
+  if (row.overN > 0) return 'has-over-committed';
+  if (row.sharedN > 0) return 'has-shared-people';
+  return 'clean';
+}
+
+/**
+ * CSV scope #105 (Schema v119, ADR-0140). Aggregate-only: a manager row is
+ * named only when it clears the declared cell floor, and a person is never
+ * named at all — an individual's allocation is item detail about an individual.
+ */
+export function matrixCsvRows(report) {
+  const rows = [];
+  const r = report.reconciliation;
+
+  rows.push({
+    row_kind: 'workspace',
+    scope: 'workspace',
+    altitude: report.seat.rank === null ? '' : String(report.seat.rank),
+    person_n: r.peopleN,
+    line_n: r.lineN,
+    secondary_line_n: r.secondaryLineN,
+    multi_line_n: r.multiLineN,
+    attributed_h: r.assertedH,
+    attributable_people_n: r.resolvedN,
+    undeclared_people_n: r.undeclaredN,
+    net_fte_error_h: r.netErrorH,
+    balances: r.balances ? 'yes' : 'no',
+    over_committed_n: r.overN,
+    under_allocated_n: r.underN,
+    balanced_n: r.balancedN,
+    contested_right_n: report.rightsSummary.contestedN,
+    unowned_right_n: report.rightsSummary.unownedN,
+    expiring_n: report.expiringN,
+    manager_rank: '',
+    manager_attributed_h: r.fanOutH,
+    manager_direct_n: '',
+    manager_shared_n: '',
+    manager_withheld: '',
+    right_key: '',
+    right_state: '',
+    right_holders_n: '',
+    share_state: '',
+    share_total_h: '',
+    finding: '',
+    band: '',
+    withheld: '',
+    withheld_reason: '',
+  });
+
+  for (const span of report.spans) {
+    const named = !span.withheld && span.directN >= MATRIX_FLOORS.cellN;
+    rows.push({
+      row_kind: 'manager',
+      scope: named ? span.name : (span.isLeader ? 'workspace-leader' : 'withheld'),
+      altitude: '',
+      person_n: span.directN,
+      line_n: '',
+      secondary_line_n: '',
+      multi_line_n: span.sharedN,
+      attributed_h: span.attributedH,
+      attributable_people_n: span.directN - span.undeclaredN,
+      undeclared_people_n: span.undeclaredN,
+      net_fte_error_h: '',
+      balances: '',
+      over_committed_n: span.overN,
+      under_allocated_n: '',
+      balanced_n: '',
+      contested_right_n: '',
+      unowned_right_n: '',
+      expiring_n: '',
+      manager_rank: '',
+      manager_attributed_h: span.attributedH,
+      manager_direct_n: span.directN,
+      manager_shared_n: span.sharedN,
+      manager_withheld: span.withheld ? 'yes' : (named ? '' : 'yes'),
+      right_key: '',
+      right_state: '',
+      right_holders_n: '',
+      share_state: '',
+      share_total_h: '',
+      finding: '',
+      band: aggregateBand(span),
+      withheld: named ? '' : 'yes',
+      withheld_reason: named ? '' : (span.withheldReason || `Fewer than ${MATRIX_FLOORS.cellN} attributed people — a named allocation is item detail.`),
+    });
+  }
+
+  for (const right of report.rightsSummary.byRight) {
+    rows.push({
+      row_kind: 'right',
+      scope: 'workspace',
+      altitude: '',
+      person_n: '',
+      line_n: '',
+      secondary_line_n: '',
+      multi_line_n: '',
+      attributed_h: '',
+      attributable_people_n: '',
+      undeclared_people_n: '',
+      net_fte_error_h: '',
+      balances: '',
+      over_committed_n: '',
+      under_allocated_n: '',
+      balanced_n: '',
+      contested_right_n: right.contested,
+      unowned_right_n: right.unowned,
+      expiring_n: '',
+      manager_rank: '',
+      manager_attributed_h: '',
+      manager_direct_n: '',
+      manager_shared_n: '',
+      manager_withheld: '',
+      right_key: right.key,
+      right_state: right.contested > 0 ? 'contested' : (right.unowned > 0 ? 'unowned' : 'held'),
+      right_holders_n: '',
+      share_state: '',
+      share_total_h: '',
+      finding: '',
+      band: '',
+      withheld: '',
+      withheld_reason: '',
+    });
+  }
+
+  for (const finding of report.findings.rows) {
+    rows.push({
+      row_kind: 'finding',
+      scope: 'workspace',
+      altitude: '',
+      person_n: '',
+      line_n: '',
+      secondary_line_n: '',
+      multi_line_n: finding.managers,
+      attributed_h: '',
+      attributable_people_n: '',
+      undeclared_people_n: '',
+      net_fte_error_h: '',
+      balances: '',
+      over_committed_n: '',
+      under_allocated_n: '',
+      balanced_n: '',
+      contested_right_n: '',
+      unowned_right_n: '',
+      expiring_n: '',
+      manager_rank: '',
+      manager_attributed_h: '',
+      manager_direct_n: '',
+      manager_shared_n: '',
+      manager_withheld: '',
+      right_key: '',
+      right_state: '',
+      right_holders_n: '',
+      share_state: '',
+      share_total_h: '',
+      finding: finding.finding,
+      band: '',
+      withheld: '',
+      withheld_reason: '',
+    });
+  }
+
+  return rows;
+}
+
+export const MATRIX_CSV_HEADER = MATRIX_CSV_COLUMNS;
+
+/**
+ * Identity-free brief for Today/Signals. Counts and the reconciliation verdict
+ * only — never a person, a manager or an allocation.
+ */
+export function matrixBriefText(report) {
+  if (!report || !isPlainObject(report.reconciliation)) return 'No matrix accountability reading is available.';
+  const r = report.reconciliation;
+  const lines = [];
+  lines.push(`Matrix: ${r.peopleN} people on ${r.lineN} reporting lines, ${r.multiLineN} on more than one.`);
+  lines.push(r.balances
+    ? `Every span adds back to the headcount: ${r.assertedDisplay} attributed across ${r.resolvedN} attributable people, net error ${r.netErrorDisplay}.`
+    : `The allocations do NOT add back to the headcount: ${r.assertedDisplay} attributed against ${r.expectedDisplay} expected — net error ${r.netErrorDisplay}.`);
+  if (!r.auditClean) lines.push('THE LEDGER IS UNSOUND: the printed total is not the sum of the printed rows. Treat every figure on this page as unverified.');
+  lines.push(`${r.overN} over-committed, ${r.underN} under-allocated, ${r.balancedN} balanced, ${r.undeclaredN} undeclared.`);
+  lines.push(`Decision rights: ${report.rightsSummary.contestedN} contested, ${report.rightsSummary.unownedN} unowned across ${report.rightsSummary.contestedPeopleN + report.rightsSummary.unownedPeopleN} people on more than one line.`);
+  if (r.undeclaredN > 0) lines.push('An undeclared allocation is attributed to nobody; it is never split by guesswork.');
+  return lines.join(' ');
+}

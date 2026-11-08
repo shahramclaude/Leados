@@ -41,6 +41,7 @@ import { createAgendaActions } from './core/domain/agendaProvenanceActions.js';
 // ADR-0121: the Duty Coverage Register. Three human commands on one duty line;
 // eligibility, exercise and concentration are re-derived on read.
 import { createDutyCoverageActions } from './core/domain/dutyCoverageActions.js';
+import { createMatrixActions } from './core/domain/matrixActions.js';
 // ADR-0122: the Dated Absence Plan. One read (the window plan), three human
 // commands (declare, revoke, scan); availability is derived from the declared
 // windows, never stored.
@@ -19809,6 +19810,10 @@ export function createApi(store, options = {}) {
   Object.assign(api, createDutyStandbyActions(store, { now: clock, idFactory: id }));
   Object.assign(api, createDutyRehearsalActions(store, { now: clock, idFactory: id }));
   Object.assign(api, createBranchReadingActions(store, { now: clock, idFactory: id }));
+  // ADR-0140: the Matrix Accountability Ledger. Declaring, retuning and ending
+  // a reporting line are human commands through the same reviewed gateway; the
+  // roll-up is derived on read and RULE-MTX-01 fans the work in the same commit.
+  Object.assign(api, createMatrixActions(store, { now: clock, idFactory: id }));
   // ADR-0118: the only write is RECORD-ARBITRATION; the receipt, the governed
   // decision, the two `rehearses` edges and the vertical roll-up land in one
   // atomic transaction performed by this mixin plus RULE-CMP-01.

@@ -1,3 +1,18 @@
+## 2026-11-08 — Matrix accountability: does the roll-up add up?
+
+Most organisations above a few hundred people are not a tree. An engineer with a functional manager, a project manager and a product lead is the normal case, and until now every roll-up in LeadOS assumed she was not: `person.managerId` is a single pointer, and ownership, span of control and the automation fan-out were all properties of that tree. A tree's answer is unique *because a tree has exactly one path to the root* — add a second line and the same question has two defensible answers.
+
+`#/matrix` adds the matrix **over** the existing hierarchy, never as a second one. Declare an additional reporting line — project, product, cross-functional or administrative — with the share of that person it owns, as a whole percentage, and the decision rights it holds. The home line stays exactly where it always was, and a workspace that declares nothing behaves precisely as it did before.
+
+What that buys you:
+
+- **A roll-up that audits itself.** Every manager's attributed span is added together and compared against the headcount, in whole integer hundredths so the answer is exact rather than something that rounds into looking correct. Two separate claims are printed, because they are two different facts: *do the allocations add up* (`balances`) and *is the printed total the sum of the printed rows* (`auditClean`). A ledger can be perfectly audited and still not balance — someone at 140% is reported truthfully and still leaves the roll-up 0.30 out.
+- **Nobody is invented.** A person on one line owns the whole person to that manager, by arithmetic, and says that it was arithmetic. A person on two lines with a hole in them is attributed to **nobody**, never split evenly: filling the gap would be an agreement nobody made.
+- **Who decides what.** Six decision rights (priority, assignment, technical direction, performance assessment, pay, absence approval), attributed per line. Two managers holding one is *contested*; nobody holding it is *unowned*. The register records both and adjudicates neither — both are properties of the structure, not of a person.
+- **Work reaches every manager.** When a line is declared, that person's open work rolls up to the new manager in the same transaction. The engine never picks which of two managers *owns* an item; it names all of them and reports the ambiguity, because choosing one silently is not a decision it is entitled to make.
+
+The upgrade adds both ledgers empty at Schema v119: "this organisation is recorded as a single chain of command", which is a different claim from "nobody here has two managers". No reporting line and no allocation is back-filled. An allocation is a declaration, not a measurement — nothing checks it against a calendar, and the page says so. Above the declared detail ceiling a manager row is disclosed as counts only, and no person is ever named in an export row. Seat selection is not authentication.
+
 ## 2026-11-08 — Budget headroom needs evidence
 
 In `#/finance?panel=span`, currency and branch headroom is blank when an attributable envelope has no ceiling, a spent line has no actual, or an open line has no price. Recorded forecast subtotals remain visible; the ledger and brief carry the limitation. Unpriced planned lines also conservatively block headroom, although priced planned pipeline is separate from forecast-at-completion. This does not change the individual envelope cards or the existing finance actions. No setup or schema change.

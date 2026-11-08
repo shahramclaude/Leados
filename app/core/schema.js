@@ -23,6 +23,7 @@ import { normalizeBoardMemos, normalizeBoardMarkers, normalizeBoardSettings } fr
 import { normalizeSeatIdentities, normalizeIdentityMarkers, normalizeIdentitySettings } from './domain/identitySchema.js';
 // ADR-0121 (Schema v114): the Duty Coverage Register's fail-closed normalizers.
 import { normalizeDutyCovers, normalizeDutyCoverageMarkers, normalizeDutyCoverageSettings } from './domain/dutyCoverageSchema.js';
+import { normalizeReportingLines, normalizeMatrixMarkers, normalizeMatrixSettings } from './domain/matrixSchema.js';
 import { normalizeAbsencePlans } from './domain/dutyAbsenceSchema.js';
 import { normalizeStandbyAnswers, normalizeDutyStandbySettings } from './domain/dutyStandbySchema.js';
 import { normalizeDutyRehearsals } from './domain/dutyRehearsalSchema.js';
@@ -547,7 +548,21 @@ export {
 // workspace opens with an EMPTY absence ledger: no absence is scheduled at
 // upgrade time, because an absence invented at upgrade time would make every
 // cover in the span read as unavailable on dates no human declared.
-export const SCHEMA_VERSION = 118;
+// v119 adds the Matrix Accountability Ledger (ADR-0140, `#/matrix`):
+// `reportingLines` records the dated, human declaration that a person is also
+// accountable to a second (or third) manager — functional home line plus
+// project, product, cross-functional or administrative lines — with an
+// allocation in whole hundredths and the decision rights each line holds.
+// Purely additive and deliberately EMPTY on upgrade: an existing workspace has
+// never declared a second reporting line, so the ledger starts by saying "this
+// organisation is recorded as a single chain of command", which is a different
+// claim from "nobody here has two managers". Nothing is back-filled: a second
+// reporting line invented at upgrade time would be an accountability no human
+// accepted, and a 100% allocation invented for every home line would make the
+// roll-up close on a number nobody agreed to. Every existing roll-up keeps
+// working unchanged: the home line is still `person.managerId`, read through
+// the same tree, and a workspace with no declared lines gains no edges.
+export const SCHEMA_VERSION = 119;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -2416,6 +2431,17 @@ export const COLLECTIONS = [
   // so a reading cannot silently outlive the window it was given for.
   'branchReadingAsks',
   'branchReadings',
+  // ADR-0140 (Schema v119): the Matrix Accountability Ledger. `reportingLines`
+  // holds ONLY the dated human declaration that a person is ALSO accountable to
+  // a named manager — the kind of line, the allocation in whole hundredths of a
+  // person (or null, which is undeclared and never zero), the decision rights
+  // that line holds, and the window. `matrixMarkers` is the rule's idempotency
+  // ledger. Every total, every span attribution and the reconciliation itself
+  // are DERIVED on read from these rows and the roster — never stored, so the
+  // roll-up cannot drift from the lines it claims to add up. The home line is
+  // NOT copied here: `person.managerId` already records it.
+  'reportingLines',
+  'matrixMarkers',
 
 ];
 
@@ -7507,6 +7533,8 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // the `prepares-for` provenance edge validates against a real cover id.
   state.dutyCovers = normalizeDutyCovers(raw.dutyCovers, warnings);
   state.dutyCoverageMarkers = normalizeDutyCoverageMarkers(raw.dutyCoverageMarkers);
+  state.reportingLines = normalizeReportingLines(raw.reportingLines, warnings);
+  state.matrixMarkers = normalizeMatrixMarkers(raw.matrixMarkers);
   // ADR-0122: a malformed absence row is dropped with a warning, never repaired —
   // an invented absence is an invented unavailability for every cover in the span.
   // Resolved BEFORE links so the `declares-absence-of` provenance edge validates
@@ -8384,6 +8412,23 @@ export const MIGRATIONS = {
     branchReadings: Array.isArray(v117.branchReadings) ? v117.branchReadings : [],
     settings: isPlainObject(v117.settings)
       ? { ...v117.settings, ...normalizeDutyCoverageSettings(v117.settings) }
+      : { ...DEFAULT_SETTINGS },
+  }),
+  // ADR-0140: additive 118 → 119. An existing workspace has never declared a
+  // second reporting line, so both ledgers start EMPTY — "this organisation is
+  // recorded as a single chain of command", which is a different claim from
+  // "nobody here reports to two managers". The three conventions are clamped in
+  // at upgrade time so the printed numbers exist before anyone re-declares
+  // them; no line, no allocation and no decision right is invented, because an
+  // accountability invented at upgrade time is an accountability nobody
+  // accepted.
+  118: (v118) => ({
+    ...v118,
+    schemaVersion: 119,
+    reportingLines: Array.isArray(v118.reportingLines) ? v118.reportingLines : [],
+    matrixMarkers: Array.isArray(v118.matrixMarkers) ? v118.matrixMarkers : [],
+    settings: isPlainObject(v118.settings)
+      ? { ...v118.settings, ...normalizeMatrixSettings(v118.settings) }
       : { ...DEFAULT_SETTINGS },
   }),
   // ADR-0113: additive 111 → 112. An existing workspace is full of prompts it
