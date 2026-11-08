@@ -121,8 +121,17 @@ test('the queue separates who owes each line and surfaces the 12-cap eviction', 
   assert.equal(q.above, 9, 'the classification duty plus the eight leader-owned filler prompts');
   assert.equal(q.atCap, true);
   assert.equal(q.headroom, 0);
-  assert.equal(q.rows[0].evictionRisk, true, 'the oldest line is the one the cap will drop');
-  assert.equal(q.rows[1].evictionRisk, false);
+  // ADR-0134: the badge is derived from the retention policy that actually
+  // STORES the list, not assumed from one end. Row 0 here is THEIR_TOPIC — a
+  // line the person raised — and the policy protects it, so it is not at risk.
+  assert.equal(q.rows[0].evictionRisk, false, 'the person’s own topic is never the line at risk');
+  assert.equal(q.rows.filter((r) => r.evictionRisk).length, 1, 'exactly one line is next to go');
+  // The oldest ENGINE prompt is the one the declared policy displaces.
+  const atRisk = q.rows.find((r) => r.evictionRisk);
+  assert.equal(atRisk.engine, true, 'the line at risk is engine-authored');
+  assert.equal(atRisk.text, q.rows.filter((r) => r.engine)[0].text,
+    'it is the OLDEST engine prompt, because engine prompts survive newest-first');
+  assert.equal(q.nextEvicted.index, atRisk.index);
 
   // Shortening the list removes the eviction risk: the wall is real, not a label.
   const short = personQueue({ ...person, talkingPoints: prompts.slice(0, 3) });

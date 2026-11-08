@@ -18,9 +18,12 @@
  *
  * Frontline reality, which the product was getting wrong: a lead's next 1:1
  * starts from a queue where the person's own topic is buried under twelve
- * engine prompts, and the prompts the lead owed from *last* week are the first
- * to be silently evicted — `normalizeTalkingPoints` caps the list at 12 and
- * drops the oldest. The lead cannot tell which prompt they promised to raise,
+ * engine prompts. ADR-0134 replaced the accidental truncation this file used to
+ * describe: `normalizeTalkingPoints` kept the first twelve while the rules that
+ * write prompts bounded themselves with `.slice(-30)`, so the prompt a rule had
+ * just written was the first thing a reload deleted. One declared policy now
+ * governs the cap (their topics first, engine prompts newest-first) and reports
+ * what it refuses. The lead still cannot tell which prompt they promised to raise,
  * which one they already asked about, and which one the engine is about to
  * delete.
  *

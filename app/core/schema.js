@@ -309,6 +309,12 @@ import {
   normalizeAgendaMarkers,
   normalizeAgendaSettings,
 } from './domain/agendaProvenanceSchema.js';
+// The ONE declared retention policy for a person's 1:1 waiting list. Both the
+// storage normalizer here and the agenda ledger's eviction reading import it, so
+// the cap that stores the list and the cap that is printed about it cannot
+// disagree — the defect ADR-0134 records.
+import { TALKING_QUEUE_CAP, retainQueue } from './domain/talkingPointPolicy.js';
+
 import { ALTITUDES as SPAN_ALTITUDES } from './domain/chainRegistry.js';
 // ADR-0088: the Escalation Economy — the disposition ledger, intervention-rate
 // commitments, idempotency markers, and clamped conventions.
@@ -3118,14 +3124,25 @@ export function normalizeSettings(raw) {
 }
 
 /**
- * Topics a person has asked to raise in a 1:1. One line each, trimmed, capped
- * and de-duplicated. Stored as a plain string array so it stays readable in an
- * export and survives a copy/paste into the person dialog.
+ * Topics a person has asked to raise in a 1:1. One line each, trimmed,
+ * de-duplicated, and bounded by the ONE declared retention policy.
+ *
+ * This function used to keep the FIRST twelve lines and stop, while every rule
+ * that writes a prompt appended at the end and bounded itself with
+ * `.slice(-30)`. The two caps contradicted each other: the prompt a rule wrote
+ * today was the first thing a reload deleted, silently. The policy now lives in
+ * `talkingPointPolicy.js` and decides membership by authorship (the person's
+ * own lines first, then engine prompts newest-first), so writing a prompt can
+ * no longer destroy the prompt just written, and the ledger's eviction badge
+ * can name the line the reload will actually take.
+ *
+ * Stored as a plain string array so it stays readable in an export and survives
+ * a copy/paste into the person dialog.
  */
 export function normalizeTalkingPoints(value) {
   if (!Array.isArray(value)) return [];
   const seen = new Set();
-  const out = [];
+  const unique = [];
   for (const raw of value) {
     if (typeof raw !== 'string') continue;
     const text = raw.trim().replace(/\s+/g, ' ').slice(0, 200);
@@ -3133,10 +3150,43 @@ export function normalizeTalkingPoints(value) {
     const key = text.toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);
-    out.push(text);
-    if (out.length >= 12) break;
+    unique.push(text);
   }
-  return out;
+  return retainQueue(unique).keep;
+}
+
+/**
+ * The waiting list as it will ACTUALLY be stored, plus an honest account of
+ * every line the declared cap is about to drop. Callers that can print (the
+ * person action layer, the agenda ledger) use this to close the silent-loss
+ * channel; `normalizeTalkingPoints` keeps its simple contract for the dozens of
+ * places that only need the array.
+ */
+export function applyTalkingPointPolicy(value) {
+  if (!Array.isArray(value)) return { kept: [], dropped: [], droppedN: 0, cap: TALKING_QUEUE_CAP, sentence: null };
+  const seen = new Set();
+  const unique = [];
+  for (const raw of value) {
+    if (typeof raw !== 'string') continue;
+    const text = raw.trim().replace(/\s+/g, ' ').slice(0, 200);
+    if (!text) continue;
+    const key = text.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(text);
+  }
+  const result = retainQueue(unique);
+  return {
+    kept: result.keep,
+    dropped: result.dropped,
+    droppedN: result.droppedN,
+    droppedEngineN: result.droppedEngineN,
+    droppedPersonN: result.droppedPersonN,
+    cap: result.cap,
+    sentence: result.droppedN
+      ? `${result.droppedN} waiting-list line(s) did not fit the declared ${result.cap}-prompt cap and were not stored. The person’s own topics are kept first and engine prompts survive newest-first.`
+      : null,
+  };
 }
 
 function normalizeAgenda(items) {
@@ -6570,7 +6620,16 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
     revision: Math.max(0, Math.round(num(raw.meta?.revision, 0))),
   };
 
-  const people = asArray(raw, 'people', warnings).map((p, i) => ({
+  const people = asArray(raw, 'people', warnings).map((p, i) => {
+    // ADR-0134: a truncated waiting list is a failure the leader must see, not
+    // a quiet repair. `applyTalkingPointPolicy` returns exactly what the cap
+    // refused; a dropped line is counted and named by authorship so the reload
+    // banner can say whether it was an engine prompt or the person's own words.
+    const queue = applyTalkingPointPolicy(p.talkingPoints);
+    if (queue.droppedN) {
+      warnings.push(`1:1 waiting lists: ${queue.droppedN} line(s) on “${str(p.name).trim().slice(0, 60) || 'a person'}” did not fit the declared ${queue.cap}-prompt cap (${queue.droppedEngineN} engine prompt(s), ${queue.droppedPersonN} the person’s own). Capacity is declared, not accidental: the person’s own topics are kept first and engine prompts survive newest-first, and nothing was removed without this notice.`);
+    }
+    return {
     id: str(p.id) || `person-${i}`,
     name: str(p.name).trim().slice(0, 120),
     role: str(p.role).slice(0, 120),
@@ -6581,11 +6640,12 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
     lastPromotionOn: dayOrNull(p.lastPromotionOn),
     compensation: normalizeCompensation(p.compensation, warnings),
     focus: str(p.focus).slice(0, 300),
-    talkingPoints: normalizeTalkingPoints(p.talkingPoints),
+    talkingPoints: queue.kept,
     status: p.status === 'archived' ? 'archived' : 'active',
     createdAt: isoOrNull(p.createdAt) || now,
     archivedAt: isoOrNull(p.archivedAt),
-  }));
+    };
+  });
   state.people = uniqueIds(people.filter((p) => p.name), 'People', warnings);
 
   const oneOnOnes = asArray(raw, 'oneOnOnes', warnings).map((m, i) => ({
