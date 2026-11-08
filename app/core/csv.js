@@ -976,7 +976,7 @@ export const CSV_EXPORTS = [
   // CSV scope #80 (Schema v91, ADR-0085). Aggregate-only board claim ledger: one
   // workspace row and one row per declared claim. No memo id, no operator, no
   // note, no span name and no person. A refused figure is BLANK, never zero.
-  { key: 'board-claims', label: 'Board claims (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'board-claims', description: 'One workspace row and one row per declared board claim: verdict, point estimate, interval bounds, declared threshold and direction, observation count, materiality, post-hoc flag, disclosure tag, memo counts, attestation state and the memo fingerprint. NO memo id, NO operator, NO free text, NO span or person name. Every refused or withheld figure is BLANK rather than zero.' },
+  { key: 'board-claims', label: 'Board claims (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'board-claims', description: 'One workspace row and one row per declared board claim: verdict, point estimate, interval bounds, declared threshold and direction, observation count, materiality, post-hoc flag, disclosure tag, memo counts, attestation state, the memo fingerprint, and the carry-forward read across frozen packs (packs the claim was looked at in, whether it is carried, why, both streaks, the transition class and the last movement in percentage points). NO memo id, NO operator, NO free text, NO span or person name. Every refused or withheld figure is BLANK rather than zero.' },
   // CSV scope #81 (Schema v92, ADR-0086). One row per declared module at the
   // exporting seat: the posture it holds and the boundary that set it. Aggregate
   // cells only — a count, a rate or a currency total. No record id, name, note,
@@ -5951,6 +5951,16 @@ export function buildScopeTable(state, scope, now) {
         { key: 'memos_frozen', header: 'memos_frozen' },
         { key: 'attestation', header: 'attestation' },
         { key: 'fingerprint', header: 'fingerprint' },
+        // ADR-0135 carry-forward columns: how many frozen packs the claim has
+        // been looked at in, whether it is carried, why, and how far the last
+        // two looks moved. Counts and words only — no memo id, no name.
+        { key: 'packs', header: 'packs' },
+        { key: 'carry_forward', header: 'carry_forward' },
+        { key: 'carry_reason', header: 'carry_reason' },
+        { key: 'failing_streak', header: 'failing_streak' },
+        { key: 'unverified_streak', header: 'unverified_streak' },
+        { key: 'transition', header: 'transition' },
+        { key: 'move_pp', header: 'move_pp' },
       ];
       return { columns, rows };
     }

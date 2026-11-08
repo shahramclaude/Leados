@@ -222,6 +222,7 @@ export function renderBoard(ctx) {
       { key: 'memo', label: 'Memo' },
       { key: 'claims', label: 'Claims' },
       { key: 'rollup', label: 'Roll-up' },
+      { key: 'cycle', label: 'Carry-forward' },
       { key: 'discrepancies', label: 'Cross-checks' },
       { key: 'method', label: 'Method' },
     ],
@@ -555,11 +556,135 @@ export function renderBoard(ctx) {
     );
   }
 
+  /* --------------------------------------------------------------- cycle */
+
+  function cyclePanel() {
+    const continuity = report.continuity;
+    const c = continuity.counts;
+    const downloadLedger = () => {
+      const res = ctx.api.boardContinuityText();
+      const text = res.ok ? res.text : 'Ledger unavailable.';
+      const ok = downloadText({ filename: `leados-board-carry-forward-${dayKey(now)}.md`, text, mime: 'text/markdown;charset=utf-8' });
+      toast(ok ? 'Carry-forward ledger downloaded' : 'Download not available — the panel is the record', ok ? 'good' : 'warn');
+    };
+
+    const looksBanner = h('div', { class: 'row-actions' },
+      badge(`${c.looks} pack(s) read`, c.looks > 1 ? 'neutral' : 'warn', c.looksDropped ? `${c.looksDropped} older look(s) outside the ${continuity.conventions.looksRead}-look window` : ''),
+      badge(`carry floor ${continuity.floor}`, 'neutral', 'Two consecutive frozen packs is a declared convention, not a measured optimum.'),
+      c.queueDeferred ? badge(`${c.queueDeferred} deferred`, 'warn', `The review queue is bounded at ${continuity.conventions.queueCap}; the remainder is counted, not dropped.`) : null);
+
+    const grid = h('div', { class: 'stat-grid' },
+      stat({ label: 'Packs read', value: String(c.looks), hint: c.looksDropped ? `${c.looksDropped} older outside the window` : 'every frozen pack on this record' }),
+      stat({ label: 'Carried forward', value: String(c.carryForward), hint: `${continuity.floor}+ consecutive packs`, tone: c.carryForward ? 'bad' : 'good' }),
+      stat({ label: 'Recurring failure', value: String(c.recurringFailure), hint: 'failing in consecutive packs', tone: c.recurringFailure ? 'bad' : '' }),
+      stat({ label: 'Figure still not producible', value: String(c.repeatedUnverified), hint: 'REFUSED or WITHHELD in consecutive packs', tone: c.repeatedUnverified ? 'warn' : '' }),
+      stat({ label: 'Moved beyond its interval', value: String(c.separated), hint: 'the only movement this ledger calls evidence' }),
+      stat({ label: 'Moved inside noise', value: String(c.insideNoise), hint: 'the intervals overlap — not evidence of movement', tone: c.insideNoise ? 'warn' : '' }),
+      stat({ label: 'Bar moved', value: String(c.rulerMoved), hint: 'threshold changed between looks', tone: c.rulerMoved ? 'warn' : '' }),
+      stat({ label: 'Steady', value: String(c.steady), hint: `${c.firstLook} at a first look` }));
+
+    const trail = (claim) => claim.readings.map((r) => `${VERDICT_LABEL[r.verdict] || r.verdict} ${r.day || '—'}`).join(' · ');
+    const carryTable = tableWithKeys({
+      columns: [
+        { key: 'claim', label: 'Claim' },
+        { key: 'why', label: 'Why it is carried' },
+        { key: 'since', label: 'Carried since' },
+        { key: 'trail', label: 'Verdict trail' },
+        { key: 'figure', label: 'Latest figure' },
+        { key: 'move', label: 'Movement' },
+        {
+          key: 'route',
+          label: '',
+          render: (row) => h('a', { class: 'btn btn-ghost btn-sm', href: row.href }, 'Open module'),
+        },
+      ],
+      rows: continuity.slice.map((claim) => ({
+        claim: h('strong', null, claim.label),
+        why: claim.carryReason === 'both' ? 'Recurring failure and not producible'
+          : claim.carryReason === 'repeated-unverified' ? `Figure not producible in ${claim.carryLength} packs`
+            : `Failing in ${claim.carryLength} packs`,
+        since: claim.carriedSince || '—',
+        trail: h('span', { class: 'muted small' }, trail(claim)),
+        figure: claimFigure({ ...claim.latest, unit: claim.unit, comparator: claim.comparator }),
+        move: claim.movePp === null ? '—' : `${claim.movePp >= 0 ? '+' : ''}${claim.movePp}pp · ${claim.transition}`,
+        href: claim.route,
+      })),
+      caption: 'Bounded review queue, oldest carry first. Each row is a claim the record has already put in front of a board more than once.',
+    });
+
+    const allTable = tableWithKeys({
+      columns: [
+        { key: 'claim', label: 'Claim' },
+        { key: 'looks', label: 'Packs' },
+        { key: 'latest', label: 'Latest verdict' },
+        { key: 'transition', label: 'Change since the previous pack' },
+        { key: 'move', label: 'Movement' },
+        { key: 'carried', label: 'Carried' },
+      ],
+      rows: continuity.claims.map((claim) => ({
+        claim: claim.label,
+        looks: String(claim.looks),
+        latest: verdictBadge(claim.latest),
+        transition: h('span', null, h('strong', null, claim.transition), h('span', { class: 'muted small' }, ` — ${claim.transitionReason}`)),
+        move: claim.movePp === null ? '—' : `${claim.movePp >= 0 ? '+' : ''}${claim.movePp}pp`,
+        carried: claim.carryForward ? badge(`carried · ${claim.carryLength}`, 'bad') : badge('no', 'good'),
+      })),
+      caption: 'Every claim the record has a frozen reading for. A claim never looked at carries nothing and is not counted as healthy.',
+    });
+
+    return h('div', { class: 'stack' },
+      banner({
+        tone: c.carryForward ? 'warn' : 'info',
+        title: c.looks > 1
+          ? `${c.carryForward} claim(s) have carried for ${continuity.floor}+ frozen packs`
+          : 'A single pack has no movement to read',
+        body: c.looks > 1
+          ? 'This is the read the chief needs at the second board meeting and every one after it: what moved since the last pack, what did not move despite being broken, and which numbers were never producible in the first place. Nothing here is stored — it is derived from the frozen snapshots the workspace already keeps.'
+          : 'Open a memo, look at it and commit it. The ledger fills in at the second frozen pack, when the record can show a direction at all.',
+        actions: [h('button', { class: 'btn btn-ghost', type: 'button', onClick: downloadLedger }, 'Download carry-forward ledger')],
+      }),
+      looksBanner,
+      grid,
+      card({
+        title: 'Carry-forward queue',
+        subtitle: `Ordered oldest carry first; bounded at ${continuity.conventions.queueCap} rows. A carry floor of ${continuity.floor} consecutive packs is a declared convention.`,
+        actions: [badge(`${c.carryForward} carried`, c.carryForward ? 'bad' : 'good')],
+        body: continuity.slice.length
+          ? carryTable
+          : emptyState({
+            title: 'Nothing has carried',
+            body: c.looks > 1
+              ? 'No claim has held the same failure or the same unproducible figure for two consecutive packs. That is a statement about the packs, not about the organisation.'
+              : 'A carry needs two frozen packs. This record has not looked twice yet.',
+          }),
+      }),
+      card({
+        title: 'Every claim across the packs',
+        subtitle: 'Movement is classified, never summarised: separated intervals are evidence, overlapping intervals are not, and a moved bar belongs to the ruler.',
+        body: continuity.claims.length ? allTable : emptyState({ title: 'No frozen reading', body: 'No claim has been looked at in a pack that was frozen.' }),
+      }),
+      card({
+        title: 'What this ledger may never claim',
+        body: h('div', { class: 'prose' },
+          ...continuity.method.map((entry) => h('p', null, h('strong', null, `${entry.name}. `), entry.note)),
+          h('p', { class: 'muted' }, 'It carries no person, name, note or span: a frozen board snapshot holds none, so none can reach this read.')),
+      }),
+      continuity.refusals.length
+        ? card({
+          title: 'Refusals',
+          subtitle: 'Printed, not softened.',
+          body: h('ul', null, ...continuity.refusals.map((reason) => h('li', null, reason))),
+        })
+        : null,
+    );
+  }
+
   const body = panel === 'claims' ? claimsPanel()
     : panel === 'rollup' ? rollupPanel()
-      : panel === 'discrepancies' ? discrepanciesPanel()
-        : panel === 'method' ? methodPanel()
-          : memoPanel();
+      : panel === 'cycle' ? cyclePanel()
+        : panel === 'discrepancies' ? discrepanciesPanel()
+          : panel === 'method' ? methodPanel()
+            : memoPanel();
 
   return h('div', { class: 'page board-page' }, header, tabBar, body);
 }

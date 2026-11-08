@@ -93,7 +93,11 @@ function normalizeSnapshot(raw, warnings = [], memoId = 'memo') {
     if (!object(row)) continue;
     const declared = boardClaim(text(row.key));
     if (!declared) continue;
-    const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : null);
+    // `Number(null) === 0`, so a withheld or refused figure used to be frozen
+    // into the snapshot as a ZERO — a fake reading inside the one record the
+    // board is shown, against the module's own "blank, never zero" contract.
+    // ADR-0135 reads these snapshots back, so absent is absent here.
+    const num = (v) => (v === null || v === undefined || v === '' ? null : (Number.isFinite(Number(v)) ? Number(v) : null));
     claims.push({
       key: declared.key,
       verdict: text(row.verdict).slice(0, 24) || 'refused',
@@ -132,7 +136,11 @@ export function normalizeBoardMemo(raw, warnings = []) {
     warnings.push(`Board memo ${id}: claimed FROZEN with no snapshot; reopened as a draft.`);
     status = 'draft';
   }
-  if (status !== 'committed' && status !== 'frozen') snapshot = null;
+  // A SUPERSEDED pack is still a pack the board was shown, so its frozen
+  // snapshot is kept: ADR-0135's carry-forward ledger reads every frozen look,
+  // and erasing one on supersede would silently shorten the record's history.
+  // A DRAFT still cannot carry one — a verdict nobody froze is not a disclosure.
+  if (status !== 'committed' && status !== 'frozen' && status !== 'superseded') snapshot = null;
   return {
     id,
     revision: Math.max(1, Math.round(Number(raw.revision) || 1)),
