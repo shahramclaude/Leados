@@ -125,10 +125,10 @@ const seatOf = (state) => activeSeat(buildSeats(state, { now: NOW, settings: sta
 /* --------------------------------------------------------------- 1. schema */
 
 test('schema v115 is additive and convergent; a malformed absence is dropped, never repaired', () => {
-  assert.equal(SCHEMA_VERSION, 118);
+  assert.equal(SCHEMA_VERSION, 119);
   const migrated = migrate({ schemaVersion: 114, people: [{ id: 'p1', name: 'A' }], settings: { leaderName: 'Dana' } });
-  assert.deepEqual(migrated.applied, ['114 → 115', '115 → 116', '116 → 117', '117 → 118']);
-  assert.equal(migrated.raw.schemaVersion, 118);
+  assert.deepEqual(migrated.applied, ['114 → 115', '115 → 116', '116 → 117', '117 → 118', '118 → 119']);
+  assert.equal(migrated.raw.schemaVersion, 119);
   assert.deepEqual(migrated.raw.absencePlans, [], 'no absence is invented at upgrade time');
   assert.equal(migrated.raw.settings.leaderName, 'Dana', 'existing settings survive');
   assert.deepEqual(migrate(migrated.raw).applied, [], 'convergence, not a loop');

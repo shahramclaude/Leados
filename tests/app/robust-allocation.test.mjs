@@ -140,10 +140,10 @@ function declaration(overrides = {}) {
 /* ------------------------------------------------------------------ schema */
 
 test('Schema v98 migrates additively: empty ledgers, declared conventions, nothing inferred', () => {
-  assert.equal(SCHEMA_VERSION, 118);
+  assert.equal(SCHEMA_VERSION, 119);
   const migrated = migrate({ schemaVersion: 96, settings: { leaderName: 'Keep this' }, cases: [{ id: 'x' }] });
-  assert.deepEqual(migrated.applied, ['96 → 97', '97 → 98', '98 → 99', '99 → 100', '100 → 101', '101 → 102', '102 → 103', '103 → 104', '104 → 105', '105 → 106', '106 → 107', '107 → 108', '108 → 109', '109 → 110', '110 → 111', '111 → 112', '112 → 113', '113 → 114', '114 → 115', '115 → 116', '116 → 117', '117 → 118']);
-  assert.equal(migrated.raw.schemaVersion, 118);
+  assert.deepEqual(migrated.applied, ['96 → 97', '97 → 98', '98 → 99', '99 → 100', '100 → 101', '101 → 102', '102 → 103', '103 → 104', '104 → 105', '105 → 106', '106 → 107', '107 → 108', '108 → 109', '109 → 110', '110 → 111', '111 → 112', '112 → 113', '113 → 114', '114 → 115', '115 → 116', '116 → 117', '117 → 118', '118 → 119']);
+  assert.equal(migrated.raw.schemaVersion, 119);
   assert.deepEqual(migrated.raw.robustPlans, []);
   assert.deepEqual(migrated.raw.robustMarkers, []);
   assert.equal(migrated.raw.settings.leaderName, 'Keep this');

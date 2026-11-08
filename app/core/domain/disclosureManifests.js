@@ -129,6 +129,11 @@ export const MODULE_MANIFESTS = Object.freeze({
   // complementary cell and refuses a coverage rate below the span floor, so a
   // declared seat may open its own reading and cannot read a peer span's rows.
   federation: row('federation', 'Programme federation', ['federationAssessments'], { mode: A, classKey: 'unit', adapterScoped: true, detailCeiling: 5, dates: ['frozenOn'], note: 'The federation adapter measures carriage per declared leadership edge inside the active seat\u2019s span, blanks small cells with a complementary cell and withholds the coverage rate below the declared span floor. Raw assessment and marker rows are never projected into declared-seat view state, and no person is ever named.' }),
+  // ADR-0140: the Matrix Accountability Ledger. Adaptive: the report adapter
+  // recomputes the active seat's scope from the reporting graph, so a seat sees
+  // its own span's lines and never a peer span's allocation, and above the
+  // declared detail ceiling a manager row is disclosed as counts only.
+  matrix: row('matrix', 'Matrix accountability', ['reportingLines', 'matrixMarkers'], { mode: A, classKey: 'unit', adapterScoped: true, detailCeiling: 5, dates: ['fromISO', 'toISO'], statuses: ['status'], note: 'The matrix adapter publishes allocations as whole integer hundredths and reconciles them exactly: per-person share states, the net error against the headcount, and the two identities that prove the printed total is the sum of the printed rows. An undeclared allocation is attributed to nobody and exported BLANK, never zero. Above the detail ceiling a manager row carries counts and no name; below the export cell floor a manager row is withheld with its reason. No person is ever named in an export row, and the roll-up never guesses which of several managers owns an item.' }),
   // ADR-0099: the Freeze-Line Continuity Audit. The adapter measures continuity
   // across each crossed freeze line inside the active seat's span, refuses a
   // verdict below the declared edge floor, suppresses small altitude cells with

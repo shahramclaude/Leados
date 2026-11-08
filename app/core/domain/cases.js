@@ -1218,10 +1218,18 @@ export const LINK_RELATIONS = [
   // its OWN reading, and the answer edge records what that branch published or
   // declined. The withheld figure never travels on either edge.
   'requests-reading-from', 'answers-reading-ask',
+  // ADR-0140 (Schema v119): a declared ADDITIONAL reporting line. Distinct from
+  // `rolls-up-to` (work travelling up the hierarchy) and from `prepares-for`
+  // (a person preparing for a duty): this edge says a person is accountable to
+  // this manager on a second line, dated and dated out. The home line is
+  // deliberately NOT written as an edge — `person.managerId` already records it.
+  'reports-to',
 
 ];
 
 export const LINK_RELATION_LABELS = {
+  // ADR-0140 (Schema v119): a declared additional reporting line.
+  'reports-to': 'Accountable to this manager on a declared additional reporting line',
   carries: 'Carried to this leadership span as a sealed packet',
   reconnects: 'Measured carriage resumed on this span\u2019s declared edge above it',
   'pre-registers': 'Froze a bet before this governed work was approved',

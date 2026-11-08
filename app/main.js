@@ -261,6 +261,9 @@ import { renderIdentity } from './views/identity.js';
 import { renderDutyCover } from './views/dutyCover.js';
 import { renderStandby } from './views/standby.js';
 import { dutyCoverageAttentionCount } from './core/domain/dutyCoverage.js';
+// ADR-0140: the Matrix Accountability Ledger.
+import { renderMatrix } from './views/matrix.js';
+import { matrixAttentionCount } from './core/domain/matrix.js';
 import { dutyStandbyAttentionCount } from './core/domain/dutyStandby.js';
 import { identityAttentionCount } from './core/domain/identity.js';
 
@@ -491,6 +494,8 @@ export const NAV = [
     { route: 'disclosure', label: 'Disclosure Console', icon: '◑', badge: 'disclosure' },
     // ADR-0121: who answers for each declared duty line when the holder is out.
     { route: 'duty-cover', label: 'Duty coverage', icon: '⛨', badge: 'dutyCoverage' },
+    // ADR-0140: who is accountable to whom when one person has several managers.
+    { route: 'matrix', label: 'Matrix accountability', icon: '⋔', badge: 'matrix' },
     { route: 'standby', label: 'Cover acknowledgement', icon: '✋', badge: 'standby' },
   ] },
 ];
@@ -548,6 +553,7 @@ const RENDERERS = {
   seal: (ctx) => renderSeal(ctx),
   identity: (ctx) => renderIdentity(ctx),
   'duty-cover': (ctx) => renderDutyCover(ctx),
+  matrix: (ctx) => renderMatrix(ctx),
   standby: (ctx) => renderStandby(ctx),
   people: (ctx) => renderPeople(ctx),
   person: (ctx, segments) => renderPerson(ctx, safeDecode(segments[1])),
@@ -720,6 +726,10 @@ export function parseRoute(hash) {
     standby: 'standby', 'cover-acknowledgement': 'standby', 'standby-asks': 'standby',
     'cover-standby': 'standby', 'standby-answer': 'standby',
     'cover-register': 'duty-cover', 'stand-in': 'duty-cover', 'deputy-register': 'duty-cover',
+    // ADR-0140: the names a person types looking for "who else does my report
+    // answer to" / "why is my engineer on four projects".
+    matrix: 'matrix', 'matrix-accountability': 'matrix', 'reporting-lines': 'matrix',
+    'dotted-line': 'matrix', 'dual-reporting': 'matrix', 'second-manager': 'matrix',
     'succession': 'succession', 'bench': 'succession', 'leadership-bench': 'succession',
     'key-person': 'succession', 'key-person-risk': 'succession',
     'bench-strength': 'succession', 'bus-factor': 'succession', 'min-cut': 'succession',
@@ -1186,6 +1196,9 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       identity: identityAttentionCount(state, { now: at, settings: state.settings }),
       // ADR-0121: duty lines carrying open work with no eligible, exercised cover.
       dutyCoverage: dutyCoverageAttentionCount(state, { now: at, settings: state.settings }),
+      // ADR-0140: undeclared allocations, over-commitments, contested decision
+      // rights and refused lines. A person on one line is not noise.
+      matrix: matrixAttentionCount(state, { now: at, settings: state.settings }),
       // ADR-0127: refusals and asks past their declared response deadline. An ask
       // still inside its deadline is a normal Monday and is NOT counted here — a
       // badge that fires on every fresh declaration is a badge people stop reading.
@@ -1735,6 +1748,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       settings: 'Settings',
       prep: '1:1 prep sheet',
       'agenda-ledger': '1:1 agenda ledger',
+      matrix: 'Matrix accountability — for every person with more than one manager: which lines they are accountable through, what share of them each line owns, whether those shares add back to one person, who holds each of the six decision rights, and whether every manager’s span adds up to the headcount without counting anybody twice',
       'duty-cover': 'Duty coverage — for every duty line this altitude (and the spans below it) is supposed to perform: who is declared answerable when the holder is absent, whether that person’s altitude can reach the duty at all, whether their access has ever been exercised on a dated record, which duty carries open work with nobody behind it, where one hand is carrying a duty alone, and — under the Absence plan panel — which dated absence windows leave a duty line with no available cover at all',
     };
     return labels[route] || 'LeadOS';

@@ -189,7 +189,7 @@ const identityTokens = () => [
 /* ------------------------------------------- 1. additive, unchanged schema */
 
 test('Schema v118 is unchanged: no new collection, event, rule, action, export spec or convention', () => {
-  assert.equal(SCHEMA_VERSION, 118);
+  assert.equal(SCHEMA_VERSION, 119);
   // The pre-existing `state.spanReadings` collection is ADR-0100's span
   // CALIBRATION ledger, not this read model. `report.spanReadings` is a pure
   // projection of the two ADR-0129 ledgers and never reads that collection.

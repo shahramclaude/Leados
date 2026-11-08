@@ -150,7 +150,7 @@ function disposition(claimKey, verdict, at = '2026-09-01T10:00:00.000Z', extra =
 /* ------------------------------------------------------------- 1. the schema */
 
 test('schema v81 is additive and invents no round, verdict or rate', () => {
-  assert.equal(SCHEMA_VERSION, 118);
+  assert.equal(SCHEMA_VERSION, 119);
   const v80 = { ...createEmptyState(NOW.toISOString()), schemaVersion: 80 };
   delete v80.scepticRounds;
   delete v80.scepticDispositions;
@@ -162,8 +162,8 @@ test('schema v81 is additive and invents no round, verdict or rate', () => {
   assert.deepEqual(migrated.raw.scepticMarkers, []);
   assert.equal(typeof MIGRATIONS[80], 'function');
   const normalized = normalizeState(migrated.raw, { now: NOW }).state;
-  assert.equal(normalized.schemaVersion, 118);
-  assert.equal(normalized.schemaVersion, 118);
+  assert.equal(normalized.schemaVersion, 119);
+  assert.equal(normalized.schemaVersion, 119);
   assert.deepEqual(normalized.scepticDispositions, []);
   // An upgraded workspace says the true thing: nothing has been examined.
   const report = scepticReport(normalized, NOW, normalized.settings);
