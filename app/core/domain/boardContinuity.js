@@ -70,6 +70,88 @@ const num = (v) => (v === null || v === undefined || v === '' ? null : (Number.i
 const day = (iso) => (typeof iso === 'string' && iso.length >= 10 ? iso.slice(0, 10) : null);
 
 /**
+ * Reconcile the frozen failing looks with the decisions RULE-BRD-01 actually
+ * opened. Association uses the rule's typed `decision —escalates-from→ memo`
+ * edge AND the claim assertion the rule writes verbatim into the question. A
+ * title similarity or a contributor name is never used to guess provenance.
+ *
+ * Only status metadata leaves this reader: no rationale, option, contributor or
+ * outcome note crosses into the chief's identity-free ledger.
+ */
+function responseForClaim(state, declared, readings, nowDay) {
+  const failingLooks = readings.filter((reading) => reading.verdict === 'failing');
+  const empty = {
+    state: 'not-required', decisionId: null, route: null, decisions: 0,
+    uncoveredPacks: 0, undecided: 0, reviewDue: 0, reviewed: 0,
+    reason: 'The latest frozen verdict is not FAILING, so RULE-BRD-01 opens no new obligation for it.',
+  };
+  if (!readings.length || readings[readings.length - 1].verdict !== 'failing') return empty;
+
+  const decisionById = new Map((Array.isArray(state?.decisions) ? state.decisions : [])
+    .filter((row) => row && row.id && String(row.question || '').includes(declared.assertion))
+    .map((row) => [row.id, row]));
+  const memoIds = new Set(failingLooks.map((reading) => reading.memoId));
+  const linked = new Map();
+  for (const edge of Array.isArray(state?.links) ? state.links : []) {
+    if (!edge || edge.sourceType !== 'decision' || edge.targetType !== 'boardmemo'
+      || edge.relation !== 'escalates-from' || !memoIds.has(edge.targetId)) continue;
+    const decision = decisionById.get(edge.sourceId);
+    if (!decision) continue;
+    if (!linked.has(edge.targetId)) linked.set(edge.targetId, new Map());
+    linked.get(edge.targetId).set(decision.id, decision);
+  }
+
+  const decisions = [];
+  let uncoveredPacks = 0;
+  for (const look of failingLooks) {
+    const forLook = [...(linked.get(look.memoId)?.values() || [])]
+      .sort((a, b) => String(a.createdAt || a.date || a.id).localeCompare(String(b.createdAt || b.date || b.id)));
+    if (!forLook.length) uncoveredPacks += 1;
+    decisions.push(...forLook.map((decision) => ({ decision, look })));
+  }
+  decisions.sort((a, b) => {
+    if (a.look.at !== b.look.at) return a.look.at < b.look.at ? -1 : 1;
+    return String(a.decision.createdAt || a.decision.id).localeCompare(String(b.decision.createdAt || b.decision.id));
+  });
+  const latestLook = failingLooks[failingLooks.length - 1];
+  const current = decisions.filter((entry) => entry.look.memoId === latestLook.memoId);
+  const undecidedRows = decisions.filter(({ decision }) => !decision.chosen);
+  const reviewDueRows = decisions.filter(({ decision }) => decision.chosen && !decision.reviewedOn
+    && decision.reviewOn && decision.reviewOn <= nowDay);
+  const latest = current[current.length - 1]?.decision || decisions[decisions.length - 1]?.decision || null;
+  const actionable = undecidedRows[undecidedRows.length - 1]?.decision
+    || reviewDueRows[reviewDueRows.length - 1]?.decision || latest;
+  const reviewed = decisions.filter(({ decision }) => Boolean(decision.reviewedOn)).length;
+
+  let responseState = 'decided';
+  let reason = 'Every currently open board response has a chosen correction; its outcome review is not yet due.';
+  if (!current.length) {
+    responseState = 'uncovered';
+    reason = 'The latest frozen FAILING look has no linked governed decision. Earlier responses do not cover this pack; Reconcile runs the existing RULE-BRD-01 path.';
+  } else if (undecidedRows.length) {
+    responseState = 'undecided';
+    reason = `${undecidedRows.length} linked decision(s) still have no chosen correction, so the carry is governed but not yet answered.`;
+  } else if (reviewDueRows.length) {
+    responseState = 'review-due';
+    reason = `${reviewDueRows.length} chosen correction(s) are due for outcome review; a choice is not evidence that the exposure moved.`;
+  } else if (decisions.length && reviewed === decisions.length) {
+    responseState = 'reviewed';
+    reason = 'Every linked response has a chosen correction and a recorded outcome review. The frozen claim still fails; the review does not overwrite that fact.';
+  }
+  return {
+    state: responseState,
+    decisionId: actionable?.id || null,
+    route: actionable?.id ? `#/decisions?decision=${encodeURIComponent(actionable.id)}` : '#/board?panel=memo',
+    decisions: decisions.length,
+    uncoveredPacks,
+    undecided: undecidedRows.length,
+    reviewDue: reviewDueRows.length,
+    reviewed,
+    reason,
+  };
+}
+
+/**
  * Every look the record has committed to, oldest first.
  *
  * A `look` is one frozen snapshot — a pack whose verdicts were written down at a
@@ -194,6 +276,7 @@ export function boardContinuity(state = {}, { now = new Date(), seatId = null } 
     // to tell the board if asked "how long has this been on the list?".
     const carryLength = Math.max(recurring ? failingStreak : 0, repeatedUnverified ? unverifiedStreak : 0);
     const firstCarried = carryLength ? readings[readings.length - carryLength] : null;
+    const response = responseForClaim(state, declared, readings, day(now instanceof Date ? now.toISOString() : now));
 
     claims.push({
       key: declared.key,
@@ -219,6 +302,7 @@ export function boardContinuity(state = {}, { now = new Date(), seatId = null } 
       carryLength,
       carriedSince: firstCarried ? firstCarried.day : null,
       lastMoved: transition === T.STEADY ? null : (prior ? latest.day : null),
+      response,
     });
   }
 
@@ -258,6 +342,11 @@ export function boardContinuity(state = {}, { now = new Date(), seatId = null } 
     failingNow: claims.filter((c) => c.latest.verdict === 'failing').length,
     holdingNow: claims.filter((c) => c.latest.verdict === 'holding').length,
     unverifiedNow: claims.filter((c) => BOARD_CONTINUITY.unverified.includes(c.latest.verdict)).length,
+    responseDebt: claims.filter((c) => ['uncovered', 'undecided', 'review-due'].includes(c.response.state)).length,
+    responseUncovered: claims.filter((c) => c.response.state === 'uncovered').length,
+    responseUndecided: claims.filter((c) => c.response.state === 'undecided').length,
+    responseReviewDue: claims.filter((c) => c.response.state === 'review-due').length,
+    responseUncoveredPacks: claims.reduce((sum, c) => sum + c.response.uncoveredPacks, 0),
   };
 
   const refusals = [];
@@ -339,6 +428,7 @@ export function boardCarryForwardText(state = {}, { now = new Date(), seatId = n
   lines.push(`Looks read: ${c.looks} of ${c.looksTotal} frozen snapshot(s) · oldest ${report.looks[0].day || '—'} · newest ${report.looks[report.looks.length - 1].day || '—'}${c.looksDropped ? ` · ${c.looksDropped} older look(s) outside the ${report.conventions.looksRead}-look window` : ''}`);
   lines.push(`Claims tracked: ${c.claimsTracked}${c.claimsNeverLooked ? ` · ${c.claimsNeverLooked} declared claim(s) never looked at` : ''}`);
   lines.push(`Carried forward: ${c.carryForward} · recurring failure: ${c.recurringFailure} · figure still not producible: ${c.repeatedUnverified} · carry floor: ${report.floor} consecutive packs (declared convention)`);
+  lines.push(`Governed response debt: ${c.responseDebt} currently failing claim(s) · ${c.responseUncovered} latest pack(s) without a decision · ${c.responseUndecided} with an undecided response · ${c.responseReviewDue} with an outcome review due · ${c.responseUncoveredPacks} failing pack(s) without a linked decision across the window`);
   lines.push(`Movement: ${c.separated} beyond its interval · ${c.insideNoise} inside noise · ${c.rulerMoved} because the bar moved · ${c.steady} steady · ${c.firstLook} at a first look`);
   lines.push('');
   lines.push('CARRY-FORWARD (oldest carry first)');
@@ -354,6 +444,7 @@ export function boardCarryForwardText(state = {}, { now = new Date(), seatId = n
     lines.push(`    Latest figure: ${figure(claim.latest)} against a ${pct(claim.latest.threshold)} ${claim.comparator === 'gte' ? 'floor' : 'ceiling'}${claim.gapPp === null ? '' : ` · ${claim.gapPp >= 0 ? '+' : ''}${claim.gapPp}pp`}.`);
     if (claim.movePp !== null) lines.push(`    Movement against the previous look: ${claim.movePp >= 0 ? '+' : ''}${claim.movePp}pp (${claim.transition}).`);
     lines.push(`    Why it is on this list: ${carrySentence(claim)}`);
+    lines.push(`    Governed response: ${claim.response.state.toUpperCase()} — ${claim.response.reason}`);
     lines.push(`    How the last two looks compare: ${claim.transitionReason}`);
   }
   if (c.queueDeferred) lines.push(`    ${c.queueDeferred} further carried claim(s) are counted and not printed (queue bounded at ${BOARD_CONTINUITY.queue}).`);
@@ -379,7 +470,7 @@ export function boardContinuityBrief(state = {}, { now = new Date() } = {}) {
   const report = boardContinuity(state, { now });
   const c = report.counts;
   if (!c.looks) return 'Board carry-forward: no frozen pack exists, so nothing is carried forward.';
-  if (c.looks === 1) return 'Board carry-forward: one pack frozen — a single look has no movement to report.';
-  if (!c.carryForward && !c.separated) return `Board carry-forward across ${c.looks} packs: nothing carried and nothing moved beyond its interval.`;
-  return `Board carry-forward across ${c.looks} packs: ${c.carryForward} claim(s) carried for ${report.floor}+ packs (${c.recurringFailure} recurring failure, ${c.repeatedUnverified} figure still not producible), ${c.separated} moved beyond its interval, ${c.insideNoise} moved inside noise.`;
+  if (c.looks === 1) return `Board carry-forward: one pack frozen — a single look has no movement to report. Governed response debt: ${c.responseDebt} currently failing claim(s).`;
+  if (!c.carryForward && !c.separated && !c.responseDebt) return `Board carry-forward across ${c.looks} packs: nothing carried and nothing moved beyond its interval.`;
+  return `Board carry-forward across ${c.looks} packs: ${c.carryForward} claim(s) carried for ${report.floor}+ packs (${c.recurringFailure} recurring failure, ${c.repeatedUnverified} figure still not producible), ${c.separated} moved beyond its interval, ${c.insideNoise} moved inside noise. Governed response debt: ${c.responseDebt} currently failing claim(s) — ${c.responseUncovered} latest pack(s) without a decision, ${c.responseUndecided} undecided, ${c.responseReviewDue} outcome review(s) due.`;
 }

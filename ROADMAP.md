@@ -1,3 +1,15 @@
+## 2026-11-08 — A carried board claim now shows whether its correction is governed, chosen, or overdue (Session 185, Schema v118 unchanged, [ADR-0137](./docs/adr/0137-board-response-reconciliation.md), `#/board?panel=cycle`)
+
+**Implemented — CEO / C-suite PRIMARY; every altitude reading the Board Room receives the same identity-free reconciliation.** The real duty: a chief at a repeat board review must distinguish a persistent enterprise exposure with no current governed response from one whose correction is chosen but whose outcome review is due. CEO took priority because Session 184 named this rung next (last primary 182; frontline/mid 184; director/VP 183).
+
+The Cycle ledger now joins each currently FAILING frozen claim to real `RULE-BRD-01` decisions through the existing `escalates-from` graph edge and exact claim assertion—never title or person similarity. It derives `uncovered`, `undecided`, `review-due`, `decided`, or `reviewed`; a previous pack's decision cannot cover a new failure. The row action opens the unresolved/review-due decision, or the memo's existing Reconcile path when no decision exists. Counts travel in the downloadable ledger, board brief and existing aggregate CSV. No new storage, schema, rule or event. The Board table adapter now preserves declared cell renderers, restoring action links it previously discarded.
+
+**Altitude coverage map (Session 185):** frontline last primary 184; mid-manager last primary 184; director last primary 183; VP last primary 183; **CEO / C-suite primary 185**. Next rotation: **director / VP**.
+
+**Verified (one focused pass).** `board-continuity` **17/17**: old decisions cannot cover a new pack, fail-closed provenance, unresolved and review-due prioritisation, outcome review preserving the frozen failure, CSV/brief/text propagation, real store API read with no mutation, and JSDOM Cycle action rendering. The initial view failure exposed the renderer overwrite; one fix produced the passing pass. `npm run build:standalone` succeeded (9,550,384 bytes / 587 modules / schema v118). Full suite, standalone execution and real-browser AT **[UNVERIFIED]**. Seats remain workflow declarations, not authentication.
+
+**Next targets:** [director / VP] next hierarchy rotation; [all altitudes] authenticated identity + tenant boundary (standing foundational item); [frontline / mid-manager → all] shared automation writer retention carried from Session 184.
+
 ## 2026-11-08 — Review 1:1 queue overflow before saving a person (Session 184, Schema v118 unchanged)
 
 **Implemented — frontline / mid-manager PRIMARY.** A lead preparing a 1:1 must preserve the person's own agenda topics; a manager must be able to edit the same queue without losing an engine-generated prompt unknowingly. Session 183's coverage map gives these two altitudes priority (last primary 181; director/VP 183; CEO 182). The person dialog previously normalized the input *before* the shared action saw it, so overflow was silently discarded and the action's warning could not fire.

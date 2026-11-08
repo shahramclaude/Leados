@@ -111,6 +111,35 @@ function bootDocument() {
 
 const byKey = (report, key) => report.claims.find((c) => c.key === key);
 
+function governedDecision(id, memoId, {
+  claimKey = 'bench-coverage', chosen = '', reviewOn = '2026-12-01', reviewedOn = null,
+  decidedOn = null, question = null,
+} = {}) {
+  const declared = BOARD_CLAIMS.find((row) => row.key === claimKey);
+  return {
+    decision: {
+      id, title: `Board line fails: ${declared.label}`,
+      question: question || `${declared.assertion} Which correction do we fund?`,
+      date: '2026-10-01', chosen, reviewOn, reviewedOn, decidedOn,
+      outcome: reviewedOn ? 'worked' : 'pending', outcomeNotes: '',
+      options: [{ id: `${id}-opt`, label: 'Fund the correction', pros: '', cons: '' }],
+      createdAt: '2026-10-01T10:00:00.000Z',
+    },
+    link: {
+      id: `lnk-${id}`, sourceType: 'decision', sourceId: id,
+      targetType: 'boardmemo', targetId: memoId, relation: 'escalates-from',
+      ruleId: 'RULE-BRD-01', createdAt: '2026-10-01T10:00:00.000Z',
+    },
+  };
+}
+
+function stateWithResponses(rows) {
+  const state = stateWith(TWO_PACKS());
+  state.decisions = rows.map((row) => row.decision);
+  state.links = rows.map((row) => row.link);
+  return normalizeState(state, { now: NOW }).state;
+}
+
 /* Two packs that exercise every transition class at once. */
 const TWO_PACKS = () => [
   // Stored newest-first on purpose: the ledger must order by the frozen instant.
@@ -310,6 +339,64 @@ test('the queue is oldest-carry-first, bounded, and the remainder is counted', (
   assert.equal(aged.counts.queueDeferred, 0);
 });
 
+/* ------------------------------------------------------ governed response */
+
+test('the latest failing pack cannot borrow coverage from an earlier decision, and provenance is never guessed', () => {
+  const uncovered = byKey(boardContinuity(stateWith(TWO_PACKS()), { now: NOW }), 'bench-coverage');
+  assert.equal(uncovered.response.state, 'uncovered');
+  assert.equal(uncovered.response.uncoveredPacks, 2);
+  assert.equal(uncovered.response.route, '#/board?panel=memo');
+  assert.equal(boardContinuity(stateWith(TWO_PACKS()), { now: NOW }).counts.responseDebt, 1);
+  assert.equal(byKey(boardContinuity(stateWith(TWO_PACKS()), { now: NOW }), 'promise-reliability').response.state, 'not-required');
+
+  const prior = governedDecision('dec-old', 'brm-old', { chosen: 'Fund the correction', decidedOn: '2026-02-01', reviewedOn: '2026-03-01' });
+  const state = stateWithResponses([prior]);
+  const report = boardContinuity(state, { now: NOW });
+  const current = byKey(report, 'bench-coverage');
+  assert.equal(current.response.state, 'uncovered', 'a reviewed response to the old pack does not answer the new one');
+  assert.equal(current.response.uncoveredPacks, 1);
+  assert.equal(current.response.decisions, 1);
+  assert.equal(current.response.decisionId, 'dec-old');
+  assert.match(current.response.route, /dec-old/);
+
+  const wrongAssertion = governedDecision('dec-wrong', 'brm-new', { question: 'A differently worded question with no exact claim assertion.' });
+  const guessed = byKey(boardContinuity(stateWithResponses([prior, wrongAssertion]), { now: NOW }), 'bench-coverage');
+  assert.equal(guessed.response.state, 'uncovered', 'a typed edge alone cannot guess which claim a decision answers');
+});
+
+test('response debt distinguishes undecided work, a due outcome review and a fully reviewed response', () => {
+  const older = governedDecision('dec-old', 'brm-old');
+  const newer = governedDecision('dec-new', 'brm-new', { chosen: 'Fund the correction', decidedOn: '2026-10-02' });
+  let report = boardContinuity(stateWithResponses([older, newer]), { now: NOW });
+  let response = byKey(report, 'bench-coverage').response;
+  assert.equal(response.state, 'undecided', 'an older open call remains work even when the latest call was made');
+  assert.equal(response.undecided, 1);
+  assert.equal(response.decisionId, 'dec-old', 'the action opens the unresolved call, not an already-chosen newer one');
+  assert.equal(report.counts.responseUndecided, 1);
+
+  older.decision.chosen = 'Fund the correction';
+  older.decision.decidedOn = '2026-02-01';
+  older.decision.reviewedOn = '2026-03-01';
+  older.decision.outcome = 'worked';
+  newer.decision.reviewOn = '2026-11-01';
+  report = boardContinuity(stateWithResponses([older, newer]), { now: NOW });
+  response = byKey(report, 'bench-coverage').response;
+  assert.equal(response.state, 'review-due');
+  assert.equal(response.reviewDue, 1);
+  assert.equal(report.counts.responseReviewDue, 1);
+  assert.match(response.reason, /choice is not evidence/);
+
+  newer.decision.reviewedOn = '2026-11-03';
+  newer.decision.outcome = 'worked';
+  report = boardContinuity(stateWithResponses([older, newer]), { now: NOW });
+  response = byKey(report, 'bench-coverage').response;
+  assert.equal(response.state, 'reviewed');
+  assert.equal(response.reviewed, 2);
+  assert.equal(report.counts.responseDebt, 0, 'review never rewrites the still-failing frozen verdict');
+  assert.equal(byKey(report, 'bench-coverage').latest.verdict, 'failing');
+  assert.match(boardCarryForwardText(stateWithResponses([older, newer]), { now: NOW }), /Governed response: REVIEWED/);
+});
+
 /* ------------------------------------------------------------ text/brief/CSV */
 
 test('the ledger text is deterministic, names no memo or person, and prints its method', () => {
@@ -347,6 +434,10 @@ test('the read travels into the board brief and the aggregate CSV', () => {
   assert.equal(coverage.failing_streak, 2);
   assert.equal(coverage.transition, 'steady');
   assert.equal(coverage.move_pp, -11);
+  assert.equal(coverage.response_state, 'uncovered');
+  assert.equal(coverage.response_uncovered_packs, 2);
+  assert.equal(workspace.response_uncovered_packs, 2);
+  assert.match(brief, /Governed response debt: 1/);
   const spec = CSV_EXPORTS.find((e) => e.key === 'board-claims');
   assert.match(spec.description, /carry-forward/);
 });
@@ -388,6 +479,8 @@ test('the Cycle panel renders the queue over real state with no dead end', () =>
     assert.match(text, /Carried since|carried since|2026-01-15/);
     assert.match(text, /Wilson/);
     assert.match(text, /Figure still not producible|FIGURE STILL NOT/i);
+    assert.match(text, /Governed response debt/);
+    assert.match(text, /Open memo to reconcile/);
     for (const button of node.querySelectorAll('button')) {
       assert.ok((button.textContent || '').trim().length > 0 || button.getAttribute('aria-label'), 'every button has a name');
     }

@@ -40,7 +40,7 @@ const TAG_TONE = Object.freeze({
  * readable and makes a missing field a visible blank rather than a crash.
  */
 function tableWithKeys({ columns, rows, caption = '' }) {
-  return table({ columns: columns.map((col) => ({ ...col, render: (row) => row[col.key] })), rows, caption });
+  return table({ columns: columns.map((col) => ({ ...col, render: col.render || ((row) => row[col.key]) })), rows, caption });
 }
 
 function verdictBadge(row) {
@@ -578,6 +578,7 @@ export function renderBoard(ctx) {
       stat({ label: 'Carried forward', value: String(c.carryForward), hint: `${continuity.floor}+ consecutive packs`, tone: c.carryForward ? 'bad' : 'good' }),
       stat({ label: 'Recurring failure', value: String(c.recurringFailure), hint: 'failing in consecutive packs', tone: c.recurringFailure ? 'bad' : '' }),
       stat({ label: 'Figure still not producible', value: String(c.repeatedUnverified), hint: 'REFUSED or WITHHELD in consecutive packs', tone: c.repeatedUnverified ? 'warn' : '' }),
+      stat({ label: 'Governed response debt', value: String(c.responseDebt), hint: `${c.responseUncovered} latest pack(s) uncovered · ${c.responseUndecided} undecided · ${c.responseReviewDue} review(s) due`, tone: c.responseDebt ? 'bad' : 'good' }),
       stat({ label: 'Moved beyond its interval', value: String(c.separated), hint: 'the only movement this ledger calls evidence' }),
       stat({ label: 'Moved inside noise', value: String(c.insideNoise), hint: 'the intervals overlap — not evidence of movement', tone: c.insideNoise ? 'warn' : '' }),
       stat({ label: 'Bar moved', value: String(c.rulerMoved), hint: 'threshold changed between looks', tone: c.rulerMoved ? 'warn' : '' }),
@@ -592,10 +593,13 @@ export function renderBoard(ctx) {
         { key: 'trail', label: 'Verdict trail' },
         { key: 'figure', label: 'Latest figure' },
         { key: 'move', label: 'Movement' },
+        { key: 'response', label: 'Governed response' },
         {
           key: 'route',
-          label: '',
-          render: (row) => h('a', { class: 'btn btn-ghost btn-sm', href: row.href }, 'Open module'),
+          label: 'Actions',
+          render: (row) => h('div', { class: 'row-actions' },
+            h('a', { class: 'btn btn-ghost btn-sm', href: row.responseHref }, row.responseState === 'uncovered' ? 'Open memo to reconcile' : row.responseState === 'not-required' ? 'Open memo' : 'Open decision'),
+            h('a', { class: 'btn btn-ghost btn-sm', href: row.href }, 'Open module')),
         },
       ],
       rows: continuity.slice.map((claim) => ({
@@ -607,6 +611,11 @@ export function renderBoard(ctx) {
         trail: h('span', { class: 'muted small' }, trail(claim)),
         figure: claimFigure({ ...claim.latest, unit: claim.unit, comparator: claim.comparator }),
         move: claim.movePp === null ? '—' : `${claim.movePp >= 0 ? '+' : ''}${claim.movePp}pp · ${claim.transition}`,
+        response: h('span', { title: claim.response.reason },
+          badge(claim.response.state, ['uncovered', 'undecided', 'review-due'].includes(claim.response.state) ? 'bad' : 'good'),
+          h('span', { class: 'muted small' }, ` ${claim.response.reason}`)),
+        responseHref: claim.response.route,
+        responseState: claim.response.state,
         href: claim.route,
       })),
       caption: 'Bounded review queue, oldest carry first. Each row is a claim the record has already put in front of a board more than once.',

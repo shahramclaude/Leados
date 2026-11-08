@@ -1,3 +1,13 @@
+## 2026-11-08 — Session 185: reconcile the board's repeated exposures with the work actually opened (Schema v118 unchanged, ADR-0137)
+
+**Built / altitude.** CEO / C-suite PRIMARY. The Board Room Cycle queue now shows whether each currently failing carried claim is `uncovered`, `undecided`, `review-due`, `decided`, or `reviewed`. It reads the real `RULE-BRD-01` decisions via existing `decision —escalates-from→ boardmemo` edges plus the exact claim assertion; no title/person guess and no new storage or automation. A newer failing pack cannot borrow coverage from an older decision. Actions open the unresolved/review-due decision or the memo Reconcile path. Response counts reach the ledger download, identity-free brief and aggregate CSV. CEO was next in Session 184's altitude map (last primary 182).
+
+**Verified.** `node --test tests/app/board-continuity.test.mjs` **17/17**, including fail-closed provenance, current-pack coverage, unresolved-work action targeting, due reviews, fully reviewed responses, CSV/brief/text, real synced API zero-mutation reads and JSDOM rendering. First run passed 16 domain/API tests and failed the action-link render because the Board table adapter overwrote custom renderers; one shared-helper fix made the focused pass green. Standalone rebuilt. Full canonical suite, standalone execution and real-browser AT [UNVERIFIED].
+
+**Flagged / blocker.** Exact-assertion matching deliberately leaves hand-authored or altered decisions uncovered rather than guessing. Response status does not rewrite the frozen verdict. Seats remain workflow declarations, not authentication. No blockers.
+
+**Next:** director / VP hierarchy rotation; authenticated identity and tenant boundary remain foundational; shared talking-point writer retention remains open from Session 184.
+
 ## 2026-11-08 — Session 184: review the 1:1 waiting-list cap before saving
 
 **Built / altitude.** Frontline and mid-manager PRIMARY: when capturing or editing a person's 1:1 topics, the dialog now uses the existing queue policy to refuse overflow before any write, names up to five refused lines plus the remaining count, focuses the accessible inline error, and retains the entire editable input. After the leader resolves overflow, the usual person action, event and shared automation run; action warnings are displayed. This fixes the dialog's premature normalization, which prevented the action from ever reporting lost lines. Session 183 identified these altitudes as next (last primary 181). Existing hierarchy/agenda readers remain unchanged; new roll-up behavior was not asserted.
