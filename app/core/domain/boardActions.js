@@ -19,6 +19,7 @@ import {
   boardRead, boardEvaluateMemo, boardSnapshot, boardBriefText, boardMemoText, boardCsvRows,
   boardAttentionCount, boardConventions, boardSources,
 } from './board.js';
+import { boardContinuity, boardCarryForwardText } from './boardContinuity.js';
 import { normalizeBoardMemos, normalizeBoardSettings } from './boardSchema.js';
 import {
   BOARD_CLAIMS, BOARD_CLAIM_KEYS, BOARD_EVENTS, BOARD_LIMITS, BOARD_STATUSES,
@@ -96,6 +97,23 @@ export function createBoardActions(store, { now, idFactory }) {
 
     boardCsvRows(memoId = null) {
       return { ok: true, rows: boardCsvRows(store.state, { now: clock(), settings: settings(), memoId }) };
+    },
+
+    /**
+     * The carry-forward read across every frozen pack (ADR-0135). A pure read:
+     * it writes nothing and records no look.
+     */
+    boardContinuity() {
+      const built = buildSeats(store.state, { now: clock(), settings: settings() });
+      const seat = activeSeat(built);
+      return boardContinuity(store.state, { now: clock(), seatId: seat?.id || null });
+    },
+
+    /** The carry-forward ledger as text, for the board pack. Identity-free. */
+    boardContinuityText() {
+      const built = buildSeats(store.state, { now: clock(), settings: settings() });
+      const seat = activeSeat(built);
+      return { ok: true, text: boardCarryForwardText(store.state, { now: clock(), seatId: seat?.id || null }) };
     },
 
     boardAttentionCount() {

@@ -72,7 +72,7 @@ export const BOARD_LIMITS = Object.freeze({
   history: 8,
 });
 
-export const BOARD_PANELS = Object.freeze(['memo', 'claims', 'rollup', 'discrepancies', 'method']);
+export const BOARD_PANELS = Object.freeze(['memo', 'claims', 'rollup', 'cycle', 'discrepancies', 'method']);
 
 /**
  * The claim register. Each row is a sentence a management team would put in a
@@ -252,6 +252,49 @@ export const BOARD_CONVENTION_DEFAULTS = Object.freeze({
   boardMaterialityPct: 10,    // distance below the threshold that counts as material
   boardRecheckDays: 90,       // a committed claim is stale after this
   boardAutoPropagate: true,   // pausable; an explicit scan always runs
+});
+
+/**
+ * The carry-forward ledger (Session 182, ADR-0135). One declared convention and
+ * one declared vocabulary — no setting, because a chief does not need to tune
+ * how long "still broken" means before the board has asked twice.
+ *
+ * `streakFloor` is the number of CONSECUTIVE frozen packs a claim must carry the
+ * same verdict before it reaches the review queue. Two is a convention, not a
+ * measured optimum: the second pack is the first moment the record can show
+ * movement at all (see boardContinuity.js).
+ */
+export const BOARD_CONTINUITY = Object.freeze({
+  streakFloor: 2,     // consecutive frozen packs before a claim is carried
+  looks: 24,          // bounded look window; older looks are counted, not printed
+  queue: 40,          // bounded review queue; the remainder is counted, not dropped
+  unverified: Object.freeze(['withheld', 'refused']),
+  transitions: Object.freeze({
+    FIRST_LOOK: 'first-look',
+    STEADY: 'steady',
+    SEPARATED: 'separated',
+    INSIDE_NOISE: 'inside-noise',
+    RULER_MOVED: 'ruler-moved',
+    UNCLASSIFIED: 'unclassified',
+  }),
+  method: Object.freeze([
+    Object.freeze({
+      name: 'Interval screen (Wilson 1927)',
+      note: 'Movement is called only when the two stored 95% intervals do not overlap. Non-overlap is evidence of difference; overlap is NOT evidence of sameness, and consecutive looks share the record they are drawn from, so no p-value is printed.',
+    }),
+    Object.freeze({
+      name: 'Pre-registration carried forward (ADR-0085)',
+      note: 'A claim whose declared threshold changed between looks is classified ruler-moved: the movement belongs to the bar, not to the record.',
+    }),
+    Object.freeze({
+      name: 'Measurement debt, not performance',
+      note: 'A figure the workspace REFUSED to produce in consecutive packs is carried as a measurement debt — the organisation has had that many cycles to make the number producible — and never as a judgement about a person.',
+    }),
+    Object.freeze({
+      name: 'Declared carry convention',
+      note: `Two consecutive frozen packs is a declared convention, not a measured optimum. It is printed wherever the queue is used.`,
+    }),
+  ]),
 });
 
 export const BOARD_DISCLOSURE = Object.freeze({

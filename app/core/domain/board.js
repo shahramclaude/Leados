@@ -43,6 +43,7 @@ import { concordanceRead } from './concordance.js';
 import { teamHealth } from './health.js';
 import { sealReport } from './sealChain.js';
 import { scepticReport } from './sceptic.js';
+import { boardContinuity, boardContinuityBrief } from './boardContinuity.js';
 import {
   BOARD_CLAIMS,
   BOARD_CLAIM_KEYS,
@@ -757,6 +758,7 @@ export function boardRead(state = {}, { now = new Date(), settings = null, seatI
     frozen: memos.filter((m) => m.status === 'frozen').length,
     superseded: memos.filter((m) => m.status === 'superseded').length,
   };
+  const continuity = boardContinuity(state, { now, seatId });
   return {
     now,
     conventions: conv,
@@ -764,6 +766,7 @@ export function boardRead(state = {}, { now = new Date(), settings = null, seatI
     ledger,
     memo: selected,
     evaluation,
+    continuity,
     seat: seat ? { id: seat.id, label: seat.label, rank: seat.rank, fullAccess: seat.fullAccess } : null,
     labelNames,
     claimCatalogue: BOARD_CLAIMS,
@@ -863,6 +866,8 @@ export function boardMemoText(state = {}, { now = new Date(), settings = null, m
 export function boardCsvRows(state = {}, { now = new Date(), settings = null, memoId = null } = {}) {
   const read = boardRead(state, { now, settings, memoId });
   const ledger = read.ledger;
+  const continuity = read.continuity;
+  const carriedByKey = new Map((continuity?.claims || []).map((c) => [c.key, c]));
   const rows = [{
     scope: 'workspace',
     claim: '',
@@ -882,6 +887,13 @@ export function boardCsvRows(state = {}, { now = new Date(), settings = null, me
     memos_frozen: ledger.frozen,
     attestation: read.evaluation?.attestation?.verified ? 'verified' : read.evaluation?.attestation?.available ? 'not-verified' : 'none',
     fingerprint: read.evaluation?.fingerprint || '',
+    packs: continuity?.counts?.looks ?? 0,
+    carry_forward: '',
+    carry_reason: '',
+    failing_streak: null,
+    unverified_streak: null,
+    transition: '',
+    move_pp: null,
   }];
   if (!read.evaluation) return rows;
   for (const row of read.evaluation.rows) {
@@ -904,6 +916,13 @@ export function boardCsvRows(state = {}, { now = new Date(), settings = null, me
       memos_frozen: ledger.frozen,
       attestation: read.evaluation.attestation.verified ? 'verified' : read.evaluation.attestation.available ? 'not-verified' : 'none',
       fingerprint: read.evaluation.fingerprint,
+      packs: carriedByKey.get(row.key)?.looks ?? 0,
+      carry_forward: carriedByKey.get(row.key)?.carryForward ? 'yes' : 'no',
+      carry_reason: carriedByKey.get(row.key)?.carryReason || '',
+      failing_streak: carriedByKey.get(row.key)?.failingStreak ?? 0,
+      unverified_streak: carriedByKey.get(row.key)?.unverifiedStreak ?? 0,
+      transition: carriedByKey.get(row.key)?.transition || '',
+      move_pp: Number.isFinite(carriedByKey.get(row.key)?.movePp) ? carriedByKey.get(row.key).movePp : null,
     });
   }
   return rows;
@@ -943,6 +962,7 @@ export function boardBriefText(state = {}, { now = new Date(), settings = null, 
     `Board memo ${memo.revision} (${memo.status}): ${counts.holding} holding, ${counts.failing} failing, ${counts.inconclusive} inconclusive, ${counts.withheld + counts.refused} unverified.`,
     counts.postHoc ? `${counts.postHoc} threshold(s) were revised after the first look and are marked post-hoc.` : 'Every threshold was declared before the first look.',
     attestation.note,
+    boardContinuityBrief(state, { now }),
   ].join(' ');
 }
 
