@@ -43,8 +43,8 @@
  *  - A ceiling total is a total of DECLARED ceilings and says how many envelopes
  *    it covers; headroom is refused (BLANK, never zero) when any active envelope
  *    in that currency has no ceiling.
- *  - Spend with no recorded actual contributes ZERO to the sums and is counted
- *    as evidence debt instead — the same rule `evaluateBudget` enforces.
+ *  - Missing actuals or unpriced open lines make headroom unknowable. Known
+ *    amounts remain subtotals; missing amounts are never treated as zero.
  *  - Every envelope is attributed to exactly one bucket or excluded with a
  *    printed reason. Nothing is guessed into a branch.
  *  - Closed and archived envelopes are counted, never summed: they are history.
@@ -57,7 +57,7 @@
 import { evaluateBudget, formatMoney, DEFAULT_BUDGET_WATCH_PCT } from './finance.js';
 import { dayKey } from '../time.js';
 
-export const BUDGET_EXPOSURE_ENGINE_VERSION = 'budget-exposure-2026.11-v1';
+export const BUDGET_EXPOSURE_ENGINE_VERSION = 'budget-exposure-2026.11-v2';
 
 export const BUDGET_EXPOSURE_LIMITS = Object.freeze({
   /** Review-queue rows the reading carries. The remainder is counted, never dropped. */
@@ -226,15 +226,19 @@ function addToCurrency(row, ev) {
 }
 
 function settleCurrency(row) {
-  // Headroom is a comparison of two sums inside one currency. It is refused —
-  // BLANK, never zero — when part of that currency is tracking-only, because a
-  // ceiling total that covers only some envelopes is not a ceiling for the rest.
-  if (!row.complete) {
-    row.headroomReason = `${row.untracked} active envelope(s) in ${row.currency} carry no declared ceiling, so a currency headroom cannot be computed. They are counted, never treated as zero spend or as headroom.`;
-    row.headroom = null;
-  } else if (!row.envelopes) {
+  // A partial forecast cannot establish a free balance. The shared evaluator's
+  // unpriced count also includes planned lines; conservatively refuse headroom
+  // until they are priced, rather than claim a reliable allocation position.
+  const gaps = [];
+  if (row.untracked) gaps.push(`${row.untracked} active envelope(s) carry no declared ceiling`);
+  if (row.evidenceDebt) gaps.push(`${row.evidenceDebt} envelope(s) have spent lines without recorded actuals`);
+  if (row.unpricedLines) gaps.push(`${row.unpricedLines} open line(s), including planned lines, have no price`);
+  if (!row.envelopes) {
     row.headroom = null;
     row.headroomReason = `No active envelope in ${row.currency}.`;
+  } else if (gaps.length) {
+    row.headroom = null;
+    row.headroomReason = `Headroom cannot be computed for ${row.currency}: ${gaps.join('; ')}. Recorded figures exclude missing amounts.`;
   } else {
     row.headroom = round2(row.ceiling - row.forecast);
   }
@@ -494,14 +498,14 @@ export function budgetExposureText(report) {
     const headroom = row.headroom === null
       ? 'headroom BLANK (see refusal)'
       : row.headroom >= 0 ? `headroom ${formatMoney(row.currency, row.headroom)}` : `over ceiling by ${formatMoney(row.currency, Math.abs(row.headroom))}`;
-    lines.push(`  ${row.currency}: ceilings ${formatMoney(row.currency, row.ceiling)} across ${row.ceilingsCovered} of ${row.envelopes} envelope(s) · actuals ${formatMoney(row.currency, row.actuals)} · open commitments ${formatMoney(row.currency, row.committed)} · planned ${formatMoney(row.currency, row.planned)} · forecast ${formatMoney(row.currency, row.forecast)} · ${headroom}`);
+    lines.push(`  ${row.currency}: ceilings ${formatMoney(row.currency, row.ceiling)} across ${row.ceilingsCovered} of ${row.envelopes} envelope(s) · actuals ${formatMoney(row.currency, row.actuals)} · open commitments ${formatMoney(row.currency, row.committed)} · planned ${formatMoney(row.currency, row.planned)} · recorded forecast ${formatMoney(row.currency, row.forecast)} · ${headroom}`);
     lines.push(`    ${row.breaches} breach(es), ${row.watches} watch, ${row.pipelineBreaches} pipeline breach(es), ${row.evidenceDebt} evidence-debt envelope(s).`);
   }
   lines.push('', 'BY BRANCH — the authority holder, not a grand total:');
   if (!report.branches.length) lines.push('  (no direct branch holds an attributable envelope)');
   for (const branch of report.branches) {
     const label = branch.position ? `Branch ${branch.position} · ${branch.label}` : branch.label;
-    const cells = branch.currencies.map((row) => `${row.currency} forecast ${formatMoney(row.currency, row.forecast)}${row.headroom === null ? '' : ` (${row.headroom >= 0 ? 'headroom' : 'over'} ${formatMoney(row.currency, Math.abs(row.headroom))})`}${row.breaches ? ` ${row.breaches} BREACH` : ''}`).join(' | ');
+    const cells = branch.currencies.map((row) => `${row.currency} recorded forecast ${formatMoney(row.currency, row.forecast)}${row.headroom === null ? ` (headroom BLANK: ${row.headroomReason})` : ` (${row.headroom >= 0 ? 'headroom' : 'over'} ${formatMoney(row.currency, Math.abs(row.headroom))})`}${row.breaches ? ` ${row.breaches} BREACH` : ''}`).join(' | ');
     lines.push(`  ${label} — ${branch.envelopes} envelope(s)${cells ? ` — ${cells}` : ''}`);
   }
   lines.push('', `REVIEW QUEUE — bounded at ${report.limits.queue}, worst first:`);
@@ -535,7 +539,7 @@ export function budgetExposureBrief(report) {
   const currencies = report.currencies.map((row) => `${row.currency} ${row.breaches}/${row.envelopes} envelope(s) in breach`
     + (row.headroom === null ? ', headroom blank' : `, ${row.headroom >= 0 ? 'headroom' : 'over'} ${formatMoney(row.currency, Math.abs(row.headroom))}`)).join('; ');
   const line = `Money: ${report.counts.active} active envelope(s) across ${report.currencies.length} currency(ies)${currencies ? ` — ${currencies}` : ''}. `
-    + `${report.counts.evidenceDebt} envelope(s) carry spend with no recorded actual; ${report.queue.length + report.queueDeferred} row(s) in the bounded review queue. No netting across currencies or branches.`;
+    + `${report.counts.evidenceDebt} envelope(s) carry spend with no recorded actual; ${report.counts.unpricedEnvelopes} have unpriced open lines (including planned); ${report.queue.length + report.queueDeferred} row(s) in the bounded review queue. No netting across currencies or branches.`;
   return report.detail === 'aggregate' ? line.replace('active envelope(s) across', 'active envelope(s), counts only, across') : line;
 }
 

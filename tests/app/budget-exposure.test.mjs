@@ -216,8 +216,46 @@ test('a ceiling total says what it covers, and headroom is BLANK when an envelop
   assert.match(dkk.headroomReason, /carry no declared ceiling/);
   const eur = currencyRow(report, 'EUR');
   assert.equal(eur.complete, true);
-  assert.equal(eur.headroom, 25000, 'EUR ceiling 80000 - forecast 55000');
-  assert.ok(report.refusals.some((r) => /headroom cannot be computed/.test(r)));
+  assert.equal(eur.headroom, null, 'missing actual and price cannot be treated as available funds');
+  assert.match(eur.headroomReason, /without recorded actuals/);
+  assert.match(eur.headroomReason, /have no price/);
+  assert.ok(report.refusals.some((r) => /headroom cannot be computed/i.test(r)));
+});
+
+test('headroom follows actual and priced evidence through real finance writes, by branch and currency', () => {
+  const state = stateWith([
+    budget('gaps', { currency: 'EUR', limit: 100, ownerId: 'mgrA', lines: [
+      line('spent', { status: 'spent', committedAmount: 20 }),
+      line('open', { status: 'committed' }),
+      line('plan', { status: 'planned' }),
+    ] }),
+    budget('sound', { currency: 'EUR', limit: 200, ownerId: 'mgrB', lines: [line('known', { committedAmount: 30 })] }),
+    budget('other', { currency: 'DKK', limit: 100, ownerId: 'mgrA', lines: [line('priced', { committedAmount: 40 })] }),
+  ]);
+  const { store, api } = boot(state);
+  let report = api.budgetExposureRead();
+  let eur = currencyRow(report, 'EUR');
+  assert.equal(eur.forecast, 30, 'known subtotal remains visible');
+  assert.equal(eur.headroom, null);
+  assert.match(eur.headroomReason, /without recorded actuals/);
+  assert.match(eur.headroomReason, /2 open line/);
+  assert.equal(currencyRow(report, 'DKK').headroom, 60, 'other currency is independent');
+  assert.equal(report.branches.find((b) => b.label === 'Ada Manager').currencies.find((c) => c.currency === 'EUR').headroom, null);
+  assert.equal(report.branches.find((b) => b.label === 'Bo Manager').currencies[0].headroom, 170, 'sound sibling is independent');
+  assert.match(api.budgetExposureText().text, /headroom BLANK/);
+  assert.match(api.budgetExposureBriefText().text, /headroom blank/);
+
+  assert.equal(api.setActiveSeat('vp1').ok, true, 'capital writes require the VP authority floor');
+  assert.equal(api.recordBudgetActual('gaps', 'spent', { actualAmount: 15 }).ok, true);
+  assert.equal(api.updateBudgetLine('gaps', 'open', { committedAmount: 10 }).ok, true);
+  report = api.budgetExposureRead();
+  eur = currencyRow(report, 'EUR');
+  assert.equal(eur.headroom, null, 'unpriced planned line conservatively blocks headroom');
+  assert.match(eur.headroomReason, /including planned lines/);
+  assert.equal(api.updateBudgetLine('gaps', 'plan', { committedAmount: 5 }).ok, true);
+  report = api.budgetExposureRead();
+  assert.equal(currencyRow(report, 'EUR').headroom, 245, 'priced planned pipeline is not part of FAC');
+  assert.ok(store.state.events.some((e) => e.type === 'budget.lineUpdated'), 'normal finance events still fire');
 });
 
 /* ---------------------------------------------------------- attribution */
@@ -425,6 +463,8 @@ test('the span panel renders over real state with no dead end', () => {
     const text = node.textContent;
     assert.match(text, /Span budget exposure/);
     assert.match(text, /Position by currency/);
+    assert.match(text, /Headroom cannot be computed for EUR/);
+    assert.match(text, /Recorded forecasts exclude missing amounts/);
     assert.match(text, /By branch/);
     assert.match(text, /Review queue/);
     assert.match(text, /No netting|does not net|transfer of authority/);
