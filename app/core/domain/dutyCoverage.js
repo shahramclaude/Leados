@@ -1390,12 +1390,14 @@ function branchCoverage(built, seat, rows, conventions = null, readingInput = nu
   const belowFloor = (b) => (b.seatsN > 0 && b.seatsN < floor) || (b.dutiesN > 0 && b.dutiesN < floor);
   const withheld = new Set(graded.filter(belowFloor).map((b) => b.idx));
   // Complementary suppression: one further released cell, chosen deterministically
-  // (smallest cell, then stable label) so a single withheld cell is never
-  // recoverable by subtracting the released cells from a known total.
+  // (smallest cell, then stable label) whenever only one cell is withheld,
+  // irrespective of how many cells remain released. Retain the existing
+  // protection for a lone released cell beside multiple withheld cells. This
+  // prevents recovery of a single blank from a known parent total.
   let complementary = null;
   if (withheld.size) {
     const stillReleased = graded.filter((b) => !withheld.has(b.idx) && b.dutiesN > 0);
-    if (stillReleased.length <= 1 && stillReleased.length > 0) {
+    if (stillReleased.length > 0 && (withheld.size === 1 || stillReleased.length === 1)) {
       const victim = [...stillReleased].sort((a, b) => a.seatsN - b.seatsN || a.dutiesN - b.dutiesN || a.label.localeCompare(b.label))[0];
       withheld.add(victim.idx);
       complementary = victim.idx;

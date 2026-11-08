@@ -1092,7 +1092,7 @@ function deskPanel(ctx, report) {
     handoverDigestCard(ctx, report.absences?.handoverDigest),
     report.branchCoverage ? card({
       title: 'Continuity across direct branches',
-      subtitle: `Each duty line belongs to one direct leadership branch; your own duties are excluded. Branch numbers are anonymous and may change when the roster changes. They are not division names. A cell below the declared floor of ${report.branchCoverage.floor} duty line(s) is withheld, and one released cell is withheld beside each of them so nothing is recoverable by subtraction.`,
+      subtitle: `Each duty line belongs to one direct leadership branch; your own duties are excluded. Branch numbers are anonymous and may change when the roster changes. They are not division names. A cell below the declared floor of ${report.branchCoverage.floor} duty line(s) is withheld, and an additional cell may be withheld to reduce recovery by subtraction from a parent total.`,
       body: h('div', { class: 'stack' },
         report.branchCoverage.refusal
           ? h('p', { class: 'muted' }, report.branchCoverage.refusal)

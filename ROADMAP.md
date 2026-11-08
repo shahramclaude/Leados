@@ -1,3 +1,13 @@
+## 2026-11-08 — Complementary suppression with multiple released branches (Session 179, schema v118 unchanged)
+
+**Implemented — CEO / C-suite PRIMARY; director and VP inherit the same hierarchy-scoped protection.** A chief reviewing cross-division continuity needs to compare exposure without turning one small branch's withheld figures into an arithmetic exercise. The shared duty-coverage report previously added a complementary suppression only when at most one branch remained released: with one primary blank and two or more released cells, parent totals could reveal that blank by subtraction. It now also masks the smallest eligible cell when exactly one cell is withheld, regardless of released-cell count; the existing lone-released-cell behavior is preserved. The desk, brief, CSV and branch-reading handoff consume this shared hierarchy projection, which is re-derived from the existing automation-fed coverage data; no new schema or isolated data path.
+
+**Altitude coverage map (Session 179):** frontline last primary 178; mid-manager last primary 178; director last primary 177; VP last primary 177; **CEO / C-suite primary 179**. Next rotation: director / VP.
+
+**Verification:** focused `duty-branch-disclosure` suite 15/15 after one fixture correction, including a three-branch regression and adjacent existing desk/brief/CSV behavior; standalone bundle rebuilt. Full suite and real-browser walkthrough [UNVERIFIED]. Complementary suppression is not differential privacy or a guarantee against differencing across historical exports or other available data; local seats are not authentication. Previously exported reports cannot be recalled. No blockers.
+
+**Next:** [all altitudes] authenticated identity and tenant boundary (foundational, in progress); [director / VP] next hierarchy rotation, select a scoped priority from the roadmap.
+
 ## 2026-11-08 — The inference-only handover digest: a daily review queue for covers resting on inferred work (Session 178, Schema v118 unchanged, [ADR-0132](./docs/adr/0132-inference-only-handover-digest.md))
 
 **Implemented [frontline (rank 1) / mid-manager (rank 2) PRIMARY; director/VP/CEO read the same counts inside their own spans].** The real duty: a shift lead preparing tomorrow's absence, or a manager checking two leads' leave weeks, asks which named covers have only touched the duty's records and have not explicitly rehearsed being answerable. Frontline/mid-manager took priority because the Session-177 map put them last primary in **174** (CEO 175, director/VP 177), and this was ADR-0128's own tagged remainder carried since 174.
