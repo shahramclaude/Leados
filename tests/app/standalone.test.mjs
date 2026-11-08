@@ -203,6 +203,10 @@ test('standalone artifact exists and is a single inline HTML document', () => {
   // tracks module count only; the per-module bound below is what catches a
   // module inlined twice, so raising the ceiling by one session's growth does
   // not weaken the duplicate-inlining guard.
+  // Session 183 (ADR-0136) added two modules (budgetExposure, budgetExposureActions)
+  // plus the finance view/actions/gateway wiring — measured build: 9,545,055
+  // bytes / 587 modules = 16,261 bytes per module, DOWN again from 16,269.
+  // The per-module density bound below is still what catches a module inlined twice.
   assert.ok(bytes < 9_600_000, `standalone file is unexpectedly large (${bytes} bytes)`);
   const declaredModules = Number((html.match(/content="[^"]*?(\d+) source modules/) || [])[1]);
   assert.ok(declaredModules > 100, `expected the build to declare its module count (got ${declaredModules})`);

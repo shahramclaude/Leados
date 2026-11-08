@@ -4958,6 +4958,17 @@ function normalizeNegotiations(raw, state, todayDay, now, warnings) {
  * the dead source pointer is cleared — deleting a goal must not delete the
  * record that money was committed.
  */
+/**
+ * A money field is absent (null) or a number. `null` must NOT be coerced to 0:
+ * in the budget ledger "blank" and "zero" are different facts — an unpriced
+ * commitment is not a commitment of nothing, and a spend with no recorded actual
+ * is not a spend of nothing (ADR-0136).
+ */
+function moneyOrNull(v) {
+  if (v === null || v === undefined || v === '') return null;
+  return nonNegativeOrNull(v);
+}
+
 function normalizeBudgets(raw, state, todayDay, now, warnings) {
   const personIds = new Set(state.people.map((p) => p.id));
   const sourceIds = {
@@ -4982,7 +4993,7 @@ function normalizeBudgets(raw, state, todayDay, now, warnings) {
       endsOn = null;
       warnings.push('Budgets: cleared a period end date that preceded its start date');
     }
-    const rawLimit = nonNegativeOrNull(b.limit);
+    const rawLimit = moneyOrNull(b.limit);
     const ownerIdRaw = str(b.ownerId).trim();
 
     const lines = (Array.isArray(b.lines) ? b.lines : []).slice(0, 120).map((rawLine, j) => {
@@ -5004,10 +5015,16 @@ function normalizeBudgets(raw, state, todayDay, now, warnings) {
         title: str(line.title).trim().slice(0, 200),
         category,
         status: lineStatus,
-        committedAmount: nonNegativeOrNull(line.committedAmount),
+        // ADR-0136 (defect): an ABSENT amount is null, never 0. `Number(null)`
+        // is 0, so a blank commitment was normalised into a priced commitment of
+        // zero and a spent line with no recorded actual into a spend of zero —
+        // which made `evaluateBudget`'s "spent without actual" and "unpriced
+        // open line" branches unreachable after the first reload, and scored a
+        // fake perfect underspend in the commitment-calibration ledger.
+        committedAmount: moneyOrNull(line.committedAmount),
         // An actual only exists once money has landed; on any other status a
         // stray figure would be scored as spend that never happened.
-        actualAmount: lineStatus === 'spent' ? nonNegativeOrNull(line.actualAmount) : null,
+        actualAmount: lineStatus === 'spent' ? moneyOrNull(line.actualAmount) : null,
         committedOn: calendarDayOrNull(line.committedOn),
         expectedOn: calendarDayOrNull(line.expectedOn),
         spentOn,

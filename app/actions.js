@@ -29,6 +29,7 @@ import { createReputationActions } from './core/domain/reputationalCapitalAction
 import { createHindsightActions } from './core/domain/hindsightActions.js';
 import { createEpistemicActions } from './core/domain/epistemicActions.js';
 import { createDiligenceActions } from './core/domain/diligenceActions.js';
+import { createBudgetExposureActions } from './core/domain/budgetExposureActions.js';
 import { createFitActions } from './core/domain/decisionFitActions.js';
 // ADR-0109: the Jurisdiction Compiler. Its findings, governed boundary
 // decisions, typed edges, once-only grades and identity-free span readings are
@@ -19790,6 +19791,10 @@ export function createApi(store, options = {}) {
   // TRANSACTION as the decision, with one `diligence-for` edge, one
   // `deliberates-on` edge per fact and one `rolls-up-to` edge per ancestor.
   Object.assign(api, createDiligenceActions(store, { now: clock, idFactory: id }));
+  // ADR-0136: the span budget exposure roll-up. Three seat-scoped safe reads and
+  // NO writes at all: the reading is derived from `evaluateBudget` on every
+  // render, so there is no collection, marker or stored snapshot to keep in step.
+  Object.assign(api, createBudgetExposureActions(store, { now: clock }));
   // ADR-0108: the Decision-Fit Ledger. Reads are pure adapters; the three writes
   // are scan / classify / conventions, all on the shared spine.
   Object.assign(api, createFitActions(store, { now: clock, idFactory: id }));
