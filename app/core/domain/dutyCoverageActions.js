@@ -302,7 +302,7 @@ export function createDutyCoverageActions(store, { now, idFactory }) {
         type: DUTY_COVERAGE_EVENTS.SCAN,
         entity: 'workspace',
         entityId: '',
-        summary: `Duty coverage re-derived: ${report.summary.coveredN} covered, ${report.summary.thinN} thin, ${report.summary.ineligibleN} ineligible, ${report.summary.gapN} without cover across ${report.summary.dutiesN} declared duty line(s). Nothing was assigned.`.slice(0, 300),
+        summary: `Duty coverage re-derived: ${report.summary.coveredN} covered, ${report.summary.thinN} thin, ${report.summary.ineligibleN} ineligible, ${report.summary.gapN} without cover across ${report.summary.dutiesN} declared duty line(s). Handover checks: ${report.absences?.handoverDigest?.summary?.checksN ?? 0} inference-only cover check(s). Nothing was assigned.`.slice(0, 300),
       });
       return saved({ summary: report.summary });
     },

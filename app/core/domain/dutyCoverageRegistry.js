@@ -90,6 +90,9 @@ export const DUTY_COVERAGE_PANELS = Object.freeze([
 export const DUTY_COVERAGE_LIMITS = Object.freeze({
   /** Drafts shown on the Desk; the register is capped, the count is not. */
   rowCap: 60,
+  /** ADR-0132: inference-only handover checks printed on the Desk. The full
+   * count and the deferred remainder are always printed beside the slice. */
+  handoverDigestRowCap: 40,
   /** Declared covers per duty (a duty is not a committee). */
   coversPerDuty: 3,
   /** Ledger rows the register will render in one read. */
@@ -157,6 +160,12 @@ export const DUTY_COVERAGE_BOUNDS = Object.freeze({
 });
 
 export const DUTY_PREMISE = 'A duty with no named, capable, exercised stand-in is a duty one absence away from stopping. LeadOS can name the cover because it already knows the reporting tree, the duty table and the dated work records — but it will not invent a stand-in: declaring cover is a dated human act, and every gap prints the reason it is a gap instead of a reassuring blank.';
+
+/** ADR-0132: the daily triage queue for covers whose only pre-window evidence
+ * is inferred work. It is a review prompt, not a readiness verdict, not a
+ * person score, and not a new automation rule. */
+export const DUTY_HANDOVER_DIGEST_ENGINE_VERSION = 'duty-handover-digest-2026.11-v1';
+export const DUTY_HANDOVER_DIGEST_PREMISE = 'Inferred work proves contact with a duty’s records, not that the stand-in practised being answerable. This digest lists available, eligible covers whose only in-window evidence is inferred work, for absence windows that have not ended. It is ordered by open work on the duty, then the earliest preparation cutoff (constraint-first dispatching, Goldratt’s Theory of Constraints); it is not a risk score. Record a rehearsal only when the practice actually happened. The queue clears itself when a ready rehearsal, a revocation, a roster change or the window itself changes the evidence.';
 
 /**
  * ADR-0126 — the disclosure floor on the branch comparison.

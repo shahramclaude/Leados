@@ -428,13 +428,14 @@ export function createDutyRehearsalActions(store, { now, idFactory }) {
       const list = buildList(seat, built);
       const report = buildDutyCoverageReport(store.state, { now: clock(), settings: settings() });
       const exercise = report.absences?.exercise || {};
+      const handover = report.absences?.handoverDigest?.summary || null;
       store.update(() => {}, {
         type: DUTY_REHEARSAL_EVENTS.SCAN,
         entity: 'workspace',
         entityId: '',
-        summary: `Cover rehearsals re-derived at ${seat.label}: ${list.summary.activeN} active attestation(s) in scope (${list.summary.readyN} ready, ${list.summary.gapsN} gaps), ${list.summary.attestedN} holder/supervisor-attested, ${list.summary.selfReportedN} self-reported. Pre-window: ${exercise.rehearsedCoversN ?? 0} cover(s) graded rehearsed, ${exercise.gapsCoversN ?? 0} graded gaps. Nothing was certified or scheduled.`.slice(0, 300),
+        summary: `Cover rehearsals re-derived at ${seat.label}: ${list.summary.activeN} active (${list.summary.readyN} ready, ${list.summary.gapsN} gaps), ${list.summary.attestedN} attested, ${list.summary.selfReportedN} self-reported. Pre-window: ${exercise.rehearsedCoversN ?? 0} rehearsed, ${exercise.gapsCoversN ?? 0} gaps. Handover: ${handover?.checksN ?? 0} inference-only check(s). Nothing certified or scheduled.`.slice(0, 300),
       });
-      return saved({ summary: list.summary, exercise });
+      return saved({ summary: list.summary, exercise, handover });
     },
   };
 }
