@@ -1,3 +1,9 @@
+## 2026-11-08 — Matrix managers can read their budget exposure
+
+On `#/finance?panel=span`, a director or VP who holds someone through a declared project, product or cross-functional line now sees that person's recorded budget envelope in the span roll-up. The whole envelope is counted once for that seat under **Declared matrix line**; if both the home tree and the line reach the owner, it is still counted only once. Forecast, actuals, commitments and headroom continue to come directly from the stored envelope and existing finance evaluator.
+
+A capacity allocation is not a financial split, so LeadOS never multiplies money by the reporting-line share. The home cost centre and matrix manager are reading the same envelope: the panel, downloaded ledger and upward brief explicitly warn that overlapping seat totals must not be added together. Ordinary finance writes and events are unchanged, and the reading survives reload without a stored copy. No setup or schema change.
+
 ## 2026-11-08 — Matrix accountability: does the roll-up add up?
 
 Most organisations above a few hundred people are not a tree. An engineer with a functional manager, a project manager and a product lead is the normal case, and until now every roll-up in LeadOS assumed she was not: `person.managerId` is a single pointer, and ownership, span of control and the automation fan-out were all properties of that tree. A tree's answer is unique *because a tree has exactly one path to the root* — add a second line and the same question has two defensible answers.

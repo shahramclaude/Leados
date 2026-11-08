@@ -57,7 +57,7 @@
 import { evaluateBudget, formatMoney, DEFAULT_BUDGET_WATCH_PCT } from './finance.js';
 import { dayKey } from '../time.js';
 
-export const BUDGET_EXPOSURE_ENGINE_VERSION = 'budget-exposure-2026.11-v2';
+export const BUDGET_EXPOSURE_ENGINE_VERSION = 'budget-exposure-2026.11-v3';
 
 export const BUDGET_EXPOSURE_LIMITS = Object.freeze({
   /** Review-queue rows the reading carries. The remainder is counted, never dropped. */
@@ -113,6 +113,10 @@ export const BUDGET_EXPOSURE_METHOD = Object.freeze([
     name: 'Statistical disclosure control',
     why: 'Above the declared detail ceiling the envelopes are disclosed as counts, shares and bands. An envelope name, a line title and an exact per-row amount are item detail; a currency total is an aggregate.',
   },
+  {
+    name: 'Matrix overlapping accountability (Galbraith)',
+    why: 'An additional reporting line makes the whole recorded envelope visible once in that seat’s reading. Capacity shares never divide money, and totals from overlapping seats are never added together: the home cost centre and the matrix manager are two accountabilities over the same envelope, not two envelopes.',
+  },
 ]);
 
 const REASON_RANK = new Map(BUDGET_EXPOSURE_REASONS.map((r, i) => [r.key, i]));
@@ -142,7 +146,7 @@ function refusalReport(reason, extra = {}) {
     counts: {
       envelopes: 0, active: 0, inactive: 0, measured: 0, untracked: 0, breaches: 0,
       watches: 0, pipelineBreaches: 0, evidenceDebt: 0, unpricedEnvelopes: 0,
-      overdueEnvelopes: 0, attributed: 0, unowned: 0, outOfSpan: 0, ambiguous: 0, branches: 0,
+      overdueEnvelopes: 0, attributed: 0, viaLine: 0, unowned: 0, outOfSpan: 0, ambiguous: 0, branches: 0,
     },
     currencies: [],
     branches: [],
@@ -167,12 +171,21 @@ function refusalReport(reason, extra = {}) {
  *  - `branch`     — exactly one direct child seat holds the owner.
  *  - `desk`       — the acting seat's own envelope, or a direct report with no
  *                   leadership seat beneath them.
+ *  - `matrix-line`— the owner reaches this seat only through an active declared
+ *                   additional reporting line. The WHOLE envelope enters this
+ *                   seat's reading exactly once; no capacity-share split is
+ *                   invented, and the overlap with the home seat is printed.
  */
 function attributeEnvelope(budget, seat, built) {
   const ownerId = typeof budget?.ownerId === 'string' && budget.ownerId.trim() ? budget.ownerId.trim() : null;
   if (!ownerId) return { bucket: 'unowned', child: null };
   if (ownerId === seat.id) return { bucket: 'desk', child: null };
-  if (!seat.scope.has(ownerId)) return { bucket: 'out-of-span', child: null };
+  const inTree = seat.scope.has(ownerId);
+  const viaLine = !inTree && seat.lineScope instanceof Set && seat.lineScope.has(ownerId);
+  if (!inTree && !viaLine) return { bucket: 'out-of-span', child: null };
+  // Tree first when both routes exist: two accountabilities over one person do
+  // not make two envelopes, and a secondary line never creates another branch.
+  if (viaLine) return { bucket: 'matrix-line', child: null };
   const holders = seat.childSeatIds
     .map((id) => built.byId.get(id))
     .filter((child) => child && (child.scope.has(ownerId) || child.id === ownerId));
@@ -284,7 +297,7 @@ export function buildBudgetExposure(state, { now = new Date(), seat = null, buil
   const counts = {
     envelopes: budgets.length, active: 0, inactive: 0, measured: 0, untracked: 0,
     breaches: 0, watches: 0, pipelineBreaches: 0, evidenceDebt: 0, unpricedEnvelopes: 0,
-    overdueEnvelopes: 0, attributed: 0, unowned: 0, outOfSpan: 0, ambiguous: 0,
+    overdueEnvelopes: 0, attributed: 0, viaLine: 0, unowned: 0, outOfSpan: 0, ambiguous: 0,
     branches: childSeats.length,
   };
   const byCurrency = new Map();
@@ -300,6 +313,7 @@ export function buildBudgetExposure(state, { now = new Date(), seat = null, buil
         label: meta.label,
         rank: meta.rank ?? null,
         ownDesk: Boolean(meta.ownDesk),
+        viaLine: Boolean(meta.viaLine),
         currencies: new Map(),
         envelopes: 0,
         breaches: 0,
@@ -341,22 +355,31 @@ export function buildBudgetExposure(state, { now = new Date(), seat = null, buil
       continue;
     }
 
+    if (attribution.bucket === 'matrix-line') counts.viaLine += 1;
     counts.attributed += 1;
     const cur = byCurrency.get(currency) || emptyCurrency(currency);
     addToCurrency(cur, ev);
     byCurrency.set(currency, cur);
 
-    const branchKey = attribution.bucket === 'enterprise' ? 'enterprise' : attribution.bucket === 'desk' ? 'desk' : attribution.child.id;
+    const branchKey = attribution.bucket === 'enterprise'
+      ? 'enterprise'
+      : attribution.bucket === 'desk'
+        ? 'desk'
+        : attribution.bucket === 'matrix-line'
+          ? 'matrix-line'
+          : attribution.child.id;
     const branch = branchRow(branchKey, attribution.bucket === 'enterprise'
       ? { label: 'Whole workspace', ownDesk: false }
       : attribution.bucket === 'desk'
         ? { label: enforced ? 'Own desk (no leadership seat beneath)' : 'Whole workspace', ownDesk: true }
-        : {
-          position: branchPosition.get(attribution.child.id) || null,
-          label: attribution.child.name,
-          rank: attribution.child.rank,
-          ownDesk: false,
-        });
+        : attribution.bucket === 'matrix-line'
+          ? { label: 'Declared matrix line', rank: null, ownDesk: false, viaLine: true }
+          : {
+            position: branchPosition.get(attribution.child.id) || null,
+            label: attribution.child.name,
+            rank: attribution.child.rank,
+            ownDesk: false,
+          });
     branch.envelopes += 1;
     if (ev.breach) branch.breaches += 1;
     const bCur = branch.currencies.get(currency) || emptyCurrency(currency);
@@ -371,6 +394,7 @@ export function buildBudgetExposure(state, { now = new Date(), seat = null, buil
       branchPosition: branch.position,
       branchLabel: detail === 'aggregate' ? (branch.position ? `Branch ${branch.position}` : branch.label) : branch.label,
       branchRank: branch.rank,
+      viaLine: branch.viaLine,
       name: detail === 'aggregate' ? null : budget.name,
       currency,
       band: bandOf(ev),
@@ -403,6 +427,7 @@ export function buildBudgetExposure(state, { now = new Date(), seat = null, buil
     label: detail === 'aggregate' ? (row.position ? `Branch ${row.position}` : row.label) : row.label,
     rank: row.rank,
     ownDesk: row.ownDesk,
+    viaLine: row.viaLine,
     envelopes: row.envelopes,
     breaches: row.breaches,
     currencies: [...row.currencies.values()].map(settleCurrency).sort((a, b) => a.currency.localeCompare(b.currency)),
@@ -422,6 +447,9 @@ export function buildBudgetExposure(state, { now = new Date(), seat = null, buil
   }
   if (counts.outOfSpan) {
     refusals.push(`${counts.outOfSpan} active envelope(s) name an owner outside this seat’s span; they are excluded from the reading.`);
+  }
+  if (counts.viaLine) {
+    refusals.push(`${counts.viaLine} active envelope(s) reach this seat only through a declared additional reporting line. Each whole envelope is counted once in THIS seat’s reading and labelled “Declared matrix line”; its capacity allocation is NOT applied to money. The home cost centre reads the same envelope, so totals from overlapping seats are not additive.`);
   }
   if (counts.ambiguous) {
     refusals.push(`${counts.ambiguous} active envelope(s) resolve to more than one direct branch and are excluded rather than guessed.`);
@@ -453,7 +481,19 @@ export function buildBudgetExposure(state, { now = new Date(), seat = null, buil
         altitudeKey: seat.altitudeKey || null,
         horizonDays: seat.horizonDays ?? null,
         scopeN: seat.scopeN ?? null,
+        matrixScopeN: seat.matrixScopeN ?? seat.scopeN ?? null,
+        lineScopeN: seat.lineScopeN ?? 0,
+        viaLineEnvelopes: counts.viaLine,
         childBranches: childSeats.length,
+      }
+      : null,
+    matrix: seat?.lineScope
+      ? {
+        declared: true,
+        lineScopeN: seat.lineScopeN ?? 0,
+        viaLineEnvelopes: counts.viaLine,
+        allocationAppliedToMoney: false,
+        additiveAcrossSeats: false,
       }
       : null,
     counts,
@@ -492,6 +532,9 @@ export function budgetExposureText(report) {
   lines.push(`COUNTED: ${report.counts.active} active envelope(s), ${report.counts.measured} with a declared ceiling, ${report.counts.untracked} tracking-only. `
     + `${report.counts.breaches} breach(es), ${report.counts.watches} in the watch zone, ${report.counts.pipelineBreaches} pipeline breach(es), `
     + `${report.counts.evidenceDebt} with spend and no recorded actual, ${report.counts.unpricedEnvelopes} with unpriced open lines.`);
+  if (report.counts.viaLine) {
+    lines.push(`MATRIX OVERLAP: ${report.counts.viaLine} envelope(s) arrived only through a declared additional reporting line. Each is counted once here at its whole recorded amount; no capacity-share split was invented. The home seat reads the same envelope — never add overlapping seat totals.`);
+  }
   lines.push('', 'PER CURRENCY — never pooled, never converted:');
   if (!report.currencies.length) lines.push('  (no attributable active envelope)');
   for (const row of report.currencies) {
@@ -539,7 +582,8 @@ export function budgetExposureBrief(report) {
   const currencies = report.currencies.map((row) => `${row.currency} ${row.breaches}/${row.envelopes} envelope(s) in breach`
     + (row.headroom === null ? ', headroom blank' : `, ${row.headroom >= 0 ? 'headroom' : 'over'} ${formatMoney(row.currency, Math.abs(row.headroom))}`)).join('; ');
   const line = `Money: ${report.counts.active} active envelope(s) across ${report.currencies.length} currency(ies)${currencies ? ` — ${currencies}` : ''}. `
-    + `${report.counts.evidenceDebt} envelope(s) carry spend with no recorded actual; ${report.counts.unpricedEnvelopes} have unpriced open lines (including planned); ${report.queue.length + report.queueDeferred} row(s) in the bounded review queue. No netting across currencies or branches.`;
+    + `${report.counts.evidenceDebt} envelope(s) carry spend with no recorded actual; ${report.counts.unpricedEnvelopes} have unpriced open lines (including planned); ${report.queue.length + report.queueDeferred} row(s) in the bounded review queue. No netting across currencies or branches.`
+    + (report.counts.viaLine ? ` ${report.counts.viaLine} envelope(s) arrived via matrix line; overlapping seat totals are not additive and no allocation split was applied.` : '');
   return report.detail === 'aggregate' ? line.replace('active envelope(s) across', 'active envelope(s), counts only, across') : line;
 }
 
