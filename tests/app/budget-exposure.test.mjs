@@ -30,6 +30,9 @@ import { createEmptyState, normalizeState, SCHEMA_VERSION } from '../../app/core
 import { createStore, STORAGE_KEY } from '../../app/core/store.js';
 import { createApi } from '../../app/actions.js';
 import { buildSeats, activeSeat } from '../../app/core/domain/seat.js';
+import { matrixLineScopeFor } from '../../app/core/domain/matrix.js';
+import { safeSeatContext, scopedViewState } from '../../app/core/domain/viewScope.js';
+import { formatMoney } from '../../app/core/domain/finance.js';
 import { RECORD_CLASSES } from '../../app/core/domain/seatRegistry.js';
 import { SAFE_READS } from '../../app/core/domain/accessGateway.js';
 import {
@@ -126,6 +129,36 @@ function directorReport(state = stateWith()) {
   return { report: buildBudgetExposure(state, { now: NOW, seat, built }), seat, built };
 }
 
+const MATRIX_PEOPLE = [
+  { id: 'matrix-vp', name: 'Morgan VP', role: 'VP', level: 'vp', managerId: null, status: 'active' },
+  { id: 'home-dir', name: 'Harper Home', role: 'Director', level: 'director', managerId: 'matrix-vp', status: 'active' },
+  { id: 'product-dir', name: 'Pia Product', role: 'Director', level: 'director', managerId: 'matrix-vp', status: 'active' },
+  { id: 'worker', name: 'Sam Engineer', role: 'Engineer', level: 'ic', managerId: 'home-dir', status: 'active' },
+  { id: 'outsider', name: 'Olive Outside', role: 'Analyst', level: 'ic', managerId: 'matrix-vp', status: 'active' },
+];
+
+function matrixWorkspace({ activeSeatId = 'product-dir', lineManagerId = 'product-dir' } = {}) {
+  const state = createEmptyState(NOW.toISOString());
+  state.settings = { ...state.settings, chainLeaderAltitude: 'chief', activeSeatId };
+  state.people = MATRIX_PEOPLE;
+  state.reportingLines = [{
+    id: 'line-worker', personId: 'worker', managerId: lineManagerId, kind: 'project',
+    shareH: 40, rights: ['priority'], fromISO: '2026-01-01', toISO: null,
+    declaredAt: '2026-01-01T00:00:00.000Z', history: [], status: 'active',
+  }];
+  state.budgets = [
+    budget('bud-matrix', {
+      name: 'Matrix delivery', currency: 'EUR', limit: 1000, ownerId: 'worker',
+      lines: [line('matrix-commitment', { committedAmount: 600 })],
+    }),
+    budget('bud-matrix-peer', {
+      name: 'Outside peer', currency: 'EUR', limit: 5000, ownerId: 'outsider',
+      lines: [line('peer-commitment', { committedAmount: 4000 })],
+    }),
+  ];
+  return normalizeState(state, { now: NOW }).state;
+}
+
 function boot(state) {
   const map = new Map();
   const storage = { getItem: (k) => map.get(k) ?? null, setItem: (k, v) => map.set(k, String(v)), removeItem: (k) => map.delete(k) };
@@ -135,7 +168,7 @@ function boot(state) {
   map.set(STORAGE_KEY, JSON.stringify(state));
   const store = createStore({ storage, now, idFactory });
   store.load();
-  return { store, api: createApi(store, { now, idFactory }) };
+  return { store, api: createApi(store, { now, idFactory }), storage };
 }
 
 function bootDocument() {
@@ -438,6 +471,130 @@ test('the API read is seat-scoped on the raw store and mutates nothing', () => {
   assert.match(text.text, /SPAN BUDGET EXPOSURE/);
   const brief = api.budgetExposureBriefText();
   assert.match(brief.text, /No netting/);
+});
+
+/* ---------------------------------------------------- matrix attribution */
+
+test('a line-only director reads one whole matrix envelope through the REAL render boundary, with display = stored = API', () => {
+  const state = matrixWorkspace();
+  const seatContext = safeSeatContext(state, NOW);
+  assert.equal(seatContext.error, null);
+  assert.equal(seatContext.seat.id, 'product-dir');
+  assert.equal(seatContext.seat.readOnly, undefined, 'the main renderer must not fall back to read-only');
+  assert.equal(seatContext.seat.lineScopeN, 1);
+
+  const viewState = scopedViewState(state, seatContext, { now: NOW, settings: state.settings });
+  assert.deepEqual(viewState.budgets.map((row) => row.id), ['bud-matrix'], 'the line envelope survives and the outside peer is denied');
+  const report = buildBudgetExposure(viewState, { now: NOW, seat: seatContext.seat, built: seatContext.built });
+  assert.equal(report.counts.active, 1);
+  assert.equal(report.counts.viaLine, 1);
+  assert.equal(report.counts.outOfSpan, 0);
+  assert.equal(report.counts.attributed, 1);
+  assert.equal(report.matrix.allocationAppliedToMoney, false);
+  assert.equal(report.matrix.additiveAcrossSeats, false);
+  assert.equal(report.branches.length, 1);
+  assert.equal(report.branches[0].key, 'matrix-line');
+  assert.equal(report.branches[0].viaLine, true);
+  assert.equal(report.branches[0].label, 'Declared matrix line');
+
+  const { store, api } = boot(state);
+  const before = JSON.stringify(store.state);
+  const stored = store.state.budgets.find((row) => row.id === 'bud-matrix');
+  const storedLine = stored.lines[0];
+  const apiReport = api.budgetExposureRead();
+  assert.deepEqual(apiReport, report, 'raw-store API and projected render derive the same reading');
+  const eur = currencyRow(apiReport, 'EUR');
+  assert.equal(eur.forecast, storedLine.committedAmount, 'the displayed forecast is the stored open commitment');
+  assert.equal(eur.actuals, 0);
+  assert.equal(eur.committed, storedLine.committedAmount);
+  assert.equal(eur.headroom, stored.limit - storedLine.committedAmount);
+  assert.equal(eur.ceilingsCovered, 1);
+  assert.match(api.budgetExposureText().text, /MATRIX OVERLAP: 1 envelope/);
+  assert.match(api.budgetExposureBriefText().text, /overlapping seat totals are not additive/);
+
+  const { dom, errors } = bootDocument();
+  try {
+    const node = renderFinance({
+      api, now: NOW, state: viewState, query: new URLSearchParams('panel=span'),
+      navigate: () => {}, refresh: () => {}, seatContext,
+    });
+    const text = node.textContent;
+    assert.match(text, /1 envelope\(s\) arrive through matrix accountability/);
+    assert.match(text, /Declared matrix line/);
+    assert.match(text, /never add overlapping seat totals|must not be added together/);
+    assert.ok(text.includes(formatMoney(stored.currency, storedLine.committedAmount)), 'the rendered forecast equals stored money');
+    assert.ok(text.includes(formatMoney(stored.currency, stored.limit - storedLine.committedAmount)), 'the rendered headroom equals stored ceiling minus stored commitment');
+    assert.ok(!text.includes('Outside peer'), 'a sideways envelope is never rendered');
+    assert.ok(!MATRIX_PEOPLE.some((person) => api.budgetExposureBriefText().text.includes(person.name)), 'the upward brief is identity-free');
+    assert.deepEqual(errors, []);
+  } finally {
+    dom.window.close();
+  }
+  assert.equal(JSON.stringify(store.state), before, 'all three reads and the render are pure');
+});
+
+test('tree + line routes deduplicate the owner, and the common ancestor still counts each envelope once', () => {
+  const state = matrixWorkspace({ activeSeatId: 'home-dir', lineManagerId: 'home-dir' });
+  const { api } = boot(state);
+  const home = api.budgetExposureRead();
+  assert.equal(home.counts.active, 1);
+  assert.equal(home.counts.attributed, 1);
+  assert.equal(home.counts.viaLine, 0, 'the tree route wins when both routes name the same owner');
+  assert.equal(home.branches.length, 1);
+  assert.equal(home.branches[0].ownDesk, true);
+  assert.equal(currencyRow(home, 'EUR').forecast, 600);
+
+  assert.equal(api.setActiveSeat('matrix-vp').ok, true);
+  const ancestor = api.budgetExposureRead();
+  assert.equal(ancestor.counts.active, 2, 'two distinct stored envelopes, not three attribution claims');
+  assert.equal(ancestor.counts.attributed, 2);
+  assert.equal(ancestor.counts.viaLine, 0);
+  assert.equal(ancestor.branches.reduce((sum, row) => sum + row.envelopes, 0), 2);
+  assert.equal(currencyRow(ancestor, 'EUR').forecast, 4600, '600 matrix + 4000 outside peer, each exactly once');
+  assert.equal(ancestor.counts.attributed + ancestor.counts.unowned + ancestor.counts.outOfSpan + ancestor.counts.ambiguous, ancestor.counts.active);
+});
+
+test('a real finance commit updates the matrix reading, survives the storage reload, and still renders the stored figures', () => {
+  const state = matrixWorkspace();
+  const { store, api, storage } = boot(state);
+  assert.equal(api.setActiveSeat('matrix-vp').ok, true, 'capital write uses the VP authority floor');
+  const write = api.recordBudgetActual('bud-matrix', 'matrix-commitment', { actualAmount: 550, spentOn: '2026-11-08' });
+  assert.equal(write.ok, true);
+  assert.ok(store.state.events.some((event) => event.type === 'budget.actualRecorded' && event.entityId === 'bud-matrix'), 'the shared finance event spine fired');
+  assert.equal(api.setActiveSeat('product-dir').ok, true);
+
+  const stored = store.state.budgets.find((row) => row.id === 'bud-matrix');
+  const storedLine = stored.lines[0];
+  assert.equal(storedLine.status, 'spent');
+  assert.equal(storedLine.actualAmount, 550);
+  const current = api.budgetExposureRead();
+  const eur = currencyRow(current, 'EUR');
+  assert.equal(eur.actuals, storedLine.actualAmount);
+  assert.equal(eur.forecast, storedLine.actualAmount);
+  assert.equal(eur.committed, 0);
+  assert.equal(eur.headroom, stored.limit - storedLine.actualAmount);
+  assert.equal(current.counts.viaLine, 1);
+
+  let seq = 100;
+  const reloaded = createStore({ storage, now: () => NOW, idFactory: (prefix) => `${prefix}-reload-${++seq}` });
+  reloaded.load();
+  const reloadedApi = createApi(reloaded, { now: () => NOW, idFactory: (prefix) => `${prefix}-reload-${++seq}` });
+  assert.deepEqual(reloadedApi.budgetExposureRead(), current, 'persisted reload is byte-for-byte the same derived report');
+  assert.equal(reloaded.state.budgets.find((row) => row.id === 'bud-matrix').lines[0].actualAmount, 550);
+
+  const seatContext = safeSeatContext(reloaded.state, NOW);
+  const viewState = scopedViewState(reloaded.state, seatContext, { now: NOW, settings: reloaded.state.settings });
+  const { dom } = bootDocument();
+  try {
+    const node = renderFinance({
+      api: reloadedApi, now: NOW, state: viewState, query: new URLSearchParams('panel=span'),
+      navigate: () => {}, refresh: () => {}, seatContext,
+    });
+    assert.ok(node.textContent.includes(formatMoney(stored.currency, storedLine.actualAmount)), 'reloaded UI prints the stored actual');
+    assert.ok(node.textContent.includes(formatMoney(stored.currency, stored.limit - storedLine.actualAmount)), 'reloaded UI prints the exact recomputed headroom');
+  } finally {
+    dom.window.close();
+  }
 });
 
 /* ------------------------------------------------------------ the view */

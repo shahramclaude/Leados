@@ -6,6 +6,7 @@
 import { COLLECTIONS, LINK_ENTITY_COLLECTIONS } from '../schema.js';
 import { activeSeat, buildSeats, canSee, projectForSeat } from './seat.js';
 import { grantedRecords } from './disclosure.js';
+import { matrixLineScopeFor } from './matrix.js';
 
 const PUBLIC_PERSON_FIELDS = ['id', 'name', 'role', 'level', 'team', 'managerId', 'status'];
 /**
@@ -64,7 +65,12 @@ export function scopedViewState(state, seatContext = null, { now = new Date(), s
 /** Used by the shell if seat construction fails: never fail open on an enforced workspace. */
 export function safeSeatContext(state, now) {
   try {
-    const built = buildSeats(state, { now, settings: state.settings });
+    const settings = state.settings || {};
+    const built = buildSeats(state, {
+      now,
+      settings,
+      lineScope: matrixLineScopeFor(state, { now, settings }),
+    });
     const seat = activeSeat(built);
     return { built, seat, projection: projectForSeat(state, seat, built), error: null };
   } catch (error) {

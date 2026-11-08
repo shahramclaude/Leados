@@ -361,6 +361,13 @@ function renderSpanExposure(ctx, exposure, seat) {
         body: 'The roll-up does not net them against headroom anywhere else. Offsetting one cost centre with another’s slack is a transfer of authority nobody approved — it is a decision for this seat, not a line the arithmetic may draw.',
       })
       : null,
+    exposure.counts.viaLine
+      ? banner({
+        tone: 'info',
+        title: `${exposure.counts.viaLine} envelope(s) arrive through matrix accountability`,
+        body: 'Each whole envelope is counted once in this seat’s reading and labelled “Declared matrix line”. No capacity-share split is applied to money. The home cost centre reads the same envelope, so totals from overlapping seats must not be added together.',
+      })
+      : null,
     !exposure.counts.active
       ? banner({ tone: 'info', title: 'Nothing has been measured in this span', body: 'A blank reading is not a zero position: there is no active envelope to evaluate. Create an envelope, or record commitments against the one the span already has.' })
       : null,
@@ -381,7 +388,9 @@ function renderSpanExposure(ctx, exposure, seat) {
     }),
     card({
       title: 'By branch — the authority holder',
-      subtitle: 'A variance belongs to the cost centre that holds the authority, which is why this is a table of branches and not one grand total.',
+      subtitle: exposure.counts.viaLine
+        ? 'Home branches hold cost-centre authority. “Declared matrix line” is overlapping operational accountability over the same whole envelope, not a second cost centre or an allocation-weighted split; never add overlapping seat totals.'
+        : 'A variance belongs to the cost centre that holds the authority, which is why this is a table of branches and not one grand total.',
       body: exposure.branches.length
         ? table({ columns: branchColumns, rows: exposure.branches, caption: 'Span budget position by branch' })
         : emptyState({ title: 'No branch holds an envelope', body: 'Every attributable envelope belongs to your own desk. Assign an owner in a branch and it appears here.' }),

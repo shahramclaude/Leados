@@ -12,6 +12,7 @@
  */
 
 import { activeSeat, buildSeats, canSee } from './seat.js';
+import { matrixLineScopeFor } from './matrix.js';
 import { buildBudgetExposure, budgetExposureText, budgetExposureBrief } from './budgetExposure.js';
 
 export function createBudgetExposureActions(store, { now }) {
@@ -20,7 +21,12 @@ export function createBudgetExposureActions(store, { now }) {
 
   /** The state, reduced to the budgets this seat may read in full. */
   const scopedState = () => {
-    const built = buildSeats(store.state, { now: clock(), settings: settings() });
+    const at = clock();
+    const built = buildSeats(store.state, {
+      now: at,
+      settings: settings(),
+      lineScope: matrixLineScopeFor(store.state, { now: at, settings: settings() }),
+    });
     const seat = activeSeat(built);
     if (!seat || seat.fullAccess) return { state: store.state, seat, built };
     const readable = (store.state.budgets || []).filter((b) => canSee(b, 'budgets', seat, built).allow === 'full');
