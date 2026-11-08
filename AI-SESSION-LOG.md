@@ -1,3 +1,20 @@
+## 2026-11-08 — Session 181: the 1:1 queue stops deleting the prompt it just wrote (Schema v118 unchanged, ADR-0134, `#/agenda`)
+
+**Built / altitudes.** Frontline (rank 1) and mid-manager (rank 2) PRIMARY; every altitude that holds a 1:1 reads the same corrected queue. Frontline/mid-manager took priority because the Session-180 coverage map put them last primary in 178 and named them the next rotation. Duty served: a shift lead preparing next week's 1:1 works from their report's waiting list, and that list is the leader's only record of what they owe and what the person asked to raise.
+
+**Missing → implemented.** The standing `[PLANNED]` prompt-hygiene item, carried since Session 62. Two live defects, both reproduced with a probe before any change:
+
+1. **Write-then-delete.** The ~20 writers append and bound with `.slice(-30)`; `normalizeTalkingPoints` kept the FIRST twelve. Measured: a full queue plus a fresh rule prompt = thirteen lines in memory, twelve after reload, and the deleted line was the **newest** — the prompt the engine had just raised. Silent loss, against the no-silent-failures baseline.
+2. **The warning named the survivor.** The ledger believed the cap truncated from the oldest end, so `evictionRisk`/`capWarning` pointed at row 0 — the line that always survived. Five surfaces repeated it, including the upward brief.
+
+`app/core/domain/talkingPointPolicy.js` now declares the policy once and both layers read it: the person's own topics claim capacity first, engine prompts survive newest-first, survivors keep their original order, and refusals are returned with authorship and warned through the existing repair channel (`addPerson`/`updatePerson` also return the sentence as a `warning`). Eviction is derived by simulation (append a sentinel, re-apply, diff), so the badge names the line a reload will actually take. One shared `queueCapSentence` drives desk, prep sheet and normalizer wording. No collection, node, relation, rule, event, action, setting, CSV scope or schema bump.
+
+**Verified (one focused pass).** New `talking-point-policy` **13/13**; updated `agenda-provenance` **11/11** (test 3 had pinned the buggy direction and now asserts the corrected policy); adjacent `agenda-render`/`continuity-coupling`/`prep`/`autopilot`/`cases-automation`/`core` **60 pass / 2 fail, both verified PRE-EXISTING against a clean worktree of the base commit via `git stash`** (stale `SCHEMA_VERSION === 112` pin in `prep.test.mjs`; v58 additivity pin in `core.test.mjs`) — neither is a regression. `npm run lint` PASS; `npm run check:boundary` PASS (585 modules / 180 suites / 23 doc checks, 0 leaks). Full canonical suite and real-browser AT walkthrough **[UNVERIFIED]**. `node_modules` installed for jsdom/axe/eslint — dev dependencies only, not a product change.
+
+**Unverified / flagged.** Twelve is a declared convention, not a measured optimum. A refused prompt is reported but not rescheduled — visible, not recovered. Authorship comes from the declared marker grammar, so a hand-typed bracketed rule id counts as engine-authored (the safe direction). Seats remain workflow declarations, not authentication. Blockers: none.
+
+**Next up.** [all altitudes] authenticated identity + tenant boundary (standing); [director / VP] next rotation (last primary 180); [all altitudes] last 14 typed-links sweep fixture rows.
+
 ## 2026-11-08 — Session 180: the span reading roll-up (Schema v118 unchanged, ADR-0133, `#/duty-cover?panel=desk`)
 
 **Built / altitudes.** Director (rank 3) and VP / executive (rank 4) PRIMARY; CEO / C-suite reads the same enterprise-wide projection; frontline/mid unchanged. The duty served: a VP forecasting quarterly continuity risk across divisions, or a director approving leave coverage for a whole unit, must see WHERE a governed continuity signal has gone dark. Director/VP took priority because the Session-179 map explicitly named them as the next rotation (last primary 177, while CEO was primary 179). No user override was added.

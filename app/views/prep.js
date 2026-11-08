@@ -398,7 +398,7 @@ export function renderPrepSheet(ctx, personId) {
         stat({ label: 'Yours, not theirs', value: agendaCounts.yours, hint: 'Your own span duties filed on their list.' }),
         stat({ label: 'Unclassified', value: agendaCounts.unclassified, hint: 'Untagged prompts — counted, not credited.' }),
       ),
-      agendaPlan.capWarning ? banner({ tone: 'warn', title: 'The 12-prompt cap is about to drop a line', body: agendaPlan.capWarning }) : null,
+      agendaPlan.capWarning ? banner({ tone: 'warn', title: 'The waiting list is at its declared cap', body: agendaPlan.capWarning }) : null,
       agendaPlan.ordered.length
         ? h('ol', { class: 'prep-list prep-provenance-list' },
           ...agendaPlan.ordered.map((row) => h('li', { class: 'prep-item' },

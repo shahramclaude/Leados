@@ -186,6 +186,7 @@ import {
   IMPACT_ALPHAS,
   IMPACT_INTERVENTION_IDS,
   normalizeTalkingPoints,
+  applyTalkingPointPolicy,
   SCHEMA_VERSION,
 } from './core/schema.js';
 import { buildReviewEvidence, calibrateReview, reviewReadiness, validPeriod } from './core/domain/reviews.js';
@@ -1396,6 +1397,9 @@ export function createApi(store, options = {}) {
     addPerson(data) {
       const name = clean(data.name) || '';
       if (!name) return fail('A name is required.', 'name');
+      // ADR-0134: the waiting list is bounded by ONE declared policy, and what
+      // it refuses is printed back rather than dropped in silence.
+      const queue = applyTalkingPointPolicy(data.talkingPoints);
       const person = {
         id: id('person'),
         name,
@@ -1407,7 +1411,7 @@ export function createApi(store, options = {}) {
         lastPromotionOn: null,
         startDate: data.startDate || today(),
         focus: clean(data.focus) || '',
-        talkingPoints: normalizeTalkingPoints(data.talkingPoints),
+        talkingPoints: queue.kept,
         status: 'active',
         createdAt: stamp(),
         archivedAt: null,
@@ -1418,12 +1422,15 @@ export function createApi(store, options = {}) {
         },
         { type: 'person.created', entity: 'person', entityId: person.id, summary: `Added ${person.name}` },
       );
-      return { ok: true, id: person.id };
+      return { ok: true, id: person.id, warning: queue.sentence };
     },
 
     updatePerson(personId, patch) {
       if (!personExists(personId)) return fail('That person is no longer in the roster.');
       const before = store.state.people.find((p) => p.id === personId);
+      // ADR-0134: the same declared policy bounds the list here, and anything it
+      // refuses is reported to the caller instead of vanishing on the next load.
+      const queue = patch.talkingPoints !== undefined ? applyTalkingPointPolicy(patch.talkingPoints) : null;
       store.update(
         (draft) => {
           const person = draft.people.find((p) => p.id === personId);
@@ -1436,12 +1443,12 @@ export function createApi(store, options = {}) {
             managerId: patch.managerId !== undefined ? patch.managerId || null : person.managerId,
             startDate: patch.startDate !== undefined ? patch.startDate || person.startDate : person.startDate,
             focus: patch.focus !== undefined ? clean(patch.focus) : person.focus,
-            talkingPoints: patch.talkingPoints !== undefined ? normalizeTalkingPoints(patch.talkingPoints) : person.talkingPoints,
+            talkingPoints: queue ? queue.kept : person.talkingPoints,
           });
         },
         { type: 'person.updated', entity: 'person', entityId: personId, summary: `Updated ${before?.name || 'person'}` },
       );
-      return { ok: true };
+      return { ok: true, warning: queue?.sentence || null };
     },
 
     archivePerson(personId) {

@@ -113,10 +113,10 @@ function queuePanel(ctx, { ledger, people, named, selectedPerson, selectedPerson
         stat({ label: 'Owed upward', value: String(t.above), hint: 'The leader’s own span duties filed on a person who owes nothing.' }),
         stat({ label: 'Bilateral', value: String(t.both), hint: 'Returned commitments both sides carry.' }),
         stat({ label: 'Unclassified', value: String(t.unclassified), hint: 'Prompts this ledger cannot classify. Counted, not credited.' }),
-        stat({ label: 'At the 12-cap', value: String(t.atCap.length), hint: 'Lists where the engine truncates from the oldest end.' }),
+        stat({ label: 'At the 12-cap', value: String(t.atCap.length), hint: 'Lists at the declared cap. Their own topics are kept first and engine prompts survive newest-first.' }),
       ),
       t.atCap.length
-        ? banner({ tone: 'warn', title: `${t.atCap.length} waiting list(s) sit at the cap`, body: `Each writer caps the queue at 12 and truncates from the OLDEST end. At the cap, the line most likely to vanish is the one that has been carried longest — usually a prompt the leader owes. Open Build agenda to see which line is next.` })
+        ? banner({ tone: 'warn', title: `${t.atCap.length} waiting list(s) sit at the cap`, body: `The declared cap is 12 lines. Prompts the person raised are kept first, and engine prompts survive newest-first, so the next rule that writes removes the OLDEST engine prompt — never their own topic and never the prompt just written. Anything the cap refuses is reported, not dropped in silence. Open Build agenda to see which line is next.` })
         : null,
     ),
   });
@@ -177,7 +177,7 @@ function queueTable(ctx, person) {
         h('span', { class: 'muted tiny' }, [r.label, r.owner ? `· ${r.owner}` : null, r.why].filter(Boolean).join(' ')),
       ) },
       { label: 'Owed', render: (r) => badge(r.owedToLabel, groupTone[r.family === 'person-raised' ? 'theirs' : r.owedTo === 'self' ? 'owed-them' : r.owedTo === 'both' ? 'bilateral' : r.owedTo === 'above' ? 'yours' : 'unclassified'], r.framework || '') },
-      { label: 'Eviction risk', render: (r) => (r.evictionRisk ? badge('next to drop', 'bad', 'The queue is at its cap and truncates from the oldest end.') : '—') },
+      { label: 'Eviction risk', render: (r) => (r.evictionRisk ? badge('next to drop', 'bad', 'The queue is at the cap and this is the line the declared policy displaces next: the oldest engine prompt.') : '—') },
       { label: 'Commit', render: (r) => h('button', {
         class: 'btn btn-tiny btn-ghost', type: 'button',
         onClick: () => filePrompt(ctx, { personId: person.id, prompt: r.text, sourceKind: r.engine ? 'engine-prompt' : 'their-topic' }),
@@ -360,7 +360,7 @@ function rollupPanel(ctx, { t, rank }) {
           stat({ label: 'Queue pressure', value: pct(r.pressurePct), hint: r.pressurePct === null ? 'No prompt on any list.' : `engine-authored share · 95% Wilson ${pct(r.pressureLowPct)}–${pct(r.pressureHighPct)}%` }),
           stat({ label: 'Receipt rate', value: pct(r.receiptRatePct), hint: r.receiptRatePct === null ? `Refused below ${r.receiptFloor} filed lines with a fair chance.` : `95% Wilson ${pct(r.receiptLowPct)}–${pct(r.receiptHighPct)}%` }),
           stat({ label: 'Prompts on lists', value: String(r.queueN ?? 0), hint: `${r.personRaisedN ?? 0} raised by the people themselves.` }),
-          stat({ label: 'Lists at cap', value: String(r.atCapN ?? 0), hint: 'Where the engine truncates from the oldest end.' }),
+          stat({ label: 'Lists at cap', value: String(r.atCapN ?? 0), hint: 'At the declared cap. Their topics first, engine prompts newest-first.' }),
         ),
         ...(span?.refusals || []).map((refusal) => banner({ tone: 'warn', title: 'Refused, with the reason', body: refusal.reason })),
       ),
