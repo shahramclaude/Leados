@@ -420,6 +420,10 @@ export function renderBoard(ctx) {
         'aria-current': r.key === selectedKey ? 'true' : null,
       }, r.label)));
 
+    const suppression = partition?.suppression || null;
+    // ADR-0139. A withheld cell keeps its identity and loses its figure: the
+    // board is told which span was held back, and why. "Nothing here" and "we
+    // cannot tell you" are different answers to the same question.
     const table_ = !partition
       ? emptyState({ title: 'No decomposition', body: 'This claim has no span attribution.' })
       : partition.rows.length
@@ -434,25 +438,49 @@ export function renderBoard(ctx) {
               { key: 'route', label: '' },
             ],
             rows: partition.rows.map((part) => ({
-              label: h('strong', null, part.label),
+              label: part.withhold
+                ? h('span', null, h('strong', null, part.label), ' ', badge(part.why === 'floor' ? 'below floor' : 'complementary', 'caution', part.reason || ''))
+                : h('strong', null, part.label),
               n: String(part.n),
-              ok: String(part.successes),
-              value: part.value === null ? '—' : pct(part.value),
-              interval: part.interval?.lower === null ? '—' : `${pct(part.interval.lower)}–${pct(part.interval.upper)}`,
+              // A withheld cell's PASS count is the figure being protected. The
+              // observation count is already derivable from the published claim
+              // denominator; the pass count is not, so it is blanked, not zeroed.
+              ok: part.withhold ? '—' : String(part.successes),
+              value: part.withhold ? h('span', { class: 'muted' }, 'withheld') : pct(part.value),
+              interval: part.withhold || part.interval?.lower === null ? '—' : `${pct(part.interval.lower)}–${pct(part.interval.upper)}`,
               route: h('a', { class: 'btn btn-ghost btn-sm', href: row.route }, 'Module'),
             })),
           }),
+          suppression?.refused
+            ? banner({
+              tone: 'warn',
+              title: 'The span decomposition is withheld, not empty',
+              body: suppression.notes[suppression.notes.length - 1] || 'No suppression pattern protects these cells while the claim total is published.',
+            })
+            : null,
           h('div', { class: `board-reconcile ${partition.reconciles ? 'board-reconcile-ok' : 'board-reconcile-bad'}` },
             badge(partition.reconciles ? 'reconciled' : 'broken roll-up', partition.reconciles ? 'good' : 'bad'),
+            suppression && !suppression.nothingToProtect
+              ? badge(`${suppression.withheldN} withheld`, 'caution', `Cell floor ${suppression.floor} observation(s)`)
+              : null,
             h('p', null, partition.reason),
-            h('p', { class: 'muted small' }, `Rows: ${partition.totals.n} observation(s), ${partition.totals.successes} passing${partition.totals.value === null ? '' : ` · ${pct(partition.totals.value)}`}. Claim denominator: ${row.n}.`)))
+            h('p', { class: 'muted small' }, `Rows: ${partition.totals.n} observation(s), ${partition.totals.successes} passing${partition.totals.value === null ? ' · workspace rate withheld' : ` · ${pct(partition.totals.value)}`}. Claim denominator: ${row.n}.`),
+            suppression && !suppression.nothingToProtect ? h('p', { class: 'muted small' }, suppression.determinacy) : null))
         : emptyState({ title: 'Nothing attributed', body: partition.reason });
+    const withheld = Boolean(suppression && !suppression.nothingToProtect);
     return h('div', { class: 'stack' },
       banner({
         tone: 'info',
         title: 'A roll-up that does not add up is reported, not drawn',
         body: 'Every claim that can be attributed to a span is partitioned over the reporting tree, and the parts are CHECKED against the claim’s own denominator. If they disagree, this panel says so instead of charting the difference.',
       }),
+      withheld
+        ? banner({
+          tone: 'warn',
+          title: 'A span holding one assessed pair is not a rate',
+          body: `Below ${suppression.floor} observation(s) a span's rate is withheld here, exactly as the claim-level floor withholds its own. The counts are still printed and still reconcile — it is the percentage that would name the pairs it is built from.`,
+        })
+        : null,
       selects,
       card({
         title: row ? `${row.label} — by ${partition?.dimension === 'span' ? 'span' : partition?.dimension === 'altitude' ? 'altitude' : 'workspace'}` : 'Roll-up',

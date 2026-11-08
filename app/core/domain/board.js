@@ -44,6 +44,7 @@ import { teamHealth } from './health.js';
 import { sealReport } from './sealChain.js';
 import { scepticReport } from './sceptic.js';
 import { boardContinuity, boardContinuityBrief } from './boardContinuity.js';
+import { suppressPartitionRows } from './boardSuppression.js';
 import {
   BOARD_CLAIMS,
   BOARD_CLAIM_KEYS,
@@ -538,25 +539,67 @@ export function boardPartition(state, claimRow, { now = new Date(), settings = n
     group.successes += contributionOk(contribution);
   }
 
-  const rows = [...groups.values()]
-    .map((group) => ({
-      ...group,
-      value: group.n ? round((group.successes / group.n) * 100, 1) : null,
-      interval: boardWilson(group.successes, group.n),
+  // ADR-0139. The claim-level cell floor (ADR-0085) protected the enterprise
+  // rate and said nothing about the cells under it, so a span holding a single
+  // assessed pair was printed as "1 observation, 100%". The same declared floor
+  // now governs the partition, and the published claim total is treated as the
+  // total this table cannot un-publish — see `boardSuppression.js`.
+  const unsuppressed = [...groups.values()].sort((a, b) => (b.n - a.n) || String(a.label).localeCompare(String(b.label)));
+  const suppression = suppressPartitionRows({
+    rows: unsuppressed,
+    claim: { n: claimRow.n, successes: claimRow.successes ?? null },
+    floor: floorFor(declared, boardConventions(settings || state?.settings || {})),
+  });
+  const rows = suppression.rows
+    .map((row) => ({
+      ...row,
+      // A withheld cell loses its FIGURE, never its identity: the reader is told
+      // which span was held back and why, because "nothing here" and "we cannot
+      // tell you" are different answers to a board's question.
+      value: row.withhold ? null : (row.n ? round((row.successes / row.n) * 100, 1) : null),
+      interval: row.withhold ? { lower: null, upper: null } : boardWilson(row.successes, row.n),
     }))
     .sort((a, b) => (b.n - a.n) || String(a.label).localeCompare(String(b.label)));
 
   const totalN = rows.reduce((sum, r) => sum + r.n, 0);
   const totalOk = rows.reduce((sum, r) => sum + r.successes, 0);
   const reconciles = totalN === claimRow.n;
+  const printedN = rows.filter((r) => !r.withhold).length;
+  const parts = [];
+  parts.push(reconciles
+    ? `Every observation is counted exactly once: the ${rows.length} row(s) sum to ${totalN}, the claim's own denominator.`
+    : `BROKEN ROLL-UP: the rows sum to ${totalN} observations but the claim's denominator is ${claimRow.n}. The partition is printed with the defect rather than hidden by it.`);
+  if (suppression.refused) {
+    parts.push(suppression.notes[suppression.notes.length - 1]);
+  } else if (suppression.withheldN) {
+    parts.push(`${printedN} of ${rows.length} cell(s) are printed; ${suppression.withheldN} are withheld under the ${suppression.floor}-observation cell floor. The observation counts still reconcile — it is the rates that are not shown.`);
+  }
   return {
     dimension: declared.partition,
+    // `rows` is the PUBLISHED surface: a withheld cell carries no figure. Rules
+    // that delegate work and graphs that link provenance read these rows, so they
+    // must never see a number the board is not allowed to see.
     rows,
-    totals: { n: totalN, successes: totalOk, value: totalN ? round((totalOk / totalN) * 100, 1) : null },
+    totals: {
+      n: totalN,
+      successes: totalOk,
+      value: !suppression.printTotals || suppression.refused || !totalN ? null : round((totalOk / totalN) * 100, 1),
+    },
     reconciles,
-    reason: reconciles
-      ? `Every observation is counted exactly once: the ${rows.length} row(s) sum to ${totalN}, the claim's own denominator.`
-      : `BROKEN ROLL-UP: the rows sum to ${totalN} observations but the claim's denominator is ${claimRow.n}. The partition is printed with the defect rather than hidden by it.`,
+    suppression: {
+      refused: suppression.refused,
+      nothingToProtect: suppression.nothingToProtect,
+      withheldN: suppression.withheldN,
+      printedN,
+      floor: suppression.floor,
+      verdict: suppression.verdict,
+      recoverableN: suppression.recoverableN,
+      informationLossPct: suppression.informationLossPct,
+      determinacy: suppression.determinacy,
+      notes: suppression.notes,
+      accounting: suppression.accounting,
+    },
+    reason: parts.join(' '),
   };
 }
 
@@ -898,6 +941,10 @@ export function boardCsvRows(state = {}, { now = new Date(), settings = null, me
     response_uncovered_packs: continuity?.counts?.responseUncoveredPacks ?? 0,
     response_undecided: continuity?.counts?.responseUndecided ?? 0,
     response_review_due: continuity?.counts?.responseReviewDue ?? 0,
+    cells_total: null,
+    cells_withheld: null,
+    partition_state: '',
+    partition_floor: null,
   }];
   if (!read.evaluation) return rows;
   for (const row of read.evaluation.rows) {
@@ -931,6 +978,19 @@ export function boardCsvRows(state = {}, { now = new Date(), settings = null, me
       response_uncovered_packs: carriedByKey.get(row.key)?.response?.uncoveredPacks ?? 0,
       response_undecided: carriedByKey.get(row.key)?.response?.undecided ?? 0,
       response_review_due: carriedByKey.get(row.key)?.response?.reviewDue ?? 0,
+      // ADR-0139: the span decomposition's own cell suppression, as counts and
+      // words. No cell label, no cell figure, no span name — this export stayed
+      // aggregate-only and it still is.
+      cells_total: row.partition?.suppression ? row.partition.rows.length : null,
+      cells_withheld: row.partition?.suppression?.withheldN ?? null,
+      partition_state: !row.partition || !row.partition.suppression
+        ? ''
+        : row.partition.suppression.refused
+          ? 'refused'
+          : row.partition.suppression.nothingToProtect
+            ? 'printed'
+            : 'withheld-below-floor',
+      partition_floor: row.partition?.suppression?.floor ?? null,
     });
   }
   return rows;
