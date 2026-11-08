@@ -43,6 +43,7 @@ import { concordanceRead } from './concordance.js';
 import { teamHealth } from './health.js';
 import { sealReport } from './sealChain.js';
 import { scepticReport } from './sceptic.js';
+import { buildMatrixReport, matrixLineScopeFor } from './matrix.js';
 import { boardContinuity, boardContinuityBrief } from './boardContinuity.js';
 import { suppressPartitionRows } from './boardSuppression.js';
 import {
@@ -132,6 +133,7 @@ export function boardSources(state, { now = new Date(), settings = null } = {}) 
     health: safe(() => teamHealth(state, now, { withTrend: true }), empty),
     seal: safe(() => sealReport(state, { now, settings: s }), empty),
     sceptic: safe(() => scepticReport(state, now, s), empty),
+    matrix: safe(() => buildMatrixReport(state, { now, settings: s }), empty),
   };
 }
 
@@ -482,6 +484,44 @@ function crossCheckRows(sources, rowsByKey) {
         ? 'The chain verifies and the workspace holds no examinable claim: the seal attests the writing, not the content.'
         : `The chain verifies and ${examined} of ${claimCount} claims have ever been examined. An unaltered record is not a true one.`);
   }
+
+  if (BOARD_CROSS_CHECKS.some((c) => c.key === 'matrix-authority-vs-tree')) {
+    const check = BOARD_CROSS_CHECKS.find((c) => c.key === 'matrix-authority-vs-tree');
+    const matrix = sources.matrix || {};
+    const rec = matrix.reconciliation || {};
+    const secondaryN = Number(rec.secondaryLineN) || 0;
+    const rights = matrix.rightsSummary || {};
+    const seats = matrix.seats || {};
+    const gov = matrix.governance || {};
+    const authority = row('authority-hold');
+    const bench = row('bench-coverage');
+    const anchor = authority && authority.value !== null ? authority : (bench && bench.value !== null ? bench : authority || bench);
+    const treeReadsGreen = Boolean((authority && authority.verdict === 'holding') || (bench && bench.verdict === 'holding'));
+    const structuralProblems = secondaryN > 0 && (
+      rec.balances === false
+      || (rec.undeclaredN || 0) > 0
+      || (rights.contestedN || 0) > 0
+      || (seats.refusedN || 0) > 0
+      || (seats.workLineOnlyN || 0) > 0
+      || (gov.apexAmbiguousN || 0) > 0
+    );
+    const triggered = Boolean(treeReadsGreen && structuralProblems);
+    const alertN = Number(gov.alertN) || 0;
+    push(
+      check,
+      triggered,
+      anchor ? { label: anchor.label, value: anchor.value, unit: '%', extra: anchor.lower !== null ? `interval ${anchor.lower}–${anchor.upper}%` : anchor.reason } : null,
+      secondaryN > 0
+        ? {
+          label: 'Matrix governance conditions',
+          value: alertN,
+          unit: '',
+          extra: `${secondaryN} additional line(s) · ${rights.contestedN || 0} contested right(s) · ${seats.workLineOnlyN || 0} tree-hidden item(s)`,
+        }
+        : { label: 'Declared matrix lines', value: 0, unit: '', extra: 'single-chain workspace' },
+      `${anchor?.label || 'Tree reading'} reads ${anchor?.value ?? '—'}% on the home chain while the matrix layer carries ${secondaryN} additional reporting line(s): ${rights.contestedN || 0} contested decision right(s), ${rec.undeclaredN || 0} undeclared split(s), ${rec.overN || 0} over-committed, ${seats.refusedN || 0} unseated line holder(s), ${seats.workLineOnlyN || 0} tree-hidden open item(s) and ${gov.apexAmbiguousN || 0} diamond apex tie(s).`,
+    );
+  }
   return out;
 }
 
@@ -574,6 +614,13 @@ export function boardPartition(state, claimRow, { now = new Date(), settings = n
   } else if (suppression.withheldN) {
     parts.push(`${printedN} of ${rows.length} cell(s) are printed; ${suppression.withheldN} are withheld under the ${suppression.floor}-observation cell floor. The observation counts still reconcile — it is the rates that are not shown.`);
   }
+  const matrixRec = sources?.matrix?.reconciliation || null;
+  const matrixGov = sources?.matrix?.governance || null;
+  const secondaryLineN = Number(matrixRec?.secondaryLineN) || 0;
+  const matrixNote = declared.partition === 'span' && secondaryLineN > 0
+    ? `Home-tree attribution only: ${secondaryLineN} active additional matrix line(s) across ${matrixRec?.multiLineN || 0} shared person(s) couple ${matrixGov?.coupling?.coupledSpanPairsN || 0} span pair(s) outside this home-line partition.`
+    : null;
+  if (matrixNote) parts.push(matrixNote);
   return {
     dimension: declared.partition,
     // `rows` is the PUBLISHED surface: a withheld cell carries no figure. Rules
@@ -586,6 +633,7 @@ export function boardPartition(state, claimRow, { now = new Date(), settings = n
       value: !suppression.printTotals || suppression.refused || !totalN ? null : round((totalOk / totalN) * 100, 1),
     },
     reconciles,
+    matrixNote,
     suppression: {
       refused: suppression.refused,
       nothingToProtect: suppression.nothingToProtect,
@@ -737,6 +785,26 @@ export function boardEvaluateMemo(state, memo, { now = new Date(), settings = nu
   };
   const fingerprint = boardFingerprint(rows.map((r) => `${r.key}:${r.threshold}:${r.verdict}:${r.value}:${r.lower}:${r.upper}:${r.n}`).join('|'));
   const evaluable = counts.evaluated >= conv.evidenceFloor;
+  const mRec = src.matrix?.reconciliation || null;
+  const mGov = src.matrix?.governance || null;
+  const secondaryLineN = Number(mRec?.secondaryLineN) || 0;
+  const matrixSummary = secondaryLineN > 0
+    ? {
+      hasMatrix: true,
+      secondaryLineN,
+      multiLineN: Number(mRec?.multiLineN) || 0,
+      balances: mRec?.balances !== false,
+      undeclaredN: Number(mRec?.undeclaredN) || 0,
+      contestedN: Number(src.matrix?.rightsSummary?.contestedN) || 0,
+      contestedOperationalN: Number(mGov?.contestedOperationalN) || 0,
+      apexRowsN: Array.isArray(mGov?.apexRows) ? mGov.apexRows.length : 0,
+      apexAmbiguousN: Number(mGov?.apexAmbiguousN) || 0,
+      coupledSpanPairsN: Number(mGov?.coupling?.coupledSpanPairsN) || 0,
+      workLineOnlyN: Number(src.matrix?.seats?.workLineOnlyN) || 0,
+      seatRefusedN: Number(src.matrix?.seats?.refusedN) || 0,
+      alertN: Number(mGov?.alertN) || 0,
+    }
+    : null;
   return {
     memo,
     rows,
@@ -750,6 +818,7 @@ export function boardEvaluateMemo(state, memo, { now = new Date(), settings = nu
     committable: evaluable && memo.status === 'draft',
     commitRefusal: evaluable ? null : `${counts.evaluated} claim(s) could be evaluated against a declared floor of ${conv.evidenceFloor}. A memo committed on fewer is a press release with a timestamp.`,
     stale: memo.committedAt ? (daysBetween(String(memo.committedAt).slice(0, 10), dayKey(now)) ?? 0) >= conv.recheckDays : false,
+    matrixSummary,
     sources: src,
   };
 }
@@ -782,7 +851,11 @@ export function boardRead(state = {}, { now = new Date(), settings = null, seatI
   const memos = Array.isArray(state.boardMemos) ? state.boardMemos : [];
   let seat = null;
   try {
-    const built = buildSeats(state, { now, settings: effective });
+    const built = buildSeats(state, {
+      now,
+      settings: effective,
+      lineScope: matrixLineScopeFor(state, { now, settings: effective }),
+    });
     seat = seatId ? (built.byId.get(seatId) || null) : activeSeat(built);
   } catch {
     seat = null;
@@ -883,6 +956,13 @@ export function boardMemoText(state = {}, { now = new Date(), settings = null, m
     for (const check of evaluation.discrepancies.filter((c) => c.triggered)) {
       lines.push(`- ${check.label}: ${check.finding}`);
     }
+  }
+  if (evaluation.matrixSummary) {
+    const m = evaluation.matrixSummary;
+    lines.push('');
+    lines.push('MATRIX ACCOUNTABILITY CONTEXT');
+    lines.push(`- ${m.secondaryLineN} active additional reporting line(s) across ${m.multiLineN} multi-line person(s), coupling ${m.coupledSpanPairsN} span pair(s).`);
+    lines.push(`- Structural reading: ${m.balances ? 'allocations balance' : 'allocations DO NOT balance'}, ${m.undeclaredN} undeclared split(s), ${m.contestedOperationalN} contested operational right(s), ${m.apexRowsN} joint escalation apex(es) (${m.apexAmbiguousN} ambiguous diamond tie(s)), ${m.workLineOnlyN} tree-hidden open item(s).`);
   }
   lines.push('');
   lines.push('THE QUESTION WE ARE NOT ASKING');
@@ -1025,13 +1105,17 @@ export function boardAttentionCount(state = {}, now = new Date(), settings = nul
 export function boardBriefText(state = {}, { now = new Date(), settings = null, memoId = null } = {}) {
   const read = boardRead(state, { now, settings, memoId });
   if (!read.evaluation) return 'Board Room: no memo open. Nothing is disclosed and nothing is claimed.';
-  const { counts, attestation, memo } = read.evaluation;
-  return [
+  const { counts, attestation, memo, matrixSummary } = read.evaluation;
+  const parts = [
     `Board memo ${memo.revision} (${memo.status}): ${counts.holding} holding, ${counts.failing} failing, ${counts.inconclusive} inconclusive, ${counts.withheld + counts.refused} unverified.`,
     counts.postHoc ? `${counts.postHoc} threshold(s) were revised after the first look and are marked post-hoc.` : 'Every threshold was declared before the first look.',
     attestation.note,
     boardContinuityBrief(state, { now }),
-  ].join(' ');
+  ];
+  if (matrixSummary) {
+    parts.push(`Matrix structure active: ${matrixSummary.secondaryLineN} additional line(s), ${matrixSummary.contestedOperationalN} contested operational right(s), ${matrixSummary.alertN} governance condition(s).`);
+  }
+  return parts.join(' ');
 }
 
 /* --------------------------------------------------------------- utilities */

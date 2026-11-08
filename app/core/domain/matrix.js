@@ -48,7 +48,7 @@
  */
 
 import { buildChain, harvestWork, LEADER_ID } from './chain.js';
-import { altitudeRank } from './chainRegistry.js';
+import { altitudeByKey, altitudeRank } from './chainRegistry.js';
 import { buildSeats, activeSeat } from './seat.js';
 import { dayKey, daysBetween } from '../time.js';
 import {
@@ -59,6 +59,7 @@ import {
   MATRIX_HOME_RIGHTS_DEFAULT,
   MATRIX_LIMITS,
   MATRIX_METHOD,
+  MATRIX_OPERATIONAL_RIGHTS,
   MATRIX_PANELS,
   MATRIX_PRIMARY_KIND,
   MATRIX_RIGHTS,
@@ -66,6 +67,7 @@ import {
   MATRIX_RIGHT_STATES,
   MATRIX_SHARE_STATE_LABELS,
   MATRIX_SHARE_STATES,
+  MATRIX_STEWARDSHIP_RIGHTS,
   matrixFindingRank,
   matrixLineKind,
 } from './matrixRegistry.js';
@@ -708,6 +710,7 @@ export function matrixWorkReach(matrix, lineScope, items) {
       for (const [managerId, entry] of lineScope.byManager) {
         if (managerId === ownerNodeId) continue;
         const held = new Set(entry.personIds);
+        if (!people.some((pid) => held.has(pid))) continue;
         const node = matrix.chain.nodes.get(managerId);
         const subtree = new Set(node?.subtreeIds || []);
         const covers = people.every((pid) => subtree.has(pid) || held.has(pid));
@@ -843,6 +846,394 @@ export function matrixFindings(matrix, { allocations, rightsRows, spans } = {}) 
   return { rows: carried, total, carriedN: carried.length, remainderN: Math.max(0, total - carried.length) };
 }
 
+/* ------------------------------------------------ CEO / C-suite governance */
+
+const Z95 = 1.959963984540054;
+
+/** Wilson 95% score interval in percent, matching boardWilson. */
+export function matrixWilson(successes, n, z = Z95) {
+  if (!Number.isFinite(n) || n <= 0) return { lower: null, upper: null };
+  const p = Math.min(1, Math.max(0, successes / n));
+  const denom = 1 + (z * z) / n;
+  const centre = (p + (z * z) / (2 * n)) / denom;
+  const half = (z * Math.sqrt((p * (1 - p)) / n + (z * z) / (4 * n * n))) / denom;
+  return {
+    lower: Math.max(0, Math.round((centre - half) * 1000) / 10),
+    upper: Math.min(100, Math.round((centre + half) * 1000) / 10),
+  };
+}
+
+/**
+ * Resolve the lowest common ancestor(s) in the matrix DAG for a set of
+ * accountable manager node IDs.
+ *
+ * A reporting tree always has ONE unique lowest common ancestor. A matrix DAG
+ * can have TWO incomparable minimal common ancestors (a diamond tie) or zero
+ * common ancestors if the roster has a disconnected defect. This function
+ * returns EVERY minimal common ancestor and NEVER silently collapses a tie.
+ */
+export function matrixJointApex(matrix, nodeIds = []) {
+  const valid = [...new Set((Array.isArray(nodeIds) ? nodeIds : [])
+    .filter((id) => typeof id === 'string' && matrix?.nodes?.has(id)))].sort();
+  if (!valid.length) {
+    return {
+      apexIds: [],
+      apexId: null,
+      unique: false,
+      ambiguous: false,
+      disconnected: false,
+      isLeaderOnly: false,
+    };
+  }
+  if (valid.length === 1) {
+    return {
+      apexIds: valid,
+      apexId: valid[0],
+      unique: true,
+      ambiguous: false,
+      disconnected: false,
+      isLeaderOnly: valid[0] === LEADER_ID,
+    };
+  }
+
+  let common = null;
+  for (const id of valid) {
+    const node = matrix.nodes.get(id);
+    const reachUp = new Set([id, ...(node?.ancestors || [])]);
+    if (common === null) {
+      common = reachUp;
+    } else {
+      for (const candidate of [...common]) {
+        if (!reachUp.has(candidate)) common.delete(candidate);
+      }
+    }
+  }
+  if (!common || !common.size) {
+    return {
+      apexIds: [],
+      apexId: null,
+      unique: false,
+      ambiguous: true,
+      disconnected: true,
+      isLeaderOnly: false,
+    };
+  }
+
+  // A node `c` in `common` is minimal (lowest in the DAG — closest to the work)
+  // iff no other `d` in `common` has `c` as an ancestor.
+  const minimal = [];
+  for (const candidate of common) {
+    let dominated = false;
+    for (const other of common) {
+      if (other === candidate) continue;
+      if (matrix.nodes.get(other)?.ancestors?.has(candidate)) {
+        dominated = true;
+        break;
+      }
+    }
+    if (!dominated) minimal.push(candidate);
+  }
+  minimal.sort((a, b) => {
+    if (a === LEADER_ID && b !== LEADER_ID) return 1;
+    if (b === LEADER_ID && a !== LEADER_ID) return -1;
+    const da = matrix.nodes.get(a)?.depth ?? 0;
+    const db = matrix.nodes.get(b)?.depth ?? 0;
+    return (db - da) || String(a).localeCompare(String(b));
+  });
+
+  if (minimal.length === 1) {
+    return {
+      apexIds: minimal,
+      apexId: minimal[0],
+      unique: true,
+      ambiguous: false,
+      disconnected: false,
+      isLeaderOnly: minimal[0] === LEADER_ID,
+    };
+  }
+  return {
+    apexIds: minimal,
+    apexId: null,
+    unique: false,
+    ambiguous: true,
+    disconnected: false,
+    isLeaderOnly: false,
+  };
+}
+
+/**
+ * Pure CEO / C-suite Matrix Governance read model.
+ *
+ * Surfaces:
+ *   1. Common-agency escalation tax: contested operational rights (priority,
+ *      assignment, technical) and multi-manager shared work aggregated to each
+ *      joint apex in the reporting DAG (preserving ties as ambiguous, never
+ *      inventing a single owner).
+ *   2. Cross-axis structural coupling: distinct managerial span-pairs linked by
+ *      shared people, tree-hidden open work, and Wilson-bounded multi-line /
+ *      shared-work shares refused below `MATRIX_FLOORS.cellN`.
+ *   3. Structural checks (five explicit binary assertions — NO composite score).
+ */
+export function matrixGovernance(matrix, {
+  allocations = [],
+  rightsRows = [],
+  reach = [],
+  seatRows = [],
+  reconciliation = null,
+  seat = null,
+} = {}) {
+  const rec = reconciliation || matrixReconciliation(matrix, allocations);
+  const hasMatrix = rec.secondaryLineN > 0 || allocations.some((p) => p.multiLine);
+
+  const opSet = new Set(MATRIX_OPERATIONAL_RIGHTS);
+  const stewSet = new Set(MATRIX_STEWARDSHIP_RIGHTS);
+
+  const contested = rightsRows.filter((r) => r.state === MATRIX_RIGHT_STATES.contested);
+  const unowned = rightsRows.filter((r) => r.state === MATRIX_RIGHT_STATES.unowned);
+
+  const contestedOperationalN = contested.filter((r) => opSet.has(r.rightKey)).length;
+  const contestedStewardshipN = contested.filter((r) => stewSet.has(r.rightKey)).length;
+  const contestedPriorityN = contested.filter((r) => r.rightKey === 'priority').length;
+  const contestedAssignmentN = contested.filter((r) => r.rightKey === 'assignment').length;
+  const contestedTechnicalN = contested.filter((r) => r.rightKey === 'technical').length;
+  const unownedOperationalN = unowned.filter((r) => opSet.has(r.rightKey)).length;
+  const unownedStewardshipN = unowned.filter((r) => stewSet.has(r.rightKey)).length;
+
+  // Bucket contested rights and shared work items by their joint DAG apex.
+  const buckets = new Map();
+  const ensureBucket = (apex) => {
+    const key = apex.disconnected
+      ? '__disconnected__'
+      : apex.unique
+        ? apex.apexId
+        : `ambiguous:${apex.apexIds.join('+')}`;
+    let entry = buckets.get(key);
+    if (!entry) {
+      entry = {
+        key,
+        apexIds: apex.apexIds,
+        apexId: apex.apexId,
+        unique: apex.unique,
+        ambiguous: apex.ambiguous,
+        disconnected: apex.disconnected,
+        isLeader: apex.apexId === LEADER_ID,
+        contestedRightsN: 0,
+        operationalContestedN: 0,
+        stewardshipContestedN: 0,
+        sharedWorkN: 0,
+        lineOnlyWorkN: 0,
+        sensitiveCountedN: 0,
+        peopleIds: new Set(),
+      };
+      buckets.set(key, entry);
+    }
+    return entry;
+  };
+
+  for (const row of contested) {
+    const apex = matrixJointApex(matrix, row.holderIds);
+    const entry = ensureBucket(apex);
+    entry.contestedRightsN += 1;
+    if (opSet.has(row.rightKey)) entry.operationalContestedN += 1;
+    if (stewSet.has(row.rightKey)) entry.stewardshipContestedN += 1;
+    entry.peopleIds.add(row.personId);
+  }
+
+  const sharedItems = reach.filter((item) => item.shared);
+  for (const item of sharedItems) {
+    const apex = matrixJointApex(matrix, item.sites);
+    const entry = ensureBucket(apex);
+    entry.sharedWorkN += 1;
+    if (item.lineOnlyN > 0) entry.lineOnlyWorkN += 1;
+    if (item.sensitive) entry.sensitiveCountedN += 1;
+  }
+
+  // Executive detail ceiling: a rank-4 restricted seat may not inspect peer/other
+  // individual manager names below/beside them; chief (rank 5) and fullAccess
+  // see leadership apex seats (never IC names). CSV applies small-cell floor
+  // separately so no sub-floor row is ever named in exports.
+  const restrictNonSelfNames = Boolean(seat)
+    && !seat.fullAccess
+    && Number(seat.rank) >= MATRIX_FLOORS.detailRank
+    && Number(seat.rank) < 5;
+
+  const apexRows = [...buckets.values()].map((entry) => {
+    const firstNode = entry.apexIds.length ? matrix.chain.nodes.get(entry.apexIds[0]) : null;
+    const altitude = entry.disconnected ? null : (firstNode?.altitude || null);
+    const altitudeLabel = entry.disconnected
+      ? 'Disconnected graph defect'
+      : entry.ambiguous
+        ? `Tie across ${entry.apexIds.length} minimal ancestors`
+        : (altitudeByKey(altitude)?.label || 'Unassigned');
+    const rank = entry.disconnected ? null : altitudeRank(altitude);
+    const withheld = restrictNonSelfNames && !entry.isLeader && entry.apexId !== seat?.id;
+
+    let displayName = null;
+    if (!withheld) {
+      if (entry.disconnected) {
+        displayName = 'No common ancestor (roster defect)';
+      } else if (entry.ambiguous) {
+        const names = entry.apexIds.map((id) => (id === LEADER_ID ? 'Workspace leader' : (matrix.nodes.get(id)?.name || id)));
+        displayName = `${names.join(' / ')} (tie — neither chosen)`;
+      } else {
+        displayName = entry.isLeader ? 'Workspace leader' : (matrix.nodes.get(entry.apexId)?.name || entry.apexId);
+      }
+    } else {
+      displayName = `${altitudeLabel} (name withheld at executive ceiling)`;
+    }
+
+    const totalEscalationsN = entry.contestedRightsN + entry.sharedWorkN;
+    return {
+      key: entry.key,
+      apexId: entry.apexId,
+      apexIds: entry.apexIds,
+      name: withheld ? null : displayName,
+      displayLabel: displayName,
+      isLeader: entry.isLeader,
+      unique: entry.unique,
+      ambiguous: entry.ambiguous,
+      disconnected: entry.disconnected,
+      altitude,
+      altitudeLabel,
+      rank,
+      withheld,
+      withheldReason: withheld ? `Non-self leadership names are withheld at rank ${seat.rank} unless full access holds; structural counts survive.` : null,
+      contestedRightsN: entry.contestedRightsN,
+      operationalContestedN: entry.operationalContestedN,
+      stewardshipContestedN: entry.stewardshipContestedN,
+      sharedWorkN: entry.sharedWorkN,
+      lineOnlyWorkN: entry.lineOnlyWorkN,
+      sensitiveCountedN: entry.sensitiveCountedN,
+      affectedPeopleN: entry.peopleIds.size,
+      totalEscalationsN,
+    };
+  }).sort((a, b) => (b.totalEscalationsN - a.totalEscalationsN)
+    || (b.operationalContestedN - a.operationalContestedN)
+    || String(a.key).localeCompare(String(b.key)));
+
+  // Cross-axis structural coupling: unique unordered manager pairs linked by
+  // at least one person on more than one active line.
+  const spanPairKeys = new Set();
+  for (const person of allocations) {
+    if (!person.multiLine) continue;
+    const managers = [...new Set(person.managerIds)].sort();
+    for (let i = 0; i < managers.length; i += 1) {
+      for (let j = i + 1; j < managers.length; j += 1) {
+        spanPairKeys.add(`${managers[i]}|${managers[j]}`);
+      }
+    }
+  }
+
+  const workTotalN = reach.length;
+  const workLineOnlyN = reach.filter((r) => r.lineManagers.some((m) => m.lineOnly)).length;
+  const workSharedN = sharedItems.length;
+  const multiLinePeopleN = rec.multiLineN;
+  const peopleN = rec.peopleN;
+  const maxLinesOnPerson = allocations.reduce((mx, p) => Math.max(mx, p.lineN || 0), 0);
+  const maxManagersOnPerson = allocations.reduce((mx, p) => Math.max(mx, new Set(p.managerIds).size), 0);
+
+  const peopleRateRefused = peopleN < MATRIX_FLOORS.cellN;
+  const multiLineSharePct = peopleRateRefused ? null : Math.round((multiLinePeopleN / peopleN) * 1000) / 10;
+  const multiLineInterval = peopleRateRefused ? { lower: null, upper: null } : matrixWilson(multiLinePeopleN, peopleN);
+
+  const workRateRefused = workTotalN < MATRIX_FLOORS.cellN;
+  const sharedWorkPct = workRateRefused ? null : Math.round((workSharedN / workTotalN) * 1000) / 10;
+  const sharedWorkInterval = workRateRefused ? { lower: null, upper: null } : matrixWilson(workSharedN, workTotalN);
+
+  const seatRefusedN = seatRows.filter((r) => !r.seatEligible).length;
+  const apexAmbiguousN = apexRows.filter((r) => r.ambiguous).length;
+  const leaderApexEscalationsN = apexRows.filter((r) => r.isLeader).reduce((sum, r) => sum + r.totalEscalationsN, 0);
+
+  const checks = [
+    {
+      key: 'capacity-reconciles',
+      label: 'Headcount capacity reconciles without undeclared splits',
+      holds: !hasMatrix || (rec.balances && rec.undeclaredN === 0),
+      detail: !hasMatrix
+        ? 'Single-chain workspace: every person maps to one home line.'
+        : (rec.balances && rec.undeclaredN === 0
+          ? `${rec.assertedDisplay} attributed across ${rec.resolvedN} people with zero undeclared splits.`
+          : `Net error ${rec.netErrorDisplay}, ${rec.overN} over-committed, ${rec.underN} under-allocated, ${rec.undeclaredN} undeclared.`),
+    },
+    {
+      key: 'operational-rights-clear',
+      label: 'Day-to-day operational rights have one owner (priority, assignment, technical)',
+      holds: contestedOperationalN === 0 && unownedOperationalN === 0,
+      detail: contestedOperationalN === 0 && unownedOperationalN === 0
+        ? 'Every multi-line person has a single declared holder on priority, assignment and technical direction.'
+        : `${contestedOperationalN} contested and ${unownedOperationalN} unowned operational right(s) climb upward to joint apex seats.`,
+    },
+    {
+      key: 'stewardship-rights-clear',
+      label: 'Employment stewardship rights have one owner (pay, performance, absence)',
+      holds: contestedStewardshipN === 0 && unownedStewardshipN === 0,
+      detail: contestedStewardshipN === 0 && unownedStewardshipN === 0
+        ? 'Pay, performance and absence each sit with one line.'
+        : `${contestedStewardshipN} contested and ${unownedStewardshipN} unowned stewardship right(s) create dual-appraisal conflict.`,
+    },
+    {
+      key: 'seats-resolved',
+      label: 'Every declared line holder carries a valid leadership seat',
+      holds: seatRefusedN === 0,
+      detail: seatRefusedN === 0
+        ? 'Every declared secondary-line manager resolves an operating seat.'
+        : `${seatRefusedN} line holder(s) carry no leadership altitude on the roster and were refused a seat.`,
+    },
+    {
+      key: 'dag-apex-unique',
+      label: 'Cross-line escalations converge to a unique joint apex in the DAG',
+      holds: apexAmbiguousN === 0,
+      detail: apexAmbiguousN === 0
+        ? (apexRows.length ? `All ${apexRows.length} escalation cluster(s) resolve to a unique minimal common ancestor.` : 'No cross-line escalations in scope.')
+        : `${apexAmbiguousN} escalation cluster(s) hit incomparable minimal ancestors in a matrix diamond and have no single owner.`,
+    },
+  ];
+
+  const alertN = hasMatrix
+    ? ((rec.balances ? 0 : 1)
+      + (rec.undeclaredN > 0 ? 1 : 0)
+      + (contestedOperationalN > 0 ? 1 : 0)
+      + (unownedOperationalN > 0 ? 1 : 0)
+      + (seatRefusedN > 0 ? 1 : 0)
+      + (apexAmbiguousN > 0 ? 1 : 0))
+    : 0;
+
+  return {
+    hasMatrix,
+    headlineVerdict: !hasMatrix ? 'single-chain' : (alertN === 0 ? 'governed' : 'attention'),
+    alertN,
+    contestedOperationalN,
+    contestedStewardshipN,
+    contestedPriorityN,
+    contestedAssignmentN,
+    contestedTechnicalN,
+    unownedOperationalN,
+    unownedStewardshipN,
+    apexRows,
+    apexAmbiguousN,
+    leaderApexEscalationsN,
+    coupling: {
+      coupledSpanPairsN: spanPairKeys.size,
+      multiLinePeopleN,
+      peopleN,
+      maxLinesOnPerson,
+      maxManagersOnPerson,
+      workTotalN,
+      workLineOnlyN,
+      workSharedN,
+      peopleRateRefused,
+      peopleRateReason: peopleRateRefused ? `Below ${MATRIX_FLOORS.cellN}-person cell floor (${peopleN} in scope); counts print, rate is withheld.` : null,
+      multiLineSharePct,
+      multiLineInterval,
+      workRateRefused,
+      workRateReason: workRateRefused ? `Below ${MATRIX_FLOORS.cellN}-item cell floor (${workTotalN} open item(s)); counts print, rate is withheld.` : null,
+      sharedWorkPct,
+      sharedWorkInterval,
+    },
+    checks,
+  };
+}
+
 /* ------------------------------------------------------------------ report */
 
 function withholdManagerRows(rows, seat, matrix) {
@@ -934,6 +1325,15 @@ export function buildMatrixReport(state, { now = new Date(), settings = null } =
     scopeLineN: seat ? (seat.lineScopeN || 0) : 0,
   };
 
+  const governance = matrixGovernance(matrix, {
+    allocations,
+    rightsRows: rightsAll,
+    reach,
+    seatRows,
+    reconciliation,
+    seat,
+  });
+
   return {
     engineVersion: MATRIX_ENGINE_VERSION,
     method: MATRIX_METHOD,
@@ -966,6 +1366,7 @@ export function buildMatrixReport(state, { now = new Date(), settings = null } =
     findings,
     expiringN,
     seats: seatsSection,
+    governance,
     defects: matrix.defects,
     inactiveLines: matrix.inactiveLines,
     limits: MATRIX_LIMITS,
@@ -1039,6 +1440,12 @@ export function matrixCsvRows(report) {
     line_work_n: report.seats.workLineOnlyN,
     line_work_shared_n: report.seats.workSharedN,
     seat_state: '',
+    apex_contested_n: report.governance ? (report.governance.contestedOperationalN + report.governance.contestedStewardshipN) : 0,
+    apex_operational_contested_n: report.governance?.contestedOperationalN ?? 0,
+    apex_shared_work_n: report.governance?.coupling?.workSharedN ?? 0,
+    apex_ambiguous_n: report.governance?.apexAmbiguousN ?? 0,
+    coupled_span_pairs_n: report.governance?.coupling?.coupledSpanPairsN ?? 0,
+    governance_alert_n: report.governance?.alertN ?? 0,
   });
 
   for (const span of report.spans) {
@@ -1196,6 +1603,53 @@ export function matrixCsvRows(report) {
     });
   }
 
+  for (const apex of report.governance?.apexRows || []) {
+    const named = !apex.withheld && !apex.ambiguous && !apex.disconnected
+      && (apex.affectedPeopleN >= MATRIX_FLOORS.cellN || apex.sharedWorkN >= MATRIX_FLOORS.cellN);
+    rows.push({
+      row_kind: 'apex',
+      scope: apex.disconnected ? 'disconnected-apex' : apex.ambiguous ? 'ambiguous-apex' : apex.isLeader ? 'workspace-leader' : (named ? apex.name : 'withheld'),
+      altitude: apex.rank ? String(apex.rank) : '',
+      person_n: apex.affectedPeopleN,
+      line_n: '',
+      secondary_line_n: '',
+      multi_line_n: '',
+      attributed_h: '',
+      attributable_people_n: '',
+      undeclared_people_n: '',
+      net_fte_error_h: '',
+      balances: '',
+      over_committed_n: '',
+      under_allocated_n: '',
+      balanced_n: '',
+      contested_right_n: apex.contestedRightsN,
+      unowned_right_n: '',
+      expiring_n: '',
+      manager_rank: apex.rank ? String(apex.rank) : '',
+      manager_attributed_h: '',
+      manager_direct_n: '',
+      manager_shared_n: '',
+      manager_withheld: named || apex.isLeader ? '' : 'yes',
+      right_key: '',
+      right_state: '',
+      right_holders_n: '',
+      share_state: '',
+      share_total_h: '',
+      finding: '',
+      band: apex.ambiguous || apex.disconnected ? 'ambiguous-apex' : 'unique-apex',
+      withheld: named || apex.isLeader || apex.ambiguous || apex.disconnected ? '' : 'yes',
+      withheld_reason: named || apex.isLeader || apex.ambiguous || apex.disconnected
+        ? ''
+        : (apex.withheldReason || `Fewer than ${MATRIX_FLOORS.cellN} affected people or shared items — a named leadership apex below the cell floor is withheld.`),
+      apex_contested_n: apex.contestedRightsN,
+      apex_operational_contested_n: apex.operationalContestedN,
+      apex_shared_work_n: apex.sharedWorkN,
+      apex_ambiguous_n: apex.ambiguous ? 1 : 0,
+      coupled_span_pairs_n: '',
+      governance_alert_n: '',
+    });
+  }
+
   return rows;
 }
 
@@ -1219,6 +1673,10 @@ export function matrixBriefText(report) {
   if (report.seats) {
     lines.push(`Seats: ${report.seats.managerN} manager(s) hold people on a declared line; ${report.seats.workLineOnlyN} open item(s) reach a manager only through a line and ${report.seats.workSharedN} have more than one accountable manager.`);
     if (report.seats.refusedN > 0) lines.push(`${report.seats.refusedN} declared line holder(s) carry no leadership altitude on the roster and are refused a seat rather than invented.`);
+  }
+  if (report.governance?.hasMatrix) {
+    const g = report.governance;
+    lines.push(`Governance: ${g.contestedOperationalN} contested operational right(s), ${g.apexRows.length} joint escalation apex(es) (${g.apexAmbiguousN} ambiguous tie(s)), ${g.coupling.coupledSpanPairsN} coupled span pair(s), ${g.alertN} structural alert(s).`);
   }
   if (r.undeclaredN > 0) lines.push('An undeclared allocation is attributed to nobody; it is never split by guesswork.');
   return lines.join(' ');

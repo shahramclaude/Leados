@@ -292,10 +292,20 @@ export function renderBoard(ctx) {
       })
       : null;
 
+    const matrixBanner = evaluation.matrixSummary
+      ? banner({
+        tone: evaluation.matrixSummary.alertN > 0 ? 'warn' : 'info',
+        title: `Matrix accountability active: ${evaluation.matrixSummary.secondaryLineN} additional line(s) across ${evaluation.matrixSummary.multiLineN} person(s)`,
+        body: `${evaluation.matrixSummary.balances ? 'Allocations balance' : 'Allocations DO NOT balance'} · ${evaluation.matrixSummary.contestedOperationalN} contested operational right(s) · ${evaluation.matrixSummary.apexRowsN} joint escalation apex(es) (${evaluation.matrixSummary.apexAmbiguousN} ambiguous tie(s)) · ${evaluation.matrixSummary.workLineOnlyN} tree-hidden open item(s).`,
+        actions: [h('a', { class: 'btn btn-ghost btn-sm', href: '#/matrix?panel=governance' }, 'Open Matrix governance')],
+      })
+      : null;
+
     return h('div', { class: 'stack' },
       grid,
       readOnlyReason ? banner({ tone: 'info', title: 'Read-only at this altitude', body: readOnlyReason }) : null,
       evaluation.stale ? banner({ tone: 'warn', title: 'This pack is past its re-check window', body: `Committed ${evaluation.memo.committedAt ? formatDate(String(evaluation.memo.committedAt).slice(0, 10)) : '—'}, re-check interval ${conv.recheckDays} days. A disclosed figure decays; the badge counted it.` }) : null,
+      matrixBanner,
       addendum,
       card({
         title: 'The unasked question',
@@ -481,6 +491,14 @@ export function renderBoard(ctx) {
           body: `Below ${suppression.floor} observation(s) a span's rate is withheld here, exactly as the claim-level floor withholds its own. The counts are still printed and still reconcile — it is the percentage that would name the pairs it is built from.`,
         })
         : null,
+      partition?.matrixNote
+        ? banner({
+          tone: 'warn',
+          title: 'This span roll-up follows the home reporting tree, not additional matrix lines',
+          body: `${partition.matrixNote} Open Matrix Governance to inspect cross-line coupling and joint escalation apexes.`,
+          actions: [h('a', { class: 'btn btn-ghost btn-sm', href: '#/matrix?panel=governance' }, 'Open Matrix governance')],
+        })
+        : null,
       selects,
       card({
         title: row ? `${row.label} — by ${partition?.dimension === 'span' ? 'span' : partition?.dimension === 'altitude' ? 'altitude' : 'workspace'}` : 'Roll-up',
@@ -507,15 +525,15 @@ export function renderBoard(ctx) {
         actions: [badge(check.triggered ? 'disagrees' : 'agrees', check.triggered ? 'bad' : 'good')],
         body: h('div', { class: 'stack' },
           h('div', { class: 'board-crosscheck' },
-            h('div', null, h('h4', null, 'Management claim'), h('p', null, check.left ? `${check.left.label}: ${check.left.value === null ? 'refused' : `${check.left.value}${check.left.unit === '%' ? '%' : ''}`}` : '—'), h('p', { class: 'muted small' }, check.left?.extra || '')),
+            h('div', null, h('h3', null, 'Management claim'), h('p', null, check.left ? `${check.left.label}: ${check.left.value === null ? 'refused' : `${check.left.value}${check.left.unit === '%' ? '%' : ''}`}` : '—'), h('p', { class: 'muted small' }, check.left?.extra || '')),
             h('div', { class: 'board-crosscheck-sep', 'aria-hidden': 'true' }, '↔'),
-            h('div', null, h('h4', null, check.rightModule), h('p', null, check.right ? `${check.right.label}: ${check.right.value === null ? 'refused' : `${check.right.value}${check.right.unit === '%' ? '%' : ''}`}` : '—'), h('p', { class: 'muted small' }, check.right?.extra || ''))),
+            h('div', null, h('h3', null, check.rightModule), h('p', null, check.right ? `${check.right.label}: ${check.right.value === null ? 'refused' : `${check.right.value}${check.right.unit === '%' ? '%' : ''}`}` : '—'), h('p', { class: 'muted small' }, check.right?.extra || ''))),
           h('p', null, check.statement),
           check.finding ? h('p', { class: 'board-finding' }, check.finding) : h('p', { class: 'muted' }, 'The two readings are consistent on this record. That is evidence, not proof: both could be wrong the same way.'),
           h('a', { class: 'btn btn-ghost btn-sm', href: check.route }, `Open ${check.rightModule}`)),
       })),
       card({
-        title: 'Why these three checks',
+        title: 'Why these four checks',
         body: h('div', { class: 'prose' },
           h('p', null, 'They exist because the pairs are produced by different machinery: a count and a flow, a rate and a list, a chain and an examination. Same-machinery agreement would be arithmetic, not evidence.'),
           h('p', { class: 'muted' }, 'A triggered check does not change any claim. It is written into the memo and, on commit, becomes part of the record a reader can walk.')),

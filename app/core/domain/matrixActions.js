@@ -36,7 +36,7 @@ import { activeSeat, buildSeats, canAct } from './seat.js';
 import { LEADER_ID } from './chain.js';
 import {
   buildMatrixReport, matrixBriefText, matrixCsvRows, matrixAttentionCount,
-  formatShareH,
+  matrixLineScopeFor, formatShareH,
 } from './matrix.js';
 import { normalizeMatrixSettings, normalizeShareH } from './matrixSchema.js';
 import {
@@ -69,7 +69,13 @@ export function createMatrixActions(store, { now, idFactory }) {
   });
 
   const seatFor = (right) => {
-    const built = buildSeats(store.state, { now: clock(), settings: settings() });
+    const at = clock();
+    const cfg = settings();
+    const built = buildSeats(store.state, {
+      now: at,
+      settings: cfg,
+      lineScope: matrixLineScopeFor(store.state, { now: at, settings: cfg }),
+    });
     const seat = activeSeat(built);
     if (seat.readOnly) {
       return fail('The declared seat is unresolved and read-only. Choose a valid seat before declaring a reporting line.');
@@ -93,7 +99,7 @@ export function createMatrixActions(store, { now, idFactory }) {
     const homeManagerId = built.chain.nodes.get(personId)?.rawManagerId || LEADER_ID;
     if (seat.id === homeManagerId) return { ok: true };
     if (seat.id === managerId) return { ok: true };
-    const scope = seat.scope || new Set();
+    const scope = new Set([...(seat.scope || []), ...(seat.lineScope || [])]);
     if (scope.has(personId) && (managerId === LEADER_ID || scope.has(managerId))) return { ok: true };
     return {
       ok: false,
@@ -158,7 +164,9 @@ export function createMatrixActions(store, { now, idFactory }) {
       const check = seatFor('declare-matrix-line');
       if (!check.ok) return check;
       const { seat, built } = check;
-      const scope = seat.fullAccess ? new Set(built.chain.byId.keys()) : new Set(seat.scope || []);
+      const scope = seat.fullAccess
+        ? new Set(built.chain.byId.keys())
+        : new Set([...(seat.scope || []), ...(seat.lineScope || [])]);
       const personRows = [];
       for (const personId of scope) {
         const node = built.chain.byId.get(personId);

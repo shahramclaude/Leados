@@ -488,6 +488,112 @@ function methodPanel(report) {
   );
 }
 
+function governancePanel(ctx, report) {
+  const g = report.governance;
+  if (!g) return emptyState({ title: 'Governance reading unavailable', body: 'Recompute the matrix report to view joint-apex governance.' });
+  const c = g.coupling;
+  const pctWithBand = (pct, iv, refused, reason) => (refused || pct === null
+    ? 'withheld'
+    : `${pct}% (${iv.lower}–${iv.upper}%)`);
+
+  return h('div', { class: 'stack' },
+    h('p', { class: 'lede' }, 'At executive altitude the question is never which individual split changed, but where unresolved conflicts climb in the reporting DAG and whether two supposedly separate spans share the same people underneath.'),
+
+    !g.hasMatrix
+      ? banner({
+        tone: 'neutral',
+        title: 'Single-chain workspace: zero cross-line escalation tax',
+        body: 'No additional reporting lines are declared in scope. Every work item and decision right has one path up the reporting tree.',
+      })
+      : banner({
+        tone: g.alertN > 0 ? 'warn' : 'good',
+        title: g.alertN > 0
+          ? `${g.alertN} matrix governance condition(s) require structural resolution`
+          : 'Declared matrix governance checks hold on this record',
+        body: g.alertN > 0
+          ? 'No composite score is computed here: each capacity, decision-right, seat and DAG convergence check prints its own verdict below.'
+          : 'Allocations balance, operational and stewardship rights have single holders, all line managers seat cleanly and every cross-line escalation has a unique joint apex.',
+      }),
+
+    h('div', { class: 'stat-grid' },
+      stat({
+        label: 'Operational rights contested',
+        value: num(g.contestedOperationalN),
+        hint: `priority ${g.contestedPriorityN} · assignment ${g.contestedAssignmentN} · technical ${g.contestedTechnicalN}`,
+        tone: g.contestedOperationalN ? 'bad' : '',
+      }),
+      stat({
+        label: 'Stewardship rights contested',
+        value: num(g.contestedStewardshipN),
+        hint: `${g.unownedOperationalN + g.unownedStewardshipN} unowned right(s) overall`,
+        tone: g.contestedStewardshipN ? 'warn' : '',
+      }),
+      stat({
+        label: 'Joint escalation apexes',
+        value: num(g.apexRows.length),
+        hint: g.apexAmbiguousN ? `${g.apexAmbiguousN} ambiguous diamond tie(s)` : 'all converge cleanly',
+        tone: g.apexAmbiguousN ? 'bad' : (g.apexRows.length ? 'warn' : ''),
+      }),
+      stat({
+        label: 'Coupled span pairs',
+        value: num(c.coupledSpanPairsN),
+        hint: c.maxManagersOnPerson > 1 ? `up to ${c.maxManagersOnPerson} managers on one person` : 'independent spans',
+        tone: c.coupledSpanPairsN ? 'warn' : '',
+      }),
+      stat({
+        label: 'Multi-line headcount share',
+        value: pctWithBand(c.multiLineSharePct, c.multiLineInterval, c.peopleRateRefused, c.peopleRateReason),
+        hint: c.peopleRateRefused ? c.peopleRateReason : `${c.multiLinePeopleN} of ${c.peopleN} in scope (Wilson 95%)`,
+      }),
+      stat({
+        label: 'Shared multi-owner work',
+        value: pctWithBand(c.sharedWorkPct, c.sharedWorkInterval, c.workRateRefused, c.workRateReason),
+        hint: c.workRateRefused ? c.workRateReason : `${c.workSharedN} of ${c.workTotalN} open item(s) · ${c.workLineOnlyN} tree-hidden`,
+        tone: c.workLineOnlyN ? 'warn' : '',
+      }),
+    ),
+
+    card({
+      title: 'Where unresolved conflicts climb (joint apex in the reporting DAG)',
+      subtitle: 'Each contested right or shared work item climbs until its accountable managers share a minimal common ancestor. Diamond ties list every minimal ancestor and choose none.',
+      body: g.apexRows.length
+        ? table({
+          caption: 'Joint-apex escalations across contested rights and shared work',
+          columns: [
+            { label: 'Joint apex', render: (row) => row.displayLabel },
+            { label: 'Altitude', key: 'altitudeLabel' },
+            { label: 'Resolution', render: (row) => badge(
+              row.disconnected ? 'disconnected' : row.ambiguous ? 'ambiguous tie' : 'unique apex',
+              row.ambiguous || row.disconnected ? 'bad' : 'good',
+            ) },
+            { label: 'Operational contested', key: 'operationalContestedN' },
+            { label: 'All contested rights', key: 'contestedRightsN' },
+            { label: 'Shared work', key: 'sharedWorkN' },
+            { label: 'Tree-hidden items', key: 'lineOnlyWorkN' },
+            { label: 'Total load', key: 'totalEscalationsN' },
+          ],
+          rows: g.apexRows,
+        })
+        : emptyState({ title: 'No cross-line escalation in scope', body: 'When two lines contest a decision right or hold shared work, its joint apex in the reporting DAG prints here.' }),
+    }),
+
+    card({
+      title: 'Structural governance checks',
+      subtitle: 'Five explicit binary conditions across capacity, decision rights, seats and DAG convergence — never averaged into one score.',
+      actions: [h('a', { class: 'btn btn-ghost btn-small', href: '#/board?panel=discrepancies' }, 'Open Board Room cross-checks')],
+      body: table({
+        caption: 'Structural matrix governance checks',
+        columns: [
+          { label: 'Check', key: 'label' },
+          { label: 'Verdict', render: (row) => badge(row.holds ? 'holds' : 'attention', row.holds ? 'good' : 'bad') },
+          { label: 'Reading', key: 'detail' },
+        ],
+        rows: g.checks,
+      }),
+    }),
+  );
+}
+
 /* -------------------------------------------------------------------- route */
 
 export function renderMatrix(ctx) {
@@ -539,6 +645,7 @@ export function renderMatrix(ctx) {
     panel === 'lines' ? linesPanel(ctx, report) : null,
     panel === 'rights' ? rightsPanel(ctx, report) : null,
     panel === 'seats' ? seatsPanel(ctx, report) : null,
+    panel === 'governance' ? governancePanel(ctx, report) : null,
     panel === 'queue' ? queuePanel(ctx, report) : null,
     panel === 'method' ? methodPanel(report) : null,
   );

@@ -15,6 +15,7 @@
  */
 import { dayKey } from '../time.js';
 import { buildSeats, activeSeat, canAct } from './seat.js';
+import { matrixLineScopeFor } from './matrix.js';
 import {
   boardRead, boardEvaluateMemo, boardSnapshot, boardBriefText, boardMemoText, boardCsvRows,
   boardAttentionCount, boardConventions, boardSources,
@@ -41,7 +42,13 @@ export function createBoardActions(store, { now, idFactory }) {
   const findMemo = (id) => memos().find((m) => m && m.id === id) || null;
 
   function gate(right = 'declare-board-line') {
-    const built = buildSeats(store.state, { now: clock(), settings: settings() });
+    const at = clock();
+    const cfg = settings();
+    const built = buildSeats(store.state, {
+      now: at,
+      settings: cfg,
+      lineScope: matrixLineScopeFor(store.state, { now: at, settings: cfg }),
+    });
     const seat = activeSeat(built);
     if (seat.fullAccess) return { seat, refusal: null };
     const verdict = canAct(right, seat);
@@ -104,16 +111,28 @@ export function createBoardActions(store, { now, idFactory }) {
      * it writes nothing and records no look.
      */
     boardContinuity() {
-      const built = buildSeats(store.state, { now: clock(), settings: settings() });
+      const at = clock();
+      const cfg = settings();
+      const built = buildSeats(store.state, {
+        now: at,
+        settings: cfg,
+        lineScope: matrixLineScopeFor(store.state, { now: at, settings: cfg }),
+      });
       const seat = activeSeat(built);
-      return boardContinuity(store.state, { now: clock(), seatId: seat?.id || null });
+      return boardContinuity(store.state, { now: at, seatId: seat?.id || null });
     },
 
     /** The carry-forward ledger as text, for the board pack. Identity-free. */
     boardContinuityText() {
-      const built = buildSeats(store.state, { now: clock(), settings: settings() });
+      const at = clock();
+      const cfg = settings();
+      const built = buildSeats(store.state, {
+        now: at,
+        settings: cfg,
+        lineScope: matrixLineScopeFor(store.state, { now: at, settings: cfg }),
+      });
       const seat = activeSeat(built);
-      return { ok: true, text: boardCarryForwardText(store.state, { now: clock(), seatId: seat?.id || null }) };
+      return { ok: true, text: boardCarryForwardText(store.state, { now: at, seatId: seat?.id || null }) };
     },
 
     boardAttentionCount() {
