@@ -174,7 +174,7 @@ test('one withheld cell beside one released cell withholds the released cell too
   assert.equal(complementary.coveredN, null, 'its counts are withheld too');
 });
 
-test('complementary suppression does not fire once two or more cells stay released', () => {
+test('existing multi-primary and fully released cases retain their suppression behavior', () => {
   // Three branches of 2, 2 and 3 contributing seats. A floor of 3 withholds the
   // two smallest — which leaves exactly ONE released cell, so the complementary
   // rule does fire there. A floor of 2 releases all three: no primary
@@ -190,6 +190,30 @@ test('complementary suppression does not fire once two or more cells stay releas
   assert.equal(typeof open.pooledPct, 'number');
   assert.equal(typeof open.meanPct, 'number');
   assert.equal(open.meanBranchesN, 3);
+});
+
+test('a single small branch cannot be reconstructed when two other branches are released', () => {
+  const state = makeState({ third: true });
+  // Add contributing leadership seats to both wider branches, leaving one
+  // primary suppression and two eligible branches before complementary masking.
+  state.people.push(
+    { id: 'mgr-w3', name: 'Additional manager', level: 'manager', managerId: 'dir-wide', status: 'active', createdAt: ago(500) },
+    { id: 'ic-w3', name: 'Additional report', level: 'ic', managerId: 'mgr-w3', status: 'active', createdAt: ago(500) },
+    { id: 'mgr-t4', name: 'Third branch manager', level: 'manager', managerId: 'dir-third', status: 'active', createdAt: ago(500) },
+    { id: 'ic-t4', name: 'Third branch report', level: 'ic', managerId: 'mgr-t4', status: 'active', createdAt: ago(500) },
+  );
+  const c = reportOf(normalizeState(state, { now: NOW }).state).branchCoverage;
+  assert.equal(c.branches.filter((b) => b.seatsN < c.floor && b.dutiesN > 0).length, 1);
+  assert.equal(c.suppressedN, 2);
+  assert.equal(c.branches.filter((b) => b.complementary).length, 1);
+  assert.equal(c.branches.filter((b) => !b.suppressed && b.dutiesN > 0).length, 1);
+  for (const b of c.branches.filter((row) => row.suppressed)) {
+    assert.equal(b.coveredN, null);
+    assert.equal(b.gapN, null);
+    assert.equal(b.openGapN, null);
+  }
+  assert.equal(c.pooledPct, null);
+  assert.match(dutyCoverageBriefText(reportOf(normalizeState(state, { now: NOW }).state)), /2 cell\(s\) withheld/);
 });
 
 test('a partial table quotes the mean over released cells and says it is not the whole table', () => {

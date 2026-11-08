@@ -1,3 +1,11 @@
+## 2026-11-08 — Session 179: prevent single-cell subtraction in a multi-branch review
+
+**Built:** CEO / C-suite primary; director and VP benefit from the same shared roll-up. Corrected complementary suppression when one small branch and multiple otherwise releasable branches occur. The hierarchy-derived continuity report, fed by existing coverage automation, now masks another eligible branch; the existing desk, brief, CSV and reading handoff receive the corrected projection. No schema change. This altitude was least recently primary (175 vs 177 and 178 for the others).
+
+**Verified:** `node --test tests/app/duty-branch-disclosure.test.mjs` 15/15 after one fixture correction; `npm run build:standalone` completed. **[UNVERIFIED]:** full suite, real-browser assistive technology, protection against historical-export or external-data differencing. Suppression is not differential privacy; seats are workflow declarations, not authentication, and earlier exports remain exposed. Blockers: none.
+
+**Next:** authenticated identity / tenant boundary (all altitudes, foundational); director / VP for the next scoped hierarchy item.
+
 ## 2026-11-08 — Session 178: The inference-only handover digest (Schema v118 unchanged, ADR-0132, `#/duty-cover?panel=desk`)
 
 **Built / altitudes.** Frontline (rank 1) and mid-manager (rank 2) PRIMARY; director/VP/CEO read the same counts inside their own spans. The duty served: handover triage before an absence — which available, eligible covers have only inferred duty-specific work in the preparation window and no explicit rehearsal? Frontline/mid-manager took priority because the Session-177 map put them last primary in 174 (CEO 175, director/VP 177), and this was ADR-0128's own tagged remainder carried since 174.
