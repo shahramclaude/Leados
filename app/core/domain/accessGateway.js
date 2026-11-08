@@ -5,6 +5,7 @@
  */
 import { activeSeat, buildSeats, canAct, canSee, recordPeople } from './seat.js';
 import { responsibleNodeId } from './chain.js';
+import { matrixLineScopeFor } from './matrix.js';
 import { routeVerdict } from './seatRegistry.js';
 import { validateMissionCommands } from './mission.js';
 import { captureBriefCase } from './missionCaptureBrief.js';
@@ -314,7 +315,10 @@ function bundleFor(state, name, args) {
 export function guardApiCall(state, name, args, nowMs = undefined) {
   if (!state.settings?.activeSeatId) return { ok: true };
   let built; let seat;
-  try { built = buildSeats(state, { settings: state.settings }); seat = activeSeat(built); }
+  // ADR-0141: the gate and the seat must agree about what a declared line
+  // carries. If the gate resolved the seat without the lines, a line-only
+  // manager resolved to the read-only fallback and every call was refused.
+  try { built = buildSeats(state, { settings: state.settings, lineScope: matrixLineScopeFor(state, { settings: state.settings }) }); seat = activeSeat(built); }
   catch { return refusal('The operating seat could not be resolved. No record was read or changed.'); }
   if (seat.readOnly && name !== 'setActiveSeat') return refusal('The operating seat is unresolved. Declare a valid seat first.');
   if (SAFE_READS.has(name)) return { ok: true, seat, built };

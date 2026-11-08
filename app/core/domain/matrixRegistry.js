@@ -164,6 +164,9 @@ export const MATRIX_FINDINGS = Object.freeze([
   { key: 'under-allocated', label: 'Declared allocations do not account for the person' },
   { key: 'expiring', label: 'A line ends within the declared window' },
   { key: 'multi-line', label: 'Accountable to more than one manager' },
+  { key: 'line-only-work', label: 'Open work reaches a manager only through a declared line' },
+  { key: 'shared-work', label: 'Open work with more than one accountable manager' },
+  { key: 'seat-refused', label: 'A declared line holder the roster cannot seat' },
 ]);
 
 export const MATRIX_FINDING_KEYS = Object.freeze(MATRIX_FINDINGS.map((f) => f.key));
@@ -177,6 +180,7 @@ export const MATRIX_PANELS = Object.freeze([
   Object.freeze({ key: 'desk', label: 'Desk', hint: 'The reconciliation: does the roll-up add up?' }),
   Object.freeze({ key: 'lines', label: 'Lines', hint: 'Every declared reporting line, dated and dated out.' }),
   Object.freeze({ key: 'rights', label: 'Rights', hint: 'Who decides what, for each person on more than one line.' }),
+  Object.freeze({ key: 'seats', label: 'Seats', hint: 'Whose line the work actually reaches — and who the roster cannot seat.' }),
   Object.freeze({ key: 'queue', label: 'Review', hint: 'The bounded queue, worst first.' }),
   Object.freeze({ key: 'method', label: 'Method', hint: 'What is declared, what is derived, and what is refused.' }),
 ]);
@@ -246,4 +250,5 @@ export const MATRIX_CSV_COLUMNS = Object.freeze([
   'manager_rank', 'manager_attributed_h', 'manager_direct_n', 'manager_shared_n',
   'manager_withheld', 'right_key', 'right_state', 'right_holders_n',
   'share_state', 'share_total_h', 'finding', 'band', 'withheld', 'withheld_reason',
+  'line_scope_n', 'line_only_n', 'line_work_n', 'line_work_shared_n', 'seat_state',
 ]);

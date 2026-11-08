@@ -68,7 +68,7 @@ import { buildDiligenceReport, diligenceCsvRows } from './domain/diligence.js';
 // seat id. A refused rate is BLANK, never zero.
 import { buildDutyCoverageReport, dutyCoverageCsvRows, SPAN_READINGS_CSV_COLUMNS } from './domain/dutyCoverage.js';
 // ADR-0140: the Matrix Accountability Ledger's aggregate-only export.
-import { buildMatrixReport, matrixCsvRows, MATRIX_CSV_HEADER } from './domain/matrix.js';
+import { buildMatrixReport, matrixCsvRows, matrixLineScopeFor, MATRIX_CSV_HEADER } from './domain/matrix.js';
 import { standbyCsvRows, standbyExportBoard } from './domain/dutyStandby.js';
 // ADR-0109: CSV scope #103. Aggregate-only, identity-free, refusal-honest.
 import { jurCsvRows, JUR_CSV_COLUMNS } from './domain/jurisdiction.js';
@@ -6033,7 +6033,8 @@ export function buildScopeTable(state, scope, now) {
       // CSV scope #81 (Schema v92, ADR-0086). Compiled at the exporting seat, so
       // the file says what THAT altitude may see — not what the operator can.
       const seatSettings = state.settings || {};
-      const built = buildSeats(state, { now, settings: seatSettings });
+      // ADR-0141: compiled at the exporting seat, with the declared lines in it.
+      const built = buildSeats(state, { now, settings: seatSettings, lineScope: matrixLineScopeFor(state, { now, settings: seatSettings }) });
       const report = disclosureReport(state, { now, settings: seatSettings, seat: activeSeat(built), built });
       const rows = disclosureCsvRows(report);
       const columns = ['route', 'module', 'posture', 'record_class', 'floor_rank', 'detail_ceiling', 'open_n', 'overdue_n', 'total_n', 'withheld_cells', 'money_by_currency', 'reason'].map((key) => ({ key, header: key }));

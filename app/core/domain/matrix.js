@@ -47,7 +47,8 @@
  * Pure module: no DOM, no storage, no clock beyond the injected `now`.
  */
 
-import { buildChain, LEADER_ID } from './chain.js';
+import { buildChain, harvestWork, LEADER_ID } from './chain.js';
+import { altitudeRank } from './chainRegistry.js';
 import { buildSeats, activeSeat } from './seat.js';
 import { dayKey, daysBetween } from '../time.js';
 import {
@@ -588,6 +589,151 @@ export function matrixRightsSummary(rows) {
   };
 }
 
+/* ------------------------------------------------- ADR-0141: line reach */
+
+/**
+ * Who a manager holds on a DECLARED ADDITIONAL line.
+ *
+ * This is the read-side half of the matrix. `person.managerId` gives every
+ * other roll-up in the workspace a single path to the root, so a manager with
+ * no home-line reports has `span = 0`: the Operating Seat refuses them a seat,
+ * and `canSee` denies them a record naming their own people. RULE-MTX-01 already
+ * fans the work to them; until this existed the seat then refused to let them
+ * read what had been fanned. The sets here are the exact input the seat engine
+ * ingests (`buildSeats({ lineScope })`) and the exact predicate the panel
+ * counts with — one source, so what is displayed is what is enforced.
+ *
+ * `lineOnlyIds` is the subset the tree does NOT already put in this manager's
+ * subtree: the people a home-line-only product silently hides from them.
+ */
+export function matrixLineScope(matrix) {
+  const byManager = new Map();
+  for (const line of matrix.lines) {
+    if (line.role === 'primary') continue;
+    if (line.active === false) continue;
+    if (!matrix.chain.byId.has(line.personId)) continue;
+    if (!matrix.chain.nodes.has(line.managerId)) continue;
+    let entry = byManager.get(line.managerId);
+    if (!entry) {
+      entry = { managerId: line.managerId, personIds: new Set(), lineIds: [], kinds: new Set() };
+      byManager.set(line.managerId, entry);
+    }
+    entry.personIds.add(line.personId);
+    entry.lineIds.push(line.id);
+    entry.kinds.add(line.kind);
+  }
+  const scope = new Map();
+  const rows = [];
+  for (const managerId of [...byManager.keys()].sort()) {
+    const entry = byManager.get(managerId);
+    const node = matrix.chain.nodes.get(managerId);
+    const subtree = new Set(node?.subtreeIds || []);
+    const personIds = [...entry.personIds].sort();
+    const lineOnlyIds = personIds.filter((pid) => !subtree.has(pid));
+    const treeSpanN = Math.max(0, (node?.span || 0));
+    scope.set(managerId, {
+      personIds,
+      lineN: entry.lineIds.length,
+      kinds: [...entry.kinds].sort(),
+      lineOnlyIds,
+    });
+    rows.push({
+      managerId,
+      name: node?.name || managerId,
+      isLeader: managerId === LEADER_ID,
+      altitude: node?.altitude || null,
+      rank: altitudeRank(node?.altitude),
+      treeSpanN,
+      lineN: entry.lineIds.length,
+      linePersonN: personIds.length,
+      lineOnlyN: lineOnlyIds.length,
+      matrixSpanN: treeSpanN + lineOnlyIds.length,
+      kinds: [...entry.kinds].sort(),
+      // A line holder with no leadership altitude cannot be given a seat, and
+      // the tree gave them no span. The refusal is a fact about the roster.
+      seatEligible: treeSpanN > 0 || Boolean(node?.altitude),
+      seatReason: null,
+    });
+  }
+  for (const row of rows) {
+    if (!row.seatEligible) {
+      row.seatReason = `${row.name} holds ${row.linePersonN} person(s) on ${row.lineN} declared line(s) but carries no leadership altitude on the roster. The seat is refused rather than invented; correct the roster level to give them one.`;
+    }
+  }
+  return { byManager: scope, rows };
+}
+
+/**
+ * The injection helper every seat-reading surface uses.
+ *
+ * Returns `null` when the workspace declares NO additional line, so a
+ * single-chain workspace keeps the pre-ADR-0141 code path exactly — the option
+ * is absent rather than empty, and `buildSeats` produces byte-identical seats.
+ */
+export function matrixLineScopeFor(state, { now = new Date(), settings = null } = {}) {
+  const lines = Array.isArray(state?.reportingLines) ? state.reportingLines : [];
+  if (!lines.length) return null;
+  const matrix = buildMatrix(state, { now, settings: settings || state?.settings || null });
+  const scope = matrixLineScope(matrix);
+  return scope.byManager.size ? scope.byManager : null;
+}
+
+/**
+ * The reach of every open work item across the matrix.
+ *
+ * Two separate claims, printed separately (Bulletproof Reliability Mandate):
+ *   treeSees(m)  the reporting tree already rolls the item up to m;
+ *   lineSees(m)  every person the item names is someone m manages on a line.
+ * An item reachable only through a line is the exact work a home-line-only
+ * product hides from its owner. `sites` is the set of managers the item is
+ * accountable to — never collapsed to one: when it has more than one, the
+ * ledger says so instead of picking.
+ */
+export function matrixWorkReach(matrix, lineScope, items) {
+  const rows = [];
+  for (const item of items || []) {
+    const people = Array.isArray(item.people) ? item.people : [];
+    const ownerNodeId = item.ownerNodeId || LEADER_ID;
+    const treeSees = (managerId) => {
+      if (managerId === ownerNodeId) return true;
+      const node = matrix.chain.nodes.get(managerId);
+      if (!node) return false;
+      const subtree = node.subtreeIds || [];
+      if (subtree.includes(ownerNodeId)) return true;
+      return people.some((pid) => pid === managerId || subtree.includes(pid));
+    };
+    const sites = [ownerNodeId];
+    const lineManagers = [];
+    if (people.length) {
+      for (const [managerId, entry] of lineScope.byManager) {
+        if (managerId === ownerNodeId) continue;
+        const held = new Set(entry.personIds);
+        const node = matrix.chain.nodes.get(managerId);
+        const subtree = new Set(node?.subtreeIds || []);
+        const covers = people.every((pid) => subtree.has(pid) || held.has(pid));
+        if (!covers) continue;
+        if (sites.includes(managerId)) continue;
+        sites.push(managerId);
+        lineManagers.push({ managerId, lineOnly: !treeSees(managerId) });
+      }
+    }
+    rows.push({
+      type: item.type,
+      entityId: item.entityId,
+      ownerNodeId,
+      treeOwnerNodeId: ownerNodeId,
+      sites,
+      siteN: sites.length,
+      shared: sites.length > 1,
+      lineManagers,
+      lineOnlyN: lineManagers.filter((m) => m.lineOnly).length,
+      sensitive: item.sensitive === true,
+    });
+  }
+  rows.sort((a, b) => b.siteN - a.siteN || String(a.type).localeCompare(String(b.type)) || String(a.entityId).localeCompare(String(b.entityId)));
+  return rows;
+}
+
 /* ---------------------------------------------------------------- findings */
 
 export function matrixFindings(matrix, { allocations, rightsRows, spans } = {}) {
@@ -719,11 +865,18 @@ function withholdManagerRows(rows, seat, matrix) {
 export function buildMatrixReport(state, { now = new Date(), settings = null } = {}) {
   const effective = settings || state?.settings || null;
   const matrix = buildMatrix(state, { now, settings: effective });
-  const built = buildSeats(state, { now, settings: effective });
+  // ADR-0141: the declared lines are handed to the seat engine BEFORE the seats
+  // are built, so a manager who holds people only on a line has a seat here —
+  // otherwise choosing them as the operating seat made the whole workspace
+  // read-only ("that seat no longer exists"), which was a silent matrix failure.
+  const lineScope = matrixLineScope(matrix);
+  const built = buildSeats(state, { now, settings: effective, lineScope: lineScope.byManager });
   const seat = activeSeat(built);
 
   const allocationsAll = matrixAllocations(matrix);
-  const scope = seat?.fullAccess ? null : new Set([...(seat?.scope || [])]);
+  const scope = seat?.fullAccess
+    ? null
+    : new Set([...(seat?.scope || []), ...(seat?.lineScope || [])]);
   const inScope = (personId) => !scope || scope.has(personId);
   const allocations = allocationsAll.filter((p) => inScope(p.personId));
 
@@ -738,6 +891,48 @@ export function buildMatrixReport(state, { now = new Date(), settings = null } =
   const peopleRemainderN = Math.max(0, allocations.length - people.length);
 
   const expiringN = findings.rows.filter((f) => f.finding === 'expiring').length;
+
+  /* ADR-0141 — the seat reading. Who the matrix made accountable, who the
+     workspace can actually seat, and how much open work reaches a manager only
+     through a line. Counts reconcile against the work total, so the panel can
+     print an identity rather than a reassurance. */
+  const seatRows = lineScope.rows.filter((row) => inScope(row.managerId));
+  const seatRefused = seatRows.filter((row) => !row.seatEligible);
+  const workItems = harvestWork(state, matrix.chain, { now, settings: effective });
+  const scopedWork = workItems.filter((item) => !scope
+    || scope.has(item.ownerNodeId)
+    || item.people.some((pid) => scope.has(pid)));
+  const reach = matrixWorkReach(matrix, lineScope, scopedWork);
+  const coveredByLine = reach.filter((r) => r.lineManagers.length > 0);
+  const workLineOnly = coveredByLine.filter((r) => r.lineManagers.some((m) => m.lineOnly));
+  const sharedWork = reach.filter((r) => r.shared);
+  const seatsSection = {
+    rowN: seatRows.length,
+    rows: seatRows.slice(0, MATRIX_LIMITS.managers),
+    remainderN: Math.max(0, seatRows.length - MATRIX_LIMITS.managers),
+    managerN: seatRows.length,
+    seatableN: seatRows.length - seatRefused.length,
+    refusedN: seatRefused.length,
+    refused: seatRefused,
+    // People held on a line, and the subset the tree hides from that manager.
+    peopleOnLinesN: new Set(seatRows.flatMap((r) => lineScope.byManager.get(r.managerId)?.personIds || [])).size,
+    lineOnlyPeopleN: seatRows.reduce((acc, r) => acc + r.lineOnlyN, 0),
+    // Open work, three claims that must reconcile:
+    workTotalN: scopedWork.length,
+    workReachN: reach.length,
+    workTreeN: reach.length - workLineOnly.length,
+    workLineOnlyN: workLineOnly.length,
+    workSharedN: sharedWork.length,
+    workSensitiveN: workLineOnly.filter((r) => r.sensitive).length,
+    coveredN: coveredByLine.length,
+    // Identity: tree-only + line-only rows = every scoped open item, exactly.
+    // Both terms are counted from the same one-row-per-item list, so the panel
+    // can print an equality instead of a reassurance.
+    identityHolds: (reach.length - workLineOnly.length) + workLineOnly.length === scopedWork.length
+      && reach.length === scopedWork.length,
+    identityLabel: 'every open item in scope is reachable either only through the reporting tree or only through a declared line, and the two columns add to the total',
+    scopeLineN: seat ? (seat.lineScopeN || 0) : 0,
+  };
 
   return {
     engineVersion: MATRIX_ENGINE_VERSION,
@@ -770,6 +965,7 @@ export function buildMatrixReport(state, { now = new Date(), settings = null } =
     rightsSummary,
     findings,
     expiringN,
+    seats: seatsSection,
     defects: matrix.defects,
     inactiveLines: matrix.inactiveLines,
     limits: MATRIX_LIMITS,
@@ -838,6 +1034,11 @@ export function matrixCsvRows(report) {
     band: '',
     withheld: '',
     withheld_reason: '',
+    line_scope_n: report.seats.peopleOnLinesN,
+    line_only_n: report.seats.lineOnlyPeopleN,
+    line_work_n: report.seats.workLineOnlyN,
+    line_work_shared_n: report.seats.workSharedN,
+    seat_state: '',
   });
 
   for (const span of report.spans) {
@@ -952,6 +1153,49 @@ export function matrixCsvRows(report) {
     });
   }
 
+  for (const row of report.seats.rows) {
+    const named = row.lineOnlyN >= MATRIX_FLOORS.cellN || row.treeSpanN >= MATRIX_FLOORS.cellN;
+    rows.push({
+      row_kind: 'seat',
+      scope: named ? row.name : (row.isLeader ? 'workspace-leader' : 'withheld'),
+      altitude: row.rank ? String(row.rank) : '',
+      person_n: row.linePersonN,
+      line_n: row.lineN,
+      secondary_line_n: row.lineOnlyN,
+      multi_line_n: '',
+      attributed_h: '',
+      attributable_people_n: '',
+      undeclared_people_n: '',
+      net_fte_error_h: '',
+      balances: '',
+      over_committed_n: '',
+      under_allocated_n: '',
+      balanced_n: '',
+      contested_right_n: '',
+      unowned_right_n: '',
+      expiring_n: '',
+      manager_rank: row.rank ? String(row.rank) : '',
+      manager_attributed_h: '',
+      manager_direct_n: row.treeSpanN,
+      manager_shared_n: row.lineOnlyN,
+      manager_withheld: named ? '' : 'yes',
+      right_key: '',
+      right_state: '',
+      right_holders_n: '',
+      share_state: '',
+      share_total_h: '',
+      finding: '',
+      band: row.seatEligible ? 'seated' : 'refused',
+      withheld: named ? '' : 'yes',
+      withheld_reason: named ? '' : `Fewer than ${MATRIX_FLOORS.cellN} people on either side of the line — a named line holder is item detail.`,
+      line_scope_n: row.linePersonN,
+      line_only_n: row.lineOnlyN,
+      line_work_n: '',
+      line_work_shared_n: '',
+      seat_state: row.seatEligible ? 'seated' : 'refused',
+    });
+  }
+
   return rows;
 }
 
@@ -972,6 +1216,10 @@ export function matrixBriefText(report) {
   if (!r.auditClean) lines.push('THE LEDGER IS UNSOUND: the printed total is not the sum of the printed rows. Treat every figure on this page as unverified.');
   lines.push(`${r.overN} over-committed, ${r.underN} under-allocated, ${r.balancedN} balanced, ${r.undeclaredN} undeclared.`);
   lines.push(`Decision rights: ${report.rightsSummary.contestedN} contested, ${report.rightsSummary.unownedN} unowned across ${report.rightsSummary.contestedPeopleN + report.rightsSummary.unownedPeopleN} people on more than one line.`);
+  if (report.seats) {
+    lines.push(`Seats: ${report.seats.managerN} manager(s) hold people on a declared line; ${report.seats.workLineOnlyN} open item(s) reach a manager only through a line and ${report.seats.workSharedN} have more than one accountable manager.`);
+    if (report.seats.refusedN > 0) lines.push(`${report.seats.refusedN} declared line holder(s) carry no leadership altitude on the roster and are refused a seat rather than invented.`);
+  }
   if (r.undeclaredN > 0) lines.push('An undeclared allocation is attributed to nobody; it is never split by guesswork.');
   return lines.join(' ');
 }

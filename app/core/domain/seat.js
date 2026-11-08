@@ -55,9 +55,27 @@ export function recordPeople(record) {
   return [...out];
 }
 
-function seatFromNode(node, built) {
+function seatFromNode(node, built, line = null) {
   const altitude = altitudeByKey(node.altitude) || null;
   const scopeIds = (node.subtreeIds || []).filter((id) => id !== LEADER_ID);
+  // ADR-0141: people this manager holds on a DECLARED ADDITIONAL line — the
+  // matrix edge the reporting tree does not carry. Empty when the workspace
+  // declares no matrix line, in which case the seat object is byte-identical
+  // to the pre-0141 shape (pinned by test).
+  const lineIds = line ? [...line.personIds].filter((pid) => pid !== node.id) : [];
+  const lineOnly = lineIds.filter((pid) => !scopeIds.includes(pid));
+  const lineFields = line
+    ? {
+      lineScope: new Set(lineIds),
+      lineScopeIds: lineIds,
+      lineScopeN: lineIds.length,
+      lineOnlyIds: lineOnly,
+      lineOnlyN: lineOnly.length,
+      lineKinds: [...line.kinds],
+      lineCount: line.lineN,
+      matrixScopeN: scopeIds.length + lineOnly.length,
+    }
+    : {};
   const childSeatIds = built.seats
     .filter((s) => s.parentId === node.id && s.id !== node.id)
     .map((s) => s.id);
@@ -91,6 +109,29 @@ function seatFromNode(node, built) {
     altitudeReason: node.altitudeReason || '',
     reachable: node.reachable !== false,
     fullAccess: false,
+    ...lineFields,
+  };
+}
+
+/**
+ * Read one injected matrix line-scope entry, fail-closed.
+ *
+ * The injection is plain data (`Map<managerId, {personIds,lineIds,kinds}>` or a
+ * plain object with the same shape) precisely so this module never imports the
+ * matrix engine and no import cycle is created. Only ids that the ACTIVE roster
+ * actually contains survive; an id that is not a person cannot widen a scope.
+ */
+function readLineScope(lineScope, id, chain) {
+  if (!lineScope || !id) return null;
+  const raw = typeof lineScope.get === 'function' ? lineScope.get(id) : lineScope[id];
+  if (!raw) return null;
+  const personIds = [...new Set((Array.isArray(raw) ? raw : raw.personIds || [])
+    .filter((pid) => typeof pid === 'string' && pid && pid !== id && chain.byId.has(pid)))];
+  if (!personIds.length) return null;
+  return {
+    personIds,
+    lineN: Number.isInteger(raw?.lineN) ? raw.lineN : personIds.length,
+    kinds: Array.isArray(raw?.kinds) ? raw.kinds : [],
   };
 }
 
@@ -99,8 +140,15 @@ function seatFromNode(node, built) {
  * span) or the workspace leader; an IC with no reports is NOT a seat — ADR-0075
  * refuses to invent a courtesy rung, and so do we. The undeclared operator
  * view is a separate, explicitly unenforced seat at enterprise rank.
+ *
+ * ADR-0141: a manager who holds people ONLY through a declared additional line
+ * (a project or product manager with no home-line reports) is a seat too — the
+ * tree gave them no span, the matrix gave them one, and refusing them a seat
+ * meant the work RULE-MTX-01 routed to them could not be read by them. The
+ * altitude is never invented: a line holder whose roster title carries no
+ * leadership altitude is REFUSED a seat and listed in `refusedLineSeats`.
  */
-export function buildSeats(state, { now = new Date(), settings = null } = {}) {
+export function buildSeats(state, { now = new Date(), settings = null, lineScope = null } = {}) {
   const effective = settings || state?.settings || null;
   const chain = buildChain(state, { now, settings: effective });
   const conventions = seatConventions(effective);
@@ -118,12 +166,35 @@ export function buildSeats(state, { now = new Date(), settings = null } = {}) {
     rootSeatId: LEADER_ID,
     now,
     warnings: [],
+    refusedLineSeats: [],
+    lineScope: lineScope || null,
   };
+  for (const node of chain.nodes.values()) {
+    const line = node.id === LEADER_ID ? null : readLineScope(lineScope, node.id, chain);
+    if (line && !nodeIndex.has(node.id) && node.altitude) nodeIndex.add(node.id);
+  }
   for (const node of chain.nodes.values()) {
     if (node.reachable === false) continue;
     const isLeader = node.id === LEADER_ID;
-    if (!isLeader && !(node.span > 0 && node.altitude)) continue;
-    const seat = seatFromNode(node, built);
+    const line = isLeader ? null : readLineScope(lineScope, node.id, chain);
+    const treeSeat = node.span > 0 && Boolean(node.altitude);
+    const lineSeat = Boolean(line) && Boolean(node.altitude);
+    if (!isLeader && !treeSeat && !lineSeat) {
+      if (line) {
+        // A declared line holder with no leadership altitude cannot be given a
+        // rung the roster does not record. The refusal is PRINTED, never silent.
+        built.refusedLineSeats.push({
+          id: node.id,
+          name: node.name,
+          lineScopeN: line.personIds.length,
+          lineCount: line.lineN,
+          kinds: [...line.kinds],
+          reason: `${node.name} holds ${line.personIds.length} person(s) on ${line.lineN} declared reporting line(s) but carries no leadership altitude on the roster (“${node.level}”). The matrix gives them accountability and the roster gives them no rung — the seat is refused rather than invented. Correct the roster level to give them one.`,
+        });
+      }
+      continue;
+    }
+    const seat = seatFromNode(node, built, line);
     built.seats.push(seat);
     built.byId.set(seat.id, seat);
   }
@@ -239,20 +310,43 @@ export function canSee(record, collection, seat, built) {
   // (their manager is outside their downward span). Scope the person by id;
   // all other records retain their full named-person boundary.
   const people = collection === 'people' ? [record.id].filter(Boolean) : recordPeople(record);
-  const inScope = people.length === 0 ? true : people.every((pid) => seat.scope.has(pid));
-  if (!inScope) {
-    return { ...base, allow: 'denied', reason: `This ${policy.label} names people outside ${seat.label}’s span. The reporting tree does not put it under this seat (no sideways disclosure).` };
+  // ADR-0141: a declared additional line is a second accountability, so a person
+  // this seat manages ON THAT LINE is in scope. It is not a second chain: the
+  // same person reached through the tree and through a line is one person, and
+  // the verdict names which route carried it. A record that names even one
+  // person reachable through neither is still DENIED — the matrix widens a seat
+  // to its own line, never sideways.
+  const lineScope = seat.lineScope || null;
+  const viaLineIds = [];
+  const outsideIds = [];
+  for (const pid of people) {
+    if (seat.scope.has(pid)) continue;
+    if (lineScope && lineScope.has(pid)) { viaLineIds.push(pid); continue; }
+    outsideIds.push(pid);
+  }
+  const viaLine = viaLineIds.length > 0;
+  const lineNote = viaLine
+    ? ` ${viaLineIds.length} of the people named reach this seat only through a declared reporting line — a second accountability, not a second chain.`
+    : '';
+  const lineFields = {
+    viaLine,
+    lineScopedN: viaLineIds.length,
+    lineKinds: viaLine ? [...(seat.lineKinds || [])] : [],
+  };
+  if (outsideIds.length) {
+    return { ...base, ...lineFields, allow: 'denied',
+      reason: `This ${policy.label} names people outside ${seat.label}’s span${viaLine ? ` (${outsideIds.length} of them reach this seat through neither the reporting tree nor a declared line)` : ''}. The reporting tree does not put it under this seat (no sideways disclosure).` };
   }
   if (seat.rank < policy.minRank) {
-    return { ...base, allow: 'denied', reason: `${policy.classLabel} is not handed below rank ${policy.minRank}; ${seat.label} is rank ${seat.rank}. ${policy.reason}` };
+    return { ...base, ...lineFields, allow: 'denied', reason: `${policy.classLabel} is not handed below rank ${policy.minRank}; ${seat.label} is rank ${seat.rank}. ${policy.reason}${lineNote}` };
   }
   if (seat.rank > policy.maxRank) {
-    return { ...base, allow: 'aggregate', reason: `${policy.classLabel} is disclosed above rank ${policy.maxRank} as a COUNT ONLY. ${policy.reason}` };
+    return { ...base, ...lineFields, allow: 'aggregate', reason: `${policy.classLabel} is disclosed above rank ${policy.maxRank} as a COUNT ONLY. ${policy.reason}${lineNote}` };
   }
   if (seat.rank > policy.detailCeiling) {
-    return { ...base, allow: 'aggregate', reason: `${policy.classLabel} is disclosed above rank ${policy.detailCeiling} as counts and rates, not item detail. ${RECORD_CLASSES[policy.classKey].reason}` };
+    return { ...base, ...lineFields, allow: 'aggregate', reason: `${policy.classLabel} is disclosed above rank ${policy.detailCeiling} as counts and rates, not item detail. ${RECORD_CLASSES[policy.classKey].reason}${lineNote}` };
   }
-  return { ...base, allow: 'full', reason: '' };
+  return { ...base, ...lineFields, allow: 'full', reason: '' };
 }
 
 /** Action decision: rank window first, then scope when a record is named. */
@@ -337,8 +431,19 @@ export function seatDigest(state, seat, built, { now = new Date(), settings = nu
   const floorN = Math.max(conv.seatFloorN, seat.disclosure?.floorN || 0);
   const nowDay = dayKey(now);
   const items = harvestWork(state, built.chain, { now, settings: effective });
-  const inScope = items.filter((item) => seat.scope.has(item.ownerNodeId)
-    || item.people.some((pid) => seat.scope.has(pid)));
+  // ADR-0141: an item is in a seat's scope when the tree puts it there OR when
+  // every person it names is someone this seat manages on a declared line. The
+  // subset that arrives ONLY through a line is counted separately, so a matrix
+  // manager's figure is never quietly mixed with their tree figure.
+  const lineScope = seat.lineScope || null;
+  const inTree = (item) => seat.scope.has(item.ownerNodeId)
+    || item.people.some((pid) => seat.scope.has(pid));
+  const inLine = (item) => Boolean(lineScope) && item.people.length > 0
+    && item.people.every((pid) => seat.scope.has(pid) || lineScope.has(pid))
+    && item.people.some((pid) => lineScope.has(pid));
+  const inScope = items.filter((item) => inTree(item) || inLine(item));
+  const viaLineItems = lineScope ? inScope.filter((item) => !inTree(item) && inLine(item)) : [];
+  const viaLineN = viaLineItems.length;
 
   const byType = new Map();
   const byClassCount = { individual: 0, unit: 0, portfolio: 0, enterprise: 0 };
@@ -460,9 +565,20 @@ export function seatDigest(state, seat, built, { now = new Date(), settings = nu
     altitudeKey: seat.altitudeKey, rank: seat.rank, horizonDays: seat.horizonDays,
     isLeader: seat.isLeader, fullAccess: Boolean(seat.fullAccess), enforced: !seat.fullAccess,
     scopeN: seat.scopeN, spanN: units.length, floorN, windowDays: conv.seatWindowDays,
+    // ADR-0141 provenance: what the tree gives this seat, what a declared line
+    // adds, and how many people arrive only through the line.
+    lineScopeN: seat.lineScopeN || 0,
+    lineOnlyN: seat.lineOnlyN || 0,
+    lineCount: seat.lineCount || 0,
+    lineKinds: [...(seat.lineKinds || [])],
+    matrixScopeN: typeof seat.matrixScopeN === 'number' ? seat.matrixScopeN : seat.scopeN,
     nowDay,
     counts: {
       openN: inScope.length, overdueN, debtN, severityLoad, oldestAgeDays,
+      // ADR-0141: the figure above is the whole matrix reading; this is the part
+      // of it the tree alone would have hidden. Printed, never merged silently.
+      viaLineN,
+      treeOpenN: inScope.length - viaLineN,
       sensitiveN, withheldDetailN: withheld.reduce((a, w) => a + w.n, 0),
       byType: [...byType.entries()].sort((a, b) => b[1] - a[1]).map(([key, count]) => ({ key, label: sourceLabel(key), count })),
       byClass: byClassCount,
@@ -531,8 +647,8 @@ export function drillDown(state, built, seatId, opts = {}) {
 }
 
 /** Whole-workspace report for the Altitude Lens surface. */
-export function seatReport(state = {}, { now = new Date(), settings = null } = {}) {
-  const built = buildSeats(state, { now, settings });
+export function seatReport(state = {}, { now = new Date(), settings = null, lineScope = null } = {}) {
+  const built = buildSeats(state, { now, settings, lineScope });
   const seat = activeSeat(built);
   const digest = seatDigest(state, seat, built, { now, settings: settings || state?.settings || null });
   const projection = projectForSeat(state, seat, built);
@@ -540,12 +656,17 @@ export function seatReport(state = {}, { now = new Date(), settings = null } = {
   const children = drillDown(state, built, seat.id, { now, settings: settings || state?.settings || null });
   const allSeats = built.seats.map((s) => ({ id: s.id, name: s.name, label: s.label, shortLabel: s.shortLabel,
     rank: s.rank, altitudeKey: s.altitudeKey, scopeN: s.scopeN, parentId: s.parentId,
-    depth: s.depth, span: s.span, isLeader: s.isLeader, horizonDays: s.horizonDays }));
+    depth: s.depth, span: s.span, isLeader: s.isLeader, horizonDays: s.horizonDays,
+    lineScopeN: s.lineScopeN || 0, lineOnlyN: s.lineOnlyN || 0,
+    matrixScopeN: typeof s.matrixScopeN === 'number' ? s.matrixScopeN : s.scopeN }));
   return {
     engineVersion: SEAT_ENGINE_VERSION,
     built, seat, digest, projection, rollUp, children, allSeats,
     operatorSeat: built.operatorSeat,
     warnings: built.warnings,
+    // ADR-0141: line holders the roster cannot seat, with the reason — refused,
+    // never given a rung the roster does not record.
+    refusedLineSeats: built.refusedLineSeats,
     conventions: built.conventions,
     seatsByAltitude: ALTITUDES.map((a) => ({
       key: a.key, label: a.label, rank: a.rank, horizonDays: a.horizonDays,

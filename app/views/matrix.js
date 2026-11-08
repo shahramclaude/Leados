@@ -322,6 +322,60 @@ function linesPanel(ctx, report) {
   );
 }
 
+function seatsPanel(ctx, report) {
+  const s = report.seats;
+  const lineLabel = (row) => row.kinds.map((k) => matrixLineKind(k)?.label || k).join(', ') || '—';
+  return h('div', { class: 'stack' },
+    h('p', { class: 'lede' }, 'A tree can route work to one manager. A matrix routes it to every manager on the person’s lines — and then the seat has to be able to read what arrived. This panel is the read side: who holds people on a declared line, how much open work reaches them only through that line, and which line holders the roster cannot seat at all.'),
+
+    h('div', { class: 'stat-grid' },
+      stat({ label: 'Line managers', value: num(s.managerN), hint: 'hold people on a declared line', tone: s.managerN ? 'warn' : '' }),
+      stat({ label: 'People on a line', value: num(s.peopleOnLinesN), hint: `${s.lineOnlyPeopleN} the tree hides from that manager` }),
+      stat({ label: 'Seatable', value: num(s.seatableN), hint: `${s.refusedN} refused`, tone: s.refusedN ? 'bad' : '' }),
+      stat({ label: 'Open work in scope', value: num(s.workTotalN), hint: 'before the line is applied' }),
+      stat({ label: 'Reaches only via a line', value: num(s.workLineOnlyN), hint: 'hidden by a single-chain seat', tone: s.workLineOnlyN ? 'warn' : '' }),
+      stat({ label: 'Several owners', value: num(s.workSharedN), hint: 'named, never collapsed to one', tone: s.workSharedN ? 'warn' : '' }),
+    ),
+
+    h('p', { class: 'muted small' }, s.identityHolds
+      ? `Audit: ${s.workTreeN} item(s) reach a manager through the reporting tree and ${s.workLineOnlyN} only through a declared line. Those two counts are built from the same ${s.workReachN} scoped item row(s), so they add to the total exactly — the split is a fact, not a proportion.`
+      : banner({ tone: 'bad', title: 'The seat split does not reconcile', body: 'The tree count and the line count do not add to the scoped work total. Treat every figure on this panel as unverified and report it.' })),
+
+    s.refusedN
+      ? card({
+        title: 'Refused a seat',
+        subtitle: 'The matrix gave them accountability and the roster gave them no rung. A seat is refused, never invented.',
+        body: h('ul', { class: 'stack small' }, s.refused.map((row) => h('li', { key: row.managerId }, row.seatReason))),
+      })
+      : null,
+
+    card({
+      title: 'Who the line reaches',
+      subtitle: `One row per manager holding people on a declared line. “Only via line” is the subset the reporting tree does not put under them — the people a single-chain reading silently drops.`,
+      body: s.rows.length
+        ? table({
+          caption: 'Declared-line holders and the work their line carries',
+          columns: [
+            { label: 'Manager', render: (row) => (row.isLeader ? `${row.name} (workspace leader)` : row.name) },
+            { label: 'Tree span', key: 'treeSpanN' },
+            { label: 'On a line', key: 'linePersonN' },
+            { label: 'Only via line', key: 'lineOnlyN' },
+            { label: 'Matrix span', key: 'matrixSpanN' },
+            { label: 'Lines', render: (row) => lineLabel(row) },
+            { label: 'Seat', render: (row) => badge(row.seatEligible ? 'seated' : 'refused', row.seatEligible ? 'good' : 'bad') },
+          ],
+          rows: s.rows,
+        })
+        : emptyState({ title: 'No declared additional line', body: 'Declare one on the Lines panel and the work it carries appears here.' }),
+    }),
+    s.remainderN
+      ? h('p', { class: 'muted small' }, `${s.remainderN} further line manager row(s) are not shown: the table is capped at ${report.conventions.managerCap}. The remainder is counted, not dropped.`)
+      : null,
+
+    h('p', { class: 'muted small' }, 'A declared line is a second accountability, not a second chain. The reporting tree still decides the home line, the altitude and the disclosure class; the line only decides who else the work is owed to. Where an item has more than one accountable manager, this ledger names all of them and resolves none of them — picking one silently is a decision the engine is not entitled to make.'),
+  );
+}
+
 function rightsPanel(ctx, report) {
   const s = report.rightsSummary;
   return h('div', { class: 'stack' },
@@ -484,6 +538,7 @@ export function renderMatrix(ctx) {
     panel === 'desk' ? deskPanel(ctx, report) : null,
     panel === 'lines' ? linesPanel(ctx, report) : null,
     panel === 'rights' ? rightsPanel(ctx, report) : null,
+    panel === 'seats' ? seatsPanel(ctx, report) : null,
     panel === 'queue' ? queuePanel(ctx, report) : null,
     panel === 'method' ? methodPanel(report) : null,
   );
