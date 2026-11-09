@@ -52,9 +52,51 @@ import {
   ONBOARDING_MATRIX_RIGHTS,
   ONBOARDING_MATRIX_SCAN_EVENT,
 } from './onboardingMatrixRegistry.js';
+import {
+  ROLE_CLARITY_DOMAIN_KEYS,
+  ROLE_CLARITY_DECISION_RIGHTS,
+  ROLE_CLARITY_CRITERIA,
+} from './roleClarityRegistry.js';
+import { buildRoleClarity, buildRoleClarityCase } from './roleClarity.js';
 
 const MIN_SCOPE = 8;
 const MIN_REASON = 8;
+
+const DECISION_RIGHT_KEYS = new Set(ROLE_CLARITY_DECISION_RIGHTS.map((r) => r.key));
+const CRITERIA_KEYS = new Set(ROLE_CLARITY_CRITERIA.map((c) => c.key));
+
+/**
+ * ADR-0153: validate the OPTIONAL structured role marks on a WRITE. The marks are
+ * the only part of a brief another line can be compared against, so an unknown
+ * value is REFUSED with the closed vocabulary printed — never dropped silently,
+ * never coerced into a plausible mark. Absence is always allowed (a brief with no
+ * marks is a valid brief; it just cannot be compared).
+ */
+function validateRoleMarks(input) {
+  const fail = (error, field) => ({ ok: false, error, ...(field ? { field } : {}) });
+  const domains = [];
+  const seen = new Set();
+  for (const value of Array.isArray(input.domains) ? input.domains : []) {
+    const key = String(value || '').trim().toLowerCase();
+    if (!key) continue;
+    if (!ROLE_CLARITY_DOMAIN_KEYS.includes(key)) {
+      return fail(`“${key}” is not an accountability domain on the closed lexicon (${ROLE_CLARITY_DOMAIN_KEYS.join(', ')}). Nothing is guessed into it; choose from the declared set.`, 'domains');
+    }
+    if (seen.has(key)) continue;
+    seen.add(key);
+    domains.push(key);
+    if (domains.length >= ROLE_CLARITY_DOMAIN_KEYS.length) break;
+  }
+  const decisionRight = String(input.decisionRight || '').trim().toLowerCase();
+  if (decisionRight && !DECISION_RIGHT_KEYS.has(decisionRight)) {
+    return fail(`“${decisionRight}” is not a decision right on the closed scale (decides, advises, informed). Nothing is guessed into it.`, 'decisionRight');
+  }
+  const criteria = String(input.criteria || '').trim().toLowerCase();
+  if (criteria && !CRITERIA_KEYS.has(criteria)) {
+    return fail(`“${criteria}” is not a criteria standing on the closed scale (written, verbal, unstated). Nothing is guessed into it.`, 'criteria');
+  }
+  return { ok: true, domains, decisionRight, criteria };
+}
 
 export function createOnboardingMatrixActions(store, { now, idFactory }) {
   const fail = (error, field = null) => ({ ok: false, error, ...(field ? { field } : {}) });
@@ -217,6 +259,8 @@ export function createOnboardingMatrixActions(store, { now, idFactory }) {
       const gate = checkLineForWrite(seat, report, line);
       if (!gate.ok) return gate;
 
+      const marksCheck = validateRoleMarks(input);
+      if (!marksCheck.ok) return marksCheck;
       const scope = String(input.scope || '').trim().slice(0, ONBOARDING_MATRIX_LIMITS.scopeChars);
       if (scope.length < MIN_SCOPE) return fail(ONBOARDING_MATRIX_REFUSALS.scopeTooShort, 'scope');
       const firstWork = String(input.firstWork || '').trim().slice(0, ONBOARDING_MATRIX_LIMITS.firstWorkChars);
@@ -257,6 +301,9 @@ export function createOnboardingMatrixActions(store, { now, idFactory }) {
           scope,
           firstWork,
           stakeholders,
+          domains: marksCheck.domains,
+          decisionRight: marksCheck.decisionRight,
+          criteria: marksCheck.criteria,
           reason: '',
           acknowledgedOn: null,
           acknowledgedBySeatId: null,
@@ -315,6 +362,9 @@ export function createOnboardingMatrixActions(store, { now, idFactory }) {
           scope: '',
           firstWork: '',
           stakeholders: [],
+          domains: [],
+          decisionRight: '',
+          criteria: '',
           reason,
           acknowledgedOn: null,
           acknowledgedBySeatId: null,
@@ -390,6 +440,53 @@ export function createOnboardingMatrixActions(store, { now, idFactory }) {
         summary: 'Matrix onboarding completeness scanned; deferred obligations retried and no declaration changed.',
       });
       return saved({ propagations: store.lastPropagations || [] });
+    },
+
+    /* --------------------------------- ADR-0153: Cross-Line Role Clarity Reconciliation */
+
+    /**
+     * The reconciliation for ONE plan, seat-checked exactly like the onboarding
+     * read: the same right that authorises reading the briefs authorises reading
+     * the comparison of them, and the same reach check applies. The report is a
+     * pure read; it writes nothing and derives everything from the stored briefs,
+     * the plan and the live matrix.
+     */
+    roleClarityRead(input = {}) {
+      const check = seatFor(ONBOARDING_MATRIX_RIGHTS.acknowledge);
+      if (!check.ok) return check;
+      const planId = String(input.planId || '').trim();
+      const personId = String(input.personId || '').trim();
+      const plan = planId ? findPlan(planId) : null;
+      if (planId && !plan) return fail('That 30-60-90 plan no longer exists.', 'planId');
+      if (!plan && !personId) return fail('Name the plan or the person whose role definitions you are reading.', 'planId');
+      const at = clock();
+      const cfg = settings();
+      let target = plan;
+      if (!target) {
+        const board = buildRoleClarity(store.state, { now: at, settings: cfg, limit: Number.MAX_SAFE_INTEGER });
+        const unplanned = board.cases.find((c) => c.personId === personId) || null;
+        if (!unplanned) return fail('No role-clarity case resolves for that person.', 'personId');
+        target = findPlan(unplanned.planId);
+      }
+      if (!target) return fail('No role-clarity case resolves for that person.', 'personId');
+      if (!seatReaches(check.seat, target.personId)) {
+        return fail('That person is outside your operating seat. Role definitions are only readable from a seat above the person or on one of their lines.');
+      }
+      return { ok: true, report: buildRoleClarityCase(store.state, target, { now: at, settings: cfg }) };
+    },
+
+    /** The whole-workspace board, seat-gated exactly like the onboarding board. */
+    roleClarityBoard() {
+      const check = seatFor(ONBOARDING_MATRIX_RIGHTS.acknowledge);
+      if (!check.ok) return check;
+      return {
+        ok: true,
+        board: buildRoleClarity(store.state, {
+          now: clock(),
+          settings: settings(),
+          limit: ONBOARDING_MATRIX_LIMITS.board,
+        }),
+      };
     },
   };
 }

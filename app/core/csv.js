@@ -89,6 +89,7 @@ import { buildLineConsent, lineConsentCsvRows } from './domain/lineConsent.js';
 import { LINE_CONSENT_CSV_COLUMNS } from './domain/lineConsentRegistry.js';
 import { buildStructureHistoryReport, structureHistoryCsvRows } from './domain/structureHistory.js';
 import { onboardingMatrixCsvRows, ONBOARDING_MATRIX_CSV_COLUMNS } from './domain/onboardingMatrix.js';
+import { roleClarityCsvRows, ROLE_CLARITY_CSV_COLUMNS } from './domain/roleClarity.js';
 import { lineExitCsvRows } from './domain/lineExit.js';
 import { LINE_EXIT_CSV_COLUMNS } from './domain/lineExitRegistry.js';
 import { STRUCTURE_HISTORY_CSV_COLUMNS } from './domain/structureHistoryRegistry.js';
@@ -1123,6 +1124,8 @@ export const CSV_EXPORTS = [
   // CSV scope #114 (Schema v127, ADR-0152). Aggregate-only: one workspace summary
   // row plus one row per ended line, identified by KIND and a stable position. No
   // person, no name, no manager, no line id and no free text.
+  // CSV scope #115 (Schema v128, ADR-0153). Aggregate-only: one row per onboarding case × line; no identity, no prose.
+  { key: 'role-clarity', label: 'Cross-line role clarity (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'role-clarity', description: 'One row per onboarding case × reporting line for every case where the person sat on more than one reporting line during the window. Each row carries the window dates, the derived case verdict (unbriefed / contested / unscoped-pair / overlapping / partitioned), whether that verdict is open, the line role and kind, whether the line was in force in the window, the line outcome (brief / declined / none), the number of accountability domains the line declared, the sorted closed-lexicon domain keys, the declared decision right (decides / advises / informed), the declared criteria standing (written / verbal / unstated) and how many earlier briefs the current one supersedes. NO person, NO name, NO manager id, NO manager name, NO brief text and NO stakeholder name. A line with no brief exports BLANK marks, never a zero, and a brief with no declared marks exports BLANK, never an imputed one: nothing derived is stored and every figure is recomputed from the stored briefs on read.' },
   { key: 'line-exit', label: 'Matrix line-exit obligations (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'line-exit', description: 'One workspace summary row plus one row per reporting line that has been dated out, carrying the line KIND and a stable position, the day it ended, whether its start and end days support the overlap arithmetic, and the obligation counts by derived state (open with no remedy / retired with a reason / carried to a named manager), how many are past their due day, how many are about a work window that falls entirely outside the line\u2019s life (flagged for retirement, never retired automatically), how many carry no dated window, the age of the oldest open obligation in whole days, the line\u2019s derived verdict and whether that verdict is open. NO person, NO name, NO manager id, NO declaration id and NO free text. An obligation is never re-pointed and never voided by arithmetic, so a line whose end day is not recorded exports line_window_verifiable = false and its obligations read as open rather than settled.' },
   RIGHTS_CONCORDANCE_CSV_DESCRIPTOR,
   { key: 'priority-arbitration', label: 'Cross-line priority arbitration (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'priority-arbitration', description: 'One workspace summary row, one row per live arbitration case (derived state, frozen demand count, line count, disposition counts, the exact-integer verdict and its refusal when a score set is incomplete, the arbiter tie state, the agreed window and review date, dissent count, issued obligation count and the declared capacity claim), and one row per frozen demand carrying ONLY the two declared integers, the chain days and the integer rank. NO person, NO name, NO demand title, NO case id, NO seat id and NO rationale text. A demand missing its cost of delay or job size exports its rank BLANK with the refusal in `withheld_reason`, never a zero. `ranked` and `reconciles` are separate claims: an order can be absent while the counts still add up, and the export says which.' },
@@ -6213,6 +6216,17 @@ export function buildScopeTable(state, scope, now) {
       // never a zero-length claim that a line said nothing in particular.
       const rows = onboardingMatrixCsvRows(state, { now, settings: state.settings || {} });
       const columns = ONBOARDING_MATRIX_CSV_COLUMNS.map((key) => ({ key, header: key }));
+      return { columns, rows };
+    }
+    case 'role-clarity': {
+      // CSV scope #115 (Schema v128, ADR-0153). Built from the same read model the
+      // panel renders, so the exported state of a line is provably the state that
+      // was printed. Aggregate only: no person, no name, no manager id, no brief
+      // text and no stakeholder name. A line with no brief exports BLANK marks,
+      // never a zero, and a brief with no declared marks exports BLANK — the marks
+      // are declared by the line or they do not exist.
+      const rows = roleClarityCsvRows(state, { now, settings: state.settings || {} });
+      const columns = ROLE_CLARITY_CSV_COLUMNS.map((key) => ({ key, header: key }));
       return { columns, rows };
     }
     case 'line-exit': {

@@ -490,7 +490,7 @@ test('CSV #114 is the same reading, aggregate only, and reconciles against the b
 
 /* ----------------------------------------------------------------- schema */
 
-test('schema v127 is additive: an upgraded workspace has an EMPTY remedy ledger and a clamped window', () => {
+test('schema v126 past v127 is additive all the way to v128: an upgraded workspace gains an EMPTY remedy ledger, an EMPTY mark ledger and a clamped window', () => {
   const legacy = createEmptyState(ISO);
   legacy.people = roster();
   legacy.reportingLines = [endedLine()];
@@ -502,8 +502,8 @@ test('schema v127 is additive: an upgraded workspace has an EMPTY remedy ledger 
   delete legacy.settings.lineExitDueDays;
 
   const migrated = migrate(legacy);
-  assert.equal(SCHEMA_VERSION, 127);
-  assert.equal(migrated.raw.schemaVersion, 127);
+  assert.equal(SCHEMA_VERSION, 128);
+  assert.equal(migrated.raw.schemaVersion, 128);
   assert.deepEqual(migrated.raw.lineExitRemedies, []);
   assert.deepEqual(migrated.raw.lineExitMarkers, []);
   assert.equal(migrated.raw.settings.lineExitDueDays, 7);

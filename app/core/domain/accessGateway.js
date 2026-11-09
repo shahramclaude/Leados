@@ -29,7 +29,11 @@ const groups = [
   // are separate rights on the spine because they are separate humans' statements,
   // and neither can perform the other. The three aggregate reads and the scan are
   // declared here so a real operator can always retry a deferred obligation.
-  ['brief-onboarding-line', 'onboardingMatrixBriefLine onboardingMatrixDeclineLine onboardingMatrixRead onboardingMatrixCandidates onboardingMatrixScan'],
+  // ADR-0153: the role-clarity read surface. `roleClarityRead` and
+  // `roleClarityBoard` are seat-checked inside the action (the same right that
+  // authorises reading the briefs authorises reading the comparison of them), so
+  // they live on the brief right; the aggregate reads live in SAFE_READS below.
+  ['brief-onboarding-line', 'onboardingMatrixBriefLine onboardingMatrixDeclineLine onboardingMatrixRead onboardingMatrixCandidates onboardingMatrixScan roleClarityRead roleClarityBoard'],
   ['acknowledge-onboarding-line', 'onboardingMatrixAcknowledge'],
   ['log-conflict', 'addConflict updateConflict agreeConflict completeConflictAction followUpConflict resolveConflict escalateConflict reopenConflict'],
   ['open-case', 'addCase updateCase requestMitigationReview syncCaseAutomations resolveCase recordCaseActuals reopenCase deleteCase linkCaseEntity removeMissingCaseMitigation refreshCaseAutomation'],
@@ -363,6 +367,12 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // the brief right (they are seat-scoped inside the read model), so only the
 // aggregate reads live here.
 'onboardingMatrixBoard', 'onboardingMatrixBriefText', 'onboardingMatrixCsv',
+// ADR-0153: the role-clarity read surface. Registered for the same reason as every
+// module above — a read absent from SAFE_READS is unreadable under enforcement
+// while the briefs it compares are still gated. `roleClarityRead` and
+// `roleClarityBoard` are declared commands on the brief right (they are
+// seat-checked inside the action), so only the aggregate reads live here.
+'roleClarityAggregate', 'roleClarityBriefText', 'roleClarityCsv', 'roleClarityAttentionCount',
 // ADR-0152: the line-exit read surface. Registered for the same reason as every
 // module above — a read absent from SAFE_READS is unreadable under enforcement
 // while its writes are still gated, which would hide an orphaned obligation from
