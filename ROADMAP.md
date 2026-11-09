@@ -1,3 +1,13 @@
+## 2026-11-09 — Session 200: overdue governance sittings are not available today
+
+**Implemented — frontline / mid-manager primary, applicable to all altitudes × single-chain and matrix for date arithmetic only.** An overdue expected sitting is retained as a missed date, not a zero-day wait. Unknown rungs block an all-routes-late conclusion; the clock, constraint list, brief and view name uncertainty, and a frozen forecast does not promise a sitting whose date is unknown. The existing cadence report, automation and roll-up path consume the revised reading; no new data model or event engine. **Matrix forum authorization, item routing, scope and roll-up parity remain In Progress**, not certified by this slice.
+
+**Coverage map:** frontline / mid-manager 200 (calendar calculation only; matrix parity still priority); director / VP 197; CEO / C-suite 198. Single-chain 1–188 plus this slice; matrix primary 189–198 plus this shared calculation, not full matrix cadence coverage. Next: frontline / mid-manager × matrix, diagnose harvested owner and concurrent-chair scope from Session 199.
+
+**Verified:** one focused test command after correcting a test-only negation assertion: 8/8, including stored sitting vs computed date/count vs rendered view and frozen reading in single-chain and a matrix fixture, an unknown alternative, plus adjacent single-chain propagation and rendering. First pass 6/8 due to the test assertion matching its own negated warning. Full suite, real-browser AT, broader matrix routing and current historically frozen readings **[UNVERIFIED]**. Existing ladder logic may still report “every competent forum is congested” when one known-date alternative is non-congested but lacks a flow estimate; it is **not fixed or verified here**. Seats are workflow declarations, not authentication.
+
+**New planned gap:** cross-forum dependency and handoff ledger.
+
 ## 2026-11-09 — Session 199: cadence matrix parity blocked; clean baseline retained
 
 **In Progress — frontline / mid-manager PRIMARY × matrix.** Duty: let a project-line manager declare and read forums for directly declared line members, without choosing authority by meeting interval. The attempted slice used the canonical dated matrix → seat model in cadence reads and actions, retaining the existing automation and roll-up spine. It was **not shipped**: after one correction, the focused suite passed 17/18 but the new concurrent-chair test still returned `nearest-competent-of-several` rather than the required `ambiguous-matrix-authority`. All implementation and test edits were reverted to the session’s starting baseline under the stop rule. No schema or dependency changes retained.
@@ -1537,6 +1547,8 @@ second hierarchy engine; back-filling forecasts into historical responses.
 
 ### Implemented
 
+- **[frontline → CEO, single-chain and matrix: calendar arithmetic only]** Overdue cadence sittings refuse invented waits, unknown ladder conclusions and date-dependent forecasts; recorded missed dates and uncertainty counts are displayed. Session 200; `tests/app/cadence-overdue.test.mjs`. Matrix routing and scope parity remain In Progress.
+
 - **[frontline → CEO, matrix]** Exact bounded matrix fan-out link accounting and retry on subsequent scans or operational events (Session 192; `matrixRules.js`).
 - **[frontline → chief]** Certified exact branch-and-bound past the enumeration wall (`app/core/domain/robustBranchBound.js`): integer-cross-multiplication bounds, ceiled fractional remainders, strict pruning with tie-exploration, one shared node budget (director+ convention, clamped 25k–2M), provenance certificate frozen at adoption. Over-cap plans (e.g. 9⁵ = 59,049 combinations) now solve and ADOPT with full RULE-RAL-01 fan-out; unit-sum > 40 or budget exhaustion refuses. Field-for-field equivalence with the enumerator proven by a seeded fixture sweep.
 - **[frontline → chief]** Closed-loop evidence calibration: actions declare the prospective instrument that grades their premise; settled ADR-0094 grades read back by altitude × instrument cell (Wilson 95%, floor, complementary suppression, director-rank gate, subtree-correct coverage); per-action graded readings on Solve; a **revision** (`supersedesId`) freezes a new plan — the engine never adjusts a declared range.
@@ -1680,6 +1692,8 @@ This section is the session-scoped execution view of [NORTH_STAR.md](NORTH_STAR.
 - **[all altitudes]** Full canonical verification and real-browser/assistive-technology walkthroughs. Automated jsdom/axe checks pass; real-browser AT behaviour remains `[UNVERIFIED]`. Evidence: Session 118/128 verification sections.
 
 ### Planned — Not Started
+
+- **Cross-forum dependency and handoff ledger [frontline / mid-manager / director × single-chain and matrix]:** model a decision that must wait for a prerequisite ruling in another forum, with explicit typed dependencies, dated handoff, accountable acknowledgement, cycle detection and censored wait time. Roll up distinct blocked decisions via the existing event/provenance and matrix hierarchy; do not infer approval from a meeting or invent a handoff. Operations basis: critical-path and queueing theory. Targeted cadence inspection found competence-based alternatives but no prerequisite/handoff model; repository-wide absence is **[UNVERIFIED]**. Discovered Session 200.
 
 - **Decision-forum authority quorum [frontline / mid-manager / director × matrix]:** compare dated RAPID rights across all affected lines with a forum’s declared attendees; name missing or contested authority before a sitting rather than equating headcount with a binding decision. Reuse the canonical matrix and typed decision provenance, with governed remedies through the existing event spine. Targeted cadence inspection found no rights-quorum check; repository-wide absence remains **[UNVERIFIED]**. Discovered Session 199.
 
