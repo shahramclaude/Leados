@@ -1,3 +1,15 @@
+# 2026-11-09 — Session 207: as-of matrix reading blocked
+
+**Doctrine / sync / scope.** NORTH_STAR.md contains both mandates; origin matched the requested repository. Target: director / VP / CEO × matrix, using the existing matrix engine, structure-history reconciliation and RULE-SHR-01 automation rather than a standalone report.
+
+**Outcome.** Prototype reverted; no user-facing feature shipped. Focused `node --test tests/app/structure-history.test.mjs` reported 40/43 passing. The prototype omitted `matrix.inactiveLines` and one test miscounted reporting-line acts. Inspection also found that `buildMatrix` builds its graph using current home managers, making historical cycle decisions potentially wrong, and the prototype did not filter matrix output by seat scope. These cannot be represented as a trustworthy historical or scoped reading. No fix attempt was made after identifying these architectural blockers; returned to the last clean code state rather than ship.
+
+**Verification / limits.** The failed prototype test run did not establish display-versus-stored equality. Reverted code, real-browser behaviour, full suite and documentation checks are **[UNVERIFIED]** this session. No adjacent or unrelated suites were rerun.
+
+**Discovery / next.** Added per-line onboarding completeness to Planned [frontline / mid-manager × matrix; executive roll-up]; repository-wide absence **[UNVERIFIED]**. As-of matrix reads remain In Progress; first resolve historical home graph and scope, with fail-closed unknowns.
+
+---
+
 # 2026-11-09 — Session 206: the org chart gets a history (Schema v124, ADR-0149, `RULE-SHR-01`, CSV #111, `#/structure-history`)
 
 **Doctrine / sync / scope.** `NORTH_STAR.md` present with both binding mandates (Matrix Leadership, Bulletproof Reliability); no augmentation needed. Origin verified as `https://github.com/shahramclaude/Leados.git`; work stayed on `arena/7490cc11-leados`. **Altitude: director / VP PRIMARY** (last primary 197 — named as the next rotation by Sessions 203, 204 and 205, and not taken in any of them). **Structure: matrix**; the ordinary single-chain tree is a first-class case and gains no row, no ask and no change.
