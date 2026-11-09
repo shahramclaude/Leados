@@ -155,6 +155,9 @@ export const RECORD_POLICIES = Object.freeze({
   // The marker ledger carries opaque keys only.
   priorityArbitrations: { classKey: 'unit', label: 'Cross-line priority cases', route: '#/arbitration?panel=board' },
   priorityArbitrationMarkers: { classKey: 'unit', label: 'Arbitration idempotency markers', route: '#/arbitration' },
+  lineMandates: { classKey: 'unit', label: 'Declared line charters', route: '#/contradiction?panel=board' },
+  contradictionReviews: { classKey: 'unit', label: 'Contradiction rulings', route: '#/contradiction?panel=log' },
+  contradictionMarkers: { classKey: 'unit', label: 'Contradiction idempotency markers', route: '#/contradiction' },
   // ADR-0128: a rehearsal record attests practice of a POSITION's duty by a
   // named cover, so it carries the same unit class as the cover ledger it is
   // evidence for; above the manager altitude the plan prints counts, modes and
@@ -433,6 +436,19 @@ export const ACTION_RIGHTS = Object.freeze({
   // refuses any seat that is not one of the parties, and the normalizer keeps one
   // answer per seat so a second cannot overwrite the first.
   'answer-arbitration': { minRank: 1, maxRank: 5, label: 'Answer a cross-line precedence as a named party' },
+  // ADR-0144: a line's charter is declared by the line — its manager or the span
+  // above it — and open at every leadership rank, because a project lead with no
+  // home-line reports still owns a charter. The action additionally refuses a
+  // line the seat cannot reach on the tree OR a declared line.
+  'declare-line-mandate': { minRank: 1, maxRank: 5, label: 'Declare, withdraw or read a line charter' },
+  // Ruling on a contradiction is a director-and-above act: a resequence issues a
+  // dated obligation to somebody else's line, and the chief who owns the
+  // portfolio trade-off is the seat this module exists for.
+  'review-contradiction': { minRank: 3, maxRank: 5, label: 'Rule on a cross-line contradiction' },
+  // The conventions decide when a pair reads incompatible, so re-declaring them
+  // is a governance act for a rank-4+ seat, and the action additionally requires
+  // full access — a scoped seat cannot re-price the audit for the whole workspace.
+  'set-contradiction-conventions': { minRank: 4, maxRank: 5, label: 'Re-declare the contradiction-audit conventions' },
   // ADR-0128: recording a rehearsal is the act of a seat that WAS THERE — the
   // duty holder (a frontline lead as much as a chief), a leadership ancestor of
   // the holder, or the cover themselves. Open at every altitude by rank; the

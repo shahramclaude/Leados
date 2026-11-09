@@ -133,6 +133,7 @@ import { matrixRule } from './matrixRules.js';
 // fanned up the primary tree in the SAME transaction. Inert unless an agreement
 // was recorded, so a workspace that never opens a case gains nothing.
 import { priorityArbitrationRule } from './priorityArbitrationRules.js';
+import { contradictionRule } from './contradictionRules.js';
 
 
 // ADR-0087: the Operating Cadence Clock. Reads the finished queue after the
@@ -785,6 +786,12 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // the precedence, and typed provenance to the person, the decision, each task
   // and every leadership ancestor.
   priorityArbitrationRule,
+  // ADR-0144: the Cross-Line Contradiction Audit (RULE-CNT-01). ONLY a recorded
+  // ruling (`contradiction.reviewed`) or an explicit scan makes it run: declaring
+  // a charter is not deciding what to do about its contradiction. It opens one
+  // governed decision per ruling and issues work ONLY for a resequence, to the
+  // one named line. It never edits a charter.
+  contradictionRule,
   // ADR-0076: the Operating Seat (vertical roll-up + enforced boundaries).
   // It reads the finished record after every module has propagated, then fans
   // each open item up every leadership ancestor in the reporting tree with one

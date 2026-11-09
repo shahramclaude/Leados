@@ -46,6 +46,11 @@ import { createMatrixActions } from './core/domain/matrixActions.js';
 // the same reviewed gateway; every score, state and capacity total is derived on
 // read, and only an AGREED precedence issues work (RULE-ARB-01).
 import { createPriorityArbitrationActions } from './core/domain/priorityArbitrationActions.js';
+// ADR-0144: the Cross-Line Contradiction Audit. Declaring a line charter and
+// ruling on a derived contradiction are dated human commands on the same
+// reviewed gateway; every finding, severity and weight total is derived on read,
+// and only a RESEQUENCE ruling issues work (RULE-CNT-01).
+import { createContradictionActions } from './core/domain/contradictionActions.js';
 // ADR-0122: the Dated Absence Plan. One read (the window plan), three human
 // commands (declare, revoke, scan); availability is derived from the declared
 // windows, never stored.
@@ -19835,6 +19840,11 @@ export function createApi(store, options = {}) {
   // reviewed gateway; the recommendation is computed on read and RULE-ARB-01 fans
   // the agreed obligations in the same commit.
   Object.assign(api, createPriorityArbitrationActions(store, { now: clock, idFactory: id }));
+  // ADR-0144: the Cross-Line Contradiction Audit. Charter declarations and
+  // rulings are human commands through the same reviewed gateway; the finding is
+  // computed on read and RULE-CNT-01 fans a resequence's obligation in the same
+  // commit.
+  Object.assign(api, createContradictionActions(store, { now: clock, idFactory: id }));
   // ADR-0118: the only write is RECORD-ARBITRATION; the receipt, the governed
   // decision, the two `rehearses` edges and the vertical roll-up land in one
   // atomic transaction performed by this mixin plus RULE-CMP-01.

@@ -102,6 +102,7 @@ import { parityRule } from './parityRules.js';
 import { seatRule } from './seatRules.js';
 import { matrixRule } from './matrixRules.js';
 import { priorityArbitrationRule } from './priorityArbitrationRules.js';
+import { contradictionRule } from './contradictionRules.js';
 import { sealRule } from './sealRules.js';
 // ADR-0092: the Differencing Defender declares its contract like every other rule.
 import { differencingRule } from './differencingRules.js';
@@ -787,6 +788,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'priorityArbitrationRules.js',
     purpose: 'RULE-ARB-01: an AGREED cross-line precedence becomes owned work. One dated delegation per demand the agreement sequenced, addressed to the person whose capacity the case froze; one governed decision recording the precedence, its window, its review date and the arbiter\u2019s own reasoning; and typed provenance only (`concerns`, `decides`, `issues-obligation`, `rolls-up-to` per leadership ancestor in the matrix DAG). It never fires on a PROPOSAL, never issues work for a demand the agreement deferred, reshaped or released, never edits the case, and is idempotent through a per-agreement marker plus exact-edge deduplication. Inert unless an agreement exists.',
     writes: ['delegations', 'decisions', 'links', 'priorityArbitrationMarkers', 'priorityArbitrations'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: contradictionRule,
+    module: 'contradictionRules.js',
+    purpose: 'RULE-CNT-01: a recorded ruling on a cross-line contradiction becomes a governed record. Exactly ONE decision per ruling — the finding kind, its severity, the declared integers that produced it and the chief\u2019s own reasoning — and, ONLY when the verdict is a resequence, exactly one dated delegation to the single named line to revise its charter, plus typed provenance (`concerns`, `decides`, `issues-obligation`, `rolls-up-to` per leadership ancestor in the matrix DAG). It never fires on a declaration, never issues work for an acceptance or a withholding, never edits a charter, never rules on its own, refuses to act when the declarations have changed so the finding no longer reproduces (the ruling stands as history), and is idempotent through a per-review and a per-review-per-line marker plus exact-edge deduplication. Inert unless a ruling exists.',
+    writes: ['contradictionMarkers', 'contradictionReviews', 'delegations', 'decisions', 'links'],
     emits: [],
     scansWorkspace: true,
   },
