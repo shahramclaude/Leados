@@ -341,6 +341,13 @@ function bundleFor(state, name, args) {
   return (state.actionBundles || []).find((b) => b.id === id);
 }
 
+const MATRIX_LINE_SCOPED = new Set([
+  'cadenceDeclareForum', 'cadenceUpdateForum', 'cadenceLogSession',
+  'priorityOpenCase', 'priorityTreatDemand', 'priorityPropose', 'priorityAgreePrecedence', 'priorityRecordAnswer', 'priorityWithdraw',
+  'contradictionDeclareMandate', 'contradictionWithdrawMandate',
+  'dutyCoverageDesignate', 'dutyCoverageRevoke',
+]);
+
 /** Exact method allowlist + rank + record/person scope. No arbitrary API names. */
 export function guardApiCall(state, name, args, nowMs = undefined) {
   if (!state.settings?.activeSeatId) return { ok: true };
@@ -348,8 +355,12 @@ export function guardApiCall(state, name, args, nowMs = undefined) {
   // ADR-0141: the gate and the seat must agree about what a declared line
   // carries. If the gate resolved the seat without the lines, a line-only
   // manager resolved to the read-only fallback and every call was refused.
-  try { built = buildSeats(state, { settings: state.settings, lineScope: matrixLineScopeFor(state, { settings: state.settings }) }); seat = activeSeat(built); }
-  catch { return refusal('The operating seat could not be resolved. No record was read or changed.'); }
+  const gateNow = Number.isFinite(nowMs) ? new Date(nowMs) : undefined;
+  try {
+    const lineScope = matrixLineScopeFor(state, { ...(gateNow ? { now: gateNow } : {}), settings: state.settings });
+    built = buildSeats(state, { ...(gateNow ? { now: gateNow } : {}), settings: state.settings, ...(lineScope ? { lineScope } : {}) });
+    seat = activeSeat(built);
+  } catch { return refusal('The operating seat could not be resolved. No record was read or changed.'); }
   if (seat.readOnly && name !== 'setActiveSeat') return refusal('The operating seat is unresolved. Declare a valid seat first.');
   if (SAFE_READS.has(name)) return { ok: true, seat, built };
   // ADR-0089: fail-closed authorship enforcement. A workspace that claims
@@ -400,7 +411,9 @@ export function guardApiCall(state, name, args, nowMs = undefined) {
   // Only proposal may name a peer subtree at the generic boundary. The mixin
   // then requires active party membership and resolves the exact LCA mediator.
   const reviewedPeerProposal = name === 'valueStreamContractPropose';
-  const unknown = reviewedPeerProposal ? [] : payloadPeople(args).filter((id) => !seat.scope.has(id));
+  const inBoundary = (id) => seat.scope.has(id)
+    || (MATRIX_LINE_SCOPED.has(name) && Boolean(seat.lineScope?.has(id)));
+  const unknown = reviewedPeerProposal ? [] : payloadPeople(args).filter((id) => !inBoundary(id));
   if (unknown.length) return refusal('The request names a person outside the operating span. Escalate through the common leader instead of crossing a peer boundary.');
   if (['createActionBundle', 'updateActionBundle', 'saveActionBundlePreview', 'commitActionBundle', 'withdrawActionBundle', 'archiveActionBundle'].includes(name)) {
     const b = bundleFor(state, name, args);
@@ -418,10 +431,11 @@ export function guardApiCall(state, name, args, nowMs = undefined) {
   }
   return { ok: true, seat, built };
 }
-export function guardApi(api, store) {
+export function guardApi(api, store, { now = null } = {}) {
   return Object.fromEntries(Object.entries(api).map(([name, fn]) => [name, (...args) => {
     if (store.writeBlockReason) return { ok: false, error: store.writeBlockReason };
-    const verdict = guardApiCall(store.state, name, args);
+    const nowMs = typeof now === 'function' ? Number(now()) : undefined;
+    const verdict = guardApiCall(store.state, name, args, nowMs);
     return verdict.ok ? fn(...args) : verdict;
   }]));
 }

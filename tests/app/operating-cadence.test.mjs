@@ -95,9 +95,9 @@ const weeklyForum = (extra = {}) => ({
 /* ------------------------------------------------------------------ schema */
 
 test('v92 → v93 migration is additive, and no forum is ever invented', () => {
-  assert.equal(SCHEMA_VERSION, 119);
+  assert.equal(SCHEMA_VERSION, 121);
   const migrated = migrate({ schemaVersion: 90, settings: { leaderName: 'Keep' }, people: [] });
-  assert.deepEqual(migrated.applied, ['90 → 91', '91 → 92', '92 → 93', '93 → 94', '94 → 95', '95 → 96', '96 → 97', '97 → 98', '98 → 99', '99 → 100', '100 → 101', '101 → 102', '102 → 103', '103 → 104', '104 → 105', '105 → 106', '106 → 107', '107 → 108', '108 → 109', '109 → 110', '110 → 111', '111 → 112', '112 → 113', '113 → 114', '114 → 115', '115 → 116', '116 → 117', '117 → 118', '118 → 119']);
+  assert.deepEqual(migrated.applied, ['90 → 91', '91 → 92', '92 → 93', '93 → 94', '94 → 95', '95 → 96', '96 → 97', '97 → 98', '98 → 99', '99 → 100', '100 → 101', '101 → 102', '102 → 103', '103 → 104', '104 → 105', '105 → 106', '106 → 107', '107 → 108', '108 → 109', '109 → 110', '110 → 111', '111 → 112', '112 → 113', '113 → 114', '114 → 115', '115 → 116', '116 → 117', '117 → 118', '118 → 119', '119 → 120', '120 → 121']);
   assert.deepEqual(migrated.raw.cadenceForums, []);
   assert.deepEqual(migrated.raw.cadenceSessions, []);
   assert.deepEqual(migrated.raw.cadenceReadings, []);
@@ -146,7 +146,7 @@ test('graph vocabulary and spine parity are exhaustive', () => {
   assert.ok(contract.writes.includes('decisions'));
   // ADR-0088 appends after this scope, so the registry ORDER is the contract.
   assert.ok(CSV_EXPORTS.findIndex((s) => s.key === 'operating-cadence') < CSV_EXPORTS.findIndex((s) => s.key === 'federated-exchange'));
-  assert.equal(CSV_EXPORTS.length, 104);
+  assert.equal(CSV_EXPORTS.length, 107);
 });
 
 /* ------------------------------------- the concrete self-test: one transaction */
@@ -558,7 +558,7 @@ test('the engine is inert until a forum is declared', () => {
   assert.equal(after.picture.forums.length, 1);
   assert.equal(after.picture.perItem[0].forumId, declared.forum.id);
   assert.notEqual(after.constraint.type, 'competence-gap', 'the gap is closed by the declaration');
-  assert.ok(['forum-capacity', 'service-time', 'none'].includes(after.constraint.type), after.constraint.type);
+  assert.ok(['calendar-unknown', 'forum-capacity', 'service-time', 'none'].includes(after.constraint.type), after.constraint.type);
 });
 
 test('every panel renders without an accessibility violation', async () => {

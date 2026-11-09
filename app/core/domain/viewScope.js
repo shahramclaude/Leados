@@ -37,9 +37,14 @@ export function scopedViewState(state, seatContext = null, { now = new Date(), s
     for (const key of COLLECTIONS) out[key] = [];
     return out;
   }
-  // Names of subordinate leaders are organizational structure. Private person
-  // fields (pay, talking points, development notes) never ride along with them.
-  out.people = (state.people || []).filter((p) => seat.scope.has(p.id)).map((p) => {
+  // Names of subordinate leaders and direct declared matrix-line reports are
+  // organizational structure. Private person fields (pay, talking points,
+  // development notes) never ride across a matrix boundary or above rank 2.
+  out.people = (state.people || []).filter((p) => seat.scope.has(p.id) || Boolean(seat.lineScope?.has(p.id))).map((p) => {
+    if (!seat.scope.has(p.id)) {
+      if (seat.rank > 2 && !built.nodeIndex.has(p.id)) return null;
+      return Object.fromEntries(PUBLIC_PERSON_FIELDS.map((key) => [key, p[key]]));
+    }
     if (seat.rank <= 2) return p;
     if (!built.nodeIndex.has(p.id)) return null;
     return Object.fromEntries(PUBLIC_PERSON_FIELDS.map((key) => [key, p[key]]));

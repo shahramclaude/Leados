@@ -19892,5 +19892,5 @@ export function createApi(store, options = {}) {
   Object.assign(api, createIdentityActions(store, { now: clock }));
   // ADR-0080: one fail-closed API boundary. The local operator is unchanged;
   // a declared seat gets only reviewed adapters, with rank and span checks.
-  return guardApi(api, store);
+  return guardApi(api, store, { now: clock });
 }

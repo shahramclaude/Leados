@@ -72,6 +72,7 @@ const stateTone = (state) => ({
   'on-clock': 'good',
   'escape-ladder': 'bad',
   congested: 'bad',
+  'ambiguous-authority': 'caution',
   unpredictable: 'caution',
   'no-competent-forum': 'caution',
   refused: 'neutral',
@@ -82,6 +83,7 @@ const STATE_LABELS = {
   'on-clock': 'On the clock',
   'escape-ladder': 'Escapes the ladder',
   congested: 'Congested queue',
+  'ambiguous-authority': 'Ambiguous authority',
   unpredictable: 'Unpredictable',
   'no-competent-forum': 'No competent forum',
   refused: 'Not reviewable',
@@ -119,9 +121,12 @@ export function renderCadence(ctx) {
 
   const {
     report, forums, readings, band, constraint, secondary, planning, altitudeRows, clock, counts, conventions, seat,
+    scopedPeople, visibleItemKeys,
   } = result;
-  const people = personOptions(state);
-  const nameOf = (id) => people.find((p) => p.id === id)?.name || id || '—';
+  const people = !seat.fullAccess && Array.isArray(scopedPeople) ? scopedPeople : personOptions(state);
+  const visibleSet = !seat.fullAccess && Array.isArray(visibleItemKeys) ? new Set(visibleItemKeys) : null;
+  const visibleForumIds = new Set((forums || []).map((f) => f.id));
+  const nameOf = (id) => people.find((p) => p.id === id)?.name || (seat.fullAccess ? (id || '—') : 'Out-of-span seat');
   const playbook = CADENCE_ALTITUDE_PLAYBOOK.find((row) => row.key === (seat.altitudeKey || 'chief')) || CADENCE_ALTITUDE_PLAYBOOK[4];
 
   /* ------------------------------------------------------------- actions */
@@ -355,7 +360,7 @@ export function renderCadence(ctx) {
       h('div', { class: 'grid grid-4' },
         stat({ label: 'Declared forums', value: String(forums.length), hint: `${activeForums.length} active` }),
         stat({ label: 'Workspace ρ', value: fmt(report.workspaceRho), tone: band.tone === 'bad' ? 'bad' : band.tone === 'caution' ? 'caution' : 'good', hint: band.label }),
-        stat({ label: 'Items queued', value: String(counts.attributable), hint: `${counts.unmatched} unmatched · ${counts.unreviewable} unreviewable` }),
+        stat({ label: 'Items queued', value: String(counts.attributable), hint: `${counts.unmatched} unmatched${counts.ambiguousAuthority ? ` · ${counts.ambiguousAuthority} ambiguous` : ''} · ${counts.unreviewable} unreviewable` }),
         stat({ label: 'Escaping the ladder', value: String(clock.counts.escape), tone: clock.counts.escape ? 'bad' : clock.counts.unpredictable ? 'caution' : 'neutral', hint: `${clock.counts.unpredictable} unpredictable; zero escapes does not prove every item can land in time` }),
       ),
       band.key !== 'unmeasured' && h('div', null, banner({
@@ -455,13 +460,22 @@ export function renderCadence(ctx) {
   /* ------------------------------------------------------------ panel 2 */
 
   function workbenchPanel() {
-    const rows = clock.rows.filter((r) => r.reviewable).slice(0, 80);
-    const byClass = InputClassSummary(clock);
+    const visibleClockRows = visibleSet
+      ? clock.rows.filter((r) => visibleSet.has(`${r.type}:${r.entityId}`))
+      : clock.rows;
+    const rows = visibleClockRows.filter((r) => r.reviewable).slice(0, 80);
+    const byClass = InputClassSummary({ rows: visibleClockRows });
+    const renderCompeting = (row) => {
+      const list = Array.isArray(row.competingForums) ? row.competingForums : [];
+      if (!list.length) return h('span', { class: 'muted' }, 'none');
+      const labels = list.map((f) => (seat.fullAccess || visibleForumIds.has(f.id) ? f.title : 'competing line forum'));
+      return h('span', { class: 'muted' }, labels.join(' vs '));
+    };
     return [
       h('div', { class: 'grid grid-4' },
         stat({ label: 'Reviewable items', value: String(counts.reviewable), hint: 'classified from the record’s own shape' }),
         stat({ label: 'Attributed', value: String(counts.attributable), hint: 'a competent forum exists' }),
-        stat({ label: 'Unmatched', value: String(counts.unmatched), tone: counts.unmatched ? 'caution' : 'good', hint: 'no competent forum at the required horizon' }),
+        stat({ label: 'Unmatched', value: String(counts.unmatched), tone: counts.unmatched ? 'caution' : 'good', hint: counts.ambiguousAuthority ? `${counts.ambiguousAuthority} ambiguous matrix authority` : 'no competent forum at the required horizon' }),
         stat({ label: 'Not reviewable', value: String(counts.unreviewable), tone: counts.unreviewable ? 'caution' : 'good', hint: 'facts not recorded — excluded from capacity' }),
       ),
       card({
@@ -484,17 +498,24 @@ export function renderCadence(ctx) {
       }),
       card({
         title: 'The queue',
-        subtitle: 'Each item attributed to ONE competent forum, with the two slack figures that matter: the measured slack (queue-adjusted) and the declared slack (a strict lower bound on lateness).',
+        subtitle: 'Each item attributed to ONE competent forum (or held as ambiguous when concurrent matrix lines compete), with the two slack figures that matter: the measured slack (queue-adjusted) and the declared slack (a strict lower bound on lateness).',
         body: rows.length ? table({
           caption: 'Open items with their attributed forum and clock state',
           columns: [
             { label: 'Item', render: (row) => h('div', null,
               h('strong', null, row.title),
               h('div', { class: 'muted small' }, `${row.typeLabel} · ${row.classLabel}`)) },
-            { label: 'Owner span', render: (row) => (row.ownerNodeId ? nameOf(row.ownerNodeId) : h('span', { class: 'muted' }, 'unowned')) },
+            { label: 'Owner span', render: (row) => {
+              const sites = Array.isArray(row.accountableSites) && row.accountableSites.length
+                ? row.accountableSites
+                : (row.ownerNodeId ? [row.ownerNodeId] : []);
+              return sites.length ? sites.map(nameOf).join(', ') : h('span', { class: 'muted' }, 'unowned');
+            } },
             { label: 'Age', render: (row) => `${row.ageDays} d` },
             { label: 'Horizon', render: (row) => fmt(row.requiredHorizonDays, ' d') },
-            { label: 'Forum', render: (row) => (row.forumTitle ? row.forumTitle : h('span', { class: 'muted' }, 'none')) },
+            { label: 'Forum', render: (row) => (row.forumTitle
+              ? row.forumTitle
+              : (row.matchBasis === 'ambiguous-matrix-authority' ? renderCompeting(row) : h('span', { class: 'muted' }, 'none'))) },
             { label: 'State', render: (row) => badge(STATE_LABELS[row.clock.state] || row.clock.state, stateTone(row.clock.state)) },
             { label: 'Slack', render: (row) => (row.clock.slackDays === null ? h('span', { class: 'muted' }, '—') : `${row.clock.slackDays} d`) },
             { label: 'Expected close', render: (row) => (row.clock.expectedCloseOn ? formatDate(row.clock.expectedCloseOn) : h('span', { class: 'muted' }, 'unpromisable')) },
@@ -558,7 +579,7 @@ export function renderCadence(ctx) {
             constraint.itemN ? badge(`${constraint.itemN} item(s)`, 'bad') : null,
           ),
           h('p', null, h('strong', null, 'Remedy: '), constraint.remedy),
-          h('p', { class: 'muted small' }, 'Ordering: unreviewable demand → no competent forum → congested forum (ρ ≥ 1) → escape ladder → utilisation above target → Conway mismatch → none. The ordering is a declared convention: it reflects what a leader can actually fix this week, not what is mathematically worst.'),
+          h('p', { class: 'muted small' }, 'Ordering: unreviewable demand → no competent forum → ambiguous matrix authority → congested forum (ρ ≥ 1) → escape ladder → utilisation above target → Conway mismatch → calendar unknown → none. The ordering is a declared convention: it reflects what a leader can actually fix this week, not what is mathematically worst.'),
         ),
       }),
       secondary.length ? card({
@@ -598,7 +619,7 @@ export function renderCadence(ctx) {
                 `${rung.title}: next ${rung.waitDays ?? '—'} d + service ${rung.declaredServiceDays} d → declared slack ${rung.declaredSlackDays ?? '—'} d${rung.congested ? ' (congested)' : ''}`))) },
               { label: 'Verdict', render: (row) => h('span', { class: 'small' }, row.clock.reason) },
             ],
-            rows: clock.escape.slice(0, 25),
+            rows: (visibleSet ? clock.escape.filter((r) => visibleSet.has(`${r.type}:${r.entityId}`)) : clock.escape).slice(0, 25),
           }),
         ),
       }) : card({

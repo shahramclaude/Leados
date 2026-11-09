@@ -70,6 +70,7 @@
 import { addDays, dayKey, daysBetween, round } from '../time.js';
 import { harvestWork, escalationTarget } from './chain.js';
 import { buildSeats, activeSeat } from './seat.js';
+import { buildMatrix, matrixLineScope, matrixLineScopeFor, matrixWorkReach } from './matrix.js';
 import { altitudeByKey, ALTITUDES, SIGNAL_SOURCES } from './chainRegistry.js';
 import {
   CADENCE_ENGINE_VERSION,
@@ -327,11 +328,20 @@ export function forumFlow(forum, demand, conventions = CADENCE_DEFAULTS) {
  * what happens in a real organisation, silently and expensively.
  */
 export function buildDemandPicture(state, { now = new Date(), settings = null, conventions = null } = {}) {
-  const conv = conventions || cadenceConventions(settings || state?.settings || {});
-  const built = buildSeats(state, { now, settings: settings || state?.settings });
+  const effectiveSettings = settings || state?.settings || {};
+  const conv = conventions || cadenceConventions(effectiveSettings);
+  const hasDeclaredLines = Array.isArray(state?.reportingLines) && state.reportingLines.length > 0;
+  const matrix = hasDeclaredLines ? buildMatrix(state, { now, settings: effectiveSettings }) : null;
+  const matrixScope = matrix ? matrixLineScope(matrix) : null;
+  const lineScope = matrixScope && matrixScope.byManager.size ? matrixScope.byManager : null;
+  const built = buildSeats(state, {
+    now,
+    settings: effectiveSettings,
+    ...(lineScope ? { lineScope } : {}),
+  });
   const chain = built.chain;
   const today = todayOf(now);
-  const items = harvestWork(state, chain, { now, settings: settings || state?.settings });
+  const items = harvestWork(state, chain, { now, settings: effectiveSettings });
 
   // A governed decision that THIS module opened (RULE-CAD-02) is a decision about
   // the forum, not work the forum must serve. Counting it as demand would make the
@@ -347,6 +357,13 @@ export function buildDemandPicture(state, { now = new Date(), settings = null, c
   const demandItems = items.filter((item) => !(
     item.type === 'decision' && cadenceDecisionIds.has(item.entityId)
   ));
+
+  const reachByItemKey = new Map();
+  if (matrix && matrixScope && lineScope) {
+    for (const row of matrixWorkReach(matrix, matrixScope, demandItems)) {
+      reachByItemKey.set(`${row.type}:${row.entityId}`, row);
+    }
+  }
 
   const classified = demandItems.map((item) => {
     const cls = classifyInput(item);
@@ -367,17 +384,18 @@ export function buildDemandPicture(state, { now = new Date(), settings = null, c
   const classCountsAll = {};
   for (const item of classified) classCountsAll[item.classKey] = (classCountsAll[item.classKey] || 0) + 1;
 
-  // Attribute each reviewable item to the first active forum, walking UP the
-  // reporting tree, that is competent for its class (kind + horizon).
+  // Attribute each reviewable item to the competent standing forum covering its
+  // accountable reporting line(s). In a matrix where multiple incomparable
+  // accountable managers each chair a competent forum, refuse to pick one by
+  // meeting interval and surface `ambiguous-matrix-authority` instead.
   const activeForums = forums.filter((f) => f.status === 'active');
-  const seatToForums = new Map();
-  for (const forum of forums) {
-    const key = forum.chairSeatId || forum.ownerId;
-    if (!key) continue;
-    const list = seatToForums.get(key) || [];
-    list.push(forum);
-    seatToForums.set(key, list);
-  }
+
+  const forumCoversSite = (forum, siteId) => {
+    if (!siteId || !forum) return false;
+    if (forum.chairSeatId === siteId) return true;
+    const chairSeat = built.byId.get(forum.chairSeatId);
+    return Boolean(chairSeat?.scope?.has(siteId));
+  };
 
   function competentForumsFor(item) {
     const cls = INPUT_CLASS_BY_KEY[item.classKey];
@@ -393,41 +411,142 @@ export function buildDemandPicture(state, { now = new Date(), settings = null, c
 
   const attributed = new Map(); // forumId -> classCounts
   const unmatched = [];
+  const ambiguous = [];
   const unreviewable = [];
   const perItem = [];
   for (const item of classified) {
+    const reach = reachByItemKey.get(`${item.type}:${item.entityId}`) || null;
+    const accountableSites = reach?.sites?.length
+      ? [...reach.sites]
+      : (item.ownerNodeId ? [item.ownerNodeId] : []);
+    const matrixShared = accountableSites.length > 1;
+
     if (!item.reviewable) {
       unreviewable.push(item);
-      perItem.push({ ...item, forumId: null, forumTitle: null, matchBasis: 'refused', matchReason: 'the facts needed to close this item are not yet recorded' });
+      perItem.push({
+        ...item,
+        accountableSites,
+        forumOwningSites: [],
+        matrixShared,
+        forumId: null,
+        forumTitle: null,
+        matchBasis: 'refused',
+        matchReason: 'the facts needed to close this item are not yet recorded',
+      });
       continue;
     }
     const { forums: candidates, reason } = competentForumsFor(item);
     if (!candidates.length) {
-      unmatched.push({ ...item, reason });
-      perItem.push({ ...item, forumId: null, forumTitle: null, matchBasis: 'no-competent-forum', matchReason: reason });
+      unmatched.push({ ...item, accountableSites, matrixShared, reason });
+      perItem.push({
+        ...item,
+        accountableSites,
+        forumOwningSites: [],
+        matrixShared,
+        forumId: null,
+        forumTitle: null,
+        matchBasis: 'no-competent-forum',
+        matchReason: reason,
+      });
       continue;
     }
-    // Prefer a forum whose chair is in the item's own reporting subtree (the
-    // nearest competent forum), then the one with the shortest interval.
-    const ownerId = item.ownerNodeId || null;
-    const ranked = [...candidates].sort((a, b) => {
-      const aIn = ownerId && (a.chairSeatId === ownerId || built.byId.get(a.chairSeatId)?.scope?.has(ownerId)) ? 0 : 1;
-      const bIn = ownerId && (b.chairSeatId === ownerId || built.byId.get(b.chairSeatId)?.scope?.has(ownerId)) ? 0 : 1;
-      if (aIn !== bIn) return aIn - bIn;
-      return (a.intervalDays || 999) - (b.intervalDays || 999);
-    });
+
+    const covering = candidates.filter((f) => accountableSites.some((siteId) => forumCoversSite(f, siteId)));
+    if (!covering.length) {
+      const hasKnownSpan = accountableSites.some((sid) => built.byId.has(sid));
+      if (!hasDeclaredLines && !hasKnownSpan) {
+        const ranked = [...candidates].sort((a, b) => (a.intervalDays || 999) - (b.intervalDays || 999));
+        const forum = ranked[0];
+        const counts = attributed.get(forum.id) || {};
+        counts[item.classKey] = (counts[item.classKey] || 0) + 1;
+        attributed.set(forum.id, counts);
+        perItem.push({
+          ...item,
+          accountableSites,
+          forumOwningSites: item.ownerNodeId ? [item.ownerNodeId] : [],
+          matrixShared,
+          forumId: forum.id,
+          forumTitle: forum.title,
+          forumKind: forum.kind,
+          matchBasis: ranked.length > 1 ? 'nearest-competent-of-several' : 'only-competent-forum',
+          matchReason: null,
+          alternativesN: ranked.length - 1,
+        });
+        continue;
+      }
+      const noSpanReason = hasDeclaredLines
+        ? 'no active competent forum covers any accountable reporting line for this item'
+        : 'no active competent forum covers the owning reporting span for this item';
+      unmatched.push({ ...item, accountableSites, matrixShared, reason: noSpanReason });
+      perItem.push({
+        ...item,
+        accountableSites,
+        forumOwningSites: [],
+        matrixShared,
+        forumId: null,
+        forumTitle: null,
+        matchBasis: 'no-competent-forum',
+        matchReason: noSpanReason,
+      });
+      continue;
+    }
+
+    // Keep the most specific (lowest/non-ancestor) covering forums on each
+    // reporting line: if chair A sits inside chair B's reporting subtree, B
+    // defers to A by subsidiarity. Two chairs remaining after this filter have
+    // incomparable authority across distinct lines.
+    const minimal = covering.filter((b) => !covering.some((a) => (
+      a.chairSeatId !== b.chairSeatId
+      && Boolean(built.byId.get(b.chairSeatId)?.scope?.has(a.chairSeatId))
+    )));
+    const distinctChairs = [...new Set(minimal.map((f) => f.chairSeatId).filter(Boolean))];
+    if (distinctChairs.length > 1) {
+      const competingForums = minimal.map((f) => ({
+        id: f.id,
+        title: f.title,
+        chairSeatId: f.chairSeatId,
+        cadence: f.cadence,
+        intervalDays: f.intervalDays,
+      }));
+      const names = competingForums.map((f) => `“${f.title}”`).join(', ');
+      const ambigReason = `Ambiguous matrix authority: ${competingForums.length} competent forums (${names}) hold concurrent accountability across reporting lines; LeadOS refuses to pick one by meeting interval.`;
+      const entry = {
+        ...item,
+        accountableSites,
+        forumOwningSites: [],
+        matrixShared,
+        forumId: null,
+        forumTitle: null,
+        forumKind: null,
+        matchBasis: 'ambiguous-matrix-authority',
+        matchReason: ambigReason,
+        alternativesN: competingForums.length,
+        competingForumIds: competingForums.map((f) => f.id),
+        competingChairIds: distinctChairs,
+        competingForums,
+      };
+      ambiguous.push(entry);
+      perItem.push(entry);
+      continue;
+    }
+
+    const ranked = [...minimal].sort((a, b) => (a.intervalDays || 999) - (b.intervalDays || 999));
     const forum = ranked[0];
+    const forumOwningSites = accountableSites.filter((siteId) => forumCoversSite(forum, siteId));
     const counts = attributed.get(forum.id) || {};
     counts[item.classKey] = (counts[item.classKey] || 0) + 1;
     attributed.set(forum.id, counts);
     perItem.push({
       ...item,
+      accountableSites,
+      forumOwningSites: forumOwningSites.length ? forumOwningSites : (item.ownerNodeId ? [item.ownerNodeId] : []),
+      matrixShared,
       forumId: forum.id,
       forumTitle: forum.title,
       forumKind: forum.kind,
-      matchBasis: ranked.length > 1 ? 'nearest-competent-of-several' : 'only-competent-forum',
+      matchBasis: covering.length > 1 ? 'nearest-competent-of-several' : 'only-competent-forum',
       matchReason: null,
-      alternativesN: ranked.length - 1,
+      alternativesN: covering.length - 1,
     });
   }
 
@@ -469,11 +588,15 @@ export function buildDemandPicture(state, { now = new Date(), settings = null, c
   });
 
   // A forum can only close what its membership may decide. Compute the topology
-  // pattern against the seats that actually own the items attributed to it.
+  // pattern against the accountable seats that own the items attributed to it.
   for (const row of forumRows) {
     const owningSeats = new Set();
     for (const item of perItem) {
-      if (item.forumId === row.id && item.ownerNodeId) owningSeats.add(item.ownerNodeId);
+      if (item.forumId !== row.id) continue;
+      const sites = Array.isArray(item.forumOwningSites) && item.forumOwningSites.length
+        ? item.forumOwningSites
+        : (item.ownerNodeId ? [item.ownerNodeId] : []);
+      for (const seatId of sites) owningSeats.add(seatId);
     }
     const attendees = new Set([row.chairSeatId, ...(row.forum.attending || [])].filter(Boolean));
     let covered = 0;
@@ -511,6 +634,7 @@ export function buildDemandPicture(state, { now = new Date(), settings = null, c
       topologyNote,
       owningSeatN: owningN,
       coveredSeatN: covered,
+      missingSeatIds: [...missingSeats].sort(),
       attendeeN: attendees.size,
       coveragePct: owningN ? pct((covered / owningN) * 100) : null,
     };
@@ -520,19 +644,23 @@ export function buildDemandPicture(state, { now = new Date(), settings = null, c
     engineVersion: CADENCE_ENGINE_VERSION,
     today,
     conventions: conv,
+    matrix,
+    lineScope,
     built,
     chain,
     items: classified,
     perItem,
     forums: forumRows,
     unmatched,
+    ambiguous,
     unreviewable,
     classCountsAll,
     counts: {
       items: classified.length,
       reviewable: classified.length - unreviewable.length,
-      attributable: classified.length - unreviewable.length - unmatched.length,
+      attributable: classified.length - unreviewable.length - unmatched.length - ambiguous.length,
       unmatched: unmatched.length,
+      ambiguousAuthority: ambiguous.length,
       unreviewable: unreviewable.length,
       forums: forums.length,
       activeForums: activeForums.length,
@@ -575,6 +703,19 @@ export function buildCadenceClock(picture, { now = new Date() } = {}) {
     // quietly understate how bad the breach is.
     const cls = INPUT_CLASS_BY_KEY[item.classKey];
     const anchor = activeForums.find((row) => row.id === item.forumId) || null;
+    const isAmbiguous = item.matchBasis === 'ambiguous-matrix-authority';
+    const competingSet = isAmbiguous && Array.isArray(item.competingForumIds)
+      ? new Set(item.competingForumIds)
+      : null;
+    const sites = Array.isArray(item.accountableSites) && item.accountableSites.length
+      ? item.accountableSites
+      : (item.ownerNodeId ? [item.ownerNodeId] : []);
+    const rowCoversItem = (row) => {
+      if (!picture.built || !sites.length) return true;
+      return sites.some((siteId) => (
+        row.chairSeatId === siteId || Boolean(picture.built.byId.get(row.chairSeatId)?.scope?.has(siteId))
+      ));
+    };
     const ladder = [];
     if (cls && cls.reviewable) {
       for (const row of activeForums) {
@@ -582,6 +723,15 @@ export function buildCadenceClock(picture, { now = new Date() } = {}) {
           && (cls.forums || []).includes(row.kind)
           && Number(cls.horizonDays) <= Number(row.forum.horizonDays || 0);
         if (!competent) continue;
+        if (isAmbiguous) {
+          if (competingSet && competingSet.size && !competingSet.has(row.id)) continue;
+          ladder.push({ row, rung: 1 });
+          continue;
+        }
+        if (picture.built && sites.length && (!anchor || row.id !== anchor.id)) {
+          const singleChainFallback = !picture.lineScope && !item.matrixShared && Boolean(anchor);
+          if (!singleChainFallback && !rowCoversItem(row)) continue;
+        }
         ladder.push({ row, rung: anchor && row.id === anchor.id ? 0 : 1 });
       }
     }
@@ -637,6 +787,24 @@ export function buildCadenceClock(picture, { now = new Date() } = {}) {
           : null,
       };
     });
+
+    if (isAmbiguous) {
+      rows.push({
+        ...item,
+        clock: {
+          state: 'ambiguous-authority',
+          horizonDays: horizon,
+          ageDays: age,
+          slackDays: null,
+          expectedCloseOn: null,
+          bestForumId: null,
+          bestForumTitle: null,
+          forumPath: evaluated,
+          reason: item.matchReason || 'competing competent forums hold concurrent accountability; LeadOS refuses to pick one',
+        },
+      });
+      continue;
+    }
 
     const measuredUsable = evaluated.filter((r) => r.slackDays !== null);
     const declaredUsable = evaluated.filter((r) => r.declaredSlackDays !== null);
@@ -707,7 +875,12 @@ export function buildCadenceClock(picture, { now = new Date() } = {}) {
     if (escapeByClass[key].worstSlackDays === null || row.clock.slackDays < escapeByClass[key].worstSlackDays) {
       escapeByClass[key].worstSlackDays = row.clock.slackDays;
     }
-    if (row.ownerNodeId && !row.sensitive) escapeByClass[key].spanIds.add(row.ownerNodeId);
+    if (!row.sensitive) {
+      const spanSites = Array.isArray(row.accountableSites) && row.accountableSites.length
+        ? row.accountableSites
+        : (row.ownerNodeId ? [row.ownerNodeId] : []);
+      for (const sid of spanSites) escapeByClass[key].spanIds.add(sid);
+    }
   }
 
   return {
@@ -722,6 +895,7 @@ export function buildCadenceClock(picture, { now = new Date() } = {}) {
       escape: escape.length,
       unpredictable: unpredictable.length,
       congested: congested.length,
+      ambiguousAuthority: rows.filter((r) => r.clock.state === 'ambiguous-authority').length,
       refused: rows.filter((r) => r.clock.state === 'refused').length,
       noCompetentForum: rows.filter((r) => r.clock.state === 'no-competent-forum').length,
     },
@@ -738,13 +912,15 @@ export function buildCadenceClock(picture, { now = new Date() } = {}) {
  * worst-looking row, but the thing whose relief would move the most items.
  *
  * The ordering is explicit and printed:
- *   1. unreviewable demand  (a data gap that inflates nothing and blocks everything)
- *   2. no competent forum   (a structural hole: work with nowhere to go)
- *   3. congested forum      (ρ ≥ 1: no steady state)
- *   4. escape ladder        (the ladder cannot deliver inside the horizon)
- *   5. high-ρ forum         (ρ ≥ target: waiting rises faster than work arrives)
- *   6. topology mismatch    (a forum that cannot close what it is sent)
- *   7. none
+ *   1. unreviewable demand          (a data gap that inflates nothing and blocks everything)
+ *   2. no competent forum           (a structural hole: work with nowhere to go)
+ *   3. ambiguous matrix authority   (competing concurrent forums across lines)
+ *   4. congested forum              (ρ ≥ 1: no steady state)
+ *   5. escape ladder                (the ladder cannot deliver inside the horizon)
+ *   6. high-ρ forum                 (ρ ≥ target: waiting rises faster than work arrives)
+ *   7. topology mismatch            (a forum that cannot close what it is sent)
+ *   8. calendar unknown             (sitting date or flow unknown)
+ *   9. none
  */
 export function nameConstraint(picture, clock, conventions = CADENCE_DEFAULTS) {
   const target = (Number(conventions.cadenceUtilisationTargetPct) || CADENCE_DEFAULTS.cadenceUtilisationTargetPct) / 100;
@@ -773,6 +949,26 @@ export function nameConstraint(picture, clock, conventions = CADENCE_DEFAULTS) {
       rho: null,
       itemN: picture.unmatched.length,
       remedy: 'Declare a forum of the competent kind at or above the class horizon, or widen an existing forum\'s horizon.',
+    };
+  }
+  if (Array.isArray(picture.ambiguous) && picture.ambiguous.length > 0) {
+    const classes = {};
+    const pairs = new Set();
+    for (const item of picture.ambiguous) {
+      classes[item.classKey] = (classes[item.classKey] || 0) + 1;
+      const pair = (item.competingForums || []).map((f) => f.title).sort().join(' vs ');
+      if (pair) pairs.add(pair);
+    }
+    const top = Object.entries(classes).sort((a, b) => b[1] - a[1])[0];
+    return {
+      type: 'ambiguous-matrix-authority',
+      label: 'Ambiguous matrix authority',
+      title: `${picture.ambiguous.length} reviewable item(s) face competing accountable forums`,
+      detail: `Concurrent forums (${[...pairs].slice(0, 3).join('; ') || 'multiple lines'}) hold competing accountability for “${INPUT_CLASS_BY_KEY[top[0]]?.label || top[0]}”. LeadOS refuses to pick one by meeting interval or list order.`,
+      forumId: null,
+      rho: null,
+      itemN: picture.ambiguous.length,
+      remedy: 'Escalate to the joint apex or explicitly assign priority/forum authority across the competing reporting lines.',
     };
   }
   const withRho = picture.forums.filter((row) => row.demand.rho !== null && row.status === 'active');
@@ -955,6 +1151,27 @@ export function secondaryConstraints(picture, clock, conventions = CADENCE_DEFAU
       rho: null,
       itemN: picture.unmatched.length,
       remedy: 'Declare a competent forum at the required horizon, or formally retire the class.',
+    });
+  }
+
+  if (Array.isArray(picture.ambiguous) && picture.ambiguous.length > 0) {
+    const classes = {};
+    const pairs = new Set();
+    for (const item of picture.ambiguous) {
+      classes[item.classKey] = (classes[item.classKey] || 0) + 1;
+      const pair = (item.competingForums || []).map((f) => f.title).sort().join(' vs ');
+      if (pair) pairs.add(pair);
+    }
+    const top = Object.entries(classes).sort((a, b) => b[1] - a[1])[0];
+    add({
+      type: 'ambiguous-matrix-authority',
+      label: 'Ambiguous matrix authority',
+      title: `${picture.ambiguous.length} reviewable item(s) face competing accountable forums`,
+      detail: `Concurrent forums (${[...pairs].slice(0, 3).join('; ') || 'multiple lines'}) hold competing accountability for “${INPUT_CLASS_BY_KEY[top[0]]?.label || top[0]}”. LeadOS refuses to pick one by meeting interval.`,
+      forumId: null,
+      rho: null,
+      itemN: picture.ambiguous.length,
+      remedy: 'Escalate to the joint apex or explicitly assign priority/forum authority across lines.',
     });
   }
 
@@ -1252,7 +1469,7 @@ export function cadenceBriefText(report) {
   lines.push(`Frozen view of the standing-forum calendar as at ${report.today}. Identity-free: this brief carries forums, classes and counts, never a person.`);
   lines.push('');
   lines.push(`- Items in the workspace: **${report.counts.items}** (${report.counts.reviewable} reviewable, ${report.counts.unreviewable} not yet reviewable).`);
-  lines.push(`- Attributable to a competent forum: **${report.counts.attributable}**; unmatched: **${report.counts.unmatched}**.`);
+  lines.push(`- Attributable to a competent forum: **${report.counts.attributable}**; unmatched: **${report.counts.unmatched}**${report.counts.ambiguousAuthority ? `; ambiguous matrix authority: **${report.counts.ambiguousAuthority}**` : ''}.`);
   lines.push(`- Active forums: **${report.counts.activeForums}** of ${report.counts.forums} declared.`);
   lines.push(`- Workspace utilisation ρ: **${report.workspaceRho === null ? 'unmeasured' : report.workspaceRho}** — ${report.band.label}. ${report.band.verdict}`);
   lines.push(`- Items that escape their own horizon through every competent forum: **${report.clock.counts.escape}**; unpredictable ladders: **${report.clock.counts.unpredictable}**.`);
