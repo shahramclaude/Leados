@@ -80,6 +80,34 @@ const ancestorsOf = (chain, nodeId, cap = JUR_LIMITS.ancestorsCap) => {
   return out;
 };
 
+function findingRollupTargets(chain, clusterOrFinding, { cap = JUR_LIMITS.ancestorsCap } = {}) {
+  const targets = new Set();
+  const homeSpans = new Set(Array.isArray(clusterOrFinding?.spanNodeIds) ? clusterOrFinding.spanNodeIds : []);
+  for (const spanId of homeSpans) {
+    for (const ancestor of ancestorsOf(chain, spanId, cap)) targets.add(ancestor);
+  }
+  const allSites = Array.isArray(clusterOrFinding?.accountableSpanIds) ? clusterOrFinding.accountableSpanIds : [];
+  for (const siteId of allSites) {
+    if (!siteId) continue;
+    if (!homeSpans.has(siteId) && siteId !== LEADER_ID && chain.nodes.has(siteId)) {
+      targets.add(siteId);
+    }
+    for (const ancestor of ancestorsOf(chain, siteId, cap)) targets.add(ancestor);
+  }
+  const apexIds = Array.isArray(clusterOrFinding?.matrixApexIds) ? clusterOrFinding.matrixApexIds : [];
+  for (const apexId of apexIds) {
+    if (!apexId) continue;
+    if (!homeSpans.has(apexId) && apexId !== LEADER_ID && chain.nodes.has(apexId)) {
+      targets.add(apexId);
+    }
+    for (const ancestor of ancestorsOf(chain, apexId, cap)) targets.add(ancestor);
+  }
+  if (clusterOrFinding?.lcaNodeId) {
+    for (const ancestor of ancestorsOf(chain, clusterOrFinding.lcaNodeId, cap)) targets.add(ancestor);
+  }
+  return [...targets].slice(0, cap);
+}
+
 const markerHas = (draft, marker) => (Array.isArray(draft.jurMarkers) ? draft.jurMarkers.includes(marker) : false);
 const addMarker = (draft, marker) => {
   draft.jurMarkers = Array.isArray(draft.jurMarkers) ? draft.jurMarkers : [];
@@ -137,7 +165,67 @@ function detectPass(draft, ctx, out, conventions, budget, { automatic, changedId
   }
   const week = book.week;
   const changedGoalKey = eventType?.startsWith('goal.') && changedId ? `goal:${changedId}` : null;
-  const filterByMember = automatic && changedId && !changedGoalKey && eventType !== 'link.created';
+  const matrixLifecycle = Boolean(eventType && eventType.startsWith('matrix.line.'));
+  const filterByMember = automatic && changedId && !changedGoalKey && eventType !== 'link.created' && !matrixLifecycle;
+
+  // When a declared reporting line changes (`matrix.line.declared/retuned/ended`)
+  // or on an explicit scan, reconcile current-week frozen findings so stale
+  // `rolls-up-to` edges to departed matrix managers are pruned and un-governed
+  // findings track resolved/new matrix apexes or diamond ties in the same commit.
+  if (matrixLifecycle || !automatic) {
+    const clusterByObj = new Map(book.clusters.map((c) => [c.objectiveKey, c]));
+    for (const finding of draft.jurFindings) {
+      if (!finding || finding.status !== 'frozen' || finding.week !== week) continue;
+      const live = clusterByObj.get(finding.objectiveKey);
+      if (!live) continue;
+      const expectedTargets = new Set(findingRollupTargets(chain, live));
+      let pruned = 0;
+      if (Array.isArray(draft.links)) {
+        const beforeLen = draft.links.length;
+        draft.links = draft.links.filter((l) => {
+          if (!l || l.relation !== 'rolls-up-to' || l.sourceType !== 'jurfinding' || l.sourceId !== finding.id) return true;
+          if (l.ruleId !== JUR_RULE_IDS.DETECT && l.ruleId !== JUR_RULE_IDS.GOVERN) return true;
+          return expectedTargets.has(l.targetId);
+        });
+        pruned = beforeLen - draft.links.length;
+      }
+      let added = 0;
+      for (const targetId of expectedTargets) {
+        if (link(draft, ctx, 'jurfinding', finding.id, 'person', targetId,
+          'rolls-up-to', JUR_RULE_IDS.DETECT, 'Cross-branch jurisdiction gap rolled up to this span')) {
+          added += 1;
+        }
+      }
+      if (!finding.governedDecisionId) {
+        finding.spanNodeIds = live.spanNodeIds.slice(0, JUR_LIMITS.branchesCap);
+        finding.accountableSpanIds = live.accountableSpanIds.slice(0, JUR_LIMITS.branchesCap);
+        finding.matrixApexIds = live.matrixApexIds.slice(0, JUR_LIMITS.branchesCap);
+        finding.lcaBasis = live.lcaBasis || 'tree';
+        finding.matrixAmbiguous = live.matrixAmbiguous === true;
+        finding.matrixLineCount = live.matrixLineCount || 0;
+        finding.branchSeatIds = live.branchSeatIds.slice(0, JUR_LIMITS.branchesCap);
+        finding.lcaNodeId = live.lcaNodeId || LEADER_ID;
+        finding.lcaRank = live.lcaRank || null;
+        finding.maxSpanRank = live.maxSpanRank || null;
+        finding.coalitionSize = live.coalitionSize;
+        finding.escalationRungs = live.escalationRungs;
+        finding.handoffPairs = live.handoffPairs;
+        finding.costCoalition = live.costCoalition;
+        finding.costEscalate = live.costEscalate;
+        finding.costRedraw = live.costRedraw;
+        finding.predictedOption = live.verdict === 'priced' ? live.predictedOption : null;
+        finding.predictedProbability = live.verdict === 'priced' ? live.predictedProbability : null;
+        finding.verdict = live.verdict;
+        finding.refusalKey = live.verdict === 'refused' ? live.refusalKey : '';
+        finding.refusalNote = live.verdict === 'refused' ? live.refusalNote : '';
+      }
+      if (pruned > 0 || added > 0) {
+        note(ctx, out, JUR_RULE_IDS.DETECT, 'reconciled', 'jurfinding', finding.id,
+          `Reconciled matrix roll-up edges (${pruned} pruned, ${added} added)`);
+      }
+    }
+  }
+
   for (const cluster of book.clusters) {
     if (budget.remaining <= 0) break;
     const id = findingKey(cluster.objectiveKey, week);
@@ -159,6 +247,11 @@ function detectPass(draft, ctx, out, conventions, budget, { automatic, changedId
       memberIds: cluster.memberIds.slice(0, JUR_LIMITS.membersPerCluster),
       memberCount: cluster.evidenceN,
       spanNodeIds: cluster.spanNodeIds.slice(0, JUR_LIMITS.branchesCap),
+      accountableSpanIds: (cluster.accountableSpanIds || cluster.spanNodeIds).slice(0, JUR_LIMITS.branchesCap),
+      matrixApexIds: (cluster.matrixApexIds || []).slice(0, JUR_LIMITS.branchesCap),
+      lcaBasis: cluster.lcaBasis || 'tree',
+      matrixAmbiguous: cluster.matrixAmbiguous === true,
+      matrixLineCount: cluster.matrixLineCount || 0,
       branchSeatIds: cluster.branchSeatIds.slice(0, JUR_LIMITS.branchesCap),
       lcaNodeId: cluster.lcaNodeId || LEADER_ID,
       lcaRank: cluster.lcaRank || null,
@@ -189,14 +282,11 @@ function detectPass(draft, ctx, out, conventions, budget, { automatic, changedId
       link(draft, ctx, 'jurfinding', id, member.entityType, member.recordId,
         'spans-work', JUR_RULE_IDS.DETECT, 'Cross-branch objective spans this work record');
     }
-    // ONE rolls-up-to edge per distinct leadership ancestor of every span —
-    // vertical roll-up on the SAME generalized graph, same atomic transaction.
-    const ancestors = new Set();
-    for (const spanId of cluster.spanNodeIds) {
-      for (const ancestor of ancestorsOf(chain, spanId)) ancestors.add(ancestor);
-    }
-    for (const ancestor of [...ancestors].slice(0, JUR_LIMITS.ancestorsCap)) {
-      link(draft, ctx, 'jurfinding', id, 'person', ancestor,
+    // ONE rolls-up-to edge per distinct leadership ancestor across home spans
+    // AND declared matrix reporting lines — vertical roll-up on the SAME
+    // generalized graph, same atomic transaction.
+    for (const targetId of findingRollupTargets(chain, cluster)) {
+      link(draft, ctx, 'jurfinding', id, 'person', targetId,
         'rolls-up-to', JUR_RULE_IDS.DETECT, 'Cross-branch jurisdiction gap rolled up to this span');
     }
     budget.remaining -= 1;
@@ -239,12 +329,15 @@ function governPass(draft, ctx, out, conventions, book) {
       pros: o.question,
       cons: o.note,
     }));
+    const matrixSuffix = finding.lcaBasis === 'matrix-apex'
+      ? ` (joint matrix apex across ${finding.matrixLineCount || 1} secondary line(s)).`
+      : (finding.matrixLineCount > 0 ? ` (${finding.matrixLineCount} additional matrix reporting line(s) also span members of this objective).` : '.');
     draft.decisions.push({
       id: decisionId,
       title: `Who holds this cross-branch objective? (${finding.coalitionSize} branches)`,
       question: `${governanceDecisionMarker(finding.id, week)} ${governedDecisionMarker(finding.id, week)} `
         + `One objective is worked across ${finding.coalitionSize} reporting branches under ${lcaName} `
-        + `(rank ${finding.lcaRank ?? '—'}). Priced routes: ${costText}. The minimal covering coalition `
+        + `(rank ${finding.lcaRank ?? '—'})${matrixSuffix} Priced routes: ${costText}. The minimal covering coalition `
         + `(Riker 1962) needs ${finding.handoffPairs} handoff pair(s); escalating climbs `
         + `${finding.escalationRungs} rung(s); a boundary redraw is a declared one-off. `
         + `Predicted route: ${finding.predictedOption} at ${Math.round((finding.predictedProbability || 0) * 100)}% `
@@ -266,8 +359,8 @@ function governPass(draft, ctx, out, conventions, book) {
     addMarker(draft, marker);
     link(draft, ctx, 'jurfinding', finding.id, 'decision', decisionId,
       'governs-mandate', JUR_RULE_IDS.GOVERN, 'Governed boundary decision a human must accept');
-    for (const ancestor of ancestorsOf(book.chain, finding.lcaNodeId)) {
-      link(draft, ctx, 'jurfinding', finding.id, 'person', ancestor,
+    for (const targetId of findingRollupTargets(book.chain, finding)) {
+      link(draft, ctx, 'jurfinding', finding.id, 'person', targetId,
         'rolls-up-to', JUR_RULE_IDS.GOVERN, 'Governed boundary decision rolled up');
     }
     opened += 1;

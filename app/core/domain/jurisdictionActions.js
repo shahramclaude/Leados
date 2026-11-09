@@ -26,12 +26,14 @@
 import { dayKey } from '../time.js';
 import { ensureEntityLink } from './automation.js';
 import { activeSeat, buildSeats, canAct, canSee } from './seat.js';
+import { matrixLineScopeFor } from './matrix.js';
 import {
   buildJurisdictionBook, jurisdictionRead, jurAttentionCount, jurBrief,
   jurConventions, jurCsvRows, jurSpanRollUp, isEngineAuditRecord, workRecordPeople,
 } from './jurisdiction.js';
 import { normalizeJurSettings } from './jurisdictionSchema.js';
 import { jurDriftRead } from './jurisdictionDrift.js';
+import { rehearseBoundaryRedraw, redactRehearsalReport } from './redrawRehearsal.js';
 import { JUR_EVENTS, JUR_RULE_IDS, JUR_SOURCES } from './jurisdictionRegistry.js';
 
 export function createJurisdictionActions(store, { now, idFactory }) {
@@ -48,7 +50,10 @@ export function createJurisdictionActions(store, { now, idFactory }) {
   const conventions = () => jurConventions(settings());
 
   const seatFor = (right, { fullAccess = false } = {}) => {
-    const built = buildSeats(store.state, { now: clock(), settings: settings() });
+    const at = clock();
+    const eff = settings();
+    const lineScope = matrixLineScopeFor(store.state, { now: at, settings: eff });
+    const built = buildSeats(store.state, { now: at, settings: eff, ...(lineScope ? { lineScope } : {}) });
     const seat = activeSeat(built);
     if (seat.readOnly) {
       return { ok: false, error: 'The declared seat is unresolved and read-only. Choose a valid seat before changing the jurisdiction ledger.' };
@@ -113,7 +118,8 @@ export function createJurisdictionActions(store, { now, idFactory }) {
         if (!people.length && !seat.isLeader) {
           return fail('Unowned work belongs to the enterprise root and cannot be re-anchored by a subordinate seat.', 'recordId');
         }
-        if (people.length && !people.every((pid) => seat.scope.has(pid))) {
+        const inAccountableSpan = (pid) => seat.scope.has(pid) || Boolean(seat.lineScope?.has(pid));
+        if (people.length && !people.every(inAccountableSpan)) {
           return fail('That work record belongs to a peer span outside your reporting subtree.', 'recordId');
         }
       }
@@ -240,6 +246,26 @@ export function createJurisdictionActions(store, { now, idFactory }) {
     },
     jurBook() {
       return saved({ book: buildJurisdictionBook(store.state, { now: clock(), conventions: conventions() }) });
+    },
+    jurRedrawRehearse({ moves = [] } = {}) {
+      const at = clock();
+      const eff = settings();
+      const lineScope = matrixLineScopeFor(store.state, { now: at, settings: eff });
+      const built = buildSeats(store.state, { now: at, settings: eff, ...(lineScope ? { lineScope } : {}) });
+      const seat = activeSeat(built);
+      if (seat.readOnly) {
+        return fail('The declared seat is unresolved and read-only. Choose a valid seat before rehearsing a boundary redraw.');
+      }
+      if (!seat.fullAccess && seat.rank < 3) {
+        return fail('The boundary rehearsal is a director-and-above instrument (rank 3 or higher).');
+      }
+      const raw = rehearseBoundaryRedraw(store.state, { moves, now: at, conventions: conventions() });
+      if (seat.fullAccess) return saved({ report: raw });
+      const scope = new Set([
+        ...(seat.scope instanceof Set ? seat.scope : []),
+        ...(seat.lineScope instanceof Set ? seat.lineScope : []),
+      ]);
+      return saved({ report: redactRehearsalReport(raw, scope) });
     },
   };
 }

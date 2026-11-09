@@ -35,6 +35,9 @@ import {
 import { recordPeople, buildSeats, activeSeat, canSee } from './seat.js';
 import { altitudeRank } from './chainRegistry.js';
 import {
+  buildMatrix, matrixLineScope, matrixLineScopeFor, matrixJointApex,
+} from './matrix.js';
+import {
   JUR_CONVENTION_BOUNDS, JUR_CONVENTION_DEFAULTS, JUR_ENGINE_VERSION,
   JUR_GOVERNANCE_OPTIONS, JUR_LIMITS, JUR_OPTION_KEYS, JUR_REFUSALS,
   JUR_SOURCES, findingKey,
@@ -196,6 +199,49 @@ export function rankOf(chain, nodeId) {
 }
 
 /**
+ * Resolve the reporting chain plus (when declared additional lines exist) the
+ * active matrix DAG and per-manager line scope. Returns `matrix: null, lineScope: null`
+ * for single-chain workspaces so single-chain runs keep the exact legacy path.
+ */
+export function resolveJurisdictionContext(state, { now = new Date(), settings = null, chain = null } = {}) {
+  const at = now instanceof Date ? now : new Date(now);
+  const effSettings = settings || state?.settings || {};
+  const builtChain = chain || buildChain(state, { now: at, settings: effSettings });
+  const hasDeclaredLines = Array.isArray(state?.reportingLines) && state.reportingLines.length > 0;
+  if (!hasDeclaredLines) return { chain: builtChain, matrix: null, lineScope: null };
+  const matrix = buildMatrix(state, { now: at, settings: effSettings });
+  const scope = matrixLineScope(matrix);
+  const lineScope = scope.byManager.size ? scope.byManager : null;
+  return { chain: builtChain, matrix: lineScope ? matrix : null, lineScope };
+}
+
+/**
+ * Resolve every accountable manager covering `people` on a work record:
+ * the home-tree owner (`treeSpan`) plus any active matrix line manager whose
+ * (subtree ∪ declared lineScope) covers ALL people named on the record.
+ */
+export function accountableSitesFor(people, treeSpan, { chain, lineScope = null } = {}) {
+  const sites = treeSpan && chain?.nodes?.has(treeSpan) ? [treeSpan] : [];
+  const lineSites = [];
+  if (lineScope && Array.isArray(people) && people.length) {
+    for (const [managerId, entry] of lineScope) {
+      const held = new Set(entry?.personIds || []);
+      if (!people.some((pid) => held.has(pid))) continue;
+      const node = chain?.nodes?.get(managerId);
+      const subtree = new Set(node?.subtreeIds || []);
+      const covers = people.every((pid) => pid === managerId || subtree.has(pid) || held.has(pid));
+      if (!covers) continue;
+      if (!sites.includes(managerId)) sites.push(managerId);
+      const treeSees = managerId === treeSpan
+        || subtree.has(treeSpan)
+        || people.some((pid) => subtree.has(pid));
+      if (!treeSees) lineSites.push(managerId);
+    }
+  }
+  return { sites, lineSites };
+}
+
+/**
  * Harvest objectives AND objective-pointer hygiene from the workspace's own
  * open work records. Every open non-engine work record is accounted for:
  *  - `anchored`: names >= 1 live goal in `state.goals`
@@ -206,7 +252,7 @@ export function rankOf(chain, nodeId) {
  * person name is copied here. Grouping is by objective key, so a new work
  * source plugs in with one row in JUR_SOURCES and zero changes here.
  */
-export function harvestObjectives(state, { chain, conventions = jurConventions(state?.settings || {}) } = {}) {
+export function harvestObjectives(state, { chain, conventions = jurConventions(state?.settings || {}), lineScope = null } = {}) {
   const byObjective = new Map();
   const clusterMeta = new Map();
   const validateGoals = Array.isArray(state?.goals);
@@ -241,6 +287,9 @@ export function harvestObjectives(state, { chain, conventions = jurConventions(s
       const span = responsibleNodeId(chain, people);
       const spanRank = rankOf(chain, span);
       const attributed = people.length > 0 && Boolean(chain?.nodes?.get(span));
+      const { sites, lineSites } = attributed
+        ? accountableSitesFor(people, span, { chain, lineScope })
+        : { sites: [], lineSites: [] };
       const date = recordDate(record, source);
       const linkedGoals = goalLinkMap.get(`${source.entityType}:${recordId}`) || [];
       const keys = objectiveKeysFor(record, source, linkedGoals);
@@ -254,6 +303,7 @@ export function harvestObjectives(state, { chain, conventions = jurConventions(s
         const pointer = {
           recordId, entityType: source.entityType, collection: source.collection,
           label: source.label, span, spanRank, attributed, date,
+          sites, lineSites, people,
           pointerState: 'unanchored', reasonKey: 'unanchored-work',
           reasonNote: JUR_REFUSALS['unanchored-work'],
           goalStatus: 'unanchored', danglingGoalIds: [],
@@ -272,6 +322,7 @@ export function harvestObjectives(state, { chain, conventions = jurConventions(s
         const pointer = {
           recordId, entityType: source.entityType, collection: source.collection,
           label: source.label, span, spanRank, attributed, date,
+          sites, lineSites, people,
           pointerState: 'dangling', reasonKey: 'dangling-objective',
           reasonNote: JUR_REFUSALS['dangling-objective'],
           goalStatus: problem,
@@ -285,6 +336,7 @@ export function harvestObjectives(state, { chain, conventions = jurConventions(s
         records.push({
           recordId, entityType: source.entityType, collection: source.collection,
           label: source.label, span, spanRank, attributed, date,
+          sites, lineSites, people,
           pointerState: 'anchored', reasonKey: '', reasonNote: '',
           goalStatus: 'active', danglingGoalIds: [],
         });
@@ -307,6 +359,9 @@ export function harvestObjectives(state, { chain, conventions = jurConventions(s
           collection: source.collection,
           label: source.label,
           span,
+          sites,
+          lineSites,
+          people,
           attributed,
           date,
         });
@@ -399,10 +454,13 @@ export function commonAncestorOfAll(chain, spanIds) {
  * no longer exists or was dropped is REFUSED (`dangling-objective`), never
  * priced into a governance decision.
  */
-export function priceCluster(cluster, { chain, conventions }) {
+export function priceCluster(cluster, { chain, conventions, matrix = null, lineScope = null } = {}) {
   const members = cluster.members || [];
   const attributed = members.filter((m) => m.attributed);
   const spans = unique(attributed.map((m) => m.span));
+  const accountableSpanIds = unique(attributed.flatMap((m) => (Array.isArray(m.sites) && m.sites.length ? m.sites : [m.span])));
+  const matrixLineSpanIds = accountableSpanIds.filter((id) => !spans.includes(id));
+  const memberPeople = unique(attributed.flatMap((m) => (Array.isArray(m.people) ? m.people : [])));
   const evidenceN = members.length;
   const attribution = jurWilson(attributed.length, evidenceN);
   const dangling = Boolean(cluster.dangling);
@@ -420,6 +478,12 @@ export function priceCluster(cluster, { chain, conventions }) {
     confidenceLoPct: attribution.lo,
     confidenceHiPct: attribution.hi,
     spanNodeIds: spans,
+    accountableSpanIds,
+    matrixLineSpanIds,
+    matrixApexIds: [],
+    lcaBasis: 'tree',
+    matrixAmbiguous: false,
+    matrixLineCount: matrixLineSpanIds.length,
     lcaNodeId: null, lcaRank: 0, maxSpanRank: 0, minSpanRank: 0,
     branchSeatIds: [], coalitionSize: 0, escalationRungs: 0, handoffPairs: 0,
     costCoalition: null, costEscalate: null, costRedraw: null,
@@ -430,17 +494,48 @@ export function priceCluster(cluster, { chain, conventions }) {
     const key = dangling ? 'dangling-objective' : 'single-span';
     return { ...base, gap: false, refusalKey: key, refusalNote: JUR_REFUSALS[key] };
   }
-  const lca = commonAncestorOfAll(chain, spans);
+  const treeLca = commonAncestorOfAll(chain, spans);
+  let lca = treeLca;
+  let lcaBasis = 'tree';
+  let matrixApexIds = [];
+  let matrixAmbiguous = false;
+
+  if (matrix && lineScope && memberPeople.length > 0 && attributed.every((m) => Array.isArray(m.people) && m.people.length > 0)) {
+    const apex = matrixJointApex(matrix, memberPeople);
+    if (apex.ambiguous && apex.apexIds.length > 1) {
+      matrixAmbiguous = true;
+      matrixApexIds = apex.apexIds.slice(0, JUR_LIMITS.branchesCap);
+      lcaBasis = 'ambiguous-matrix';
+    } else if (apex.unique && apex.apexId && chain.nodes.has(apex.apexId)) {
+      matrixApexIds = [apex.apexId];
+      const apexRank = rankOf(chain, apex.apexId);
+      const treeLcaRank = treeLca ? rankOf(chain, treeLca) : 0;
+      const otherMaxRank = Math.max(...spans.filter((s) => s !== apex.apexId).map((s) => rankOf(chain, s)), 0);
+      const strictlyLowerThanTreeLca = apex.apexId !== treeLca
+        && (treeLca === LEADER_ID || !treeLcaRank || apexRank <= treeLcaRank);
+      if (strictlyLowerThanTreeLca && apexRank > otherMaxRank) {
+        lca = apex.apexId;
+        lcaBasis = 'matrix-apex';
+      }
+    }
+  }
+
   if (!lca || !chain.nodes.get(lca)) {
-    return { ...base, gap: true, refusalKey: 'no-lca', refusalNote: JUR_REFUSALS['no-lca'] };
+    return {
+      ...base, matrixApexIds, lcaBasis, matrixAmbiguous,
+      gap: true, refusalKey: 'no-lca', refusalNote: JUR_REFUSALS['no-lca'],
+    };
   }
   const lcaRank = rankOf(chain, lca);
   const maxSpanRank = Math.max(...spans.map((s) => rankOf(chain, s)), 0);
   const minSpanRank = Math.min(...spans.map((s) => rankOf(chain, s)));
-  const branches = unique(spans.map((s) => branchChildOf(chain, lca, s))).slice(0, JUR_LIMITS.branchesCap);
+  const lcaSubtree = new Set(chain.nodes.get(lca)?.subtreeIds || []);
+  const branches = lcaBasis === 'matrix-apex'
+    ? unique(spans.map((s) => (s === lca || lcaSubtree.has(s) ? branchChildOf(chain, lca, s) : s))).slice(0, JUR_LIMITS.branchesCap)
+    : unique(spans.map((s) => branchChildOf(chain, lca, s))).slice(0, JUR_LIMITS.branchesCap);
   const branchRungs = branches
     .filter((b) => b !== lca)
-    .map((b) => Math.max(0, lcaRank - rankOf(chain, b)));
+    .map((b) => Math.max(lcaBasis === 'matrix-apex' ? 1 : 0, lcaRank - rankOf(chain, b)));
   const escalationRungs = branchRungs.reduce((sum, n) => sum + n, 0);
   const coalitionSize = branches.length;
   const handoffPairs = (coalitionSize * (coalitionSize - 1)) / 2;
@@ -459,6 +554,7 @@ export function priceCluster(cluster, { chain, conventions }) {
   const pricedBase = {
     ...base,
     lcaNodeId: lca, lcaRank, maxSpanRank, minSpanRank,
+    matrixApexIds, lcaBasis, matrixAmbiguous,
     branchSeatIds: branches, coalitionSize, escalationRungs, handoffPairs,
     costCoalition, costEscalate, costRedraw, costs, advantagePct,
     gap: true,
@@ -475,6 +571,13 @@ export function priceCluster(cluster, { chain, conventions }) {
   }
   if (attribution.pct === null || attribution.pct < conventions.jurAttributionFloorPct) {
     return { ...pricedBase, refusalKey: 'thin-attribution', refusalNote: JUR_REFUSALS['thin-attribution'] };
+  }
+  if (matrixAmbiguous) {
+    return {
+      ...pricedBase,
+      costCoalition: null, costEscalate: null, costRedraw: null, costs: [], advantagePct: null,
+      refusalKey: 'ambiguous-matrix-lca', refusalNote: JUR_REFUSALS['ambiguous-matrix-lca'],
+    };
   }
   if (advantagePct === null || advantagePct < conventions.jurMaterialityPct) {
     return { ...pricedBase, refusalKey: 'no-decisive-route', refusalNote: JUR_REFUSALS['no-decisive-route'] };
@@ -499,9 +602,12 @@ export function priceCluster(cluster, { chain, conventions }) {
 /** The full book: every cross-span objective, priced or refused, plus hygiene. */
 export function buildJurisdictionBook(state, { now = new Date(), conventions = jurConventions(), chain = null } = {}) {
   const at = now instanceof Date ? now : new Date(now);
-  const built = chain || buildChain(state, { now: at, settings: state?.settings });
-  const harvest = harvestObjectives(state, { chain: built, conventions });
-  const all = harvest.objectives.map((cluster) => priceCluster(cluster, { chain: built, conventions }));
+  const ctx = resolveJurisdictionContext(state, { now: at, settings: state?.settings, chain });
+  const built = ctx.chain;
+  const harvest = harvestObjectives(state, { chain: built, conventions, lineScope: ctx.lineScope });
+  const all = harvest.objectives.map((cluster) => priceCluster(cluster, {
+    chain: built, conventions, matrix: ctx.matrix, lineScope: ctx.lineScope,
+  }));
   const gaps = all.filter((c) => c.gap);
   const priced = gaps.filter((c) => c.verdict === 'priced');
   const refused = gaps.filter((c) => c.verdict === 'refused');
@@ -512,6 +618,8 @@ export function buildJurisdictionBook(state, { now = new Date(), conventions = j
     week: weekKey(at),
     conventions,
     chain: built,
+    matrixActive: Boolean(ctx.lineScope),
+    lineScope: ctx.lineScope,
     // ADR-0115: the cross-week drift reader needs the DENOMINATOR of the
     // cross-branch share. `clusters` is gaps only; `allClusters` is every
     // objective the harvest could place, including single-branch ones. No title,
@@ -558,12 +666,18 @@ export function jurSpanRollUp(state, { nodeId, now = new Date(), conventions = j
   const node = built.nodes.get(nodeId);
   if (!node) return { ok: false, reason: 'no-node' };
   const subtree = new Set([...(node.subtreeIds || []), nodeId, LEADER_ID === nodeId ? nodeId : null].filter(Boolean));
-  const own = report.clusters.filter((c) => c.spanNodeIds.some((s) => subtree.has(s)));
+  const clusterInSubtree = (c) => {
+    const spanIds = Array.isArray(c.accountableSpanIds) && c.accountableSpanIds.length
+      ? c.accountableSpanIds
+      : c.spanNodeIds;
+    return spanIds.some((s) => subtree.has(s));
+  };
+  const own = report.clusters.filter(clusterInSubtree);
   // ADR-0115: every objective in this span's subtree, not only cross-branch
   // gaps. A reading written before this denominator existed has `objectives:
   // null`, and the drift reader REFUSES its share rather than printing 100%.
   const allHere = Array.isArray(report.allClusters)
-    ? report.allClusters.filter((c) => c.spanNodeIds.some((s) => subtree.has(s)))
+    ? report.allClusters.filter(clusterInSubtree)
     : null;
   const priced = own.filter((c) => c.verdict === 'priced');
   const refused = own.filter((c) => c.verdict === 'refused');
@@ -576,7 +690,10 @@ export function jurSpanRollUp(state, { nodeId, now = new Date(), conventions = j
   const governed = (Array.isArray(state?.decisions) ? state.decisions : [])
     .filter((d) => String(d?.question || '').includes('[JUR-OPTION:') && String(d?.question || '').includes('[RULE-JUR-02:')).length;
 
-  const ownWork = (report.hygiene?.records || []).filter((r) => subtree.has(r.span));
+  const ownWork = (report.hygiene?.records || []).filter((r) => {
+    const sites = Array.isArray(r.sites) && r.sites.length ? r.sites : [r.span];
+    return sites.some((s) => subtree.has(s));
+  });
   const hygieneSuppressed = ownWork.length < floor;
   const ownAnchored = ownWork.filter((r) => r.pointerState === 'anchored').length;
   const ownUnanchored = ownWork.filter((r) => r.pointerState === 'unanchored').length;
@@ -784,19 +901,30 @@ export function jurBrief(state, { now = new Date(), settings = null, conventions
 /** Role-tiered read. The seat changes WHAT is claimed and what may be anchored. */
 export function jurisdictionRead(state, { now = new Date(), settings = null, seatId = null, conventions = jurConventions(settings || state?.settings || {}) } = {}) {
   const at = now instanceof Date ? now : new Date(now);
+  const effSettings = settings || state?.settings || {};
   const book = buildJurisdictionBook(state, { now: at, conventions });
-  const built = buildSeats(state, { now: at, settings: settings || state?.settings || {} });
+  const lineScope = book.lineScope || matrixLineScopeFor(state, { now: at, settings: effSettings });
+  const built = buildSeats(state, { now: at, settings: effSettings, ...(lineScope ? { lineScope } : {}) });
   const seat = seatId ? built.seats.find((s) => s.id === seatId) || activeSeat(built) : activeSeat(built);
   const rank = seat?.rank || 0;
   const withheld = Boolean(seat && !seat.fullAccess && rank > 2);
   const findings = Array.isArray(state?.jurFindings) ? state.jurFindings : [];
   const grades = findings.filter((f) => f?.status === 'graded');
   const floor = conventions.jurCellFloor;
+  const seatHasNode = (id) => Boolean(seat?.scope instanceof Set && seat.scope.has(id))
+    || Boolean(seat?.lineScope instanceof Set && seat.lineScope.has(id));
 
-  // Span-scoped cluster membership for frontline & manager seats.
+  // Span-scoped cluster membership for frontline, manager & matrix-line seats.
   const scopedSeat = Boolean(seat && !seat.fullAccess && !seat.readOnly && seat.scope instanceof Set);
   const ownSpanClusterKeys = scopedSeat
-    ? book.clusters.filter((c) => c.spanNodeIds.some((s) => seat.scope.has(s))).map((c) => c.objectiveKey)
+    ? book.clusters
+      .filter((c) => {
+        const spanIds = Array.isArray(c.accountableSpanIds) && c.accountableSpanIds.length
+          ? c.accountableSpanIds
+          : c.spanNodeIds;
+        return spanIds.some((s) => seatHasNode(s));
+      })
+      .map((c) => c.objectiveKey)
     : book.clusters.map((c) => c.objectiveKey);
 
   // Above the detail ceiling (rank 3..5 declared seats) the read is compiled
@@ -867,7 +995,7 @@ export function jurisdictionRead(state, { now = new Date(), settings = null, sea
         if (canSee(raw, item.collection, seat, built).allow !== 'full') continue;
         const people = workRecordPeople(raw, built.chain);
         if (!people.length && !seat.isLeader) continue;
-        if (people.length && !people.every((pid) => seat.scope.has(pid))) continue;
+        if (people.length && !people.every((pid) => seatHasNode(pid))) continue;
       }
       hygieneQueue.push({
         recordId: item.recordId,
@@ -893,7 +1021,11 @@ export function jurisdictionRead(state, { now = new Date(), settings = null, sea
         status: g.status || 'active',
       }));
     if (scopedSeat) {
-      const inSpan = book.hygiene.records.filter((r) => seat.scope.has(r.span));
+      const inSpan = book.hygiene.records.filter((r) => {
+        const sites = Array.isArray(r.sites) && r.sites.length ? r.sites : [r.span];
+        if (sites.some((s) => seat.scope.has(s))) return true;
+        return Array.isArray(r.people) && r.people.length > 0 && r.people.every((pid) => seatHasNode(pid));
+      });
       spanHygiene = {
         openWork: inSpan.length,
         anchoredWork: inSpan.filter((r) => r.pointerState === 'anchored').length,
@@ -909,7 +1041,11 @@ export function jurisdictionRead(state, { now = new Date(), settings = null, sea
     engineVersion: JUR_ENGINE_VERSION,
     week: book.week,
     conventions,
-    seat: seat ? { id: seat.id, rank, label: seat.label, fullAccess: Boolean(seat.fullAccess), readOnly: Boolean(seat.readOnly) } : null,
+    seat: seat ? {
+      id: seat.id, rank, label: seat.label,
+      fullAccess: Boolean(seat.fullAccess), readOnly: Boolean(seat.readOnly),
+      lineScopeN: seat.lineScopeN || 0, lineOnlySeat: Boolean(seat.lineOnlySeat),
+    } : null,
     withheld,
     ownSpanClusterKeys,
     spanHygiene,

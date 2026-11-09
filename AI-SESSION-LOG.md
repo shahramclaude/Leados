@@ -1,3 +1,30 @@
+## 2026-11-09 — Session 203: Jurisdiction Compiler × Matrix Parity (Schema v121 unchanged)
+
+**Doctrine / sync / scope.** `NORTH_STAR.md` verified; `origin` verified as `https://github.com/shahramclaude/Leados.git`; branch `arena/f5bfd2f8-leados` from `8a9d6e8`. Primary altitude × structure: **Director / VP × matrix** (`proddir` / `vp_prod` rank 3–4 line-only matrix governance; all altitudes and single-chain workspaces preserve backward-compatible parity).
+
+**Built.**
+- `app/core/domain/jurisdictionRegistry.js` & `jurisdictionSchema.js`: registered `'matrix.line.declared'`, `'matrix.line.retuned'`, `'matrix.line.ended'` in `JUR_WORK_EVENTS`; added `'ambiguous-matrix-lca'` refusal; extended `normalizeJurFindings` with optional matrix metadata (`accountableSpanIds`, `matrixApexIds`, `lcaBasis`, `matrixAmbiguous`, `matrixLineCount`).
+- `app/core/domain/jurisdiction.js`: added `resolveJurisdictionContext` (`buildMatrix`, `matrixLineScope`, `matrixLineScopeFor`, `matrixJointApex`) and `accountableSitesFor` without touching single-chain behavior (`matrixActive === false`, `lcaBasis === 'tree'`). Multi-branch clusters route through declared matrix apexes (`lcaBasis === 'matrix-apex'`) at Director/VP rank when unique, refuse silent tie-breaking on competing incomparable matrix managers (`ambiguous-matrix-lca`), include matrix-reachable objectives in `harvestObjectives`, `buildJurisdictionBook`, `jurSpanRollUp`, and `jurisdictionRead`, and reconcile identity-free span readings across home spans + active matrix lines.
+- `app/core/domain/jurisdictionRules.js`: added `findingRollupTargets`, bypassed `filterByMember` on `matrix.line.*` commits, reconciled current-week frozen un-governed findings and pruned stale `RULE-JUR-01` / `RULE-JUR-02` `rolls-up-to` edges on `matrix.line.*` commits and explicit scans, rolled up `RULE-JUR-01` / `RULE-JUR-02` across matrix ancestors/apexes, and withheld single-decider `RULE-JUR-02` decisions on diamond ties (`ambiguous-matrix-lca`).
+- `app/core/domain/jurisdictionDrift.js`, `redrawRehearsal.js`, `jurisdictionActions.js`, `accessGateway.js`, & `app/views/jurisdiction.js`: unioned `seat.lineScope` into `jurDriftScope` and `jurAnchorWork` (`MATRIX_LINE_SCOPED`); wired `resolveJurisdictionContext` and `accountableSpanIds` / `matrixApexIds` roll-ups into `rehearseBoundaryRedraw`; moved `redactRehearsalReport` into `redrawRehearsal.js` (re-exported by `app/views/jurisdiction.js`) to respect canonical domain boundaries; exposed `api.jurRedrawRehearse` in `SAFE_READS` with server-side rank ≥ 3 span redaction; routed `#/jurisdiction` panel reads through `ctx.api.*` when a seat context is active (`scopedViewState` + `safeSeatContext` strip raw `reportingLines` / out-of-span detail above rank 2) and added a non-PII `Structure` column in the boundary map panel.
+- `tests/app/jurisdiction-matrix.test.mjs`: added 6 end-to-end tests covering single-chain parity, rank-3/rank-4 `matrix-apex` roll-up + identity-free drift/rehearsal, `ambiguous-matrix-lca` refusal + `matrix.line.ended` reconciliation + stale edge pruning, rank-2 line-only manager hygiene/`jurAnchorWork`/`guardApi`, `jurRedrawRehearse` span redaction, and 7-panel `scopedViewState` + JSDOM/axe-core display-vs-computed parity.
+
+**Proactive discovery.** Added **Cross-Boundary Design Structure Matrix (DSM) & Coupled Feedback-Cycle Engine** (`[director / VP / CEO × both single-chain and matrix]`, Steward 1981 / Eppinger & Browning 2012 / Tarjan 1972 SCC / Baldwin & Clark 2000) to `ROADMAP.md` under `### Planned — Not Started` after confirming via grep across `app/` and `RESEARCH.md` that Tarjan SCC tearing / coupled cycle partitioning is absent; also updated `ROADMAP.md` Session 203 `Verified Shipped` & `In Progress`.
+
+**Verified.**
+- `npm run lint` (`eslint .`) — PASS.
+- `npm run check:boundary` — PASS (609 app ES modules, 194 test suites, 23 documentation checks, 0 leaks).
+- `npm run check:links` — PASS (983 internal links across 264 markdown files).
+- Focused suite `node --test tests/app/jurisdiction-matrix.test.mjs tests/app/jurisdiction-drift.test.mjs tests/app/cadence-matrix.test.mjs tests/app/matrix*.test.mjs tests/app/operating-seat.test.mjs tests/app/boundary.test.mjs` — **81/81 PASS** (0 failures; JSDOM/axe-core clean across all 7 `#/jurisdiction` panels).
+- `npm run build:standalone && node --test tests/app/standalone.test.mjs` — rebuilt `LeadOS-standalone.html` (`9,882,413 bytes`, `608` modules, `16,254 bytes/module`); 6/7 standalone assertions passed, 1 failed on the pre-existing `9_600_000` byte ceiling (`HEAD` itself was already `9,743,091` bytes).
+- Pre-existing pin drift observed on untouched suites (`jurisdiction.test.mjs`, `redraw-rehearsal.test.mjs`, `disclosure-compiler.test.mjs`, `parity.test.mjs`, `typed-links-lineage.test.mjs`) from earlier `SCHEMA_VERSION` 119→121 / `CSV_EXPORTS` / link-type additions; all functional assertions in `jurisdiction.test.mjs` and `redraw-rehearsal.test.mjs` passed.
+
+**Unverified / limits.** Full 194-suite sequential `npm test` timed out at the 600s command limit after confirming pre-existing v33/v42/v43/v73/v112 schema/CSV pin failures in early suites; real-browser keyboard/AT walkthrough and `src/**` parity remain **[UNVERIFIED]**. Seats remain local workflow declarations, not authenticated server tenants.
+
+**Next.** Audit remaining matrix read-model parity gaps (`succession.js`, non-matrix `accessGateway.js` payload helpers) or build the Cross-Boundary DSM & Coupled Feedback-Cycle Engine `[director / VP / CEO × single-chain and matrix]`.
+
+---
+
 ## 2026-11-09 — Session 200: an overdue forum has no known next sitting
 
 **Built / scope.** Frontline / mid-manager primary, shared calculation used at all altitudes in single-chain and matrix workspaces. A missed expected sitting is no longer treated as a zero-day wait. Unknown alternatives cannot prove the whole ladder late; the view and brief show uncertainty and the frozen reading omits a forecast dependent on an unknown sitting. The existing cadence report feeds shared post-commit automation and hierarchy paths; this is not a claim that those paths are matrix-safe.

@@ -40,6 +40,7 @@
 
 import { LEADER_ID } from './chain.js';
 import { buildSeats, activeSeat } from './seat.js';
+import { matrixLineScopeFor } from './matrix.js';
 import { jurConventions } from './jurisdiction.js';
 import { JUR_REFUSALS } from './jurisdictionRegistry.js';
 import {
@@ -245,16 +246,19 @@ export function buildJurisdictionDrift(state, { now = new Date(), settings = nul
   };
 }
 
-/** The seat's reporting subtree is the ONLY scope cut. No second hierarchy. */
+/** The seat's reporting subtree + declared matrix lines is the ONLY scope cut. */
 export function jurDriftScope(state, { now = new Date(), settings = null } = {}) {
   const at = now instanceof Date ? now : new Date(now);
   try {
-    const built = buildSeats(state, { now: at, settings: settings || state?.settings || {} });
+    const effSettings = settings || state?.settings || {};
+    const lineScope = matrixLineScopeFor(state, { now: at, settings: effSettings });
+    const built = buildSeats(state, { now: at, settings: effSettings, ...(lineScope ? { lineScope } : {}) });
     const seat = activeSeat(built) || built.operatorSeat;
     const rank = seat?.rank || 0;
     const full = seat?.fullAccess === true;
     const scopeNodeIds = full ? null : new Set([
       ...(seat?.scope instanceof Set ? [...seat.scope] : []),
+      ...(seat?.lineScope instanceof Set ? [...seat.lineScope] : []),
       seat?.nodeId,
       ...(rank >= 5 ? [LEADER_ID] : []),
     ].filter(Boolean));
