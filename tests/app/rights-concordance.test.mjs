@@ -641,6 +641,11 @@ test('the CSV scope exports the report counts exactly, and carries no person, na
   assert.equal(ws[idx('decisions_single_line_n')], String(c.decisions.singleLineN));
   assert.equal(ws[idx('decisions_unresolved_decider_n')], String(c.decisions.unresolvedDeciderN));
   assert.equal(ws[idx('withheld_findings_n')], String(c.findings.withheldN));
+  assert.equal(ws[idx('recurrence_observations_n')], String(c.recurrence.observationN));
+  assert.equal(ws[idx('recurring_observations_n')], String(c.recurrence.recurringObservationN));
+  assert.equal(ws[idx('one_off_observations_n')], String(c.recurrence.oneOffObservationN));
+  assert.equal(ws[idx('recurring_patterns_n')], String(c.recurrence.recurringPatternN));
+  assert.equal(ws[idx('recurrence_patterns_withheld_n')], String(c.recurrence.remainderN));
 
   // One row per finding kind, with the exact count.
   const countKey = {
@@ -659,6 +664,45 @@ test('the CSV scope exports the report counts exactly, and carries no person, na
   const flat = JSON.stringify(parsed);
   for (const needle of ['Ada Executive', 'Sam Engineer', 'Pia Product', 'Victor VP Eng', 'dec-1', 'c-1', 'Decision']) {
     assert.doesNotMatch(flat, new RegExp(needle));
+  }
+});
+
+test('recurrence groups repeated structural patterns by distinct decisions, not people, and stays identity-free', () => {
+  const state = workspace({
+    decisions: [
+      decision('dec-1', { date: '2026-10-20', approver: 'Ada Executive' }),
+      decision('dec-2', { date: '2026-10-21', approver: 'Ada Executive' }),
+    ],
+    cases: [caseRec('c-sam', 'sam'), caseRec('c-lee', 'lee')],
+    links: [
+      link('lnk-1', 'case', 'c-sam', 'decision', 'dec-1', 'decides'),
+      link('lnk-2', 'case', 'c-lee', 'decision', 'dec-1', 'decides'),
+      link('lnk-3', 'case', 'c-sam', 'decision', 'dec-2', 'decides'),
+    ],
+    lines: [
+      ...baseLines(),
+      line('l-lee-fn', 'lee', 'dana', 'functional', 60, ['priority', 'technical']),
+      line('l-lee-pj', 'lee', 'vp1', 'project', 40, []),
+    ],
+  });
+  const c = concordanceOf(state, { seat: { id: 'exec', rank: 5, fullAccess: true }, scope: null });
+  const repeatedBypass = c.recurrence.rows.find((row) => row.kind === 'bypass'
+    && row.lineKinds.join('|') === 'functional|project' && row.rightKeys.length === 0);
+  assert.ok(repeatedBypass, 'same structural bypass pattern recurs across distinct decisions');
+  assert.equal(repeatedBypass.decisionN, 2, 'one decision linked to two matching subjects counts once');
+  assert.equal(repeatedBypass.firstOn, '2026-10-20');
+  assert.equal(repeatedBypass.lastOn, '2026-10-21');
+  assert.equal(c.recurrence.identity.observations, true);
+  assert.equal(c.recurrence.identity.queue, true);
+  assert.ok(c.recurrence.recurringObservationN > 0);
+  const recurrenceCsv = rightsConcordanceCsvRows(c).filter((row) => row.row_kind === 'recurrence');
+  const exportedPattern = recurrenceCsv.find((row) => row.kind === 'bypass'
+    && row.line_kinds === 'functional|project' && row.right_keys === '');
+  assert.equal(exportedPattern.decisions_n, 2, 'CSV exactly carries the computed distinct-decision count');
+  assert.equal(recurrenceCsv.length, c.recurrence.rows.length, 'CSV includes every displayed pattern');
+  const recurrenceText = JSON.stringify(c.recurrence);
+  for (const privateValue of ['Sam Engineer', 'Lee Engineer', 'sam', 'lee', 'dec-1', 'l-sam-pj']) {
+    assert.doesNotMatch(recurrenceText, new RegExp(privateValue));
   }
 });
 
@@ -734,6 +778,11 @@ test('the concordance panel renders axe-clean in JSDOM with findings, identity a
     assert.match(node.textContent, /Decisions read/);
     assert.match(node.textContent, /outside the declared rights/, 'the bypass finding is rendered');
     assert.match(node.textContent, /The reconciliation/);
+    assert.match(node.textContent, /Recurring structural patterns/);
+    assert.match(node.textContent, /Distinct decisions/);
+    const firstPattern = report.concordance.recurrence.rows[0];
+    assert.ok(firstPattern, 'fixture produces a repeated structural pattern');
+    assert.ok(node.textContent.includes(String(firstPattern.decisionN)), 'rendered pattern count equals the computed report');
     assert.match(node.textContent, /Honest limits/);
 
     dom.window.document.body.replaceChildren(node);

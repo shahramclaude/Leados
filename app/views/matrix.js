@@ -611,6 +611,7 @@ function concordancePanel(ctx, report) {
   const c = report.concordance;
   const d = c.decisions;
   const f = c.findings;
+  const recurrence = c.recurrence || { rows: [], recurringPatternN: 0, oneOffObservationN: 0, observationN: 0, remainderN: 0 };
 
   if (!c || !d) {
     return emptyState({ title: 'Concordance unavailable', body: 'Recompute the matrix report to audit the decision log against the declared line rights.' });
@@ -640,6 +641,7 @@ function concordancePanel(ctx, report) {
       stat({ label: 'Decisions read', value: num(d.completedN), hint: `of ${d.totalN} logged` }),
       stat({ label: 'Audited', value: num(d.auditedN), hint: 'multi-line subject in the record' }),
       stat({ label: 'With findings', value: num(d.withFindingsN), tone: d.withFindingsN ? 'warn' : '' }),
+      stat({ label: 'Recurring patterns', value: num(recurrence.recurringPatternN), hint: `${recurrence.oneOffObservationN} one-off structural observation(s)`, tone: recurrence.recurringPatternN ? 'warn' : '' }),
       stat({ label: 'Clean', value: num(d.cleanN), hint: 'decided inside the declared rights' }),
       stat({ label: 'Unscoped', value: num(d.unscopedN), hint: 'no subject in the record', tone: d.unscopedN ? 'warn' : '' }),
       stat({ label: 'Unresolved decider', value: num(d.unresolvedDeciderN), hint: 'not on the roster', tone: d.unresolvedDeciderN ? 'warn' : '' }),
@@ -657,6 +659,32 @@ function concordancePanel(ctx, report) {
         rows: identityRows,
       }),
     }),
+
+    recurrence.rows.length
+      ? card({
+        title: 'Recurring structural patterns',
+        subtitle: `${recurrence.recurringPatternN} pattern(s) recur across distinct decisions · ${recurrence.recurringObservationN} repeated observations · ${recurrence.oneOffObservationN} one-off observations. Grouped by process finding, line kinds and rights — never by person.`,
+        body: table({
+          caption: 'Repeated matrix decision-right patterns',
+          columns: [
+            { label: 'Structural finding', render: (row) => RIGHTS_CONCORDANCE_FINDINGS.find((f) => f.key === row.kind)?.label || row.kind },
+            { label: 'Line kinds', render: (row) => row.lineKinds.join(' + ') || 'not declared' },
+            { label: 'Rights', render: (row) => row.rightKeys.length ? row.rightKeys.join(', ') : 'none specified' },
+            { label: 'Distinct decisions', key: 'decisionN' },
+            { label: 'First', key: 'firstOn' },
+            { label: 'Latest', key: 'lastOn' },
+          ],
+          rows: recurrence.rows,
+        }),
+      })
+      : emptyState({
+        title: 'No recurring structural pattern in the audited decisions',
+        body: `${recurrence.observationN} distinct decision-pattern observation(s) were checked. A recurrence requires the same structural finding, line-kind set and right set on at least two distinct decisions; this is a design signal, not a rating of any person.`,
+      }),
+
+    recurrence.remainderN
+      ? h('p', { class: 'muted small' }, `${recurrence.remainderN} further recurring pattern(s) are not shown; all are included in the exported audit and counted here.`)
+      : null,
 
     f.rows.length
       ? card({

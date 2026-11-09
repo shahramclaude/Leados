@@ -329,6 +329,7 @@ export function buildRightsConcordance(state, {
     let decisionHasFinding = false;
     for (const { subjectId, rights } of multiLineSubjects) {
       const holdersByRight = rights.holdersByRight;
+      const lineKinds = [...new Set(rights.lines.map((line) => line.kind).filter(Boolean))].sort();
       const approverRights = approver.resolved
         ? (rights.rightsByManager.get(approver.personId) || new Set())
         : new Set();
@@ -343,6 +344,7 @@ export function buildRightsConcordance(state, {
           detail: `The recorded decider held no declared right on any of the ${rights.lines.length} active line(s) of this person on ${dateStr}`
             + `${isManagerOfSubject ? ' — they manage this person, but the declared lines give them none of the six rights' : ' — they hold no governance route to this person at all'}.`,
           rightKeys: [],
+          lineKinds,
         }, approver));
       } else if (approver.resolved) {
         /* 2. Was any right the decider held also held by a second manager? */
@@ -354,6 +356,7 @@ export function buildRightsConcordance(state, {
           findingRows.push(makeFinding(decision, subjectId, rosterName, inScope, 'contested-decided', {
             detail: `The decider held ${contested.length} right(s) that two or more managers hold on this person's lines on ${dateStr} — the structure duplicated the authority and this decision picked one holder.`,
             rightKeys: contested,
+            lineKinds,
           }, approver));
         }
       }
@@ -368,6 +371,7 @@ export function buildRightsConcordance(state, {
         findingRows.push(makeFinding(decision, subjectId, rosterName, inScope, 'unresolved-authority', {
           detail: `Right(s) ${unowned.join(', ')} on this person's active lines were held by nobody on ${dateStr} — the decision itself supplied the authority the declared structure did not have.`,
           rightKeys: unowned,
+          lineKinds,
         }, approver));
       }
 
@@ -383,6 +387,7 @@ export function buildRightsConcordance(state, {
         findingRows.push(makeFinding(decision, subjectId, rosterName, inScope, 'consult-gap', {
           detail: `The manager holding ${operational.join(', ')} on this person's lines was not recorded among the decision's contributors.`,
           rightKeys: operational,
+          lineKinds,
         }, approver));
       }
     }
@@ -417,6 +422,68 @@ export function buildRightsConcordance(state, {
       withheldFindingsN += 1;
     }
   }
+
+  // Aggregate repeated structural configurations, not repeated people. A
+  // pattern is the finding kind + the kinds of lines in force + the affected
+  // rights. One decision contributes at most once to a pattern even if its
+  // provenance links the same configuration to several people. The output is
+  // identity-free and seat-scoped: no manager, person, decision or line id is
+  // carried into this systemic CEO reading.
+  const recurrenceGroups = new Map();
+  const seenDecisionPatterns = new Set();
+  for (const row of shownRows) {
+    const lineKinds = [...new Set(row.lineKinds || [])].sort();
+    const rightKeys = [...new Set(row.rightKeys || [])].sort();
+    const signature = JSON.stringify([row.kind, lineKinds, rightKeys]);
+    const observation = `${row.decisionId}|${signature}`;
+    if (seenDecisionPatterns.has(observation)) continue;
+    seenDecisionPatterns.add(observation);
+    if (!recurrenceGroups.has(signature)) {
+      recurrenceGroups.set(signature, {
+        kind: row.kind,
+        lineKinds,
+        rightKeys,
+        decisionIds: new Set(),
+        dates: [],
+      });
+    }
+    const group = recurrenceGroups.get(signature);
+    group.decisionIds.add(row.decisionId);
+    group.dates.push(row.decidedOn);
+  }
+  const recurrenceAll = [...recurrenceGroups.values()]
+    .map((group) => ({
+      kind: group.kind,
+      lineKinds: group.lineKinds,
+      rightKeys: group.rightKeys,
+      decisionN: group.decisionIds.size,
+      firstOn: [...group.dates].sort()[0] || null,
+      lastOn: [...group.dates].sort().at(-1) || null,
+    }))
+    .filter((row) => row.decisionN >= 2)
+    .sort((a, b) => b.decisionN - a.decisionN
+      || a.kind.localeCompare(b.kind)
+      || a.lineKinds.join('|').localeCompare(b.lineKinds.join('|'))
+      || a.rightKeys.join('|').localeCompare(b.rightKeys.join('|')));
+  const recurrenceObservationN = [...recurrenceGroups.values()]
+    .reduce((n, group) => n + group.decisionIds.size, 0);
+  const recurringObservationN = recurrenceAll.reduce((n, row) => n + row.decisionN, 0);
+  const oneOffObservationN = [...recurrenceGroups.values()]
+    .filter((group) => group.decisionIds.size < 2)
+    .reduce((n, group) => n + group.decisionIds.size, 0);
+  const recurrenceShown = recurrenceAll.slice(0, RIGHTS_CONCORDANCE_LIMITS.recurrencePatterns);
+  const recurrence = {
+    observationN: recurrenceObservationN,
+    recurringPatternN: recurrenceAll.length,
+    recurringObservationN,
+    oneOffObservationN,
+    rows: recurrenceShown,
+    remainderN: recurrenceAll.length - recurrenceShown.length,
+    identity: {
+      observations: recurrenceObservationN === recurringObservationN + oneOffObservationN,
+      queue: recurrenceShown.length + (recurrenceAll.length - recurrenceShown.length) === recurrenceAll.length,
+    },
+  };
 
   const order = { bypass: 0, 'contested-decided': 1, 'unresolved-authority': 2, 'consult-gap': 3 };
   shownRows.sort((a, b) => {
@@ -463,6 +530,7 @@ export function buildRightsConcordance(state, {
     },
     decisionRows: decisionsShown,
     decisionsRemainderN,
+    recurrence,
     scopeCounts: { ...scopeCounts },
     conventions: {
       consultRequiredRights: [...MATRIX_OPERATIONAL_RIGHTS],
@@ -505,6 +573,7 @@ function makeFinding(decision, subjectId, rosterName, inScope, kind, detail, app
     approverReason: approver.resolved ? null : approver.reason,
     contributorsN: splitParticipants(decision.contributors).length,
     rightKeys: detail.rightKeys || [],
+    lineKinds: detail.lineKinds || [],
     detail: String(detail.detail).slice(0, RIGHTS_CONCORDANCE_LIMITS.detailChars),
     subjectInScope,
   };
@@ -521,6 +590,7 @@ function makeFinding(decision, subjectId, rosterName, inScope, kind, detail, app
 export function rightsConcordanceCsvRows(report) {
   const c = report?.decisions || {};
   const f = report?.findings || {};
+  const recurrence = report?.recurrence || {};
   // The finding rows carry the kebab-case keys of the declared vocabulary;
   // the counts object carries the module's own camelCase accumulators. The
   // mapping is declared once, here, so the export can never silently print a
@@ -546,6 +616,11 @@ export function rightsConcordanceCsvRows(report) {
     decisions_unresolved_decider_n: c.unresolvedDeciderN ?? 0,
     dangling_subject_n: c.danglingSubjectN ?? 0,
     withheld_findings_n: f.withheldN ?? 0,
+    recurrence_observations_n: recurrence.observationN ?? 0,
+    recurring_observations_n: recurrence.recurringObservationN ?? 0,
+    one_off_observations_n: recurrence.oneOffObservationN ?? 0,
+    recurring_patterns_n: recurrence.recurringPatternN ?? 0,
+    recurrence_patterns_withheld_n: recurrence.remainderN ?? 0,
   });
   for (const finding of RIGHTS_CONCORDANCE_FINDINGS) {
     rows.push({
@@ -553,15 +628,18 @@ export function rightsConcordanceCsvRows(report) {
       scope: 'workspace',
       kind: finding.key,
       count: f.counts?.[countKey[finding.key]] ?? 0,
-      decisions_read_n: '',
-      decisions_audited_n: '',
-      decisions_with_findings_n: '',
-      decisions_clean_n: '',
-      decisions_unscoped_n: '',
-      decisions_single_line_n: '',
-      decisions_unresolved_decider_n: '',
-      dangling_subject_n: '',
-      withheld_findings_n: '',
+    });
+  }
+  for (const pattern of recurrence.rows || []) {
+    rows.push({
+      row_kind: 'recurrence',
+      scope: 'seat',
+      kind: pattern.kind,
+      line_kinds: pattern.lineKinds.join('|'),
+      right_keys: pattern.rightKeys.join('|'),
+      decisions_n: pattern.decisionN,
+      first_decision_on: pattern.firstOn,
+      last_decision_on: pattern.lastOn,
     });
   }
   return rows;
@@ -582,8 +660,10 @@ export function rightsConcordanceBriefText(report) {
       ? `Concordance: ${c.completedN} completed decision(s) read, none with a multi-line subject in the record.`
       : 'Concordance: no completed decisions in the record.';
   }
+  const recurrence = report.recurrence || { recurringPatternN: 0 };
   return `Concordance: ${c.completedN} completed decision(s), ${c.auditedN} audited against the declared line rights — `
     + `${f.counts.bypass} outside the declared rights, ${f.counts.contestedDecided} on contested rights, `
     + `${f.counts.unresolvedAuthority} filling unowned right(s), ${f.counts.consultGap} right-holder(s) not consulted; `
+    + `${recurrence.recurringPatternN} recurring structural pattern(s), `
     + `${c.unscopedN} unscoped, ${c.unresolvedDeciderN} decider(s) not on the roster.`;
 }
