@@ -124,10 +124,10 @@ const seatOf = (state) => activeSeat(buildSeats(state, { now: NOW, settings: sta
 /* --------------------------------------------------------------- 1. schema */
 
 test('schema v114 is additive and convergent; a malformed cover is dropped, never repaired', () => {
-  assert.equal(SCHEMA_VERSION, 119);
+  assert.equal(SCHEMA_VERSION, 121);
   const migrated = migrate({ schemaVersion: 113, people: [{ id: 'p1', name: 'A' }], settings: { leaderName: 'Dana' } });
-  assert.deepEqual(migrated.applied, ['113 → 114', '114 → 115', '115 → 116', '116 → 117', '117 → 118', '118 → 119']);
-  assert.equal(migrated.raw.schemaVersion, 119);
+  assert.deepEqual(migrated.applied, ['113 → 114', '114 → 115', '115 → 116', '116 → 117', '117 → 118', '118 → 119', '119 → 120', '120 → 121']);
+  assert.equal(migrated.raw.schemaVersion, 121);
   assert.deepEqual(migrated.raw.dutyCovers, [], 'no stand-in is invented at upgrade time');
   assert.deepEqual(migrated.raw.dutyCoverageMarkers, []);
   assert.equal(migrated.raw.settings.dutyCoverageExerciseDays, DUTY_COVERAGE_DEFAULTS.dutyCoverageExerciseDays);
@@ -426,7 +426,46 @@ test('the access gateway enforces the right: a read-only seat cannot declare, a 
   void govern;
 });
 
-/* ------------------------------------------------- 8. the altitude roll-up */
+/* ------------------------------------------------ 8. matrix duty-span parity */
+
+test('a line-only manager reads each directly matrix-held duty once, with CSV values equal to the report', () => {
+  const base = fixture();
+  const matrixState = normalizeState({
+    ...base,
+    people: [...base.people, {
+      id: 'pmdir', name: 'Pia Product', role: 'Project Manager', level: 'manager',
+      managerId: 'dir1', status: 'active', createdAt: ago(300),
+    }],
+    reportingLines: [{
+      id: 'line-pm-lead', personId: 'lead1', managerId: 'pmdir', kind: 'project',
+      shareH: 40, rights: [], fromISO: '2026-01-01', toISO: null,
+      declaredAt: NOW.toISOString(), status: 'active', history: [],
+    }],
+    settings: { ...base.settings, activeSeatId: 'pmdir' },
+  }, { now: NOW }).state;
+
+  const report = buildDutyCoverageReport(matrixState, { now: NOW });
+  assert.equal(report.seat.id, 'pmdir', 'the existing matrix seat is active in this reader');
+  assert.equal(report.seat.lineOnlyN, 1);
+  const productLeadRows = report.rows.filter((row) => row.seat.id === 'lead1');
+  assert.ok(productLeadRows.length > 0, 'the matrix manager sees the directly held frontline duty lines');
+  assert.equal(new Set(report.rows.map((row) => row.reading.dutyId)).size, report.rows.length,
+    'tree and declared-line scope union the same seat only once');
+  assert.equal(report.summary.dutiesN, report.rows.length);
+  assert.equal(report.seatRows.reduce((sum, row) => sum + row.dutiesN, 0), report.rows.length,
+    'the printed per-seat roll-up reconciles exactly to the duty rows');
+
+  const csvDuties = dutyCoverageCsvRows(report).filter((row) => row.row_kind === 'duty');
+  assert.equal(csvDuties.length, report.rows.length);
+  for (const row of csvDuties) {
+    const computed = report.rows.find((entry) => entry.reading.key === row.duty_key);
+    assert.ok(computed, `CSV duty ${row.duty_key} exists in the computed report`);
+    assert.equal(row.band, computed.reading.band);
+    assert.equal(row.open_n, computed.reading.openN);
+  }
+});
+
+/* ------------------------------------------------- 9. the altitude roll-up */
 
 test('above the manager altitude the same register withholds names and prints bands', () => {
   const base = fixture();
@@ -575,6 +614,34 @@ test('the Duty Coverage Register renders at the frontline altitude, axe-clean, o
   assert.match(host.textContent, /Register readiness/);
   assert.match(host.textContent, /This altitude's question/);
   assert.match(host.textContent, /measures the REGISTER, not a person/);
+
+  // The same real UI labels matrix-only visibility and prints the report's exact
+  // duty count; the report and CSV equality is pinned in the focused test above.
+  const matrixBase = fixture();
+  const matrixState = normalizeState({
+    ...matrixBase,
+    people: [...matrixBase.people, {
+      id: 'pmdir', name: 'Pia Product', role: 'Project Manager', level: 'manager',
+      managerId: 'dir1', status: 'active', createdAt: ago(300),
+    }],
+    reportingLines: [{ id: 'line-pm-lead', personId: 'lead1', managerId: 'pmdir', kind: 'project',
+      shareH: 40, rights: [], fromISO: '2026-01-01', toISO: null, declaredAt: NOW.toISOString(), status: 'active', history: [] }],
+    settings: { ...matrixBase.settings, activeSeatId: 'pmdir' },
+  }, { now: NOW }).state;
+  const matrixMap = new Map([[STORAGE_KEY, JSON.stringify(matrixState)]]);
+  const matrixStorage = { getItem: (k) => matrixMap.get(k) ?? null, setItem: (k, v) => matrixMap.set(k, String(v)), removeItem: (k) => matrixMap.delete(k) };
+  const matrixStore = createStore({ storage: matrixStorage, now: () => NOW, idFactory: (p) => `m-${p}` });
+  matrixStore.load();
+  const matrixApi = createApi(matrixStore, { now: () => NOW, idFactory: (p) => `m-${p}` });
+  ctx.api = matrixApi;
+  ctx.query = new URLSearchParams('panel=desk');
+  host.replaceChildren(renderDutyCover(ctx));
+  const matrixResult = matrixApi.dutyCoverageReport();
+  assert.ok(matrixResult.ok, matrixResult.error || 'matrix seat was refused by the duty-coverage reader');
+  const matrixReport = matrixResult.report;
+  assert.ok(host.textContent.includes(`${matrixReport.summary.dutiesN} duty line(s)`), 'the rendered count equals the computed report');
+  assert.match(host.textContent, /1 seat\(s\) are visible only through matrix lines \(project\); they are counted once\./,
+    'the UI states why the additional duty lines are in scope');
 
   // Every interactive control has an accessible name.
   for (const el of host.querySelectorAll('button, a[href], select, textarea, input')) {

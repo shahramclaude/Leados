@@ -2675,3 +2675,17 @@ Meanwhile `RULE-MTX-01` (ADR-0140) had already fanned that same work to her.
 **New gap discovered (Step 3), added to ROADMAP Planned.** Matrix transfer pricing and shared-service attribution [director / VP / CEO × matrix]: declare consumption of a shared capacity, price it by a named method (activity-based costing or a Shapley split over declared usage), and print the residual no method can attribute — so a line's P&L is comparable across a matrix instead of a function of where the cost centre happens to sit. Distinct from ADR-0142's exposure read and from this audit's claim arithmetic. Not built this session.
 
 **Next.** Frontline / mid-manager × matrix rotation; the shared-service attribution above; the ~60-module matrix read-model parity audit still In Progress (`jurisdiction`, `succession`, `cadence`, `disclosure`, gateway payload helpers); then matrix line acceptance, which would turn a declared share from an ask into an accepted obligation. Authenticated identity and tenant isolation remain the standing foundational item.
+
+# 2026-11-09 — Session 196: the duty chart includes the second line now
+
+**Scope.** Frontline / mid-manager PRIMARY × matrix; all altitudes inherit the same reader. Single-chain workspaces retain the existing seat path. Schema v121 unchanged; no new collection, rule, or CSV field.
+
+**Built.** `buildDutyCoverageReport` and the duty action's seat resolution now use the canonical `matrixLineScopeFor` → `buildSeats` path, at one injected date. Matrix-line members appear once in the duty register; the explicitly declared line route is named in the Desk, and concentration / work-in-span / exercise evidence recognizes that direct scope. `dutyWindowExercise` reads work through the same declared line membership. Covers remain explicit human declarations; a line does not silently assign a stand-in or claim a single owner. Unpartitionable tree-branch comparisons remain refused. The initial focused run caught a genuine second, tree-only seat build inside the action; it was corrected. It also exposed a stale v119 migration pin in the duty suite, updated through v121.
+
+**Verified.** `node --test tests/app/duty-coverage.test.mjs` — 11/11 PASS. The pass covers the real API seat path, a real-store rendered matrix explanation, unique duty rows and exact per-seat reconciliation, CSV `band` / `open_n` equality with the computed report, plus existing refusal, privacy, write-path and JSDOM/axe checks. This is the focused verification; no unrelated suites were re-run.
+
+**New gap (Step 3).** Added Planned: matrix decision-right execution concordance [frontline / mid-manager / director / VP × matrix], comparing recorded decision participation with effective dated RAPID rights, rolled up through the shared graph. The gap claim is **[UNVERIFIED]** pending a full repository audit.
+
+**Unverified / limits.** Full canonical suite, standalone build, real-browser assistive-technology walkthrough and broader matrix parity audit were not run. Branch-level matrix decomposition still refuses where a tree partition cannot prove a unique branch. Line declarations are not acceptance; seats are not authentication. No blocker.
+
+**Next.** Director / VP × matrix rotation; continue the matrix read-model parity audit, then matrix line acceptance. Standing foundational item: authenticated identity and tenant isolation.

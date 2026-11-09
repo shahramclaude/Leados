@@ -56,7 +56,7 @@
  * up through the existing seat digest, not through a second decision engine.
  */
 
-export const DUTY_COVERAGE_ENGINE_VERSION = 'duty-coverage-2026.11-v1';
+export const DUTY_COVERAGE_ENGINE_VERSION = 'duty-coverage-2026.11-v2-matrix';
 
 export const DUTY_COVERAGE_EVENTS = Object.freeze({
   DESIGNATE: 'dutyCoverage.designated',

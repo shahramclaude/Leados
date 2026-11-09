@@ -46,10 +46,12 @@
 
 import { harvestWork, LEADER_ID } from './chain.js';
 import { buildSeats, activeSeat } from './seat.js';
+import { matrixLineScopeFor } from './matrix.js';
 import { addDays, dayKey, daysBetween } from '../time.js';
 import {
   DUTY_BRANCH_DISCLOSURE_PREMISE,
   DUTY_COVERAGE_LIMITS,
+  DUTY_COVERAGE_ENGINE_VERSION,
   DUTY_HANDOVER_DIGEST_ENGINE_VERSION,
   DUTY_HANDOVER_DIGEST_PREMISE,
   DUTY_PREMISE,
@@ -89,6 +91,15 @@ const round1 = (n) => Math.round(n * 10) / 10;
 const round2 = (n) => Math.round(n * 100) / 100;
 const clamp01 = (n) => Math.min(1, Math.max(0, n));
 
+/** A duty span includes its reporting-tree subtree plus only explicitly
+ * declared additional-line members. It never crosses a peer boundary by
+ * ancestry, and deduplicates a person already present on the home line. */
+function inDutySpan(seat, personId) {
+  return Boolean(personId) && (personId === seat.id
+    || Boolean(seat.scope?.has(personId))
+    || Boolean(seat.lineScope?.has(personId)));
+}
+
 /** Wilson (1927) score interval — the same estimator the rest of the product uses. */
 export function wilsonInterval(successes, n, z = 1.959963984540054) {
   if (!Number.isFinite(n) || n <= 0) return null;
@@ -114,7 +125,6 @@ export function wilsonInterval(successes, n, z = 1.959963984540054) {
  */
 export function exerciseIndex(state, built, seat, { now = new Date(), settings = null, items = null } = {}) {
   const chain = built.chain;
-  const scope = seat.scope;
   const out = new Map();
   const bump = (personId, day, via) => {
     if (typeof personId !== 'string' || !personId) return;
@@ -125,10 +135,10 @@ export function exerciseIndex(state, built, seat, { now = new Date(), settings =
   const record = (people, day, via) => {
     if (!day) return;
     const unique = [...new Set((people || []).filter((p) => typeof p === 'string' && p))];
-    const touchesSpan = unique.some((p) => scope.has(p));
+    const touchesSpan = unique.some((p) => inDutySpan(seat, p));
     for (const personId of unique) {
       if (!built.byId.has(personId)) continue; // only a leadership node can be a cover
-      if (personId === seat.id || scope.has(personId) || touchesSpan) bump(personId, day, via);
+      if (inDutySpan(seat, personId) || touchesSpan) bump(personId, day, via);
     }
   };
   const all = items || harvestWork(state, chain, { now, settings: settings || state?.settings || null });
@@ -197,8 +207,9 @@ export function dutyCandidates(state, built, seat, duty) {
     if (node.reachable === false || !node.altitude) continue;
     const nodeSeat = built.byId.get(node.id);
     if (!nodeSeat) continue;
-    const inSpan = seat.scope.has(node.id);
+    const inSpan = inDutySpan(seat, node.id);
     const above = ancestors.has(node.id);
+    const viaLine = !seat.scope.has(node.id) && Boolean(seat.lineScope?.has(node.id));
     if (!inSpan && !above) continue; // a peer or an unrelated branch: never offered
     const isSelf = node.id === seat.id;
     const candidateRank = nodeSeat.rank;
@@ -210,7 +221,7 @@ export function dutyCandidates(state, built, seat, duty) {
       rank: candidateRank,
       altitudeKey: nodeSeat.altitudeKey,
       isSelf,
-      relation: isSelf ? 'self' : (above ? 'ancestor' : 'descendant'),
+      relation: isSelf ? 'self' : (above ? 'ancestor' : (viaLine ? 'matrix-line' : 'descendant')),
       eligible,
       reason: isSelf
         ? 'The duty holder cannot cover their own absence. Declare a different eligible stand-in.'
@@ -298,7 +309,7 @@ export function dutyReading(state, built, seat, duty, { now = new Date(), settin
   for (const item of relevant) {
     for (const pid of Array.isArray(item.people) ? item.people : []) {
       if (!pid || pid === LEADER_ID) continue;
-      if (!seat.scope.has(pid)) continue;
+      if (!inDutySpan(seat, pid)) continue;
       hands.set(pid, (hands.get(pid) || 0) + 1);
     }
   }
@@ -518,7 +529,7 @@ export function dutyAbsenceRollup(state, built, seat, { now = new Date(), settin
   for (const plan of Array.isArray(state?.absencePlans) ? state.absencePlans : []) {
     if (!plan || plan.status !== 'active' || !plan.seatId) continue;
     if (plan.seatId === seat.id) continue;
-    if (!seat.fullAccess && !seat.scope.has(plan.seatId)) continue;
+    if (!seat.fullAccess && !inDutySpan(seat, plan.seatId)) continue;
     const absentSeat = built.byId.get(plan.seatId);
     if (!absentSeat) continue;
     if (!exerciseIndexes.has(absentSeat.id)) {
@@ -572,8 +583,8 @@ const workKey = (item) => `${item.type}:${item.entityId ?? item.title}`;
 
 function workInSpan(item, seat) {
   const people = Array.isArray(item.people) ? item.people : [];
-  return people.some((pid) => seat.scope.has(pid))
-    || Boolean(item.ownerNodeId && seat.scope.has(item.ownerNodeId));
+  return people.some((pid) => inDutySpan(seat, pid))
+    || Boolean(item.ownerNodeId && inDutySpan(seat, item.ownerNodeId));
 }
 
 function openWorkKeys(seat, duty, items) {
@@ -610,7 +621,7 @@ export function coverLoadEnvelope(built, seat, items) {
   const loads = new Map();
   for (const s of built.seats) {
     if (s.isLeader || s.reachable === false) continue;
-    if (!seat.fullAccess && s.id !== seat.id && !seat.scope.has(s.id)) continue;
+    if (!seat.fullAccess && s.id !== seat.id && !inDutySpan(seat, s.id)) continue;
     loads.set(s.id, { id: s.id, rank: s.rank, n: openWorkForSeat(s, items).size });
   }
   return { loads, seatsN: loads.size };
@@ -780,7 +791,7 @@ export function absenceConcurrency(state, built, seat, { now = new Date(), setti
     if (!plan || plan.status !== 'active' || !plan.seatId) continue;
     const node = built.byId.get(plan.seatId);
     if (!node) continue;
-    const inScope = seat.fullAccess || plan.seatId === seat.id || seat.scope.has(plan.seatId);
+    const inScope = seat.fullAccess || inDutySpan(seat, plan.seatId);
     if (!inScope) continue;
     const window = parseAbsenceWindow(plan);
     if (!window) continue;
@@ -1622,7 +1633,7 @@ export function spanReadingRollup(state, built, seat, { now = new Date(), settin
     // A hand-off belongs to THIS span only when its asker is the acting seat or
     // a seat inside its span. A sibling's or an ancestor's ask is not ours to
     // read — the roll-up edge is upward, never sideways.
-    if (askerId !== seat.id && !seat.scope.has(askerId)) { summary.outsideN += 1; continue; }
+    if (!inDutySpan(seat, askerId)) { summary.outsideN += 1; continue; }
     const asker = built.byId.get(askerId);
     if (!asker) { summary.orphanedN += 1; continue; }
     let cell = own;
@@ -1748,7 +1759,11 @@ function spanReadingsCsvCells(roll) {
  */
 export function buildDutyCoverageReport(state, { now = new Date(), settings = null } = {}) {
   const effective = settings || state?.settings || null;
-  const built = buildSeats(state, { now, settings: effective });
+  // Reuse the canonical matrix graph; no second hierarchy or local line parser.
+  // A workspace with no additional lines receives null and retains the exact
+  // pre-matrix Operating Seat path.
+  const lineScope = matrixLineScopeFor(state, { now, settings: effective });
+  const built = buildSeats(state, { now, settings: effective, ...(lineScope ? { lineScope } : {}) });
   const seat = activeSeat(built);
   const conv = normalizeDutyCoverageSettings(effective || {});
   const items = harvestWork(state, built.chain, { now, settings: effective });
@@ -1758,7 +1773,7 @@ export function buildDutyCoverageReport(state, { now = new Date(), settings = nu
   // managers'. Names are withheld above the manager altitude below.
   const scopedSeats = seat.fullAccess
     ? built.seats.filter((s) => !s.isLeader)
-    : [seat, ...built.seats.filter((s) => !s.isLeader && s.id !== seat.id && seat.scope.has(s.id))];
+    : [seat, ...built.seats.filter((s) => !s.isLeader && s.id !== seat.id && inDutySpan(seat, s.id))];
   const rows = [];
   for (const s of scopedSeats) {
     const duties = dutiesForSeat(s);
@@ -1824,7 +1839,7 @@ export function buildDutyCoverageReport(state, { now = new Date(), settings = nu
   const interval = total ? wilsonInterval(coveredN, total) : null;
 
   return {
-    engineVersion: 'duty-coverage-2026.11-v1',
+    engineVersion: DUTY_COVERAGE_ENGINE_VERSION,
     premise: DUTY_PREMISE,
     seat: {
       id: seat.id,
@@ -1835,6 +1850,9 @@ export function buildDutyCoverageReport(state, { now = new Date(), settings = nu
       fullAccess: Boolean(seat.fullAccess),
       readOnly: Boolean(seat.readOnly),
       scopeN: seat.scopeN,
+      lineScopeN: seat.lineScopeN || 0,
+      lineOnlyN: seat.lineOnlyN || 0,
+      lineKinds: seat.lineKinds || [],
     },
     namesVisible,
     // ADR-0129: the two reading ledgers are read here, under the SAME seat and

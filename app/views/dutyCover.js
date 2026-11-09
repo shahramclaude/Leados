@@ -1151,7 +1151,7 @@ function deskPanel(ctx, report) {
       title: `This altitude's question — ${report.seat.label}`,
       subtitle: report.seat.fullAccess
         ? 'Operator view: every declared seat’s duty register, as the whole workspace.'
-        : `Reading the duty lines you hold and the ${Math.max(0, report.rows.length - (report.rows.filter((r) => r.seat.id === report.seat.id).length))} held below you in this span.`,
+        : `Reading the duty lines you hold and ${Math.max(0, report.rows.length - (report.rows.filter((r) => r.seat.id === report.seat.id).length))} held by seats in your tree or on your declared additional lines.${report.seat.lineOnlyN ? ` ${report.seat.lineOnlyN} seat(s) are visible only through matrix lines (${report.seat.lineKinds.join(', ')}); they are counted once.` : ''}`,
       body: h('div', { class: 'stat-grid' },
         stat({ label: 'Duty lines', value: String(s.dutiesN), hint: `${s.byBand.covered} covered · ${s.byBand.thin} thin · ${s.byBand.ineligible} ineligible · ${s.byBand.gap} uncovered` }),
         stat({ label: 'Register readiness', value: pctText(s.readinessPct), tone: s.readinessPct === null ? '' : (s.readinessPct >= 70 ? 'good' : 'bad'), hint: s.interval ? `Wilson 95% ${s.interval.low}–${s.interval.high}% · measures the REGISTER, not a person` : 'refused: no declared duty line' }),

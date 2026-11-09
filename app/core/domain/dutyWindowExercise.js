@@ -71,8 +71,9 @@ const ATTESTATION_TEXTS = Object.freeze({
 
 function touchesSpan(item, seat) {
   const people = Array.isArray(item.people) ? item.people : [];
-  return people.some((pid) => seat.scope.has(pid))
-    || Boolean(item.ownerNodeId && seat.scope.has(item.ownerNodeId));
+  const inSpan = (personId) => Boolean(personId)
+    && (seat.scope.has(personId) || Boolean(seat.lineScope?.has(personId)));
+  return people.some(inSpan) || inSpan(item.ownerNodeId);
 }
 
 /** The leadership ancestors of the holder seat, for deriving attestation strength. */
