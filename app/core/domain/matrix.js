@@ -72,6 +72,7 @@ import {
   matrixLineKind,
 } from './matrixRegistry.js';
 import { normalizeMatrixSettings, shareHToDisplay } from './matrixSchema.js';
+import { buildRightsConcordance, rightsConcordanceBriefText } from './rightsConcordance.js';
 
 const FULL_H = 100;
 
@@ -1370,6 +1371,11 @@ export function buildMatrixReport(state, { now = new Date(), settings = null } =
     defects: matrix.defects,
     inactiveLines: matrix.inactiveLines,
     limits: MATRIX_LIMITS,
+    // ADR-0145: the decision-right execution concordance. A pure read over
+    // the same seat scope and the same declared lines — every figure is
+    // re-derived from the decision log and the typed graph on every render,
+    // and nothing is stored.
+    concordance: buildRightsConcordance(state, { now, settings: effective, seat, scope }),
   };
 }
 
@@ -1679,5 +1685,7 @@ export function matrixBriefText(report) {
     lines.push(`Governance: ${g.contestedOperationalN} contested operational right(s), ${g.apexRows.length} joint escalation apex(es) (${g.apexAmbiguousN} ambiguous tie(s)), ${g.coupling.coupledSpanPairsN} coupled span pair(s), ${g.alertN} structural alert(s).`);
   }
   if (r.undeclaredN > 0) lines.push('An undeclared allocation is attributed to nobody; it is never split by guesswork.');
+  const concordanceText = rightsConcordanceBriefText(report?.concordance);
+  if (concordanceText) lines.push(concordanceText);
   return lines.join(' ');
 }
