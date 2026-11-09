@@ -22,6 +22,7 @@ import {
 } from '../core/domain/onboarding.js';
 import { activePeople, personById, tenureDays } from '../core/domain/people.js';
 import { onboardingCheckinsCard } from '../ui/onboarding-checkins.js';
+import { onboardingMatrixHref } from './onboardingMatrixPanel.js';
 import { formatDate } from '../core/time.js';
 import {
   openOnboardingPlanDialog,
@@ -31,6 +32,59 @@ import {
   openManagerSupportDialog,
   openPersonDialog,
 } from '../ui/modals.js';
+
+/**
+ * ADR-0150: the matrix lens on the SAME plans. Read through the gateway so the
+ * summary and the panel cannot disagree, and never rendered as a number when the
+ * read itself declined — an unreadable report is not a zero.
+ *
+ * The card exists because a 30-60-90 plan is written by one manager about one job.
+ * When the person also sits on a project line, that line's expectations are not in
+ * the plan, and the plan nevertheless reads as the whole story.
+ */
+function matrixOnboardingCard(ctx) {
+  const board = (() => {
+    try {
+      const result = ctx.api?.onboardingMatrixBoard?.();
+      return result?.ok ? result.board : null;
+    } catch {
+      return null;
+    }
+  })();
+  if (!board) {
+    return card({
+      title: 'Matrix onboarding',
+      subtitle: 'Reconciling each 30-60-90 plan against the lines the person actually landed on.',
+      body: banner({ tone: 'warn', title: 'Not readable at this seat', body: 'The matrix-onboarding report declined to be read here. Nothing is shown rather than showing a zero.' }),
+    });
+  }
+  const link = h('a', { class: 'btn btn-small btn-ghost', href: '#/onboarding?panel=matrix' }, 'Open the matrix onboarding lens →');
+  if (!board.caseN) {
+    return card({
+      title: 'Matrix onboarding',
+      subtitle: 'One question per person: did every line they landed on say what it expects of them?',
+      body: h('div', null,
+        h('p', { class: 'muted small' }, 'No active plan in this workspace covers a person who sits on more than one reporting line. A single-line onboarding needs no reconciliation step — which is a different claim than “every line onboarded them”.'),
+        link),
+    });
+  }
+  const figure = (label, value, hint) => h('div', { class: 'stat' },
+    h('span', { class: 'stat-label' }, label),
+    h('span', { class: 'stat-value' }, String(value)),
+    hint ? h('span', { class: 'stat-hint' }, hint) : null);
+  return card({
+    title: 'Matrix onboarding',
+    subtitle: 'A plan written by one manager is not an onboarding of a person with two. This is the reconciliation against every line they landed on.',
+    actions: [link],
+    body: h('div', null,
+      h('div', { class: 'stat-row' },
+        figure('People on more than one line', board.peopleN, 'distinct people, never plan-line pairs'),
+        figure('Lines never briefed', board.unbriefedLinesN, 'a named process gap, never a zero'),
+        figure('Awaiting the person', board.briefedLinesN + board.acknowledgementOverdueLinesN, 'briefed, not yet acknowledged'),
+        figure('No plan at all', board.unplannedN, 'multi-line people nobody is onboarding')),
+      h('p', { class: 'muted small' }, 'The plan’s own completion and cross-line completeness are two different claims and are printed as two. No per-line share of a person is derived anywhere on this screen.')),
+  });
+}
 
 function renderStakeholdersSection(ctx, plan, health, readOnly) {
   const { items, met, total } = health.stakeholderStats;
@@ -599,6 +653,8 @@ export function renderOnboarding(ctx) {
         { key: 'all', label: 'All', count: summary.rows.length },
       ],
     }),
+
+    matrixOnboardingCard(ctx),
 
     filter === 'checkins'
       ? onboardingCheckinsCard(ctx, { rows: scopedCheckins, showEmpty: true })

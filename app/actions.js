@@ -84,6 +84,17 @@ import {
   structureHistoryBriefText,
   structureHistoryCsvRows,
 } from './core/domain/structureHistory.js';
+// ADR-0150: Matrix Onboarding Completeness. One bounded read model over the
+// EXISTING 30-60-90 machinery, three dated human commands (a line's brief, a
+// line's decline and the PERSON's acknowledgement) and one scan; every state,
+// window and verdict is recomputed on read and nothing derived is stored.
+import { createOnboardingMatrixActions } from './core/domain/onboardingMatrixActions.js';
+import {
+  buildOnboardingMatrix,
+  onboardingMatrixAttentionCount,
+  onboardingMatrixBriefText,
+  onboardingMatrixCsvRows,
+} from './core/domain/onboardingMatrix.js';
 // ADR-0122: the Dated Absence Plan. One read (the window plan), three human
 // commands (declare, revoke, scan); availability is derived from the declared
 // windows, never stored.
@@ -19902,6 +19913,30 @@ export function createApi(store, options = {}) {
   });
   api.reviewStewardshipAttentionCount = (options = {}) => ({
     ok: true, count: reviewStewardshipAttentionCount(store.state, stewardshipOptions(options)),
+  });
+  // ADR-0150: Matrix Onboarding Completeness. The three writes and the seat-scoped
+  // reads are in the factory; the aggregate reads are attached here so the CSV
+  // export, the attention badge and the panel read the SAME report, and so a view
+  // can never render `undefined` as if it were an empty ledger.
+  Object.assign(api, createOnboardingMatrixActions(store, { now: clock, idFactory: id }));
+  const onboardingMatrixOptions = (options = {}) => ({
+    now: options.now instanceof Date ? options.now : clock(),
+    settings: store.state.settings || {},
+  });
+  api.onboardingMatrixBoard = (options = {}) => ({
+    ok: true, board: buildOnboardingMatrix(store.state, {
+      ...onboardingMatrixOptions(options),
+      limit: options.limit ?? 40,
+    }),
+  });
+  api.onboardingMatrixBriefText = (options = {}) => ({
+    ok: true, text: onboardingMatrixBriefText(store.state, onboardingMatrixOptions(options)),
+  });
+  api.onboardingMatrixCsv = (options = {}) => ({
+    ok: true, rows: onboardingMatrixCsvRows(store.state, onboardingMatrixOptions(options)),
+  });
+  api.onboardingMatrixAttentionCount = (options = {}) => ({
+    ok: true, count: onboardingMatrixAttentionCount(store.state, onboardingMatrixOptions(options)),
   });
   // ADR-0148: Matrix Line Consent. The two first-person writes and the seat
   // reads are in the factory; the aggregate reads are attached here so the CSV

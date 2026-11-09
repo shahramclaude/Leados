@@ -23,6 +23,14 @@ const groups = [
   // changes no declaration and is declared here so an operator can retry a cap.
   ['ask-review-input', 'reviewStewardshipAsk reviewStewardshipRead reviewStewardshipCandidates'],
   ['answer-review-input', 'reviewStewardshipAnswer reviewStewardshipScan'],
+  // ADR-0150: Matrix Onboarding Completeness. Writing a line's onboarding brief is
+  // the act of the manager who holds that line (the action narrows it to them), and
+  // acknowledging one is the PERSON's own act (the action narrows that too). They
+  // are separate rights on the spine because they are separate humans' statements,
+  // and neither can perform the other. The three aggregate reads and the scan are
+  // declared here so a real operator can always retry a deferred obligation.
+  ['brief-onboarding-line', 'onboardingMatrixBriefLine onboardingMatrixDeclineLine onboardingMatrixRead onboardingMatrixCandidates onboardingMatrixScan'],
+  ['acknowledge-onboarding-line', 'onboardingMatrixAcknowledge'],
   ['log-conflict', 'addConflict updateConflict agreeConflict completeConflictAction followUpConflict resolveConflict escalateConflict reopenConflict'],
   ['open-case', 'addCase updateCase requestMitigationReview syncCaseAutomations resolveCase recordCaseActuals reopenCase deleteCase linkCaseEntity removeMissingCaseMitigation refreshCaseAutomation'],
   ['open-decision', 'addDecision updateDecision decideDecision reviewDecision withdrawBundleDecision addGoal updateGoal checkInGoal addKeyResult removeKeyResult'],
@@ -341,7 +349,15 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // `structureHistoryBriefText` and `structureHistoryCsvRows` are declared commands
 // on the read right (they are seat-scoped inside the read model), so only the
 // aggregate reads live here.
-'structureHistoryBoard', 'structureHistoryBrief', 'structureHistoryCsv']);
+'structureHistoryBoard', 'structureHistoryBrief', 'structureHistoryCsv',
+// ADR-0150: the matrix-onboarding read surface. Registered for the same reason as
+// every module above — a read absent from SAFE_READS is unreadable under
+// enforcement while its writes are still gated, which would hide a never-briefed
+// line from exactly the manager who must write it. `onboardingMatrixRead`,
+// `onboardingMatrixCandidates` and `onboardingMatrixScan` are declared commands on
+// the brief right (they are seat-scoped inside the read model), so only the
+// aggregate reads live here.
+'onboardingMatrixBoard', 'onboardingMatrixBriefText', 'onboardingMatrixCsv']);
 const refusal = (reason) => ({ ok: false, code: 'scope-refusal', error: reason, field: 'scope' });
 
 /** ADR-0087: under enforcement, boundary-management commands stay reachable

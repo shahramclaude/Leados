@@ -137,6 +137,7 @@ import { contradictionRule } from './contradictionRules.js';
 import { reviewStewardshipRule } from './reviewStewardshipRules.js';
 import { lineConsentRule } from './lineConsentRules.js';
 import { structureHistoryRule } from './structureHistoryRules.js';
+import { onboardingMatrixRule } from './onboardingMatrixRules.js';
 
 
 // ADR-0087: the Operating Cadence Clock. Reads the finished queue after the
@@ -820,6 +821,14 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // is the failure this module exists to catch. Bounded by a per-transaction cap
   // whose remainder is counted and retried by a scan.
   structureHistoryRule,
+  // ADR-0150: Matrix Onboarding Completeness (RULE-ONB-01). A created or updated
+  // 30-60-90 plan, a declared second reporting line or an explicit scan makes it
+  // run; a read and an acknowledgement never do. One dated brief obligation per
+  // line that wrote nothing, addressed to the manager who holds that line, and one
+  // dated acknowledgement ask to the PERSON per standing brief. It never writes a
+  // brief, acknowledges one, invents a plan or rates the person, and it is bounded
+  // by a per-transaction cap whose remainder is counted and retried by a scan.
+  onboardingMatrixRule,
   // ADR-0076: the Operating Seat (vertical roll-up + enforced boundaries).
   // It reads the finished record after every module has propagated, then fans
   // each open item up every leadership ancestor in the reporting tree with one

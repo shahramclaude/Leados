@@ -503,6 +503,14 @@ export const ACTION_RIGHTS = Object.freeze({
   // manager, so it is open at every rank here rather than narrowed twice.
   'ask-review-input': { minRank: 1, maxRank: 2, label: 'Ask a reporting line for review input' },
   'answer-review-input': { minRank: 1, maxRank: 5, label: 'Answer a review-input ask for your own line' },
+  // ADR-0150: onboarding a person into a matrix. Writing a line's brief is the act
+  // of the manager who HOLDS that line, at whatever altitude that line's manager
+  // sits (a project lead with no home-line reports gets this exactly as a
+  // functional manager does), so it is open by rank and the action narrows it to
+  // the line holder. Acknowledging is the PERSON's own act — the 90 days are
+  // theirs — and the action refuses any seat that is not that person.
+  'brief-onboarding-line': { minRank: 1, maxRank: 5, label: 'State in writing what your reporting line expects of a person during onboarding' },
+  'acknowledge-onboarding-line': { minRank: 1, maxRank: 5, label: 'Acknowledge what a reporting line expects of you during onboarding' },
   'delegate': { minRank: 1, maxRank: 5, label: 'Delegate work' },
   'offer-authority': { minRank: 1, maxRank: 5, label: 'Offer bounded authority' },
   'accept-authority': { minRank: 1, maxRank: 5, label: 'Accept bounded authority' },
