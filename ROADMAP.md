@@ -1,3 +1,13 @@
+## 2026-11-09 — Session 199: cadence matrix parity blocked; clean baseline retained
+
+**In Progress — frontline / mid-manager PRIMARY × matrix.** Duty: let a project-line manager declare and read forums for directly declared line members, without choosing authority by meeting interval. The attempted slice used the canonical dated matrix → seat model in cadence reads and actions, retaining the existing automation and roll-up spine. It was **not shipped**: after one correction, the focused suite passed 17/18 but the new concurrent-chair test still returned `nearest-competent-of-several` rather than the required `ambiguous-matrix-authority`. All implementation and test edits were reverted to the session’s starting baseline under the stop rule. No schema or dependency changes retained.
+
+**Coverage map:** shipped coverage unchanged: frontline / mid-manager 196; director / VP 197; CEO / C-suite 198. Single-chain 1–188; matrix primary 189–198. Session 199 attempted frontline / mid-manager × matrix but adds no implemented coverage. Next priority remains that neglected rotation.
+
+**Verified / unverified:** doctrine and origin confirmed. Focused cadence pass failed initially (16/18), then failed after one fix (17/18). The new test reached successful line-scoped declaration, unique forum read, stored-title/computed-item rendering parity, CSV parity and unrelated-attendee refusal before failing at concurrent authority. Those are diagnostic results for reverted code, **not evidence of a shipped feature**. Expiry check was not reached. Baseline cadence matrix correctness, full suite and browser/AT remain **[UNVERIFIED]**. Existing suite pins were stale (schema 119 vs 121 and CSV scopes 104 vs 107); their attempted corrections were also reverted.
+
+**New gap:** decision-forum authority quorum, recorded in Planned below. Next: diagnose the harvested work owner and chair-scope intersection before resuming cadence parity; keep matrix authority ambiguity explicit rather than silently selecting a forum. Broader matrix parity audit remains In Progress.
+
 ## 2026-11-09 — Repeated matrix friction becomes a structural signal (Session 198, Schema v121 unchanged, [ADR-0146](./docs/adr/0146-matrix-recurring-structural-patterns.md), CSV #108, `#/matrix?panel=concordance`)
 
 **Implemented — CEO / C-suite PRIMARY × matrix; the same seat-scoped read is available to every altitude.** Single-chain workspaces remain inert. The chief's duty: distinguish a one-off exception from a repeated pattern in how the matrix's decision rights work, without turning repeated friction into a score on the people involved.
@@ -1670,6 +1680,9 @@ This section is the session-scoped execution view of [NORTH_STAR.md](NORTH_STAR.
 - **[all altitudes]** Full canonical verification and real-browser/assistive-technology walkthroughs. Automated jsdom/axe checks pass; real-browser AT behaviour remains `[UNVERIFIED]`. Evidence: Session 118/128 verification sections.
 
 ### Planned — Not Started
+
+- **Decision-forum authority quorum [frontline / mid-manager / director × matrix]:** compare dated RAPID rights across all affected lines with a forum’s declared attendees; name missing or contested authority before a sitting rather than equating headcount with a binding decision. Reuse the canonical matrix and typed decision provenance, with governed remedies through the existing event spine. Targeted cadence inspection found no rights-quorum check; repository-wide absence remains **[UNVERIFIED]**. Discovered Session 199.
+
 
 - **[director / VP / CEO × matrix]** Matrix pattern repair and prospective closure. (Discovered Session 198, not built.) ADR-0146 now identifies repeated decision-right patterns across distinct decisions, but the workspace cannot attach a human-reviewed remedy decision, accountable owner, due/review date and post-change recurrence check to that structural signature. Build the closure loop through the existing decision/provenance and hierarchy paths; it must measure design change, never rate the people in the decisions or automatically rewrite rights.
 
