@@ -182,6 +182,7 @@ export const JUR_WORK_EVENTS = Object.freeze([
   'portfolio.created', 'portfolio.updated', 'portfolio.funded',
   'goal.updated',
   'link.created',
+  'matrix.line.declared', 'matrix.line.retuned', 'matrix.line.ended',
 ]);
 
 export const JUR_SETTLEMENT_EVENTS = Object.freeze([
@@ -259,6 +260,7 @@ export const JUR_REFUSALS = Object.freeze({
   'thin-attribution': 'Too little of this cluster can be placed in the reporting tree. Pricing a boundary for work nobody can be shown to own would be a guess.',
   'single-span': 'Every record in this cluster is held inside one branch. A single seat already has the mandate; there is no jurisdiction gap to price.',
   'no-lca': 'The reporting tree resolves no common ancestor for these spans. No governance route can be named without inventing authority.',
+  'ambiguous-matrix-lca': 'Multiple incomparable matrix managers hold joint span over this objective (a diamond tie in the reporting DAG). LeadOS refuses to pick one silently or guess an escalation seat.',
   'no-decisive-route': 'The two cheapest governance routes are within the declared materiality band. No route is recommended; the tie is printed, not broken silently.',
   'dangling-objective': 'Work record names a goal id that no longer exists or has been dropped. Counted as a dangling refusal and never priced as a live jurisdiction boundary.',
   'unanchored-work': 'Open work record carries no objective pointer and no impacts-goal link. Counted as an unanchored refusal rather than silently excluded (Heckman 1979 selection bias).',

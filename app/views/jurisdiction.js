@@ -30,6 +30,7 @@ import { pageHeader, card, stat, badge, banner, tabs, emptyState, table, kv } fr
 import { serializeCsv } from '../core/csv.js';
 import { formatDate } from '../core/time.js';
 import { buildSeats, activeSeat } from '../core/domain/seat.js';
+import { matrixLineScopeFor } from '../core/domain/matrix.js';
 import {
   JUR_CONVENTION_BOUNDS, JUR_CONVENTION_DEFAULTS, JUR_GOVERNANCE_OPTIONS,
   JUR_PANELS, JUR_REFUSALS, JUR_ALTITUDE_QUESTIONS,
@@ -38,7 +39,7 @@ import {
   jurisdictionRead, jurCsvRows, JUR_CSV_COLUMNS, jurConventions,
 } from '../core/domain/jurisdiction.js';
 import {
-  rehearseBoundaryRedraw, redrawBrief, REDRAW_LIMITS,
+  rehearseBoundaryRedraw, redactRehearsalReport, redrawBrief, REDRAW_LIMITS,
 } from '../core/domain/redrawRehearsal.js';
 import { jurDriftRead } from '../core/domain/jurisdictionDrift.js';
 import {
@@ -53,9 +54,17 @@ const objectiveLabel = (key) => {
   const raw = String(key || '');
   return raw.startsWith('goal:') ? `Objective ${raw.slice(5, 17)}` : `Objective ${raw.slice(0, 12)}`;
 };
+const canUseApiRead = (ctx, fnName) => Boolean(
+  ctx?.api?.[fnName]
+  && (ctx.seatContext || (ctx.store?.state?.settings?.activeSeatId ?? null) === (ctx.state?.settings?.activeSeatId ?? null)),
+);
 
 function safeRead(ctx) {
   try {
+    if (canUseApiRead(ctx, 'jurRead')) {
+      const res = ctx.api.jurRead();
+      if (res?.ok && res.report) return res.report;
+    }
     return jurisdictionRead(ctx.state, { now: ctx.now, settings: ctx.state.settings || {} });
   } catch (error) {
     return {
@@ -68,8 +77,11 @@ function safeRead(ctx) {
 }
 
 function seatOf(ctx) {
+  if (ctx?.seatContext?.seat) return { built: ctx.seatContext.built, seat: ctx.seatContext.seat };
   try {
-    const built = buildSeats(ctx.state, { now: ctx.now, settings: ctx.state.settings || {} });
+    const effSettings = ctx.state?.settings || {};
+    const lineScope = matrixLineScopeFor(ctx.state, { now: ctx.now, settings: effSettings });
+    const built = buildSeats(ctx.state, { now: ctx.now, settings: effSettings, ...(lineScope ? { lineScope } : {}) });
     return { built, seat: activeSeat(built) };
   } catch {
     return { built: null, seat: null };
@@ -164,6 +176,11 @@ function mapPanel(ctx, read, query) {
     members: c.evidenceN,
     branches: c.coalitionSize,
     rungs: c.escalationRungs,
+    matrixTag: c.lcaBasis === 'ambiguous-matrix'
+      ? 'diamond tie'
+      : (c.lcaBasis === 'matrix-apex'
+        ? `matrix apex (+${c.matrixLineCount || 0})`
+        : (c.matrixLineCount > 0 ? `+${c.matrixLineCount} line(s)` : 'tree')),
     route: c.verdict === 'priced' ? c.predictedOption : '—',
     confidence: c.confidencePct,
     verdict: c.verdict,
@@ -210,6 +227,7 @@ function mapPanel(ctx, read, query) {
     { label: 'Work records', key: 'members' },
     { label: 'Branches', key: 'branches' },
     { label: 'Rungs to the ancestor', key: 'rungs' },
+    ...(book.matrixActive ? [{ label: 'Structure', key: 'matrixTag' }] : []),
     { label: 'Predicted route', key: 'route' },
     { label: 'Confidence floor', render: (r) => pct(r.confidence) },
     { label: 'Verdict', render: (r) => badge(r.verdict, r.verdict === 'priced' ? 'good' : 'neutral') },
@@ -470,47 +488,7 @@ function changeTable({ caption, rows, emptyMessage, columns }) {
   return table({ caption, emptyMessage, columns, rows });
 }
 
-/**
- * A declared, enforced (non-full-access) seat rehearses inside its own span:
- * objective pointers are replaced with ordinals and roll-up targets outside
- * the seat's scope are named only as "a span above your boundary" — the same
- * compiled-altitude ceiling the Map honours. The operator view prints real
- * names. `scope === null` means unenforced (operator).
- */
-export function redactRehearsalReport(report, scope) {
-  if (!scope) return report;
-  const ordinals = new Map();
-  const anon = (key) => {
-    const k = String(key || '');
-    if (!ordinals.has(k)) ordinals.set(k, `Objective ${ordinals.size + 1}`);
-    return ordinals.get(k);
-  };
-  const maskSpan = (id, name) => ((id === 'leader' || scope.has(String(id))) ? name : 'A span above your boundary');
-  const maskEdge = (id, name) => (scope.has(String(id)) || String(id) === 'leader' ? name : 'A span above your boundary');
-  const mapEdges = (row) => ({
-    ...row,
-    findingId: null,
-    governedDecisionId: null,
-    objective: anon(row.objectiveKey),
-    objectiveKey: null,
-    withdrawn: (row.withdrawn || []).map((n, i) => maskEdge((row.withdrawnIds || [])[i], n)),
-    added: (row.added || []).map((n, i) => maskEdge((row.addedIds || [])[i], n)),
-    withdrawnIds: [],
-    addedIds: [],
-  });
-  return {
-    ...report,
-    collapsed: report.collapsed.map((r) => ({ ...r, objectiveKey: null, objective: anon(r.objectiveKey), lcaBefore: maskSpan(r.lcaBeforeId, r.lcaBefore), lcaAfter: maskSpan(r.lcaAfterId, r.lcaAfter), lcaBeforeId: null, lcaAfterId: null })),
-    created: report.created.map((r) => ({ ...r, objectiveKey: null, objective: anon(r.objectiveKey), lcaAfter: maskSpan(r.lcaAfterId, r.lcaAfter), lcaBeforeId: null, lcaAfterId: null })),
-    changed: report.changed.map((r) => ({ ...r, objectiveKey: null, objective: anon(r.objectiveKey), lcaBefore: maskSpan(r.lcaBeforeId, r.lcaBefore), lcaAfter: maskSpan(r.lcaAfterId, r.lcaAfter), lcaBeforeId: null, lcaAfterId: null })),
-    rollups: {
-      ...report.rollups,
-      moved: report.rollups.moved.map(mapEdges),
-      readingMoves: report.rollups.readingMoves.map((r) => ({ ...r, nodeId: null, readingId: null, spanName: scope.has(String(r.nodeId)) ? r.spanName : 'A span above your boundary' })),
-    },
-    decisions: { ...report.decisions, stale: report.decisions.stale.map((d) => ({ ...d, decisionId: null, objective: anon(d.objectiveKey), objectiveKey: null, fromLca: maskSpan(d.fromLcaId, d.fromLca), toLca: maskSpan(d.toLcaId, d.toLca), fromLcaId: null, toLcaId: null })) },
-  };
-}
+export { redactRehearsalReport };
 
 function renderRehearsalResults(report, ctx) {
   const frag = h('div', { class: 'stack' });
@@ -656,10 +634,16 @@ function renderRehearsalResults(report, ctx) {
 }
 
 function redrawPanel(ctx, read) {
-  const seat = read.seat;
+  const { seat: fullSeat } = seatOf(ctx);
+  const seat = fullSeat || read.seat;
   const rank = seat?.rank || 0;
   const enforced = Boolean(seat && !seat.fullAccess);
-  const scope = enforced && seat.scope instanceof Set ? seat.scope : null;
+  const scope = enforced && seat.scope instanceof Set
+    ? new Set([
+      ...seat.scope,
+      ...(seat.lineScope instanceof Set ? seat.lineScope : []),
+    ])
+    : null;
   const canRehearse = !seat || (!seat.readOnly && (seat.fullAccess || rank >= 3));
   if (!canRehearse) {
     return h('div', { class: 'stack' },
@@ -713,9 +697,21 @@ function redrawPanel(ctx, read) {
       if (personId && !newManagerId) { incomplete.push({ personId, personName: null, to: '', reasonKey: 'unknown-manager', reasonNote: 'A person was chosen with no destination — the row is refused, not guessed.' }); continue; }
       moves.push({ personId, newManagerId });
     }
-    const raw = rehearseBoundaryRedraw(ctx.state, { moves, now: ctx.now, conventions: read.conventions });
-    if (incomplete.length) raw.refusedMoves = [...(raw.refusedMoves || []), ...incomplete];
-    resultsHost.replaceChildren(renderRehearsalResults(enforced ? redactRehearsalReport(raw, scope) : raw, ctx));
+    let resultReport = null;
+    if (canUseApiRead(ctx, 'jurRedrawRehearse')) {
+      const res = ctx.api.jurRedrawRehearse({ moves });
+      if (res?.ok && res.report) resultReport = res.report;
+      else if (res && res.ok === false) {
+        toast(res.error || 'Could not rehearse boundary redraw.', 'bad');
+        return;
+      }
+    }
+    if (!resultReport) {
+      const raw = rehearseBoundaryRedraw(ctx.state, { moves, now: ctx.now, conventions: read.conventions });
+      resultReport = enforced ? redactRehearsalReport(raw, scope) : raw;
+    }
+    if (incomplete.length) resultReport.refusedMoves = [...(resultReport.refusedMoves || []), ...incomplete];
+    resultsHost.replaceChildren(renderRehearsalResults(resultReport, ctx));
   };
 
   const moveReset = () => ctx.navigate('#/jurisdiction?panel=redraw');
@@ -772,7 +768,13 @@ function downloadOrCopy(ctx, { filename, text, mime, title, okMessage }) {
 function driftPanel(ctx) {
   let report;
   try {
-    report = jurDriftRead(ctx.state, { now: ctx.now, settings: ctx.state.settings || {} });
+    if (canUseApiRead(ctx, 'jurDriftRead')) {
+      const res = ctx.api.jurDriftRead();
+      if (res?.ok && res.report) report = res.report;
+    }
+    if (!report) {
+      report = jurDriftRead(ctx.state, { now: ctx.now, settings: ctx.state.settings || {} });
+    }
   } catch (error) {
     return banner({ tone: 'bad', title: 'The cross-week reader could not run',
       body: String(error?.message || error) });
@@ -980,7 +982,9 @@ export function renderJurisdiction(ctx) {
       h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => openConventions(ctx) }, 'Conventions'),
       h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => {
         try {
-          const rows = jurCsvRows(ctx.state, { now: ctx.now, settings: ctx.state.settings || {} });
+          const rows = canUseApiRead(ctx, 'jurCsvRows')
+            ? (ctx.api.jurCsvRows()?.rows || jurCsvRows(ctx.state, { now: ctx.now, settings: ctx.state.settings || {} }))
+            : jurCsvRows(ctx.state, { now: ctx.now, settings: ctx.state.settings || {} });
           const text = serializeCsv(JUR_CSV_COLUMNS.map((key) => ({ key, header: key })), rows);
           const saved = downloadText({ filename: `leados-jurisdiction-${ctx.now.toISOString().slice(0, 10)}.csv`, text, mime: 'text/csv' });
           if (saved) { toast('Aggregate CSV downloaded.', 'good'); return; }

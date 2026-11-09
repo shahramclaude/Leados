@@ -263,7 +263,7 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // ADR-0109: the Jurisdiction Compiler's seat-scoped read surface. Registered
 // here because a module whose reads are absent from SAFE_READS is unreadable
 // under enforcement while its writes are still gated.
-'jurRead', 'jurHygiene', 'jurBriefText', 'jurCsvRows', 'jurConventions', 'jurAttentionCount', 'jurSpanRollUp', 'jurBook',
+'jurRead', 'jurHygiene', 'jurBriefText', 'jurCsvRows', 'jurConventions', 'jurAttentionCount', 'jurSpanRollUp', 'jurBook', 'jurRedrawRehearse',
 // ADR-0115: the seat-scoped cross-week drift reads. The verdict itself is
 // derived from RULE-JUR-04's frozen readings, so a read absent from SAFE_READS
 // would make the VP/chief surface vanish exactly when enforcement is on.
@@ -343,6 +343,7 @@ function bundleFor(state, name, args) {
 
 const MATRIX_LINE_SCOPED = new Set([
   'cadenceDeclareForum', 'cadenceUpdateForum', 'cadenceLogSession',
+  'jurAnchorWork',
   'priorityOpenCase', 'priorityTreatDemand', 'priorityPropose', 'priorityAgreePrecedence', 'priorityRecordAnswer', 'priorityWithdraw',
   'contradictionDeclareMandate', 'contradictionWithdrawMandate',
   'dutyCoverageDesignate', 'dutyCoverageRevoke',

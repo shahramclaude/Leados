@@ -52,7 +52,7 @@ import {
   buildChain, managerNodeId, LEADER_ID,
 } from './chain.js';
 import {
-  harvestObjectives, priceCluster, jurConventions,
+  harvestObjectives, priceCluster, jurConventions, resolveJurisdictionContext,
 } from './jurisdiction.js';
 import { JUR_REFUSALS } from './jurisdictionRegistry.js';
 
@@ -197,10 +197,11 @@ function spanName(chain, id) {
 }
 
 /** Harvest AND price every objective (including single-branch) so a diff can see both sides. */
-function priceAllClusters(sourceState, chain, conventions) {
-  const harvest = harvestObjectives(sourceState, { chain, conventions });
+function priceAllClusters(sourceState, chain, conventions, now) {
+  const ctx = resolveJurisdictionContext(sourceState, { now, settings: sourceState?.settings, chain });
+  const harvest = harvestObjectives(sourceState, { chain: ctx.chain, conventions, lineScope: ctx.lineScope });
   return harvest.objectives
-    .map((cluster) => priceCluster(cluster, { chain, conventions }))
+    .map((cluster) => priceCluster(cluster, { chain: ctx.chain, conventions, matrix: ctx.matrix, lineScope: ctx.lineScope }))
     .sort((a, b) => String(a.objectiveKey).localeCompare(String(b.objectiveKey)));
 }
 
@@ -272,13 +273,13 @@ export function rehearseBoundaryRedraw(state, { moves = [], now = new Date(), co
 
   /* ----------------------------------------------------------- BEFORE */
   const beforeChain = buildChain(state, { now: at, settings: state?.settings });
-  const beforeAll = priceAllClusters(state, beforeChain, conv);
+  const beforeAll = priceAllClusters(state, beforeChain, conv, at);
   const beforeBy = new Map(beforeAll.map((c) => [c.objectiveKey, c]));
 
   /* ------------------------------------------------------------ AFTER */
   const afterState = { ...state, people: plan.working };
   const afterChain = buildChain(afterState, { now: at, settings: state?.settings });
-  const afterAll = priceAllClusters(afterState, afterChain, conv);
+  const afterAll = priceAllClusters(afterState, afterChain, conv, at);
   const afterBy = new Map(afterAll.map((c) => [c.objectiveKey, c]));
 
   /* ------------------------------------------------- cluster diffing */
@@ -369,7 +370,16 @@ export function rehearseBoundaryRedraw(state, { moves = [], now = new Date(), co
     if (afterCluster?.gap) {
       reason = 'gap-moved';
       const acc = new Set();
-      for (const span of afterCluster.spanNodeIds || []) for (const a of ancestorsOf(afterChain, span)) acc.add(a);
+      const homeSpans = new Set(afterCluster.spanNodeIds || []);
+      for (const span of homeSpans) for (const a of ancestorsOf(afterChain, span)) acc.add(a);
+      for (const site of afterCluster.accountableSpanIds || []) {
+        if (!homeSpans.has(site) && site !== LEADER_ID && afterChain.nodes.has(site)) acc.add(site);
+        for (const a of ancestorsOf(afterChain, site)) acc.add(a);
+      }
+      for (const apex of afterCluster.matrixApexIds || []) {
+        if (!homeSpans.has(apex) && apex !== LEADER_ID && afterChain.nodes.has(apex)) acc.add(apex);
+        for (const a of ancestorsOf(afterChain, apex)) acc.add(a);
+      }
       for (const a of ancestorsOf(afterChain, afterCluster.lcaNodeId)) acc.add(a);
       hypoTargets = [...acc];
     }
@@ -535,6 +545,48 @@ export function redrawBrief(report) {
   lines.push('');
   lines.push('Frameworks: Coase (1937)/Williamson (1975) governance choice · Riker (1962) size principle · Ashby (1956) requisite variety · Jensen & Meckling (1976) residual control rights · Klein (1998) premortem. Coordination units are declared conventions printed on the Method panel, never money. A redraw is never executed by this tool; it opens or re-frames a governed decision a human must accept.');
   return lines.join('\n');
+}
+
+/**
+ * Redact a boundary rehearsal report for an enforced rank 3+ seat: real
+ * objective pointers are replaced with ordinals and roll-up targets outside
+ * the seat's scope are named only as "a span above your boundary" — the same
+ * compiled-altitude ceiling the Map honours. The operator view prints real
+ * names. `scope === null` means unenforced (operator).
+ */
+export function redactRehearsalReport(report, scope) {
+  if (!scope) return report;
+  const ordinals = new Map();
+  const anon = (key) => {
+    const k = String(key || '');
+    if (!ordinals.has(k)) ordinals.set(k, `Objective ${ordinals.size + 1}`);
+    return ordinals.get(k);
+  };
+  const maskSpan = (id, name) => ((id === 'leader' || scope.has(String(id))) ? name : 'A span above your boundary');
+  const maskEdge = (id, name) => (scope.has(String(id)) || String(id) === 'leader' ? name : 'A span above your boundary');
+  const mapEdges = (row) => ({
+    ...row,
+    findingId: null,
+    governedDecisionId: null,
+    objective: anon(row.objectiveKey),
+    objectiveKey: null,
+    withdrawn: (row.withdrawn || []).map((n, i) => maskEdge((row.withdrawnIds || [])[i], n)),
+    added: (row.added || []).map((n, i) => maskEdge((row.addedIds || [])[i], n)),
+    withdrawnIds: [],
+    addedIds: [],
+  });
+  return {
+    ...report,
+    collapsed: report.collapsed.map((r) => ({ ...r, objectiveKey: null, objective: anon(r.objectiveKey), lcaBefore: maskSpan(r.lcaBeforeId, r.lcaBefore), lcaAfter: maskSpan(r.lcaAfterId, r.lcaAfter), lcaBeforeId: null, lcaAfterId: null })),
+    created: report.created.map((r) => ({ ...r, objectiveKey: null, objective: anon(r.objectiveKey), lcaAfter: maskSpan(r.lcaAfterId, r.lcaAfter), lcaBeforeId: null, lcaAfterId: null })),
+    changed: report.changed.map((r) => ({ ...r, objectiveKey: null, objective: anon(r.objectiveKey), lcaBefore: maskSpan(r.lcaBeforeId, r.lcaBefore), lcaAfter: maskSpan(r.lcaAfterId, r.lcaAfter), lcaBeforeId: null, lcaAfterId: null })),
+    rollups: {
+      ...report.rollups,
+      moved: report.rollups.moved.map(mapEdges),
+      readingMoves: report.rollups.readingMoves.map((r) => ({ ...r, nodeId: null, readingId: null, spanName: scope.has(String(r.nodeId)) ? r.spanName : 'A span above your boundary' })),
+    },
+    decisions: { ...report.decisions, stale: report.decisions.stale.map((d) => ({ ...d, decisionId: null, objective: anon(d.objectiveKey), objectiveKey: null, fromLca: maskSpan(d.fromLcaId, d.fromLca), toLca: maskSpan(d.toLcaId, d.toLca), fromLcaId: null, toLcaId: null })) },
+  };
 }
 
 /** Re-export so the view and tests share one vocabulary. */
