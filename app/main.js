@@ -267,7 +267,12 @@ import { renderStandby } from './views/standby.js';
 import { dutyCoverageAttentionCount } from './core/domain/dutyCoverage.js';
 // ADR-0140: the Matrix Accountability Ledger.
 import { renderMatrix } from './views/matrix.js';
+// ADR-0149: the as-of structure reader. `person.managerId` is a pointer with no
+// history, so a re-org silently re-points every stored act; this screen reads the
+// structure that was RECORDED for a day and reconciles the acts against it.
+import { renderStructureHistory } from './views/structureHistory.js';
 import { matrixAttentionCount } from './core/domain/matrix.js';
+import { structureHistoryAttentionCount } from './core/domain/structureHistory.js';
 import { renderArbitration } from './views/arbitration.js';
 import { priorityAttentionCount } from './core/domain/priorityArbitration.js';
 // ADR-0144: the Cross-Line Contradiction Audit — the design-level question the
@@ -579,6 +584,7 @@ const RENDERERS = {
   identity: (ctx) => renderIdentity(ctx),
   'duty-cover': (ctx) => renderDutyCover(ctx),
   matrix: (ctx) => renderMatrix(ctx),
+  'structure-history': (ctx) => renderStructureHistory(ctx),
   arbitration: (ctx) => renderArbitration(ctx),
   contradiction: (ctx) => renderContradiction(ctx),
   standby: (ctx) => renderStandby(ctx),
@@ -763,6 +769,14 @@ export function parseRoute(hash) {
     // to this share of me" / "who accepted this project line".
     'line-consent': 'matrix', consent: 'matrix', 'matrix-consent': 'matrix',
     'accepted-share': 'matrix', 'shadow-accountability': 'matrix',
+    // ADR-0149: the names a director types the week after a re-org — "what did
+    // the org chart look like last quarter" / "why does this February acceptance
+    // read against a manager who was not there".
+    'structure-history': 'structure-history', 'org-history': 'structure-history',
+    'as-of': 'structure-history', 'asof': 'structure-history',
+    'reorganisation': 'structure-history', 'reorg': 'structure-history',
+    'org-chart-history': 'structure-history', 'historical-structure': 'structure-history',
+    'reporting-history': 'structure-history', 'who-did-they-report-to': 'structure-history',
     // ADR-0143: the names a person types looking for "who decides what I do
     // first" when two managers have both handed them dated work.
     arbitration: 'arbitration', 'priority-conflict': 'arbitration', 'precedence': 'arbitration',
@@ -1242,6 +1256,11 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       // ADR-0140: undeclared allocations, over-commitments, contested decision
       // rights and refused lines. A person on one line is not noise.
       matrix: matrixAttentionCount(state, { now: at, settings: state.settings }),
+      // ADR-0149: home-line moves inside the declared review window, stored acts
+      // that no longer read against their own day's structure, and overlapping
+      // periods. A workspace with no recorded history is not counted — it has no
+      // drift, only an absence, and an absence is stated on the page.
+      'structure-history': structureHistoryAttentionCount(state, { now: at, settings: state.settings }),
       // ADR-0143: proposals nobody agreed, cases frozen with nothing proposed, and
       // agreed precedences that claim more than the person has. An agreed and
       // in-force precedence is NOT noise and is not counted here.

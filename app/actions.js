@@ -68,12 +68,22 @@ import {
 // manager accepts or declines it AND the person acknowledges it. Two
 // first-person commands, one scan, and three aggregate reads that report `ok`.
 import { createLineConsentActions } from './core/domain/lineConsentActions.js';
+// ADR-0149: Matrix Reorganisation Reconciliation & As-Of Structure Reads. One
+// dated home-line writer, one import of committed-design evidence and one scan;
+// every as-of reading is derived and nothing derived is stored.
+import { createStructureHistoryActions } from './core/domain/structureHistoryActions.js';
 import {
   buildLineConsent,
   lineConsentAttentionCount,
   lineConsentBriefText,
   lineConsentCsvRows,
 } from './core/domain/lineConsent.js';
+import {
+  buildStructureHistoryReport,
+  structureHistoryAttentionCount,
+  structureHistoryBriefText,
+  structureHistoryCsvRows,
+} from './core/domain/structureHistory.js';
 // ADR-0122: the Dated Absence Plan. One read (the window plan), three human
 // commands (declare, revoke, scan); availability is derived from the declared
 // windows, never stored.
@@ -19916,6 +19926,37 @@ export function createApi(store, options = {}) {
   };
   api.lineConsentAttentionCount = (options = {}) => ({
     ok: true, count: lineConsentAttentionCount(store.state, consentOptions(options)),
+  });
+  // ADR-0149: Matrix Reorganisation Reconciliation & As-Of Structure Reads. The
+  // three writes and the seat-scoped reads are in the factory; the aggregate
+  // reads are attached here so the CSV export and the panel read the SAME report,
+  // and so a view can never render `undefined` as if it were an empty ledger.
+  Object.assign(api, createStructureHistoryActions(store, { now: clock, idFactory: id }));
+  const structureOptions = (options = {}) => ({
+    now: options.now instanceof Date ? options.now : clock(),
+    settings: store.state.settings || {},
+    asOf: options.asOf || null,
+    fromISO: options.fromISO || null,
+    toISO: options.toISO || null,
+  });
+  api.structureHistoryBoard = (options = {}) => {
+    const report = buildStructureHistoryReport(store.state, structureOptions(options));
+    return { ok: true, report, board: report.board };
+  };
+  api.structureHistoryBrief = (options = {}) => {
+    const report = buildStructureHistoryReport(store.state, structureOptions(options));
+    return { ok: true, text: structureHistoryBriefText(report), report };
+  };
+  api.structureHistoryCsv = (options = {}) => {
+    const report = buildStructureHistoryReport(store.state, structureOptions(options));
+    return { ok: true, rows: structureHistoryCsvRows(report) };
+  };
+  api.structureHistoryAttention = (options = {}) => ({
+    ok: true,
+    count: structureHistoryAttentionCount(store.state, {
+      now: options.now instanceof Date ? options.now : clock(),
+      settings: store.state.settings || {},
+    }),
   });
   // ADR-0118: the only write is RECORD-ARBITRATION; the receipt, the governed
   // decision, the two `rehearses` edges and the vertical roll-up land in one
