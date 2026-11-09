@@ -32,6 +32,16 @@ import {
   normalizePriorityMarkers,
   normalizePrioritySettings,
 } from './domain/priorityArbitrationSchema.js';
+// ADR-0144 (Schema v121): the Cross-Line Contradiction Audit's fail-closed
+// normalizers. A charter with an unreadable lever is dropped rather than mapped
+// to a neighbouring one; a ruling that does not say who must act is dropped
+// rather than reconstructed. Nothing derived is stored.
+import {
+  normalizeLineMandates,
+  normalizeContradictionReviews,
+  normalizeContradictionMarkers,
+  normalizeContradictionSettings,
+} from './domain/contradictionSchema.js';
 import { normalizeAbsencePlans } from './domain/dutyAbsenceSchema.js';
 import { normalizeStandbyAnswers, normalizeDutyStandbySettings } from './domain/dutyStandbySchema.js';
 import { normalizeDutyRehearsals } from './domain/dutyRehearsalSchema.js';
@@ -584,7 +594,22 @@ export {
 // upgrade time would be a precedence nobody negotiated, and the recommendation
 // it would have to invent is not in the record either. Every score, verdict,
 // state and capacity total is DERIVED on read, so no printed figure can drift.
-export const SCHEMA_VERSION = 120;
+// v121 adds the Cross-Line Contradiction Audit (ADR-0144, `#/contradiction`):
+// `lineMandates` records ONE declared charter per row — this line, this lever
+// from the declared taxonomy, this direction, this share of the scorecard in
+// basis points, this claim on one existing envelope, this declared target — and
+// `contradictionReviews` records the chief's ruling on a DERIVED finding, with
+// the reasoning, the review date, the line told to change, and a POINTER to the
+// decision and the obligation the rule issued. `contradictionMarkers` is the
+// rule's idempotency ledger. Purely additive and deliberately EMPTY on upgrade:
+// an existing workspace has never declared a charter, so the register opens by
+// saying "no line charter has been declared here", which is a different claim
+// from "no two charters could ever conflict". Nothing is back-filled: a charter
+// invented at upgrade time would be an accountability nobody declared, and a
+// finding derived from it would be a contradiction nobody has. No finding, no
+// severity, no weight total and no queueing multiplier is ever stored — every
+// one is re-derived on read from these declarations plus the live matrix.
+export const SCHEMA_VERSION = 121;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -1943,6 +1968,12 @@ export const DEFAULT_SETTINGS = Object.freeze({
   // are printed on the Method panel and re-declarable only by a rank-4+
   // full-access seat; none is fitted from the record.
   ...normalizePrioritySettings({}),
+  // ADR-0144: the contradiction-audit conventions — the utilisation above which
+  // the queueing coupling reads incompatible, the incentive weight below which
+  // an opposite-direction pair is immaterial, and the horizon an accepted
+  // contradiction comes back on. All are clamped, printed and re-declarable only
+  // by a rank-4+ full-access seat; none is fitted from the record.
+  ...normalizeContradictionSettings({}),
 });
 
 export const COLLECTIONS = [
@@ -2481,6 +2512,19 @@ export const COLLECTIONS = [
   // claims to rank.
   'priorityArbitrations',
   'priorityArbitrationMarkers',
+  // ADR-0144 (Schema v121): the Cross-Line Contradiction Audit. `lineMandates`
+  // holds ONLY the dated human declaration of a line's charter — lever,
+  // direction, scorecard share in basis points, optional envelope claim and
+  // optional declared target. `contradictionReviews` holds ONLY the human ruling
+  // on a DERIVED finding, with a POINTER to the decision and obligation issued.
+  // `contradictionMarkers` is the rule's idempotency ledger. NOTHING DERIVED IS
+  // STORED: no finding, no severity, no contradiction count, no weight total and
+  // no queueing multiplier, because every one of those is re-derived on read
+  // from these declarations plus the live matrix. A stored severity is a verdict
+  // waiting to disagree with the charters it was computed from.
+  'lineMandates',
+  'contradictionReviews',
+  'contradictionMarkers',
 
 ];
 
@@ -3180,6 +3224,12 @@ export function normalizeSettings(raw) {
     ...normalizeDutyCoverageSettings(s),
     ...normalizeDutyStandbySettings(s, DUTY_STANDBY_BOUNDS, DUTY_STANDBY_DEFAULTS),
     ...normalizePrioritySettings(s),
+    // ADR-0144: the contradiction-audit conventions. Listed here because
+    // `normalizeSettings` rebuilds the settings object field by field — a key
+    // spread into DEFAULT_SETTINGS but not named here would be silently DROPPED
+    // on every load, and the printed convention would be a number the record
+    // does not hold.
+    ...normalizeContradictionSettings(s),
     ...normalizeAgendaSettings(s),
     chainAdoptedHorizons: normalizeAdoptedHorizons(s.chainAdoptedHorizons, DECLARED_HORIZONS),
     chainAdoptedOn: /^\d{4}-\d{2}-\d{2}$/.test(String(s.chainAdoptedOn || '')) ? s.chainAdoptedOn : null,
@@ -7584,6 +7634,15 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // not an agreement.
   state.priorityArbitrations = normalizePriorityArbitrations(raw.priorityArbitrations, state.people, warnings);
   state.priorityArbitrationMarkers = normalizePriorityMarkers(raw.priorityArbitrationMarkers);
+  // ADR-0144: a charter names a line manager and a lever from the declared
+  // taxonomy; a row that cannot be read is dropped with a warning rather than
+  // mapped to a neighbouring lever, because a guessed lever manufactures a
+  // contradiction nobody declared. Resolved BEFORE links so the `concerns`,
+  // `decides` and `issues-obligation` provenance edges validate against real
+  // review ids.
+  state.lineMandates = normalizeLineMandates(raw.lineMandates, warnings);
+  state.contradictionReviews = normalizeContradictionReviews(raw.contradictionReviews, warnings);
+  state.contradictionMarkers = normalizeContradictionMarkers(raw.contradictionMarkers);
   // ADR-0122: a malformed absence row is dropped with a warning, never repaired —
   // an invented absence is an invented unavailability for every cover in the span.
   // Resolved BEFORE links so the `declares-absence-of` provenance edge validates
@@ -8495,6 +8554,23 @@ export const MIGRATIONS = {
     priorityArbitrationMarkers: Array.isArray(v119.priorityArbitrationMarkers) ? v119.priorityArbitrationMarkers : [],
     settings: isPlainObject(v119.settings)
       ? { ...v119.settings, ...normalizePrioritySettings(v119.settings) }
+      : { ...DEFAULT_SETTINGS },
+  }),
+  // ADR-0144: additive 120 → 121. An existing workspace has never declared a
+  // line charter, so all three ledgers start EMPTY — "no charter has been
+  // declared here", which is a different claim from "no two charters conflict".
+  // The four conventions are clamped in so the printed numbers exist before
+  // anyone re-declares them. No charter, no finding and no ruling is invented: a
+  // charter back-filled at upgrade time would be an accountability nobody
+  // accepted, and a finding derived from it would be a contradiction nobody has.
+  120: (v120) => ({
+    ...v120,
+    schemaVersion: 121,
+    lineMandates: Array.isArray(v120.lineMandates) ? v120.lineMandates : [],
+    contradictionReviews: Array.isArray(v120.contradictionReviews) ? v120.contradictionReviews : [],
+    contradictionMarkers: Array.isArray(v120.contradictionMarkers) ? v120.contradictionMarkers : [],
+    settings: isPlainObject(v120.settings)
+      ? { ...v120.settings, ...normalizeContradictionSettings(v120.settings) }
       : { ...DEFAULT_SETTINGS },
   }),
   // ADR-0113: additive 111 → 112. An existing workspace is full of prompts it

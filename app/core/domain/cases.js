@@ -137,6 +137,12 @@ export const LINK_ENTITY_TYPES = [
   // demands it froze, the governed decision it opened and the obligations it
   // issued are reachable from either end without copying any record into an edge.
   'arbitration',
+  // ADR-0144: a recorded contradiction ruling is a first-class graph node, so
+  // the lines it concerns, the governed decision it opened and the obligation it
+  // issued are reachable from either end without copying a single record into an
+  // edge. The FINDING is not a node: it is derived on read, and a node for it
+  // would be a stored verdict waiting to disagree with the charters.
+  'contradiction',
   // Schema v44: an after-action lesson is independently navigable from the
   // dated workspace artifact offered as its corroboration.
   'lesson',
@@ -524,6 +530,7 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   branchask: 'branchReadingAsks',
   branchreading: 'branchReadings',
   arbitration: 'priorityArbitrations',
+  contradiction: 'contradictionReviews',
   comparison: 'portfolioComparisons',
   lesson: null,
   decision: 'decisions',
@@ -3259,6 +3266,28 @@ export function resolveLinkedEntity(state, entityType, entityId) {
         status: `${derived} · ${(rec.demands || []).length} demand(s)`,
         route: `#/arbitration?panel=case&case=${encodeURIComponent(rec.id)}`,
         raw: rec,
+      };
+    }
+    case 'contradiction': {
+      const rec = (state.contradictionReviews || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      // A graph label carries the ruling, the finding KIND and the day — never a
+      // manager's name, a person, an objective title or the chief's reasoning.
+      // Whether it issued work is read from the pointers, not from a stored flag.
+      return {
+        type: 'contradiction',
+        id: rec.id,
+        title: `Contradiction ruling · ${rec.verdict}`,
+        status: `${rec.verdict} · ${rec.kind} · ${rec.decidedOn}`,
+        route: `#/contradiction?panel=log&finding=${encodeURIComponent(rec.findingKey)}`,
+        raw: {
+          id: rec.id,
+          kind: rec.kind,
+          verdict: rec.verdict,
+          decidedOn: rec.decidedOn,
+          reviewOn: rec.reviewOn || null,
+          obligationN: (rec.obligationIssued || []).length,
+        },
       };
     }
     case 'branchask': {

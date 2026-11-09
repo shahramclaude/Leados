@@ -266,6 +266,11 @@ import { renderMatrix } from './views/matrix.js';
 import { matrixAttentionCount } from './core/domain/matrix.js';
 import { renderArbitration } from './views/arbitration.js';
 import { priorityAttentionCount } from './core/domain/priorityArbitration.js';
+// ADR-0144: the Cross-Line Contradiction Audit — the design-level question the
+// arbitration answers demand by demand: do two lines' declared charters make one
+// another unachievable for the people on both?
+import { renderContradiction } from './views/contradiction.js';
+import { contradictionAttentionCount } from './core/domain/contradictionAudit.js';
 import { dutyStandbyAttentionCount } from './core/domain/dutyStandby.js';
 import { identityAttentionCount } from './core/domain/identity.js';
 
@@ -502,6 +507,11 @@ export const NAV = [
     // both hold work on one person. Sits beside the matrix register on purpose —
     // the register says who is accountable; this says which demand wins.
     { route: 'arbitration', label: 'Priority arbitration', icon: '⚖', badge: 'arbitration' },
+    // ADR-0144: the reverse question — not "which demand goes first" but "do two
+    // lines' declared charters make one another unachievable for the people on
+    // both?". Sits beside the arbitration on purpose: one adjudicates demands,
+    // this audits the design that produces them.
+    { route: 'contradiction', label: 'Contradiction audit', icon: '≠', badge: 'contradiction' },
     { route: 'standby', label: 'Cover acknowledgement', icon: '✋', badge: 'standby' },
   ] },
 ];
@@ -561,6 +571,7 @@ const RENDERERS = {
   'duty-cover': (ctx) => renderDutyCover(ctx),
   matrix: (ctx) => renderMatrix(ctx),
   arbitration: (ctx) => renderArbitration(ctx),
+  contradiction: (ctx) => renderContradiction(ctx),
   standby: (ctx) => renderStandby(ctx),
   people: (ctx) => renderPeople(ctx),
   person: (ctx, segments) => renderPerson(ctx, safeDecode(segments[1])),
@@ -742,6 +753,11 @@ export function parseRoute(hash) {
     arbitration: 'arbitration', 'priority-conflict': 'arbitration', 'precedence': 'arbitration',
     'wsjf': 'arbitration', 'cost-of-delay': 'arbitration', 'demand-conflict': 'arbitration',
     'who-goes-first': 'arbitration', 'priority-arbitration': 'arbitration',
+    // ADR-0144: the names a leader would actually search for.
+    contradiction: 'contradiction', 'objective-conflict': 'contradiction',
+    'incentive-conflict': 'contradiction', 'goal-conflict': 'contradiction',
+    'charter-conflict': 'contradiction', 'tradeoff-audit': 'contradiction',
+    'design-conflict': 'contradiction',
     'succession': 'succession', 'bench': 'succession', 'leadership-bench': 'succession',
     'key-person': 'succession', 'key-person-risk': 'succession',
     'bench-strength': 'succession', 'bus-factor': 'succession', 'min-cut': 'succession',
@@ -1215,6 +1231,10 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       // agreed precedences that claim more than the person has. An agreed and
       // in-force precedence is NOT noise and is not counted here.
       arbitration: priorityAttentionCount(state, { now: at, settings: state.settings }),
+      // ADR-0144: incompatible pairs nobody has ruled on, plus accepted rulings
+      // past their review date. A tension or an isolated pair is information, not
+      // a badge — a badge that fires on every declared trade-off is unread.
+      contradiction: contradictionAttentionCount(state, { now: at, settings: state.settings }),
       // ADR-0127: refusals and asks past their declared response deadline. An ask
       // still inside its deadline is a normal Monday and is NOT counted here — a
       // badge that fires on every fresh declaration is a badge people stop reading.
@@ -1687,6 +1707,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       differencing: 'Differencing defender — a table can be safe while a series of tables is not: every published aggregate audited as one exact integer system across releases, seats and modules, the cheapest suppression pattern that determines nothing chosen before publication, and a publication refused when no pattern can make it safe',
       responses: 'Response studio — rehearse and adopt a coordinated leadership response',
       bundles: 'Action bundles — review, adopt and safely withdraw coordinated work',
+      contradiction: 'Cross-line contradiction audit — the reverse of the arbitration: not which of two dated demands goes first, but whether two lines’ DECLARED charters make one another permanently unachievable for the people who sit on both. Reads the declared charters (lever, direction, scorecard share in basis points, optional envelope claim, optional target) against the LIVE matrix, and derives five families: the same lever pushed opposite ways, coupled levers pulled against each other (utilisation vs lead time is the one with arithmetic — τ/(100−τ) at the declared target, printed beside the declared knee — everything else is named as a trade-off and never as a proof), a person whose lines’ shares sum past 100%, a person paid at material weight to do both, and lines claiming more than 100% of one existing budget envelope. Every finding is re-derived on read from the declarations and the roster; nothing is stored but the declarations and the chief’s rulings. Severity is honest: `incompatible` only where declared integers or the queueing law prove it, `tension` where only a trade-off exists, `isolated` where the charters share nobody, `insufficient` where a figure was not declared. A ruling issues a governed decision; ONLY a resequence issues dated work, and only to the one named line. No person is scored, ranked or named in any export; no zero stands in for a missing figure.',
       arbitration: 'Cross-line priority arbitration — two or more managers have placed dated work on ONE person, and the workspace records the negotiated precedence instead of guessing: the frozen demands with the two integers each line declared (cost of delay, job size) and the chain days, the exact integer ranking and its refusal when a figure is missing, the derived lifecycle (open / proposed / agreed / withdrawn re-derived from the recorded acts, never a stored field), the arbiter as an exact minimal common ancestor with diamond ties named rather than broken, every party’s own answer, the agreed window and review date, one owned dated obligation per sequenced demand issued in the same transaction, and an explicit statement that a proposal binds nobody. No person is ranked, no order is auto-applied, and no figure is invented.',
       compare: 'Portfolio rehearsal comparison — two reviewed responses replayed from ONE frozen revision: declared spend, owned work, briefs and software footprints side by side, where they collide, and Pareto dominance over declared criteria (or an explicit refusal to rank). The VP/chief records the arbitration in writing; no benefit score, probability or automatic choice exists anywhere in the module.',
       attribution: 'Outcome attribution — Earned Schedule, clearance bottlenecks and variance settlement',

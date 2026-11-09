@@ -40,6 +40,15 @@ const groups = [
   ['open-arbitration', 'priorityOpenCase priorityTreatDemand priorityPropose prioritySetConventions'],
   ['agree-arbitration', 'priorityAgreePrecedence priorityWithdraw'],
   ['answer-arbitration', 'priorityRecordAnswer'],
+  // ADR-0144: declaring a line charter is the line's own act, open at every
+  // leadership rank and enforced in the action (the seat must reach the line on
+  // the tree or a declared line). Ruling on a contradiction is a director-and-
+  // above act, because a resequence issues an obligation to somebody else's
+  // line; re-declaring the audit's conventions is split out so it can require a
+  // full-access rank-4+ seat.
+  ['declare-line-mandate', 'contradictionDeclareMandate contradictionWithdrawMandate contradictionReport contradictionBriefText contradictionCsvRows contradictionCandidates'],
+  ['review-contradiction', 'contradictionReview contradictionScan contradictionReviews'],
+  ['set-contradiction-conventions', 'contradictionSetConventions'],
   // ADR-0121: declaring who answers for a duty when the seat holder is absent.
   // Every method is declared (deny-by-default); the action additionally enforces
   // that the declaring seat HOLDS the duty or sits above it in the same branch,
@@ -281,7 +290,13 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // under enforcement while its writes are still gated, which would hide the case
 // from exactly the two lines and the person it was opened for. The report is
 // built under the acting seat and scoped on the tree OR a declared line.
-'priorityReport', 'priorityBriefText', 'priorityCsvRows', 'prioritySettings', 'priorityCandidates']);
+'priorityReport', 'priorityBriefText', 'priorityCsvRows', 'prioritySettings', 'priorityCandidates',
+// ADR-0144: the contradiction audit's read surface. Registered for the same
+// reason as every module above — a read absent from SAFE_READS is unreadable
+// under enforcement while its writes are still gated. The report is built under
+// the acting seat: a scoped seat compares only the lines it can reach, and the
+// charter rows it cannot reach are counted out rather than summed over a part.
+'contradictionReport', 'contradictionBriefText', 'contradictionCsvRows', 'contradictionCandidates']);
 const refusal = (reason) => ({ ok: false, code: 'scope-refusal', error: reason, field: 'scope' });
 
 /** ADR-0087: under enforcement, boundary-management commands stay reachable

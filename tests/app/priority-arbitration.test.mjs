@@ -217,15 +217,15 @@ test('an unstated chain counts as 0 and is labelled, never treated as critical',
 /* -------------------------------------------------- 2. schema v120 is additive */
 
 test('schema v120 migrates additively: empty ledgers, clamped conventions, nothing invented', () => {
-  assert.equal(SCHEMA_VERSION, 120);
+  assert.ok(SCHEMA_VERSION >= 120, 'the v120 step still reaches the current head');
   const v119 = {
     schemaVersion: 119, appId: 'leados', meta: { createdAt: STAMP, updatedAt: STAMP, isDemo: false, revision: 0 },
     settings: { priorityPrecedenceDays: 9999, priorityReviewDays: -5 },
     people: orgRoster(), reportingLines: baseLines(),
   };
   const { raw, applied } = migrate(v119);
-  assert.deepEqual(applied, ['119 → 120']);
-  assert.equal(raw.schemaVersion, 120);
+  assert.ok(applied.includes('119 → 120'), 'the v120 step still runs');
+  assert.equal(raw.schemaVersion, SCHEMA_VERSION);
   assert.deepEqual(raw.priorityArbitrations, []);
   assert.deepEqual(raw.priorityArbitrationMarkers, []);
   // Clamped into their declared bounds, not silently accepted.

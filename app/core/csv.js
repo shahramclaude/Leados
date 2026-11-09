@@ -73,6 +73,12 @@ import { buildMatrixReport, matrixCsvRows, matrixLineScopeFor, MATRIX_CSV_HEADER
 // is the adapter's own aggregate — no person, no demand title, no case id — and a
 // refused figure is BLANK with its printed reason, never 0.
 import { buildPriorityReport, priorityCsvRows, PRIORITY_CSV_COLUMNS } from './domain/priorityArbitration.js';
+// ADR-0144 (Schema v121): the Cross-Line Contradiction Audit export. A row names
+// a finding KIND, a SEVERITY and the declared integers that produced it — no
+// person, no line id, no objective title and no reasoning. A figure the engine
+// refused is BLANK with its printed reason, never 0.
+import { buildContradictionAudit, contradictionCsvRows } from './domain/contradictionAudit.js';
+import { CONTRADICTION_CSV_COLUMNS } from './domain/contradictionRegistry.js';
 import { standbyCsvRows, standbyExportBoard } from './domain/dutyStandby.js';
 // ADR-0109: CSV scope #103. Aggregate-only, identity-free, refusal-honest.
 import { jurCsvRows, JUR_CSV_COLUMNS } from './domain/jurisdiction.js';
@@ -1069,6 +1075,7 @@ export const CSV_EXPORTS = [
   // rows only — ranks, dates, derived standby states and counts. The named
   // cover's identity never enters the row set, and an ask that has not been
   // answered exports BLANK rate columns rather than zeros.
+  { key: 'contradiction-audit', label: 'Cross-line contradiction audit (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'contradiction-audit', description: 'One workspace summary row, one row per live finding and one row per lever touched. Each finding row carries its KIND, SEVERITY and derived RULING STATE plus ONLY the declared integers that produced it: the two scorecard shares in basis points, the exact integer sum, the materiality floor, the envelope claims and their sum, the utilisation target and the τ/(100−τ) multiplier with the declared ceiling. NO person, NO name, NO line manager id, NO objective title, NO finding id and NO rationale text. `incompatible` is reserved for a pair that can be shown from declared integers or from the queueing law; everything else reads `tension` or `isolated` and says so. A finding with a missing figure exports BLANK figures with the refused figure named in `withheld_reason`, never a zero.' },
   { key: 'priority-arbitration', label: 'Cross-line priority arbitration (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'priority-arbitration', description: 'One workspace summary row, one row per live arbitration case (derived state, frozen demand count, line count, disposition counts, the exact-integer verdict and its refusal when a score set is incomplete, the arbiter tie state, the agreed window and review date, dissent count, issued obligation count and the declared capacity claim), and one row per frozen demand carrying ONLY the two declared integers, the chain days and the integer rank. NO person, NO name, NO demand title, NO case id, NO seat id and NO rationale text. A demand missing its cost of delay or job size exports its rank BLANK with the refusal in `withheld_reason`, never a zero. `ranked` and `reconciles` are separate claims: an order can be absent while the counts still add up, and the export says which.' },
   { key: 'cover-standby', label: 'Cover acknowledgement (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'cover-standby', description: 'One aggregate row per declared cover in the active seat’s span (holder rank, cover rank, ask window and its basis, derived standby state, days since the ask, the declared response deadline and days past it, the answer window and its age), one refused-only exposure row per duty line whose only declared covers declined, and one board summary row. NO person, NO name, NO seat id or label, NO duty label, NO note text, NO decision id. The acknowledged rate measures the REGISTER (the named person answered YES to this ask window), never a person’s willingness; an unanswered, lapsed or refused row is its own printed state and is BLANK in the rate column rather than zero.' },
   { key: 'outcome-learning', label: 'Outcome learning (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'outcome-learning', description: 'One workspace row, one row per child span, one calibration row and one method row: suppression-safe interval counts of frozen expectations, once-only grades, good/mixed outcomes and late loops; shrunk outside view with Wilson 95% interval, pooled Brier skill, one-sided conformal lateness bound with finite-sample coverage, direction and every refusal named. NO bundle id, NO case id, NO span id or label, NO person, NO title, NO note, NO proof pointer and NO individual grade. A refused rate and a suppressed cell are BLANK rather than zero.' },
@@ -6120,6 +6127,15 @@ export function buildScopeTable(state, scope, now) {
       // identity-free aggregate; BLANK for every refusal and suppressed cell.
       const rows = jurCsvRows(state, { now, settings: state.settings || {} });
       const columns = JUR_CSV_COLUMNS.map((key) => ({ key, header: key }));
+      return { columns, rows };
+    }
+    case 'contradiction-audit': {
+      // CSV scope #107 (Schema v121, ADR-0144). The report is built under the
+      // acting seat, so a scoped seat exports only the findings it can derive;
+      // the charter rows it cannot reach are counted out, never summed over.
+      const report = buildContradictionAudit(state, { now, settings: state.settings || {} });
+      const rows = contradictionCsvRows(report);
+      const columns = CONTRADICTION_CSV_COLUMNS.map((key) => ({ key, header: key }));
       return { columns, rows };
     }
     case 'priority-arbitration': {
