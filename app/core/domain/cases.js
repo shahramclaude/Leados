@@ -133,6 +133,10 @@ export const LINK_ENTITY_TYPES = [
   // only place its figures live, and only the band crosses.
   'branchask',
   'branchreading',
+  // ADR-0143: a cross-line priority case is a first-class graph node, so the
+  // demands it froze, the governed decision it opened and the obligations it
+  // issued are reachable from either end without copying any record into an edge.
+  'arbitration',
   // Schema v44: an after-action lesson is independently navigable from the
   // dated workspace artifact offered as its corroboration.
   'lesson',
@@ -519,6 +523,7 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   rehearsal: 'dutyRehearsals',
   branchask: 'branchReadingAsks',
   branchreading: 'branchReadings',
+  arbitration: 'priorityArbitrations',
   comparison: 'portfolioComparisons',
   lesson: null,
   decision: 'decisions',
@@ -1076,6 +1081,13 @@ export const LINK_RELATIONS = [
   'cross-examines',
   'finds-against',
   'records-verdict',
+  // ADR-0143: written only by the arbitration commands and RULE-ARB-01.
+  // `issues-obligation` says an AGREED precedence issued this owned task; it is
+  // never written by a proposal, because a recommendation that issued work would
+  // make the engine the decider. `concerns` and `decides` already exist and are
+  // reused so the case, the person and the governed decision are navigable from
+  // either end.
+  'issues-obligation',
   // Schema v82: command-chain provenance written only by RULE-CHN-01..05. A record
   // escalates to the task that carries it to a higher altitude; a span or a reading
   // rolls up to the altitude above it. Neither asserts that the work moved — it
@@ -3231,6 +3243,22 @@ export function resolveLinkedEntity(state, entityType, entityId) {
           rehearsedOn: rec.rehearsedOn,
           status: rec.status,
         },
+      };
+    }
+    case 'arbitration': {
+      const rec = (state.priorityArbitrations || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      // A graph label carries the STATE and the counts, never a demand title, a
+      // person or the arbiter's reasoning. `withdrawn` and `agreed` are read from
+      // the recorded acts, not from a stored status field.
+      const derived = rec.withdrawnAt ? 'withdrawn' : rec.agreement ? 'agreed' : rec.proposal ? 'proposed' : 'open';
+      return {
+        type: 'arbitration',
+        id: rec.id,
+        title: `Cross-line precedence · ${derived}`,
+        status: `${derived} · ${(rec.demands || []).length} demand(s)`,
+        route: `#/arbitration?panel=case&case=${encodeURIComponent(rec.id)}`,
+        raw: rec,
       };
     }
     case 'branchask': {

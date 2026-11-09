@@ -148,6 +148,13 @@ export const RECORD_POLICIES = Object.freeze({
   // ADR-0127: an acknowledgement names a person as the answerer, so it carries
   // the same individual-detail ceiling as the cover ledger it answers.
   dutyStandbyAnswers: { classKey: 'unit', label: 'Cover acknowledgements', route: '#/standby?panel=asked' },
+  // ADR-0143: an arbitration case names the DEMANDS two lines placed on one
+  // person, and (at detail ranks) the arbiter above them. A demand title is item
+  // detail about a named person's week, so the case reads as unit material: full
+  // at the manager altitude, counts and derived states above the detail ceiling.
+  // The marker ledger carries opaque keys only.
+  priorityArbitrations: { classKey: 'unit', label: 'Cross-line priority cases', route: '#/arbitration?panel=board' },
+  priorityArbitrationMarkers: { classKey: 'unit', label: 'Arbitration idempotency markers', route: '#/arbitration' },
   // ADR-0128: a rehearsal record attests practice of a POSITION's duty by a
   // named cover, so it carries the same unit class as the cover ledger it is
   // evidence for; above the manager altitude the plan prints counts, modes and
@@ -412,6 +419,20 @@ export const ACTION_RIGHTS = Object.freeze({
   // may answer, only for dates inside the ask, and never twice over. Reading the
   // outgoing board is scoped to the spans the seat already governs.
   'answer-duty-standby': { minRank: 1, maxRank: 5, label: 'Answer a standby ask as the named cover' },
+  // ADR-0143: opening a cross-line priority case is every leadership seat's
+  // business — a frontline lead carrying two managers' demands is exactly who
+  // needs it — and so is disposing of a demand. What is NOT open at every rank is
+  // recording the BINDING precedence, because that act issues obligations to
+  // somebody else's line. It is a director-and-above right (a seat that can hold a
+  // span above two managers), and the action additionally refuses a seat that
+  // cannot reach the person on either the tree or a declared line.
+  'open-arbitration': { minRank: 1, maxRank: 5, label: 'Open a cross-line priority case and record the measured order' },
+  'agree-arbitration': { minRank: 3, maxRank: 5, label: 'Record (or withdraw) the binding cross-line precedence' },
+  // Answering is each named party's own first-person act — a line manager or the
+  // person whose capacity was frozen. Open by rank at every altitude; the action
+  // refuses any seat that is not one of the parties, and the normalizer keeps one
+  // answer per seat so a second cannot overwrite the first.
+  'answer-arbitration': { minRank: 1, maxRank: 5, label: 'Answer a cross-line precedence as a named party' },
   // ADR-0128: recording a rehearsal is the act of a seat that WAS THERE — the
   // duty holder (a frontline lead as much as a chief), a leadership ancestor of
   // the holder, or the cover themselves. Open at every altitude by rank; the

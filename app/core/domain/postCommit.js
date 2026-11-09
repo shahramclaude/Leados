@@ -127,6 +127,12 @@ import { carryoverRule } from './carryoverRules.js';
 // escalation and the agenda-fit gap before the market rebalances attention.
 import { cadenceRule } from './cadenceRules.js';
 import { matrixRule } from './matrixRules.js';
+// ADR-0143: the Cross-Line Priority Arbitration. Runs AFTER the matrix fan-out so
+// the edges it writes land on a graph that already knows every declared line, and
+// BEFORE the Operating Seat so an obligation issued by an agreed precedence is
+// fanned up the primary tree in the SAME transaction. Inert unless an agreement
+// was recorded, so a workspace that never opens a case gains nothing.
+import { priorityArbitrationRule } from './priorityArbitrationRules.js';
 
 
 // ADR-0087: the Operating Cadence Clock. Reads the finished queue after the
@@ -772,6 +778,13 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // transaction carries both, and the seat's own roll-up then sees a graph that
   // already knows the second line. Inert in a single-chain workspace.
   matrixRule,
+  // ADR-0143: the Cross-Line Priority Arbitration (RULE-ARB-01). ONLY an
+  // `arbitration.agreed` event (or an explicit scan) makes it run: a proposal is
+  // not an agreement and this rule will not issue work off a recommendation. It
+  // writes one owned task per SEQUENCED demand, one governed decision recording
+  // the precedence, and typed provenance to the person, the decision, each task
+  // and every leadership ancestor.
+  priorityArbitrationRule,
   // ADR-0076: the Operating Seat (vertical roll-up + enforced boundaries).
   // It reads the finished record after every module has propagated, then fans
   // each open item up every leadership ancestor in the reporting tree with one

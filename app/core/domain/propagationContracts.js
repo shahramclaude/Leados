@@ -101,6 +101,7 @@ import { parityRule } from './parityRules.js';
 // other rule on the spine. It is inert unless a seat is explicitly declared.
 import { seatRule } from './seatRules.js';
 import { matrixRule } from './matrixRules.js';
+import { priorityArbitrationRule } from './priorityArbitrationRules.js';
 import { sealRule } from './sealRules.js';
 // ADR-0092: the Differencing Defender declares its contract like every other rule.
 import { differencingRule } from './differencingRules.js';
@@ -778,6 +779,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'matrixRules.js',
     purpose: 'RULE-MTX-01 fans one typed `rolls-up-to` edge from every open work item to EVERY manager in the reporting set of each person it touches who is accountable to more than one manager — the project, product, cross-functional and administrative lines the primary `person.managerId` tree does not contain — so the second manager sees the work in the SAME atomic transaction as the declaration that created the line. It runs immediately before the Operating Seat so one commit carries both fans. Idempotent by exact-edge uniqueness, marker-ledgered, pausable by matrixAutoPropagate, and INERT in a single-chain workspace: a workspace that declares no additional line gains no edges and no decisions. A confidential source contributes a count and never an edge, because a second manager is not a wider audience for a sensitive people record. It never edits a reporting line, an allocation, a roster record or a decision right, never resolves which of two managers OWNS an item (it names both and the ledger prints the ambiguity), and never asserts that work moved.',
     writes: ['links', 'matrixMarkers'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: priorityArbitrationRule,
+    module: 'priorityArbitrationRules.js',
+    purpose: 'RULE-ARB-01: an AGREED cross-line precedence becomes owned work. One dated delegation per demand the agreement sequenced, addressed to the person whose capacity the case froze; one governed decision recording the precedence, its window, its review date and the arbiter\u2019s own reasoning; and typed provenance only (`concerns`, `decides`, `issues-obligation`, `rolls-up-to` per leadership ancestor in the matrix DAG). It never fires on a PROPOSAL, never issues work for a demand the agreement deferred, reshaped or released, never edits the case, and is idempotent through a per-agreement marker plus exact-edge deduplication. Inert unless an agreement exists.',
+    writes: ['delegations', 'decisions', 'links', 'priorityArbitrationMarkers', 'priorityArbitrations'],
     emits: [],
     scansWorkspace: true,
   },

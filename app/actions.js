@@ -42,6 +42,10 @@ import { createAgendaActions } from './core/domain/agendaProvenanceActions.js';
 // eligibility, exercise and concentration are re-derived on read.
 import { createDutyCoverageActions } from './core/domain/dutyCoverageActions.js';
 import { createMatrixActions } from './core/domain/matrixActions.js';
+// ADR-0143: the Cross-Line Priority Arbitration. Seven dated human commands on
+// the same reviewed gateway; every score, state and capacity total is derived on
+// read, and only an AGREED precedence issues work (RULE-ARB-01).
+import { createPriorityArbitrationActions } from './core/domain/priorityArbitrationActions.js';
 // ADR-0122: the Dated Absence Plan. One read (the window plan), three human
 // commands (declare, revoke, scan); availability is derived from the declared
 // windows, never stored.
@@ -19825,6 +19829,12 @@ export function createApi(store, options = {}) {
   // a reporting line are human commands through the same reviewed gateway; the
   // roll-up is derived on read and RULE-MTX-01 fans the work in the same commit.
   Object.assign(api, createMatrixActions(store, { now: clock, idFactory: id }));
+  // ADR-0143: the Cross-Line Priority Arbitration. Opening a case, disposing of a
+  // demand, proposing the measured order, answering as a party, agreeing the
+  // binding precedence and withdrawing it are all human commands through the same
+  // reviewed gateway; the recommendation is computed on read and RULE-ARB-01 fans
+  // the agreed obligations in the same commit.
+  Object.assign(api, createPriorityArbitrationActions(store, { now: clock, idFactory: id }));
   // ADR-0118: the only write is RECORD-ARBITRATION; the receipt, the governed
   // decision, the two `rehearses` edges and the vertical roll-up land in one
   // atomic transaction performed by this mixin plus RULE-CMP-01.

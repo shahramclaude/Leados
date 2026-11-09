@@ -31,6 +31,15 @@ const groups = [
   // is one of the two managers the line joins, or the span above both of them,
   // so a peer cannot grant itself a report inside another span.
   ['declare-matrix-line', 'matrixDeclareLine matrixRetuneLine matrixEndLine matrixSetConventions matrixReport matrixBriefText matrixCsvRows matrixSettings matrixCandidates'],
+  // ADR-0143: the Cross-Line Priority Arbitration. Opening a case, disposing of a
+  // demand and recording the measured recommendation are the parties' and the
+  // span's work; recording the BINDING precedence is a separate right
+  // (`agree-arbitration`) because it is the only act that issues obligations, and
+  // `answer-arbitration` is each named party's own first-person act, enforced in
+  // the action. Every method is declared; an unknown name still fails closed.
+  ['open-arbitration', 'priorityOpenCase priorityTreatDemand priorityPropose prioritySetConventions'],
+  ['agree-arbitration', 'priorityAgreePrecedence priorityWithdraw'],
+  ['answer-arbitration', 'priorityRecordAnswer'],
   // ADR-0121: declaring who answers for a duty when the seat holder is absent.
   // Every method is declared (deny-by-default); the action additionally enforces
   // that the declaring seat HOLDS the duty or sits above it in the same branch,
@@ -266,7 +275,13 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // unreadable under enforcement while its writes are still gated, which would
 // hide the ledger from exactly the seats that declared it. The report is built
 // under the acting seat, so a seat sees only its own span.
-'matrixReport', 'matrixBriefText', 'matrixCsvRows', 'matrixSettings', 'matrixCandidates']);
+'matrixReport', 'matrixBriefText', 'matrixCsvRows', 'matrixSettings', 'matrixCandidates',
+// ADR-0143: the arbitration register's read surface. Registered for the same
+// reason as every module above — a read absent from SAFE_READS is unreadable
+// under enforcement while its writes are still gated, which would hide the case
+// from exactly the two lines and the person it was opened for. The report is
+// built under the acting seat and scoped on the tree OR a declared line.
+'priorityReport', 'priorityBriefText', 'priorityCsvRows', 'prioritySettings', 'priorityCandidates']);
 const refusal = (reason) => ({ ok: false, code: 'scope-refusal', error: reason, field: 'scope' });
 
 /** ADR-0087: under enforcement, boundary-management commands stay reachable
