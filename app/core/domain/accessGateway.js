@@ -38,6 +38,13 @@ const groups = [
   // (deny-by-default); the action additionally enforces that the declaring seat
   // is one of the two managers the line joins, or the span above both of them,
   // so a peer cannot grant itself a report inside another span.
+  // ADR-0149: recording a home-line change is a SEPARATE right from declaring a
+  // second line. Declaring an additional line ADDS accountability; MOVING a home
+  // line REWRITES the tree every other module rolls up through, so it is its own
+  // gated act, and the action additionally requires the seat to be one of the two
+  // managers involved or the span above both — a peer cannot restructure another
+  // span.
+  ['record-structure-change', 'structureRecordMove structureImportDesign structureSeedCurrent structureScan structureHistoryCandidates'],
   ['declare-matrix-line', 'matrixDeclareLine matrixRetuneLine matrixEndLine matrixSetConventions matrixReport matrixBriefText matrixCsvRows matrixSettings matrixCandidates lineConsentRead lineConsentCandidates lineConsentScan'],
   // ADR-0148: answering a declared share is TWO first-person acts, split on the
   // spine rather than in prose. `accept-matrix-line` is the manager's own
@@ -326,7 +333,15 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // enforcement while its writes are still gated. `lineConsentRead` and
 // `lineConsentCandidates` are declared commands on the read right (they are
 // seat-scoped inside the read model), so only the aggregate reads live here.
-'lineConsentBoard', 'lineConsentBriefText', 'lineConsentCsvRows']);
+'lineConsentBoard', 'lineConsentBriefText', 'lineConsentCsvRows',
+// ADR-0149: the structure-history read surface. Registered for the same reason as
+// every module above — a read absent from SAFE_READS is unreadable under
+// enforcement while its writes are still gated, which would hide the drift from
+// exactly the manager being asked to reconcile it. `structureHistoryReport`,
+// `structureHistoryBriefText` and `structureHistoryCsvRows` are declared commands
+// on the read right (they are seat-scoped inside the read model), so only the
+// aggregate reads live here.
+'structureHistoryBoard', 'structureHistoryBrief', 'structureHistoryCsv']);
 const refusal = (reason) => ({ ok: false, code: 'scope-refusal', error: reason, field: 'scope' });
 
 /** ADR-0087: under enforcement, boundary-management commands stay reachable

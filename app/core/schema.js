@@ -54,6 +54,11 @@ import {
 // to a neighbouring one; a ruling that does not say who must act is dropped
 // rather than reconstructed. Nothing derived is stored.
 import {
+  normalizeStructureHistory,
+  normalizeStructureHistoryMarkers,
+  normalizeStructureHistorySettings,
+} from './domain/structureHistorySchema.js';
+import {
   normalizeLineMandates,
   normalizeContradictionReviews,
   normalizeContradictionMarkers,
@@ -652,7 +657,7 @@ export {
 // hours nobody told them about. Every state, lapse, day count, verdict and total
 // is DERIVED on read from these acts plus the live matrix, so no printed figure
 // can drift from the record that produced it.
-export const SCHEMA_VERSION = 123;
+export const SCHEMA_VERSION = 124;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -2028,6 +2033,10 @@ export const DEFAULT_SETTINGS = Object.freeze({
   // acceptance before they are chased. All three printed, all three clamped,
   // none fitted from the record.
   ...normalizeLineConsentSettings({}),
+  // ADR-0149: the structure-history convention — how many days after a home-line
+  // move the reader keeps drawing attention to it. Clamped, printed, and never
+  // fitted from the record.
+  ...normalizeStructureHistorySettings({}),
 });
 
 export const COLLECTIONS = [
@@ -2593,6 +2602,23 @@ export const COLLECTIONS = [
   // disagree with the acts it was computed from.
   'lineConsents',
   'lineConsentMarkers',
+  // ADR-0149 (Schema v124): Matrix Reorganisation Reconciliation & As-Of
+  // Structure Reads. `structureHistory` holds ONLY one dated record per OBSERVED
+  // HOME-LINE PERIOD — "from this day until that day (or until further notice)
+  // this person's home line was that manager" — with the day it was recorded and
+  // the seat that recorded it. The valid-time period and the transaction time are
+  // kept as separate fields, because conflating them is how a back-dated
+  // correction silently rewrites a period that other stored acts were judged
+  // against. `structureHistoryMarkers` is RULE-SHR-01's idempotency ledger.
+  // NOTHING DERIVED IS STORED: no span, no depth, no subtree, no changed/held
+  // verdict, no act reading and no comparable/uncomparable verdict, because every
+  // one of those is re-derived on read from these periods plus the live roster. A
+  // stored span is a number waiting to disagree with the structure it describes.
+  // Deliberately EMPTY on upgrade: a workspace that has been re-organised before
+  // this version has NO recorded past, and the honest reading of those days is
+  // `unknown`, never a projection of today's pointer backwards.
+  'structureHistory',
+  'structureHistoryMarkers',
 
 ];
 
@@ -7733,6 +7759,14 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // state this module exists to expose, never to fabricate.
   state.lineConsents = normalizeLineConsents(raw.lineConsents, warnings);
   state.lineConsentMarkers = normalizeLineConsentMarkers(raw.lineConsentMarkers);
+  // ADR-0149: a home-line period must name its person, its manager, its start day
+  // and its recording day; one that does not is DROPPED with a printed warning,
+  // never repaired. A period invented at load time is a past that never happened,
+  // and it would be indistinguishable from one that did. A record made before the
+  // period it describes began is dropped too: a planned move is recorded on the
+  // day it takes effect, never early.
+  state.structureHistory = normalizeStructureHistory(raw.structureHistory, warnings);
+  state.structureHistoryMarkers = normalizeStructureHistoryMarkers(raw.structureHistoryMarkers);
   // ADR-0122: a malformed absence row is dropped with a warning, never repaired —
   // an invented absence is an invented unavailability for every cover in the span.
   // Resolved BEFORE links so the `declares-absence-of` provenance edge validates
@@ -8680,6 +8714,15 @@ export const MIGRATIONS = {
   // acknowledgement and no expiry is invented: consent back-filled at upgrade
   // time would be an agreement nobody made, and an acknowledgement back-filled
   // at upgrade time would be a person recorded as told when they were not.
+  123: (v123) => ({
+    ...v123,
+    schemaVersion: 124,
+    structureHistory: Array.isArray(v123.structureHistory) ? v123.structureHistory : [],
+    structureHistoryMarkers: Array.isArray(v123.structureHistoryMarkers) ? v123.structureHistoryMarkers : [],
+    settings: isPlainObject(v123.settings)
+      ? { ...v123.settings, ...normalizeStructureHistorySettings(v123.settings) }
+      : { ...DEFAULT_SETTINGS },
+  }),
   122: (v122) => ({
     ...v122,
     schemaVersion: 123,

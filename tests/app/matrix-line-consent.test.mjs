@@ -411,8 +411,8 @@ test('the rule spine is one contract per rule', () => {
 
 /* ---------------------------------------------------- 7. schema + inert */
 
-test('schema v123 is additive: an upgraded workspace opens with an empty consent ledger and clamped conventions', () => {
-  assert.equal(SCHEMA_VERSION, 123);
+test('schema v124 is additive: an upgraded workspace opens with an empty consent ledger and clamped conventions', () => {
+  assert.equal(SCHEMA_VERSION, 124);
   const v122 = { ...makeState(), schemaVersion: 122 };
   delete v122.lineConsents;
   delete v122.lineConsentMarkers;

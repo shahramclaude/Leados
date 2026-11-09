@@ -458,6 +458,16 @@ export const ACTION_RIGHTS = Object.freeze({
   // including the operator view.
   'accept-matrix-line': { minRank: 1, maxRank: 5, label: 'Accept or decline a reporting line you were given' },
   'acknowledge-matrix-line': { minRank: 1, maxRank: 5, label: 'Acknowledge a share taken from your own hours' },
+  // ADR-0149: moving a home line is a SEPARATE act from declaring a second line.
+  // Declaring an additional line ADDS accountability; moving the home line
+  // REWRITES the tree every other module rolls up through. Open from rank 1
+  // because the manager a person is leaving or joining is frequently a team lead
+  // with no home-line reports of their own — exactly who a re-org moves somebody
+  // between. The action additionally requires the seat to be one of the two
+  // managers involved or the span above both, so the rank here is not the control.
+  // Registering it is not ceremony: an action whose right was never declared is
+  // refused for EVERY seat, including the operator view.
+  'record-structure-change': { minRank: 1, maxRank: 5, label: 'Record a dated home-line change and reconcile stored acts against it' },
   // Ruling on a contradiction is a director-and-above act: a resequence issues a
   // dated obligation to somebody else's line, and the chief who owns the
   // portfolio trade-off is the seat this module exists for.

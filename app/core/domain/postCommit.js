@@ -136,6 +136,7 @@ import { priorityArbitrationRule } from './priorityArbitrationRules.js';
 import { contradictionRule } from './contradictionRules.js';
 import { reviewStewardshipRule } from './reviewStewardshipRules.js';
 import { lineConsentRule } from './lineConsentRules.js';
+import { structureHistoryRule } from './structureHistoryRules.js';
 
 
 // ADR-0087: the Operating Cadence Clock. Reads the finished queue after the
@@ -810,6 +811,15 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // anyone's behalf, and it is bounded by a per-transaction cap whose remainder
   // is counted and retried by a scan.
   lineConsentRule,
+  // ADR-0149: Matrix Reorganisation Reconciliation (RULE-SHR-01). A HOME-LINE
+  // MOVE, an import of committed design evidence or an explicit scan makes it run;
+  // a read never does. When stored acts about a person no longer read against the
+  // structure their own day recorded, it issues one dated reconciliation ask to
+  // the manager who now holds that person's home line. It never edits, re-points,
+  // migrates or withdraws a stored act — rewriting history to match today's roster
+  // is the failure this module exists to catch. Bounded by a per-transaction cap
+  // whose remainder is counted and retried by a scan.
+  structureHistoryRule,
   // ADR-0076: the Operating Seat (vertical roll-up + enforced boundaries).
   // It reads the finished record after every module has propagated, then fans
   // each open item up every leadership ancestor in the reporting tree with one
