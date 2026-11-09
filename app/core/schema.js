@@ -24,6 +24,14 @@ import { normalizeSeatIdentities, normalizeIdentityMarkers, normalizeIdentitySet
 // ADR-0121 (Schema v114): the Duty Coverage Register's fail-closed normalizers.
 import { normalizeDutyCovers, normalizeDutyCoverageMarkers, normalizeDutyCoverageSettings } from './domain/dutyCoverageSchema.js';
 import { normalizeReportingLines, normalizeMatrixMarkers, normalizeMatrixSettings } from './domain/matrixSchema.js';
+// ADR-0143 (Schema v120): the Cross-Line Priority Arbitration's fail-closed
+// normalizers. Every stored row is a human act; every score, state and count is
+// re-derived on read, so a printed order cannot drift from the integers it ranks.
+import {
+  normalizePriorityArbitrations,
+  normalizePriorityMarkers,
+  normalizePrioritySettings,
+} from './domain/priorityArbitrationSchema.js';
 import { normalizeAbsencePlans } from './domain/dutyAbsenceSchema.js';
 import { normalizeStandbyAnswers, normalizeDutyStandbySettings } from './domain/dutyStandbySchema.js';
 import { normalizeDutyRehearsals } from './domain/dutyRehearsalSchema.js';
@@ -562,7 +570,21 @@ export {
 // roll-up close on a number nobody agreed to. Every existing roll-up keeps
 // working unchanged: the home line is still `person.managerId`, read through
 // the same tree, and a workspace with no declared lines gains no edges.
-export const SCHEMA_VERSION = 119;
+// v120 adds the Cross-Line Priority Arbitration (ADR-0143, `#/arbitration`):
+// `priorityArbitrations` records, per case, the demands two or more lines have
+// placed on ONE person's capacity, the two declared integers each line supplied
+// (cost of delay and job size), the remaining chain in whole days, the measured
+// recommendation, the arbiter's ratified precedence with its effective window and
+// review date, every party's own answer, and a POINTER to each obligation it
+// issued. `priorityArbitrationMarkers` is the rule's idempotency ledger. Purely
+// additive and deliberately EMPTY on upgrade: an existing workspace has never
+// opened an arbitration, so the register opens by saying "no cross-line
+// contention has been declared here", which is a different claim from "no two
+// managers have ever disagreed". Nothing is back-filled: an order invented at
+// upgrade time would be a precedence nobody negotiated, and the recommendation
+// it would have to invent is not in the record either. Every score, verdict,
+// state and capacity total is DERIVED on read, so no printed figure can drift.
+export const SCHEMA_VERSION = 120;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -1915,6 +1937,12 @@ export const DEFAULT_SETTINGS = Object.freeze({
   // absence. Both printed, both clamped, both re-declarable by the same rank-4+/
   // full-access seat that declares the register's other conventions.
   ...normalizeDutyStandbySettings({}, DUTY_STANDBY_BOUNDS, DUTY_STANDBY_DEFAULTS),
+  // ADR-0143: the priority-arbitration conventions — the window an agreed
+  // precedence runs for, the day it comes back for review, and the declared
+  // capacity ceiling a set of sequenced demands is measured against. All three
+  // are printed on the Method panel and re-declarable only by a rank-4+
+  // full-access seat; none is fitted from the record.
+  ...normalizePrioritySettings({}),
 });
 
 export const COLLECTIONS = [
@@ -2442,6 +2470,17 @@ export const COLLECTIONS = [
   // NOT copied here: `person.managerId` already records it.
   'reportingLines',
   'matrixMarkers',
+  // ADR-0143 (Schema v120): the Cross-Line Priority Arbitration. `priorityArbitrations`
+  // holds ONLY human acts — the frozen demands as each line stated them, with the
+  // two integers that line declared; the arbiter's ratified precedence, its window
+  // and its review date; each party's own answer; and a POINTER to every
+  // obligation issued. `priorityArbitrationMarkers` is the rule's idempotency
+  // ledger. NOTHING ELSE IS STORED: no rank, no ratio, no score, no state and no
+  // capacity total, because every one of those is re-derived on read from these
+  // integers. A stored score is a number waiting to disagree with the numbers it
+  // claims to rank.
+  'priorityArbitrations',
+  'priorityArbitrationMarkers',
 
 ];
 
@@ -3140,6 +3179,7 @@ export function normalizeSettings(raw) {
     ...normalizeDiligenceSettings(s),
     ...normalizeDutyCoverageSettings(s),
     ...normalizeDutyStandbySettings(s, DUTY_STANDBY_BOUNDS, DUTY_STANDBY_DEFAULTS),
+    ...normalizePrioritySettings(s),
     ...normalizeAgendaSettings(s),
     chainAdoptedHorizons: normalizeAdoptedHorizons(s.chainAdoptedHorizons, DECLARED_HORIZONS),
     chainAdoptedOn: /^\d{4}-\d{2}-\d{2}$/.test(String(s.chainAdoptedOn || '')) ? s.chainAdoptedOn : null,
@@ -7535,6 +7575,15 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.dutyCoverageMarkers = normalizeDutyCoverageMarkers(raw.dutyCoverageMarkers);
   state.reportingLines = normalizeReportingLines(raw.reportingLines, warnings);
   state.matrixMarkers = normalizeMatrixMarkers(raw.matrixMarkers);
+  // ADR-0143: an arbitration case is about a person on THIS roster, and its
+  // agreement must name every frozen demand exactly once. Resolved BEFORE links
+  // so the `concerns`, `decides` and `issues-obligation` provenance edges
+  // validate against real row ids. A case whose frame is unreadable is dropped
+  // whole with a printed warning: half-loading it would put demands into a span
+  // whose capacity the read model cannot resolve, and an unreadable agreement is
+  // not an agreement.
+  state.priorityArbitrations = normalizePriorityArbitrations(raw.priorityArbitrations, state.people, warnings);
+  state.priorityArbitrationMarkers = normalizePriorityMarkers(raw.priorityArbitrationMarkers);
   // ADR-0122: a malformed absence row is dropped with a warning, never repaired —
   // an invented absence is an invented unavailability for every cover in the span.
   // Resolved BEFORE links so the `declares-absence-of` provenance edge validates
@@ -8429,6 +8478,23 @@ export const MIGRATIONS = {
     matrixMarkers: Array.isArray(v118.matrixMarkers) ? v118.matrixMarkers : [],
     settings: isPlainObject(v118.settings)
       ? { ...v118.settings, ...normalizeMatrixSettings(v118.settings) }
+      : { ...DEFAULT_SETTINGS },
+  }),
+  // ADR-0143: additive 119 → 120. An existing workspace has never opened a
+  // cross-line arbitration, so both ledgers start EMPTY — "no cross-line
+  // contention has been declared here", which is a different claim from "no two
+  // managers have ever disagreed". The three conventions are clamped in so the
+  // printed numbers exist before anyone re-declares them. No case, no demand, no
+  // order and no obligation is invented: a precedence back-filled at upgrade time
+  // would be a decision no arbiter made, and it would issue work to somebody who
+  // never received it.
+  119: (v119) => ({
+    ...v119,
+    schemaVersion: 120,
+    priorityArbitrations: Array.isArray(v119.priorityArbitrations) ? v119.priorityArbitrations : [],
+    priorityArbitrationMarkers: Array.isArray(v119.priorityArbitrationMarkers) ? v119.priorityArbitrationMarkers : [],
+    settings: isPlainObject(v119.settings)
+      ? { ...v119.settings, ...normalizePrioritySettings(v119.settings) }
       : { ...DEFAULT_SETTINGS },
   }),
   // ADR-0113: additive 111 → 112. An existing workspace is full of prompts it

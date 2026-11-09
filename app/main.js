@@ -264,6 +264,8 @@ import { dutyCoverageAttentionCount } from './core/domain/dutyCoverage.js';
 // ADR-0140: the Matrix Accountability Ledger.
 import { renderMatrix } from './views/matrix.js';
 import { matrixAttentionCount } from './core/domain/matrix.js';
+import { renderArbitration } from './views/arbitration.js';
+import { priorityAttentionCount } from './core/domain/priorityArbitration.js';
 import { dutyStandbyAttentionCount } from './core/domain/dutyStandby.js';
 import { identityAttentionCount } from './core/domain/identity.js';
 
@@ -496,6 +498,10 @@ export const NAV = [
     { route: 'duty-cover', label: 'Duty coverage', icon: '⛨', badge: 'dutyCoverage' },
     // ADR-0140: who is accountable to whom when one person has several managers.
     { route: 'matrix', label: 'Matrix accountability', icon: '⋔', badge: 'matrix' },
+    // ADR-0143: the negotiation and enforceable hand-off between two lines that
+    // both hold work on one person. Sits beside the matrix register on purpose —
+    // the register says who is accountable; this says which demand wins.
+    { route: 'arbitration', label: 'Priority arbitration', icon: '⚖', badge: 'arbitration' },
     { route: 'standby', label: 'Cover acknowledgement', icon: '✋', badge: 'standby' },
   ] },
 ];
@@ -554,6 +560,7 @@ const RENDERERS = {
   identity: (ctx) => renderIdentity(ctx),
   'duty-cover': (ctx) => renderDutyCover(ctx),
   matrix: (ctx) => renderMatrix(ctx),
+  arbitration: (ctx) => renderArbitration(ctx),
   standby: (ctx) => renderStandby(ctx),
   people: (ctx) => renderPeople(ctx),
   person: (ctx, segments) => renderPerson(ctx, safeDecode(segments[1])),
@@ -730,6 +737,11 @@ export function parseRoute(hash) {
     // answer to" / "why is my engineer on four projects".
     matrix: 'matrix', 'matrix-accountability': 'matrix', 'reporting-lines': 'matrix',
     'dotted-line': 'matrix', 'dual-reporting': 'matrix', 'second-manager': 'matrix',
+    // ADR-0143: the names a person types looking for "who decides what I do
+    // first" when two managers have both handed them dated work.
+    arbitration: 'arbitration', 'priority-conflict': 'arbitration', 'precedence': 'arbitration',
+    'wsjf': 'arbitration', 'cost-of-delay': 'arbitration', 'demand-conflict': 'arbitration',
+    'who-goes-first': 'arbitration', 'priority-arbitration': 'arbitration',
     'succession': 'succession', 'bench': 'succession', 'leadership-bench': 'succession',
     'key-person': 'succession', 'key-person-risk': 'succession',
     'bench-strength': 'succession', 'bus-factor': 'succession', 'min-cut': 'succession',
@@ -1199,6 +1211,10 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       // ADR-0140: undeclared allocations, over-commitments, contested decision
       // rights and refused lines. A person on one line is not noise.
       matrix: matrixAttentionCount(state, { now: at, settings: state.settings }),
+      // ADR-0143: proposals nobody agreed, cases frozen with nothing proposed, and
+      // agreed precedences that claim more than the person has. An agreed and
+      // in-force precedence is NOT noise and is not counted here.
+      arbitration: priorityAttentionCount(state, { now: at, settings: state.settings }),
       // ADR-0127: refusals and asks past their declared response deadline. An ask
       // still inside its deadline is a normal Monday and is NOT counted here — a
       // badge that fires on every fresh declaration is a badge people stop reading.
@@ -1671,6 +1687,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       differencing: 'Differencing defender — a table can be safe while a series of tables is not: every published aggregate audited as one exact integer system across releases, seats and modules, the cheapest suppression pattern that determines nothing chosen before publication, and a publication refused when no pattern can make it safe',
       responses: 'Response studio — rehearse and adopt a coordinated leadership response',
       bundles: 'Action bundles — review, adopt and safely withdraw coordinated work',
+      arbitration: 'Cross-line priority arbitration — two or more managers have placed dated work on ONE person, and the workspace records the negotiated precedence instead of guessing: the frozen demands with the two integers each line declared (cost of delay, job size) and the chain days, the exact integer ranking and its refusal when a figure is missing, the derived lifecycle (open / proposed / agreed / withdrawn re-derived from the recorded acts, never a stored field), the arbiter as an exact minimal common ancestor with diamond ties named rather than broken, every party’s own answer, the agreed window and review date, one owned dated obligation per sequenced demand issued in the same transaction, and an explicit statement that a proposal binds nobody. No person is ranked, no order is auto-applied, and no figure is invented.',
       compare: 'Portfolio rehearsal comparison — two reviewed responses replayed from ONE frozen revision: declared spend, owned work, briefs and software footprints side by side, where they collide, and Pareto dominance over declared criteria (or an explicit refusal to rank). The VP/chief records the arbitration in writing; no benefit score, probability or automatic choice exists anywhere in the module.',
       attribution: 'Outcome attribution — Earned Schedule, clearance bottlenecks and variance settlement',
       counterfactual: 'Counterfactual policy — would another policy have scored better than the way you decided?',

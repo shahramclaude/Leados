@@ -385,9 +385,11 @@ test('the brief states the failure, not a reassurance', () => {
 /* ----------------------------------------------------------- 7. schema & caps */
 
 test('schema v119 migrates additively and starts with an EMPTY line ledger', () => {
-  assert.equal(SCHEMA_VERSION, 119);
+  // v119 is no longer the head (ADR-0143 took it to v120); the assertion is that
+  // the v119 STEP is still additive and still reaches the current head.
+  assert.ok(SCHEMA_VERSION >= 119);
   const { raw, applied } = migrate({ schemaVersion: 118, people: [], settings: {} });
-  assert.equal(raw.schemaVersion, 119);
+  assert.equal(raw.schemaVersion, 120);
   assert.ok(applied.includes('118 → 119'));
   assert.deepEqual(raw.reportingLines, [], 'no reporting line is invented at upgrade time');
   assert.deepEqual(raw.matrixMarkers, []);

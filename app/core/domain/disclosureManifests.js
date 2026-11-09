@@ -134,6 +134,14 @@ export const MODULE_MANIFESTS = Object.freeze({
   // its own span's lines and never a peer span's allocation, and above the
   // declared detail ceiling a manager row is disclosed as counts only.
   matrix: row('matrix', 'Matrix accountability', ['reportingLines', 'matrixMarkers'], { mode: A, classKey: 'unit', adapterScoped: true, detailCeiling: 5, dates: ['fromISO', 'toISO'], statuses: ['status'], note: 'The matrix adapter publishes allocations as whole integer hundredths and reconciles them exactly: per-person share states, the net error against the headcount, and the two identities that prove the printed total is the sum of the printed rows. An undeclared allocation is attributed to nobody and exported BLANK, never zero. Above the detail ceiling a manager row carries counts and no name; below the export cell floor a manager row is withheld with its reason. No person is ever named in an export row, and the roll-up never guesses which of several managers owns an item.' }),
+  // ADR-0143: the Cross-Line Priority Arbitration. Adaptive: the report adapter
+  // recomputes the acting seat's scope from the reporting graph — the tree OR a
+  // declared line, so a manager who holds a person only through a matrix line can
+  // read the case about them — and above the declared detail ceiling a case keeps
+  // its counts, its derived state and its window while the arbiter's identity is
+  // withheld. A demand with no declared figures is exported BLANK with its
+  // refusal, never zero, and a proposal is printed as a proposal.
+  arbitration: row('arbitration', 'Priority arbitration', ['priorityArbitrations', 'priorityArbitrationMarkers'], { mode: A, classKey: 'unit', adapterScoped: true, detailCeiling: 5, dates: ['openedOn'], statuses: ['status'], note: 'The arbitration adapter publishes the frozen demands with the two integers each line declared, the exact integer ranking the engine computed from them, the derived lifecycle state (open / proposed / agreed / withdrawn) re-derived from the recorded acts rather than a stored field, and the agreed precedence with its effective window and review date. `ranked` (an order was computable) and `reconciles` (the printed disposition counts add to the frozen demand count) are two separate claims printed on two separate lines. A demand missing its cost of delay or its job size forces the whole case to `insufficient-evidence` and no order is printed at all. A proposal is never presented as an agreement and issues no work. Above the detail ceiling the arbiter’s identity is withheld; no export names a person or a demand title.' }),
   // ADR-0099: the Freeze-Line Continuity Audit. The adapter measures continuity
   // across each crossed freeze line inside the active seat's span, refuses a
   // verdict below the declared edge floor, suppresses small altitude cells with
