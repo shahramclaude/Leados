@@ -30,6 +30,7 @@
 import { dayKey, addDays } from '../time.js';
 import { ensureEntityLink } from './automation.js';
 import { activeSeat, buildSeats, canAct } from './seat.js';
+import { matrixLineScopeFor } from './matrix.js';
 import { harvestWork, LEADER_ID } from './chain.js';
 import {
   buildDutyCoverageReport, dutyCandidates, dutyReading, dutyCoverageCsvRows,
@@ -48,6 +49,12 @@ export function createDutyCoverageActions(store, { now, idFactory }) {
   const fail = (error, field = null) => ({ ok: false, error, ...(field ? { field } : {}) });
   const clock = () => (now() instanceof Date ? now() : new Date(now() || Date.now()));
   const settings = () => store.state.settings || {};
+  // The action gate and the projection use the same canonical matrix graph.
+  // A null line scope leaves single-chain seats on their original path.
+  const seats = (at = clock(), effective = settings()) => {
+    const lineScope = matrixLineScopeFor(store.state, { now: at, settings: effective });
+    return buildSeats(store.state, { now: at, settings: effective, ...(lineScope ? { lineScope } : {}) });
+  };
   /** `store.update()` returns the new STATE, so success is read from persistError.
    *  `ok` is set LAST so a payload field can never overwrite the success flag. */
   const saved = (extra = {}) => ({
@@ -59,7 +66,7 @@ export function createDutyCoverageActions(store, { now, idFactory }) {
   });
 
   const seatFor = (right) => {
-    const built = buildSeats(store.state, { now: clock(), settings: settings() });
+    const built = seats();
     const seat = activeSeat(built);
     if (seat.readOnly) {
       return fail('The declared seat is unresolved and read-only. Choose a valid seat before declaring duty cover.');
@@ -75,10 +82,12 @@ export function createDutyCoverageActions(store, { now, idFactory }) {
     /* ---------------------------------------------------------------- reads */
 
     dutyCoverageReport() {
-      const built = buildSeats(store.state, { now: clock(), settings: settings() });
+      const at = clock();
+      const effective = settings();
+      const built = seats(at, effective);
       const seat = activeSeat(built);
       if (seat.readOnly) return fail('The declared seat is unresolved and read-only; the register refuses to read a boundary it cannot resolve.');
-      return { ok: true, report: buildDutyCoverageReport(store.state, { now: clock(), settings: settings() }) };
+      return { ok: true, report: buildDutyCoverageReport(store.state, { now: at, settings: effective }) };
     },
 
     /** The candidate pool for ONE duty, with every refusal printed. */
@@ -308,7 +317,7 @@ export function createDutyCoverageActions(store, { now, idFactory }) {
     },
 
     dutyCoverageSetConventions(input = {}) {
-      const built = buildSeats(store.state, { now: clock(), settings: settings() });
+      const built = seats();
       const seat = activeSeat(built);
       if (!seat || seat.readOnly) return fail('Choose a valid seat before re-declaring the duty-coverage conventions.');
       if ((seat.rank ?? 0) < 4) return fail('Re-declaring these conventions re-prices every duty line’s exercise window. Only a rank-4 and above seat may declare them.');
