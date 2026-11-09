@@ -2,7 +2,7 @@
  * app/views/matrix.js — `#/matrix`, the Matrix Accountability Ledger
  * (ADR-0140, Schema v119).
  *
- * Four panels, four questions a single-chain org chart cannot answer:
+ * Panels that answer questions a single-chain org chart cannot:
  *
  *   Desk    does the roll-up add up? Every manager's span, added together,
  *           against the headcount, as exact integer hundredths.
@@ -40,6 +40,9 @@ import {
   RIGHTS_CONCORDANCE_FINDINGS,
   RIGHTS_CONCORDANCE_LIMITS_TEXT,
 } from '../core/domain/rightsConcordanceRegistry.js';
+// ADR-0148: the consent register. A declared share is an ask until the manager it
+// was given to answers it and the person whose hours it takes acknowledges it.
+import { renderConsentPanel } from './matrixConsentPanel.js';
 
 const PANELS = MATRIX_PANELS;
 
@@ -801,6 +804,7 @@ export function renderMatrix(ctx) {
 
     panel === 'desk' ? deskPanel(ctx, report) : null,
     panel === 'lines' ? linesPanel(ctx, report) : null,
+    panel === 'consent' ? renderConsentPanel(ctx) : null,
     panel === 'rights' ? rightsPanel(ctx, report) : null,
     panel === 'concordance' ? concordancePanel(ctx, report) : null,
     panel === 'seats' ? seatsPanel(ctx, report) : null,

@@ -357,7 +357,7 @@ test('a single-chain workspace is inert: no findings, no decisions, no edges, an
 /* --------------------------------------------------------- 4. schema / migration */
 
 test('schema v121 is additive and clamps the conventions without inventing a charter', () => {
-  assert.equal(SCHEMA_VERSION, 122);
+  assert.equal(SCHEMA_VERSION, 123);
   const { raw, applied } = migrate({
     schemaVersion: 120,
     appId: 'leados',
@@ -366,7 +366,7 @@ test('schema v121 is additive and clamps the conventions without inventing a cha
     people: orgRoster(),
     reportingLines: baseLines(),
   });
-  assert.deepEqual(applied, ['120 → 121', '121 → 122']);
+  assert.deepEqual(applied, ['120 → 121', '121 → 122', '122 → 123']);
   assert.deepEqual(raw.lineMandates, []);
   assert.deepEqual(raw.contradictionReviews, []);
   assert.deepEqual(raw.contradictionMarkers, []);

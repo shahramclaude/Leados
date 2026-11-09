@@ -83,6 +83,10 @@ import { CONTRADICTION_CSV_COLUMNS } from './domain/contradictionRegistry.js';
 // from the SAME read model the stewardship panel renders, so a printed line state
 // and an exported line state cannot disagree.
 import { reviewStewardshipCsvRows, REVIEW_STEWARDSHIP_CSV_COLUMNS } from './domain/reviewStewardship.js';
+// ADR-0148: CSV scope #110. The export reads the SAME read model the panel
+// renders, so a printed state and an exported state cannot disagree.
+import { buildLineConsent, lineConsentCsvRows } from './domain/lineConsent.js';
+import { LINE_CONSENT_CSV_COLUMNS } from './domain/lineConsentRegistry.js';
 // ADR-0145: the Matrix Decision-Right Execution Concordance export (CSV scope
 // #108). Aggregate-only and identity-free: one workspace row carrying every
 // count the panel prints, one row per finding kind — no person, no name, no
@@ -93,6 +97,9 @@ import {
 } from './domain/rightsConcordance.js';
 import {
   RIGHTS_CONCORDANCE_CSV_COLUMNS,
+  // CSV scope #110 (Schema v123, ADR-0148). Aggregate-only: a declined line is
+  // counted, a refused share is BLANK, and no person, name, manager or
+  // declaration id appears in any cell.
   RIGHTS_CONCORDANCE_CSV_DESCRIPTOR,
 } from './domain/rightsConcordanceRegistry.js';
 import { standbyCsvRows, standbyExportBoard } from './domain/dutyStandby.js';
@@ -1092,6 +1099,10 @@ export const CSV_EXPORTS = [
   // cover's identity never enters the row set, and an ask that has not been
   // answered exports BLANK rate columns rather than zeros.
   { key: 'contradiction-audit', label: 'Cross-line contradiction audit (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'contradiction-audit', description: 'One workspace summary row, one row per live finding and one row per lever touched. Each finding row carries its KIND, SEVERITY and derived RULING STATE plus ONLY the declared integers that produced it: the two scorecard shares in basis points, the exact integer sum, the materiality floor, the envelope claims and their sum, the utilisation target and the τ/(100−τ) multiplier with the declared ceiling. NO person, NO name, NO line manager id, NO objective title, NO finding id and NO rationale text. `incompatible` is reserved for a pair that can be shown from declared integers or from the queueing law; everything else reads `tension` or `isolated` and says so. A finding with a missing figure exports BLANK figures with the refused figure named in `withheld_reason`, never a zero.' },
+  // CSV scope #110 (Schema v123, ADR-0148). Aggregate-only: a declined line is
+  // counted, a refused share is BLANK, and no person, name, manager or
+  // declaration id appears in any cell.
+  { key: 'line-consent', label: 'Matrix line consent (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'line-consent', description: 'One workspace summary row plus one row per declared line kind: lines, never answered, declined, lapsed, accepted but not acknowledged, and accepted-and-acknowledged counts, with the declared and accepted share totals in whole percent of a person. NO person, NO name, NO manager, NO declaration id, NO decline reason and NO acceptance basis. A share total is BLANK with share_refused = true and the reason in its own column whenever any line in scope carries no allocation, never printed over the declared lines only, and never a zero.' },
   { key: 'review-stewardship', label: 'Matrix review stewardship (per line)', group: 'operational', sensitive: false, filenameSlug: 'review-stewardship', description: 'One row per review × reporting line for every review that covers a person who sat on a second line during the period. Each row carries the line role and kind, the manager NAME, whether the line was in force inside the period (and the printed exclusion reason when it was not), whether that line held the performance-assessment right and whether that right was presumed rather than declared, the derived line state (answered / declined / asked / overdue / unasked), the ask date, due date, overdue flag and whole overdue days, the first-person answer text or the stated decline reason, and whether the answer arrived late. NO per-line contribution share is exported because none is computable: feedback, recognition, 1:1 notes and delegations record who the evidence is about, never which line produced it, and `line_attributable` says so on every row. A line nobody asked exports `unasked` with a BLANK answer, never a zero contribution.' },
   RIGHTS_CONCORDANCE_CSV_DESCRIPTOR,
   { key: 'priority-arbitration', label: 'Cross-line priority arbitration (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'priority-arbitration', description: 'One workspace summary row, one row per live arbitration case (derived state, frozen demand count, line count, disposition counts, the exact-integer verdict and its refusal when a score set is incomplete, the arbiter tie state, the agreed window and review date, dissent count, issued obligation count and the declared capacity claim), and one row per frozen demand carrying ONLY the two declared integers, the chain days and the integer rank. NO person, NO name, NO demand title, NO case id, NO seat id and NO rationale text. A demand missing its cost of delay or job size exports its rank BLANK with the refusal in `withheld_reason`, never a zero. `ranked` and `reconciles` are separate claims: an order can be absent while the counts still add up, and the export says which.' },
@@ -6162,6 +6173,16 @@ export function buildScopeTable(state, scope, now) {
       // is provably the state the panel printed.
       const rows = reviewStewardshipCsvRows(state, { now, settings: state.settings || {} });
       const columns = REVIEW_STEWARDSHIP_CSV_COLUMNS.map((key) => ({ key, header: key }));
+      return { columns, rows };
+    }
+    case 'line-consent': {
+      // CSV scope #110 (Schema v123, ADR-0148). Built from the same read model the
+      // panel renders, so an exported state is provably the state that was
+      // printed. Aggregate only: no person, no name, no declaration id, no free
+      // text. A refused share is BLANK with its reason in its own column.
+      const report = buildLineConsent(state, { now, settings: state.settings || {} });
+      const rows = lineConsentCsvRows(report);
+      const columns = LINE_CONSENT_CSV_COLUMNS.map((key) => ({ key, header: key }));
       return { columns, rows };
     }
     case 'rights-concordance': {

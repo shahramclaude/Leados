@@ -40,6 +40,15 @@ import {
   normalizeReviewStewardship,
   normalizeReviewStewardshipSettings,
 } from './domain/reviewStewardshipSchema.js';
+// ADR-0148 (Schema v123): Matrix Line Consent. A declared share is an ask until
+// the manager it was given to accepts or declines it AND the person whose hours
+// it takes acknowledges it. The ledger stores ONLY those dated human acts; every
+// state, lapse, verdict and total is derived on read.
+import {
+  normalizeLineConsents,
+  normalizeLineConsentMarkers,
+  normalizeLineConsentSettings,
+} from './domain/lineConsentSchema.js';
 // ADR-0144 (Schema v121): the Cross-Line Contradiction Audit's fail-closed
 // normalizers. A charter with an unreadable lever is dropped rather than mapped
 // to a neighbouring one; a ruling that does not say who must act is dropped
@@ -629,7 +638,21 @@ export {
 // somebody made, and an answer back-filled at upgrade time would be words nobody
 // said. A single-chain workspace gains no second row, no warning and no change
 // to any existing review.
-export const SCHEMA_VERSION = 122;
+// v123 adds Matrix Line Consent (ADR-0148, `#/matrix?panel=consent`): a declared
+// reporting line is an ASK until two humans answer it. `lineConsents` records
+// ONLY the dated acts — a line manager's acceptance (with the window it runs to
+// and an optional stated basis) or reasoned decline, and the person's own
+// acknowledgement that the share is taken from their hours. `lineConsentMarkers`
+// is RULE-LCN-01's idempotency ledger. Purely additive and deliberately EMPTY on
+// upgrade: no line has been answered by anybody, so an upgraded workspace reads
+// "every declared share is still an ask" — which is a different claim from "every
+// manager agreed", and it is the honest one. Nothing is back-filled: an
+// acceptance invented at upgrade time is consent nobody gave, and an
+// acknowledgement invented at upgrade time is a person recorded as committed to
+// hours nobody told them about. Every state, lapse, day count, verdict and total
+// is DERIVED on read from these acts plus the live matrix, so no printed figure
+// can drift from the record that produced it.
+export const SCHEMA_VERSION = 123;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -1999,6 +2022,12 @@ export const DEFAULT_SETTINGS = Object.freeze({
   // panel opens on the board rather than the first packet. Both printed, both
   // clamped, neither fitted from the record.
   ...normalizeReviewStewardshipSettings({}),
+  // ADR-0148: the line-consent conventions — how long an acceptance stands
+  // before it must be re-affirmed, how long a line's manager has to answer the
+  // ask the rule issues, and how long the person has to acknowledge an
+  // acceptance before they are chased. All three printed, all three clamped,
+  // none fitted from the record.
+  ...normalizeLineConsentSettings({}),
 });
 
 export const COLLECTIONS = [
@@ -2550,6 +2579,20 @@ export const COLLECTIONS = [
   'lineMandates',
   'contradictionReviews',
   'contradictionMarkers',
+  // ADR-0148 (Schema v123): Matrix Line Consent. `lineConsents` holds ONLY the
+  // dated human acts on a declared line — which side answered (the line's
+  // manager or the person whose hours are taken), whether the answer was an
+  // acceptance, a reasoned decline or an acknowledgement, the day it was given,
+  // the seat that gave it, and the window an acceptance runs to. The share
+  // itself is NEVER copied here: it lives on the declaration and is read from
+  // there, so a retune cannot leave a consent row claiming agreement to a number
+  // that no longer exists. `lineConsentMarkers` is the rule's idempotency
+  // ledger. NOTHING DERIVED IS STORED: no state, no lapse, no day count, no
+  // verdict and no total, because every one of those is re-derived on read from
+  // these acts and the live matrix. A stored state is a verdict waiting to
+  // disagree with the acts it was computed from.
+  'lineConsents',
+  'lineConsentMarkers',
 
 ];
 
@@ -3260,6 +3303,11 @@ export function normalizeSettings(raw) {
     // here would be silently DROPPED on every load, and the printed answer window
     // would be a number the record does not hold.
     ...normalizeReviewStewardshipSettings(s),
+    // ADR-0148: listed here for the same reason — a key spread into
+    // DEFAULT_SETTINGS but not named here would be silently DROPPED on every
+    // load, and the printed consent windows would be numbers the record does
+    // not hold.
+    ...normalizeLineConsentSettings(s),
     ...normalizeAgendaSettings(s),
     chainAdoptedHorizons: normalizeAdoptedHorizons(s.chainAdoptedHorizons, DECLARED_HORIZONS),
     chainAdoptedOn: /^\d{4}-\d{2}-\d{2}$/.test(String(s.chainAdoptedOn || '')) ? s.chainAdoptedOn : null,
@@ -7678,6 +7726,13 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.lineMandates = normalizeLineMandates(raw.lineMandates, warnings);
   state.contradictionReviews = normalizeContradictionReviews(raw.contradictionReviews, warnings);
   state.contradictionMarkers = normalizeContradictionMarkers(raw.contradictionMarkers);
+  // ADR-0148: a consent act must name its side, its outcome and its day; one
+  // that does not is DROPPED with a printed warning, never repaired. An
+  // acceptance invented at load time is consent nobody gave. An acceptance
+  // without an expiry is dropped too: a consent that can never lapse is the
+  // state this module exists to expose, never to fabricate.
+  state.lineConsents = normalizeLineConsents(raw.lineConsents, warnings);
+  state.lineConsentMarkers = normalizeLineConsentMarkers(raw.lineConsentMarkers);
   // ADR-0122: a malformed absence row is dropped with a warning, never repaired —
   // an invented absence is an invented unavailability for every cover in the span.
   // Resolved BEFORE links so the `declares-absence-of` provenance edge validates
@@ -8617,6 +8672,23 @@ export const MIGRATIONS = {
   // answer invented at upgrade time would be words nobody said. The two new
   // conventions are clamped in so the printed answer window exists before anyone
   // re-declares it.
+  // ADR-0148: additive 122 → 123. An existing workspace has declared lines but
+  // has never recorded an acceptance of one, so both ledgers start EMPTY — "no
+  // declared share has been answered yet", which is a different claim from
+  // "every manager agreed". The three conventions are clamped in so the printed
+  // windows exist before anyone re-declares them. No acceptance, no
+  // acknowledgement and no expiry is invented: consent back-filled at upgrade
+  // time would be an agreement nobody made, and an acknowledgement back-filled
+  // at upgrade time would be a person recorded as told when they were not.
+  122: (v122) => ({
+    ...v122,
+    schemaVersion: 123,
+    lineConsents: Array.isArray(v122.lineConsents) ? v122.lineConsents : [],
+    lineConsentMarkers: Array.isArray(v122.lineConsentMarkers) ? v122.lineConsentMarkers : [],
+    settings: isPlainObject(v122.settings)
+      ? { ...v122.settings, ...normalizeLineConsentSettings(v122.settings) }
+      : { ...DEFAULT_SETTINGS },
+  }),
   121: (v121) => ({
     ...v121,
     schemaVersion: 122,

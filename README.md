@@ -1,3 +1,14 @@
+## 2026-11-09 — A declared share of a person is an ask until two people answer it
+
+`#/matrix?panel=consent` adds the consent protocol the matrix ledger was missing. Declaring a line (ADR-0140) recorded what one manager said; nothing recorded what the other manager and the person answered. The register now prints **declared**, **accepted** and **acknowledged** capacity as three different figures, because "the roll-up adds up" and "somebody agreed to it" are different facts.
+
+- **The manager a line was given to accepts or declines it**, for a declared window, storing the share it accepted and optionally what the line is on the hook to deliver. A decline requires a stated reason and does **not** delete the declaration: the share stays charged, and the register counts the lines that are charged despite a refusal.
+- **The person whose hours are taken acknowledges it**, in the first person. A manager cannot acknowledge on their behalf. Where a person holds no leadership seat, the operator view can capture their statement and the row is marked `operator` — never printed as an authenticated identity.
+- **A retuned share is not a consented share.** Accepting 40% and then retuning the line to 90% reads `changed`, prints both numbers, drops out of the accepted total, and asks again at the new share.
+- **No consent past one whole person.** An acceptance that would commit more than 100% of someone is refused with the arithmetic in the message (`40% + 70% = 110%`). When any line's share is undeclared, both share totals are refused with the reason rather than printed over a part.
+
+`RULE-LCN-01` issues one dated acceptance ask to the line's manager, and one dated acknowledgement ask to the **person** once an acceptance has stood past its window unacknowledged. Schema v123 is additive: an upgraded workspace opens with "every declared share is still an ask", and a single-chain workspace gains no row, no ask and no change. CSV scope #110 is aggregate-only. See [ADR-0148](./docs/adr/0148-matrix-line-consent.md).
+
 ## 2026-11-09 — Repeated matrix decision friction, grouped as a design signal
 
 The Matrix Concordance now looks beyond individual decisions: it groups the same structural finding by active line kinds and affected rights, and marks it recurring only when it appears across at least two distinct decisions. The executive view shows the first and latest dates; the seat-scoped aggregate CSV carries only structural labels, counts and dates. A decision linked to multiple people still counts once per pattern. No person, manager, decision or line identifiers enter the recurrence export, and no finding is a rating or an automatic change to reporting rights. See [ADR-0146](./docs/adr/0146-matrix-recurring-structural-patterns.md).
