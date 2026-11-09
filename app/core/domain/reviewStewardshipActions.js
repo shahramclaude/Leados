@@ -249,6 +249,19 @@ export function createReviewStewardshipActions(store, { now, idFactory }) {
       if (outcomeRaw === 'declined' && reason.length < MIN_REASON) {
         return fail('Say why there is nothing to add. A bare refusal is indistinguishable from a missed deadline, and the record would read as considered when nothing was considered.', 'reason');
       }
+      // The coarse signal is the ONLY field the reconciliation compares for
+      // divergence, because it is a declared human judgement on a shared scale.
+      // It is OPTIONAL on every answer and does not change whether the answer
+      // counts as answered — a paragraph with no signal still reads `answered`
+      // and still counts toward stewardship completeness. The reconciliation
+      // instead reads `unrated-pair` when too few signals are present, rather
+      // than inventing a signal from the prose.
+      const VALID_SIGNALS = new Set(['needs-support', 'as-expected', 'strong', 'exceptional']);
+      const signalRaw = typeof input.signal === 'string' ? input.signal.trim() : '';
+      const signal = outcomeRaw === 'input' && signalRaw ? signalRaw : null;
+      if (signalRaw && !VALID_SIGNALS.has(signalRaw)) {
+        return fail('A signal must be one of the four coarse assessments or left blank — it is a declared human judgement, not an inferred one.', 'signal');
+      }
 
       const rowId = idFactory('ans');
       const at = clock();
@@ -272,6 +285,7 @@ export function createReviewStewardshipActions(store, { now, idFactory }) {
           answeredBySeatId: seat.fullAccess ? null : seat.id,
           text: outcomeRaw === 'input' ? body : '',
           reason: outcomeRaw === 'declined' ? reason : '',
+          signal: signal || null,
         });
         target.updatedAt = at.toISOString();
       }, {

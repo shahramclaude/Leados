@@ -107,6 +107,13 @@ function normalizeRequest(raw, warnings) {
   };
 }
 
+const ASSESSMENT_SIGNAL_SET = new Set(['needs-support', 'as-expected', 'strong', 'exceptional']);
+
+function normalizeSignal(value) {
+  const key = text(value, 40);
+  return ASSESSMENT_SIGNAL_SET.has(key) ? key : null;
+}
+
 function normalizeAnswer(raw, warnings) {
   if (!isPlainObject(raw)) {
     warnings.push('Review stewardship: dropped an answer that was not an object.');
@@ -133,6 +140,14 @@ function normalizeAnswer(raw, warnings) {
     warnings.push('Review stewardship: dropped line input shorter than a sentence.');
     return null;
   }
+  // The coarse signal is the ONLY field the reconciliation compares for
+  // divergence, because it is a declared human judgement on a shared scale.
+  // A free-text answer with no signal is still valid — it reads `unrated`
+  // rather than as a zero signal, and no divergence is inferred from prose.
+  const signal = outcome === 'input' ? normalizeSignal(raw.signal) : null;
+  if (raw.signal !== undefined && raw.signal !== null && outcome === 'input' && !signal) {
+    warnings.push('Review stewardship: an answer carried an unrecognised signal and it was dropped; the text was kept.');
+  }
   return {
     id: rowId,
     lineKey,
@@ -142,6 +157,7 @@ function normalizeAnswer(raw, warnings) {
     answeredBySeatId: id(raw.answeredBySeatId),
     text: body,
     reason,
+    signal,
   };
 }
 
