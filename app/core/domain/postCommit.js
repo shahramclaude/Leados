@@ -135,6 +135,7 @@ import { matrixRule } from './matrixRules.js';
 import { priorityArbitrationRule } from './priorityArbitrationRules.js';
 import { contradictionRule } from './contradictionRules.js';
 import { reviewStewardshipRule } from './reviewStewardshipRules.js';
+import { lineConsentRule } from './lineConsentRules.js';
 
 
 // ADR-0087: the Operating Cadence Clock. Reads the finished queue after the
@@ -801,6 +802,14 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // addressed to nobody could never close. It runs before the Operating Seat so
   // the obligation it opens rolls up the hierarchy in the SAME transaction.
   reviewStewardshipRule,
+  // ADR-0148: Matrix Line Consent (RULE-LCN-01). A DECLARATION, a RETUNE or an
+  // explicit scan makes it run; an acceptance never does. It issues one dated
+  // acceptance ask to the manager a line was given to, and one dated
+  // acknowledgement ask to the PERSON once an acceptance has stood past its
+  // window unacknowledged. It never accepts, declines or acknowledges anything on
+  // anyone's behalf, and it is bounded by a per-transaction cap whose remainder
+  // is counted and retried by a scan.
+  lineConsentRule,
   // ADR-0076: the Operating Seat (vertical roll-up + enforced boundaries).
   // It reads the finished record after every module has propagated, then fans
   // each open item up every leadership ancestor in the reporting tree with one

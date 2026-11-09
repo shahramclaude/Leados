@@ -64,6 +64,16 @@ import {
   reviewStewardshipBriefText,
   reviewStewardshipCsvRows,
 } from './core/domain/reviewStewardship.js';
+// ADR-0148: Matrix Line Consent. A declared share is an ask until the line's
+// manager accepts or declines it AND the person acknowledges it. Two
+// first-person commands, one scan, and three aggregate reads that report `ok`.
+import { createLineConsentActions } from './core/domain/lineConsentActions.js';
+import {
+  buildLineConsent,
+  lineConsentAttentionCount,
+  lineConsentBriefText,
+  lineConsentCsvRows,
+} from './core/domain/lineConsent.js';
 // ADR-0122: the Dated Absence Plan. One read (the window plan), three human
 // commands (declare, revoke, scan); availability is derived from the declared
 // windows, never stored.
@@ -19882,6 +19892,30 @@ export function createApi(store, options = {}) {
   });
   api.reviewStewardshipAttentionCount = (options = {}) => ({
     ok: true, count: reviewStewardshipAttentionCount(store.state, stewardshipOptions(options)),
+  });
+  // ADR-0148: Matrix Line Consent. The two first-person writes and the seat
+  // reads are in the factory; the aggregate reads are attached here so the CSV
+  // export and the panel read the SAME report, and so a view can never render
+  // `undefined` as if it were an empty register.
+  Object.assign(api, createLineConsentActions(store, { now: clock, idFactory: id }));
+  const consentOptions = (options = {}) => ({
+    now: options.now instanceof Date ? options.now : clock(),
+    settings: store.state.settings || {},
+  });
+  api.lineConsentBoard = (options = {}) => {
+    const report = buildLineConsent(store.state, consentOptions(options));
+    return { ok: true, report, board: report.board };
+  };
+  api.lineConsentBriefText = (options = {}) => {
+    const report = buildLineConsent(store.state, consentOptions(options));
+    return { ok: true, text: lineConsentBriefText(report), report };
+  };
+  api.lineConsentCsvRows = (options = {}) => {
+    const report = buildLineConsent(store.state, consentOptions(options));
+    return { ok: true, rows: lineConsentCsvRows(report) };
+  };
+  api.lineConsentAttentionCount = (options = {}) => ({
+    ok: true, count: lineConsentAttentionCount(store.state, consentOptions(options)),
   });
   // ADR-0118: the only write is RECORD-ARBITRATION; the receipt, the governed
   // decision, the two `rehearses` edges and the vertical roll-up land in one

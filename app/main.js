@@ -759,6 +759,10 @@ export function parseRoute(hash) {
     // answer to" / "why is my engineer on four projects".
     matrix: 'matrix', 'matrix-accountability': 'matrix', 'reporting-lines': 'matrix',
     'dotted-line': 'matrix', 'dual-reporting': 'matrix', 'second-manager': 'matrix',
+    // ADR-0148: the names a person types looking for "did anyone actually agree
+    // to this share of me" / "who accepted this project line".
+    'line-consent': 'matrix', consent: 'matrix', 'matrix-consent': 'matrix',
+    'accepted-share': 'matrix', 'shadow-accountability': 'matrix',
     // ADR-0143: the names a person types looking for "who decides what I do
     // first" when two managers have both handed them dated work.
     arbitration: 'arbitration', 'priority-conflict': 'arbitration', 'precedence': 'arbitration',

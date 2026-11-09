@@ -161,7 +161,7 @@ test('Schema v95 migrates additively: empty ledgers, declared conventions, no in
   const migrated = migrate({ schemaVersion: 94, settings: { leaderName: 'Keep this', federationWindowDays: 999 }, strategyCycles: [] });
   // The chain now runs one further additive step for the Clearinghouse; the
   // federation migration itself is unchanged, which is what this suite is about.
-  assert.deepEqual(migrated.applied, ['94 → 95', '95 → 96', '96 → 97', '97 → 98', '98 → 99', '99 → 100', '100 → 101', '101 → 102', '102 → 103', '103 → 104', '104 → 105', '105 → 106', '106 → 107', '107 → 108', '108 → 109', '109 → 110', '110 → 111', '111 → 112', '112 → 113', '113 → 114', '114 → 115', '115 → 116', '116 → 117', '117 → 118', '118 → 119', '119 → 120', '120 → 121', '121 → 122']);
+  assert.deepEqual(migrated.applied, ['94 → 95', '95 → 96', '96 → 97', '97 → 98', '98 → 99', '99 → 100', '100 → 101', '101 → 102', '102 → 103', '103 → 104', '104 → 105', '105 → 106', '106 → 107', '107 → 108', '108 → 109', '109 → 110', '110 → 111', '111 → 112', '112 → 113', '113 → 114', '114 → 115', '115 → 116', '116 → 117', '117 → 118', '118 → 119', '119 → 120', '120 → 121', '121 → 122', '122 → 123']);
   assert.deepEqual(migrated.raw.federationAssessments, []);
   assert.deepEqual(migrated.raw.federationMarkers, []);
   assert.equal(migrated.raw.settings.leaderName, 'Keep this');

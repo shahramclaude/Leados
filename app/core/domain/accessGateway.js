@@ -38,7 +38,16 @@ const groups = [
   // (deny-by-default); the action additionally enforces that the declaring seat
   // is one of the two managers the line joins, or the span above both of them,
   // so a peer cannot grant itself a report inside another span.
-  ['declare-matrix-line', 'matrixDeclareLine matrixRetuneLine matrixEndLine matrixSetConventions matrixReport matrixBriefText matrixCsvRows matrixSettings matrixCandidates'],
+  ['declare-matrix-line', 'matrixDeclareLine matrixRetuneLine matrixEndLine matrixSetConventions matrixReport matrixBriefText matrixCsvRows matrixSettings matrixCandidates lineConsentRead lineConsentCandidates lineConsentScan'],
+  // ADR-0148: answering a declared share is TWO first-person acts, split on the
+  // spine rather than in prose. `accept-matrix-line` is the manager's own
+  // answer (accept or decline the line they were given); it is open at every
+  // leadership rank because a project lead with no home-line reports is exactly
+  // who gets handed a line. `acknowledge-matrix-line` is the PERSON's own act —
+  // the hours are theirs — and the action refuses any seat that is not that
+  // person (or the operator view). Neither can answer for the other.
+  ['accept-matrix-line', 'lineConsentAccept lineConsentDecline'],
+  ['acknowledge-matrix-line', 'lineConsentAcknowledge'],
   // ADR-0143: the Cross-Line Priority Arbitration. Opening a case, disposing of a
   // demand and recording the measured recommendation are the parties' and the
   // span's work; recording the BINDING precedence is a separate right
@@ -311,7 +320,13 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // ask from exactly the line holder being asked. `reviewStewardshipRead` and
 // `reviewStewardshipCandidates` are declared commands (they are seat-checked
 // against the person), so only the three aggregate/packet reads live here.
-'reviewStewardshipBoard', 'reviewStewardshipBriefText', 'reviewStewardshipCsvRows']);
+'reviewStewardshipBoard', 'reviewStewardshipBriefText', 'reviewStewardshipCsvRows',
+// ADR-0148: the line-consent read surface. Registered for the same reason as
+// every module above — a read absent from SAFE_READS is unreadable under
+// enforcement while its writes are still gated. `lineConsentRead` and
+// `lineConsentCandidates` are declared commands on the read right (they are
+// seat-scoped inside the read model), so only the aggregate reads live here.
+'lineConsentBoard', 'lineConsentBriefText', 'lineConsentCsvRows']);
 const refusal = (reason) => ({ ok: false, code: 'scope-refusal', error: reason, field: 'scope' });
 
 /** ADR-0087: under enforcement, boundary-management commands stay reachable

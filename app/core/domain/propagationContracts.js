@@ -106,6 +106,7 @@ import { contradictionRule } from './contradictionRules.js';
 // ADR-0147: Matrix Multi-Line Review Stewardship declares its contract like
 // every other rule on the spine.
 import { reviewStewardshipRule } from './reviewStewardshipRules.js';
+import { lineConsentRule } from './lineConsentRules.js';
 import { sealRule } from './sealRules.js';
 // ADR-0092: the Differencing Defender declares its contract like every other rule.
 import { differencingRule } from './differencingRules.js';
@@ -807,6 +808,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'reviewStewardshipRules.js',
     purpose: 'RULE-SRV-01: a COMPLETED review in a matrix is reconciled against the lines the person actually sat on. One owned, dated delegation per line the packet never consulted, addressed to the manager who holds that line, pointing at the review rather than copying its content; typed provenance only (`concerns` to every period line, `issues-obligation` from the review to the task, `rolls-up-to` per leadership ancestor in the matrix DAG). It never fires on a declaration, never issues work when the assessor is contested or undeclared (a task addressed to nobody could never close), never assesses anybody, never edits a rating, never marks a line answered, and is idempotent through a per-review-per-line marker plus exact-edge deduplication, bounded by a per-transaction cap whose remainder is counted and retried by an explicit scan. Inert in a single-chain workspace.',
     writes: ['delegations', 'links', 'reviewStewardshipMarkers', 'reviews'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: lineConsentRule,
+    module: 'lineConsentRules.js',
+    purpose: 'RULE-LCN-01: a DECLARED reporting line is an ask until two humans answer it. One owned, dated delegation is issued to the manager the line was given to (accept or decline the share, with a stated window), and one to the PERSON once an acceptance has stood past its window unacknowledged — because a manager accepting a share of somebody else\u2019s hours is not the person being told. Typed provenance only (`concerns` from the person to the manager, `issues-obligation` from the person to the task, `rolls-up-to` per leadership ancestor in the matrix DAG). It fires on a declaration, a retune or an explicit scan — never on an acceptance, which is an answer and not a reason to ask again. It never accepts, declines, acknowledges, edits a share or ends a declaration on anybody\u2019s behalf; it is idempotent through a per-line marker plus exact-edge deduplication, bounded by a per-transaction cap whose remainder is counted and retried, and inert in a single-chain workspace.',
+    writes: ['delegations', 'links', 'lineConsentMarkers'],
     emits: [],
     scansWorkspace: true,
   },

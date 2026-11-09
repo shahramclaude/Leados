@@ -449,6 +449,15 @@ export const ACTION_RIGHTS = Object.freeze({
   // including the operator view, so an unregistered right silently makes
   // the whole module unreachable through the live API.
   'declare-matrix-line': { minRank: 1, maxRank: 5, label: 'Declare, retune or read a line decision-rights charter' },
+  // ADR-0148: a declared share is an ASK until the manager it was given to
+  // answers it, and until the person whose hours it takes acknowledges it. Both
+  // are first-person acts, open at every leadership rank by the spine and
+  // enforced in the action: only the line's own manager may accept or decline,
+  // and only the person may acknowledge. Registering them here is not ceremony —
+  // an action whose right was never declared is refused for EVERY seat,
+  // including the operator view.
+  'accept-matrix-line': { minRank: 1, maxRank: 5, label: 'Accept or decline a reporting line you were given' },
+  'acknowledge-matrix-line': { minRank: 1, maxRank: 5, label: 'Acknowledge a share taken from your own hours' },
   // Ruling on a contradiction is a director-and-above act: a resequence issues a
   // dated obligation to somebody else's line, and the chief who owns the
   // portfolio trade-off is the seat this module exists for.
