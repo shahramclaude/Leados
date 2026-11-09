@@ -108,6 +108,7 @@ import { contradictionRule } from './contradictionRules.js';
 import { reviewStewardshipRule } from './reviewStewardshipRules.js';
 import { lineConsentRule } from './lineConsentRules.js';
 import { structureHistoryRule } from './structureHistoryRules.js';
+import { onboardingMatrixRule } from './onboardingMatrixRules.js';
 import { sealRule } from './sealRules.js';
 // ADR-0092: the Differencing Defender declares its contract like every other rule.
 import { differencingRule } from './differencingRules.js';
@@ -825,6 +826,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'structureHistoryRules.js',
     purpose: 'RULE-SHR-01: a stored act that names a manager is reconciled against the structure of the ACT\u2019S OWN DAY. When a home line moves, every stored act about that person that no longer reads against the structure its day recorded is reported, and ONE owned, dated delegation is issued to the manager who now holds the person\u2019s home line, naming the affected records. Typed provenance only (`issues-obligation` from the person to the task, `rolls-up-to` per leadership ancestor). It fires on a home-line move, a committed-design import and an explicit scan — never on a read. It NEVER edits, re-points, migrates or withdraws a stored act, because rewriting a historical record to match today\u2019s roster is precisely the drift this reconciliation surfaces; it issues NOTHING when nothing drifts; it is idempotent through a per-person-per-drift-set marker plus exact-edge deduplication, bounded by a per-transaction cap whose remainder is counted and retried, and inert in a workspace with no recorded structure history.',
     writes: ['delegations', 'links', 'structureHistoryMarkers'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: onboardingMatrixRule,
+    module: 'onboardingMatrixRules.js',
+    purpose: 'RULE-ONB-01: onboarding a person into a matrix is reconciled against the lines they actually landed on. One owned, dated delegation per line that has written no brief, addressed to the manager who HOLDS that line, naming the person, the window and a due date that is the plan\u2019s own deadline when it is still ahead and a fresh window when it has passed; plus one dated acknowledgement ask to the PERSON for every brief that stands unacknowledged \u2014 because an expectation set by one party is not an agreement between two. Typed provenance only (`concerns` from the person to each line\u2019s manager, `issues-obligation` from the person to the task, `rolls-up-to` per leadership ancestor in the matrix DAG). It fires on a created or updated plan, on a declared second line and on an explicit scan \u2014 never on a read and never on an acknowledgement. It issues NOTHING for two concurrent plans (which plan owns the onboarding is a declaration only a leader can settle) and NOTHING for a presumed home line (a presumption is printed, not chased); it never writes a brief, never acknowledges one, never invents a plan and never rates the person. Idempotent through a per-obligation marker (keyed on the BRIEF for acknowledgements, so a re-brief re-asks), bounded by a per-transaction cap whose remainder is counted and retried, and inert in a single-chain workspace.',
+    writes: ['delegations', 'links', 'onboardingLineBriefMarkers'],
     emits: [],
     scansWorkspace: true,
   },

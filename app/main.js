@@ -271,8 +271,10 @@ import { renderMatrix } from './views/matrix.js';
 // history, so a re-org silently re-points every stored act; this screen reads the
 // structure that was RECORDED for a day and reconciles the acts against it.
 import { renderStructureHistory } from './views/structureHistory.js';
+import { renderOnboardingMatrixPanel } from './views/onboardingMatrixPanel.js';
 import { matrixAttentionCount } from './core/domain/matrix.js';
 import { structureHistoryAttentionCount } from './core/domain/structureHistory.js';
+import { onboardingMatrixAttentionCount } from './core/domain/onboardingMatrix.js';
 import { renderArbitration } from './views/arbitration.js';
 import { priorityAttentionCount } from './core/domain/priorityArbitration.js';
 // ADR-0144: the Cross-Line Contradiction Audit — the design-level question the
@@ -407,7 +409,7 @@ export const NAV = [
     // chief carries has a printed lower bound and a printed refusal beside it.
     { route: 'succession', label: 'Leadership bench', icon: '⚯', badge: 'succession' },
     { route: 'people', label: 'People', icon: '◍' },
-    { route: 'onboarding', label: 'Onboarding & transitions', icon: '◈' },
+    { route: 'onboarding', label: 'Onboarding & transitions', icon: '◈', badge: 'onboarding' },
     { route: 'oneonones', label: '1:1s', icon: '❯', badge: 'due' },
     // ADR-0113: the 1:1 agenda provenance ledger. A lead's queue is mostly
     // software-written prompts; this is where the lead can see who each line
@@ -590,7 +592,9 @@ const RENDERERS = {
   standby: (ctx) => renderStandby(ctx),
   people: (ctx) => renderPeople(ctx),
   person: (ctx, segments) => renderPerson(ctx, safeDecode(segments[1])),
-  onboarding: (ctx) => renderOnboarding(ctx),
+  onboarding: (ctx) => (['matrix', 'board', 'case', 'method'].includes(ctx.query?.get?.('panel'))
+    ? renderOnboardingMatrixPanel(ctx)
+    : renderOnboarding(ctx)),
   oneonones: (ctx) => renderOneOnOnes(ctx),
   feedback: (ctx) => renderFeedback(ctx),
   goals: (ctx) => renderGoals(ctx),
@@ -1261,6 +1265,10 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       // periods. A workspace with no recorded history is not counted — it has no
       // drift, only an absence, and an absence is stated on the page.
       'structure-history': structureHistoryAttentionCount(state, { now: at, settings: state.settings }),
+      // ADR-0150: matrix onboarding cases whose matrix step is still open. A case
+      // settled across its lines, and every single-line plan, is not counted — the
+      // badge is attention, not telemetry.
+      onboarding: onboardingMatrixAttentionCount(state, { now: at, settings: state.settings }),
       // ADR-0143: proposals nobody agreed, cases frozen with nothing proposed, and
       // agreed precedences that claim more than the person has. An agreed and
       // in-force precedence is NOT noise and is not counted here.

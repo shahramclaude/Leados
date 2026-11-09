@@ -59,6 +59,11 @@ import {
   normalizeStructureHistorySettings,
 } from './domain/structureHistorySchema.js';
 import {
+  normalizeOnboardingLineBriefs,
+  normalizeOnboardingLineBriefMarkers,
+  normalizeOnboardingMatrixSettings,
+} from './domain/onboardingMatrixSchema.js';
+import {
   normalizeLineMandates,
   normalizeContradictionReviews,
   normalizeContradictionMarkers,
@@ -657,7 +662,7 @@ export {
 // hours nobody told them about. Every state, lapse, day count, verdict and total
 // is DERIVED on read from these acts plus the live matrix, so no printed figure
 // can drift from the record that produced it.
-export const SCHEMA_VERSION = 124;
+export const SCHEMA_VERSION = 125;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -2037,6 +2042,11 @@ export const DEFAULT_SETTINGS = Object.freeze({
   // move the reader keeps drawing attention to it. Clamped, printed, and never
   // fitted from the record.
   ...normalizeStructureHistorySettings({}),
+  // ADR-0150: the matrix-onboarding windows — how long a line has to write its
+  // brief after the plan starts, and how long a standing brief may go
+  // unacknowledged by the person before it reads overdue. Both printed, both
+  // clamped, neither fitted from the record.
+  ...normalizeOnboardingMatrixSettings({}),
 });
 
 export const COLLECTIONS = [
@@ -2619,6 +2629,19 @@ export const COLLECTIONS = [
   // `unknown`, never a projection of today's pointer backwards.
   'structureHistory',
   'structureHistoryMarkers',
+  // ADR-0150 (Schema v125): Matrix Onboarding Completeness. `onboardingLineBriefs`
+  // holds ONLY one dated human STATEMENT per row — "this line expects this of this
+  // person, in these words, from this day" — or an explicit decline with a reason,
+  // plus the person's own dated acknowledgement of that exact text.
+  // `onboardingLineBriefMarkers` is RULE-ONB-01's idempotency ledger.
+  // NOTHING DERIVED IS STORED: no line state, no overdue flag, no verdict, no
+  // duplicate-plan marker and no coverage total, because every one of those is
+  // re-derived on read from these statements plus the live matrix and the plan's
+  // start date. A stored state is a verdict waiting to disagree with the record.
+  // Deliberately EMPTY on upgrade: no line has written a brief in an existing
+  // workspace, and a brief invented at upgrade time would be words nobody said.
+  'onboardingLineBriefs',
+  'onboardingLineBriefMarkers',
 
 ];
 
@@ -3334,6 +3357,11 @@ export function normalizeSettings(raw) {
     // load, and the printed consent windows would be numbers the record does
     // not hold.
     ...normalizeLineConsentSettings(s),
+    // ADR-0150: listed here because `normalizeSettings` rebuilds the settings
+    // object field by field — a key spread into DEFAULT_SETTINGS but not named
+    // here would be silently DROPPED on every load, and the printed onboarding
+    // windows would be numbers the record does not hold.
+    ...normalizeOnboardingMatrixSettings(s),
     ...normalizeAgendaSettings(s),
     chainAdoptedHorizons: normalizeAdoptedHorizons(s.chainAdoptedHorizons, DECLARED_HORIZONS),
     chainAdoptedOn: /^\d{4}-\d{2}-\d{2}$/.test(String(s.chainAdoptedOn || '')) ? s.chainAdoptedOn : null,
@@ -7767,6 +7795,14 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // day it takes effect, never early.
   state.structureHistory = normalizeStructureHistory(raw.structureHistory, warnings);
   state.structureHistoryMarkers = normalizeStructureHistoryMarkers(raw.structureHistoryMarkers);
+  // ADR-0150: a line brief must name its plan, person, line, manager, day and
+  // outcome, and must either SAY what the line expects or state why it has
+  // nothing to say; one that does not is DROPPED with a printed warning, never
+  // repaired. A brief invented at load time is words nobody said, and an
+  // acknowledgement invented at load time is a person recorded as told when they
+  // were not.
+  state.onboardingLineBriefs = normalizeOnboardingLineBriefs(raw.onboardingLineBriefs, warnings);
+  state.onboardingLineBriefMarkers = normalizeOnboardingLineBriefMarkers(raw.onboardingLineBriefMarkers, warnings);
   // ADR-0122: a malformed absence row is dropped with a warning, never repaired —
   // an invented absence is an invented unavailability for every cover in the span.
   // Resolved BEFORE links so the `declares-absence-of` provenance edge validates
@@ -8714,6 +8750,22 @@ export const MIGRATIONS = {
   // acknowledgement and no expiry is invented: consent back-filled at upgrade
   // time would be an agreement nobody made, and an acknowledgement back-filled
   // at upgrade time would be a person recorded as told when they were not.
+  // ADR-0150: additive 124 → 125. An existing workspace has plans and declared
+  // lines but no line brief of any kind, so the ledger starts EMPTY — "no line has
+  // written its onboarding brief yet", which is a different claim from "every line
+  // agreed". A brief back-filled at upgrade time would be words nobody said, and an
+  // acknowledgement back-filled at upgrade time would be a person recorded as
+  // having agreed to something they were never shown. The two conventions are
+  // clamped in so the printed windows exist before anyone re-declares them.
+  124: (v124) => ({
+    ...v124,
+    schemaVersion: 125,
+    onboardingLineBriefs: Array.isArray(v124.onboardingLineBriefs) ? v124.onboardingLineBriefs : [],
+    onboardingLineBriefMarkers: Array.isArray(v124.onboardingLineBriefMarkers) ? v124.onboardingLineBriefMarkers : [],
+    settings: isPlainObject(v124.settings)
+      ? { ...v124.settings, ...normalizeOnboardingMatrixSettings(v124.settings) }
+      : { ...DEFAULT_SETTINGS },
+  }),
   123: (v123) => ({
     ...v123,
     schemaVersion: 124,
