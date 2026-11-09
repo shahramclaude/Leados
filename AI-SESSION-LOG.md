@@ -1,3 +1,17 @@
+# 2026-11-09 — Session 205: succession matrix parity audit (not shipped)
+
+**Doctrine / sync / scope.** `NORTH_STAR.md` contains the Matrix Leadership and Bulletproof Reliability mandates. Origin verified as `https://github.com/shahramclaude/Leados.git`; work on `arena/0e18b41b-leados`. Selected director / VP and CEO × matrix succession bench parity, including lower-seat scope: maintain reliable coverage and prevent sideways disclosure while reconciling shared people.
+
+**Audit / blocker.** `successionView` tests `seat.scope` as an Array although seat construction supplies a Set, and marks every non-scope span as `above`; active matrix lines also need to be reconciled throughout eligibility, freezing/grading, rule certificates, reads, UI and CSV. An isolated fix would not establish end-to-end confidentiality or counting parity. No implementation was shipped; the full slice remains open, including integration with the shared post-commit spine and matrix roll-up. The baseline test failures below also mean its verification contracts need repair; they do not themselves prove the implementation cannot be built.
+
+**Verification on unchanged checkout.** `node --test tests/app/succession-bench.test.mjs tests/app/succession-export.test.mjs`: 24/25 pass, with the remaining test expecting schema 119 instead of 123. `node --test tests/app/disclosure-compiler.test.mjs`: 19/21 pass, failing the same schema pin and renderer catalogue length (119 vs 117). No fix attempt or post-change functional verification was made. Matrix parity, UI/export equivalence and the full suite **[UNVERIFIED]**.
+
+**Discovery.** Added Matrix Merit Pool Governance, Pay-Right Stewardship & Multi-Principal “Matrix Tax” Audit [director / VP / CEO × matrix] to Planned, distinguishing the proposed line-cohort and authority checks from existing general pay equity calculations. Repository-wide absence **[UNVERIFIED]**.
+
+**Next.** Reconcile baseline test contracts, then deliver and verify the full succession seat/matrix/rule/export boundary together; preserve single-chain behaviour and refuse unsupported or overlapping figures rather than fabricating them.
+
+---
+
 # 2026-11-09 — Session 204: a declared share is an ask until two people answer it (Schema v123, ADR-0148, `RULE-LCN-01`, CSV #110)
 
 **Doctrine / sync / scope.** `NORTH_STAR.md` present with both binding mandates (Matrix Leadership, Bulletproof Reliability); no augmentation needed. Origin confirmed as `https://github.com/shahramclaude/Leados.git`; work stayed on `arena/0a58e8b9-leados`. **Altitude: frontline / mid-manager PRIMARY** (last primary 203); the register is the duty of the manager a line was handed to and of the person whose hours it takes, and the same board is the director's roll-up of what has actually been agreed. **Structure: matrix**; a single-chain workspace gains no row, no marker, no ask.
