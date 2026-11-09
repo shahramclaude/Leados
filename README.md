@@ -534,6 +534,8 @@ Open `#/carryover` when a Hoshin Catchball pact settles as `thesis-invalidated`:
 
 ## 2026-11-04 — Operating Cadence Clock (Session 127, Schema v93)
 
+A missed expected sitting is marked overdue, not assumed to happen today. Its next date and any dependent landing forecast remain unknown until supported by a recorded sitting; the clock counts unpredictable ladders. Matrix forum routing and scope parity are still in progress.
+
 Open `#/cadence` to declare the standing forums that actually decide work, record their sittings, and see the calendar as a queueing system: declared capacity and service time, demand measured in service-days by input class, utilisation ρ with Little/Kingman flow time (refused above ρ = 1), a computable Conway topology test of each forum's membership, the escape count of items certain to miss their own horizon, and frozen readings graded once with Brier skill. The shared propagation spine writes typed provenance and opens one governed constraint decision per week; the brief and CSV #82 are aggregate-oriented, small cells are blanked with a reason, and declared local seats are not authenticated accounts. See [ADR-0087](./docs/adr/0087-operating-cadence-clock.md) for boundaries and methodology.
 
 ## 2026-11-04 — The Disclosure Compiler: every screen declares its posture, and detail is a contract (Session 126, Schema v92, [ADR-0086](./docs/adr/0086-disclosure-compiler.md), `#/disclosure`, RULE-DSC-01..02, CSV #81)

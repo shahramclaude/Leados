@@ -207,7 +207,7 @@ export function renderCadence(ctx) {
           badge(p.flow?.verdict ? p.flow.bandLabel : 'unmeasured', tone),
           badge(TOPOLOGY_PATTERN_LABELS[p.fit?.topology] || 'unmodelled', topologyTone(p.fit?.topology)),
         ),
-        h('p', null, `ρ would be ${fmt(p.demand?.rho)} against a ${p.demand?.targetPct ?? conventions.cadenceUtilisationTargetPct}% target; flow time ${fmt(p.flow?.flowDays, ' d')}; next sitting ${p.next?.on ? formatDate(p.next.on) : 'never (no sitting recorded)'}.`),
+        h('p', null, `ρ would be ${fmt(p.demand?.rho)} against a ${p.demand?.targetPct ?? conventions.cadenceUtilisationTargetPct}% target; flow time ${fmt(p.flow?.flowDays, ' d')}; next sitting ${p.next?.known ? formatDate(p.next.on) : (p.next?.reason || 'unknown')}.`),
         h('p', { class: 'muted' }, p.verdict || 'Declare the forum to begin measuring it.'),
       );
       openDeclareModal();
@@ -356,7 +356,7 @@ export function renderCadence(ctx) {
         stat({ label: 'Declared forums', value: String(forums.length), hint: `${activeForums.length} active` }),
         stat({ label: 'Workspace ρ', value: fmt(report.workspaceRho), tone: band.tone === 'bad' ? 'bad' : band.tone === 'caution' ? 'caution' : 'good', hint: band.label }),
         stat({ label: 'Items queued', value: String(counts.attributable), hint: `${counts.unmatched} unmatched · ${counts.unreviewable} unreviewable` }),
-        stat({ label: 'Escaping the ladder', value: String(clock.counts.escape), tone: clock.counts.escape ? 'bad' : 'good', hint: clock.counts.escape ? 'closes after its own horizon' : 'every item can land in time' }),
+        stat({ label: 'Escaping the ladder', value: String(clock.counts.escape), tone: clock.counts.escape ? 'bad' : clock.counts.unpredictable ? 'caution' : 'neutral', hint: `${clock.counts.unpredictable} unpredictable; zero escapes does not prove every item can land in time` }),
       ),
       band.key !== 'unmeasured' && h('div', null, banner({
         tone: band.tone === 'bad' ? 'bad' : band.tone === 'caution' ? 'caution' : 'info',
@@ -404,8 +404,8 @@ export function renderCadence(ctx) {
             { label: 'ρ', render: (row) => h('span', null, fmt(row.demand.rho), ' ', badge(row.flow.bandLabel || 'unmeasured', verdictTone(row.flow.verdict))) },
             { label: 'Flow d', render: (row) => (row.flow.flowDays === null ? h('span', { class: 'muted' }, 'no steady state') : fmt(row.flow.flowDays)) },
             { label: 'Next sitting', render: (row) => (row.next.on
-              ? h('span', null, formatDate(row.next.on), row.next.overdueDays ? ` ${badge(`${row.next.overdueDays}d overdue`, 'bad')}` : '')
-              : h('span', { class: 'muted' }, 'never sat')) },
+              ? h('span', null, row.next.known ? formatDate(row.next.on) : `Expected ${formatDate(row.next.on)}; ${row.next.reason}`)
+              : h('span', { class: 'muted' }, row.next.reason || 'unknown')) },
             { label: 'Closures/sitting', render: (row) => (row.closuresPerSitting === null
               ? h('span', { class: 'muted' }, `needs ${conventions.cadenceFloorN}`)
               : `${row.closuresPerSitting} of ${row.forum.decisionCapacity}`) },

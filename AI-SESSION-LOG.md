@@ -1,3 +1,15 @@
+## 2026-11-09 — Session 200: an overdue forum has no known next sitting
+
+**Built / scope.** Frontline / mid-manager primary, shared calculation used at all altitudes in single-chain and matrix workspaces. A missed expected sitting is no longer treated as a zero-day wait. Unknown alternatives cannot prove the whole ladder late; the view and brief show uncertainty and the frozen reading omits a forecast dependent on an unknown sitting. The existing cadence report feeds shared post-commit automation and hierarchy paths; this is not a claim that those paths are matrix-safe.
+
+**Discovery.** Added cross-forum decision dependency and handoff ledger to Planned [frontline / mid-manager / director × both structures], informed by critical-path and queueing practice; repository-wide absence [UNVERIFIED].
+
+**Verified.** Focused command `node --test --test-name-pattern='cadence overdue|one case creates a queued-for|the escape ladder measures|classification reads the record|every panel renders' tests/app/cadence-overdue.test.mjs tests/app/operating-cadence.test.mjs` — 8/8 on retry. Actual storage and session date, computed report and rendered overdue reason/count, frozen persisted prediction and brief were compared in single-chain and matrix fixtures; the adjacent propagation and panels also passed. The first pass 6/8 failed because a test searched for a phrase also present in its negated warning; corrected the assertion once.
+
+**Flagged.** Full canonical suite, browser/AT, historical frozen readings, and matrix routing/scope/roll-ups [UNVERIFIED]. Session 199's concurrent-chair ambiguity remains open; the calendar calculation does not fix it. A known-date non-congested forum with no flow estimate alongside a congested forum can still be described as if all forums are congested; this pre-existing ladder limitation is not fixed by this slice. Seats are not authentication. Next: frontline / mid-manager × matrix cadence authority parity, preserving explicit ambiguity.
+
+---
+
 ## 2026-11-09 — Session 198: recurring matrix friction is a design signal (ADR-0146, Schema v121 unchanged)
 
 **Doctrine / sync / scope.** `NORTH_STAR.md` exists and contains both binding matrix-leadership and bulletproof-reliability mandates. `origin` confirmed as `https://github.com/shahramclaude/Leados.git`; branch `arena/dac17ceb-leados`. CEO / C-suite PRIMARY × matrix; the same read remains seat-scoped for every altitude, while a single-chain workspace remains inert.

@@ -260,6 +260,7 @@ export const CONSTRAINT_TYPES = Object.freeze([
   'service-time',
   'competence-gap',
   'topology-mismatch',
+  'calendar-unknown',
   'unreviewable',
   'none',
 ]);
@@ -269,6 +270,7 @@ export const CONSTRAINT_TYPE_LABELS = Object.freeze({
   'service-time': 'Service time vs. interval (the clock cannot keep up)',
   'competence-gap': 'No competent forum for the input class',
   'topology-mismatch': 'Forum membership does not mirror the spans that own the work (Conway)',
+  'calendar-unknown': 'Sitting date or flow unknown',
   unreviewable: 'Inputs that are not yet reviewable at all',
   none: 'No binding constraint detected',
 });

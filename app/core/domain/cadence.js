@@ -162,14 +162,14 @@ export function nextSittingOn(forum, today = null) {
   // is not double-booked into today.
   const on = addDays(forum.lastHeldOn, interval);
   const slip = daysBetween(todayKey, on);
-  return {
-    on,
-    reason: null,
-    known: true,
-    daysAway: slip === null ? null : Math.max(0, slip),
-    /** Negative daysAway means the cadence is already overdue. */
-    overdueDays: slip === null ? 0 : Math.max(0, -slip),
-  };
+  if (slip === null) return { on: null, reason: 'the sitting date cannot be calculated', known: false, daysAway: null, overdueDays: null };
+  if (slip < 0) {
+    return {
+      on, known: false, daysAway: null, overdueDays: -slip,
+      reason: `the expected sitting is ${-slip} day(s) overdue; its next actual sitting is not known`,
+    };
+  }
+  return { on, reason: null, known: true, daysAway: slip, overdueDays: 0 };
 }
 
 /* ------------------------------------------------- 1. item classification */
@@ -601,7 +601,7 @@ export function buildCadenceClock(picture, { now = new Date() } = {}) {
      *                        certainly misses its horizon even in the best case.
      */
     const evaluated = ladder.map(({ row, rung }) => {
-      const wait = row.next.known ? (row.next.daysAway ?? 0) : null;
+      const wait = row.next.known && Number.isFinite(row.next.daysAway) ? row.next.daysAway : null;
       const declared = Number(row.forum.serviceDays) || 0;
       const measured = row.flow && row.flow.flowDays !== null ? Number(row.flow.flowDays) : null;
       const congested = row.demand.rho !== null && row.demand.rho >= 1;
@@ -647,16 +647,18 @@ export function buildCadenceClock(picture, { now = new Date() } = {}) {
       ? declaredUsable.reduce((a, b) => (b.declaredSlackDays > a.declaredSlackDays ? b : a))
       : null;
     const anyMeasuredFits = measuredUsable.some((r) => !r.breach);
-    const certainlyLate = bestDeclared ? bestDeclared.declaredSlackDays < 0 : false;
+    const certainlyLate = declaredUsable.length === evaluated.length && bestDeclared && bestDeclared.declaredSlackDays < 0;
+    const allMeasuredLate = measuredUsable.length === evaluated.length && measuredUsable.length > 0 && !anyMeasuredFits;
+    const unknownSitting = evaluated.some((r) => r.waitDays === null);
     const anyCongested = evaluated.some((r) => r.congested);
 
     const state = !horizon
       ? 'no-horizon'
       : !evaluated.length
         ? 'no-competent-forum'
-        : certainlyLate || (measuredUsable.length > 0 && !anyMeasuredFits)
+        : certainlyLate || allMeasuredLate
           ? 'escape-ladder'
-          : anyCongested && !anyMeasuredFits
+          : anyCongested && !anyMeasuredFits && !unknownSitting
             ? 'congested'
             : anyMeasuredFits
               ? 'on-clock'
@@ -668,19 +670,21 @@ export function buildCadenceClock(picture, { now = new Date() } = {}) {
         state,
         horizonDays: horizon,
         ageDays: age,
-        slackDays: best ? (best.slackDays !== null ? best.slackDays : best.declaredSlackDays) : null,
-        expectedCloseOn: best ? best.expectedCloseOn : null,
+        slackDays: state === 'unpredictable' ? null : (best ? (best.slackDays !== null ? best.slackDays : best.declaredSlackDays) : null),
+        expectedCloseOn: state === 'unpredictable' ? null : (best ? best.expectedCloseOn : null),
         bestForumId: best ? best.forumId : null,
         bestForumTitle: best ? best.title : null,
         forumPath: evaluated,
         reason: state === 'escape-ladder'
-          ? `closes ${Math.abs(bestDeclared ? bestDeclared.declaredSlackDays : 0)} day(s) AFTER its own ${horizon}-day horizon even at each competent forum's DECLARED service time, before any queueing delay`
+          ? (certainlyLate
+            ? `closes ${Math.abs(bestDeclared.declaredSlackDays)} day(s) AFTER its own ${horizon}-day horizon even at each competent forum's DECLARED service time, before any queueing delay`
+            : `all competent forums with measured flow miss the ${horizon}-day horizon`)
           : state === 'congested'
             ? 'every competent forum is congested (ρ ≥ 1): no landing date can be promised at all'
             : state === 'no-competent-forum'
               ? 'no active forum is competent for this class at the required horizon'
               : state === 'unpredictable'
-                ? 'no competent forum has ever sat, so no sitting date can be predicted'
+                ? 'a competent forum has no usable sitting date or flow estimate; the ladder cannot be decided'
                 : state === 'no-horizon'
                   ? 'the item class declares no horizon'
                   : null,
@@ -792,7 +796,7 @@ export function nameConstraint(picture, clock, conventions = CADENCE_DEFAULTS) {
       type: 'service-time',
       label: 'Service time vs. horizon',
       title: `${clock.counts.escape} item(s) escape the ladder`,
-      detail: `The worst class is “${worst.classLabel}”: ${worst.n} item(s), the earliest of which closes ${Math.abs(worst.worstSlackDays)} day(s) after its own horizon even in the fastest competent forum. The governance calendar, not the queue, is the binding constraint.`,
+      detail: `The worst class is “${worst.classLabel}”: ${worst.n} item(s), the worst misses its horizon by ${Math.abs(worst.worstSlackDays)} day(s) in the best evaluated forum. The governance calendar, not the queue, is the binding constraint.`,
       forumId: null,
       rho: null,
       itemN: clock.counts.escape,
@@ -827,6 +831,7 @@ export function nameConstraint(picture, clock, conventions = CADENCE_DEFAULTS) {
       remedy: 'Add the owning seat to the attendance list, or re-point the work at the seat that actually chairs it.',
     };
   }
+  if (clock.counts.unpredictable > 0) return unpredictableConstraint(clock);
   return {
     type: 'none',
     label: 'No binding constraint detected',
@@ -836,6 +841,16 @@ export function nameConstraint(picture, clock, conventions = CADENCE_DEFAULTS) {
     rho: null,
     itemN: 0,
     remedy: 'Keep recording sittings; the planning-factor estimate needs settled sittings before it can be trusted.',
+  };
+}
+
+function unpredictableConstraint(clock) {
+  return {
+    type: 'calendar-unknown', label: 'Sitting date or flow unknown',
+    title: `${clock.counts.unpredictable} item(s) have an unpredictable ladder`,
+    detail: 'A competent forum has no usable sitting date or flow estimate. Neither a safe landing nor an escape can be inferred for these items.',
+    forumId: null, rho: null, itemN: clock.counts.unpredictable,
+    remedy: 'Record the held sitting or restore the evidence needed for the flow estimate.',
   };
 }
 
@@ -964,7 +979,7 @@ export function secondaryConstraints(picture, clock, conventions = CADENCE_DEFAU
       type: 'service-time',
       label: 'Service time vs. horizon',
       title: `${clock.counts.escape} item(s) escape the ladder`,
-      detail: `Worst class “${worst.classLabel}”: ${worst.n} item(s), the earliest closing ${Math.abs(worst.worstSlackDays)} day(s) after its own horizon even before queueing delay.`,
+      detail: `Worst class “${worst.classLabel}”: ${worst.n} item(s), the worst missing its horizon by ${Math.abs(worst.worstSlackDays)} day(s) in the best evaluated forum.`,
       forumId: null,
       rho: null,
       itemN: clock.counts.escape,
@@ -1015,6 +1030,7 @@ export function secondaryConstraints(picture, clock, conventions = CADENCE_DEFAU
     });
   }
 
+  if (clock.counts.unpredictable > 0) add(unpredictableConstraint(clock));
   return out;
 }
 
@@ -1109,7 +1125,7 @@ export function buildCadenceReading(report, { now = new Date(), id = null, revie
   const dueOn = addDays(todayOf(now), Number(reviewDays) || Math.max(7, Number(focus?.intervalDays) || 14));
 
   let prediction = null;
-  if (focus && focus.demand.rho !== null) {
+  if (focus && focus.next.known && focus.demand.rho !== null) {
     // The claim is deliberately conservative: the forum keeps up (ρ stays < 1).
     const probability = focus.demand.rho >= 1 ? 0.25 : focus.demand.rho >= target ? 0.55 : 0.8;
     prediction = {
@@ -1239,7 +1255,7 @@ export function cadenceBriefText(report) {
   lines.push(`- Attributable to a competent forum: **${report.counts.attributable}**; unmatched: **${report.counts.unmatched}**.`);
   lines.push(`- Active forums: **${report.counts.activeForums}** of ${report.counts.forums} declared.`);
   lines.push(`- Workspace utilisation ρ: **${report.workspaceRho === null ? 'unmeasured' : report.workspaceRho}** — ${report.band.label}. ${report.band.verdict}`);
-  lines.push(`- Items that escape their own horizon through every competent forum: **${report.clock.counts.escape}**.`);
+  lines.push(`- Items that escape their own horizon through every competent forum: **${report.clock.counts.escape}**; unpredictable ladders: **${report.clock.counts.unpredictable}**.`);
   lines.push('');
   lines.push('## Binding constraint');
   lines.push('');
