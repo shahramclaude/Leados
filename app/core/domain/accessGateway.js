@@ -15,6 +15,14 @@ import { activeIdentitySession } from './identitySession.js';
 
 const groups = [
   ['log-oneonone', 'updatePerson logOneOnOne toggleMeetingAction addMeetingAction addFeedback updateFeedback completeFollowUp saveGrowthPlan updateGrowthPlan addWillAction toggleWillAction carryWillAction dropWillAction logGrowthReview addRecognition setReadiness createReview updateReflection updateAssessment refreshReviewEvidence completeReview reopenReview createOnboardingPlan updateOnboardingPlan addOnboardingCheckpoint toggleOnboardingCheckpoint removeOnboardingCheckpoint addOnboardingStakeholder toggleOnboardingStakeholder removeOnboardingStakeholder recordOnboardingReview addManagerSupportCommitment toggleManagerSupportCommitment completeOnboardingPlan reopenOnboardingPlan addPerformanceConcern updatePerformanceConcern addPerformanceObservation removePerformanceObservation recordPerformanceConversation recordPerformanceSupport adoptPerformancePlan reviewPerformancePlan withdrawPerformanceConcern deletePerformanceConcern'],
+  // ADR-0147: Matrix Multi-Line Review Stewardship. Asking a line and answering
+  // for a line are ordinary review work at the manager altitude (the same window
+  // as `createReview`/`completeReview`); the actions additionally enforce that the
+  // asking seat reaches the person and that the ANSWERING seat is the manager who
+  // holds the line, so a peer cannot answer for somebody else's line. The scan
+  // changes no declaration and is declared here so an operator can retry a cap.
+  ['ask-review-input', 'reviewStewardshipAsk reviewStewardshipRead reviewStewardshipCandidates'],
+  ['answer-review-input', 'reviewStewardshipAnswer reviewStewardshipScan'],
   ['log-conflict', 'addConflict updateConflict agreeConflict completeConflictAction followUpConflict resolveConflict escalateConflict reopenConflict'],
   ['open-case', 'addCase updateCase requestMitigationReview syncCaseAutomations resolveCase recordCaseActuals reopenCase deleteCase linkCaseEntity removeMissingCaseMitigation refreshCaseAutomation'],
   ['open-decision', 'addDecision updateDecision decideDecision reviewDecision withdrawBundleDecision addGoal updateGoal checkInGoal addKeyResult removeKeyResult'],
@@ -296,7 +304,14 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // under enforcement while its writes are still gated. The report is built under
 // the acting seat: a scoped seat compares only the lines it can reach, and the
 // charter rows it cannot reach are counted out rather than summed over a part.
-'contradictionReport', 'contradictionBriefText', 'contradictionCsvRows', 'contradictionCandidates']);
+'contradictionReport', 'contradictionBriefText', 'contradictionCsvRows', 'contradictionCandidates',
+// ADR-0147: the review-stewardship read surface. Registered for the same reason
+// as every module above — a read absent from SAFE_READS is unreadable under
+// enforcement while its writes are still gated, which would hide the outstanding
+// ask from exactly the line holder being asked. `reviewStewardshipRead` and
+// `reviewStewardshipCandidates` are declared commands (they are seat-checked
+// against the person), so only the three aggregate/packet reads live here.
+'reviewStewardshipBoard', 'reviewStewardshipBriefText', 'reviewStewardshipCsvRows']);
 const refusal = (reason) => ({ ok: false, code: 'scope-refusal', error: reason, field: 'scope' });
 
 /** ADR-0087: under enforcement, boundary-management commands stay reachable

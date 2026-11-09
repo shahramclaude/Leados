@@ -51,6 +51,19 @@ import { createPriorityArbitrationActions } from './core/domain/priorityArbitrat
 // reviewed gateway; every finding, severity and weight total is derived on read,
 // and only a RESEQUENCE ruling issues work (RULE-CNT-01).
 import { createContradictionActions } from './core/domain/contradictionActions.js';
+// ADR-0147: Matrix Multi-Line Review Stewardship. Asking a line and recording that
+// line's own answer are human commands through the same reviewed gateway; every
+// state, overdue flag and verdict is recomputed on read and RULE-SRV-01 fans the
+// outstanding ask in the same commit.
+import {
+  createReviewStewardshipActions,
+} from './core/domain/reviewStewardshipActions.js';
+import {
+  reviewStewardshipAttentionCount,
+  reviewStewardshipBoard,
+  reviewStewardshipBriefText,
+  reviewStewardshipCsvRows,
+} from './core/domain/reviewStewardship.js';
 // ADR-0122: the Dated Absence Plan. One read (the window plan), three human
 // commands (declare, revoke, scan); availability is derived from the declared
 // windows, never stored.
@@ -19845,6 +19858,31 @@ export function createApi(store, options = {}) {
   // computed on read and RULE-CNT-01 fans a resequence's obligation in the same
   // commit.
   Object.assign(api, createContradictionActions(store, { now: clock, idFactory: id }));
+  // ADR-0147: Matrix Multi-Line Review Stewardship. The three aggregate reads are
+  // attached here rather than in the action factory so the CSV export and the
+  // attendance badge read the SAME report the panel renders; the packet reads and
+  // the two writes are seat-checked inside the factory.
+  Object.assign(api, createReviewStewardshipActions(store, { now: clock, idFactory: id }));
+  // The three aggregate reads report `ok` and a printed reason like every other
+  // read adapter on this gateway, so a view can never render `undefined` as if it
+  // were an empty workspace.
+  const stewardshipOptions = (options = {}) => ({
+    now: options.now instanceof Date ? options.now : clock(),
+    settings: store.state.settings || {},
+  });
+  api.reviewStewardshipBoard = (options = {}) => ({
+    ok: true, ...reviewStewardshipBoard(store.state, stewardshipOptions(options)),
+  });
+  api.reviewStewardshipBriefText = (options = {}) => {
+    const board = reviewStewardshipBoard(store.state, stewardshipOptions(options));
+    return { ok: true, text: reviewStewardshipBriefText(store.state, stewardshipOptions(options)), board };
+  };
+  api.reviewStewardshipCsvRows = (options = {}) => ({
+    ok: true, rows: reviewStewardshipCsvRows(store.state, stewardshipOptions(options)),
+  });
+  api.reviewStewardshipAttentionCount = (options = {}) => ({
+    ok: true, count: reviewStewardshipAttentionCount(store.state, stewardshipOptions(options)),
+  });
   // ADR-0118: the only write is RECORD-ARBITRATION; the receipt, the governed
   // decision, the two `rehearses` edges and the vertical roll-up land in one
   // atomic transaction performed by this mixin plus RULE-CMP-01.

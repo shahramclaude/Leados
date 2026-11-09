@@ -103,6 +103,9 @@ import { seatRule } from './seatRules.js';
 import { matrixRule } from './matrixRules.js';
 import { priorityArbitrationRule } from './priorityArbitrationRules.js';
 import { contradictionRule } from './contradictionRules.js';
+// ADR-0147: Matrix Multi-Line Review Stewardship declares its contract like
+// every other rule on the spine.
+import { reviewStewardshipRule } from './reviewStewardshipRules.js';
 import { sealRule } from './sealRules.js';
 // ADR-0092: the Differencing Defender declares its contract like every other rule.
 import { differencingRule } from './differencingRules.js';
@@ -796,6 +799,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'contradictionRules.js',
     purpose: 'RULE-CNT-01: a recorded ruling on a cross-line contradiction becomes a governed record. Exactly ONE decision per ruling — the finding kind, its severity, the declared integers that produced it and the chief\u2019s own reasoning — and, ONLY when the verdict is a resequence, exactly one dated delegation to the single named line to revise its charter, plus typed provenance (`concerns`, `decides`, `issues-obligation`, `rolls-up-to` per leadership ancestor in the matrix DAG). It never fires on a declaration, never issues work for an acceptance or a withholding, never edits a charter, never rules on its own, refuses to act when the declarations have changed so the finding no longer reproduces (the ruling stands as history), and is idempotent through a per-review and a per-review-per-line marker plus exact-edge deduplication. Inert unless a ruling exists.',
     writes: ['contradictionMarkers', 'contradictionReviews', 'delegations', 'decisions', 'links'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: reviewStewardshipRule,
+    module: 'reviewStewardshipRules.js',
+    purpose: 'RULE-SRV-01: a COMPLETED review in a matrix is reconciled against the lines the person actually sat on. One owned, dated delegation per line the packet never consulted, addressed to the manager who holds that line, pointing at the review rather than copying its content; typed provenance only (`concerns` to every period line, `issues-obligation` from the review to the task, `rolls-up-to` per leadership ancestor in the matrix DAG). It never fires on a declaration, never issues work when the assessor is contested or undeclared (a task addressed to nobody could never close), never assesses anybody, never edits a rating, never marks a line answered, and is idempotent through a per-review-per-line marker plus exact-edge deduplication, bounded by a per-transaction cap whose remainder is counted and retried by an explicit scan. Inert in a single-chain workspace.',
+    writes: ['delegations', 'links', 'reviewStewardshipMarkers', 'reviews'],
     emits: [],
     scansWorkspace: true,
   },

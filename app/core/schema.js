@@ -32,6 +32,14 @@ import {
   normalizePriorityMarkers,
   normalizePrioritySettings,
 } from './domain/priorityArbitrationSchema.js';
+// ADR-0147 (Schema v122): Matrix Multi-Line Review Stewardship. It adds NO
+// collection: a request and an answer live on the review row they are about, so
+// they freeze with it at completion. Only the normalizer and two conventions are
+// new, and a malformed row is dropped with a printed warning rather than repaired.
+import {
+  normalizeReviewStewardship,
+  normalizeReviewStewardshipSettings,
+} from './domain/reviewStewardshipSchema.js';
 // ADR-0144 (Schema v121): the Cross-Line Contradiction Audit's fail-closed
 // normalizers. A charter with an unreadable lever is dropped rather than mapped
 // to a neighbouring one; a ruling that does not say who must act is dropped
@@ -609,7 +617,19 @@ export {
 // finding derived from it would be a contradiction nobody has. No finding, no
 // severity, no weight total and no queueing multiplier is ever stored — every
 // one is re-derived on read from these declarations plus the live matrix.
-export const SCHEMA_VERSION = 121;
+// v122 adds Matrix Multi-Line Review Stewardship (ADR-0147,
+// `#/reviews?panel=stewardship`): an EXISTING review row gains an optional
+// `stewardship: { requests: [], answers: [] }` — the dated asks a manager made of
+// another line, and the first-person answers (or reasoned declines) that line's
+// holder gave. It adds NO collection, no score and no rating: every line state,
+// overdue flag, assessor resolution and verdict is re-derived on read from these
+// acts plus the live `reportingLines` and the period. Deliberately EMPTY on
+// upgrade, and every existing review opens with `stewardship: { requests: [],
+// answers: [] }`: an ask back-filled at upgrade time would print as a promise
+// somebody made, and an answer back-filled at upgrade time would be words nobody
+// said. A single-chain workspace gains no second row, no warning and no change
+// to any existing review.
+export const SCHEMA_VERSION = 122;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -1974,6 +1994,11 @@ export const DEFAULT_SETTINGS = Object.freeze({
   // contradiction comes back on. All are clamped, printed and re-declarable only
   // by a rank-4+ full-access seat; none is fitted from the record.
   ...normalizeContradictionSettings({}),
+  // ADR-0147: the review-stewardship conventions — how many days a line holder
+  // has to answer an ask before it reads OVERDUE, and whether the stewardship
+  // panel opens on the board rather than the first packet. Both printed, both
+  // clamped, neither fitted from the record.
+  ...normalizeReviewStewardshipSettings({}),
 });
 
 export const COLLECTIONS = [
@@ -3230,6 +3255,11 @@ export function normalizeSettings(raw) {
     // on every load, and the printed convention would be a number the record
     // does not hold.
     ...normalizeContradictionSettings(s),
+    // ADR-0147: listed here because `normalizeSettings` rebuilds the settings
+    // object field by field — a key spread into DEFAULT_SETTINGS but not named
+    // here would be silently DROPPED on every load, and the printed answer window
+    // would be a number the record does not hold.
+    ...normalizeReviewStewardshipSettings(s),
     ...normalizeAgendaSettings(s),
     chainAdoptedHorizons: normalizeAdoptedHorizons(s.chainAdoptedHorizons, DECLARED_HORIZONS),
     chainAdoptedOn: /^\d{4}-\d{2}-\d{2}$/.test(String(s.chainAdoptedOn || '')) ? s.chainAdoptedOn : null,
@@ -7072,6 +7102,11 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
         rating: REVIEW_RATINGS.includes(review.manager?.rating) ? review.manager.rating : '',
       },
       evidence: normalizeReviewEvidence(review.evidence),
+      // ADR-0147 (Schema v122): the matrix's asks and answers about THIS review.
+      // Stored on the review so they freeze with it at completion. A malformed
+      // ask or answer is dropped with a printed warning, never repaired: an
+      // answer invented at load time would be words nobody said.
+      stewardship: normalizeReviewStewardship(review.stewardship, warnings),
       // Schema v77: append-only instrument notes (RULE-REL-03). A note about the
       // rating, never a change to it — the rating itself is untouched above.
       instrumentNotes: Array.isArray(review.instrumentNotes)
@@ -8571,6 +8606,27 @@ export const MIGRATIONS = {
     contradictionMarkers: Array.isArray(v120.contradictionMarkers) ? v120.contradictionMarkers : [],
     settings: isPlainObject(v120.settings)
       ? { ...v120.settings, ...normalizeContradictionSettings(v120.settings) }
+      : { ...DEFAULT_SETTINGS },
+  }),
+  // ADR-0147: additive 121 → 122. No collection is added and nothing is
+  // back-filled. Every EXISTING review gains an empty `stewardship`
+  // {requests, answers} so the read model can distinguish "nobody asked this
+  // line" from "this review predates the question" — and the honest reading of an
+  // upgraded workspace is the former, because no human has asked anybody yet. A
+  // request invented at upgrade time would print as a promise somebody made; an
+  // answer invented at upgrade time would be words nobody said. The two new
+  // conventions are clamped in so the printed answer window exists before anyone
+  // re-declares it.
+  121: (v121) => ({
+    ...v121,
+    schemaVersion: 122,
+    reviews: Array.isArray(v121.reviews)
+      ? v121.reviews.map((review) => (isPlainObject(review)
+          ? { ...review, stewardship: normalizeReviewStewardship(review.stewardship, []) }
+          : review))
+      : [],
+    settings: isPlainObject(v121.settings)
+      ? { ...v121.settings, ...normalizeReviewStewardshipSettings(v121.settings) }
       : { ...DEFAULT_SETTINGS },
   }),
   // ADR-0113: additive 111 → 112. An existing workspace is full of prompts it

@@ -478,6 +478,12 @@ export const ACTION_RIGHTS = Object.freeze({
   'log-feedback': { minRank: 1, maxRank: 2, label: 'Give feedback' },
   'log-conflict': { minRank: 1, maxRank: 2, label: 'Log a conflict' },
   'record-review': { minRank: 1, maxRank: 2, label: 'Record a review' },
+  // ADR-0147: asking a line for its input is review work at the manager altitude;
+  // the action additionally requires the seat to reach the person being reviewed.
+  // Answering is the LINE HOLDER's own act and is enforced in the action to that
+  // manager, so it is open at every rank here rather than narrowed twice.
+  'ask-review-input': { minRank: 1, maxRank: 2, label: 'Ask a reporting line for review input' },
+  'answer-review-input': { minRank: 1, maxRank: 5, label: 'Answer a review-input ask for your own line' },
   'delegate': { minRank: 1, maxRank: 5, label: 'Delegate work' },
   'offer-authority': { minRank: 1, maxRank: 5, label: 'Offer bounded authority' },
   'accept-authority': { minRank: 1, maxRank: 5, label: 'Accept bounded authority' },
