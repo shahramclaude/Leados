@@ -67,6 +67,11 @@ import {
   normalizeOnboardingMatrixSettings,
 } from './domain/onboardingMatrixSchema.js';
 import {
+  normalizeLineExitMarkers,
+  normalizeLineExitRemedies,
+  normalizeLineExitSettings,
+} from './domain/lineExitSchema.js';
+import {
   normalizeLineMandates,
   normalizeContradictionReviews,
   normalizeContradictionMarkers,
@@ -665,7 +670,7 @@ export {
 // hours nobody told them about. Every state, lapse, day count, verdict and total
 // is DERIVED on read from these acts plus the live matrix, so no printed figure
 // can drift from the record that produced it.
-export const SCHEMA_VERSION = 126;
+export const SCHEMA_VERSION = 127;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -2055,6 +2060,10 @@ export const DEFAULT_SETTINGS = Object.freeze({
   // a substantive one triggers a calibration prompt, and the signal steps that
   // count as divergence. All three printed, all three clamped, none fitted.
   ...normalizeAssessmentReconciliationSettings({}),
+  // ADR-0152: the line-exit convention — how many days the manager of an ended
+  // line has to settle the obligations it left open. Printed, clamped, never
+  // fitted from the record.
+  ...normalizeLineExitSettings({}),
 });
 
 export const COLLECTIONS = [
@@ -2650,6 +2659,23 @@ export const COLLECTIONS = [
   // workspace, and a brief invented at upgrade time would be words nobody said.
   'onboardingLineBriefs',
   'onboardingLineBriefMarkers',
+  // ADR-0152 (Schema v127): the Matrix Line-Exit Obligation Register.
+  // `lineExitRemedies` holds ONLY one dated human act per open obligation a
+  // DATED-OUT line left behind — which ask, whose line, which person, whether
+  // the leader RETIRED it (nothing was owed, with a reason) or CARRIED it to a
+  // named manager who holds a live line today, and the day it was decided.
+  // `lineExitMarkers` is RULE-LEX-01's idempotency ledger.
+  // NOTHING DERIVED IS STORED and no obligation is copied here: every
+  // obligation, state, window verdict, day count and total is re-derived on read
+  // from the asks the workspace already holds plus the dated declarations, so a
+  // printed obligation cannot outlive the record that produced it. An ask that
+  // was ANSWERED after a remedy was recorded therefore stops being an
+  // obligation on its own, and the remedy stays readable as history.
+  // Deliberately EMPTY on upgrade: no ended line in an existing workspace has
+  // been adjudicated, and the honest reading is "every open obligation of every
+  // ended line is still open" — which is exactly what the panel prints.
+  'lineExitRemedies',
+  'lineExitMarkers',
 
 ];
 
@@ -3375,6 +3401,11 @@ export function normalizeSettings(raw) {
     // here would be silently DROPPED on every load, and the printed
     // reconciliation windows would be numbers the record does not hold.
     ...normalizeAssessmentReconciliationSettings(s),
+    // ADR-0152: listed here because `normalizeSettings` rebuilds the settings
+    // object field by field — a key spread into DEFAULT_SETTINGS but not named
+    // here would be silently DROPPED on every load, and the printed settlement
+    // window would be a number the record does not hold.
+    ...normalizeLineExitSettings(s),
     ...normalizeAgendaSettings(s),
     chainAdoptedHorizons: normalizeAdoptedHorizons(s.chainAdoptedHorizons, DECLARED_HORIZONS),
     chainAdoptedOn: /^\d{4}-\d{2}-\d{2}$/.test(String(s.chainAdoptedOn || '')) ? s.chainAdoptedOn : null,
@@ -7816,6 +7847,14 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // were not.
   state.onboardingLineBriefs = normalizeOnboardingLineBriefs(raw.onboardingLineBriefs, warnings);
   state.onboardingLineBriefMarkers = normalizeOnboardingLineBriefMarkers(raw.onboardingLineBriefMarkers, warnings);
+  // ADR-0152: a remedy must name the obligation, the line, the person, the
+  // manager, the outcome and the day, must state WHY, and a carry must name the
+  // manager who now owes the work; one that does not is DROPPED with a printed
+  // warning, never repaired. A retirement invented at load time would close an
+  // obligation nobody settled, and a carry invented at load time would hand work
+  // to a manager who never took it.
+  state.lineExitRemedies = normalizeLineExitRemedies(raw.lineExitRemedies, warnings);
+  state.lineExitMarkers = normalizeLineExitMarkers(raw.lineExitMarkers);
   // ADR-0122: a malformed absence row is dropped with a warning, never repaired —
   // an invented absence is an invented unavailability for every cover in the span.
   // Resolved BEFORE links so the `declares-absence-of` provenance edge validates
@@ -8771,6 +8810,23 @@ export const MIGRATIONS = {
   // the record claim a comparison that never happened. The three new
   // conventions are clamped in so the printed floor exists before anyone
   // re-declares it.
+  // ADR-0152: additive 126 → 127. No collection is added to an existing
+  // workspace's obligations and none is re-pointed. The remedy ledger starts
+  // EMPTY, which reads as "no ended line has been adjudicated yet" — the honest
+  // state of a workspace that upgraded: an obligation retired at upgrade time
+  // would be a promise closed by a migration, and a carry back-filled at upgrade
+  // time would be work handed to a manager who never took it. The one new
+  // convention is clamped in so the printed settlement window exists before
+  // anyone re-declares it.
+  126: (v126) => ({
+    ...v126,
+    schemaVersion: 127,
+    lineExitRemedies: Array.isArray(v126.lineExitRemedies) ? v126.lineExitRemedies : [],
+    lineExitMarkers: Array.isArray(v126.lineExitMarkers) ? v126.lineExitMarkers : [],
+    settings: isPlainObject(v126.settings)
+      ? { ...v126.settings, ...normalizeLineExitSettings(v126.settings) }
+      : { ...DEFAULT_SETTINGS },
+  }),
   125: (v125) => ({
     ...v125,
     schemaVersion: 126,

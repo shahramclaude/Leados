@@ -109,6 +109,7 @@ import { reviewStewardshipRule } from './reviewStewardshipRules.js';
 import { lineConsentRule } from './lineConsentRules.js';
 import { structureHistoryRule } from './structureHistoryRules.js';
 import { onboardingMatrixRule } from './onboardingMatrixRules.js';
+import { lineExitRule } from './lineExitRules.js';
 import { sealRule } from './sealRules.js';
 // ADR-0092: the Differencing Defender declares its contract like every other rule.
 import { differencingRule } from './differencingRules.js';
@@ -834,6 +835,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'onboardingMatrixRules.js',
     purpose: 'RULE-ONB-01: onboarding a person into a matrix is reconciled against the lines they actually landed on. One owned, dated delegation per line that has written no brief, addressed to the manager who HOLDS that line, naming the person, the window and a due date that is the plan\u2019s own deadline when it is still ahead and a fresh window when it has passed; plus one dated acknowledgement ask to the PERSON for every brief that stands unacknowledged \u2014 because an expectation set by one party is not an agreement between two. Typed provenance only (`concerns` from the person to each line\u2019s manager, `issues-obligation` from the person to the task, `rolls-up-to` per leadership ancestor in the matrix DAG). It fires on a created or updated plan, on a declared second line and on an explicit scan \u2014 never on a read and never on an acknowledgement. It issues NOTHING for two concurrent plans (which plan owns the onboarding is a declaration only a leader can settle) and NOTHING for a presumed home line (a presumption is printed, not chased); it never writes a brief, never acknowledges one, never invents a plan and never rates the person. Idempotent through a per-obligation marker (keyed on the BRIEF for acknowledgements, so a re-brief re-asks), bounded by a per-transaction cap whose remainder is counted and retried, and inert in a single-chain workspace.',
     writes: ['delegations', 'links', 'onboardingLineBriefMarkers'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: lineExitRule,
+    module: 'lineExitRules.js',
+    purpose: 'RULE-LEX-01: a reporting line that has been DATED OUT is reconciled against the obligations it left open. For every ended line that still carries an open obligation (an unacknowledged line onboarding brief, an unanswered review input ask), ONE owned, dated settlement ask is issued to the manager who HELD that line, naming the obligations, the day the line ended and the declared settlement window. Typed provenance only (`concerns` from the person to the manager, `issues-obligation` from the person to the task, `rolls-up-to` per leadership ancestor in the matrix DAG). It fires on a line being dated out, on a completed review and on an explicit scan — never on a read. It issues NOTHING for a line key that resolves to no declaration (a task addressed to nobody could never close) and NOTHING for a manager no longer on the roster (an invented heir is the reassignment the module refuses); it never retires an obligation, never carries one, never edits an ask and never rates a person. Idempotent through a marker keyed on the LINE plus the exact open-obligation set, so a settled obligation is not re-chased and a newly opened one on the same line is; bounded by a per-transaction cap whose remainder is counted and retried, and inert in a single-chain workspace.',
+    writes: ['delegations', 'links', 'lineExitMarkers'],
     emits: [],
     scansWorkspace: true,
   },
