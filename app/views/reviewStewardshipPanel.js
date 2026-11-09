@@ -36,6 +36,9 @@ import {
   REVIEW_STEWARDSHIP_VERDICTS,
 } from '../core/domain/reviewStewardshipRegistry.js';
 import { REVIEW_STEWARDSHIP_CSV_COLUMNS } from '../core/domain/reviewStewardship.js';
+import {
+  ASSESSMENT_RECONCILIATION_VERDICTS,
+} from '../core/domain/assessmentReconciliationRegistry.js';
 import { openStewardshipAskDialog, openStewardshipAnswerDialog } from '../ui/review-stewardship-modals.js';
 
 export const STEWARDSHIP_PANELS = Object.freeze([
@@ -213,6 +216,14 @@ function packetPanel(ctx, board, reviewId) {
       }),
     });
   }
+  // The substance reconciliation is the director/VP calibration layer over the
+  // stewardship ask/answer state. It is derived from the SAME stored answers
+  // the packet already renders, so displaying it cannot drift from them.
+  let reconciliation = null;
+  try {
+    const raw = ctx.api.buildAssessmentReconciliation(report.reviewId);
+    if (raw?.ok && raw.reconciliation) reconciliation = raw.reconciliation;
+  } catch { /* a broken API returns no reconciliation; the packet still renders */ }
 
   const canAsk = (line) => line.inPeriod && !line.answer && (!line.request || line.request.overdue);
   const linesColumns = [
@@ -297,6 +308,13 @@ function packetPanel(ctx, board, reviewId) {
       title: report.verdictLabel,
       body: report.verdictDetail,
     }),
+    reconciliation
+      ? banner({
+          tone: reconciliation.verdictTone === 'good' ? 'info' : reconciliation.verdictTone === 'bad' ? 'bad' : 'caution',
+          title: `Calibration: ${reconciliation.verdictLabel}`,
+          body: `${reconciliation.verdictDetail}${reconciliation.maxSignalGap !== null ? ` The declared signals on this packet span ${reconciliation.maxSignalGap} step(s) — ${reconciliation.answeredLines.map((l) => `${l.managerName}: ${l.signal || 'no signal'} (${l.chars} chars)`).join(' · ')}.` : ''}${reconciliation.thinN ? ` ${reconciliation.thinN} line(s) wrote < ${reconciliation.conventions.assessmentReconciliationThinChars} chars while another answered line on the same packet wrote well above it.` : ''}`,
+        })
+      : null,
     h(
       'div',
       { class: 'stat-row' },
@@ -311,6 +329,28 @@ function packetPanel(ctx, board, reviewId) {
       subtitle: 'A row is a reporting line, never a fragment of the person. The home line is the roster’s own pointer; a second line is a dated human declaration.',
       body: table({ columns: linesColumns, rows: report.lines }),
     }),
+    reconciliation && reconciliation.lines.length
+      ? card({
+          title: 'Did the lines agree? The substance reconciliation',
+          subtitle: 'The ONLY comparison the product makes is of declared coarse signals and of text length. Two paragraphs are never auto-compared for sentiment — a sentence beside a paragraph is flagged as thin, not as uncaring; a declared \"needs support\" against a declared \"strong\" is flagged as divergent, not as a ranking of the line.',
+          body: h('div', { class: 'stack' },
+            table({
+              columns: [
+                { label: 'Line', render: (row) => h('div', { class: 'stack-sm' }, h('strong', null, row.managerName), h('span', { class: 'muted tiny' }, `${row.role === 'primary' ? 'Home' : 'Second'} · ${row.kind || '—'}`)) },
+                { label: 'State', render: (row) => toneBadge(row.lineStateLabel || row.lineState, row.lineState === 'answered' ? 'good' : row.lineState === 'declined' ? 'neutral' : 'warn') },
+                { label: 'Declared signal', render: (row) => row.signal ? h('div', { class: 'stack-sm' }, badge(row.signal, 'neutral'), h('span', { class: 'muted tiny' }, `rank ${row.signalRank}`)) : h('span', { class: 'muted tiny' }, 'No signal — prose only') },
+                { label: 'Length', render: (row) => h('div', { class: 'stack-sm' }, h('span', { class: row.thin ? 'text-bad' : '' }, `${row.chars} chars`), row.thin ? badge('Thin', 'bad') : null) },
+                { label: 'Words', render: (row) => h('span', { class: 'small' }, row.text ? row.text.slice(0, 180) + (row.text.length > 180 ? '…' : '') : row.reason ? `Declined: ${row.reason}` : '—') },
+              ],
+              rows: reconciliation.lines,
+            }),
+            reconciliation.refusals.length
+              ? h('ul', { class: 'calibration-list' }, ...reconciliation.refusals.map((refusal) => h('li', { class: 'calibration-item' }, h('div', null, badge(refusal.kind, 'caution'), h('p', { class: 'small' }, refusal.detail)))))
+              : null,
+            h('p', { class: 'muted tiny' }, `Conventions: thin < ${reconciliation.conventions.assessmentReconciliationThinChars} chars while another line ratio ≥ ${reconciliation.conventions.assessmentReconciliationThinRatio}× · divergence when declared signals differ by ≥ ${reconciliation.conventions.assessmentReconciliationDivergentSteps} steps · divergence ONLY from declared signals, never from prose.`),
+          ),
+        })
+      : null,
     card({
       title: 'What this packet will not tell you',
       subtitle: 'Printed because the alternative is a number that looks like evidence and is not.',

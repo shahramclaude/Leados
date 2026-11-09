@@ -107,6 +107,19 @@ export function openStewardshipAnswerDialog(ctx, { reviewId, line }) {
       help: `Required when you have something to add (at least a sentence, up to ${REVIEW_STEWARDSHIP_LIMITS.answerChars} characters). Name outcomes and behaviours with their impact — "owned the incident review on 12 Aug and the postmortem changed our on-call policy" beats "good teammate".`,
     },
     {
+      name: 'signal',
+      label: 'How does this line see the period, on the shared scale? (optional)',
+      type: 'select',
+      options: [
+        { value: '', label: 'No signal — prose only; the calibration lens will read “unrated”' },
+        { value: 'needs-support', label: 'Needs support' },
+        { value: 'as-expected', label: 'As expected' },
+        { value: 'strong', label: 'Strong' },
+        { value: 'exceptional', label: 'Exceptional' },
+      ],
+      help: 'The ONLY field the reconciliation compares for divergence, because it is a declared human judgement on a shared scale. Two paragraphs are never auto-compared. Leave blank if the prose is the whole answer — it will still count as answered, and the packet will read “unrated-pair” rather than inventing a signal from the prose.',
+    },
+    {
       name: 'reason',
       label: 'If there is nothing to add, say why',
       type: 'text',

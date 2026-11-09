@@ -84,6 +84,19 @@ import {
   structureHistoryBriefText,
   structureHistoryCsvRows,
 } from './core/domain/structureHistory.js';
+// ADR-0151: Cross-line Assessment Reconciliation. No new storage: the coarse
+// signal is an optional field on the existing stewardship answer; the
+// reconciliation of that signal (and of thin inputs) is derived on every
+// read and the board/brief/CSV are pure roll-ups of it. The review answer
+// command is the same one as ADR-0147 — a signal declared at answer time
+// freezes with that answer or is absent, and is never invented afterwards.
+import {
+  assessmentReconciliationAttentionCount,
+  assessmentReconciliationBoard,
+  assessmentReconciliationBriefText,
+  assessmentReconciliationCsvRows,
+  buildAssessmentReconciliation,
+} from './core/domain/assessmentReconciliation.js';
 // ADR-0150: Matrix Onboarding Completeness. One bounded read model over the
 // EXISTING 30-60-90 machinery, three dated human commands (a line's brief, a
 // line's decline and the PERSON's acknowledgement) and one scan; every state,
@@ -19914,6 +19927,33 @@ export function createApi(store, options = {}) {
   api.reviewStewardshipAttentionCount = (options = {}) => ({
     ok: true, count: reviewStewardshipAttentionCount(store.state, stewardshipOptions(options)),
   });
+  // ADR-0151: Cross-line Assessment Reconciliation. The read model lives on
+  // the EXISTING stewardship data; the signal is the only optional new field
+  // on an answer, and it is counted as `unrated` rather than as a zero. The
+  // board/brief/CSV are attached here so the panel, the export and the badge
+  // read the SAME reconciled packet, and a view can never render `undefined`.
+  const assessmentReconciliationOptions = (options = {}) => ({
+    now: options.now instanceof Date ? options.now : clock(),
+    settings: store.state.settings || {},
+  });
+  api.assessmentReconciliationBoard = (options = {}) => ({
+    ok: true, ...assessmentReconciliationBoard(store.state, assessmentReconciliationOptions(options)),
+  });
+  api.assessmentReconciliationBriefText = (options = {}) => {
+    const board = assessmentReconciliationBoard(store.state, assessmentReconciliationOptions(options));
+    return { ok: true, text: assessmentReconciliationBriefText(store.state, assessmentReconciliationOptions(options)), board };
+  };
+  api.assessmentReconciliationCsvRows = (options = {}) => ({
+    ok: true, rows: assessmentReconciliationCsvRows(store.state, assessmentReconciliationOptions(options)),
+  });
+  api.assessmentReconciliationAttentionCount = (options = {}) => ({
+    ok: true, count: assessmentReconciliationAttentionCount(store.state, assessmentReconciliationOptions(options)),
+  });
+  api.buildAssessmentReconciliation = (reviewId, options = {}) => {
+    const review = (Array.isArray(store.state.reviews) ? store.state.reviews : []).find((r) => r && r.id === String(reviewId || '')) || null;
+    if (!review) return { ok: false, error: 'That review no longer exists.' };
+    return { ok: true, reconciliation: buildAssessmentReconciliation(store.state, review, assessmentReconciliationOptions(options)) };
+  };
   // ADR-0150: Matrix Onboarding Completeness. The three writes and the seat-scoped
   // reads are in the factory; the aggregate reads are attached here so the CSV
   // export, the attention badge and the panel read the SAME report, and so a view

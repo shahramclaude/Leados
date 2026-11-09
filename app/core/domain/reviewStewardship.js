@@ -330,6 +330,7 @@ export function buildReviewStewardship(state, review, { now = new Date(), settin
             answeredByManagerId: answer.lineManagerId || line.managerId,
             text: answer.text || '',
             reason: answer.reason || '',
+            signal: answer.signal || null,
             late: answeredLate,
           }
         : null,

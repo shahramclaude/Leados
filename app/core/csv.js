@@ -90,6 +90,10 @@ import { LINE_CONSENT_CSV_COLUMNS } from './domain/lineConsentRegistry.js';
 import { buildStructureHistoryReport, structureHistoryCsvRows } from './domain/structureHistory.js';
 import { onboardingMatrixCsvRows, ONBOARDING_MATRIX_CSV_COLUMNS } from './domain/onboardingMatrix.js';
 import { STRUCTURE_HISTORY_CSV_COLUMNS } from './domain/structureHistoryRegistry.js';
+import {
+  assessmentReconciliationCsvRows,
+  ASSESSMENT_RECONCILIATION_CSV_COLUMNS,
+} from './domain/assessmentReconciliation.js';
 // ADR-0145: the Matrix Decision-Right Execution Concordance export (CSV scope
 // #108). Aggregate-only and identity-free: one workspace row carrying every
 // count the panel prints, one row per finding kind — no person, no name, no
@@ -1112,6 +1116,7 @@ export const CSV_EXPORTS = [
   // measured in characters and never exported, and no person or manager identity
   // appears in any cell.
   { key: 'onboarding-matrix', label: 'Matrix onboarding completeness (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'onboarding-matrix', description: 'One row per onboarding case × reporting line for every case where the person sat on more than one reporting line during their onboarding window. Each row carries the plan state and kind, the window dates, the derived verdict, the duplicate-plan count, whether the case reads as CROSS-LINE complete (a separate claim from the plan\u2019s own completion), the line role and kind, whether the line was in force inside the window (and the printed exclusion reason when it was not), the derived line state (acknowledged / briefed / acknowledgement-overdue / declined / unbriefed / awaiting-brief / presumed / excluded), the brief due date, whether it is late and by how many days, the date the brief was declared, its outcome, the CHAracter counts of its scope and first work, how many stakeholders it names, how many earlier briefs it superseded, the acknowledgement due date, whether it was acknowledged and when, and the reason length of a decline. NO person, NO name, NO manager id, NO brief text, NO stakeholder name and NO plan label. A figure that does not exist (no brief, no acknowledgement, no decline) is BLANK, never a zero, and nothing derived is stored: every state and count is recomputed from the dated brief rows on read.' },
+  { key: 'assessment-reconciliation', label: 'Cross-line assessment reconciliation (per line)', group: 'operational', sensitive: false, filenameSlug: 'assessment-reconciliation', description: 'One row per review × reporting line for every review that covers a person who sat on more than one reporting line during the period. Each row carries the review period, the line role and kind, the manager NAME, the derived line state, the first-person answer text or the stated decline reason, the OPTIONAL coarse signal the holder declared (needs-support / as-expected / strong / exceptional) and its rank, the character count and whether the line is thin, and the packet-level reconciliation verdict (incomplete / single-answer / unrated-pair / thin-input / divergent / aligned). NO inference from prose: a line that left its signal blank exports BLANK signal, never a zero signal, and divergence is only computed from declared signals, never from free text. Like #109, no per-line contribution share is exported.' },
   { key: 'review-stewardship', label: 'Matrix review stewardship (per line)', group: 'operational', sensitive: false, filenameSlug: 'review-stewardship', description: 'One row per review × reporting line for every review that covers a person who sat on a second line during the period. Each row carries the line role and kind, the manager NAME, whether the line was in force inside the period (and the printed exclusion reason when it was not), whether that line held the performance-assessment right and whether that right was presumed rather than declared, the derived line state (answered / declined / asked / overdue / unasked), the ask date, due date, overdue flag and whole overdue days, the first-person answer text or the stated decline reason, and whether the answer arrived late. NO per-line contribution share is exported because none is computable: feedback, recognition, 1:1 notes and delegations record who the evidence is about, never which line produced it, and `line_attributable` says so on every row. A line nobody asked exports `unasked` with a BLANK answer, never a zero contribution.' },
   RIGHTS_CONCORDANCE_CSV_DESCRIPTOR,
   { key: 'priority-arbitration', label: 'Cross-line priority arbitration (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'priority-arbitration', description: 'One workspace summary row, one row per live arbitration case (derived state, frozen demand count, line count, disposition counts, the exact-integer verdict and its refusal when a score set is incomplete, the arbiter tie state, the agreed window and review date, dissent count, issued obligation count and the declared capacity claim), and one row per frozen demand carrying ONLY the two declared integers, the chain days and the integer rank. NO person, NO name, NO demand title, NO case id, NO seat id and NO rationale text. A demand missing its cost of delay or job size exports its rank BLANK with the refusal in `withheld_reason`, never a zero. `ranked` and `reconciles` are separate claims: an order can be absent while the counts still add up, and the export says which.' },
@@ -6202,6 +6207,19 @@ export function buildScopeTable(state, scope, now) {
       // never a zero-length claim that a line said nothing in particular.
       const rows = onboardingMatrixCsvRows(state, { now, settings: state.settings || {} });
       const columns = ONBOARDING_MATRIX_CSV_COLUMNS.map((key) => ({ key, header: key }));
+      return { columns, rows };
+    }
+    case 'assessment-reconciliation': {
+      // CSV scope #113 (Schema v126, ADR-0151). Built from the same read model the
+      // packet renders, so the exported state of a line is provably the state that
+      // was printed. Per-line, like #109: one row per review × line, with the
+      // stored text and the OPTIONAL declared signal only — no span id and no name
+      // beyond what #109 already carries. A derived verdict is printed per packet
+      // but one packet whose lines diverge is one divergent packet on the board,
+      // even though its lines are rendered as two rows. An answer that left its
+      // signal blank exports BLANK, never a zero signal.
+      const rows = assessmentReconciliationCsvRows(state, { now, settings: state.settings || {} });
+      const columns = ASSESSMENT_RECONCILIATION_CSV_COLUMNS.map((key) => ({ key, header: key }));
       return { columns, rows };
     }
     case 'structure-history': {

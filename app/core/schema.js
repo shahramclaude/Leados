@@ -54,6 +54,9 @@ import {
 // to a neighbouring one; a ruling that does not say who must act is dropped
 // rather than reconstructed. Nothing derived is stored.
 import {
+  normalizeAssessmentReconciliationSettings,
+} from './domain/assessmentReconciliationSchema.js';
+import {
   normalizeStructureHistory,
   normalizeStructureHistoryMarkers,
   normalizeStructureHistorySettings,
@@ -662,7 +665,7 @@ export {
 // hours nobody told them about. Every state, lapse, day count, verdict and total
 // is DERIVED on read from these acts plus the live matrix, so no printed figure
 // can drift from the record that produced it.
-export const SCHEMA_VERSION = 125;
+export const SCHEMA_VERSION = 126;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -2047,6 +2050,11 @@ export const DEFAULT_SETTINGS = Object.freeze({
   // unacknowledged by the person before it reads overdue. Both printed, both
   // clamped, neither fitted from the record.
   ...normalizeOnboardingMatrixSettings({}),
+  // ADR-0151: the assessment-reconciliation conventions — the character floor
+  // below which an answer reads thin, the ratio above which a thin line beside
+  // a substantive one triggers a calibration prompt, and the signal steps that
+  // count as divergence. All three printed, all three clamped, none fitted.
+  ...normalizeAssessmentReconciliationSettings({}),
 });
 
 export const COLLECTIONS = [
@@ -3362,6 +3370,11 @@ export function normalizeSettings(raw) {
     // here would be silently DROPPED on every load, and the printed onboarding
     // windows would be numbers the record does not hold.
     ...normalizeOnboardingMatrixSettings(s),
+    // ADR-0151: listed here because `normalizeSettings` rebuilds the settings
+    // object field by field — a key spread into DEFAULT_SETTINGS but not named
+    // here would be silently DROPPED on every load, and the printed
+    // reconciliation windows would be numbers the record does not hold.
+    ...normalizeAssessmentReconciliationSettings(s),
     ...normalizeAgendaSettings(s),
     chainAdoptedHorizons: normalizeAdoptedHorizons(s.chainAdoptedHorizons, DECLARED_HORIZONS),
     chainAdoptedOn: /^\d{4}-\d{2}-\d{2}$/.test(String(s.chainAdoptedOn || '')) ? s.chainAdoptedOn : null,
@@ -8750,6 +8763,26 @@ export const MIGRATIONS = {
   // acknowledgement and no expiry is invented: consent back-filled at upgrade
   // time would be an agreement nobody made, and an acknowledgement back-filled
   // at upgrade time would be a person recorded as told when they were not.
+  // ADR-0151: additive 125 → 126. No collection is added and no answer is
+  // re-rated. Existing reviews whose lines already answered gain no signal —
+  // they read `unrated-pair` rather than a false divergence, because a signal
+  // back-filled at upgrade time would be a coarse judgement the line holder
+  // never made, and re-rating a packet that was signed without it would make
+  // the record claim a comparison that never happened. The three new
+  // conventions are clamped in so the printed floor exists before anyone
+  // re-declares it.
+  125: (v125) => ({
+    ...v125,
+    schemaVersion: 126,
+    reviews: Array.isArray(v125.reviews)
+      ? v125.reviews.map((review) => (isPlainObject(review)
+          ? { ...review, stewardship: normalizeReviewStewardship(review.stewardship, []) }
+          : review))
+      : [],
+    settings: isPlainObject(v125.settings)
+      ? { ...v125.settings, ...normalizeAssessmentReconciliationSettings(v125.settings) }
+      : { ...DEFAULT_SETTINGS },
+  }),
   // ADR-0150: additive 124 → 125. An existing workspace has plans and declared
   // lines but no line brief of any kind, so the ledger starts EMPTY — "no line has
   // written its onboarding brief yet", which is a different claim from "every line
