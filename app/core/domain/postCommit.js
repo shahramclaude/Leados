@@ -138,6 +138,7 @@ import { reviewStewardshipRule } from './reviewStewardshipRules.js';
 import { lineConsentRule } from './lineConsentRules.js';
 import { structureHistoryRule } from './structureHistoryRules.js';
 import { onboardingMatrixRule } from './onboardingMatrixRules.js';
+import { lineExitRule } from './lineExitRules.js';
 
 
 // ADR-0087: the Operating Cadence Clock. Reads the finished queue after the
@@ -829,6 +830,15 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // brief, acknowledges one, invents a plan or rates the person, and it is bounded
   // by a per-transaction cap whose remainder is counted and retried by a scan.
   onboardingMatrixRule,
+  // ADR-0152: the Matrix Line-Exit Obligation Register (RULE-LEX-01). A line being
+  // DATED OUT, a COMPLETED review (which can itself leave an input ask open on a
+  // line that already ended) or an explicit scan makes it run; a read never does.
+  // For every ended line that still carries open obligations it issues ONE dated
+  // settlement ask to the manager who held that line. It never retires anything,
+  // never carries anything, never edits an ask and never invents an heir for a
+  // manager who has left the roster. It runs before the Operating Seat so the
+  // obligation it opens rolls up the hierarchy in the SAME transaction.
+  lineExitRule,
   // ADR-0076: the Operating Seat (vertical roll-up + enforced boundaries).
   // It reads the finished record after every module has propagated, then fans
   // each open item up every leadership ancestor in the reporting tree with one

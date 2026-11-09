@@ -63,6 +63,11 @@ const groups = [
   // person (or the operator view). Neither can answer for the other.
   ['accept-matrix-line', 'lineConsentAccept lineConsentDecline'],
   ['acknowledge-matrix-line', 'lineConsentAcknowledge'],
+  // ADR-0152: settling an obligation an ENDED line left behind. Recording the
+  // remedy is the manager's own act (the action narrows it to a seat that reaches
+  // the person, and a carry must name a live line holder); the scan changes no
+  // declaration and is declared here so a real operator can retry a deferred ask.
+  ['close-line-obligation', 'lineExitRemedy lineExitScan lineExitRead'],
   // ADR-0143: the Cross-Line Priority Arbitration. Opening a case, disposing of a
   // demand and recording the measured recommendation are the parties' and the
   // span's work; recording the BINDING precedence is a separate right
@@ -357,7 +362,14 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // `onboardingMatrixCandidates` and `onboardingMatrixScan` are declared commands on
 // the brief right (they are seat-scoped inside the read model), so only the
 // aggregate reads live here.
-'onboardingMatrixBoard', 'onboardingMatrixBriefText', 'onboardingMatrixCsv']);
+'onboardingMatrixBoard', 'onboardingMatrixBriefText', 'onboardingMatrixCsv',
+// ADR-0152: the line-exit read surface. Registered for the same reason as every
+// module above — a read absent from SAFE_READS is unreadable under enforcement
+// while its writes are still gated, which would hide an orphaned obligation from
+// exactly the manager who has to settle it. `lineExitRead` is a declared command
+// on the remedy right (it is seat-checked inside the action), so only the
+// aggregate reads live here.
+'lineExitBoard', 'lineExitBriefText', 'lineExitCsvRows', 'lineExitAttentionCount']);
 const refusal = (reason) => ({ ok: false, code: 'scope-refusal', error: reason, field: 'scope' });
 
 /** ADR-0087: under enforcement, boundary-management commands stay reachable

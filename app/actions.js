@@ -102,6 +102,13 @@ import {
 // line's decline and the PERSON's acknowledgement) and one scan; every state,
 // window and verdict is recomputed on read and nothing derived is stored.
 import { createOnboardingMatrixActions } from './core/domain/onboardingMatrixActions.js';
+import { createLineExitActions } from './core/domain/lineExitActions.js';
+import {
+  buildLineExitReport,
+  lineExitAttentionCount,
+  lineExitBriefText,
+  lineExitCsvRows,
+} from './core/domain/lineExit.js';
 import {
   buildOnboardingMatrix,
   onboardingMatrixAttentionCount,
@@ -19977,6 +19984,29 @@ export function createApi(store, options = {}) {
   });
   api.onboardingMatrixAttentionCount = (options = {}) => ({
     ok: true, count: onboardingMatrixAttentionCount(store.state, onboardingMatrixOptions(options)),
+  });
+  // ADR-0152: the Matrix Line-Exit Obligation Register. The one remedy command
+  // and the scan are in the factory; the aggregate reads are attached here so the
+  // CSV export, the attention badge and the panel read the SAME report, and so a
+  // view can never render `undefined` as if it were an empty register.
+  Object.assign(api, createLineExitActions(store, { now: clock, idFactory: id }));
+  const lineExitOptions = (options = {}) => ({
+    now: options.now instanceof Date ? options.now : clock(),
+    settings: store.state.settings || {},
+  });
+  api.lineExitBoard = (options = {}) => ({
+    ok: true,
+    report: buildLineExitReport(store.state, { ...lineExitOptions(options), limit: options.limit ?? 40 }),
+  });
+  api.lineExitBriefText = (options = {}) => {
+    const report = buildLineExitReport(store.state, { ...lineExitOptions(options), limit: 0 });
+    return { ok: true, text: lineExitBriefText(store.state, lineExitOptions(options)), report };
+  };
+  api.lineExitCsvRows = (options = {}) => ({
+    ok: true, rows: lineExitCsvRows(store.state, lineExitOptions(options)),
+  });
+  api.lineExitAttentionCount = (options = {}) => ({
+    ok: true, count: lineExitAttentionCount(store.state, lineExitOptions(options)),
   });
   // ADR-0148: Matrix Line Consent. The two first-person writes and the seat
   // reads are in the factory; the aggregate reads are attached here so the CSV

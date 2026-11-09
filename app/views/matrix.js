@@ -43,6 +43,9 @@ import {
 // ADR-0148: the consent register. A declared share is an ask until the manager it
 // was given to answers it and the person whose hours it takes acknowledges it.
 import { renderConsentPanel } from './matrixConsentPanel.js';
+// ADR-0152: the line-exit register. A line that is dated out does not close the
+// work it created; this panel reads what it left behind and who settled it.
+import { renderLineExitPanel } from './matrixExitPanel.js';
 
 const PANELS = MATRIX_PANELS;
 
@@ -804,6 +807,7 @@ export function renderMatrix(ctx) {
 
     panel === 'desk' ? deskPanel(ctx, report) : null,
     panel === 'lines' ? linesPanel(ctx, report) : null,
+    panel === 'exit' ? renderLineExitPanel(ctx) : null,
     panel === 'consent' ? renderConsentPanel(ctx) : null,
     panel === 'rights' ? rightsPanel(ctx, report) : null,
     panel === 'concordance' ? concordancePanel(ctx, report) : null,

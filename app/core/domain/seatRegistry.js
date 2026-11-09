@@ -456,6 +456,7 @@ export const ACTION_RIGHTS = Object.freeze({
   // and only the person may acknowledge. Registering them here is not ceremony —
   // an action whose right was never declared is refused for EVERY seat,
   // including the operator view.
+  'close-line-obligation': { minRank: 1, maxRank: 5, label: 'Retire or carry an obligation an ended line left behind' },
   'accept-matrix-line': { minRank: 1, maxRank: 5, label: 'Accept or decline a reporting line you were given' },
   'acknowledge-matrix-line': { minRank: 1, maxRank: 5, label: 'Acknowledge a share taken from your own hours' },
   // ADR-0149: moving a home line is a SEPARATE act from declaring a second line.
