@@ -134,6 +134,7 @@ import { matrixRule } from './matrixRules.js';
 // was recorded, so a workspace that never opens a case gains nothing.
 import { priorityArbitrationRule } from './priorityArbitrationRules.js';
 import { contradictionRule } from './contradictionRules.js';
+import { reviewStewardshipRule } from './reviewStewardshipRules.js';
 
 
 // ADR-0087: the Operating Cadence Clock. Reads the finished queue after the
@@ -792,6 +793,14 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // governed decision per ruling and issues work ONLY for a resequence, to the
   // one named line. It never edits a charter.
   contradictionRule,
+  // ADR-0147: Matrix Multi-Line Review Stewardship (RULE-SRV-01). ONLY a
+  // COMPLETED review (or an explicit scan) makes it run: a second line being
+  // declared is not the same act as asking it. It issues one owned, dated ask per
+  // line a completed review never consulted, addressed to that line's holder,
+  // and issues NOTHING when the assessor is contested or undeclared — a task
+  // addressed to nobody could never close. It runs before the Operating Seat so
+  // the obligation it opens rolls up the hierarchy in the SAME transaction.
+  reviewStewardshipRule,
   // ADR-0076: the Operating Seat (vertical roll-up + enforced boundaries).
   // It reads the finished record after every module has propagated, then fans
   // each open item up every leadership ancestor in the reporting tree with one

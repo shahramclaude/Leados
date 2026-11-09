@@ -176,7 +176,7 @@ function thinScenario() {
 test('Schema v104 migrates additively: empty lock ledgers, declared conventions, nothing back-filled', () => {
   assert.equal(SCHEMA_VERSION, 119);
   const migrated = migrate({ schemaVersion: 103, settings: { leaderName: 'Keep this' } });
-  assert.deepEqual(migrated.applied, ['103 → 104', '104 → 105', '105 → 106', '106 → 107', '107 → 108', '108 → 109', '109 → 110', '110 → 111', '111 → 112', '112 → 113', '113 → 114', '114 → 115', '115 → 116', '116 → 117', '117 → 118', '118 → 119']);
+  assert.deepEqual(migrated.applied, ['103 → 104', '104 → 105', '105 → 106', '106 → 107', '107 → 108', '108 → 109', '109 → 110', '110 → 111', '111 → 112', '112 → 113', '113 → 114', '114 → 115', '115 → 116', '116 → 117', '117 → 118', '118 → 119', '119 → 120', '120 → 121', '121 → 122']);
   assert.deepEqual(migrated.raw.decisionLocks, []);
   assert.deepEqual(migrated.raw.decisionLockMarkers, []);
   assert.equal(migrated.raw.settings.leaderName, 'Keep this');

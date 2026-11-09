@@ -128,6 +128,10 @@ import { renderConflicts, renderConflictDetail } from './views/conflicts.js';
 import { renderDecisions } from './views/decisions.js';
 import { renderRecognition } from './views/recognition.js';
 import { renderReviews, renderReviewDetail } from './views/reviews.js';
+// ADR-0147: `#/reviews?panel=stewardship` — the matrix lens on the same reviews.
+// Rendered through the SAME route, so a packet is never reachable from a second
+// navigation tree that could disagree with the first.
+import { renderReviewStewardshipPanel } from './views/reviewStewardshipPanel.js';
 import { renderSettings } from './views/settings.js';
 import { renderVault } from './views/vault.js';
 import { renderPrepSheet } from './views/prep.js';
@@ -271,6 +275,8 @@ import { priorityAttentionCount } from './core/domain/priorityArbitration.js';
 // another unachievable for the people on both?
 import { renderContradiction } from './views/contradiction.js';
 import { contradictionAttentionCount } from './core/domain/contradictionAudit.js';
+// ADR-0147: the reviews nav badge — matrix packets with an outstanding step.
+import { reviewStewardshipAttentionCount } from './core/domain/reviewStewardship.js';
 import { dutyStandbyAttentionCount } from './core/domain/dutyStandby.js';
 import { identityAttentionCount } from './core/domain/identity.js';
 
@@ -403,7 +409,10 @@ export const NAV = [
     // actually belongs to before the forty minutes that matter.
     { route: 'agenda-ledger', label: '1:1 agenda ledger', icon: '☰', badge: 'agenda' },
     { route: 'feedback', label: 'Feedback', icon: '✎' },
-    { route: 'reviews', label: 'Performance reviews', icon: '▤' },
+    // ADR-0147: the badge counts MATRIX packets whose stewardship step is not
+    // settled — a second line still unasked, late, awaiting, or an assessor
+    // nobody can name. A single-chain packet is not noise and is never counted.
+    { route: 'reviews', label: 'Performance reviews', icon: '▤', badge: 'stewardship' },
     // Schema v89: the instrument behind the review. Two people, one word, six
     // dimensions — measured for agreement, never for performance.
     { route: 'concordance', label: 'Expectation concordance', icon: '⇹', badge: 'concordance' },
@@ -644,7 +653,9 @@ const RENDERERS = {
   conflicts: (ctx) => renderConflicts(ctx),
   conflict: (ctx, segments) => renderConflictDetail(ctx, safeDecode(segments[1])),
   recognition: (ctx) => renderRecognition(ctx),
-  reviews: (ctx) => renderReviews(ctx),
+  reviews: (ctx) => (ctx.query?.get?.('panel') === 'stewardship'
+    ? renderReviewStewardshipPanel(ctx)
+    : renderReviews(ctx)),
   review: (ctx, segments) => renderReviewDetail(ctx, safeDecode(segments[1])),
   settings: (ctx) => renderSettings(ctx),
   prep: (ctx, segments) => renderPrepSheet(ctx, safeDecode(segments[1])),
@@ -1235,6 +1246,10 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       // past their review date. A tension or an isolated pair is information, not
       // a badge — a badge that fires on every declared trade-off is unread.
       contradiction: contradictionAttentionCount(state, { now: at, settings: state.settings }),
+      // ADR-0147: matrix review packets whose stewardship step is still open. A
+      // packet that is settled across its lines, and every single-chain packet,
+      // is not counted — the badge is attention, not telemetry.
+      stewardship: reviewStewardshipAttentionCount(state, { now: at, settings: state.settings }),
       // ADR-0127: refusals and asks past their declared response deadline. An ask
       // still inside its deadline is a normal Monday and is NOT counted here — a
       // badge that fires on every fresh declaration is a badge people stop reading.
@@ -1732,7 +1747,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       oneonones: '1:1s',
       feedback: 'Feedback',
       recognition: 'Recognition',
-      reviews: 'Performance reviews',
+      reviews: 'Performance reviews — the one durable claim the workspace makes about a person. In a matrix the packet is reconciled against every reporting line the person sat on during the period: which lines were asked what they saw, which were never asked, which are late, and which line was entitled to assess. No per-line contribution share is ever printed, because the record knows who evidence is ABOUT and never which line produced it.',
       review: 'Performance review',
       goals: 'Goals',
       growth: 'Growth plans',

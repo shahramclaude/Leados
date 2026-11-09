@@ -10,6 +10,63 @@ import {
   summarizeReviewEvidence, calibrateReview, reviewReadiness, reviewSourceLabel,
 } from '../core/domain/reviews.js';
 import { openPerformanceReviewDialog, openReflectionDialog, openAssessmentDialog, openGoalDialog, openGrowthPlanDialog } from '../ui/modals.js';
+import { stewardshipHref } from './reviewStewardshipPanel.js';
+
+/**
+ * ADR-0147: the matrix lens on the same packets. Read through the gateway so the
+ * screen and the panel cannot disagree, and never rendered as a number when the
+ * read itself declined — an unreadable report is not a zero.
+ */
+function stewardshipBoard(ctx) {
+  try {
+    const board = ctx.api?.reviewStewardshipBoard?.();
+    return board?.ok ? board : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The matrix review card. It exists because a packet assembled from `personId`
+ * alone reads as a complete account while a second line that carried the person
+ * was never asked. The card is deliberately quiet: it states the counts and the
+ * refusal, and it does not invent a contribution share to display.
+ */
+function stewardshipCard(ctx, board) {
+  if (!board) {
+    return card({
+      title: 'Matrix review stewardship',
+      subtitle: 'Reconciling each packet against the lines the person actually sat on.',
+      body: banner({ tone: 'warn', title: 'Not readable at this seat', body: 'The stewardship report declined to be read here. Nothing is shown rather than showing a zero.' }),
+    });
+  }
+  const link = h('a', { class: 'btn btn-small btn-ghost', href: '#/reviews?panel=stewardship' }, 'Open the stewardship lens →');
+  if (!board.matrixReviewN) {
+    return card({
+      title: 'Matrix review stewardship',
+      subtitle: 'One question per packet: did every line the person reported to get asked what it saw?',
+      body: h('div', null,
+        h('p', { class: 'muted small' }, 'No review in this workspace covers a person who sat on more than one reporting line during its period. A single-chain review needs no reconciliation step — which is a different claim than “every line was asked”.'),
+        link),
+    });
+  }
+  const figure = (label, value, hint) => h('div', { class: 'stat' },
+    h('span', { class: 'stat-label' }, label),
+    h('span', { class: 'stat-value' }, String(value)),
+    hint ? h('span', { class: 'stat-hint' }, hint) : null);
+  return card({
+    title: 'Matrix review stewardship',
+    subtitle: 'A matrix review is not one manager’s act. This is the reconciliation of every packet against the lines the person sat on.',
+    actions: [link],
+    body: h('div', null,
+      h('div', { class: 'stat-row' },
+        figure('Matrix packets', board.matrixReviewN, 'a person with a second line in the period'),
+        figure('Settled across lines', board.settledN, 'answered, or declined with a reason'),
+        figure('Second lines never asked', board.unaskedLinesN, 'a gap in the process, never a zero'),
+        figure('Input asked and late', board.overdueLinesN, 'the overdue days are printed')),
+      h('p', { class: 'muted small' }, 'No per-line contribution share is computed: feedback, recognition, 1:1 notes and delegations record who an item is about, never which line produced it. A missing line reads as a named process gap.')),
+  });
+}
 
 export function renderReviews(ctx) {
   const { state } = ctx;
@@ -87,6 +144,7 @@ export function renderReviews(ctx) {
               : h('a', { class: 'btn btn-primary', href: '#/people' }, 'Add your team first'),
           }),
         }),
+    stewardshipCard(ctx, stewardshipBoard(ctx)),
     card({
       title: 'What a useful review contains',
       subtitle: 'The structure is deliberately consistent across people.',
@@ -156,6 +214,8 @@ export function renderReviewDetail(ctx, reviewId) {
         review.completedAt ? h('span', { class: 'muted small' }, `Completed ${formatDate(review.completedAt)}`) : null,
       ),
       actions: [
+        // ADR-0147: the same packet read against the lines the person sat on.
+        h('a', { class: 'btn btn-ghost no-print', href: stewardshipHref(review.id) }, 'Matrix stewardship'),
         h('button', { class: 'btn btn-ghost no-print', type: 'button', onClick: () => window.print() }, 'Print / save PDF'),
         isDraft ? h('button', { class: 'btn btn-ghost no-print', type: 'button', onClick: () => openAssessmentDialog(ctx, { review }) }, 'Write assessment') : null,
         isDraft

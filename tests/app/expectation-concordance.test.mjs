@@ -106,7 +106,7 @@ test('schema v89 migrates additively and a malformed round cannot become a claim
   const old = { schemaVersion: 88, settings: { leaderName: 'Keep' }, cases: [{ id: 'keep' }], altitudeRoutingPlans: [{ id: 'r1' }] };
   const migrated = migrate(old);
   assert.equal(migrated.raw.schemaVersion, 119);
-  assert.deepEqual(migrated.applied, ['88 → 89', '89 → 90', '90 → 91', '91 → 92', '92 → 93', '93 → 94', '94 → 95', '95 → 96', '96 → 97', '97 → 98', '98 → 99', '99 → 100', '100 → 101', '101 → 102', '102 → 103', '103 → 104', '104 → 105', '105 → 106', '106 → 107', '107 → 108', '108 → 109', '109 → 110', '110 → 111', '111 → 112', '112 → 113', '113 → 114', '114 → 115', '115 → 116', '116 → 117', '117 → 118', '118 → 119']);
+  assert.deepEqual(migrated.applied, ['88 → 89', '89 → 90', '90 → 91', '91 → 92', '92 → 93', '93 → 94', '94 → 95', '95 → 96', '96 → 97', '97 → 98', '98 → 99', '99 → 100', '100 → 101', '101 → 102', '102 → 103', '103 → 104', '104 → 105', '105 → 106', '106 → 107', '107 → 108', '108 → 109', '109 → 110', '110 → 111', '111 → 112', '112 → 113', '113 → 114', '114 → 115', '115 → 116', '116 → 117', '117 → 118', '118 → 119', '119 → 120', '120 → 121', '121 → 122']);
   assert.deepEqual(migrated.raw.expectationRounds, []);
   assert.deepEqual(migrated.raw.concordanceMarkers, []);
   assert.equal(migrated.raw.cases[0].id, 'keep');

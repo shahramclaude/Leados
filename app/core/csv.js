@@ -79,6 +79,10 @@ import { buildPriorityReport, priorityCsvRows, PRIORITY_CSV_COLUMNS } from './do
 // refused is BLANK with its printed reason, never 0.
 import { buildContradictionAudit, contradictionCsvRows } from './domain/contradictionAudit.js';
 import { CONTRADICTION_CSV_COLUMNS } from './domain/contradictionRegistry.js';
+// ADR-0147 (Schema v122): Matrix Multi-Line Review Stewardship. The CSV is built
+// from the SAME read model the stewardship panel renders, so a printed line state
+// and an exported line state cannot disagree.
+import { reviewStewardshipCsvRows, REVIEW_STEWARDSHIP_CSV_COLUMNS } from './domain/reviewStewardship.js';
 // ADR-0145: the Matrix Decision-Right Execution Concordance export (CSV scope
 // #108). Aggregate-only and identity-free: one workspace row carrying every
 // count the panel prints, one row per finding kind — no person, no name, no
@@ -1088,6 +1092,7 @@ export const CSV_EXPORTS = [
   // cover's identity never enters the row set, and an ask that has not been
   // answered exports BLANK rate columns rather than zeros.
   { key: 'contradiction-audit', label: 'Cross-line contradiction audit (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'contradiction-audit', description: 'One workspace summary row, one row per live finding and one row per lever touched. Each finding row carries its KIND, SEVERITY and derived RULING STATE plus ONLY the declared integers that produced it: the two scorecard shares in basis points, the exact integer sum, the materiality floor, the envelope claims and their sum, the utilisation target and the τ/(100−τ) multiplier with the declared ceiling. NO person, NO name, NO line manager id, NO objective title, NO finding id and NO rationale text. `incompatible` is reserved for a pair that can be shown from declared integers or from the queueing law; everything else reads `tension` or `isolated` and says so. A finding with a missing figure exports BLANK figures with the refused figure named in `withheld_reason`, never a zero.' },
+  { key: 'review-stewardship', label: 'Matrix review stewardship (per line)', group: 'operational', sensitive: false, filenameSlug: 'review-stewardship', description: 'One row per review × reporting line for every review that covers a person who sat on a second line during the period. Each row carries the line role and kind, the manager NAME, whether the line was in force inside the period (and the printed exclusion reason when it was not), whether that line held the performance-assessment right and whether that right was presumed rather than declared, the derived line state (answered / declined / asked / overdue / unasked), the ask date, due date, overdue flag and whole overdue days, the first-person answer text or the stated decline reason, and whether the answer arrived late. NO per-line contribution share is exported because none is computable: feedback, recognition, 1:1 notes and delegations record who the evidence is about, never which line produced it, and `line_attributable` says so on every row. A line nobody asked exports `unasked` with a BLANK answer, never a zero contribution.' },
   RIGHTS_CONCORDANCE_CSV_DESCRIPTOR,
   { key: 'priority-arbitration', label: 'Cross-line priority arbitration (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'priority-arbitration', description: 'One workspace summary row, one row per live arbitration case (derived state, frozen demand count, line count, disposition counts, the exact-integer verdict and its refusal when a score set is incomplete, the arbiter tie state, the agreed window and review date, dissent count, issued obligation count and the declared capacity claim), and one row per frozen demand carrying ONLY the two declared integers, the chain days and the integer rank. NO person, NO name, NO demand title, NO case id, NO seat id and NO rationale text. A demand missing its cost of delay or job size exports its rank BLANK with the refusal in `withheld_reason`, never a zero. `ranked` and `reconciles` are separate claims: an order can be absent while the counts still add up, and the export says which.' },
   { key: 'cover-standby', label: 'Cover acknowledgement (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'cover-standby', description: 'One aggregate row per declared cover in the active seat’s span (holder rank, cover rank, ask window and its basis, derived standby state, days since the ask, the declared response deadline and days past it, the answer window and its age), one refused-only exposure row per duty line whose only declared covers declined, and one board summary row. NO person, NO name, NO seat id or label, NO duty label, NO note text, NO decision id. The acknowledged rate measures the REGISTER (the named person answered YES to this ask window), never a person’s willingness; an unanswered, lapsed or refused row is its own printed state and is BLANK in the rate column rather than zero.' },
@@ -6149,6 +6154,14 @@ export function buildScopeTable(state, scope, now) {
       const report = buildContradictionAudit(state, { now, settings: state.settings || {} });
       const rows = contradictionCsvRows(report);
       const columns = CONTRADICTION_CSV_COLUMNS.map((key) => ({ key, header: key }));
+      return { columns, rows };
+    }
+    case 'review-stewardship': {
+      // CSV scope #109 (Schema v122, ADR-0147). Built from the same read model the
+      // panel renders; one row per review × line, so the exported state of a line
+      // is provably the state the panel printed.
+      const rows = reviewStewardshipCsvRows(state, { now, settings: state.settings || {} });
+      const columns = REVIEW_STEWARDSHIP_CSV_COLUMNS.map((key) => ({ key, header: key }));
       return { columns, rows };
     }
     case 'rights-concordance': {
