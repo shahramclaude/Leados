@@ -87,7 +87,7 @@
  * participates in a judgement a leader will act on.
  */
 
-export const RIGHTS_CONCORDANCE_ENGINE_VERSION = 'rights-concordance-2026.11-v1';
+export const RIGHTS_CONCORDANCE_ENGINE_VERSION = 'rights-concordance-2026.11-v2';
 
 /** The four structural process findings. */
 export const RIGHTS_CONCORDANCE_FINDINGS = Object.freeze([
@@ -146,6 +146,8 @@ export const RIGHTS_CONCORDANCE_LIMITS = Object.freeze({
   findings: 24,
   /** Audited-decision rows carried in the decision table. */
   decisions: 20,
+  /** Identity-free systemic pattern rows carried before remainder is counted. */
+  recurrencePatterns: 12,
   /** Free-text detail length on a finding row. */
   detailChars: 320,
   /** Decision title length carried into a finding row. */
@@ -195,13 +197,23 @@ export const RIGHTS_CONCORDANCE_CSV_DESCRIPTOR = Object.freeze({
   group: 'analytics',
   sensitive: false,
   filenameSlug: 'rights-concordance',
-  description: 'One workspace row carrying every count the panel prints (completed, audited, with-findings, clean, unscoped, single-line, unresolved-decider, dangling-subject, withheld), and one row per finding kind (bypass, contested-decided, unresolved-authority, consult-gap) with its exact count. NO person, NO name, NO decider, NO decision id, NO decision title, NO line id and NO right holder. A count that is a limit of the comparison is a number beside its label, never a zero and never a finding against anyone.',
+  description: 'One workspace row carrying every count the panel prints, one row per finding kind, and identity-free recurrence rows grouping repeated structural patterns by finding kind, line kinds and rights. Recurrence counts distinct decisions; one decision contributes at most once per pattern. NO person, NO name, NO decider, NO decision id, NO decision title, NO line id and NO right holder. The pattern queue remainder is counted, never dropped.'
 });
 
 export const RIGHTS_CONCORDANCE_CSV_COLUMNS = Object.freeze([
   'row_kind',
   'scope',
   'kind',
+  'line_kinds',
+  'right_keys',
+  'decisions_n',
+  'first_decision_on',
+  'last_decision_on',
+  'recurrence_observations_n',
+  'recurring_observations_n',
+  'one_off_observations_n',
+  'recurring_patterns_n',
+  'recurrence_patterns_withheld_n',
   'count',
   'decisions_read_n',
   'decisions_audited_n',

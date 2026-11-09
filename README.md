@@ -1,3 +1,7 @@
+## 2026-11-09 — Repeated matrix decision friction, grouped as a design signal
+
+The Matrix Concordance now looks beyond individual decisions: it groups the same structural finding by active line kinds and affected rights, and marks it recurring only when it appears across at least two distinct decisions. The executive view shows the first and latest dates; the seat-scoped aggregate CSV carries only structural labels, counts and dates. A decision linked to multiple people still counts once per pattern. No person, manager, decision or line identifiers enter the recurrence export, and no finding is a rating or an automatic change to reporting rights. See [ADR-0146](./docs/adr/0146-matrix-recurring-structural-patterns.md).
+
 ## 2026-11-08 — Which of two managers' work goes first: cross-line priority arbitration
 
 `#/contradiction` asks the question an arbitration cannot: do two lines' **declared charters** — the lever they are each paid to move, in the direction they were told to move it, and the share of a scorecard or an envelope they claim — make one another unachievable for the people who sit on both? It prints `incompatible` only where declared integers or the queueing law prove it (τ/(100−τ) at the declared utilisation target, beside the declared knee), names every other coupling a **tension** rather than a proof, refuses a missing figure instead of reading it as zero, and records the chief's ruling: run both knowingly, change one line's charter, or withhold with a reason. Only the last-but-one of those issues dated work, and only to the line named.

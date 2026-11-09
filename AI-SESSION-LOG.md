@@ -1,3 +1,19 @@
+## 2026-11-09 — Session 198: recurring matrix friction is a design signal (ADR-0146, Schema v121 unchanged)
+
+**Doctrine / sync / scope.** `NORTH_STAR.md` exists and contains both binding matrix-leadership and bulletproof-reliability mandates. `origin` confirmed as `https://github.com/shahramclaude/Leados.git`; branch `arena/dac17ceb-leados`. CEO / C-suite PRIMARY × matrix; the same read remains seat-scoped for every altitude, while a single-chain workspace remains inert.
+
+**Built.** `rightsConcordance.js` now aggregates repeated findings by structural signature: finding kind, active line-kind set and affected rights. It counts distinct decisions, not people or raw linked subject rows; one decision contributes at most once per signature. A recurrence requires at least two distinct decisions. First/latest dates and a 12-pattern bounded queue are shown in the existing Concordance panel, identity-free matrix brief and aggregate CSV #108. No schema, collection, rule, action, setting or stored derived state was added. The ADR-0145 typed provenance and date-specific `buildMatrix` / seat-scope path remain the only subject and hierarchy sources.
+
+**Proactive discovery.** The app previously reported decision-right findings one decision at a time and had no way to detect that the same matrix design pattern recurred. Added the missing pattern lens to `ROADMAP.md` and shipped it. New unbuilt gap added to Planned: a matrix pattern repair/closure loop (human-reviewed remedy, accountable owner, due/review date and prospective recurrence check) [director / VP / CEO × matrix].
+
+**Verified — one focused pass.** `node --test tests/app/rights-concordance.test.mjs` — **28/28 PASS**. This directly checks distinct-decision deduplication, pattern signature and dates, no identities in the recurrence data, recurrence CSV equality with the computed report, rendered pattern counts equal the computed report, report/brief integration, no state writes, single-chain inertness, store-backed API output and JSDOM + axe panel rendering. The first invocation could not start because dependencies were not installed (`jsdom` missing); `npm ci` installed the locked dependencies, then the focused suite passed. `package.json` and `package-lock.json` unchanged.
+
+**Unverified / limits.** Full canonical suite, real-browser keyboard/assistive-technology walkthrough and a full matrix read-model parity audit remain **[UNVERIFIED]**. Historical roster membership is not reconstructed; recurrence is a design-review signal, not proof of causation or harm. Seat selection remains a workflow declaration, not authentication. No blocker.
+
+**Next.** Frontline / mid-manager × matrix rotation; continue the matrix read-model parity audit. Highest new planned capability: matrix pattern repair and prospective closure [director / VP / CEO × matrix].
+
+---
+
 ## 2026-11-09 — Session 197: the decision log is audited against the rights the lines declared
 
 **Built / altitude / structure.** Director / VP PRIMARY (ranks 3–4); every altitude reading the matrix report inherits the same concordance, and a single-chain workspace is inert. **Structure: matrix — 197 continues the MATRIX primary rotation** (single-chain 1–188; matrix primary 189–197). The duty served: a director who has just read the matrix's declared rights and the contradiction audit's charters asks the dated reverse about the DECISION LOG — "we recorded that this manager decided this, on this day; did the structure we declared actually give them the authority, and were the people the structure says must be heard recorded as heard?"
