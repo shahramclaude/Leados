@@ -190,6 +190,7 @@ export const MATRIX_PANELS = Object.freeze([
   Object.freeze({ key: 'desk', label: 'Desk', hint: 'The reconciliation: does the roll-up add up?' }),
   Object.freeze({ key: 'lines', label: 'Lines', hint: 'Every declared reporting line, dated and dated out.' }),
   Object.freeze({ key: 'rights', label: 'Rights', hint: 'Who decides what, for each person on more than one line.' }),
+  Object.freeze({ key: 'concordance', label: 'Concordance', hint: 'What the decision log actually did, against the rights declared on each line.' }),
   Object.freeze({ key: 'seats', label: 'Seats', hint: 'Whose line the work actually reaches — and who the roster cannot seat.' }),
   Object.freeze({ key: 'governance', label: 'Governance', hint: 'Executive view: joint-apex escalations, cross-axis coupling and structural checks.' }),
   Object.freeze({ key: 'queue', label: 'Review', hint: 'The bounded queue, worst first.' }),

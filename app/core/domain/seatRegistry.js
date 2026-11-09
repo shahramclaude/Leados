@@ -441,6 +441,14 @@ export const ACTION_RIGHTS = Object.freeze({
   // home-line reports still owns a charter. The action additionally refuses a
   // line the seat cannot reach on the tree OR a declared line.
   'declare-line-mandate': { minRank: 1, maxRank: 5, label: 'Declare, withdraw or read a line charter' },
+  // ADR-0140: the Matrix Accountability Ledger gates every one of its
+  // commands — reads as well as writes — on the right to declare a line's
+  // decision-rights charter, and the module was built against that right
+  // name. It must be registered here, on the same spine as the rest: an
+  // action whose right was never declared is refused for EVERY seat,
+  // including the operator view, so an unregistered right silently makes
+  // the whole module unreachable through the live API.
+  'declare-matrix-line': { minRank: 1, maxRank: 5, label: 'Declare, retune or read a line decision-rights charter' },
   // Ruling on a contradiction is a director-and-above act: a resequence issues a
   // dated obligation to somebody else's line, and the chief who owns the
   // portfolio trade-off is the seat this module exists for.

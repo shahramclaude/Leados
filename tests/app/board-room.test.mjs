@@ -247,8 +247,9 @@ test('the route exists, is enterprise material, and is reachable from the nav', 
 });
 
 test('CSV scope #80 exists and refuses to guess', () => {
-  // ADR-0144 adds scope #107; the total is pinned deliberately.
-  assert.equal(CSV_EXPORTS.length, 106);
+  // ADR-0144 adds scope #107; ADR-0145 adds scope #108; the total is pinned
+  // deliberately so the next session cannot drift the count silently.
+  assert.equal(CSV_EXPORTS.length, 107);
   const scope = CSV_EXPORTS.find((s) => s.key === 'board-claims');
   assert.ok(scope);
   assert.equal(scope.sensitive, false);

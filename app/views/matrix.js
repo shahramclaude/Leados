@@ -36,6 +36,10 @@ import {
   MATRIX_SHARE_STATE_LABELS,
   matrixLineKind,
 } from '../core/domain/matrixRegistry.js';
+import {
+  RIGHTS_CONCORDANCE_FINDINGS,
+  RIGHTS_CONCORDANCE_LIMITS_TEXT,
+} from '../core/domain/rightsConcordanceRegistry.js';
 
 const PANELS = MATRIX_PANELS;
 
@@ -594,6 +598,132 @@ function governancePanel(ctx, report) {
   );
 }
 
+/* ---------------------------------------------------------- concordance */
+
+const CONCORDANCE_TONE = {
+  bypass: 'bad',
+  'contested-decided': 'warn',
+  'unresolved-authority': 'warn',
+  'consult-gap': 'warn',
+};
+
+function concordancePanel(ctx, report) {
+  const c = report.concordance;
+  const d = c.decisions;
+  const f = c.findings;
+
+  if (!c || !d) {
+    return emptyState({ title: 'Concordance unavailable', body: 'Recompute the matrix report to audit the decision log against the declared line rights.' });
+  }
+
+  if (report.reconciliation.secondaryLineN === 0) {
+    return h('div', { class: 'stack' },
+      banner({
+        tone: 'neutral',
+        title: 'Single-chain workspace: the concordance has nothing to audit',
+        body: 'No additional reporting lines are declared. Every person sits on exactly one line, and the rights question the audit asks — whose declared right did this decision exercise — only exists when a person has more than one manager to compare.',
+      }),
+      h('p', { class: 'lede' }, 'Declare a reporting line on the Lines panel and the decision log starts being read against the rights in force on each line, date by date.'),
+    );
+  }
+
+  const identityRows = [
+    { label: 'Audited decisions', detail: d.auditedN === d.withFindingsN + d.cleanN ? `${d.withFindingsN} with findings + ${d.cleanN} clean = ${d.auditedN}` : 'THE COUNTS DO NOT ADD UP' },
+    { label: 'Findings', detail: f.totalN === f.shownN + f.withheldN ? `${f.shownN} shown + ${f.withheldN} withheld = ${f.totalN}` : 'THE COUNTS DO NOT ADD UP' },
+    { label: 'Decisions read', detail: d.completedN === d.auditedN + d.unscopedN + d.singleLineN ? `${d.auditedN} audited + ${d.unscopedN} unscoped + ${d.singleLineN} single-line = ${d.completedN}` : 'THE COUNTS DO NOT ADD UP' },
+  ];
+
+  return h('div', { class: 'stack' },
+    h('p', { class: 'lede' }, 'The ledger declares who holds each decision right. The decision log records who actually decided. This panel reads the log backwards through the declared lines: every completed decision is checked against the rights that were in force on every active line of the person it concerned, on the day it was made.'),
+
+    h('div', { class: 'stat-grid' },
+      stat({ label: 'Decisions read', value: num(d.completedN), hint: `of ${d.totalN} logged` }),
+      stat({ label: 'Audited', value: num(d.auditedN), hint: 'multi-line subject in the record' }),
+      stat({ label: 'With findings', value: num(d.withFindingsN), tone: d.withFindingsN ? 'warn' : '' }),
+      stat({ label: 'Clean', value: num(d.cleanN), hint: 'decided inside the declared rights' }),
+      stat({ label: 'Unscoped', value: num(d.unscopedN), hint: 'no subject in the record', tone: d.unscopedN ? 'warn' : '' }),
+      stat({ label: 'Unresolved decider', value: num(d.unresolvedDeciderN), hint: 'not on the roster', tone: d.unresolvedDeciderN ? 'warn' : '' }),
+    ),
+
+    card({
+      title: 'The reconciliation',
+      subtitle: 'Every count on this page is one of these identities — printed, so a reader can check the arithmetic instead of trusting it.',
+      body: table({
+        caption: 'Concordance identities',
+        columns: [
+          { label: 'Identity', key: 'label' },
+          { label: 'Reading', key: 'detail' },
+        ],
+        rows: identityRows,
+      }),
+    }),
+
+    f.rows.length
+      ? card({
+        title: 'Findings, worst first',
+        subtitle: `${f.shownN} in scope under this seat · ${f.withheldN} withheld as outside the seat's span (counted, never shown).`,
+        body: table({
+          caption: 'Decision-right execution findings',
+          columns: [
+            { label: 'Finding', render: (row) => badge(row.kindLabel, CONCORDANCE_TONE[row.kind] || 'warn') },
+            { label: 'Decision', key: 'title' },
+            { label: 'Subject', render: (row) => (row.subjectName || h('span', { class: 'muted' }, 'outside this seat')) },
+            { label: 'Decider', render: (row) => (row.approverName || h('span', { class: 'muted' }, row.approverResolved ? 'outside this seat' : 'not on roster')) },
+            { label: 'Date', key: 'decidedOn' },
+            { label: 'Detail', key: 'detail' },
+          ],
+          rows: f.rows,
+        }),
+      })
+      : emptyState({
+        title: 'Every audited decision was made inside the declared rights',
+        body: 'No completed decision sits outside the rights the organisation declared on the person it concerned, no contested right was picked without arbitration, no unowned right was filled by the act, and every operational right-holder was consulted.',
+      }),
+
+    f.remainderN
+      ? h('p', { class: 'muted small' }, `${f.remainderN} further finding(s) are not shown: the queue is capped at ${c.conventions.findingsCap}. The remainder is counted, never dropped.`)
+      : null,
+
+    d.unscopedN + d.unresolvedDeciderN + d.danglingSubjectN + c.scopeCounts['single-line-subject'] > 0
+      ? card({
+        title: 'What was counted out, and why',
+        subtitle: 'These are limits of the comparison, not findings against anyone — printed so the audit cannot read as more complete than the record.',
+        body: table({
+          caption: 'Scope limits',
+          columns: [
+            { label: 'Limit', render: (row) => c.scopeLabels[row.key] || row.key },
+            { label: 'Count', key: 'n' },
+            { label: 'Why it is not a finding', key: 'why' },
+          ],
+          rows: [
+            { key: 'unscoped-decision', n: d.unscopedN, why: 'The decision names a decider but no subject in the typed graph. The audit refuses to guess whose lines govern.' },
+            { key: 'unresolved-decider', n: d.unresolvedDeciderN, why: 'The recorded approver is not on the roster (or the name matches several people). DACI names are free text by design.' },
+            { key: 'single-line-subject', n: c.scopeCounts['single-line-subject'], why: 'The subject sits on exactly one line — the rights question only exists on more than one.' },
+            { key: 'dangling-subject', n: d.danglingSubjectN, why: 'A linked subject who is not on the roster. Dropped and counted, never repaired.' },
+          ],
+        }),
+      })
+      : null,
+
+    card({
+      title: 'The method',
+      subtitle: 'Named, so it can be argued with.',
+      body: h('div', { class: 'stack' },
+        ...c.method.map((m) => h('div', { class: 'stack-tight' },
+          h('strong', {}, m.name),
+          h('p', { class: 'muted small' }, m.why))),
+      ),
+    }),
+
+    card({
+      title: 'Honest limits',
+      subtitle: 'Printed on the page, so the reading cannot be mistaken for a complete audit of the decision log.',
+      body: h('ul', { class: 'muted small' },
+        ...RIGHTS_CONCORDANCE_LIMITS_TEXT.map((text) => h('li', {}, text))),
+    }),
+  );
+}
+
 /* -------------------------------------------------------------------- route */
 
 export function renderMatrix(ctx) {
@@ -644,6 +774,7 @@ export function renderMatrix(ctx) {
     panel === 'desk' ? deskPanel(ctx, report) : null,
     panel === 'lines' ? linesPanel(ctx, report) : null,
     panel === 'rights' ? rightsPanel(ctx, report) : null,
+    panel === 'concordance' ? concordancePanel(ctx, report) : null,
     panel === 'seats' ? seatsPanel(ctx, report) : null,
     panel === 'governance' ? governancePanel(ctx, report) : null,
     panel === 'queue' ? queuePanel(ctx, report) : null,
