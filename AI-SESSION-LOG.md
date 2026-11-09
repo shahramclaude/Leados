@@ -2728,3 +2728,15 @@ Meanwhile `RULE-MTX-01` (ADR-0140) had already fanned that same work to her.
 **Unverified / limits.** Full canonical suite, standalone build, real-browser assistive-technology walkthrough and broader matrix parity audit were not run. Branch-level matrix decomposition still refuses where a tree partition cannot prove a unique branch. Line declarations are not acceptance; seats are not authentication. No blocker.
 
 **Next.** Director / VP × matrix rotation; continue the matrix read-model parity audit, then matrix line acceptance. Standing foundational item: authenticated identity and tenant isolation.
+
+# 2026-11-09 — Session 199: cadence matrix integration attempted, not shipped
+
+**Doctrine / sync.** NORTH_STAR.md exists with both binding mandates; no augmentation needed. Origin is https://github.com/shahramclaude/Leados.git; branch arena/7c97d5f2-leados.
+
+**Scope / discovery.** Frontline / mid-manager × matrix, the next neglected rotation. Targeted cadence inspection found tree-only seat builds and scope checks. Added a genuinely new Planned capability: decision-forum authority quorum — compare affected lines’ dated RAPID rights with attendees before a forum claims binding authority. Cadence has no such rights check; repository-wide absence **[UNVERIFIED]**.
+
+**Attempt / blocker.** Integrated canonical dated matrix scope into cadence demand and action seats, explicitly checked direct line scope, and attempted to refuse concurrent chair authority rather than select it by interval. The focused command `node --test tests/app/operating-cadence.test.mjs` first returned 16/18 passing. One correction addressed separate tree/line scope and a stale CSV count; retry returned 17/18. The new concurrent-chair assertion expected ambiguous-matrix-authority but received nearest-competent-of-several. Stopped under the user’s one-fix rule and reverted ALL implementation and test changes to the clean starting baseline. No feature shipped; no retained schema, dependency or generated artifact changes. npm ci --ignore-scripts installed locked dependencies only.
+
+**Verification limits.** The reverted test reached a real-store matrix declaration/read, unique row count, exact rendered item count vs computed attribution, stored forum title, CSV rho/items parity, no-write read check and unrelated-attendee refusal before the authority assertion failed. These results do not certify retained code. Expiry assertion not reached. Full suite, baseline matrix parity, standalone and real-browser/AT **[UNVERIFIED]**. Stale schema/CSV pins found in the existing suite remain unchanged. No unrelated tests run.
+
+**Coverage / next.** Implemented altitude map unchanged (frontline/mid 196, director/VP 197, CEO 198). Cadence parity remains In Progress; diagnose work owner attribution and candidate chair-scope intersection next, then resume frontline / mid-manager × matrix. Commit/push/PR result reported in the session response.
