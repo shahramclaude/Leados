@@ -21,6 +21,7 @@
 
 import { addDays, dayKey } from '../time.js';
 import { activeSeat, buildSeats, canAct, canSee } from './seat.js';
+import { matrixLineScopeFor } from './matrix.js';
 import { altitudeByKey } from './chainRegistry.js';
 import {
   buildCadenceReading,
@@ -66,19 +67,36 @@ export function createCadenceActions(store, { now, idFactory }) {
   const readings = () => (Array.isArray(store.state.cadenceReadings) ? store.state.cadenceReadings : []);
   const findForum = (id) => forums().find((f) => f && f.id === id) || null;
 
-  function resolveOperatingSeat() {
-    const built = buildSeats(store.state, { now: clock(), settings: settings() });
+  const seatReachesPerson = (seat, id) => Boolean(
+    seat.fullAccess
+    || (id && (id === seat.id || seat.scope?.has(id) || seat.lineScope?.has(id))),
+  );
+
+  function resolveOperatingSeat(at = clock(), effective = settings()) {
+    const lineScope = matrixLineScopeFor(store.state, { now: at, settings: effective });
+    const built = buildSeats(store.state, {
+      now: at,
+      settings: effective,
+      ...(lineScope ? { lineScope } : {}),
+    });
     const seat = activeSeat(built);
-    return { built, seat };
+    return { built, seat, lineScope };
   }
 
-  /** A forum is inside the seat's span if the chair is, or the seat outranks it. */
+  /** A forum is inside the seat's span if the chair is, or the seat reaches it via tree or declared matrix line. */
   function verifyForumScope(forum, { requireChair = false } = {}) {
     const { built, seat } = resolveOperatingSeat();
     if (seat.fullAccess) return { error: null, seat, built };
+    if (seat.readOnly) {
+      return {
+        error: fail('The declared seat is unresolved and read-only. Choose a valid leadership seat before acting.', 'scope'),
+        seat,
+        built,
+      };
+    }
     const right = canAct('run-cadence', seat);
     if (!right.allow) return { error: fail(right.reason, 'scope'), seat, built };
-    const chairInSpan = forum.chairSeatId === seat.id || Boolean(seat.scope?.has(forum.chairSeatId));
+    const chairInSpan = seatReachesPerson(seat, forum.chairSeatId);
     if (!chairInSpan) {
       return {
         error: fail(
@@ -101,8 +119,8 @@ export function createCadenceActions(store, { now, idFactory }) {
 
   function verifyAttendanceScope(forum, attending, seat) {
     for (const id of attending || []) {
-      if (!seat.fullAccess && !seat.scope.has(id)) {
-        return `“${id}” is outside your operating span. A forum cannot conscript a peer span as an attendee; escalate to the common leader.`;
+      if (!seatReachesPerson(seat, id)) {
+        return `“${id}” is outside your operating span (reporting tree and active declared lines). A forum cannot conscript a peer span as an attendee; escalate to the common leader.`;
       }
       if (!(store.state.people || []).some((p) => p && p.id === id && p.status !== 'archived')) {
         return 'An attendee is not an active person in this workspace.';
@@ -116,18 +134,36 @@ export function createCadenceActions(store, { now, idFactory }) {
 
     cadenceRead(options = {}) {
       const at = clock();
-      const report = buildCadenceReport(store.state, { now: at, settings: settings() });
-      const { seat } = resolveOperatingSeat();
-      // A declared seat sees forums inside its span; the operator sees all. The
-      // filter is applied to the ROWS, never to the underlying figures, so the
-      // per-altitude roll-up a seat sees is its own subtree and not the org's.
+      const effective = settings();
+      const { seat } = resolveOperatingSeat(at, effective);
+      if (seat.readOnly) {
+        return fail('The declared seat is unresolved and read-only; the cadence register refuses to read a boundary it cannot resolve.', 'scope');
+      }
+      const report = buildCadenceReport(store.state, { now: at, settings: effective });
+      // A declared seat sees forums inside its span (tree or direct matrix
+      // line); the operator sees all.
       const rows = seat.fullAccess
         ? report.picture.forums
-        : report.picture.forums.filter((row) => row.chairSeatId === seat.id || seat.scope?.has(row.chairSeatId));
+        : report.picture.forums.filter((row) => seatReachesPerson(seat, row.chairSeatId));
+      const visibleForumIds = new Set(rows.map((r) => r.id));
+      const visibleItemKeys = report.picture.perItem
+        .filter((item) => seat.fullAccess
+          || (item.forumId && visibleForumIds.has(item.forumId))
+          || (Array.isArray(item.competingForumIds) && item.competingForumIds.some((fid) => visibleForumIds.has(fid)))
+          || (Array.isArray(item.people) && item.people.length
+            ? item.people.every((pid) => seatReachesPerson(seat, pid))
+            : seatReachesPerson(seat, item.ownerNodeId)))
+        .map((item) => `${item.type}:${item.entityId}`);
+      const scopedPeople = (store.state.people || [])
+        .filter((p) => p && p.status !== 'archived' && seatReachesPerson(seat, p.id))
+        .map((p) => ({ id: p.id, name: p.name || p.id, role: p.role || p.level || '' }))
+        .sort((a, b) => a.name.localeCompare(b.name));
       return {
         ok: true,
         report,
         forums: rows,
+        scopedPeople,
+        visibleItemKeys,
         readings: readings().slice(-12).reverse(),
         band: report.band,
         constraint: report.constraint,
@@ -143,6 +179,7 @@ export function createCadenceActions(store, { now, idFactory }) {
           rank: seat.rank,
           fullAccess: seat.fullAccess,
           disclosure: seat.disclosure,
+          lineScopeN: seat.lineScopeN || 0,
         },
         engineVersion: report.engineVersion,
         ...(options.includeItems ? { perItem: report.picture.perItem } : {}),
@@ -218,9 +255,10 @@ export function createCadenceActions(store, { now, idFactory }) {
       const chairSeatId = input.chairSeatId || input.ownerId || null;
       if (!chairSeatId) return fail('Name the seat that chairs this forum.', 'chairSeatId');
 
-      const builtProps = buildSeats(store.state, { now: at, settings: settings() });
+      const { built: builtProps } = resolveOperatingSeat(at, settings());
       if (!builtProps.byId.has(chairSeatId) && chairSeatId !== 'leader') {
-        return fail('The chairing seat is not a leadership node in this roster.', 'chairSeatId');
+        const refused = (builtProps.refusedLineSeats || []).find((r) => r.id === chairSeatId);
+        return fail(refused?.reason || 'The chairing seat is not a leadership node in this roster.', 'chairSeatId');
       }
       const altitudeKey = input.altitudeKey || builtProps.byId.get(chairSeatId)?.altitudeKey || 'manager';
       const alt = altitudeByKey(altitudeKey);

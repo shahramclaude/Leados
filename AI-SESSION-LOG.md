@@ -2764,3 +2764,26 @@ Meanwhile `RULE-MTX-01` (ADR-0140) had already fanned that same work to her.
 **Verified vs unverified.** The failed attempts exercised real-store declarations, computed-vs-rendered queue counts, stored forum titles, CSV figures, automation provenance and single-chain behavior, but they diagnose reverted code and certify no retained implementation. Existing cadence suite, full canonical suite, standalone and real-browser/AT were not run and remain **[UNVERIFIED]**. Clean baseline restored; only ROADMAP and this log changed.
 
 **Coverage / next.** Shipped map unchanged: frontline / mid-manager 200 (calendar arithmetic only), director / VP 197, CEO / C-suite 198. Matrix cadence read/write/routing parity remains In Progress. Next: make attendance validation use the canonical tree ∪ declared-line scope before retrying the routing slice. Authenticated identity and tenant isolation remain the standing foundational gap. Commit/push/PR result is reported in the session response.
+
+# 2026-11-09 — Session 202: Operating Cadence Clock × Matrix parity (Schema v121 unchanged)
+
+**Doctrine / sync.** `NORTH_STAR.md` verified present with both binding mandates; origin confirmed as `https://github.com/shahramclaude/Leados.git`; branch `arena/ddace0e5-leados`, branched from `eb8b7ec`.
+
+**Scope / discovery.** Frontline / mid-manager PRIMARY × matrix (clearing the Session 199/201 cadence parity blocker). Added one newly discovered Planned capability to `ROADMAP.md`: **Matrix Multi-Line Performance Review Input & Stewardship Reconciliation** (`reviews.js`/`actions.js` currently ignore dated `reportingLines` and `performance` stewardship rights across `periodStart..periodEnd`; repository-wide absence **[UNVERIFIED]**).
+
+**Built.**
+- `app/core/domain/cadenceRegistry.js`, `cadence.js`: added `'ambiguous-matrix-authority'` (`clock.state: 'ambiguous-authority'`, priority 3 in `nameConstraint`, `secondaryConstraints`, `cadenceBriefText`); injected `buildMatrix`/`matrixLineScope`/`matrixWorkReach` into `buildDemandPicture` to compute `accountableSites`, enforce tree/line subsidiarity (`minimal`), refuse silent meeting-interval selection across competing accountable forums, track `forumOwningSites` / `missingSeatIds`, and prevent cross-peer fallback when an owned span has no covering forum.
+- `app/core/domain/cadenceActions.js`, `accessGateway.js`, `app/actions.js`, `viewScope.js`: wired canonical `matrixLineScopeFor` into `resolveOperatingSeat` and `cadenceDeclareForum`, allowed direct `seat.lineScope` attendance/reads (`MATRIX_LINE_SCOPED` in `guardApiCall`, forwarding `createApi` clock into `guardApi`, and `PUBLIC_PERSON_FIELDS` projection for rank ≤ 2 in `scopedViewState`), kept strict chair enforcement and `seat.readOnly` fail-closed refusals, and returned `scopedPeople` + `visibleItemKeys` from `cadenceRead`.
+- `app/core/domain/cadenceRules.js`, `propagationContracts.js`: added `matrix.line.declared`/`retuned`/`ended` triggers, pruned stale `RULE-CAD-01`/`RULE-CAD-03` links when lines/forums change or become ambiguous, wrote multi-branch `rolls-up-to` edges across all `accountableSites`, and escalated `'ambiguous-matrix-authority'` DACI decisions to `matrixJointApex`.
+- `app/views/cadence.js`: rendered `'ambiguous-authority'` state/tone/badge, multi-line `accountableSites` and competing forums, `visibleItemKeys` workbench/escape filtering, and `scopedPeople` chair/attendance options.
+
+**Verified (post-edit).**
+- `tests/app/cadence-matrix.test.mjs`: **5/5 PASS** (line-only chair + peer/non-leader refusals + `guardApiCall` boundary, matrix subsidiarity, `'ambiguous-matrix-authority'` + stale-edge reconciliation + `matrixJointApex` DACI escalation, multi-branch `rolls-up-to` / `fit-gap` / `matrix.line.ended` cleanup, `scopedViewState` + `safeSeatContext` + JSDOM/axe-core across all 5 `#/cadence` panels with zero out-of-span leaks).
+- `tests/app/operating-cadence.test.mjs`: **15/15 PASS** (after updating 3 pre-existing stale pins: `SCHEMA_VERSION` 119 → 121, `CSV_EXPORTS.length` 104 → 107, and post-declaration `'calendar-unknown'` constraint from Session 200).
+- Focused adjacent suites: `cadence-overdue` **4/4**, `priority-arbitration` **22/22**, `contradiction-audit` **21/21**, `duty-coverage` **11/11**, `matrix-line-seat` **13/13**, `matrix-governance` **7/7**, `matrix-accountability` **24/24**, `operating-seat` **14/14**, `workspace-navigation` **3/3**. (Note: unrelated pre-existing stale pins remain in untouched suites such as `disclosure-compiler` / `identity-ledger` / `budget-exposure` / `typed-links-lineage` / `terminal-publication`.)
+- `npm run lint` **PASS**; `npm run check:boundary` **PASS** (609 app ES modules, 193 test suites, 23 doc checks, 0 leaks); `npm run check:links` **PASS** (972 links across 264 markdown files).
+
+**Unverified / limits.** Full canonical `npm test`, `LeadOS-standalone.html` rebuild, and real-browser assistive-technology walkthrough **[UNVERIFIED]**. Seats remain local workflow declarations rather than server-side authentication.
+
+**Next.** Matrix parity in `jurisdiction`, `succession`, `disclosure`, non-matrix `accessGateway` payload helpers, and `reviews.js` (`Matrix Multi-Line Performance Review Input & Stewardship Reconciliation`); director / VP × matrix rotation; authenticated identity and tenant isolation remain foundational.
+
