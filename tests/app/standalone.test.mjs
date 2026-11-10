@@ -216,7 +216,14 @@ test('standalone artifact exists and is a single inline HTML document', () => {
   // this session touched anything (9,882,413 bytes at the branch point), so the
   // ceiling is raised to the measured build plus headroom; the density bound
   // below is what still catches a module inlined twice.
-  assert.ok(bytes < 10_100_000, `standalone file is unexpectedly large (${bytes} bytes)`);
+  // Raised in Session 221 (Schema v130 unchanged, ADR-0160): the Matrix Line
+  // Activity Reconciliation added three real modules (lineActivity.js,
+  // lineActivityRegistry.js, views/matrixActivityPanel.js) plus shell/CSV/panel
+  // wiring. Measured build: 10,497,412 bytes / 669 modules = 15,691 bytes per
+  // module — DOWN from the previous density, against the unchanged 24,000 bound
+  // that still catches a module or asset inlined twice. The ceiling moves only
+  // because real capability was added; density is what guards duplication.
+  assert.ok(bytes < 10_600_000, `standalone file is unexpectedly large (${bytes} bytes)`);
   const declaredModules = Number((html.match(/content="[^"]*?(\d+) source modules/) || [])[1]);
   assert.ok(declaredModules > 100, `expected the build to declare its module count (got ${declaredModules})`);
   const bytesPerModule = Math.round(bytes / declaredModules);
