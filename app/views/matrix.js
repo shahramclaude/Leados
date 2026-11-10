@@ -71,6 +71,10 @@ import { renderMatrixInterfacePanel } from './matrixInterfacePanel.js';
 // Session 225 read-only slice: current goal carriage through the canonical
 // matrix DAG, with branch overlap printed separately from distinct span totals.
 import { renderGoalCarriagePanel } from './matrixGoalCarriagePanel.js';
+// ADR-0169: the meeting-load & coordination-tax ledger. The cadence register has
+// stored each sitting's duration and room since Schema v93; this panel reads those
+// minutes per person and per line, and refuses any sitting it cannot read.
+import { renderMatrixMeetingLoadPanel } from './matrixMeetingLoadPanel.js';
 
 const PANELS = MATRIX_PANELS;
 
@@ -860,6 +864,7 @@ export function renderMatrix(ctx) {
     panel === 'renewal' ? renderReaffirmationPanel(ctx) : null,
     panel === 'allocation' ? renderPeriodAllocationPanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
     panel === 'activity' ? renderActivityPanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
+    panel === 'meeting-load' ? renderMatrixMeetingLoadPanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
     panel === 'coordination' ? renderMatrixCoordinationPanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
     panel === 'interfaces' ? renderMatrixInterfacePanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
     panel === 'goal-carriage' ? renderGoalCarriagePanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`), seat: report.seat }) : null,

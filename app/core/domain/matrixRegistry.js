@@ -194,6 +194,7 @@ export const MATRIX_PANELS = Object.freeze([
   Object.freeze({ key: 'renewal', label: 'Re-affirmation', hint: 'A line has a term. Which commitments does anyone actually agree to today?' }),
   Object.freeze({ key: 'allocation', label: 'Period allocation', hint: 'What each line actually charged across a named period — time-weighted share-days, or refused.' }),
   Object.freeze({ key: 'activity', label: 'Line activity', hint: 'What each line was charged against what it actually originated — and the refusals between them.' }),
+  Object.freeze({ key: 'meeting-load', label: 'Meeting load', hint: 'Recorded meeting minutes per person and per line — and how much of that time is convened outside the home line.' }),
   Object.freeze({ key: 'coordination', label: 'Coordination', hint: 'Which matrix spans negotiate with one counterpart and which scatter across several — or cannot be measured.' }),
   Object.freeze({ key: 'interfaces', label: 'Interfaces', hint: 'Bilateral management-interface operating agreements across shared counterpart pairs — terms, joint apex escalation, and expiry.' }),
   Object.freeze({ key: 'goal-carriage', label: 'Goal carriage', hint: 'Which manager spans carry each active goal, and what adding reporting branches would double-count.' }),

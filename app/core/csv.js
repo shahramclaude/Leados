@@ -111,6 +111,12 @@ import { LINE_PERIOD_ALLOCATION_CSV_COLUMNS } from './domain/linePeriodAllocatio
 // ADR-0160: the Matrix Line Consumption Reconciliation export (CSV scope #120).
 import { buildLineActivity, lineActivityCsvRows } from './domain/lineActivity.js';
 import { LINE_ACTIVITY_CSV_COLUMNS } from './domain/lineActivityRegistry.js';
+// ADR-0169: the Matrix Meeting-Load & Coordination-Tax Ledger export (CSV scope
+// #124). Built from the SAME read model the panel renders. Aggregate only: no
+// person, no chair, no forum title, no sitting day. A refused rate is BLANK with
+// its reason in its own column, never a zero.
+import { buildMatrixMeetingLoad, matrixMeetingLoadCsvRows } from './domain/matrixMeetingLoad.js';
+import { MATRIX_MEETING_LOAD_CSV_COLUMNS } from './domain/matrixMeetingLoadRegistry.js';
 // ADR-0161: Matrix Span Fragmentation & Counterpart-Dyad Coordination Ledger
 // (CSV scope #121). Aggregate topology only — never a person, manager, line,
 // seat or free-text agreement. An incomplete matrix span withholds workspace
@@ -1178,6 +1184,15 @@ export const CSV_EXPORTS = [
   // zero. Nothing derived is stored: every state is recomputed on read from the
   // readiness ledger, the review records and the dated reporting lines.
   { key: 'succession-bench-evidence', label: 'Cross-line bench evidence (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'succession-bench-evidence', description: 'One summary row for the cross-line bench-evidence sufficiency reading: how many succession bench claims are in scope, how many were read against a completed review, how many could not be read, how many are cross-line and how many single-line, the exact count of each closed evidence state (line never asked / line silent / line awaiting / contested assessor / unowned assessor / home line only / corroborated / no readable review), and the second-line evidence-complete rate with whether it is withheld and why. NO person, NO name, NO manager, NO seat, NO rating, NO review id and NO free text.' },
+  // CSV scope #124 (Schema v135 unchanged, ADR-0169): the meeting-load ledger,
+  // aggregate only. One workspace summary row plus one row per forum KIND. Every
+  // figure is an exact integer number of minutes or of attendee-sittings; a
+  // refused coordination-tax rate exports BLANK with its reason in its own
+  // column. NO person, NO name, NO chair, NO forum title, NO sitting date and NO
+  // free text of any kind. Two separate claims are exported: whether the
+  // independent minute totals reconcile, and whether every sitting and person in
+  // scope could be read at all.
+  { key: 'matrix-meeting-load', label: 'Matrix meeting load (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'matrix-meeting-load', description: 'One workspace summary row plus one row per forum kind for the named window (period_from, period_to and period_days printed in every row): the forum and sitting counts, the sittings that could not be read (no recorded duration, no attendees recorded, an attendee not on the roster, a forum not in the register), the sittings outside the window, the exact recorded person-minute total and its split into cross-line (chaired by someone other than the person\u2019s home manager), home-manager, one declared line, two declared lines, no declared line and the person\u2019s own forum, the attendee-sitting count, the person counts (measured, refused, no recorded attendance, withheld outside the seat), the coordination-tax rate in per-mille with whether it is withheld and why, the declared floors, and TWO separate claims: whether the minute totals reconcile and whether every figure was complete. NO person, NO name, NO chair, NO forum title, NO sitting date and NO free text of any kind. A refused rate is BLANK with withheld_reason set, never a zero, and minutes refused by an unreadable sitting are never printed as a total.' },
   { key: 'line-reaffirmation', label: 'Matrix line re-affirmation (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'line-reaffirmation', description: 'One workspace summary row plus one row per declared line kind: the line count, how many lines were never given a term, how many are inside their warning window, how many have a term that ran out, how many were re-affirmed but not yet answered by the person, how many the person objected to, how many the line released, how many were re-affirmed at a different share than the line now declares, and how many are in term with both sides answered. Plus the two exact-integer share totals that are the point of the register: the share still CHARGED to a commitment no live answer covers, and the share covered by a live re-affirmed term, with the uncovered-plus-covered identity printed as a claim rather than assumed. NO person, NO name, NO manager id, NO declaration id, NO stated reason, NO objection text and NO free text of any kind. A share total is BLANK with share_refused = true and the reason in its own column whenever any line in scope carries no allocation, never a zero. A released line is counted as still charged because the declaration was never dated out: continuation by absence is never exported as a renewal.' },
   // CSV scope #119 (Schema v129 unchanged, ADR-0158). Aggregate-only: one summary row
   // plus one row per declared line KIND, over the default period (the last
@@ -6283,6 +6298,17 @@ export function buildScopeTable(state, scope, now) {
       const cells = benchEvidenceCsvCells(state, { now, settings: state.settings || {} });
       const columns = BENCH_EVIDENCE_CSV_COLUMNS.map((key) => ({ key, header: key }));
       return { columns, rows: [cells] };
+    }
+    case 'matrix-meeting-load': {
+      // CSV scope #124 (Schema v135 unchanged, ADR-0169). Built from the same
+      // read model the panel renders, so an exported minute is provably the
+      // minute that was printed. Aggregate only: no person, no chair, no forum
+      // title, no sitting day. The export reads the DEFAULT window and names it
+      // in every row; a refused rate is BLANK with its reason in its own column.
+      const report = buildMatrixMeetingLoad(state, { now, settings: state.settings || {} });
+      const rows = matrixMeetingLoadCsvRows(report);
+      const columns = MATRIX_MEETING_LOAD_CSV_COLUMNS.map((key) => ({ key, header: key }));
+      return { columns, rows };
     }
     case 'review-stewardship': {
       // CSV scope #109 (Schema v122, ADR-0147). Built from the same read model the

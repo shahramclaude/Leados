@@ -396,9 +396,10 @@ export function createCadenceActions(store, { now, idFactory }) {
         plannedN: input.plannedN,
         closedN,
         closedClassKeys,
-        attendeeIds: Array.isArray(input.attendeeIds) && input.attendeeIds.length
-          ? input.attendeeIds
-          : forum.attending,
+        // ADR-0169: an EXPLICIT empty room is recorded as empty. Only an absent
+        // list falls back to the forum's declared attendance, so the meeting-load
+        // ledger can never charge a sitting to people the recorder removed.
+        attendeeIds: Array.isArray(input.attendeeIds) ? input.attendeeIds : forum.attending,
         minutes: input.minutes,
         note: input.note,
         estimatedServiceDays: input.estimatedServiceDays,
