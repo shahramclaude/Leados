@@ -325,10 +325,13 @@ export function buildMeritParity(state, { cycleId = null, now = new Date(), sett
   /* -------------------------------------------------------- level-matched */
   const levelKeys = new Set();
   for (const r of included) levelKeys.add(r.level || 'unrecorded');
+  // A capped or excluded row may belong to any level/cohort. Do not publish
+  // level comparisons from a silently narrowed pool.
+  const partialPool = excluded.length > 0 || overflowN > 0;
   const byLevel = [...levelKeys].map((key) => {
     const m = included.filter((r) => r.cohort === 'matrix' && (r.level || 'unrecorded') === key);
     const s = included.filter((r) => r.cohort === 'single-line' && (r.level || 'unrecorded') === key);
-    const bothPrinted = m.length >= MERIT_PARITY_FLOOR && s.length >= MERIT_PARITY_FLOOR;
+    const bothPrinted = !partialPool && m.length >= MERIT_PARITY_FLOOR && s.length >= MERIT_PARITY_FLOOR;
     const mMed = m.length ? lowerMedian(m.map((r) => r.bps)) : null;
     const sMed = s.length ? lowerMedian(s.map((r) => r.bps)) : null;
     return {
@@ -342,7 +345,9 @@ export function buildMeritParity(state, { cycleId = null, now = new Date(), sett
       printed: bothPrinted,
       withheldReason: bothPrinted
         ? ''
-        : `One or both cohorts hold fewer than ${MERIT_PARITY_FLOOR} priced people at this level.`,
+        : partialPool
+          ? `The pay pool is incomplete: ${excluded.length} excluded row(s) and ${overflowN} beyond the read limit; level comparisons are withheld.`
+          : `One or both cohorts hold fewer than ${MERIT_PARITY_FLOOR} priced people at this level.`,
     };
   }).sort((a, b) => {
     const order = new Map(MERIT_PARITY_LEVELS.map((l, i) => [l.key, i]));
