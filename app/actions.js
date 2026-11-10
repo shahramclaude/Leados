@@ -42,6 +42,7 @@ import { createAgendaActions } from './core/domain/agendaProvenanceActions.js';
 // eligibility, exercise and concentration are re-derived on read.
 import { createDutyCoverageActions } from './core/domain/dutyCoverageActions.js';
 import { createMatrixActions } from './core/domain/matrixActions.js';
+import { createOneOnOneLineActions, oneOnOneHolderForLog } from './core/domain/oneOnOneLineActions.js';
 // ADR-0143: the Cross-Line Priority Arbitration. Seven dated human commands on
 // the same reviewed gateway; every score, state and capacity total is derived on
 // read, and only an AGREED precedence issues work (RULE-ARB-01).
@@ -1613,12 +1614,19 @@ export function createApi(store, options = {}) {
       if (!isCalendarDay(date)) return fail('Choose a valid meeting date.', 'date');
       if (date > today()) return fail('A 1:1 cannot be logged before it has happened.', 'date');
       const status = ['held', 'skipped', 'moved'].includes(data.status) ? data.status : 'held';
+      const attribution = oneOnOneHolderForLog(store.state, data, status, clock());
+      if (!attribution.ok) return attribution;
+      const lineOnly = !attribution.seat.fullAccess && !attribution.seat.scope.has(person.id)
+        && Boolean(attribution.seat.lineScope?.has(person.id));
 
       const planned = Array.isArray(data.reconciliations) ? data.reconciliations : [];
       if (planned.length && status !== 'held') {
         return fail('Only a 1:1 that was held can confirm what happened to an earlier commitment.', 'status');
       }
       const rawResolvedTopics = Array.isArray(data.resolvedTalkingPoints) ? data.resolvedTalkingPoints : [];
+      // Line-only seats are given public roster fields, not the person's home
+      // talking-point queue. They cannot clear a queue they cannot see.
+      if (lineOnly && rawResolvedTopics.length) return fail('This line cannot clear the home-line talking-point queue.', 'resolvedTalkingPoints');
       const resolvedTopicList = normalizeTalkingPoints(rawResolvedTopics);
       if (resolvedTopicList.length && status !== 'held') {
         return fail('Only a 1:1 that was held can clear topics the person asked to raise.', 'status');
@@ -1639,6 +1647,7 @@ export function createApi(store, options = {}) {
         const due = item.due ? String(item.due) : null;
         let source = null;
         if (sourceType === 'managerSupport') {
+          if (lineOnly) return fail('This line cannot settle an unattributed home-line support commitment.', 'reconciliations');
           source = store.state.managerSupport.find((record) => record.id === item.managerSupportId);
           if (!source) return fail('That manager follow-up no longer exists. Reload and try again.', 'reconciliations');
           if (source.personId !== person.id) return fail('A commitment can only be reconciled with the person it concerns.', 'reconciliations');
@@ -1648,6 +1657,10 @@ export function createApi(store, options = {}) {
           const sourceMeeting = store.state.oneOnOnes.find((m) => m.id === item.meetingId);
           const sourceAction = sourceMeeting?.actions.find((a) => a.id === item.actionId);
           if (!sourceMeeting || !sourceAction) return fail('That commitment no longer exists. Reload and try again.', 'reconciliations');
+          if (!attribution.seat.fullAccess && ((sourceMeeting.heldById && sourceMeeting.heldById !== attribution.seat.id)
+            || (lineOnly && !sourceMeeting.heldById))) {
+            return fail('A 1:1 cannot settle another line’s or an unattributed line-only commitment.', 'reconciliations');
+          }
           if (sourceMeeting.personId !== person.id) return fail('A commitment can only be reconciled with the person it was agreed with.', 'reconciliations');
           if (sourceMeeting.date > date) return fail('A commitment cannot be settled in a conversation that happened before it was made.', 'date');
           if (!isOpenAction(sourceAction)) return fail(`"${sourceAction.text}" is already closed. Reload before logging this 1:1.`, 'reconciliations');
@@ -1673,6 +1686,8 @@ export function createApi(store, options = {}) {
         ...append(null, 'oo'),
         personId: data.personId,
         date,
+        dateUncertain: false,
+        ...attribution.holder,
         status,
         mood: data.mood ?? null,
         resolvedTopics: status === 'held' ? resolvedTopicList : [],
@@ -1832,6 +1847,9 @@ export function createApi(store, options = {}) {
         carried: carriedCount,
         dropped: droppedCount,
         topicsCleared,
+        heldById: meeting.heldById,
+        saved: store.isEncrypted ? null : !store.persistError,
+        warning: store.persistError || (store.isEncrypted ? 'Encrypted save queued; watch the workspace save status before leaving.' : null),
       };
     },
 
@@ -19957,6 +19975,7 @@ export function createApi(store, options = {}) {
   // a reporting line are human commands through the same reviewed gateway; the
   // roll-up is derived on read and RULE-MTX-01 fans the work in the same commit.
   Object.assign(api, createMatrixActions(store, { now: clock, idFactory: id }));
+  Object.assign(api, createOneOnOneLineActions(store, { now: clock }));
   // ADR-0143: the Cross-Line Priority Arbitration. Opening a case, disposing of a
   // demand, proposing the measured order, answering as a party, agreeing the
   // binding precedence and withdrawing it are all human commands through the same

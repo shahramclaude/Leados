@@ -1,15 +1,15 @@
 /**
  * app/core/domain/oneOnOneLineSchema.js — normalization for Matrix 1:1 Line
- * Coverage (ADR-0164, Schema v132).
+ * Coverage (Schema v132; ADR-0164 is reserved and not yet written).
  *
- * WHAT IS TO BE STORED (once `schema.js` calls these normalizers — it does not yet)
+ * WHAT IS STORED
  *   On every `oneOnOnes` row, three additive fields:
  *     heldById     the roster id (or the workspace-leader id) of the manager who
  *                  HELD the meeting; `null` means "not recorded".
  *     heldByBasis  how that holder came to be on the record (closed vocabulary).
  *     heldByAt     when the attribution was recorded.
- *   One bounded ledger, `oneOnOneLineMarkers`, holding RULE-OOL-01's
- *   idempotency markers only.
+ *   A separate bounded marker ledger is reserved for the unfinished reminder
+ *   rule; it is not part of Schema v132.
  *
  * WHAT IS NEVER STORED. A line state, a day count, a "masked" verdict, a
  * cadence. Every one is derived on read from the meetings and the live matrix,
@@ -22,13 +22,8 @@
  * roster is KEPT exactly as stored — people leave, and the reader prints it as
  * a holder who is no longer on the roster rather than rewriting history.
  *
- * STATUS — NOT WIRED (Session 226, 2026-11-10). Nothing in the running app
- * imports this module yet. ADR-0164 has not been written, and "Schema v132",
- * `RULE-OOL-01`, the `one-on-ones` panel key and CSV scope #123 are RESERVED
- * names, not shipped facts (v132 is also pencilled in by goal carriage,
- * ADR-0163 — whichever lands first takes it). Until the remainder ships, the
- * app stores no holder on a 1:1, so on real data every meeting reads
- * "no holder recorded". See ROADMAP.md, In Progress.
+ * Schema v132 wires holder and setting normalization. The reminder marker
+ * normalizer remains reserved; no automatic reminder rule is shipped yet.
  */
 
 import {
@@ -109,12 +104,17 @@ export function validateOneOnOneLineConventions(input = {}) {
 export function normalizeOneOnOneHolder(meeting, counters = null) {
   const none = { heldById: null, heldByBasis: null, heldByAt: null };
   if (!isPlainObject(meeting)) return none;
-  const heldById = str(meeting.heldById).slice(0, ONE_ON_ONE_LINE_LIMITS.holderIdMax);
-  if (!heldById) return none;
+  const heldById = str(meeting.heldById);
+  if (!heldById) {
+    if (counters && meeting.heldById !== null && meeting.heldById !== undefined && meeting.heldById !== '') {
+      counters.cleared = (counters.cleared || 0) + 1;
+    }
+    return none;
+  }
   const basis = ONE_ON_ONE_HOLDER_BASES.includes(meeting.heldByBasis) ? meeting.heldByBasis : null;
-  // A holder nobody can account for, or a person recorded as their own manager,
-  // is not an attribution. Cleared and counted — never kept, never repaired.
-  if (!basis || heldById === str(meeting.personId)) {
+  // Never truncate an id into somebody else's id. Unaccountable, oversized or
+  // self-attributed holders are cleared and counted, never guessed.
+  if (!basis || heldById.length > ONE_ON_ONE_LINE_LIMITS.holderIdMax || heldById === str(meeting.personId)) {
     if (counters) counters.cleared = (counters.cleared || 0) + 1;
     return none;
   }

@@ -522,6 +522,7 @@ export const ACTION_RIGHTS = Object.freeze({
   // not the one the ask named, and the schema refuses it again on reload.
   'answer-branch-reading': { minRank: 1, maxRank: 5, label: 'Answer a branch reading request as that branch’s leader' },
   'log-oneonone': { minRank: 1, maxRank: 2, label: 'Log a 1:1' },
+  'govern-oneonone-lines': { minRank: 3, maxRank: 5, label: 'Set matrix 1:1 coverage conventions' },
   'log-feedback': { minRank: 1, maxRank: 2, label: 'Give feedback' },
   'log-conflict': { minRank: 1, maxRank: 2, label: 'Log a conflict' },
   'record-review': { minRank: 1, maxRank: 2, label: 'Record a review' },

@@ -265,9 +265,12 @@ export function renderOneOnOnes(ctx) {
                 h(
                   'div',
                   { class: 'meeting-head' },
-                  h('span', { class: 'meeting-date' }, formatDate(meeting.date)),
+                  h('span', { class: 'meeting-date' }, meeting.dateUncertain ? 'Date unverified' : formatDate(meeting.date)),
                   person ? h('a', { class: 'link', href: `#/people/${person.id}` }, person.name) : h('span', { class: 'muted' }, 'Unknown person'),
                   badge(meeting.status, meeting.status === 'held' ? 'good' : 'warn'),
+                  meeting.status === 'held' ? h('span', { class: 'muted tiny' }, meeting.heldById
+                    ? `Held by: ${meeting.heldById === 'leader' ? (state.settings.leaderName || 'Workspace leader') : personFor(meeting.heldById)?.name || 'holder not visible'}`
+                    : 'Holder not recorded') : null,
                   h('span', { class: 'muted tiny' }, `quality ${grade.score}/100`),
                   meeting.actions.length ? h('button', { class: 'btn btn-tiny btn-ghost', type: 'button', onClick: () => openActionDialog(ctx, { meetingId: meeting.id }) }, 'Add action') : null,
                 ),

@@ -1,15 +1,15 @@
 /**
- * app/core/domain/oneOnOneLines.js — Matrix 1:1 Line Coverage (ADR-0164,
- * Schema v132, `#/matrix?panel=one-on-ones`).
+ * app/core/domain/oneOnOneLines.js — Matrix 1:1 Line Coverage (Schema v132).
+ * ADR-0164 and `#/matrix?panel=one-on-ones` remain reserved.
  *
  * THE QUESTION, IN AN OPERATOR'S WORDS. "Sam sits 60% in my engineering team
  * and 40% on Priya's programme. The people list says Sam's 1:1 is on track. Is
  * that MY weekly meeting, or hers? Because if Priya has not sat down with Sam
  * since the line was declared, the roster is green and nobody knows."
  *
- * Today nobody can answer: a 1:1 stores who it was WITH and never who HELD it,
- * so the cadence engine reads "the latest meeting with this person" and one
- * busy line masks a silent one — in either direction.
+ * The legacy person-level cadence reads "the latest meeting with this person"
+ * regardless of who held it. The holder on newer meetings, or a manager's
+ * explicit claim on an older meeting, lets this reader separate those lines.
  *
  * WHAT IT BUILDS. For every person on more than one live line, one row per
  * (person, line) pair, read from the held 1:1s attributed to THAT line's
@@ -27,13 +27,8 @@
  *   pairs          = ok + due + overdue + never + new + unproven + exempt
  *   held meetings  = home + line + other + dangling + unattributed
  *
- * STATUS — NOT WIRED (Session 226, 2026-11-10). Nothing in the running app
- * imports this module yet. ADR-0164 has not been written, and "Schema v132",
- * `RULE-OOL-01`, the `one-on-ones` panel key and CSV scope #123 are RESERVED
- * names, not shipped facts (v132 is also pencilled in by goal carriage,
- * ADR-0163 — whichever lands first takes it). Until the remainder ships, the
- * app stores no holder on a 1:1, so on real data every meeting reads
- * "no holder recorded". See ROADMAP.md, In Progress.
+ * Session 227 wires this reader to stored holders and a scoped API adapter.
+ * The matrix panel, automatic reminder rule and CSV registration are unbuilt.
  *
  * Pure module: no DOM, no storage, no implicit clock.
  */
@@ -68,7 +63,9 @@ const SEVERITY = Object.freeze({ ok: 0, due: 1, overdue: 2, never: 3 });
 
 function dayOf(value) {
   const s = typeof value === 'string' ? value.trim().slice(0, 10) : '';
-  return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+  const d = new Date(`${s}T00:00:00.000Z`);
+  return Number.isFinite(d.getTime()) && d.toISOString().slice(0, 10) === s ? s : null;
 }
 
 function nameOf(value, fallback = '') {
@@ -114,16 +111,24 @@ function emptyMeetingCounts() {
  *   aggregate  the person is counted; no name and no row is built.
  *   denied     outside this seat: counted as withheld, in no figure at all.
  */
-function scopeFor(state, at, cfg) {
+function scopeFor(state, at, cfg, matrix) {
   const lineScope = matrixLineScopeFor(state, { now: at, settings: cfg });
   const built = buildSeats(state, { now: at, settings: cfg, ...(lineScope ? { lineScope } : {}) });
   const seat = activeSeat(built);
-  const disclose = (personId) => (seat.fullAccess ? 'full' : canSee({ personId }, 'oneOnOnes', seat, built).allow);
+  const disclose = (personId) => {
+    if (seat.fullAccess) return 'full';
+    const verdict = canSee({ personId }, 'oneOnOnes', seat, built).allow;
+    // A person can also reach this seat through a subordinate's additional
+    // line. The canonical DAG proves that reach, but it grants counts only,
+    // never the sideways 1:1 detail that the seat policy would deny.
+    if (verdict === 'denied' && !seat.readOnly && matrix.nodes.get(personId)?.ancestors.has(seat.id)) return 'aggregate';
+    return verdict;
+  };
   const scopeLabel = seat.fullAccess
     ? 'the whole workspace'
     : seat.readOnly
       ? 'an unresolved seat (counts only)'
-      : `${nameOf(seat.name, seat.id)}’s span and its declared lines`;
+      : `${nameOf(seat.name, seat.id)}’s span, declared lines and aggregate-only matrix descendants`;
   return { seat, disclose, scopeLabel };
 }
 
@@ -154,6 +159,9 @@ function pairState({ owes, intervalDays, lastHeldOn, lastUnattributedOn, started
     const possible = oneOnOneLineReading(daysBetween(lastUnattributedOn, today), intervalDays);
     const provenRank = proven ? SEVERITY[proven] : SEVERITY.never;
     if (possible && SEVERITY[possible] < SEVERITY.overdue && SEVERITY[possible] < provenRank) return S.unproven;
+    // An old unattributed meeting could still have been this manager's. It
+    // proves the line is overdue either way, not that a 1:1 was *never* held.
+    if (!proven && possible === 'overdue') return S.overdue;
   }
   return proven || S.never;
 }
@@ -169,17 +177,60 @@ function pairReason(line, conv) {
     case S.fresh:
       return `The line began ${line.startedOn}; its first 1:1 is due by ${line.dueOn}.`;
     case S.unproven:
-      return `${held}. An unattributed 1:1 on ${line.lastUnattributedOn} may have been this line’s; until its holder is recorded, this line cannot be read.`;
+      return line.uncertainDateN
+        ? `${held}. ${plural(line.uncertainDateN, 'held 1:1')} may belong to this line but has an unverified date; its fallback date is not evidence, so the line cannot be read.`
+        : `${held}. An unattributed 1:1 on ${line.lastUnattributedOn} may have been this line’s; until its holder is recorded, this line cannot be read.`;
     case S.due:
       return `${held} — past the ${line.intervalDays}-day interval (due ${line.dueOn}).`;
     case S.overdue:
-      return `${held} — beyond ${ONE_ON_ONE_LINE_OVERDUE.label} of ${line.intervalDays} days.`;
+      return line.lastHeldOn
+        ? `${held} — beyond ${ONE_ON_ONE_LINE_OVERDUE.label} of ${line.intervalDays} days.`
+        : `${held}. The latest unattributed 1:1 (${line.lastUnattributedOn}) would still leave this line overdue; it may have been held, so “never” cannot be claimed.`;
     default:
       return `${held}${line.startedOn ? `; the line has stood since ${line.startedOn}` : ''}.${line.lastUnattributedOn ? ` The latest unattributed 1:1 (${line.lastUnattributedOn}) would still leave it overdue.` : ''}`;
   }
 }
 
 /* ------------------------------------------------------------- the register */
+
+/** People whose current reporting graph cannot safely support a line reading. */
+function structuralIssues(state, matrix, today) {
+  const rows = Array.isArray(state.reportingLines) ? state.reportingLines.filter(Boolean) : [];
+  const rawById = new Map(rows.map((row) => [row.id, row]));
+  const possibleNow = (row) => {
+    if (!row) return true;
+    const from = dayOf(row.fromISO);
+    const to = dayOf(row.toISO);
+    return !(from && from > today) && !(to && to < today);
+  };
+  const issues = new Map();
+  const add = (personId, reason) => {
+    if (!personId) return;
+    if (!issues.has(personId)) issues.set(personId, new Set());
+    issues.get(personId).add(reason);
+  };
+  for (const defect of matrix.defects || []) {
+    if (possibleNow(defect.lineId ? rawById.get(defect.lineId) : null)) {
+      add(defect.personId, 'An active or undated reporting-line defect makes the graph incomplete.');
+    }
+  }
+  // The matrix DAG deliberately represents only one edge to a manager, but a
+  // malformed import can contain two active declarations to that same manager
+  // with different kinds. A holder alone cannot distinguish those lines.
+  const seen = new Set();
+  for (const row of rows.filter(possibleNow)) {
+    const key = `${row.personId}|${row.managerId}`;
+    if (seen.has(key)) add(row.personId, 'Several active declarations name the same manager; a holder cannot distinguish those lines.');
+    seen.add(key);
+  }
+  for (const [personId, lines] of matrix.linesByPerson) {
+    const node = matrix.chain.nodes.get(personId);
+    if (node?.inCycle || lines.some((line) => matrix.chain.nodes.get(line.managerId)?.inCycle)) {
+      add(personId, 'A reporting-line cycle prevents a trustworthy coverage reading.');
+    }
+  }
+  return issues;
+}
 
 /**
  * The whole register, built under the acting seat.
@@ -197,23 +248,31 @@ export function buildOneOnOneLines(state = {}, { now = new Date(), settings = nu
   const rawHome = Number(cfg.oneOnOneCadenceDays ?? 7);
   const homeCadenceDays = Number.isInteger(rawHome) && rawHome >= 1 ? rawHome : 7;
   const live = matrix || buildMatrix(state, { now: at, settings: cfg });
-  const { seat, disclose, scopeLabel } = scopeFor(state, at, cfg);
+  const { seat, disclose, scopeLabel } = scopeFor(state, at, cfg, live);
+  const issues = structuralIssues(state, live, today);
 
   const people = Array.isArray(state.people) ? state.people : [];
   const activeIds = new Set(people.filter((p) => p && p.status !== 'archived').map((p) => p.id));
   const nameById = new Map(people.map((p) => [p.id, nameOf(p.name, p.id)]));
   const managerName = (id) => (id === LEADER_ID ? 'the workspace leader' : nameById.get(id) || `${id} (not on the roster)`);
 
-  // Held meetings, indexed once. A meeting dated after today has not happened.
+  // Held meetings are indexed once. A future meeting has not happened; a
+  // repaired/missing date is counted but never treated as dated evidence.
   const heldByPerson = new Map();
+  const futureByPerson = new Map();
   for (const meeting of Array.isArray(state.oneOnOnes) ? state.oneOnOnes : []) {
     if (!meeting || meeting.status !== 'held') continue;
-    const date = dayOf(meeting.date);
-    if (!date || date > today) continue;
+    const parsed = dayOf(meeting.date);
+    const dateUncertain = meeting.dateUncertain === true || !parsed;
+    if (!dateUncertain && parsed > today) {
+      futureByPerson.set(meeting.personId, (futureByPerson.get(meeting.personId) || 0) + 1);
+      continue;
+    }
     if (!heldByPerson.has(meeting.personId)) heldByPerson.set(meeting.personId, []);
     heldByPerson.get(meeting.personId).push({
       id: meeting.id,
-      date,
+      date: dateUncertain ? null : parsed,
+      dateUncertain,
       heldById: typeof meeting.heldById === 'string' && meeting.heldById ? meeting.heldById : null,
       heldByBasis: meeting.heldByBasis || null,
     });
@@ -224,6 +283,11 @@ export function buildOneOnOneLines(state = {}, { now = new Date(), settings = nu
   const meetings = emptyMeetingCounts();
   const byKind = new Map();
   const claimable = [];
+  const refusedPersons = [];
+  let structuralRefusedN = 0;
+  let aggregateRefusedN = 0;
+  let uncertainDateN = 0;
+  let futureHeldN = 0;
   let peopleN = 0;
   let namedN = 0;
   let countedOnlyN = 0;
@@ -235,20 +299,31 @@ export function buildOneOnOneLines(state = {}, { now = new Date(), settings = nu
   let claimableTotal = 0;
 
   const linesByPerson = live.linesByPerson instanceof Map ? live.linesByPerson : new Map();
-  const personIds = [...linesByPerson.keys()].sort((a, b) => String(nameById.get(a) || a).localeCompare(String(nameById.get(b) || b)) || String(a).localeCompare(String(b)));
+  const personIds = [...new Set([...linesByPerson.keys(), ...issues.keys()])]
+    .sort((a, b) => String(nameById.get(a) || a).localeCompare(String(nameById.get(b) || b)) || String(a).localeCompare(String(b)));
 
   for (const personId of personIds) {
     const liveLines = (linesByPerson.get(personId) || []).filter((l) => l && l.active !== false);
-    // Only a person on MORE than one line is read here; a single line is fully
-    // served by the existing per-person cadence, which this register leaves alone.
-    if (!liveLines.some((l) => l.role !== 'primary')) continue;
+    // A defect may have prevented the second line from being wired at all. It
+    // must be refused explicitly rather than misreported as single-chain.
+    if (!liveLines.some((l) => l.role !== 'primary') && !issues.has(personId)) continue;
 
     const allow = disclose(personId);
     if (allow !== 'full' && allow !== 'aggregate') { withheldN += 1; continue; }
+    if (issues.has(personId)) {
+      structuralRefusedN += 1;
+      if (allow === 'full') refusedPersons.push({ personId, personName: nameById.get(personId) || personId, reason: [...issues.get(personId)].join(' ') });
+      else aggregateRefusedN += 1;
+      continue;
+    }
     peopleN += 1;
     if (allow === 'full') namedN += 1; else countedOnlyN += 1;
 
-    const held = (heldByPerson.get(personId) || []).slice().sort((a, b) => b.date.localeCompare(a.date) || String(b.id).localeCompare(String(a.id)));
+    const held = (heldByPerson.get(personId) || []).slice().sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')) || String(b.id).localeCompare(String(a.id)));
+    const dated = held.filter((meeting) => !meeting.dateUncertain);
+    const undated = held.filter((meeting) => meeting.dateUncertain);
+    uncertainDateN += undated.length;
+    futureHeldN += futureByPerson.get(personId) || 0;
     const home = liveLines.find((l) => l.role === 'primary') || null;
     const homeManagerId = home ? home.managerId : null;
     const additionalManagerIds = new Set(liveLines.filter((l) => l.role !== 'primary').map((l) => l.managerId));
@@ -265,7 +340,7 @@ export function buildOneOnOneLines(state = {}, { now = new Date(), settings = nu
     }
     for (const key of Object.keys(meetings)) meetings[key] += own[key];
 
-    const unattributed = held.filter((m) => !m.heldById);
+    const unattributed = dated.filter((m) => !m.heldById);
     const lastUnattributedOn = unattributed.length ? unattributed[0].date : null;
 
     // --- one row per line, home first
@@ -280,11 +355,13 @@ export function buildOneOnOneLines(state = {}, { now = new Date(), settings = nu
       // Evidence is needed to exempt a line. No declared share, no exemption.
       const owes = role === 'home' ? true : !(shareDeclared && sharePct < conv.oneOnOneLineMinSharePct);
       const intervalDays = role === 'home' ? homeCadenceDays : conv.oneOnOneLineCadenceDays;
-      const credited = held.filter((m) => m.heldById === l.managerId);
+      const credited = dated.filter((m) => m.heldById === l.managerId);
       const last = credited[0] || null;
       const lastHeldOn = last ? last.date : null;
       const startedOn = dayOf(l.fromISO);
-      const state_ = pairState({ owes, intervalDays, lastHeldOn, lastUnattributedOn, startedOn, today });
+      const uncertainForLine = undated.filter((m) => !m.heldById || m.heldById === l.managerId).length;
+      let state_ = pairState({ owes, intervalDays, lastHeldOn, lastUnattributedOn, startedOn, today });
+      if (owes && uncertainForLine && state_ !== S.ok) state_ = S.unproven;
       const row = {
         lineId: l.id,
         declarationId: l.declarationId || null,
@@ -306,7 +383,8 @@ export function buildOneOnOneLines(state = {}, { now = new Date(), settings = nu
         lastHeldBasis: last ? last.heldByBasis : null,
         daysSince: lastHeldOn ? daysBetween(lastHeldOn, today) : null,
         dueOn: lastHeldOn ? addDays(lastHeldOn, intervalDays) : startedOn ? addDays(startedOn, intervalDays) : null,
-        lastUnattributedOn: state_ === S.unproven || state_ === S.never ? lastUnattributedOn : null,
+        lastUnattributedOn: state_ === S.unproven || state_ === S.never || (state_ === S.overdue && !lastHeldOn) ? lastUnattributedOn : null,
+        uncertainDateN: uncertainForLine,
         state: state_,
         stateLabel: ONE_ON_ONE_LINE_STATE_LABELS[state_],
         tone: ONE_ON_ONE_LINE_STATE_TONES[state_],
@@ -359,7 +437,7 @@ export function buildOneOnOneLines(state = {}, { now = new Date(), settings = nu
     }
 
     if (allow !== 'full') continue;
-    const verdict = oneOnOnePersonVerdict({ masked, silentN, unprovenN: ownStates.unproven, dueN: ownStates.due });
+    const verdict = oneOnOnePersonVerdict({ masked, silentN, unprovenN: ownStates.unproven, dueN: ownStates.due, newN: ownStates.new });
     persons.push({
       personId,
       personName: nameById.get(personId) || personId,
@@ -389,7 +467,12 @@ export function buildOneOnOneLines(state = {}, { now = new Date(), settings = nu
     peopleN,
     namedN,
     countedOnlyN,
-    withheldN,
+    // A scoped seat is not entitled to a count of people outside its span.
+    withheldN: seat.fullAccess ? withheldN : null,
+    structuralRefusedN,
+    aggregateRefusedN,
+    uncertainDateN,
+    futureHeldN,
     pairsN,
     owingN,
     okN: states.ok,
@@ -418,8 +501,8 @@ export function buildOneOnOneLines(state = {}, { now = new Date(), settings = nu
   return {
     engineVersion: ONE_ON_ONE_LINE_ENGINE_VERSION,
     generatedOn: today,
-    isMatrix: peopleN > 0 || withheldN > 0,
-    singleChainNote: 'No person in scope reports on more than one line, so every 1:1 already credits the only line there is. The existing 1:1 cadence is unchanged.',
+    isMatrix: peopleN > 0 || structuralRefusedN > 0,
+    singleChainNote: 'No multi-line person is visible in this scope. The existing per-person 1:1 cadence is unchanged; it is not evidence of who held an unattributed meeting.',
     conventions: {
       homeCadenceDays,
       lineCadenceDays: conv.oneOnOneLineCadenceDays,
@@ -433,13 +516,15 @@ export function buildOneOnOneLines(state = {}, { now = new Date(), settings = nu
       // The operator view names a holder; a declared seat claims its own.
       canAttribute: Boolean(seat.fullAccess),
       canClaim: !seat.fullAccess && canLog,
-      canGovern: !seat.readOnly && canAct(ONE_ON_ONE_LINE_RIGHTS.GOVERN, seat).allow,
-      canScan: canLog,
+      canGovern: Boolean(seat.fullAccess) && !seat.readOnly && canAct(ONE_ON_ONE_LINE_RIGHTS.GOVERN, seat).allow,
+      // The scan command is reserved, not implemented in this slice.
+      canScan: false,
     },
     scope: seat.fullAccess ? 'workspace' : 'seat',
     scopeLabel,
     disclosure: countedOnlyN > 0 && namedN === 0 ? 'aggregate' : countedOnlyN > 0 ? 'mixed' : 'detail',
     persons,
+    refusedPersons,
     kinds,
     claimable,
     board,
@@ -457,22 +542,25 @@ export function oneOnOneLineBriefText(report) {
     lines.push(report.singleChainNote);
     return lines.join(' ');
   }
-  lines.push(`${plural(b.peopleN, 'person', 'people')} ${b.peopleN === 1 ? 'sits' : 'sit'} on more than one reporting line, across ${plural(b.pairsN, '(person, line) pair')}; ${b.owingN} owe a standing 1:1 (home line every ${c.homeCadenceDays} days, an additional line every ${c.lineCadenceDays} days, exempt below a ${c.minSharePct}% share).`);
+  if (b.structuralRefusedN) lines.push(`${plural(b.structuralRefusedN, 'person', 'people')} could not be read because the reporting graph is defective or ambiguous; the remaining figures are partial.`);
+  lines.push(`${plural(b.peopleN, 'person', 'people')} ${b.peopleN === 1 ? 'sits' : 'sit'} on more than one readable reporting line, across ${plural(b.pairsN, '(person, line) pair')}; ${b.owingN} owe a standing 1:1 (home line every ${c.homeCadenceDays} days, an additional line every ${c.lineCadenceDays} days, exempt below a ${c.minSharePct}% share).`);
   lines.push(b.statesReconcile
     ? `On cadence ${b.okN}; due ${b.dueN}; overdue ${b.overdueN}; never held ${b.neverN}; new ${b.newN}; cannot be read ${b.unprovenN}; exempt ${b.exemptN} — ${b.pairsN} in all.`
     : 'THE PAIR STATES DO NOT ADD UP TO THE PAIR TOTAL; treat every figure in this note as unverified.');
   lines.push(b.maskedN
     ? `${plural(b.maskedN, 'person', 'people')} ${b.maskedN === 1 ? 'reads' : 'read'} on track on the people list while one of their lines is silent: another line’s meeting is masking it.`
-    : 'No silent line is masked by another line’s meeting.');
+    : 'No masked silent line was proven among the readable records.');
   lines.push(b.meetingsReconcile
     ? `Of ${plural(b.heldN, 'held 1:1')}: ${b.homeN} by the home line, ${b.lineN} by an additional line, ${b.otherN} by somebody who holds no line today, ${b.danglingN} by a holder no longer on the roster, and ${b.unattributedN} with no holder recorded.`
     : 'THE MEETING CLASSES DO NOT ADD UP TO THE HELD TOTAL; treat every figure in this note as unverified.');
-  if (b.unprovenN) lines.push(`${plural(b.unprovenN, 'line')} cannot be read until a manager claims the unattributed 1:1 that might be theirs; nothing is assumed either way.`);
+  if (b.unprovenN) lines.push(`${plural(b.unprovenN, 'line')} cannot be read because a possible meeting lacks a holder or a trustworthy date; nothing is assumed either way.`);
+  if (b.uncertainDateN) lines.push(`${plural(b.uncertainDateN, 'held 1:1')} has an unverified date; fallback dates are not used as evidence.`);
+  if (b.futureHeldN) lines.push(`${plural(b.futureHeldN, 'future-dated held 1:1')} was excluded because it has not yet happened.`);
   if (b.withheldN) lines.push(`${plural(b.withheldN, 'person', 'people')} on more than one line ${b.withheldN === 1 ? 'sits' : 'sit'} outside this seat and ${b.withheldN === 1 ? 'is' : 'are'} counted here only as withheld.`);
   return lines.join(' ');
 }
 
-/** CSV scope #123: one summary row, then one row per line role and kind. */
+/** Reserved CSV helper: the scope is not registered in the running app. */
 export function oneOnOneLineCsvRows(report) {
   const b = report.board;
   const c = report.conventions;

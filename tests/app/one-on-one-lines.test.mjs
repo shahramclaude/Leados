@@ -1,9 +1,7 @@
 /**
- * tests/app/one-on-one-lines.test.mjs — Matrix 1:1 Line Coverage, the PURE
- * half only (Session 226). The read model, its vocabulary and its normalizers
- * are committed; nothing in the running app imports them yet (no stored
- * holder, no command, no rule, no panel, no export). The last test pins that
- * boundary so nobody can mistake this suite for an end-to-end proof.
+ * Matrix 1:1 Line Coverage read-model and schema checks. Session 227 wires
+ * holder persistence and commands; the interactive coverage panel, reminder
+ * rule and export remain unbuilt.
  *
  * Organised around what a per-line 1:1 reading can be betrayed by:
  *
@@ -196,11 +194,11 @@ test('an unattributed 1:1 that could be a line’s makes that line unreadable �
 test('an unattributed 1:1 too old to matter cannot hide a silence, and a later attributed one settles the line', () => {
   // 200 days ago: whoever held it, both lines are overdue or worse.
   const old = read(makeState({ meetings: [held(200, null)] }));
-  assert.equal(line(sam(old), 'home').state, 'never');
-  assert.equal(line(sam(old), 'additional').state, 'never');
+  assert.equal(line(sam(old), 'home').state, 'overdue');
+  assert.equal(line(sam(old), 'additional').state, 'overdue');
   assert.equal(old.board.silentPairsN, 2);
   assert.equal(old.board.claimableN, 0, 'claiming it would change no reading');
-  assert.match(line(sam(old), 'additional').reason, /would still leave it overdue/);
+  assert.match(line(sam(old), 'additional').reason, /would still leave this line overdue/);
 
   // An unattributed meeting OLDER than the line's own attributed one is irrelevant to that line.
   const settled = read(makeState({ meetings: [held(3, 'pmdir'), held(5, null)] }));
@@ -355,13 +353,13 @@ test('a seat reads only what the existing 1:1 policy lets it read: named, counte
 
   // An unrelated peer manager: outside both the tree and every line.
   const peer = read(makeState({ meetings, seatId: 'opsmgr' }));
-  assert.equal(peer.isMatrix, true);
-  assert.equal(peer.board.withheldN, 1);
+  assert.equal(peer.isMatrix, false, 'outside-span existence is not disclosed');
+  assert.equal(peer.board.withheldN, null);
   assert.equal(peer.board.peopleN, 0);
   assert.equal(peer.board.pairsN, 0);
   assert.equal(peer.board.heldN, 0, 'a withheld person contributes to no figure at all');
   assert.deepEqual(peer.persons, []);
-  assert.match(oneOnOneLineBriefText(peer), /1 person on more than one line sits outside this seat/);
+  assert.match(oneOnOneLineBriefText(peer), /No multi-line person is visible in this scope/);
 });
 
 /* ------------------------------------------ 6. inert, and fail-closed input */
@@ -376,7 +374,7 @@ test('a single-chain workspace is inert, including one whose only declared line 
     assert.equal(report.board.pairsN, 0);
     assert.equal(report.board.heldN, 0);
     assert.equal(oneOnOneLineCsvRows(report).length, 1, 'one summary row of zeros, no kind row');
-    assert.match(oneOnOneLineBriefText(report), /existing 1:1 cadence is unchanged/);
+    assert.match(oneOnOneLineBriefText(report), /existing per-person 1:1 cadence is unchanged/);
     assertReconciles(report);
   }
 });
@@ -435,19 +433,17 @@ test('normalizers fail closed: an unaccountable holder is cleared and counted, a
   assert.equal(kept.at(-1).key, `k${ONE_ON_ONE_LINE_LIMITS.markers + 4}`, 'the oldest markers are displaced first');
 });
 
-test('BOUNDARY OF THIS SLICE: the running app does not store a holder yet, so real data reads “no holder recorded”', () => {
-  // When the remainder is wired (schema field, stamping in logOneOnOne, the
-  // gateway line scope), this test is the one to turn around.
+test('holder fields survive normalisation and support a real masked-line reading', () => {
   const raw = createEmptyState(ISO);
   raw.people = roster();
   raw.reportingLines = [projectLine()];
   raw.oneOnOnes = [held(1, 'funcmgr')];
   const state = normalizeState(raw).state;
   assert.equal(state.oneOnOnes.length, 1);
-  assert.equal(Object.hasOwn(state.oneOnOnes[0], 'heldById'), false, 'schema.js does not carry the field');
+  assert.equal(state.oneOnOnes[0].heldById, 'funcmgr');
   const report = read(state);
-  assert.equal(report.board.unattributedN, 1);
-  assert.equal(report.board.homeN, 0);
-  assert.equal(report.board.maskedN, 0, 'and so no masked line can be proven on a real workspace yet');
-  assert.equal(line(sam(report), 'home').state, 'unproven');
+  assert.equal(report.board.unattributedN, 0);
+  assert.equal(report.board.homeN, 1);
+  assert.equal(report.board.maskedN, 1);
+  assert.equal(line(sam(report), 'home').state, 'ok');
 });
