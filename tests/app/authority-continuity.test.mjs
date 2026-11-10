@@ -760,5 +760,5 @@ test('a single-chain workspace with no frozen decisions reads EMPTY, not broken'
 });
 
 test('the schema is unchanged by this module', () => {
-  assert.equal(SCHEMA_VERSION, 128, 'no schema bump: the register stores nothing');
+  assert.equal(SCHEMA_VERSION, 129, 'ADR-0157 bumped the schema; this register still stores nothing of its own');
 });

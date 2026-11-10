@@ -107,6 +107,7 @@ import { contradictionRule } from './contradictionRules.js';
 // every other rule on the spine.
 import { reviewStewardshipRule } from './reviewStewardshipRules.js';
 import { lineConsentRule } from './lineConsentRules.js';
+import { lineReaffirmationRule } from './lineReaffirmationRules.js';
 import { structureHistoryRule } from './structureHistoryRules.js';
 import { onboardingMatrixRule } from './onboardingMatrixRules.js';
 import { lineExitRule } from './lineExitRules.js';
@@ -819,6 +820,15 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'lineConsentRules.js',
     purpose: 'RULE-LCN-01: a DECLARED reporting line is an ask until two humans answer it. One owned, dated delegation is issued to the manager the line was given to (accept or decline the share, with a stated window), and one to the PERSON once an acceptance has stood past its window unacknowledged — because a manager accepting a share of somebody else\u2019s hours is not the person being told. Typed provenance only (`concerns` from the person to the manager, `issues-obligation` from the person to the task, `rolls-up-to` per leadership ancestor in the matrix DAG). It fires on a declaration, a retune or an explicit scan — never on an acceptance, which is an answer and not a reason to ask again. It never accepts, declines, acknowledges, edits a share or ends a declaration on anybody\u2019s behalf; it is idempotent through a per-line marker plus exact-edge deduplication, bounded by a per-transaction cap whose remainder is counted and retried, and inert in a single-chain workspace.',
     writes: ['delegations', 'links', 'lineConsentMarkers'],
+    emits: [],
+    scansWorkspace: true,
+  },
+
+  {
+    rule: lineReaffirmationRule,
+    module: 'lineReaffirmationRules.js',
+    purpose: 'RULE-LRF-01: a declared line has a TERM, and both sides answer inside it. A line nobody ever termed, a term that ran out and a term inside its declared warning window each put ONE owned, dated delegation in front of the manager who HOLDS the line (re-affirm it for a stated term, or release it with a reason); a manager re-affirmation the PERSON has not answered puts one in front of the PERSON; a person OBJECTION is escalated to the person\u2019s HOME line, because ending somebody else\u2019s accountability is not the informed party\u2019s act; and a RELEASED line still charging a share puts one in front of the manager to date the declaration out with the governed End action. Typed provenance only (`concerns` from the person to the manager, `issues-obligation` from the person to the task, `rolls-up-to` per leadership ancestor in the matrix DAG). It fires on a declaration, a retune, any answer or an explicit scan \u2014 never on a read. It never re-affirms, releases, accepts, objects, edits a share or ends a declaration on anybody\u2019s behalf; it is idempotent through a per-line marker plus exact-edge deduplication, bounded by a per-transaction cap whose remainder is counted and retried, and inert in a single-chain workspace.',
+    writes: ['delegations', 'links', 'lineReaffirmationMarkers'],
     emits: [],
     scansWorkspace: true,
   },

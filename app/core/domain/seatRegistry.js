@@ -459,6 +459,15 @@ export const ACTION_RIGHTS = Object.freeze({
   'close-line-obligation': { minRank: 1, maxRank: 5, label: 'Retire or carry an obligation an ended line left behind' },
   'accept-matrix-line': { minRank: 1, maxRank: 5, label: 'Accept or decline a reporting line you were given' },
   'acknowledge-matrix-line': { minRank: 1, maxRank: 5, label: 'Acknowledge a share taken from your own hours' },
+  // ADR-0157: giving a declared line a TERM and calling it back. Re-affirming or
+  // releasing is the line's own manager's act, open at every leadership rank for
+  // the same reason ADR-0148 opens acceptance there — a project lead with no
+  // home-line reports is exactly who holds a line. The action additionally
+  // refuses any seat that is not that manager. Answering as the person whose hours
+  // are taken is a SEPARATE right, because it is that person's own first-person
+  // act and neither side may answer for the other.
+  'reaffirm-matrix-line': { minRank: 1, maxRank: 5, label: 'Re-affirm a reporting line you hold, or release it with a reason' },
+  'answer-line-reaffirmation': { minRank: 1, maxRank: 5, label: 'Answer for a share taken from your own hours: accept it or object' },
   // ADR-0149: moving a home line is a SEPARATE act from declaring a second line.
   // Declaring an additional line ADDS accountability; moving the home line
   // REWRITES the tree every other module rolls up through. Open from rank 1

@@ -43,6 +43,9 @@ import {
 // ADR-0148: the consent register. A declared share is an ask until the manager it
 // was given to answers it and the person whose hours it takes acknowledges it.
 import { renderConsentPanel } from './matrixConsentPanel.js';
+// ADR-0157: the re-affirmation register. A declared share is renewed by silence
+// only because nobody asks; this panel is the asking, and the answer can end it.
+import { renderReaffirmationPanel } from './matrixReaffirmationPanel.js';
 // ADR-0152: the line-exit register. A line that is dated out does not close the
 // work it created; this panel reads what it left behind and who settled it.
 import { renderLineExitPanel } from './matrixExitPanel.js';
@@ -835,6 +838,7 @@ export function renderMatrix(ctx) {
     panel === 'lines' ? linesPanel(ctx, report) : null,
     panel === 'exit' ? renderLineExitPanel(ctx) : null,
     panel === 'consent' ? renderConsentPanel(ctx) : null,
+    panel === 'renewal' ? renderReaffirmationPanel(ctx) : null,
     panel === 'rights' ? rightsPanel(ctx, report) : null,
     panel === 'concordance' ? concordancePanel(ctx, report) : null,
     panel === 'continuity' ? renderContinuityPanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,

@@ -136,6 +136,7 @@ import { priorityArbitrationRule } from './priorityArbitrationRules.js';
 import { contradictionRule } from './contradictionRules.js';
 import { reviewStewardshipRule } from './reviewStewardshipRules.js';
 import { lineConsentRule } from './lineConsentRules.js';
+import { lineReaffirmationRule } from './lineReaffirmationRules.js';
 import { structureHistoryRule } from './structureHistoryRules.js';
 import { onboardingMatrixRule } from './onboardingMatrixRules.js';
 import { lineExitRule } from './lineExitRules.js';
@@ -839,6 +840,19 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // manager who has left the roster. It runs before the Operating Seat so the
   // obligation it opens rolls up the hierarchy in the SAME transaction.
   lineExitRule,
+  // ADR-0157: the Matrix Line Re-Affirmation Register (RULE-LRF-01). A DECLARED
+  // line, a RETUNE, any ANSWER on a line, or an explicit scan makes it run; a read
+  // never does. A line nobody ever termed, a term that ran out and a term inside
+  // its warning window are put in front of the manager who HOLDS the line; a
+  // manager's re-affirmation the person has not answered is put in front of the
+  // PERSON; a person's OBJECTION is escalated to that person's HOME line, because
+  // ending somebody else's accountability is not the informed party's act, and a
+  // RELEASED line still charging a share is put back in front of its manager to
+  // date the declaration out. It never re-affirms, releases, accepts, objects or
+  // ends anything on anyone's behalf, and it is bounded by a per-transaction cap
+  // whose remainder is counted and retried by a scan. It runs before the Operating
+  // Seat so the obligation it opens rolls up the hierarchy in the SAME transaction.
+  lineReaffirmationRule,
   // ADR-0076: the Operating Seat (vertical roll-up + enforced boundaries).
   // It reads the finished record after every module has propagated, then fans
   // each open item up every leadership ancestor in the reporting tree with one
