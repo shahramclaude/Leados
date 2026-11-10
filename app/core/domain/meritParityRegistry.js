@@ -57,7 +57,7 @@
  * the same house convention as ADR‑0139 and ADR‑0126.
  */
 
-export const MERIT_PARITY_ENGINE_VERSION = 'merit-parity-2026.11-v1';
+export const MERIT_PARITY_ENGINE_VERSION = 'merit-parity-2026.11-v2';
 
 /* ------------------------------------------------------------- conventions */
 
@@ -118,7 +118,7 @@ export const MERIT_PARITY_AUTHORITY_STATES = Object.freeze([
     label: 'Pay authority cannot be read',
     rank: -1,
     tone: 'bad',
-    detail: 'The person is not on the roster, so the lines that were in force on the effective date cannot be read at all. This is an UNKNOWN, never an unowned right and never a cleared one.',
+    detail: 'A recipient is not on the roster, a row has no readable recipient, or the bounded read omitted decisions; the full set of pay authorities cannot be read. This is an UNKNOWN, never an unowned right and never a cleared one.',
   }),
   Object.freeze({
     key: 'unowned',
@@ -248,6 +248,8 @@ export function meritParityLevelLabel(key) {
  * figure is BLANK everywhere — panel, brief and CSV — and never a zero.
  */
 export const MERIT_PARITY_REFUSALS = Object.freeze([
+  Object.freeze({ key: 'malformed-row', label: 'A pay row has no readable person id', detail: 'Counted separately, never silently dropped or assigned a cohort; blocks the complete-pool reading.' }),
+  Object.freeze({ key: 'duplicate-person-row', label: 'A recipient has repeated pay rows', detail: 'Every occurrence is excluded and counted. No occurrence is silently chosen and no duplicated recipient enters a median.' }),
   Object.freeze({ key: 'no-cycle', label: 'No merit cycle', detail: 'There is no cycle to read; no cohort, no gap and no verdict is invented.' }),
   Object.freeze({ key: 'no-rows', label: 'The cycle holds no pay decisions', detail: 'An empty cycle is an empty cycle. It is not a pool that treated anyone fairly.' }),
   Object.freeze({ key: 'cohort-empty', label: 'A cohort has nobody in it', detail: 'One side of the comparison has no priced person, so no difference can be computed.' }),

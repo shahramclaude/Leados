@@ -209,12 +209,20 @@ export function buildMeritParity(state, { cycleId = null, now = new Date(), sett
   const ratingAsOf = effectiveOn <= today ? effectiveOn : today;
   const ratings = ratingIndex(state, ratingAsOf);
 
-  const rawRows = (Array.isArray(cycle.rows) ? cycle.rows : []).slice(0, MERIT_PARITY_LIMITS.rows);
-  const overflowN = Math.max(0, (Array.isArray(cycle.rows) ? cycle.rows.length : 0) - rawRows.length);
+  const sourceRows = Array.isArray(cycle.rows) ? cycle.rows : [];
+  const rawRows = sourceRows.slice(0, MERIT_PARITY_LIMITS.rows);
+  const overflowN = sourceRows.length - rawRows.length;
+  const malformedN = rawRows.filter((r) => !r || typeof r.personId !== 'string' || !r.personId.trim()).length;
+  const personCounts = new Map();
+  for (const row of rawRows) {
+    if (row && typeof row.personId === 'string' && row.personId.trim()) {
+      personCounts.set(row.personId, (personCounts.get(row.personId) || 0) + 1);
+    }
+  }
 
   const rows = [];
   for (const row of rawRows) {
-    if (!row || !row.personId) continue;
+    if (!row || typeof row.personId !== 'string' || !row.personId.trim()) continue;
     const person = peopleById.get(row.personId) || null;
     // The lines in force ON THE EFFECTIVE DATE. Not today's shape: a project
     // line that ended in June did not hold this pay decision in November, and
@@ -240,7 +248,8 @@ export function buildMeritParity(state, { cycleId = null, now = new Date(), sett
     const proposedCents = cents(row.proposedPay);
     let included = true;
     let excludeReason = null;
-    if (!person) { included = false; excludeReason = 'missing-person-row'; }
+    if (personCounts.get(row.personId) > 1) { included = false; excludeReason = 'duplicate-person-row'; }
+    else if (!person) { included = false; excludeReason = 'missing-person-row'; }
     else if (row.currentPay !== undefined && row.currentPay !== null && Number(row.currentPay) === 0) { included = false; excludeReason = 'zero-base-row'; }
     else if (currentCents === null || proposedCents === null) { included = false; excludeReason = 'unpriced-row'; }
 
@@ -279,6 +288,13 @@ export function buildMeritParity(state, { cycleId = null, now = new Date(), sett
   // reader must see, not a rounding difference.
   const included = rows.filter((r) => r.included);
   const excluded = rows.filter((r) => !r.included);
+  const duplicateN = excluded.filter((r) => r.excludeReason === 'duplicate-person-row').length;
+  // One complete-pool gate for every reader: counts remain visible, but no
+  // narrowed subset may masquerade as the cycle's distribution.
+  const partialPool = excluded.length > 0 || overflowN > 0 || malformedN > 0;
+  const partialReason = partialPool
+    ? `The pay pool is incomplete: ${excluded.length} excluded row(s) (including ${excluded.filter((r) => r.missingPerson).length} off roster), ${malformedN} malformed row(s) and ${overflowN} beyond the read limit; cohort medians, pool share and comparisons are withheld.`
+    : '';
 
   /* ------------------------------------------------------------- cohorts */
   const cohorts = {};
@@ -286,7 +302,7 @@ export function buildMeritParity(state, { cycleId = null, now = new Date(), sett
     const all = rows.filter((r) => r.cohort === spec.key);
     const inc = all.filter((r) => r.included);
     const values = inc.map((r) => r.bps);
-    const printed = inc.length >= MERIT_PARITY_FLOOR;
+    const printed = !partialPool && inc.length >= MERIT_PARITY_FLOOR;
     const levelCounts = new Map();
     for (const r of inc) {
       const key = r.level || 'unrecorded';
@@ -305,6 +321,7 @@ export function buildMeritParity(state, { cycleId = null, now = new Date(), sett
       zeroIncreaseN: inc.filter((r) => r.zeroIncrease).length,
       medianBps: printed ? lowerMedian(values) : null,
       medianPrinted: printed,
+      medianWithheldReason: printed ? '' : partialReason || `Fewer than ${MERIT_PARITY_FLOOR} priced people in this cohort.`,
       deltaCents: sum(inc.map((r) => r.deltaCents)),
       levelMix: [...levelCounts.entries()]
         .map(([key, n]) => ({ key, label: key === 'unrecorded' ? 'Unrecorded level' : meritParityLevelLabel(key), n }))
@@ -318,7 +335,10 @@ export function buildMeritParity(state, { cycleId = null, now = new Date(), sett
   const matrixCohort = cohorts.matrix;
   const singleCohort = cohorts['single-line'];
   const poolDeltaCents = matrixCohort.deltaCents + singleCohort.deltaCents;
-  const matrixPoolShareBps = poolDeltaCents > 0
+  const poolShareReason = partialReason || (!matrixCohort.medianPrinted || !singleCohort.medianPrinted
+    ? `Both cohorts must clear the floor of ${MERIT_PARITY_FLOOR} priced people before a pool share is printed.`
+    : poolDeltaCents <= 0 ? 'The pool moved no net positive money.' : '');
+  const matrixPoolShareBps = !poolShareReason
     ? Math.trunc((matrixCohort.deltaCents * 10000) / poolDeltaCents)
     : null;
 
@@ -327,11 +347,10 @@ export function buildMeritParity(state, { cycleId = null, now = new Date(), sett
   for (const r of included) levelKeys.add(r.level || 'unrecorded');
   // A capped or excluded row may belong to any level/cohort. Do not publish
   // level comparisons from a silently narrowed pool.
-  const partialPool = excluded.length > 0 || overflowN > 0;
   const byLevel = [...levelKeys].map((key) => {
     const m = included.filter((r) => r.cohort === 'matrix' && (r.level || 'unrecorded') === key);
     const s = included.filter((r) => r.cohort === 'single-line' && (r.level || 'unrecorded') === key);
-    const bothPrinted = !partialPool && m.length >= MERIT_PARITY_FLOOR && s.length >= MERIT_PARITY_FLOOR;
+    const bothPrinted = !partialPool && poolDeltaCents > 0 && m.length >= MERIT_PARITY_FLOOR && s.length >= MERIT_PARITY_FLOOR;
     const mMed = m.length ? lowerMedian(m.map((r) => r.bps)) : null;
     const sMed = s.length ? lowerMedian(s.map((r) => r.bps)) : null;
     return {
@@ -346,8 +365,10 @@ export function buildMeritParity(state, { cycleId = null, now = new Date(), sett
       withheldReason: bothPrinted
         ? ''
         : partialPool
-          ? `The pay pool is incomplete: ${excluded.length} excluded row(s) and ${overflowN} beyond the read limit; level comparisons are withheld.`
-          : `One or both cohorts hold fewer than ${MERIT_PARITY_FLOOR} priced people at this level.`,
+          ? partialReason
+          : poolDeltaCents <= 0
+            ? 'The pool moved no net positive money; level comparisons are withheld.'
+            : `One or both cohorts hold fewer than ${MERIT_PARITY_FLOOR} priced people at this level.`,
     };
   }).sort((a, b) => {
     const order = new Map(MERIT_PARITY_LEVELS.map((l, i) => [l.key, i]));
@@ -370,8 +391,17 @@ export function buildMeritParity(state, { cycleId = null, now = new Date(), sett
     refusals.push({ kind: 'row-cap', detail: `${overflowN} further pay row(s) were beyond the bounded read of ${MERIT_PARITY_LIMITS.rows} and are NOT included in any figure.` });
   }
 
+  if (malformedN) {
+    refusals.push({ kind: 'malformed-row', detail: `${malformedN} pay row(s) have no readable person id. They cannot be assigned a cohort; they are counted separately and block the comparison.` });
+  }
+  if (duplicateN) {
+    refusals.push({ kind: 'duplicate-person-row', detail: `${duplicateN} pay row(s) name repeated recipients. Every occurrence is excluded; no pay decision is silently selected and no person is counted twice in a median.` });
+  }
+
   let verdictKey = 'incomplete';
-  if (!rows.length) {
+  if (partialPool) {
+    // Incompleteness outranks single-line, divergence and parity alike.
+  } else if (!rows.length) {
     refusals.push({ kind: 'no-rows', detail: 'The cycle holds no pay decisions. No cohort, no gap and no parity claim is invented from an empty pool.' });
   } else if (matrixCohort.rowsN === 0) {
     verdictKey = 'single-line';
@@ -396,9 +426,8 @@ export function buildMeritParity(state, { cycleId = null, now = new Date(), sett
   // gap entirely rather than narrowing the sample quietly.
   const gapComputable = matrixCohort.medianPrinted
     && singleCohort.medianPrinted
-    && unpricedN === 0
-    && missingPersonN === 0
-    && overflowN === 0;
+    && !partialPool
+    && poolDeltaCents > 0;
   const gapBps = gapComputable
     ? matrixCohort.medianBps - singleCohort.medianBps
     : null;
@@ -415,7 +444,7 @@ export function buildMeritParity(state, { cycleId = null, now = new Date(), sett
   const gapReason = gapWithheld
     ? (verdictKey === 'single-line'
       ? 'No person in this cycle sat on a second reporting line on the effective date, so there is no second-line cohort to compare against.'
-      : (refusals.find((r) => ['cohort-below-floor', 'cohort-empty', 'unpriced-row', 'missing-person-row', 'no-money-moved', 'no-rows', 'row-cap'].includes(r.kind))?.detail
+      : partialReason || (refusals.find((r) => ['cohort-below-floor', 'cohort-empty', 'unpriced-row', 'missing-person-row', 'no-money-moved', 'no-rows', 'row-cap'].includes(r.kind))?.detail
         || 'The comparison could not be completed.'))
     : '';
 
@@ -423,10 +452,10 @@ export function buildMeritParity(state, { cycleId = null, now = new Date(), sett
   const contested = rows.filter((r) => r.authorityState === 'contested');
   const unowned = rows.filter((r) => r.authorityState === 'unowned');
   const unreadable = rows.filter((r) => r.authorityState === 'unknown');
-  const authorityVerdict = matrixCohort.rowsN === 0
-    ? 'single-line'
-    : unreadable.length
-      ? 'unknown'
+  const authorityVerdict = unreadable.length || malformedN || overflowN
+    ? 'unknown'
+    : matrixCohort.rowsN === 0
+      ? 'single-line'
       : unowned.length
         ? 'unowned'
         : contested.length
@@ -483,12 +512,15 @@ export function buildMeritParity(state, { cycleId = null, now = new Date(), sett
   const reconciles = rowsCounted === rows.length
     && matrixCohort.includedN + matrixCohort.excludedN === matrixCohort.rowsN
     && singleCohort.includedN + singleCohort.excludedN === singleCohort.rowsN
-    && included.length + excluded.length === rows.length;
+    && included.length + excluded.length === rows.length
+    && rows.length + malformedN + overflowN === sourceRows.length;
   // Two claims, kept apart on purpose (North Star, Bulletproof Reliability):
   // `reconciles` says the printed counts add up; `figuresComplete` says every
   // figure that WAS printed is computed from the record and nothing needed is
   // missing. A single-line pool prints no gap and is complete about that.
   const figuresComplete = reconciles
+    && !partialPool
+    && rows.length > 0
     && rows.every((r) => !r.included || (Number.isInteger(r.bps) && Number.isInteger(r.deltaCents)))
     && matrixCohort.includedN + singleCohort.includedN === included.length
     && (gapBps !== null || verdictKey === 'single-line');
@@ -518,6 +550,7 @@ export function buildMeritParity(state, { cycleId = null, now = new Date(), sett
     gapDirectionLabel: directionMeta?.label || '—',
     gapWithheld,
     gapReason,
+    poolShareReason,
     cohorts,
     rows,
     byLevel,
@@ -544,12 +577,15 @@ export function buildMeritParity(state, { cycleId = null, now = new Date(), sett
       matrixPoolShareBps,
       truncatedRowN: included.filter((r) => r.truncated).length,
       overflowN,
+      malformedN,
+      duplicateN,
+      sourceRowsN: sourceRows.length,
       matchedLevelN,
     },
     refusals,
     reconciles,
     reconcilesDetail: reconciles
-      ? `${matrixCohort.rowsN} second-line row(s) + ${singleCohort.rowsN} home-line row(s) = ${rows.length} pay row(s); ${included.length} priced + ${excluded.length} excluded = ${rows.length}.`
+      ? `${matrixCohort.rowsN} second-line row(s) + ${singleCohort.rowsN} home-line row(s) = ${rows.length} pay row(s); ${included.length} priced + ${excluded.length} excluded = ${rows.length}. ${rows.length} classified + ${malformedN} malformed + ${overflowN} beyond the read limit = ${sourceRows.length} stored pay row(s).`
       : `The rows do not reconcile: ${matrixCohort.rowsN} + ${singleCohort.rowsN} counted against ${rows.length} read, and ${included.length} + ${excluded.length} against ${rows.length}. This reading is NOT trustworthy.`,
     figuresComplete,
     figuresCompleteDetail: figuresComplete
@@ -557,7 +593,7 @@ export function buildMeritParity(state, { cycleId = null, now = new Date(), sett
         ? 'There is no second-line cohort, so no gap is printed — and none is claimed. Every printed count is the computed count.'
         : 'Every printed figure is the computed figure, and every figure the comparison needed was present.')
       : gapBps === null
-        ? 'The cohort gap is not printed, so no figure is claimed on a partial comparison.'
+        ? partialReason || 'The cohort gap is not printed; the record does not support a complete comparison.'
         : 'The counts reconcile but at least one printed figure is not fully supported by the record.',
   };
 }
@@ -587,6 +623,7 @@ export function meritParityBriefText(state, { cycleId = null, now = new Date(), 
     lines.push(`Cohort comparison: median increase ${r.cohorts.matrix.medianBps} bp on a second line against ${r.cohorts['single-line'].medianBps} bp on a home line only — a ${r.gapBps > 0 ? '+' : ''}${r.gapBps} bp UNADJUSTED difference, inside a declared ±${MERIT_PARITY_TOLERANCE_BPS} bp band it ${r.verdict === 'parity' ? 'does' : 'does not'} clear. This is descriptive, not causal and not a finding of unfairness.`);
 
   }
+  if (r.totals.malformedN || r.totals.overflowN) lines.push(`${r.totals.malformedN} malformed row(s) and ${r.totals.overflowN} beyond the read limit; ${r.totals.sourceRowsN} stored row(s) in all.`);
   lines.push(`Cell floor ${MERIT_PARITY_FLOOR} people per cohort; ${r.matchedLevelN} level-matched cell(s) cleared the floor as well. The export carries no name, no salary and no individual increase.`);
   return lines.join(' ');
 }

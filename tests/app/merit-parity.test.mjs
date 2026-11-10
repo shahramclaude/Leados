@@ -302,7 +302,10 @@ test('one unpriced row blocks the comparison and is counted, never read as a zer
 test('a pool that moved no money cannot report parity', () => {
   const rows = defaultRows().map((row) => ({ ...row, proposedPay: row.currentPay }));
   const r = reportFor(makeState({ rows }));
-  assert.equal(r.gapBps, 0, 'the arithmetic is still exact');
+  assert.equal(r.gapBps, null, 'an unspent pool prints no comparison, including no reassuring zero');
+  assert.equal(r.gapWithheld, true);
+  assert.equal(r.figuresComplete, false);
+  assert.ok(r.byLevel.every((l) => !l.printed && l.gapBps === null));
   assert.equal(r.verdict, 'incomplete');
   assert.ok(r.refusals.some((x) => x.kind === 'no-money-moved'));
   assert.equal(r.totals.matrixPoolShareBps, null);
@@ -624,4 +627,114 @@ test('partial pools withhold level comparisons in the stored report, export and 
   const reloaded = createStore({ storage: ctx.storage, now: () => NOW });
   reloaded.load();
   assert.deepEqual(reportFor(reloaded.state).byLevel, report.byLevel);
+});
+
+
+test('complete-pool gate refuses missing, duplicate and malformed recipients without silent loss', () => {
+  for (const [label, extra, expected] of [
+    ['unpriced', [payRow('dana', 100000, null)], { excludedN: 1, malformedN: 0, duplicateN: 0 }],
+    ['missing person', [payRow('removed', 100000, 104000)], { excludedN: 1, malformedN: 0, duplicateN: 0 }],
+    ['duplicate', [payRow('sam', 100000, 105000)], { excludedN: 2, malformedN: 0, duplicateN: 2 }],
+    ['malformed', [null, {}, { personId: '   ' }], { excludedN: 0, malformedN: 3, duplicateN: 0 }],
+  ]) {
+    const state = makeState();
+    // Deliberately bypass normalisation to exercise the reader's own boundary.
+    state.meritCycles[0].rows.push(...extra);
+    const r = reportFor(state);
+    assert.equal(r.verdict, 'incomplete', label);
+    assert.equal(r.figuresComplete, false, label);
+    assert.equal(r.reconciles, true, label);
+    for (const [key, value] of Object.entries(expected)) assert.equal(r.totals[key], value, `${label}: ${key}`);
+    assert.equal(r.totals.rowsN + r.totals.malformedN + r.totals.overflowN, state.meritCycles[0].rows.length);
+    assert.equal(r.gapBps, null);
+    assert.equal(r.totals.matrixPoolShareBps, null);
+    for (const cohort of Object.values(r.cohorts)) {
+      assert.equal(cohort.medianPrinted, false);
+      assert.equal(cohort.medianBps, null);
+      assert.equal(cohort.medianWithheldReason, r.gapReason);
+    }
+    assert.ok(r.byLevel.every((l) => !l.printed && l.gapBps === null));
+    const summary = meritParityCsvRows(state, { now: NOW })[0];
+    for (const key of ['matrix_median_bps', 'single_median_bps', 'gap_bps', 'matrix_pool_share_bps']) assert.equal(summary[key], '', `${label}: ${key}`);
+    assert.equal(summary.withheld_reason, r.gapReason);
+    assert.equal(summary.parity_verdict, 'incomplete');
+    assert.match(meritParityBriefText(state, { now: NOW }), /comparison: REFUSED/);
+    if (label === 'missing person' || label === 'malformed') assert.equal(r.authorityVerdict, 'unknown');
+  }
+});
+
+test('incompleteness outranks single-line and a capped pool cannot pronounce divergence', () => {
+  const single = makeState({ lines: [], rows: [...defaultRows(), payRow('dana', 100000, null)] });
+  assert.equal(reportFor(single).verdict, 'incomplete');
+  assert.equal(reportFor(single).figuresComplete, false);
+
+  const state = makeState();
+  // Keep both floor-clearing cohorts inside the cap, with unique recipients.
+  for (let i = 6; i < 501; i++) {
+    state.people.push(person(`extra-${i}`, `Extra ${i}`, 'lead'));
+    state.meritCycles[0].rows.push(payRow(`extra-${i}`, 100000, 104000));
+  }
+  const r = reportFor(state);
+  assert.equal(r.totals.sourceRowsN, 501);
+  assert.equal(r.totals.rowsN, 500);
+  assert.equal(r.totals.overflowN, 1);
+  assert.equal(r.totals.excludedN, 0);
+  assert.equal(r.verdict, 'incomplete');
+  assert.equal(r.authorityVerdict, 'unknown');
+  assert.equal(r.figuresComplete, false);
+  assert.equal(r.gapBps, null);
+  assert.equal(r.cohorts.matrix.medianBps, null);
+  assert.equal(r.cohorts['single-line'].medianBps, null);
+  assert.equal(r.totals.matrixPoolShareBps, null);
+  assert.match(r.reconcilesDetail, /500 classified \+ 0 malformed \+ 1 beyond the read limit = 501 stored/);
+  const summary = meritParityCsvRows(state, { now: NOW })[0];
+  assert.equal(summary.parity_verdict, r.verdict);
+  assert.equal(summary.withheld_reason, r.gapReason);
+  assert.match(meritParityBriefText(state, { now: NOW }), /501 stored row/);
+});
+
+test('pool share respects both disclosure floors even when one median could print', () => {
+  const state = makeState({ rows: defaultRows().filter((r) => r.personId !== 'mo') });
+  const r = reportFor(state);
+  assert.equal(r.cohorts['single-line'].medianPrinted, true);
+  assert.equal(r.cohorts.matrix.medianPrinted, false);
+  assert.equal(r.totals.matrixPoolShareBps, null);
+  assert.match(r.poolShareReason, /floor of 3/);
+  assert.equal(meritParityCsvRows(state, { now: NOW })[0].matrix_pool_share_bps, '');
+});
+
+test('partial-pool display equals persisted API, CSV and recomputation across reload without writes', async () => {
+  const { JSDOM } = await import('jsdom');
+  const dom = new JSDOM('<!doctype html><html><body></body></html>');
+  globalThis.window = dom.window;
+  globalThis.document = dom.window.document;
+  globalThis.Node = dom.window.Node;
+  globalThis.Element = dom.window.Element;
+  globalThis.HTMLElement = dom.window.HTMLElement;
+  globalThis.Event = dom.window.Event;
+  const { renderMeritMatrixTab } = await import('../../app/views/meritMatrixPanel.js');
+  const ctx = seed(makeState({ rows: [...defaultRows(), payRow('dana', 100000, null)] }));
+  const before = ctx.storage.getItem(STORAGE_KEY);
+  const report = ctx.api.meritParityReport().report;
+  const node = renderMeritMatrixTab({ api: ctx.api, state: ctx.store.state }, ctx.store.state.meritCycles[0], NOW);
+  const text = node.textContent;
+  assert.match(text, /Cohort parity: The comparison cannot be made/);
+  assert.match(text, /7 classified \+ 0 malformed \+ 0 beyond the read limit = 7 stored/);
+  assert.ok(text.includes(report.gapReason));
+  assert.doesNotMatch(text, /−2\.00%|33\.33%|two cohort medians sat inside/);
+  const stats = [...node.querySelectorAll('.stat')];
+  assert.ok(stats.length > 0, 'the rendered statistic cells are inspected');
+  for (const label of ['Second-line median', 'Home-line median', 'Gap (unadjusted)', 'Second-line share of the pool']) {
+    const cell = stats.find((n) => n.textContent.includes(label));
+    assert.ok(cell, label);
+    assert.match(cell.textContent, /withheld/);
+    assert.ok(cell.textContent.includes(report.gapReason));
+  }
+  const csv = ctx.api.meritParityCsv().rows;
+  assert.deepEqual(csv, meritParityCsvRows(ctx.store.state, { now: NOW }));
+  assert.equal(csv[0].figures_complete, 'no');
+  const reloaded = createStore({ storage: ctx.storage, now: () => NOW });
+  reloaded.load();
+  assert.deepEqual(reportFor(reloaded.state), report);
+  assert.equal(ctx.storage.getItem(STORAGE_KEY), before, 'all reads preserve persisted bytes');
 });
