@@ -1,8 +1,8 @@
 /**
  * app/core/domain/oneOnOneLineRegistry.js — closed vocabulary, conventions,
  * limits, CSV schema and named method of Matrix 1:1 Line Coverage
- * (ADR-0164, Schema v132, `#/matrix?panel=one-on-ones`, `RULE-OOL-01`,
- * CSV scope #123).
+ * (Schema v132; ADR-0164, `#/matrix?panel=one-on-ones`, `RULE-OOL-01`,
+ * and CSV scope #123 are reserved, not yet shipped).
  *
  * THE DEFECT THIS NAMES. A 1:1 was stored as `{ personId, date, status }` —
  * who it was WITH, never who HELD it. The cadence engine therefore answered
@@ -11,13 +11,9 @@
  * person green for the project manager who had not spoken to them in two
  * months, and the other way round. A silent line was masked by a busy one.
  *
- * STATUS — NOT WIRED (Session 226, 2026-11-10). Nothing in the running app
- * imports this module yet. ADR-0164 has not been written, and "Schema v132",
- * `RULE-OOL-01`, the `one-on-ones` panel key and CSV scope #123 are RESERVED
- * names, not shipped facts (v132 is also pencilled in by goal carriage,
- * ADR-0163 — whichever lands first takes it). Until the remainder ships, the
- * app stores no holder on a 1:1, so on real data every meeting reads
- * "no holder recorded". See ROADMAP.md, In Progress.
+ * Session 227 wires the holder, API-level human corrections and conventions.
+ * The matrix panel, RULE-OOL-01 and CSV scope #123 below remain RESERVED, not
+ * shipped; no automatic silent-line tasks or CSV export are implied.
  *
  * Leaf module: no storage, no clock, no DOM, and no import with side effects,
  * so `schema.js`, the read model, the rule, the actions, `csv.js` and the
@@ -103,6 +99,7 @@ export const ONE_ON_ONE_PERSON_VERDICTS = Object.freeze({
   silent: 'silent',
   unproven: 'unproven',
   due: 'due',
+  new: 'new',
   covered: 'covered',
 });
 export const ONE_ON_ONE_PERSON_VERDICT_LABELS = Object.freeze({
@@ -110,21 +107,23 @@ export const ONE_ON_ONE_PERSON_VERDICT_LABELS = Object.freeze({
   silent: 'Silent line',
   unproven: 'Cannot be read',
   due: 'A line is due',
-  covered: 'Every line covered',
+  new: 'New line awaiting its first 1:1',
+  covered: 'Every owing line on cadence',
 });
 export const ONE_ON_ONE_PERSON_VERDICT_TONES = Object.freeze({
-  masked: 'bad', silent: 'bad', unproven: 'warn', due: 'warn', covered: 'good',
+  masked: 'bad', silent: 'bad', unproven: 'warn', due: 'warn', new: 'neutral', covered: 'good',
 });
 
 /**
  * Person verdict, worst first. `masked` outranks `silent` because it is the
  * case every other screen gets wrong: the people list prints on-track.
  */
-export function oneOnOnePersonVerdict({ masked = false, silentN = 0, unprovenN = 0, dueN = 0 } = {}) {
+export function oneOnOnePersonVerdict({ masked = false, silentN = 0, unprovenN = 0, dueN = 0, newN = 0 } = {}) {
   if (masked) return ONE_ON_ONE_PERSON_VERDICTS.masked;
   if (silentN > 0) return ONE_ON_ONE_PERSON_VERDICTS.silent;
   if (unprovenN > 0) return ONE_ON_ONE_PERSON_VERDICTS.unproven;
   if (dueN > 0) return ONE_ON_ONE_PERSON_VERDICTS.due;
+  if (newN > 0) return ONE_ON_ONE_PERSON_VERDICTS.new;
   return ONE_ON_ONE_PERSON_VERDICTS.covered;
 }
 
@@ -179,8 +178,8 @@ export const ONE_ON_ONE_LINE_METHOD = Object.freeze([
     why: 'The home line is held to the workspace’s existing 1:1 interval. An additional line is held to its own declared interval, and one below the declared share floor owes no standing 1:1 and is printed as exempt. A line with no declared share cannot be exempted: there is no evidence it is small.',
   }),
   Object.freeze({
-    name: 'One dated ask, to the manager who is silent',
-    why: 'RULE-OOL-01 puts one owned, dated task in front of the manager of a line that is proven silent, and closes it when a held 1:1 is credited to that line. It never asks about a line it cannot read, never logs a meeting, and never attributes one.',
+    name: 'A finding is not an automated reminder',
+    why: 'This slice reports silent lines but does not create or close reminder tasks. The planned RULE-OOL-01 remains unimplemented.',
   }),
 ]);
 
@@ -190,11 +189,11 @@ export const ONE_ON_ONE_LINE_LIMITS_TEXT = Object.freeze([
   'Attribution is read against the lines in force TODAY. A meeting held by a manager whose line has since ended is counted under “no line today”, and a 1:1 between a person and a manager credits that pair even when it predates the line’s declared start — the pair was in conversation.',
   'A cadence is a recorded conversation, not its quality. An on-cadence line says a 1:1 was logged, not that it was useful, and a skipped or moved meeting credits nothing.',
   'Only people on more than one line are read here. A person on a single line is fully served by the existing 1:1 cadence, which this register does not change.',
-  'Above the manager altitude 1:1 detail is disclosed as counts only, so a director reads how many lines are silent in the span — not which person, and not which manager.',
+  'The report adapter withholds aggregate coverage at higher altitudes or in mixed-detail scopes until small-cell and repeated-release disclosure protection exists. Existing per-line confidentiality is not yet enforced.',
 ]);
 
 /**
- * CSV scope #123. Aggregate only: one workspace summary row plus one row per
+ * Reserved, unregistered CSV scope #123: one workspace summary row plus one row per
  * line role and declared kind. NO person id, NO name, NO manager id, NO
  * meeting id, NO meeting date and NO free text.
  */

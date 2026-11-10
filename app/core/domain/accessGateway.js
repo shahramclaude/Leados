@@ -14,7 +14,7 @@ import { DISCLOSURE_POSTURES } from './disclosureRegistry.js';
 import { activeIdentitySession } from './identitySession.js';
 
 const groups = [
-  ['log-oneonone', 'updatePerson logOneOnOne toggleMeetingAction addMeetingAction addFeedback updateFeedback completeFollowUp saveGrowthPlan updateGrowthPlan addWillAction toggleWillAction carryWillAction dropWillAction logGrowthReview addRecognition setReadiness createReview updateReflection updateAssessment refreshReviewEvidence completeReview reopenReview createOnboardingPlan updateOnboardingPlan addOnboardingCheckpoint toggleOnboardingCheckpoint removeOnboardingCheckpoint addOnboardingStakeholder toggleOnboardingStakeholder removeOnboardingStakeholder recordOnboardingReview addManagerSupportCommitment toggleManagerSupportCommitment completeOnboardingPlan reopenOnboardingPlan addPerformanceConcern updatePerformanceConcern addPerformanceObservation removePerformanceObservation recordPerformanceConversation recordPerformanceSupport adoptPerformancePlan reviewPerformancePlan withdrawPerformanceConcern deletePerformanceConcern'],
+  ['log-oneonone', 'updatePerson logOneOnOne oneOnOneLineClaim oneOnOneLineRelease toggleMeetingAction addMeetingAction addFeedback updateFeedback completeFollowUp saveGrowthPlan updateGrowthPlan addWillAction toggleWillAction carryWillAction dropWillAction logGrowthReview addRecognition setReadiness createReview updateReflection updateAssessment refreshReviewEvidence completeReview reopenReview createOnboardingPlan updateOnboardingPlan addOnboardingCheckpoint toggleOnboardingCheckpoint removeOnboardingCheckpoint addOnboardingStakeholder toggleOnboardingStakeholder removeOnboardingStakeholder recordOnboardingReview addManagerSupportCommitment toggleManagerSupportCommitment completeOnboardingPlan reopenOnboardingPlan addPerformanceConcern updatePerformanceConcern addPerformanceObservation removePerformanceObservation recordPerformanceConversation recordPerformanceSupport adoptPerformancePlan reviewPerformancePlan withdrawPerformanceConcern deletePerformanceConcern'],
   // ADR-0147: Matrix Multi-Line Review Stewardship. Asking a line and answering
   // for a line are ordinary review work at the manager altitude (the same window
   // as `createReview`/`completeReview`); the actions additionally enforce that the
@@ -85,6 +85,7 @@ const groups = [
   // are enforced inside `matrixInterfaceActions`.
   ['affirm-matrix-interface', 'matrixInterfaceAffirm matrixInterfaceRetire matrixInterfaceScan'],
   ['govern-matrix-interface', 'matrixInterfaceSetConventions'],
+  ['govern-oneonone-lines', 'oneOnOneLineSetConventions'],
   // ADR-0152: settling an obligation an ENDED line left behind. Recording the
   // remedy is the manager's own act (the action narrows it to a seat that reaches
   // the person, and a carry must name a live line holder); the scan changes no
@@ -274,7 +275,7 @@ const groups = [
 export const API_RIGHTS = Object.freeze(Object.fromEntries(groups.flatMap(([right, names]) => names.split(' ').map((name) => [name, right]))));
 const FIRST_ID_COLLECTION = Object.freeze({
   updatePerson: 'people', archivePerson: 'people', restorePerson: 'people',
-  logOneOnOne: 'oneOnOnes', toggleMeetingAction: 'oneOnOnes', addMeetingAction: 'oneOnOnes',
+  logOneOnOne: 'oneOnOnes', oneOnOneLineClaim: 'oneOnOnes', oneOnOneLineRelease: 'oneOnOnes', toggleMeetingAction: 'oneOnOnes', addMeetingAction: 'oneOnOnes',
   updateFeedback: 'feedback', completeFollowUp: 'feedback',
   updateCase: 'cases', resolveCase: 'cases', recordCaseActuals: 'cases', reopenCase: 'cases', deleteCase: 'cases', refreshCaseAutomation: 'cases', syncCaseAutomations: 'cases', requestMitigationReview: 'cases', linkCaseEntity: 'cases', removeMissingCaseMitigation: 'cases',
   updateDecision: 'decisions', decideDecision: 'decisions', reviewDecision: 'decisions', withdrawBundleDecision: 'decisions',
@@ -409,7 +410,9 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 'authorityContinuityReport', 'authorityContinuityBriefText', 'authorityContinuityCsvRows', 'authorityContinuityAttentionCount',
 // ADR-0162: Matrix Management-Interface Operating-Agreement read surface.
 // Seat-scoped inside `buildMatrixInterfaceReport` and aggregate-only in brief/CSV.
-'matrixInterfaceReport', 'matrixInterfaceBriefText', 'matrixInterfaceCsvRows', 'matrixInterfaceAttentionCount', 'matrixInterfaceCandidates']);
+'matrixInterfaceReport', 'matrixInterfaceBriefText', 'matrixInterfaceCsvRows', 'matrixInterfaceAttentionCount', 'matrixInterfaceCandidates',
+// A seat-scoped report; aggregate-only cells are withheld by the adapter.
+'oneOnOneLineReport']);
 const refusal = (reason) => ({ ok: false, code: 'scope-refusal', error: reason, field: 'scope' });
 
 /** ADR-0087: under enforcement, boundary-management commands stay reachable
@@ -455,6 +458,9 @@ function bundleFor(state, name, args) {
 }
 
 const MATRIX_LINE_SCOPED = new Set([
+  // Only logging is widened to an active direct line. Its handler separately
+  // stamps the seat and forbids settling another line's unowned commitments.
+  'logOneOnOne',
   'cadenceDeclareForum', 'cadenceUpdateForum', 'cadenceLogSession',
   'jurAnchorWork',
   'priorityOpenCase', 'priorityTreatDemand', 'priorityPropose', 'priorityAgreePrecedence', 'priorityRecordAnswer', 'priorityWithdraw',

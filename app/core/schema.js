@@ -24,6 +24,7 @@ import { normalizeSeatIdentities, normalizeIdentityMarkers, normalizeIdentitySet
 // ADR-0121 (Schema v114): the Duty Coverage Register's fail-closed normalizers.
 import { normalizeDutyCovers, normalizeDutyCoverageMarkers, normalizeDutyCoverageSettings } from './domain/dutyCoverageSchema.js';
 import { normalizeReportingLines, normalizeMatrixMarkers, normalizeMatrixSettings } from './domain/matrixSchema.js';
+import { normalizeOneOnOneHolder, normalizeOneOnOneLineSettings } from './domain/oneOnOneLineSchema.js';
 // ADR-0143 (Schema v120): the Cross-Line Priority Arbitration's fail-closed
 // normalizers. Every stored row is a human act; every score, state and count is
 // re-derived on read, so a printed order cannot drift from the integers it ranks.
@@ -696,7 +697,9 @@ export {
 // dated first-person bilateral acts between counterpart managers plus
 // RULE-MIA-01's idempotency markers. Deliberately EMPTY on upgrade so no
 // interface agreement or escalation route is fabricated without human consent.
-export const SCHEMA_VERSION = 131;
+// v132 records who held a 1:1, without assigning a holder to old meetings.
+// Coverage is derived from the current matrix and is never stored as a score.
+export const SCHEMA_VERSION = 132;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -2099,6 +2102,8 @@ export const DEFAULT_SETTINGS = Object.freeze({
   ...normalizeAuthorityReaffirmationSettings({}),
   // ADR-0162: management-interface agreement term, warning window, review ask window + pause.
   ...normalizeMatrixInterfaceSettings({}),
+  // Matrix 1:1 coverage: explicit defaults, with no inferred historical holders.
+  ...normalizeOneOnOneLineSettings({}),
 });
 
 export const COLLECTIONS = [
@@ -3475,6 +3480,7 @@ export function normalizeSettings(raw) {
     ...normalizeLineReaffirmationSettings(s),
     ...normalizeAuthorityReaffirmationSettings(s),
     ...normalizeMatrixInterfaceSettings(s),
+    ...normalizeOneOnOneLineSettings(s),
     ...normalizeAgendaSettings(s),
     chainAdoptedHorizons: normalizeAdoptedHorizons(s.chainAdoptedHorizons, DECLARED_HORIZONS),
     chainAdoptedOn: /^\d{4}-\d{2}-\d{2}$/.test(String(s.chainAdoptedOn || '')) ? s.chainAdoptedOn : null,
@@ -7026,10 +7032,15 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   });
   state.people = uniqueIds(people.filter((p) => p.name), 'People', warnings);
 
+  const holderCounters = { cleared: 0 };
   const oneOnOnes = asArray(raw, 'oneOnOnes', warnings).map((m, i) => ({
     id: str(m.id) || `oo-${i}`,
     personId: str(m.personId),
-    date: dayOrNull(m.date) || now.slice(0, 10),
+    date: calendarDayOrNull(m.date) || now.slice(0, 10),
+    // Legacy normalization requires a display date. Preserve the fact that it
+    // was repaired so a line-coverage reading never treats that day as proof.
+    dateUncertain: m.dateUncertain === true || !calendarDayOrNull(m.date),
+    ...normalizeOneOnOneHolder(m, holderCounters),
     status: ['held', 'skipped', 'moved'].includes(m.status) ? m.status : 'held',
     mood: m.mood === null || m.mood === undefined ? null : clampInt(m.mood, 1, 5, 3),
     agenda: normalizeAgenda(m.agenda),
@@ -7041,6 +7052,9 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
     createdAt: isoOrNull(m.createdAt) || now,
   }));
   state.oneOnOnes = uniqueIds(oneOnOnes, '1:1s', warnings);
+  if (holderCounters.cleared) warnings.push(`${holderCounters.cleared} 1:1 holder attribution(s) could not be validated and were cleared; no manager was inferred.`);
+  const uncertainMeetingDates = state.oneOnOnes.filter((meeting) => meeting.dateUncertain).length;
+  if (uncertainMeetingDates) warnings.push(`${uncertainMeetingDates} 1:1 date(s) were missing or invalid; their displayed fallback dates are not evidence of when a meeting was held.`);
   dedupeActionIds(state.oneOnOnes, warnings);
   repairCarryChains(state.oneOnOnes, warnings);
   auditActionOwners(state.oneOnOnes, warnings);
@@ -8676,6 +8690,21 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  // 131 → 132: no old meeting acquires an invented holder. Preserve any
+  // already-present attribution for validation by normalizeState; otherwise
+  // its three fields remain explicitly unknown.
+  131: (v131) => ({
+    ...v131,
+    schemaVersion: 132,
+    oneOnOnes: Array.isArray(v131.oneOnOnes)
+      ? v131.oneOnOnes.map((m) => (isPlainObject(m)
+        ? { ...m, heldById: m.heldById ?? null, heldByBasis: m.heldByBasis ?? null, heldByAt: m.heldByAt ?? null }
+        : m))
+      : [],
+    settings: isPlainObject(v131.settings)
+      ? { ...v131.settings, ...normalizeOneOnOneLineSettings(v131.settings) }
+      : { ...DEFAULT_SETTINGS },
+  }),
   // ADR-0107: additive 108 → 109. An existing workspace has adopted bundles
   // but NO frozen expectation, so all three ledgers start EMPTY — "no response
   // has been pre-registered here yet", which is a different claim from "every

@@ -1,3 +1,11 @@
+## 2026-11-10 — Draft: record who held a 1:1
+
+**Work in progress — not ready to merge or use for confidential notes.** The existing person-level 1:1 read policy can expose one manager's meeting body to another manager with a direct matrix line. This draft does not yet enforce per-line confidentiality, and a selected seat is not authenticated identity.
+
+In the full-access operator view, **Log a 1:1** offers an optional holder; under a frontline or mid-manager seat a held meeting is attributed to that seat, including for a direct additional-line report. History displays the stored holder or “Holder not recorded.” Schema v132 leaves older meetings unattributed rather than guessing, and newly detected invalid dates appear as “Date unverified.” A failed local save or queued encrypted save produces a warning.
+
+This is not yet the matrix 1:1 coverage feature: there is no coverage panel, reminder rule, scan, registered CSV export or interactive claim/release control. The API-only report reads **today's** lines and may credit meetings that predate a current line; legacy person-wide cadence is unchanged and can still use fallback dates. Higher-altitude line holders cannot yet log through this path. Complete confidentiality and historical-coverage work before relying on it.
+
 ## 2026-11-10 — Matrix goal carriage branch-overlap audit
 
 Open `#/matrix?panel=goal-carriage` to compare distinct active goals in each manager span with the appearances under its immediate reporting branches. The view uses the canonical matrix DAG, displays exact repeated-appearance counts, and keeps multi-manager goals unattributed rather than choosing a line. Active line defects refuse affected span totals. This is currently a read-only overlap audit; persistent manager stances, settled attribution, attainment-rate comparisons, automation and CSV export remain in progress. No setup or schema change.

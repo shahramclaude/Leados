@@ -760,5 +760,5 @@ test('a single-chain workspace with no frozen decisions reads EMPTY, not broken'
 });
 
 test('the schema reflects ADR-0159/0162 matrix settlement & interface storage while pure reads store nothing', () => {
-  assert.equal(SCHEMA_VERSION, 131, 'ADR-0162 bumped the schema to v131 for management-interface agreements');
+  assert.equal(SCHEMA_VERSION, 132, 'Matrix 1:1 holder attribution bumped the schema to v132');
 });

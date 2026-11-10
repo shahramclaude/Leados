@@ -3,13 +3,12 @@
  * validation for the Matrix Goal Carriage & Attainment Reconciliation
  * Register.
  *
- * STATUS — IN PROGRESS, NOT WIRED (Session 224). These normalizers are
- * complete and tested (`tests/app/goal-carriage.test.mjs`) but `schema.js`
- * does not call them: neither collection below is registered, no migration
- * adds them, `SCHEMA_VERSION` is still 131 and no workspace stores a stance.
- * Remove this note when the register ships.
+ * STATUS — IN PROGRESS, NOT WIRED. These normalizers are tested but
+ * `schema.js` does not call them: neither collection below is registered and
+ * no workspace stores a stance. Schema v132 belongs to 1:1 holder attribution;
+ * the goal-carriage migration must use a later available version.
  *
- * Collections these normalizers are written for (planned Schema v132):
+ * Collections these normalizers are written for (future schema version):
  *   - `goalLineStances`: append-only, dated, first-person statements by the
  *     manager who holds ONE of a goal owner's reporting lines — `carries`,
  *     `releases` or `withdrawn` (a previous statement taken back). One line per

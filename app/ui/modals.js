@@ -159,8 +159,22 @@ export function openOneOnOneDialog(
   const selected = personId && active.some((p) => p.id === personId) ? personId : active[0].id;
   const state = ctx.state;
   const settings = state.settings;
+  const seat = ctx.seatContext?.seat || null;
+  const operator = seat ? seat.fullAccess : !settings.activeSeatId;
+  // Do not suggest or settle another line's promises when preparing a meeting.
+  // Line-only seats also cannot inspect the unattributed home support queue.
+  function meetingStateFor(personIdValue) {
+    if (!seat || seat.fullAccess) return state;
+    const lineOnly = !seat.scope.has(personIdValue) && Boolean(seat.lineScope?.has(personIdValue));
+    return {
+      ...state,
+      oneOnOnes: state.oneOnOnes.filter((m) => m.personId !== personIdValue
+        || (m.heldById ? m.heldById === seat.id : !lineOnly)),
+      managerSupport: lineOnly ? (state.managerSupport || []).filter((m) => m.personId !== personIdValue) : state.managerSupport,
+    };
+  }
 
-  let currentCandidates = buildMeetingAgendaCandidates(state, selected, ctx.now, settings);
+  let currentCandidates = buildMeetingAgendaCandidates(meetingStateFor(selected), selected, ctx.now, settings);
   const agendaBox = h('div', { class: 'agenda-picks' });
   const selectedAgenda = new Set();
   let confirmDiscussed = false;
@@ -168,7 +182,7 @@ export function openOneOnOneDialog(
   let form = null;
 
   function seedAgendaSelection(forPersonId, isInitial = false) {
-    currentCandidates = buildMeetingAgendaCandidates(state, forPersonId, ctx.now, settings);
+    currentCandidates = buildMeetingAgendaCandidates(meetingStateFor(forPersonId), forPersonId, ctx.now, settings);
     selectedAgenda.clear();
     if (isInitial && Array.isArray(preparedTopics)) {
       for (const t of preparedTopics) selectedAgenda.add(t);
@@ -288,7 +302,7 @@ export function openOneOnOneDialog(
 
   function candidatesFor(personIdValue, dateValue) {
     if (!personIdValue) return [];
-    return reconciliationCandidates(state, personIdValue, dateValue || dayKey(ctx.now), ctx.now);
+    return reconciliationCandidates(meetingStateFor(personIdValue), personIdValue, dateValue || dayKey(ctx.now), ctx.now);
   }
 
   function renderReconciliation() {
@@ -441,8 +455,24 @@ export function openOneOnOneDialog(
     required: true,
   };
 
+  const holderField = operator
+    ? {
+      name: 'heldById', label: 'Who held it? (optional)', type: 'select', value: '',
+      help: 'Choose only if known. Unknown stays unattributed; skipped and moved meetings credit nobody.',
+      options: [
+        { value: '', label: 'Unknown — do not attribute' },
+        { value: 'leader', label: `${settings.leaderName || 'Workspace leader'} (workspace leader)` },
+        ...active.filter((p) => p.id !== selected && p.id !== 'leader').map((p) => ({ value: p.id, label: p.name })),
+      ],
+    }
+    : {
+      type: 'static', label: 'Who held it?',
+      value: h('p', { class: 'small' }, `A held meeting is recorded under the current seat: ${seat?.name || settings.activeSeatId}. Skipped and moved meetings credit nobody.`),
+    };
+
   form = buildForm([
     personField,
+    holderField,
     { name: 'date', label: 'Date', type: 'date', value: dayKey(ctx.now), required: true },
     {
       name: 'status',
@@ -498,6 +528,16 @@ export function openOneOnOneDialog(
   const selectedPerson = () => active.find((p) => p.id === form.getValues().personId) || active[0];
   form.field('personId').addEventListener('change', (event) => {
     const next = event.target.value;
+    const holder = form.field('heldById');
+    if (holder) {
+      const prior = holder.value;
+      holder.replaceChildren(
+        h('option', { value: '' }, 'Unknown — do not attribute'),
+        h('option', { value: 'leader' }, `${settings.leaderName || 'Workspace leader'} (workspace leader)`),
+        ...active.filter((p) => p.id !== next && p.id !== 'leader').map((p) => h('option', { value: p.id }, p.name)),
+      );
+      holder.value = prior !== next && [...holder.options].some((option) => option.value === prior) ? prior : '';
+    }
     seedAgendaSelection(next, false);
     confirmDiscussed = false;
     clearCoveredTopics = false;
@@ -545,6 +585,7 @@ export function openOneOnOneDialog(
       : [];
     const result = ctx.api.logOneOnOne({
       personId: person.id,
+      ...(operator ? { heldById: values.heldById || null } : {}),
       date,
       status: values.status,
       mood: values.mood,
@@ -573,12 +614,11 @@ export function openOneOnOneDialog(
     if (result.dropped) parts.push(`${result.dropped} dropped`);
     if (result.topicsCleared) parts.push(`${result.topicsCleared} employee topic${result.topicsCleared === 1 ? '' : 's'} covered`);
     const ownPromise = actions.some((a) => a.owner === 'leader');
-    toast(
-      values.status === 'held'
-        ? `1:1 with ${person.name} logged${parts.length ? ` — ${parts.join(', ')}` : ''}${ownPromise ? ' · added to what you owe' : ''}`
-        : `Marked as ${values.status}`,
-      'good',
-    );
+    const message = values.status === 'held'
+      ? `1:1 with ${person.name} logged${parts.length ? ` — ${parts.join(', ')}` : ''}${ownPromise ? ' · added to what you owe' : ''}`
+      : `Marked as ${values.status}`;
+    if (result.warning) toast(`${message} — ${result.warning}`, result.saved === false ? 'bad' : 'warn');
+    else toast(message, 'good');
   };
   form.node.addEventListener('submit', (event) => {
     event.preventDefault();

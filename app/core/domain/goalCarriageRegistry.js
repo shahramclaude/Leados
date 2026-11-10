@@ -3,15 +3,12 @@
  * schema and named method of the Matrix Goal Carriage & Attainment
  * Reconciliation Register.
  *
- * STATUS — IN PROGRESS, NOT WIRED (Session 224). This file and
- * `goalCarriageSchema.js` are the only parts that exist. Nothing in the app
- * imports them: there is no reader, no action, no post-commit rule, no panel,
- * no CSV scope and no schema migration. `SCHEMA_VERSION` is still 131 and
- * ADR-0163 has not been written. Every identifier below — `RULE-GCA-01`, the
- * event and right names, the `goal-carriage` CSV key, the "Schema v132"
- * collections — is RESERVED for that work and is not live. The method and
- * limits texts describe the intended design; none of it is enforced yet.
- * Remove this note when the register ships.
+ * STATUS — IN PROGRESS. This stance vocabulary and its schema are not wired;
+ * Session 225 shipped a separate read-only goal-overlap panel. Persistent
+ * stances, the action, rule, CSV and ADR-0163 remain unbuilt. Schema v132 is
+ * now used by the 1:1 holder slice, so goal stances need a later version.
+ * Identifiers below are reserved for the unbuilt portion; the method and
+ * limits describing that portion are design intent, not enforced behaviour.
  *
  * Leaf module: no storage, clock or DOM, so `schema.js`, the pure reader, the
  * rule, the actions, `csv.js` and the panel can all read ONE vocabulary.
