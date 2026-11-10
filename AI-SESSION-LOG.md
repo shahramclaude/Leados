@@ -14,7 +14,7 @@
 
 **Accessibility verification caveat.** The new route was added to `tests/app/access-audit.test.mjs`; its axe/JSDOM subtest printed `ok 1`, but the combined test/lint command exceeded its 300-second shell limit before a final TAP summary was returned. The aggregate access-audit command is therefore **[UNVERIFIED]** as a completed run, despite the emitted test result. Full `npm test` and real-browser / assistive-technology walkthrough are also **[UNVERIFIED]**.
 
-**Repo status.** Changes are on `arena/ea4c20ff-leados`; commit, push and PR outcome will be recorded after the requested single delivery pass.
+**Repo status.** Commit `02b8f38` (`Add matrix goal carriage overlap audit`) was pushed to `origin/arena/ea4c20ff-leados`; PR #254 opened against `main`: https://github.com/shahramclaude/Leados/pull/254. This log-status correction is included in the same PR branch.
 
 ## 2026-11-10 — Session 224: goal carriage across reporting lines — started, not shipped (two unwired leaf modules; Schema v131 unchanged)
 
