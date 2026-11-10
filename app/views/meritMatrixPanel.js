@@ -28,6 +28,10 @@ import { card, stat, badge, banner, table, kv, emptyState } from '../ui/componen
 import { downloadText } from '../ui/download.js';
 import { serializeCsv } from '../core/csv.js';
 import {
+  MERIT_STRUCTURE_FRAMEWORKS,
+  MERIT_STRUCTURE_STATES,
+} from '../core/domain/meritStructureRegistry.js';
+import {
   MERIT_PARITY_AUTHORITY_STATES,
   MERIT_PARITY_CONVENTIONS,
   MERIT_PARITY_COHORTS,
@@ -76,6 +80,141 @@ function verdictSection(report) {
         h('p', null, report.authorityDetail),
         h('p', { class: 'small muted' },
           `${report.totals.contestedN} contested · ${report.totals.unownedN} unowned · ${report.totals.clearN} held by exactly one line, across ${report.totals.rowsN} pay decision(s). This is a SEPARATE claim from the parity reading: the figures above can add up while the authority that set them cannot be attributed.`)),
+    }),
+  );
+}
+
+/* --------------------------------------------------------------- structure */
+
+/**
+ * ADR-0155: THE STRUCTURE THE MONEY WAS DECIDED UNDER.
+ *
+ * Printed ABOVE the money on purpose. The auditor's first question is not "what
+ * is the gap" but "who held the pay right when this money landed", and before
+ * this section the answer was today's org chart. Three claims appear here and
+ * none of them is allowed to imply the others:
+ *
+ *   what the RECORD says the home lines were on the effective date (and how
+ *   many of those days the ledger actually covers);
+ *
+ *   which home lines the record has since SUPERSEDED — the exact reason the
+ *   question is worth asking at all;
+ *
+ *   whether the LIVE reading still reproduces the block frozen beside this
+ *   decision, printed as reporting and never as correction.
+ */
+function structureSection(report) {
+  const st = report.structure;
+  if (!st) return null;
+  const frozen = report.frozen || { key: 'not-frozen', label: 'No structure frozen with this cycle', tone: 'neutral', differenceN: 0, compared: false, detail: '' };
+  const unreadable = st.unrecordedN > 0;
+  const tone = unreadable ? 'bad' : st.supersededN ? 'warn' : 'info';
+
+  const stateRow = (key) => {
+    const meta = MERIT_STRUCTURE_STATES.find((s) => s.key === key);
+    const n = st.stateCounts?.[key] || 0;
+    return h('div', { class: 'stack-sm' },
+      h('div', { class: 'row-gap' }, badge(meta?.label || key, toneFor(meta?.tone)), h('strong', null, String(n))),
+      h('span', { class: 'muted tiny' }, meta?.detail || ''));
+  };
+
+  const supersededTable = st.superseded.length
+    ? table({
+      caption: `Home lines the record has superseded since ${dash(st.asOf)}`,
+      columns: [
+        {
+          label: 'Person',
+          render: (r) => h('div', { class: 'stack-sm' },
+            h('strong', null, r.personName),
+            h('span', { class: 'muted tiny' }, meritParityLevelLabel(r.level))),
+        },
+        {
+          label: 'Home line on the effective date',
+          render: (r) => h('div', { class: 'stack-sm' },
+            h('strong', null, r.managerName || 'not recorded'),
+            badge(r.stateLabel || r.state, toneFor(r.tone))),
+        },
+        { label: 'Today’s roster shows', render: (r) => r.currentManagerId === r.managerId ? 'the same manager' : (r.homeCurrentManagerName || 'nobody recorded') },
+        { label: 'Why', render: (r) => h('span', { class: 'small' }, r.reason) },
+      ],
+      rows: st.superseded,
+    })
+    : h('p', { class: 'muted small' }, 'No home line on the effective date differs from today’s roster. That is a statement about the record’s coverage of that day, not proof that nobody moved.');
+
+  return h('div', { class: 'stack' },
+    banner({
+      tone,
+      title: `Structure on ${dash(st.asOf)}: ${st.observedN} recorded, ${st.presumedN} presumed, ${st.unrecordedN} unrecorded`,
+      body: h('div', { class: 'stack-sm' },
+        h('p', null,
+          'The home line printed below is the one the RECORD says held on the day the money takes effect (ADR-0149’s dated home-line ledger), not the one today’s roster shows. ',
+          st.hasLedger
+            ? `The ledger begins on ${dash(st.ledgerCoverageStart)}.`
+            : 'This workspace has recorded no home-line move at all, so every line here is today’s pointer used as a PRINTED PRESUMPTION.'),
+        h('p', { class: 'small muted' },
+          st.isFuture
+            ? `The effective date is ${st.daysToEffective} day(s) in the future: a recorded period that reaches it is PROJECTED, never reported as observed.`
+            : `Read ${-st.daysToEffective} day(s) after the effective date.`),
+        unreadable
+          ? h('p', { class: 'small' }, `Withheld: ${st.unrecordedN} person(s) have recorded home-line history that does not cover ${dash(st.asOf)}. Their pay authority is UNKNOWN and their rows are excluded from the cohort arithmetic — never projected backwards from today.`)
+          : null,
+        st.reconciles
+          ? h('p', { class: 'small muted' }, st.reconcilesDetail)
+          : h('p', { class: 'small' }, h('strong', null, 'The states do NOT reconcile: '), st.reconcilesDetail)),
+    }),
+    h('div', { class: 'grid-2' },
+      card({
+        title: 'What the record covers on that day',
+        subtitle: 'Four states, never collapsed. A person who had not started yet is a fifth fact and is counted separately.',
+        body: h('div', { class: 'stack-sm' },
+          ...['observed', 'projected', 'presumed-current', 'unrecorded'].map(stateRow),
+          h('div', { class: 'stack-sm' },
+            h('div', { class: 'row-gap' }, badge('Not on the roster on that day', 'neutral'), h('strong', null, String(st.notOnRosterN))),
+            h('span', { class: 'muted tiny' }, 'A joiner who did not exist yet, or a leaver already archived. Knowledge, not ignorance.'))),
+      }),
+      card({
+        title: 'Frozen beside this decision',
+        subtitle: 'A frozen pay packet that cannot reproduce the authority in force on its own effective date does not support the decision. Reporting only: neither side is edited.',
+        body: h('div', { class: 'stack-sm' },
+          h('div', { class: 'row-gap' }, badge(frozen.label, toneFor(frozen.tone))),
+          h('p', { class: 'small' }, frozen.detail),
+          frozen.compared
+            ? h('ul', { class: 'list-plain stack-xs' },
+              kv('Frozen on', dash(frozen.frozenAt)),
+              kv('Frozen for', dash(frozen.frozenAsOf)),
+              kv('Differences', String(frozen.differenceN)),
+              frozen.cappedDifferenceN ? h('li', { class: 'small muted' }, `${frozen.cappedDifferenceN} further difference(s) past the bounded list, counted not dropped.`) : null)
+            : h('p', { class: 'small muted' },
+              report.cycleStatus === 'finalized'
+                ? 'This cycle is finalised and its snapshot carries no readable structure block — it predates the freeze. That is an absence, not a match.'
+                : 'This cycle is not finalised yet, so no structure has been frozen beside it. Finalising freezes the effective-date structure in the same transaction as the money.'),
+          frozen.differences?.length
+            ? table({
+              caption: 'Differences between the frozen structure and the reading now',
+              columns: [
+                { label: 'Kind', render: (d) => badge(d.kind.replace(/-/g, ' '), 'warn') },
+                { label: 'What is named', render: (d) => h('span', { class: 'small' }, d.detail) },
+              ],
+              rows: frozen.differences,
+            })
+            : null),
+      }),
+    ),
+    card({
+      title: 'Home lines the record has superseded',
+      subtitle: 'This is the whole reason the reading exists: the manager on the packet is not always the manager in the org chart today.',
+      body: supersededTable,
+      actions: st.supersededN
+        ? [h('span', { class: 'muted tiny' }, `${st.supersededN} of ${st.rowN} line(s) superseded`)]
+        : [],
+    }),
+    card({
+      title: 'What this reading never does',
+      body: h('div', { class: 'stack-sm' },
+        h('ul', { class: 'list-plain stack-xs' },
+          ...MERIT_STRUCTURE_STATES.map((s) => h('li', { class: 'small' }, h('strong', null, s.label), ' ', s.detail))),
+        h('ul', { class: 'list-plain stack-xs' },
+          ...MERIT_STRUCTURE_FRAMEWORKS.map((f) => h('li', { class: 'small' }, h('strong', null, f.name), ' ', f.applied)))),
     }),
   );
 }
@@ -369,6 +508,7 @@ export function renderMeritMatrixTab(ctx, cycle, now = new Date()) {
   }
   return h('div', { class: 'view-stack', 'data-testid': 'merit-matrix-panel' },
     verdictSection(report),
+    structureSection(report),
     statsSection(report),
     cohortSection(report),
     decisionsSection(report),

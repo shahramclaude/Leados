@@ -45,6 +45,12 @@
 import { dayKey } from '../time.js';
 import { buildMatrix } from './matrix.js';
 import { periodLinesFor } from './reviewStewardship.js';
+import {
+  buildFrozenStructure,
+  buildMeritStructure,
+  compareFrozenStructure,
+  meritStructureBriefLines,
+} from './meritStructure.js';
 import { ratingIndex } from './comp.js';
 import {
   MERIT_PARITY_CONVENTIONS,
@@ -128,6 +134,12 @@ function emptyReport(today, refusals) {
     effectiveOn: null,
     ratingAsOf: null,
     isMatrix: false,
+    // ADR-0155: no cycle, so there is no day to read a structure for. The block
+    // is present and empty rather than absent, so a view can never render
+    // `undefined` as "the structure did not change".
+    structure: null,
+    frozen: null,
+    frozenStructure: null,
     conventions: { ...MERIT_PARITY_CONVENTIONS },
     verdict: verdict?.key || 'no-cycle',
     verdictLabel: verdict?.label || 'No merit cycle to read',
@@ -157,6 +169,8 @@ function emptyReport(today, refusals) {
       contestedN: 0, unownedN: 0, unreadableN: 0, clearN: 0,
       matrixDeltaCents: 0, singleDeltaCents: 0, poolDeltaCents: 0,
       matrixPoolShareBps: null, truncatedRowN: 0,
+      unrecordedHomeN: 0, supersededHomeN: 0, presumedHomeN: 0, projectedHomeN: 0,
+      observedHomeN: 0, frozenDifferenceN: 0,
     },
     refusals,
     reconciles: true,
@@ -204,6 +218,19 @@ export function buildMeritParity(state, { cycleId = null, now = new Date(), sett
   const people = (Array.isArray(state?.people) ? state.people : []).filter((p) => p && p.id);
   const peopleById = new Map(people.map((p) => [p.id, p]));
   const matrix = buildMatrix(state, { now, settings: settings || state?.settings || null });
+  // ADR-0155: THE STRUCTURE AS OF THE EFFECTIVE DATE, FROM THE RECORD.
+  //
+  // `buildMatrix` above reads today's `person.managerId`, and every line-level
+  // figure below is derived from it. That is correct for the DECLARED lines (they
+  // carry their own windows) and wrong for the HOME line the moment somebody has
+  // moved since the money landed: the packet would credit a manager who never saw
+  // the decision. The as-of reading substitutes each person's recorded home
+  // pointer for the effective date and runs the SAME engine over it, so the
+  // cohort split and the pay-right holders are read from the record's answer for
+  // that day. A workspace with no recorded home-line history substitutes nothing
+  // and every figure below is byte-identical to the pre-ADR-0155 reading.
+  const structure = buildMeritStructure(state, { asOf: effectiveOn, now, settings: settings || state?.settings || null });
+  const asOfMatrix = structure.asOfMatrix && structure.readable !== undefined ? structure.asOfMatrix : matrix;
   // A rating is read as of the pay decision, and never from the future — the
   // same rule `compensationRows` applies. The date used is printed.
   const ratingAsOf = effectiveOn <= today ? effectiveOn : today;
@@ -226,10 +253,14 @@ export function buildMeritParity(state, { cycleId = null, now = new Date(), sett
     const person = peopleById.get(row.personId) || null;
     // The lines in force ON THE EFFECTIVE DATE. Not today's shape: a project
     // line that ended in June did not hold this pay decision in November, and
-    // one that starts in December did not either.
+    // one that starts in December did not either. ADR-0155: the reader is the
+    // AS-OF graph, so the home line is the one the record says held on that day.
     const lines = person
-      ? periodLinesFor(matrix, row.personId, effectiveOn, effectiveOn, state).filter((l) => l.inPeriod)
+      ? periodLinesFor(asOfMatrix, row.personId, effectiveOn, effectiveOn, state).filter((l) => l.inPeriod)
       : [];
+    // The home-line observation that justifies (or withholds) this row.
+    const homeObservation = structure.perPerson?.get?.(row.personId) || null;
+    const homeUnreadable = Boolean(homeObservation && homeObservation.state === 'unrecorded');
     const holders = new Map();
     for (const line of lines) {
       const rights = Array.isArray(line.rights) ? line.rights : [];
@@ -237,8 +268,11 @@ export function buildMeritParity(state, { cycleId = null, now = new Date(), sett
       if (!line.managerId) continue;
       if (!holders.has(line.managerId)) holders.set(line.managerId, line.managerName || line.managerId);
     }
-    // A row whose person is gone cannot be read: `unknown`, never `unowned`.
-    const authorityState = !person
+    // A row whose person is gone cannot be read: `unknown`, never `unowned`. A
+    // row whose HOME line the record does not cover on that day is the same kind
+    // of fact — the authority cannot be read, and it is never downgraded to
+    // `unowned` (which would claim nobody owned it) or cleared from today.
+    const authorityState = !person || homeUnreadable
       ? 'unknown'
       : holders.size > 1 ? 'contested' : holders.size === 1 ? 'clear' : 'unowned';
     const multiLine = lines.length > 1;
@@ -250,6 +284,12 @@ export function buildMeritParity(state, { cycleId = null, now = new Date(), sett
     let excludeReason = null;
     if (personCounts.get(row.personId) > 1) { included = false; excludeReason = 'duplicate-person-row'; }
     else if (!person) { included = false; excludeReason = 'missing-person-row'; }
+    // ADR-0155: a home line the record does not cover on the effective date is
+    // not a cohort. Placing the row on one side of the comparison would publish
+    // a structure claim the record does not support, so the row is counted,
+    // excluded and named — which withholds the medians and the gap through the
+    // existing complete-pool gate rather than narrowing the sample quietly.
+    else if (homeUnreadable) { included = false; excludeReason = 'unrecorded-home-line'; }
     else if (row.currentPay !== undefined && row.currentPay !== null && Number(row.currentPay) === 0) { included = false; excludeReason = 'zero-base-row'; }
     else if (currentCents === null || proposedCents === null) { included = false; excludeReason = 'unpriced-row'; }
 
@@ -266,6 +306,16 @@ export function buildMeritParity(state, { cycleId = null, now = new Date(), sett
       cohort: cohortKey,
       lineN: lines.length,
       lineRoles: lines.map((l) => l.role),
+      // ADR-0155: the home line as the RECORD has it on the effective date,
+      // whether that differs from today's roster, and the state that justifies
+      // it. A row whose home line is unreadable prints no manager at all.
+      homeState: homeObservation?.state || (person ? null : 'not-on-roster'),
+      homeStateLabel: homeObservation?.stateLabel || null,
+      homeManagerId: homeObservation?.state === 'unrecorded' ? null : (homeObservation?.managerId || null),
+      homeManagerName: homeObservation?.state === 'unrecorded' ? null : (homeObservation?.managerName || null),
+      homeCurrentManagerName: person ? (peopleById.get(person.managerId)?.name || (person.managerId ? person.managerId : null)) : null,
+      homeSuperseded: Boolean(homeObservation?.superseded),
+      homeReason: homeObservation?.reason || null,
       holderN: holders.size,
       holderNames: [...holders.values()],
       authorityState,
@@ -293,7 +343,7 @@ export function buildMeritParity(state, { cycleId = null, now = new Date(), sett
   // narrowed subset may masquerade as the cycle's distribution.
   const partialPool = excluded.length > 0 || overflowN > 0 || malformedN > 0;
   const partialReason = partialPool
-    ? `The pay pool is incomplete: ${excluded.length} excluded row(s) (including ${excluded.filter((r) => r.missingPerson).length} off roster), ${malformedN} malformed row(s) and ${overflowN} beyond the read limit; cohort medians, pool share and comparisons are withheld.`
+    ? `The pay pool is incomplete: ${excluded.length} excluded row(s) (including ${excluded.filter((r) => r.missingPerson).length} off roster and ${excluded.filter((r) => r.excludeReason === 'unrecorded-home-line').length} whose home line the record does not cover on ${effectiveOn}), ${malformedN} malformed row(s) and ${overflowN} beyond the read limit; cohort medians, pool share and comparisons are withheld.`
     : '';
 
   /* ------------------------------------------------------------- cohorts */
@@ -379,8 +429,15 @@ export function buildMeritParity(state, { cycleId = null, now = new Date(), sett
   /* -------------------------------------------------------------- verdicts */
   const unpricedN = rows.filter((r) => r.excludeReason === 'unpriced-row' || r.excludeReason === 'zero-base-row').length;
   const missingPersonN = rows.filter((r) => r.excludeReason === 'missing-person-row').length;
+  const unrecordedHomeN = rows.filter((r) => r.excludeReason === 'unrecorded-home-line').length;
   const zeroIncreaseN = included.filter((r) => r.zeroIncrease).length;
 
+  if (unrecordedHomeN) {
+    refusals.push({
+      kind: 'unrecorded-home-line',
+      detail: `${unrecordedHomeN} pay decision(s) name a person whose recorded home line does not cover ${effectiveOn}. Their pay authority cannot be read from that day’s structure and is not projected backwards from today’s roster, so the row is excluded from the cohort arithmetic and counted here.`,
+    });
+  }
   if (unpricedN) {
     refusals.push({ kind: 'unpriced-row', detail: `${unpricedN} pay decision(s) carry no current or proposed figure. They are counted and excluded, and they block the cohort comparison rather than reading as zero increases.` });
   }
@@ -444,7 +501,7 @@ export function buildMeritParity(state, { cycleId = null, now = new Date(), sett
   const gapReason = gapWithheld
     ? (verdictKey === 'single-line'
       ? 'No person in this cycle sat on a second reporting line on the effective date, so there is no second-line cohort to compare against.'
-      : partialReason || (refusals.find((r) => ['cohort-below-floor', 'cohort-empty', 'unpriced-row', 'missing-person-row', 'no-money-moved', 'no-rows', 'row-cap'].includes(r.kind))?.detail
+      : partialReason || (refusals.find((r) => ['cohort-below-floor', 'cohort-empty', 'unpriced-row', 'missing-person-row', 'unrecorded-home-line', 'no-money-moved', 'no-rows', 'row-cap'].includes(r.kind))?.detail
         || 'The comparison could not be completed.'))
     : '';
 
@@ -465,13 +522,35 @@ export function buildMeritParity(state, { cycleId = null, now = new Date(), sett
 
   const findings = [];
   for (const r of unreadable) {
+    // ADR-0155: two different reasons for `unknown`, and they are not
+    // interchangeable. A person off the roster is gone; a home line the record
+    // does not cover on that day is a gap in the ledger. Both withhold the
+    // authority; only one of them can be fixed by recording a move.
+    const why = r.excludeReason === 'unrecorded-home-line'
+      ? `The recorded home line for this person does not cover ${effectiveOn}, so the lines in force on that day cannot be read from the record. The row is excluded from the arithmetic and the authority is UNKNOWN — never projected backwards from today’s roster.`
+      : 'The pay row names a person who is no longer on the roster, so the lines in force on the effective date cannot be read. The row is excluded from the arithmetic and the authority is UNKNOWN — never imputed.';
     findings.push({
-      kind: 'unreadable-pay-authority',
+      kind: r.excludeReason === 'unrecorded-home-line' ? 'unrecorded-home-line' : 'unreadable-pay-authority',
       personId: r.personId,
       personName: r.personName,
       cohort: r.cohort,
       lineN: r.lineN,
-      detail: 'The pay row names a person who is no longer on the roster, so the lines in force on the effective date cannot be read. The row is excluded from the arithmetic and the authority is UNKNOWN — never imputed.',
+      detail: why,
+    });
+  }
+  // ADR-0155: a home line the record has superseded, on a decision already made.
+  // This is the finding the whole module exists to print: the pay authority on
+  // the packet is not the manager the org chart shows today.
+  for (const r of rows) {
+    if (!r.homeSuperseded) continue;
+    findings.push({
+      kind: 'home-line-superseded',
+      personId: r.personId,
+      personName: r.personName,
+      cohort: r.cohort,
+      lineN: r.lineN,
+      homeStateLabel: r.homeStateLabel,
+      detail: `On ${effectiveOn} this person’s home line was ${r.homeManagerName || 'unreadable'} per the record; today’s roster shows ${r.homeCurrentManagerName || 'unreadable'}. The reading uses the recorded manager for that day and never today’s chart.`,
     });
   }
   for (const r of unowned) {
@@ -525,6 +604,48 @@ export function buildMeritParity(state, { cycleId = null, now = new Date(), sett
     && matrixCohort.includedN + singleCohort.includedN === included.length
     && (gapBps !== null || verdictKey === 'single-line');
 
+  /* ------------------------------------------- ADR-0155: the structure record */
+  //
+  // Two more claims, kept apart from the money and from each other:
+  //
+  //   `structure`  — what the RECORD says the home lines were on the effective
+  //                  date, and how many of those days the ledger actually covers.
+  //   `frozen`     — a comparison of that reading against the structure block
+  //                  frozen beside the money at finalisation. Reporting only: a
+  //                  drift is printed, never corrected in either direction.
+  const structureReading = {
+    asOf: structure.asOf,
+    today: structure.today,
+    daysToEffective: structure.daysToEffective,
+    isFuture: structure.isFuture,
+    hasLedger: structure.hasLedger,
+    ledgerCoverageStart: structure.ledgerCoverageStart,
+    rowN: structure.rowN,
+    rows: structure.rows,
+    remainderN: structure.remainderN,
+    stateCounts: structure.stateCounts,
+    observedN: structure.observedN,
+    projectedN: structure.projectedN,
+    presumedN: structure.presumedN,
+    unrecordedN: structure.unrecordedN,
+    notOnRosterN: structure.notOnRosterN,
+    reconciles: structure.reconciles,
+    reconcilesDetail: structure.reconcilesDetail,
+    superseded: structure.superseded,
+    supersededN: structure.supersededN,
+    supersedesToday: structure.supersedesToday,
+    readable: structure.readable,
+    refusedN: structure.refusedN,
+    defects: structure.defects,
+    refusals: structure.refusals,
+    briefLines: meritStructureBriefLines(structure, null),
+  };
+  const frozenComparison = compareFrozenStructure(cycle.audit?.structure || null, structure);
+  // The live reading cannot be trusted to describe a past decision when it
+  // cannot read the home line at all — so `figuresComplete` is withheld too.
+  const structureBlocked = !structure.readable;
+  const figuresCompleteFinal = figuresComplete && !structureBlocked;
+
   return {
     engineVersion: MERIT_PARITY_ENGINE_VERSION,
     today,
@@ -535,6 +656,9 @@ export function buildMeritParity(state, { cycleId = null, now = new Date(), sett
     effectiveOn,
     ratingAsOf,
     isMatrix: matrixCohort.rowsN > 0,
+    structure: structureReading,
+    frozen: frozenComparison,
+    frozenStructure: cycle.audit?.structure || null,
     conventions: { ...MERIT_PARITY_CONVENTIONS },
     verdict: parityMeta?.key || verdictKey,
     verdictLabel: parityMeta?.label || verdictKey,
@@ -581,20 +705,29 @@ export function buildMeritParity(state, { cycleId = null, now = new Date(), sett
       duplicateN,
       sourceRowsN: sourceRows.length,
       matchedLevelN,
+      // ADR-0155: the structure the money was decided under.
+      unrecordedHomeN,
+      supersededHomeN: structure.supersededN,
+      presumedHomeN: structure.presumedN,
+      projectedHomeN: structure.projectedN,
+      observedHomeN: structure.observedN,
+      frozenDifferenceN: frozenComparison.differenceN,
     },
     refusals,
     reconciles,
     reconcilesDetail: reconciles
       ? `${matrixCohort.rowsN} second-line row(s) + ${singleCohort.rowsN} home-line row(s) = ${rows.length} pay row(s); ${included.length} priced + ${excluded.length} excluded = ${rows.length}. ${rows.length} classified + ${malformedN} malformed + ${overflowN} beyond the read limit = ${sourceRows.length} stored pay row(s).`
       : `The rows do not reconcile: ${matrixCohort.rowsN} + ${singleCohort.rowsN} counted against ${rows.length} read, and ${included.length} + ${excluded.length} against ${rows.length}. This reading is NOT trustworthy.`,
-    figuresComplete,
-    figuresCompleteDetail: figuresComplete
-      ? (gapBps === null
+    figuresComplete: figuresCompleteFinal,
+    figuresCompleteDetail: !figuresCompleteFinal
+      ? (structureBlocked
+        ? `The structure the money was decided under cannot be read: ${structure.unrecordedN} person(s) have a recorded home-line history that does not cover ${effectiveOn}. Every figure that depends on the home line is withheld rather than projected backwards from today.`
+        : gapBps === null
+          ? partialReason || 'The cohort gap is not printed; the record does not support a complete comparison.'
+          : 'The counts reconcile but at least one printed figure is not fully supported by the record.')
+      : (gapBps === null
         ? 'There is no second-line cohort, so no gap is printed — and none is claimed. Every printed count is the computed count.'
-        : 'Every printed figure is the computed figure, and every figure the comparison needed was present.')
-      : gapBps === null
-        ? partialReason || 'The cohort gap is not printed; the record does not support a complete comparison.'
-        : 'The counts reconcile but at least one printed figure is not fully supported by the record.',
+        : 'Every printed figure is the computed figure, and every figure the comparison needed was present.'),
   };
 }
 
@@ -617,6 +750,15 @@ export function meritParityBriefText(state, { cycleId = null, now = new Date(), 
     `Pay decisions read: ${r.totals.rowsN} (${r.totals.matrixRowsN} on a second line, ${r.totals.singleRowsN} on a home line only); ${r.totals.includedN} priced, ${r.totals.excludedN} excluded (${r.totals.unpricedN} unpriced, ${r.totals.missingPersonN} naming a person no longer on the roster).`,
     `Authority: ${r.authorityLabel.toLowerCase()}. ${r.totals.contestedN} decision(s) carry a contested pay right, ${r.totals.unownedN} carry none and ${r.totals.unreadableN} cannot be read; ${r.totals.clearN} are held by exactly one line. A contested right is named here, never settled here.`,
   ];
+  // ADR-0155: the structure the money was decided under, kept separate from the
+  // money and from the parity word above it.
+  if (r.structure) lines.push(...meritStructureBriefLines(r.structure, r.frozen));
+  if (r.structure?.supersededN) {
+    lines.push(`Of these, ${r.structure.supersededN} home line(s) differ from today’s roster: the packet names the manager the record says held the line on ${r.effectiveOn}, and never today’s chart.`);
+  }
+  if (r.frozen && r.frozen.compared) {
+    lines.push(`Frozen structure: ${r.frozen.label}. ${r.frozen.differenceN} difference(s) between the frozen block and the reading taken now; the frozen record is not edited to match and the live reading is not overwritten to agree.`);
+  }
   if (r.gapWithheld) {
     lines.push(`Cohort comparison: REFUSED. ${r.gapReason}`);
   } else {
@@ -658,6 +800,17 @@ export function meritParityCsvRows(state, { cycleId = null, now = new Date(), se
     parity_verdict: r.verdict,
     reconciles: r.reconciles ? 'yes' : 'no',
     figures_complete: r.figuresComplete ? 'yes' : 'no',
+    // ADR-0155: the structure the money was decided under — counts only.
+    structure_as_of: r.structure?.asOf || '',
+    structure_observed_n: String(r.totals.observedHomeN ?? 0),
+    structure_projected_n: String(r.totals.projectedHomeN ?? 0),
+    structure_presumed_n: String(r.totals.presumedHomeN ?? 0),
+    structure_unrecorded_n: String(r.totals.unrecordedHomeN ?? 0),
+    structure_superseded_n: String(r.totals.supersededHomeN ?? 0),
+    structure_reconciles: r.structure ? (r.structure.reconciles ? 'yes' : 'no') : '',
+    frozen_structure_status: r.frozen?.key || 'not-frozen',
+    frozen_structure_on: r.frozen?.frozenAt || '',
+    frozen_structure_diff_n: String(r.frozen?.differenceN ?? 0),
   };
   const rows = [{
     row_kind: 'summary',

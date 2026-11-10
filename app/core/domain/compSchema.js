@@ -18,8 +18,14 @@
 
 import { dayKey } from '../time.js';
 import { COMP_DIMENSIONS, COMP_ORIGINS, COMP_STATUSES } from './comp.js';
+import { MERIT_STRUCTURE_STATES } from './meritStructureRegistry.js';
 
-export const COMP_SNAPSHOT_VERSION = 1;
+// ADR-0155 bumps the frozen-snapshot contract from 1 to 2 by ADDING one optional
+// block (`structure`). A v1 snapshot still loads: it simply carries no structure,
+// reads `not-frozen`, and nothing is claimed about the structure that decision
+// was made under. The bump is what lets a reader tell "this record predates the
+// freeze" apart from "this record froze a structure that happens to be empty".
+export const COMP_SNAPSHOT_VERSION = 2;
 export const COMP_MAX_ROWS = 400;
 export const COMP_MAX_NOTE = 400;
 export const COMP_MAX_PAY = 100000000;
@@ -109,6 +115,70 @@ export function normalizeCompBands(raw, now, warnings = []) {
 }
 
 /* ------------------------------------------------------------- frozen audit */
+
+/**
+ * The frozen structure block (ADR-0155, snapshot v2).
+ *
+ * Validated and preserved, never recomputed: a frozen record that re-derives
+ * itself from today's roster is not a frozen record. A block that cannot be read
+ * is DROPPED with its own absence — `null` reads `not-frozen`, which is a
+ * different claim from "the structure matched".
+ *
+ * The person rows are bounded and must name a person and a known state; a row
+ * that cannot be read is dropped rather than repaired, and the dropped count is
+ * carried in `rowsDroppedN` so the frozen totals can never silently claim more
+ * rows than the block holds.
+ */
+function normalizeFrozenStructure(raw) {
+  if (!isPlainObject(raw)) return null;
+  const states = new Set(MERIT_STRUCTURE_STATES.map((state) => state.key));
+  const rows = [];
+  let dropped = 0;
+  for (const row of Array.isArray(raw.rows) ? raw.rows : []) {
+    if (!isPlainObject(row)) { dropped += 1; continue; }
+    const personId = str(row.personId).trim();
+    const state = str(row.state);
+    if (!personId || !states.has(state)) { dropped += 1; continue; }
+    rows.push({
+      personId,
+      state,
+      managerId: str(row.managerId).trim() || null,
+    });
+  }
+  const count = (value) => clampInt(value, 0, COMP_MAX_ROWS, 0);
+  const pool = isPlainObject(raw.pool) ? raw.pool : null;
+  const num = (value) => (Number.isFinite(Number(value)) ? Number(value) : null);
+  return {
+    version: clampInt(raw.version, 0, 99, 1),
+    engineVersion: str(raw.engineVersion, '').slice(0, 60) || null,
+    asOf: day(raw.asOf),
+    capturedOn: day(raw.capturedOn),
+    ledgerCoverageStart: day(raw.ledgerCoverageStart),
+    observedN: count(raw.observedN),
+    projectedN: count(raw.projectedN),
+    presumedN: count(raw.presumedN),
+    unrecordedN: count(raw.unrecordedN),
+    notOnRosterN: count(raw.notOnRosterN),
+    rowN: count(raw.rowN),
+    supersededN: count(raw.supersededN),
+    rowsDroppedN: dropped,
+    rows: rows.slice(0, COMP_MAX_ROWS),
+    pool: pool && {
+      rowsN: count(pool.rowsN),
+      matrixRowsN: count(pool.matrixRowsN),
+      singleRowsN: count(pool.singleRowsN),
+      clearN: count(pool.clearN),
+      contestedN: count(pool.contestedN),
+      unownedN: count(pool.unownedN),
+      unreadableN: count(pool.unreadableN),
+      matrixMedianBps: num(pool.matrixMedianBps),
+      singleMedianBps: num(pool.singleMedianBps),
+      gapBps: num(pool.gapBps),
+      authorityVerdict: str(pool.authorityVerdict, '').slice(0, 40) || null,
+      parityVerdict: str(pool.parityVerdict, '').slice(0, 40) || null,
+    },
+  };
+}
 
 /**
  * A finalized reading. Every field is validated for range and preserved, never
@@ -208,11 +278,23 @@ export function normalizeFairnessSnapshot(raw) {
       retainedValue: moneyOrNull(policy.retainedValue) ?? null,
       regretValue: moneyOrNull(policy.regretValue) ?? null,
     })),
+    // ADR-0155: the structure the decision was made under, frozen beside the
+    // money. `null` in a v1 snapshot is a fact about the record's age, and it
+    // reads `not-frozen` rather than confirming anything.
+    structure: normalizeFrozenStructure(raw.structure),
   };
 }
 
-/** Build the frozen snapshot from a live reading. Called once, inside finalize. */
-export function buildFairnessSnapshot(reading, { capturedAt, byId = null } = {}) {
+/**
+ * Build the frozen snapshot from a live reading. Called once, inside finalize.
+ *
+ * `structure` (ADR-0155) is the frozen home-line block built by
+ * `buildFrozenStructure` in the SAME transaction as the status change, so the
+ * frozen structure and the event that propagates it cannot disagree. It is
+ * optional: a workspace with no readable structure freezes `null`, which reads
+ * `not-frozen` — never "the structure matched".
+ */
+export function buildFairnessSnapshot(reading, { capturedAt, byId = null, structure = null } = {}) {
   const decomposition = reading.decomposition || {};
   const impact = reading.impact || {};
   const usable = reading.integrity?.counts?.withPay ?? 0;
@@ -278,6 +360,7 @@ export function buildFairnessSnapshot(reading, { capturedAt, byId = null } = {})
       retainedValue: policy.retainedValue,
       regretValue: policy.regretValue,
     })),
+    structure,
   });
 }
 

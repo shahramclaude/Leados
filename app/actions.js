@@ -135,6 +135,7 @@ import {
   meritParityBriefText,
   meritParityCsvRows,
 } from './core/domain/meritParity.js';
+import { buildFrozenStructure, buildMeritStructure } from './core/domain/meritStructure.js';
 // ADR-0122: the Dated Absence Plan. One read (the window plan), three human
 // commands (declare, revoke, scan); availability is derived from the declared
 // windows, never stored.
@@ -11051,7 +11052,30 @@ export function createApi(store, options = {}) {
       if (reading.spent > reading.budget.amount + 0.5) {
         return fail(`The proposals total ${Math.round(reading.spent)} against a ${Math.round(reading.budget.amount)} budget. Reduce them, or record the overspend as its own decision.`, 'budgetValue');
       }
-      const snapshot = buildFairnessSnapshot(reading, { capturedAt: stamp(), byId: existing.ownerId || null });
+      // ADR-0155: freeze the structure the money was decided under, in the SAME
+      // transaction as the status change. The as-of reading is taken on the
+      // cycle's own effective date through the dated home-line ledger — so a
+      // home-line move later that year cannot silently rewrite who held the pay
+      // right when this money landed. A workspace with no readable structure
+      // freezes `null` (a printed `not-frozen`), never a confirming blank.
+      const parityAtFreeze = buildMeritParity(store.state, {
+        cycleId,
+        now: clock(),
+        settings: store.state.settings || null,
+      });
+      const structureAtFreeze = buildMeritStructure(store.state, {
+        asOf: existing.effectiveOn || null,
+        now: clock(),
+        settings: store.state.settings || null,
+      });
+      const frozenStructure = parityAtFreeze?.hasCycle && structureAtFreeze?.asOf
+        ? buildFrozenStructure(structureAtFreeze, parityAtFreeze)
+        : null;
+      const snapshot = buildFairnessSnapshot(reading, {
+        capturedAt: stamp(),
+        byId: existing.ownerId || null,
+        structure: frozenStructure,
+      });
       store.update(
         (draft) => {
           const cycle = (draft.meritCycles || []).find((row) => row && row.id === cycleId);
