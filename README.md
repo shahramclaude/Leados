@@ -1,3 +1,7 @@
+## 2026-11-10 — Matrix goal carriage branch-overlap audit
+
+Open `#/matrix?panel=goal-carriage` to compare distinct active goals in each manager span with the appearances under its immediate reporting branches. The view uses the canonical matrix DAG, displays exact repeated-appearance counts, and keeps multi-manager goals unattributed rather than choosing a line. Active line defects refuse affected span totals. This is currently a read-only overlap audit; persistent manager stances, settled attribution, attainment-rate comparisons, automation and CSV export remain in progress. No setup or schema change.
+
 ## 2026-11-10 — Is one manager span a stable dyad or a scattered matrix?
 
 Open `#/matrix?panel=coordination` for the Matrix Span Fragmentation & Counterpart-Dyad Coordination Ledger. A reporting-tree span of four can mean four people working with one steady counterpart manager, or four separate counterpart negotiations; tree headcount cannot tell those structures apart. This panel reads the existing live Matrix graph and prints each manager span’s distinct counterpart count, directed manager → person → counterpart exposures, deduplicated workspace manager pairs, and exact rational effective-counterpart dispersion — never a rounded score, estimated hours, performance judgement or redesign recommendation.
