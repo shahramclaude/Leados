@@ -96,6 +96,8 @@ import { roleClarityCsvRows, ROLE_CLARITY_CSV_COLUMNS } from './domain/roleClari
 import { meritParityCsvRows, MERIT_PARITY_CSV_COLUMNS } from './domain/meritParity.js';
 import { lineExitCsvRows } from './domain/lineExit.js';
 import { LINE_EXIT_CSV_COLUMNS } from './domain/lineExitRegistry.js';
+import { buildLineReaffirmation, lineReaffirmationCsvRows } from './domain/lineReaffirmation.js';
+import { LINE_REAFFIRMATION_CSV_COLUMNS } from './domain/lineReaffirmationRegistry.js';
 import { STRUCTURE_HISTORY_CSV_COLUMNS } from './domain/structureHistoryRegistry.js';
 import {
   assessmentReconciliationCsvRows,
@@ -1139,6 +1141,12 @@ export const CSV_EXPORTS = [
   // CSV scope #115 (Schema v128, ADR-0153). Aggregate-only: one row per onboarding case × line; no identity, no prose.
   { key: 'role-clarity', label: 'Cross-line role clarity (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'role-clarity', description: 'One row per onboarding case × reporting line for every case where the person sat on more than one reporting line during the window. Each row carries the window dates, the derived case verdict (unbriefed / contested / unscoped-pair / overlapping / partitioned), whether that verdict is open, the line role and kind, whether the line was in force in the window, the line outcome (brief / declined / none), the number of accountability domains the line declared, the sorted closed-lexicon domain keys, the declared decision right (decides / advises / informed), the declared criteria standing (written / verbal / unstated) and how many earlier briefs the current one supersedes. NO person, NO name, NO manager id, NO manager name, NO brief text and NO stakeholder name. A line with no brief exports BLANK marks, never a zero, and a brief with no declared marks exports BLANK, never an imputed one: nothing derived is stored and every figure is recomputed from the stored briefs on read.' },
   { key: 'line-exit', label: 'Matrix line-exit obligations (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'line-exit', description: 'One workspace summary row plus one row per reporting line that has been dated out, carrying the line KIND and a stable position, the day it ended, whether its start and end days support the overlap arithmetic, and the obligation counts by derived state (open with no remedy / retired with a reason / carried to a named manager), how many are past their due day, how many are about a work window that falls entirely outside the line\u2019s life (flagged for retirement, never retired automatically), how many carry no dated window, the age of the oldest open obligation in whole days, the line\u2019s derived verdict and whether that verdict is open. NO person, NO name, NO manager id, NO declaration id and NO free text. An obligation is never re-pointed and never voided by arithmetic, so a line whose end day is not recorded exports line_window_verifiable = false and its obligations read as open rather than settled.' },
+  // CSV scope #118 (Schema v129, ADR-0157). Aggregate-only: one summary row plus
+  // one row per declared line KIND. Every count is a count of LINES or of
+  // distinct PEOPLE; a share total is BLANK with share_refused = true and the
+  // reason in its own column whenever any line in scope carries no allocation,
+  // never printed over the declared lines only and never a zero.
+  { key: 'line-reaffirmation', label: 'Matrix line re-affirmation (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'line-reaffirmation', description: 'One workspace summary row plus one row per declared line kind: the line count, how many lines were never given a term, how many are inside their warning window, how many have a term that ran out, how many were re-affirmed but not yet answered by the person, how many the person objected to, how many the line released, how many were re-affirmed at a different share than the line now declares, and how many are in term with both sides answered. Plus the two exact-integer share totals that are the point of the register: the share still CHARGED to a commitment no live answer covers, and the share covered by a live re-affirmed term, with the uncovered-plus-covered identity printed as a claim rather than assumed. NO person, NO name, NO manager id, NO declaration id, NO stated reason, NO objection text and NO free text of any kind. A share total is BLANK with share_refused = true and the reason in its own column whenever any line in scope carries no allocation, never a zero. A released line is counted as still charged because the declaration was never dated out: continuation by absence is never exported as a renewal.' },
   // CSV scope #116 (Schema v128 unchanged, ADR-0154). Aggregate only: one summary
   // row and one row per level that appears in either cohort. Basis points, counts,
   // the declared cell floor and band, the two verdicts and the refusal reason.
@@ -6272,6 +6280,16 @@ export function buildScopeTable(state, scope, now) {
       // are declared by the line or they do not exist.
       const rows = roleClarityCsvRows(state, { now, settings: state.settings || {} });
       const columns = ROLE_CLARITY_CSV_COLUMNS.map((key) => ({ key, header: key }));
+      return { columns, rows };
+    }
+    case 'line-reaffirmation': {
+      // CSV scope #118 (Schema v129, ADR-0157). Built from the same read model the
+      // panel renders, so an exported state is provably the state that was
+      // printed. Aggregate only: no person, no name, no manager id, no
+      // declaration id and no free text.
+      const report = buildLineReaffirmation(state, { now, settings: state.settings || {} });
+      const rows = lineReaffirmationCsvRows(report);
+      const columns = LINE_REAFFIRMATION_CSV_COLUMNS.map((key) => ({ key, header: key }));
       return { columns, rows };
     }
     case 'line-exit': {

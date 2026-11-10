@@ -72,6 +72,11 @@ import {
   normalizeLineExitSettings,
 } from './domain/lineExitSchema.js';
 import {
+  normalizeLineReaffirmationMarkers,
+  normalizeLineReaffirmations,
+  normalizeLineReaffirmationSettings,
+} from './domain/lineReaffirmationSchema.js';
+import {
   normalizeLineMandates,
   normalizeContradictionReviews,
   normalizeContradictionMarkers,
@@ -670,7 +675,7 @@ export {
 // hours nobody told them about. Every state, lapse, day count, verdict and total
 // is DERIVED on read from these acts plus the live matrix, so no printed figure
 // can drift from the record that produced it.
-export const SCHEMA_VERSION = 128;
+export const SCHEMA_VERSION = 129;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -2064,6 +2069,11 @@ export const DEFAULT_SETTINGS = Object.freeze({
   // line has to settle the obligations it left open. Printed, clamped, never
   // fitted from the record.
   ...normalizeLineExitSettings({}),
+  // ADR-0157: the line re-affirmation conventions — how long a re-affirmed term
+  // runs by default, how far ahead of its end the question opens, and how long a
+  // line's manager has to answer the ask the rule issues. All three printed, all
+  // three clamped, none fitted from the record.
+  ...normalizeLineReaffirmationSettings({}),
 });
 
 export const COLLECTIONS = [
@@ -2676,7 +2686,21 @@ export const COLLECTIONS = [
   // ended line is still open" — which is exactly what the panel prints.
   'lineExitRemedies',
   'lineExitMarkers',
-
+  // ADR-0157 (Schema v129): Matrix Line Re-Affirmation. `lineReaffirmations`
+  // holds ONLY the dated human answers on one declared line — which side
+  // answered (the manager who holds the line, or the person whose hours it
+  // takes), whether the answer was a re-affirmation (with the term it sets and
+  // the share it was given for), a release, an acceptance or an objection, the
+  // day it was given and the seat that gave it. The CURRENT share is NEVER
+  // copied here: it lives on the declaration and is read from there, so a retune
+  // cannot leave an answer claiming agreement to a number that no longer exists.
+  // `lineReaffirmationMarkers` is RULE-LRF-01's idempotency ledger. NOTHING
+  // DERIVED IS STORED: no state, no lapse, no day count, no verdict and no
+  // total, because every one of those is re-derived on read from these answers
+  // plus the live matrix. A stored state is a verdict waiting to disagree with
+  // the answers it was computed from.
+  'lineReaffirmations',
+  'lineReaffirmationMarkers',
 ];
 
 /** Stable empty state. `now` is an ISO string so the result is a pure value. */
@@ -3406,6 +3430,11 @@ export function normalizeSettings(raw) {
     // here would be silently DROPPED on every load, and the printed settlement
     // window would be a number the record does not hold.
     ...normalizeLineExitSettings(s),
+    // ADR-0157: listed here because `normalizeSettings` rebuilds the settings
+    // object field by field — a key spread into DEFAULT_SETTINGS but not named
+    // here would be silently DROPPED on every load, and the printed term and
+    // warning windows would be numbers the record does not hold.
+    ...normalizeLineReaffirmationSettings(s),
     ...normalizeAgendaSettings(s),
     chainAdoptedHorizons: normalizeAdoptedHorizons(s.chainAdoptedHorizons, DECLARED_HORIZONS),
     chainAdoptedOn: /^\d{4}-\d{2}-\d{2}$/.test(String(s.chainAdoptedOn || '')) ? s.chainAdoptedOn : null,
@@ -7855,6 +7884,14 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // to a manager who never took it.
   state.lineExitRemedies = normalizeLineExitRemedies(raw.lineExitRemedies, warnings);
   state.lineExitMarkers = normalizeLineExitMarkers(raw.lineExitMarkers);
+  // ADR-0157: an answer must name its side, its outcome, its day and — for a
+  // re-affirmation — the term it sets. One that does not is DROPPED with a
+  // printed warning, never repaired. A renewal invented at load time is an
+  // agreement nobody gave, and a renewal with no end date cannot be told apart
+  // from one nobody revisited: both are the exact states this module exists to
+  // expose, never to fabricate.
+  state.lineReaffirmations = normalizeLineReaffirmations(raw.lineReaffirmations, warnings);
+  state.lineReaffirmationMarkers = normalizeLineReaffirmationMarkers(raw.lineReaffirmationMarkers);
   // ADR-0122: a malformed absence row is dropped with a warning, never repaired —
   // an invented absence is an invented unavailability for every cover in the span.
   // Resolved BEFORE links so the `declares-absence-of` provenance edge validates
@@ -8816,6 +8853,22 @@ export const MIGRATIONS = {
   // standing — so every upgraded line reads `unscoped-line` in the Role Clarity
   // lens instead of a plausible comparison nobody made. A mark back-filled at
   // upgrade time would be a coarse judgement the line holder never declared.
+  // ADR-0157: additive 128 → 129. No collection is added to an existing
+  // workspace's answers and none is re-pointed. The answer ledger starts EMPTY,
+  // which reads as "no line has ever been re-affirmed" — the honest state of a
+  // workspace that upgraded: a renewal back-filled at upgrade time would be an
+  // agreement nobody gave, and a term invented by a migration is precisely the
+  // inheritance-by-silence this module exists to name. The three new conventions
+  // are clamped in so the printed windows exist before anyone re-declares them.
+  128: (v128) => ({
+    ...v128,
+    schemaVersion: 129,
+    lineReaffirmations: Array.isArray(v128.lineReaffirmations) ? v128.lineReaffirmations : [],
+    lineReaffirmationMarkers: Array.isArray(v128.lineReaffirmationMarkers) ? v128.lineReaffirmationMarkers : [],
+    settings: isPlainObject(v128.settings)
+      ? { ...v128.settings, ...normalizeLineReaffirmationSettings(v128.settings) }
+      : { ...DEFAULT_SETTINGS },
+  }),
   127: (v127) => ({
     ...v127,
     schemaVersion: 128,

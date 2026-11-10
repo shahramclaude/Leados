@@ -68,6 +68,13 @@ import {
 // manager accepts or declines it AND the person acknowledges it. Two
 // first-person commands, one scan, and three aggregate reads that report `ok`.
 import { createLineConsentActions } from './core/domain/lineConsentActions.js';
+import { createLineReaffirmationActions } from './core/domain/lineReaffirmationActions.js';
+import {
+  buildLineReaffirmation,
+  lineReaffirmationAttentionCount,
+  lineReaffirmationBriefText,
+  lineReaffirmationCsvRows,
+} from './core/domain/lineReaffirmation.js';
 // ADR-0149: Matrix Reorganisation Reconciliation & As-Of Structure Reads. One
 // dated home-line writer, one import of committed-design evidence and one scan;
 // every as-of reading is derived and nothing derived is stored.
@@ -20116,6 +20123,30 @@ export function createApi(store, options = {}) {
   };
   api.lineConsentAttentionCount = (options = {}) => ({
     ok: true, count: lineConsentAttentionCount(store.state, consentOptions(options)),
+  });
+  // ADR-0157: Matrix Line Re-Affirmation. The four first-person answers and the
+  // seat reads are in the factory; the aggregate reads are attached here so the
+  // CSV export and the panel read the SAME report, and so a view can never render
+  // `undefined` as if it were an empty register.
+  Object.assign(api, createLineReaffirmationActions(store, { now: clock, idFactory: id }));
+  const reaffirmOptions = (options = {}) => ({
+    now: options.now instanceof Date ? options.now : clock(),
+    settings: store.state.settings || {},
+  });
+  api.lineReaffirmationBoard = (options = {}) => {
+    const report = buildLineReaffirmation(store.state, reaffirmOptions(options));
+    return { ok: true, report, board: report.board };
+  };
+  api.lineReaffirmationBriefText = (options = {}) => {
+    const report = buildLineReaffirmation(store.state, reaffirmOptions(options));
+    return { ok: true, text: lineReaffirmationBriefText(report), report };
+  };
+  api.lineReaffirmationCsvRows = (options = {}) => {
+    const report = buildLineReaffirmation(store.state, reaffirmOptions(options));
+    return { ok: true, rows: lineReaffirmationCsvRows(report) };
+  };
+  api.lineReaffirmationAttentionCount = (options = {}) => ({
+    ok: true, count: lineReaffirmationAttentionCount(store.state, reaffirmOptions(options)),
   });
   // ADR-0149: Matrix Reorganisation Reconciliation & As-Of Structure Reads. The
   // three writes and the seat-scoped reads are in the factory; the aggregate

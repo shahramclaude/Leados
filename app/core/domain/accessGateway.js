@@ -67,6 +67,15 @@ const groups = [
   // person (or the operator view). Neither can answer for the other.
   ['accept-matrix-line', 'lineConsentAccept lineConsentDecline'],
   ['acknowledge-matrix-line', 'lineConsentAcknowledge'],
+  // ADR-0157: a line has a TERM, and both sides answer inside it. Re-affirming or
+  // releasing is the line's own manager's answer and is enforced in the action;
+  // accepting or objecting is the PERSON's own act, and the action refuses any
+  // seat that is not that person (or the operator view). The read paths and the
+  // deferred-work retry sit on the same declared right as the register they read,
+  // so an action whose right was never declared cannot be refused for every seat
+  // by accident.
+  ['reaffirm-matrix-line', 'lineReaffirm lineRelease lineReaffirmationRead lineReaffirmationCandidates lineReaffirmationScan'],
+  ['answer-line-reaffirmation', 'lineReaffirmationAccept lineReaffirmationObject'],
   // ADR-0152: settling an obligation an ENDED line left behind. Recording the
   // remedy is the manager's own act (the action narrows it to a seat that reaches
   // the person, and a carry must name a live line holder); the scan changes no
