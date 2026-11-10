@@ -162,6 +162,15 @@ import {
   meritEvidenceBriefText,
 } from './core/domain/meritEvidence.js';
 import { MERIT_EVIDENCE_SCAN_EVENT } from './core/domain/meritEvidenceRules.js';
+// ADR-0168: the Cross-Line Bench-Evidence Sufficiency reading. A pure read over
+// the readiness ledger and the review records ADR-0147 already stores, plus the
+// rule id its explicit scan names.
+import {
+  buildBenchEvidenceRead,
+  benchEvidenceAttentionCount,
+  benchEvidenceBriefText,
+} from './core/domain/benchEvidence.js';
+import { BENCH_EVIDENCE_SCAN_EVENT } from './core/domain/benchEvidenceRules.js';
 import { buildFrozenStructure, buildMeritStructure } from './core/domain/meritStructure.js';
 // ADR-0122: the Dated Absence Plan. One read (the window plan), three human
 // commands (declare, revoke, scan); availability is derived from the declared
@@ -20157,6 +20166,46 @@ export function createApi(store, options = {}) {
   // ADR-0166: the Cross-Line Review-Evidence Join. Attached as its own read and
   // its own scan so the panel, the brief and the badge read the SAME report, and
   // so a view can never render `undefined` as "the evidence was complete".
+  // ADR-0168: the Cross-Line Bench-Evidence Sufficiency reading. The panel, the
+  // brief, the CSV scope and the badge all read THIS report, so a view can never
+  // render `undefined` as "the evidence was complete".
+  const benchEvidenceOptions = (options = {}) => ({
+    now: options.now instanceof Date ? options.now : clock(),
+    settings: store.state.settings || {},
+  });
+  api.benchEvidenceRead = (options = {}) => ({
+    ok: true, report: buildBenchEvidenceRead(store.state, benchEvidenceOptions(options)),
+  });
+  api.benchEvidenceBriefText = (options = {}) => ({
+    ok: true, text: benchEvidenceBriefText(store.state, benchEvidenceOptions(options)),
+  });
+  api.benchEvidenceAttentionCount = (options = {}) => ({
+    ok: true, count: benchEvidenceAttentionCount(store.state, benchEvidenceOptions(options)),
+  });
+  /**
+   * Explicit scan: retry anything the per-transaction cap deferred. It writes only
+   * through RULE-BNE-01, so a scan cannot invent an obligation the rule would not
+   * have issued on the commit itself.
+   */
+  api.scanBenchEvidence = (options = {}) => {
+    store.update(
+      () => {},
+      {
+        type: BENCH_EVIDENCE_SCAN_EVENT,
+        entity: 'workspace',
+        entityId: '',
+        summary: 'Cross-line bench-evidence scan requested by the leader',
+        rules: ['succession'],
+      },
+    );
+    return {
+      ok: true,
+      report: buildBenchEvidenceRead(store.state, benchEvidenceOptions(options)),
+      propagations: store.lastPropagations || [],
+      saved: !store.persistError,
+      warning: store.persistError || null,
+    };
+  };
   api.meritEvidenceReport = (options = {}) => ({
     ok: true, report: buildMeritEvidenceJoin(store.state, meritParityOptions(options)),
   });

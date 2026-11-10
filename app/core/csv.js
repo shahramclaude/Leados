@@ -83,6 +83,8 @@ import { CONTRADICTION_CSV_COLUMNS } from './domain/contradictionRegistry.js';
 // from the SAME read model the stewardship panel renders, so a printed line state
 // and an exported line state cannot disagree.
 import { reviewStewardshipCsvRows, REVIEW_STEWARDSHIP_CSV_COLUMNS } from './domain/reviewStewardship.js';
+import { benchEvidenceCsvCells } from './domain/benchEvidence.js';
+import { BENCH_EVIDENCE_CSV_COLUMNS } from './domain/benchEvidenceRegistry.js';
 // ADR-0148: CSV scope #110. The export reads the SAME read model the panel
 // renders, so a printed state and an exported state cannot disagree.
 import { buildLineConsent, lineConsentCsvRows } from './domain/lineConsent.js';
@@ -1167,6 +1169,15 @@ export const CSV_EXPORTS = [
   // distinct PEOPLE; a share total is BLANK with share_refused = true and the
   // reason in its own column whenever any line in scope carries no allocation,
   // never printed over the declared lines only and never a zero.
+  // CSV scope #123 (Schema v134 unchanged, ADR-0168). Aggregate-only: one summary
+  // row. Every figure is a count of BENCH CLAIMS or of LINES; the review rule and
+  // the evidence window are printed as text and dates. NO person, NO name, NO
+  // manager id, NO readiness rating, NO seat title, NO review id. A rate below the
+  // declared floor or over a partially unreadable population is BLANK with
+  // `evidence_second_line_pct_withheld = yes` and the reason in the brief, never a
+  // zero. Nothing derived is stored: every state is recomputed on read from the
+  // readiness ledger, the review records and the dated reporting lines.
+  { key: 'succession-bench-evidence', label: 'Cross-line bench evidence (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'succession-bench-evidence', description: 'One summary row for the cross-line bench-evidence sufficiency reading: how many succession bench claims are in scope, how many were read against a completed review, how many could not be read, how many are cross-line and how many single-line, the exact count of each closed evidence state (line never asked / line silent / line awaiting / contested assessor / unowned assessor / home line only / corroborated / no readable review), and the second-line evidence-complete rate with whether it is withheld and why. NO person, NO name, NO manager, NO seat, NO rating, NO review id and NO free text.' },
   { key: 'line-reaffirmation', label: 'Matrix line re-affirmation (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'line-reaffirmation', description: 'One workspace summary row plus one row per declared line kind: the line count, how many lines were never given a term, how many are inside their warning window, how many have a term that ran out, how many were re-affirmed but not yet answered by the person, how many the person objected to, how many the line released, how many were re-affirmed at a different share than the line now declares, and how many are in term with both sides answered. Plus the two exact-integer share totals that are the point of the register: the share still CHARGED to a commitment no live answer covers, and the share covered by a live re-affirmed term, with the uncovered-plus-covered identity printed as a claim rather than assumed. NO person, NO name, NO manager id, NO declaration id, NO stated reason, NO objection text and NO free text of any kind. A share total is BLANK with share_refused = true and the reason in its own column whenever any line in scope carries no allocation, never a zero. A released line is counted as still charged because the declaration was never dated out: continuation by absence is never exported as a renewal.' },
   // CSV scope #119 (Schema v129 unchanged, ADR-0158). Aggregate-only: one summary row
   // plus one row per declared line KIND, over the default period (the last
@@ -6263,6 +6274,15 @@ export function buildScopeTable(state, scope, now) {
       const rows = contradictionCsvRows(report);
       const columns = CONTRADICTION_CSV_COLUMNS.map((key) => ({ key, header: key }));
       return { columns, rows };
+    }
+    case 'succession-bench-evidence': {
+      // CSV scope #123 (Schema v134 unchanged, ADR-0168). Built from the SAME read
+      // model the panel renders, so an exported count is provably the count that
+      // was printed. Aggregate only: no person, no name, no manager, no seat, no
+      // rating and no review id. A withheld rate exports BLANK, never a zero.
+      const cells = benchEvidenceCsvCells(state, { now, settings: state.settings || {} });
+      const columns = BENCH_EVIDENCE_CSV_COLUMNS.map((key) => ({ key, header: key }));
+      return { columns, rows: [cells] };
     }
     case 'review-stewardship': {
       // CSV scope #109 (Schema v122, ADR-0147). Built from the same read model the

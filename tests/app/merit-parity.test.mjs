@@ -408,7 +408,7 @@ test('the reading stores nothing: a reload prints the identical figures and read
   assert.equal(JSON.stringify(ctx.store.state), before, 'reading mutates nothing');
   assert.equal(ctx.store.state.meta.revision, revision, 'and bumps no revision');
   assert.equal(ctx.store.state.schemaVersion, SCHEMA_VERSION);
-  assert.equal(SCHEMA_VERSION, 133);
+  assert.equal(SCHEMA_VERSION, 135);
 
   // Recompute every printed figure from the stored blob and compare.
   const recomputed = buildMeritParity(ctx.store.state, { now: NOW, settings: ctx.store.state.settings });
@@ -422,7 +422,7 @@ test('the reading stores nothing: a reload prints the identical figures and read
 /* ------------------------------------------------------------------ CSV */
 
 test('CSV #116 is registered, exact-column, aggregate-only and reconciles with the panel', () => {
-  assert.equal(CSV_EXPORTS.length, 121, 'the register now holds 121 scopes (ADR-0160 #120, ADR-0161 #121, ADR-0162 #122)');
+  assert.equal(CSV_EXPORTS.length, 122, 'the register now holds 122 scopes (ADR-0162 #122, ADR-0168 #123)');
   const descriptor = CSV_EXPORTS.find((item) => item.key === 'merit-matrix-parity');
   assert.ok(descriptor, 'the scope is registered');
   assert.equal(descriptor.group, 'analytics');

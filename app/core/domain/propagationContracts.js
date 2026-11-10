@@ -115,6 +115,7 @@ import { lineExitRule } from './lineExitRules.js';
 import { authorityContinuityRule } from './authorityContinuityRules.js';
 import { matrixInterfaceRule } from './matrixInterfaceRules.js';
 import { meritEvidenceRule } from './meritEvidenceRules.js';
+import { benchEvidenceRule } from './benchEvidenceRules.js';
 import { sealRule } from './sealRules.js';
 // ADR-0092: the Differencing Defender declares its contract like every other rule.
 import { differencingRule } from './differencingRules.js';
@@ -881,6 +882,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'meritEvidenceRules.js',
     purpose: 'RULE-MEV-01: a pay decision\u2019s evidence base is joined to the review it reads. For a decision whose review had a second line in force that was never asked, never answered in its window, or had a contested or unowned assessor, it issues ONE owned, dated delegation \u2014 \u201cobtain the missing line input\u201d before finalisation, \u201crecord the correction path\u201d after it, because a frozen decision cannot be re-opened and one word for both would be the collapse this workspace refuses. Typed provenance only (`issues-obligation` from the review to the task, `rolls-up-to` per leadership ancestor in the matrix DAG). Contested, unowned or unreadable assessors issue NOTHING and are counted, because an ask addressed to nobody can never close. It never reopens a review, edits a rating, re-runs a merit decision, changes a pay figure or marks a line asked; it is idempotent through a per-cycle-per-decision marker, bounded by a per-transaction cap whose remainder is counted and retried by the scan, and inert on every other event and in a single-chain workspace.',
     writes: ['delegations', 'links', 'meritEvidenceMarkers'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: benchEvidenceRule,
+    module: 'benchEvidenceRules.js',
+    purpose: 'RULE-BNE-01: a current bench claim (a succession readiness reading) is joined to the review its evidence window reads and to the per-line states ADR-0147 already stores. For a claim whose review had a second line in force that was never asked, was asked and went silent, or had a contested or unowned assessor, it issues ONE owned, dated delegation to the manager who held the person\u2019s HOME line as of the evidence window \u2014 \u201cobtain the missing observation\u201d, or \u201cobtain the outstanding line answer\u201d where the line\u2019s own window is still open. Typed provenance only (`concerns` from the person to the ask, `issues-obligation` from the review to the ask, `rolls-up-to` per leadership ancestor in the matrix DAG). Contested, unowned or unreadable assessors and claims with no readable as-of home line issue NOTHING and are counted, because an ask addressed to nobody can never close. It never edits a readiness rating, a review, a line or a succession reading; it is idempotent through a per-claim-per-state marker, bounded by a per-transaction cap whose remainder is counted and retried by the scan, and inert on every other event and in a single-chain workspace.',
+    writes: ['delegations', 'links', 'benchEvidenceMarkers'],
     emits: [],
     scansWorkspace: true,
   },

@@ -231,7 +231,13 @@ test('standalone artifact exists and is a single inline HTML document', () => {
   // DOWN from 15,481. The 24,000-byte density guard is unchanged and is what
   // still catches a module inlined twice; this absolute ceiling only tracks the
   // real capability added.
-  assert.ok(bytes < 10_700_000, `standalone file is unexpectedly large (${bytes} bytes)`);
+  // Session 231 (Schema v135, ADR-0168) adds three real bundled modules
+  // (benchEvidence.js, benchEvidenceRegistry.js, benchEvidenceRules.js) plus the
+  // succession panel/rule/schema/CSV wiring: 10,708,780 bytes / 695 modules =
+  // 15,408 bytes per module, DOWN from Session 229's 15,451. The 24,000-byte
+  // density guard is unchanged and is what still catches a module inlined twice;
+  // this absolute ceiling only tracks the real capability added.
+  assert.ok(bytes < 10_760_000, `standalone file is unexpectedly large (${bytes} bytes)`);
   const declaredModules = Number((html.match(/content="[^"]*?(\d+) source modules/) || [])[1]);
   assert.ok(declaredModules > 100, `expected the build to declare its module count (got ${declaredModules})`);
   const bytesPerModule = Math.round(bytes / declaredModules);

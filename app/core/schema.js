@@ -125,6 +125,9 @@ import { normalizeCompBands, normalizeMeritCycles } from './domain/compSchema.js
 // ADR-0166: the cross-line review-evidence join keeps ONE marker ledger and no
 // record of its own. Fail-closed, like every other marker normalizer.
 import { normalizeMeritEvidenceMarkers } from './domain/meritEvidenceRegistry.js';
+// ADR-0168: the bench-evidence reading's own idempotency ledger. Zero imports in
+// `benchEvidenceRegistry.js`, so `schema.js` reads the vocabulary without a cycle.
+import { normalizeBenchEvidenceMarkers } from './domain/benchEvidenceRegistry.js';
 import { normalizeTransitionPrograms } from './domain/transitionSchema.js';
 import { normalizeOrgDesigns } from './domain/orgDesignSchema.js';
 import { normalizeVoiDecisions, normalizeVoiStudies } from './domain/valueOfInformationSchema.js';
@@ -702,7 +705,7 @@ export {
 // interface agreement or escalation route is fabricated without human consent.
 // v132 records who held a 1:1, without assigning a holder to old meetings.
 // Coverage is derived from the current matrix and is never stored as a score.
-export const SCHEMA_VERSION = 134;
+export const SCHEMA_VERSION = 135;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -2755,6 +2758,15 @@ export const COLLECTIONS = [
   // keeps and the dated reporting lines. A stored verdict here would be the exact
   // drift the Bulletproof Reliability Mandate forbids.
   'meritEvidenceMarkers',
+  // ADR-0168 (Schema v135): the Cross-Line Bench-Evidence Sufficiency reading.
+  // This collection holds NOTHING BUT RULE-BNE-01's idempotency markers: which
+  // bench claims have already been given one dated ask about an unconsulted
+  // line. The reading itself stores no row, no state, no rate and no verdict —
+  // every figure is re-derived on read from the readiness ledger, the review
+  // records ADR-0147 already keeps and the dated reporting lines. A stored
+  // verdict here would be the exact drift the Bulletproof Reliability Mandate
+  // forbids.
+  'benchEvidenceMarkers',
 ];
 
 /** Stable empty state. `now` is an ISO string so the result is a pure value. */
@@ -7973,6 +7985,10 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // dropped so the ask it guarded can be issued again — never repaired into a
   // plausible-looking marker that would suppress it.
   state.meritEvidenceMarkers = normalizeMeritEvidenceMarkers(raw.meritEvidenceMarkers);
+  // ADR-0168: the bench-evidence rule's idempotency ledger. A malformed marker is
+  // dropped so the ask it guarded can be issued again — never repaired into a
+  // plausible-looking marker that would suppress it.
+  state.benchEvidenceMarkers = normalizeBenchEvidenceMarkers(raw.benchEvidenceMarkers);
   // ADR-0122: a malformed absence row is dropped with a warning, never repaired —
   // an invented absence is an invented unavailability for every cover in the span.
   // Resolved BEFORE links so the `declares-absence-of` provenance edge validates
@@ -8708,6 +8724,14 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  // 134 → 135: ADR-0168 adds ONE marker collection and no record. Nothing about an
+  // existing readiness rating, review, line or seating changes, so the migration is
+  // an empty append and every existing workspace reads exactly as before.
+  134: (v134) => ({
+    ...v134,
+    schemaVersion: 135,
+    benchEvidenceMarkers: Array.isArray(v134.benchEvidenceMarkers) ? v134.benchEvidenceMarkers : [],
+  }),
   // 133 → 134: feedback author attribution is additive. Historical notes stay
   // explicitly unattributed; no manager or room is inferred during migration.
   133: (v133) => ({

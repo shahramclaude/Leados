@@ -160,6 +160,9 @@ export const RECORD_POLICIES = Object.freeze({
   // seat-scoped report adapter rather than raw collection rows.
   matrixInterfaceAgreements: { classKey: 'unit', detailCeiling: 0, label: 'Matrix management-interface operating agreements (report only)', route: '#/matrix?panel=interfaces' },
   matrixInterfaceMarkers: { classKey: 'unit', detailCeiling: 0, label: 'Matrix management-interface review markers', route: '#/matrix?panel=interfaces' },
+  // ADR-0168: RULE-BNE-01's idempotency ledger names no person and carries no
+  // rating, so it is unit-class with NO detail printed at any ceiling.
+  benchEvidenceMarkers: { classKey: 'unit', detailCeiling: 0, label: 'Bench-evidence ask markers', route: '#/succession?panel=evidence' },
   lineMandates: { classKey: 'unit', label: 'Declared line charters', route: '#/contradiction?panel=board' },
   contradictionReviews: { classKey: 'unit', label: 'Contradiction rulings', route: '#/contradiction?panel=log' },
   contradictionMarkers: { classKey: 'unit', label: 'Contradiction idempotency markers', route: '#/contradiction' },
@@ -526,6 +529,11 @@ export const ACTION_RIGHTS = Object.freeze({
   'log-feedback': { minRank: 1, maxRank: 2, label: 'Give feedback' },
   'log-conflict': { minRank: 1, maxRank: 2, label: 'Log a conflict' },
   'record-review': { minRank: 1, maxRank: 2, label: 'Record a review' },
+  // ADR-0168: reading the cross-line bench-evidence register is succession work and
+  // is director-and-above material (a bench claim is a portfolio decision, not a
+  // weekly one). The panel further withholds every person's name above the matrix
+  // detail ceiling, so the right never widens what the disclosure ladder hides.
+  'read-bench-evidence': { minRank: 3, maxRank: 5, label: 'Read the cross-line bench-evidence register' },
   // ADR-0147: asking a line for its input is review work at the manager altitude;
   // the action additionally requires the seat to reach the person being reviewed.
   // Answering is the LINE HOLDER's own act and is enforced in the action to that
