@@ -14,7 +14,8 @@ import { DISCLOSURE_POSTURES } from './disclosureRegistry.js';
 import { activeIdentitySession } from './identitySession.js';
 
 const groups = [
-  ['log-oneonone', 'updatePerson logOneOnOne oneOnOneLineClaim oneOnOneLineRelease toggleMeetingAction addMeetingAction addFeedback updateFeedback completeFollowUp saveGrowthPlan updateGrowthPlan addWillAction toggleWillAction carryWillAction dropWillAction logGrowthReview addRecognition setReadiness createReview updateReflection updateAssessment refreshReviewEvidence completeReview reopenReview createOnboardingPlan updateOnboardingPlan addOnboardingCheckpoint toggleOnboardingCheckpoint removeOnboardingCheckpoint addOnboardingStakeholder toggleOnboardingStakeholder removeOnboardingStakeholder recordOnboardingReview addManagerSupportCommitment toggleManagerSupportCommitment completeOnboardingPlan reopenOnboardingPlan addPerformanceConcern updatePerformanceConcern addPerformanceObservation removePerformanceObservation recordPerformanceConversation recordPerformanceSupport adoptPerformancePlan reviewPerformancePlan withdrawPerformanceConcern deletePerformanceConcern'],
+  ['log-feedback', 'addFeedback'],
+  ['log-oneonone', 'updatePerson logOneOnOne oneOnOneLineClaim oneOnOneLineRelease toggleMeetingAction addMeetingAction updateFeedback completeFollowUp saveGrowthPlan updateGrowthPlan addWillAction toggleWillAction carryWillAction dropWillAction logGrowthReview addRecognition setReadiness createReview updateReflection updateAssessment refreshReviewEvidence completeReview reopenReview createOnboardingPlan updateOnboardingPlan addOnboardingCheckpoint toggleOnboardingCheckpoint removeOnboardingCheckpoint addOnboardingStakeholder toggleOnboardingStakeholder removeOnboardingStakeholder recordOnboardingReview addManagerSupportCommitment toggleManagerSupportCommitment completeOnboardingPlan reopenOnboardingPlan addPerformanceConcern updatePerformanceConcern addPerformanceObservation removePerformanceObservation recordPerformanceConversation recordPerformanceSupport adoptPerformancePlan reviewPerformancePlan withdrawPerformanceConcern deletePerformanceConcern'],
   // ADR-0147: Matrix Multi-Line Review Stewardship. Asking a line and answering
   // for a line are ordinary review work at the manager altitude (the same window
   // as `createReview`/`completeReview`); the actions additionally enforce that the
@@ -460,7 +461,7 @@ function bundleFor(state, name, args) {
 const MATRIX_LINE_SCOPED = new Set([
   // Only logging is widened to an active direct line. Its handler separately
   // stamps the seat and forbids settling another line's unowned commitments.
-  'logOneOnOne',
+  'logOneOnOne', 'addFeedback',
   'cadenceDeclareForum', 'cadenceUpdateForum', 'cadenceLogSession',
   'jurAnchorWork',
   'priorityOpenCase', 'priorityTreatDemand', 'priorityPropose', 'priorityAgreePrecedence', 'priorityRecordAnswer', 'priorityWithdraw',

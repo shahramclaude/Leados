@@ -46,7 +46,7 @@ export function renderFeedback(ctx) {
           latency.status === 'measured'
             ? badge(`${latency.days}d to discuss`, latency.days > state.settings.feedbackLatencyTargetDays ? 'warn' : 'good')
             : badge(latency.status === 'invalid' ? 'Check dates' : 'Unmeasured', latency.status === 'invalid' ? 'bad' : 'neutral'),
-          h('button', { class: 'btn btn-tiny btn-ghost', type: 'button', onClick: () => openFeedbackDatesDialog(ctx, { feedback: f }) }, 'Edit dates'),
+          !f.bodyWithheld ? h('button', { class: 'btn btn-tiny btn-ghost', type: 'button', onClick: () => openFeedbackDatesDialog(ctx, { feedback: f }) }, 'Edit dates') : null,
         );
       },
     },
@@ -54,6 +54,7 @@ export function renderFeedback(ctx) {
       label: 'Note',
       render: (f) => {
         const validation = validateSBI(f);
+        if (f.bodyWithheld) return h('div', { class: 'sbi-cell' }, badge('Body withheld', 'neutral'), h('span', { class: 'muted tiny' }, f.bodyWithheldReason));
         return h(
           'div',
           { class: 'sbi-cell' },
@@ -70,7 +71,9 @@ export function renderFeedback(ctx) {
         f.followUpOn
           ? f.followUpDone
             ? badge('closed', 'good')
-            : h('button', { class: 'btn btn-tiny btn-ghost', type: 'button', onClick: () => ctx.api.completeFollowUp(f.id, true) }, `${f.followUpOn} · close`)
+            : f.bodyWithheld
+              ? badge(`${f.followUpOn} · open`, 'neutral')
+              : h('button', { class: 'btn btn-tiny btn-ghost', type: 'button', onClick: () => ctx.api.completeFollowUp(f.id, true) }, `${f.followUpOn} · close`)
           : h('span', { class: 'muted' }, '—'),
     },
   ];

@@ -702,7 +702,7 @@ export {
 // interface agreement or escalation route is fabricated without human consent.
 // v132 records who held a 1:1, without assigning a holder to old meetings.
 // Coverage is derived from the current matrix and is never stored as a score.
-export const SCHEMA_VERSION = 133;
+export const SCHEMA_VERSION = 134;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -7086,6 +7086,9 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
     followUpDone: f.followUpDone === true,
     followUpCompletedOn: f.followUpDone === true ? calendarDayOrNull(f.followUpCompletedOn) : null,
     createdAt: isoOrNull(f.createdAt) || now,
+    authoredById: str(f.authoredById) || null,
+    authoredByBasis: f.authoredByBasis === 'seat' ? 'seat' : null,
+    authoredAt: isoOrNull(f.authoredAt),
   }));
   state.feedback = uniqueIds(feedback, 'Feedback', warnings);
   const invalidObservations = rawFeedback.filter((f) => f.observedOn && !calendarDayOrNull(f.observedOn)).length;
@@ -8705,6 +8708,15 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  // 133 → 134: feedback author attribution is additive. Historical notes stay
+  // explicitly unattributed; no manager or room is inferred during migration.
+  133: (v133) => ({
+    ...v133,
+    schemaVersion: 134,
+    feedback: Array.isArray(v133.feedback) ? v133.feedback.map((item) => (isPlainObject(item)
+      ? { ...item, authoredById: item.authoredById ?? null, authoredByBasis: item.authoredByBasis ?? null, authoredAt: item.authoredAt ?? null }
+      : item)) : [],
+  }),
   // 132 → 133: ADR-0166 adds ONE marker collection and no record. Nothing about
   // an existing pay decision, review, line or rating changes, so the migration is
   // an empty append and every existing workspace reads exactly as before.
