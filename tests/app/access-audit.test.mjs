@@ -59,6 +59,7 @@ const ROUTES = [
   ['#/matrix?panel=activity', 'Matrix line activity'],
   ['#/matrix?panel=interfaces', 'Matrix management interfaces'],
   ['#/matrix?panel=goal-carriage', 'Matrix goal carriage'],
+  ['#/matrix?panel=meeting-load', 'Matrix meeting load'],
   ['#/settings', 'Settings'],
 ];
 

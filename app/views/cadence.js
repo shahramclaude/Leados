@@ -300,6 +300,12 @@ export function renderCadence(ctx) {
     const status = { value: 'held' };
     const classes = { value: [] };
     const estimate = { value: '' };
+    // ADR-0169: the meeting-load ledger multiplies a sitting's recorded minutes
+    // by the people actually in the room. Both are captured here, per sitting,
+    // because neither can be inferred later: a forum's declared attendance is
+    // not who sat, and no duration may be assumed on the person's behalf.
+    const minutes = { value: '' };
+    const attendees = { value: [...(forumRow.forum.attending || [])] };
 
     openModal({
       title: `Record a sitting — ${forumRow.title}`,
@@ -327,6 +333,27 @@ export function renderCadence(ctx) {
         ),
         h('label', { class: 'field' }, h('span', null, 'Your estimate at agenda lock (days to close) — the planning-fallacy input'),
           h('input', { class: 'input', type: 'number', min: '0', step: '0.5', value: estimate.value, placeholder: 'leave blank if not estimated', onInput: (e) => { estimate.value = e.target.value; } })),
+        h('label', { class: 'field' }, h('span', null, 'Minutes actually spent in the room'),
+          h('input', {
+            class: 'input', type: 'number', min: '1', max: '1440', step: '5', value: minutes.value,
+            placeholder: 'e.g. 45 — leave blank if nobody recorded it',
+            onInput: (e) => { minutes.value = e.target.value; },
+          })),
+        h('div', { class: 'field' },
+          h('span', null, 'Who was actually in the room (defaults to the forum’s declared attendance)'),
+          h('div', { class: 'row-wrap' }, ...people.map((p) => h('label', { class: 'check' },
+            h('input', {
+              type: 'checkbox',
+              checked: attendees.value.includes(p.id),
+              onChange: (e) => {
+                if (e.target.checked) attendees.value = [...attendees.value, p.id];
+                else attendees.value = attendees.value.filter((id) => id !== p.id);
+              },
+            }),
+            h('span', null, p.name),
+          ))),
+          h('p', { class: 'muted small' }, 'The meeting-load ledger charges minutes × this list. A sitting with no duration is refused and the totals of everyone in it are left BLANK rather than understated.'),
+        ),
       ),
       footer: [
         h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => closeAllModals() }, 'Cancel'),
@@ -341,6 +368,8 @@ export function renderCadence(ctx) {
               plannedN: Number(plannedN.value),
               closedClassKeys: classes.value,
               estimatedServiceDays: estimate.value === '' ? null : Number(estimate.value),
+              minutes: minutes.value === '' ? null : Number(minutes.value),
+              attendeeIds: attendees.value,
             });
             if (!res.ok) return toast(res.error || 'The sitting was refused.', 'bad');
             closeAllModals();
