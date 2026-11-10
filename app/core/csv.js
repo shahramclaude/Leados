@@ -106,6 +106,9 @@ import { LINE_REAFFIRMATION_CSV_COLUMNS } from './domain/lineReaffirmationRegist
 // manager id, no declaration id and no note text in any cell.
 import { buildLinePeriodAllocation, linePeriodAllocationCsvRows } from './domain/linePeriodAllocation.js';
 import { LINE_PERIOD_ALLOCATION_CSV_COLUMNS } from './domain/linePeriodAllocationRegistry.js';
+// ADR-0160: the Matrix Line Consumption Reconciliation export (CSV scope #120).
+import { buildLineActivity, lineActivityCsvRows } from './domain/lineActivity.js';
+import { LINE_ACTIVITY_CSV_COLUMNS } from './domain/lineActivityRegistry.js';
 import { STRUCTURE_HISTORY_CSV_COLUMNS } from './domain/structureHistoryRegistry.js';
 import {
   assessmentReconciliationCsvRows,
@@ -1164,6 +1167,14 @@ export const CSV_EXPORTS = [
   // retained history's provable coverage is refused outright rather than
   // projected backwards from today's share.
   { key: 'line-period-allocation', label: 'Matrix line period allocation (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'line-period-allocation', description: 'One workspace summary row plus one row per declared line kind for the named period (the export reads the last completed calendar quarter and prints period_from, period_to and period_days in every row): the row count, how many rows were priced as time-weighted share-days, how many were refused because the retained change history cannot prove the window, how many were refused because a day inside the overlap carries no declared share, how many the matrix engine itself refused, how many sit outside the period, how many are home-line allocations counted out of scope, how many were retuned inside the period, the exact-integer share-day total, the person counts (priced, refused, over-committed), the over-committed day count, the withheld count, and the state-count identity as a claim. NO person, NO name, NO manager id, NO declaration id, NO note text and NO free text of any kind. A refused total is BLANK with share_days_refused = true and the reason in its own column, never a zero, and one refused person refuses the workspace total rather than letting a partial sum print as the whole.' },
+  // CSV scope #120 (Schema v130 unchanged, ADR-0160). Aggregate-only: one summary row
+  // plus one row per declared line KIND, over the default period (the last
+  // completed calendar quarter). Both sides of the comparison are exact integer
+  // counts: declared share-days from ADR-0158's ledger, and completed work items
+  // attributed to exactly one line inside the same window. A refused share-day
+  // total is BLANK with its reason in its own column, never a zero, and a
+  // shared landing is never divided between the lines it reached.
+  { key: 'line-activity', label: 'Matrix line activity (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'line-activity', description: 'One workspace summary row plus one row per declared line kind for the named period (period_from, period_to and period_days printed in every row): the line count, how many lines were priced, how many carried enough attributed activity to be compared, the counts that differ beyond the declared band (more activity than declared, less activity than declared, declared with nothing originated at all), how many were refused rather than compared, how many sat below the declared act floor, how many were dominated by acts that could not be assigned to one declaration, how many were the person\u2019s only priced line, the exact-integer declared share-day total, the attributed / home-manager / ambiguous / unpriced-line / no-declared-line act counts, the declared band and act floor, and two separate claims: whether the counts reconcile and whether every compared share allocated to exactly 1000 per-mille. NO person, NO name, NO manager id, NO declaration id and NO free text of any kind. A refused total is BLANK with withheld_reason set, never a zero. The observed side counts dated ACTS a line holder originated about the person (a brief, a consent answer, a re-affirmation, a settled obligation) \u2014 not hours and not work items \u2014 so the export is a screening reading about which lines are actually being run, never a measure of managerial effort or quality.' },
   // CSV scope #116 (Schema v128 unchanged, ADR-0154). Aggregate only: one summary
   // row and one row per level that appears in either cohort. Basis points, counts,
   // the declared cell floor and band, the two verdicts and the refusal reason.
@@ -6320,6 +6331,18 @@ export function buildScopeTable(state, scope, now) {
       const report = buildLinePeriodAllocation(state, { now, settings: state.settings || {} });
       const rows = linePeriodAllocationCsvRows(report);
       const columns = LINE_PERIOD_ALLOCATION_CSV_COLUMNS.map((key) => ({ key, header: key }));
+      return { columns, rows };
+    }
+    case 'line-activity': {
+      // CSV scope #120 (Schema v130 unchanged, ADR-0160). Built from the same read
+      // model the panel renders, so an exported count is provably the count that
+      // was printed. The export reads the DEFAULT period and names its window in
+      // every row. Aggregate only: no person, no manager id, no declaration id,
+      // no item title and no free text. A refused share-day total is BLANK with
+      // its reason in its own column, never a zero.
+      const report = buildLineActivity(state, { now, settings: state.settings || {} });
+      const rows = lineActivityCsvRows(report);
+      const columns = LINE_ACTIVITY_CSV_COLUMNS.map((key) => ({ key, header: key }));
       return { columns, rows };
     }
     case 'line-exit': {

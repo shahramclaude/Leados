@@ -56,6 +56,11 @@ import { renderContinuityPanel } from './matrixContinuityPanel.js';
 // at today's single share; this panel weighs what a NAMED period actually
 // consumed, in exact integer share-days, or refuses the figure.
 import { renderPeriodAllocationPanel } from './matrixPeriodAllocationPanel.js';
+// ADR-0160: the line-activity reconciliation. The period ledger says what a line
+// was CHARGED; nothing said what each line DID. This panel joins the declared
+// share-days to the dated acts each line actually originated about the person in
+// the same window — or refuses, and prints which side it could not read.
+import { renderActivityPanel } from './matrixActivityPanel.js';
 
 const PANELS = MATRIX_PANELS;
 
@@ -844,6 +849,7 @@ export function renderMatrix(ctx) {
     panel === 'consent' ? renderConsentPanel(ctx) : null,
     panel === 'renewal' ? renderReaffirmationPanel(ctx) : null,
     panel === 'allocation' ? renderPeriodAllocationPanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
+    panel === 'activity' ? renderActivityPanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
     panel === 'rights' ? rightsPanel(ctx, report) : null,
     panel === 'concordance' ? concordancePanel(ctx, report) : null,
     panel === 'continuity' ? renderContinuityPanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
