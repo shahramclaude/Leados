@@ -180,11 +180,11 @@ function makeWorkspace({
 }
 
 test('schema v129 → v130 migrates to empty settlement ledgers and drops malformed settlements fail-closed', () => {
-  assert.equal(SCHEMA_VERSION, 130);
+  assert.equal(SCHEMA_VERSION, 131);
   const legacy = { schemaVersion: 129, people: baseRoster(), settings: { authorityReaffirmDueDays: 999 } };
   const { raw, applied } = migrate(legacy);
-  assert.deepEqual(applied, ['129 → 130']);
-  assert.equal(raw.schemaVersion, 130);
+  assert.deepEqual(applied, ['129 → 130', '130 → 131']);
+  assert.equal(raw.schemaVersion, 131);
   assert.deepEqual(raw.authorityReaffirmations, []);
   assert.deepEqual(raw.authorityReaffirmationMarkers, []);
   assert.equal(raw.settings.authorityReaffirmDueDays, 60);

@@ -115,6 +115,10 @@ import { LINE_ACTIVITY_CSV_COLUMNS } from './domain/lineActivityRegistry.js';
 // topology totals rather than publishing a smaller reassuring subtotal.
 import { buildMatrixCoordination, matrixCoordinationCsvRows } from './domain/matrixCoordination.js';
 import { MATRIX_COORDINATION_CSV_COLUMNS, MATRIX_COORDINATION_CSV_DESCRIPTOR } from './domain/matrixCoordinationRegistry.js';
+// ADR-0162: Matrix Management-Interface Operating-Agreement Register (CSV scope #122).
+// Aggregate only — never names a person, manager, forum, escalation seat or basis text.
+import { buildMatrixInterfaceReport, matrixInterfaceCsvRows } from './domain/matrixInterface.js';
+import { MATRIX_INTERFACE_CSV_COLUMNS, MATRIX_INTERFACE_CSV_DESCRIPTOR } from './domain/matrixInterfaceRegistry.js';
 import { STRUCTURE_HISTORY_CSV_COLUMNS } from './domain/structureHistoryRegistry.js';
 import {
   assessmentReconciliationCsvRows,
@@ -1185,6 +1189,9 @@ export const CSV_EXPORTS = [
   // topology in aggregate only. The descriptor is shared with the registry so
   // the export catalog cannot paraphrase its privacy or refusal contract.
   MATRIX_COORDINATION_CSV_DESCRIPTOR,
+  // CSV scope #122 (Schema v131, ADR-0162): bilateral management-interface
+  // agreement coverage and escalation-bucket counts in aggregate only.
+  MATRIX_INTERFACE_CSV_DESCRIPTOR,
   // CSV scope #116 (Schema v128 unchanged, ADR-0154). Aggregate only: one summary
   // row and one row per level that appears in either cohort. Basis points, counts,
   // the declared cell floor and band, the two verdicts and the refusal reason.
@@ -6363,6 +6370,15 @@ export function buildScopeTable(state, scope, now) {
       const report = buildMatrixCoordination(state, { now, settings: state.settings || {} });
       const rows = matrixCoordinationCsvRows(report);
       const columns = MATRIX_COORDINATION_CSV_COLUMNS.map((key) => ({ key, header: key }));
+      return { columns, rows };
+    }
+    case 'matrix-interfaces': {
+      // CSV scope #122 (Schema v131, ADR-0162). Built from the same pure model
+      // as `#/matrix?panel=interfaces`. Strictly aggregate: zero names, zero
+      // IDs, zero free text; coverage % is BLANK below cellN or with defects.
+      const report = buildMatrixInterfaceReport(state, { now, settings: state.settings || {} });
+      const rows = matrixInterfaceCsvRows(report);
+      const columns = MATRIX_INTERFACE_CSV_COLUMNS.map((key) => ({ key, header: key }));
       return { columns, rows };
     }
     case 'line-exit': {

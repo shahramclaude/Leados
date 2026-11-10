@@ -80,6 +80,11 @@ const groups = [
   // drifted frozen decision is strictly checked in the action against live
   // matrix RAPID authority (`canSettleAuthority`).
   ['reaffirm-frozen-authority', 'authorityReaffirmStandBehind authorityReaffirmRefer authorityContinuityScan'],
+  // ADR-0162: Matrix Management-Interface Operating Agreements. First-person
+  // counterpart standing, unique joint-apex validation and active forum checks
+  // are enforced inside `matrixInterfaceActions`.
+  ['affirm-matrix-interface', 'matrixInterfaceAffirm matrixInterfaceRetire matrixInterfaceScan'],
+  ['govern-matrix-interface', 'matrixInterfaceSetConventions'],
   // ADR-0152: settling an obligation an ENDED line left behind. Recording the
   // remedy is the manager's own act (the action narrows it to a seat that reaches
   // the person, and a carry must name a live line holder); the scan changes no
@@ -401,7 +406,10 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 'meritParityReport', 'meritParityBriefText', 'meritParityCsv', 'meritParityAttentionCount',
 // ADR-0156 / ADR-0159: the authority-continuity and drift-settlement read surface.
 // Seat-scoped inside `buildAuthorityContinuity` (outside-span names withheld).
-'authorityContinuityReport', 'authorityContinuityBriefText', 'authorityContinuityCsvRows', 'authorityContinuityAttentionCount']);
+'authorityContinuityReport', 'authorityContinuityBriefText', 'authorityContinuityCsvRows', 'authorityContinuityAttentionCount',
+// ADR-0162: Matrix Management-Interface Operating-Agreement read surface.
+// Seat-scoped inside `buildMatrixInterfaceReport` and aggregate-only in brief/CSV.
+'matrixInterfaceReport', 'matrixInterfaceBriefText', 'matrixInterfaceCsvRows', 'matrixInterfaceAttentionCount', 'matrixInterfaceCandidates']);
 const refusal = (reason) => ({ ok: false, code: 'scope-refusal', error: reason, field: 'scope' });
 
 /** ADR-0087: under enforcement, boundary-management commands stay reachable

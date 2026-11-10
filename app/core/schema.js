@@ -82,6 +82,11 @@ import {
   normalizeAuthorityReaffirmationSettings,
 } from './domain/authorityReaffirmationSchema.js';
 import {
+  normalizeMatrixInterfaceAgreements,
+  normalizeMatrixInterfaceMarkers,
+  normalizeMatrixInterfaceSettings,
+} from './domain/matrixInterfaceSchema.js';
+import {
   normalizeLineMandates,
   normalizeContradictionReviews,
   normalizeContradictionMarkers,
@@ -686,7 +691,12 @@ export {
 // RULE-ACR-01's idempotency ledger. Deliberately EMPTY on upgrade so every
 // drifted record reads `unsettled` until a current right holder or joint
 // matrix principal answers; no frozen record is ever edited.
-export const SCHEMA_VERSION = 130;
+// ADR-0162 (Schema v131): Matrix Management-Interface Operating-Agreement
+// Register (`matrixInterfaceAgreements`, `matrixInterfaceMarkers`). Append-only
+// dated first-person bilateral acts between counterpart managers plus
+// RULE-MIA-01's idempotency markers. Deliberately EMPTY on upgrade so no
+// interface agreement or escalation route is fabricated without human consent.
+export const SCHEMA_VERSION = 131;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -2087,6 +2097,8 @@ export const DEFAULT_SETTINGS = Object.freeze({
   ...normalizeLineReaffirmationSettings({}),
   // ADR-0159: frozen authority re-affirmation due window + automation pause.
   ...normalizeAuthorityReaffirmationSettings({}),
+  // ADR-0162: management-interface agreement term, warning window, review ask window + pause.
+  ...normalizeMatrixInterfaceSettings({}),
 });
 
 export const COLLECTIONS = [
@@ -2721,6 +2733,12 @@ export const COLLECTIONS = [
   // read against the live matrix — never stored.
   'authorityReaffirmations',
   'authorityReaffirmationMarkers',
+  // ADR-0162 (Schema v131): Matrix Management-Interface Operating-Agreement
+  // Register. Holds ONLY append-only first-person bilateral acts (`affirm` /
+  // `retire`) and RULE-MIA-01 markers. Pair state, DAG apex, and coverage are
+  // derived on read from the live matrix — never stored.
+  'matrixInterfaceAgreements',
+  'matrixInterfaceMarkers',
 ];
 
 /** Stable empty state. `now` is an ISO string so the result is a pure value. */
@@ -3456,6 +3474,7 @@ export function normalizeSettings(raw) {
     // warning windows would be numbers the record does not hold.
     ...normalizeLineReaffirmationSettings(s),
     ...normalizeAuthorityReaffirmationSettings(s),
+    ...normalizeMatrixInterfaceSettings(s),
     ...normalizeAgendaSettings(s),
     chainAdoptedHorizons: normalizeAdoptedHorizons(s.chainAdoptedHorizons, DECLARED_HORIZONS),
     chainAdoptedOn: /^\d{4}-\d{2}-\d{2}$/.test(String(s.chainAdoptedOn || '')) ? s.chainAdoptedOn : null,
@@ -7918,6 +7937,10 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // audit evidence.
   state.authorityReaffirmations = normalizeAuthorityReaffirmations(raw.authorityReaffirmations, warnings);
   state.authorityReaffirmationMarkers = normalizeAuthorityReaffirmationMarkers(raw.authorityReaffirmationMarkers);
+  // ADR-0162: malformed or side-forged bilateral operating agreements are
+  // dropped with a printed warning, never repaired into synthetic consent.
+  state.matrixInterfaceAgreements = normalizeMatrixInterfaceAgreements(raw.matrixInterfaceAgreements, warnings);
+  state.matrixInterfaceMarkers = normalizeMatrixInterfaceMarkers(raw.matrixInterfaceMarkers);
   // ADR-0122: a malformed absence row is dropped with a warning, never repaired —
   // an invented absence is an invented unavailability for every cover in the span.
   // Resolved BEFORE links so the `declares-absence-of` provenance edge validates
@@ -8890,6 +8913,19 @@ export const MIGRATIONS = {
   // is back-filled. Both ledgers start EMPTY so every drifted frozen decision
   // honestly reads `unsettled` until a human with current matrix standing
   // stands behind it or refers it to a governed re-decision.
+  // ADR-0162: additive 130 → 131. No bilateral management-interface agreement
+  // is invented or backfilled on upgrade: both ledgers start EMPTY so every
+  // active counterpart pair honestly reads `unagreed` (or `structurally-unresolvable`
+  // on a diamond tie) until both counterparts sign dated terms.
+  130: (v130) => ({
+    ...v130,
+    schemaVersion: 131,
+    matrixInterfaceAgreements: Array.isArray(v130.matrixInterfaceAgreements) ? v130.matrixInterfaceAgreements : [],
+    matrixInterfaceMarkers: Array.isArray(v130.matrixInterfaceMarkers) ? v130.matrixInterfaceMarkers : [],
+    settings: isPlainObject(v130.settings)
+      ? { ...v130.settings, ...normalizeMatrixInterfaceSettings(v130.settings) }
+      : { ...DEFAULT_SETTINGS },
+  }),
   129: (v129) => ({
     ...v129,
     schemaVersion: 130,
