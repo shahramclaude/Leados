@@ -98,6 +98,14 @@ import { lineExitCsvRows } from './domain/lineExit.js';
 import { LINE_EXIT_CSV_COLUMNS } from './domain/lineExitRegistry.js';
 import { buildLineReaffirmation, lineReaffirmationCsvRows } from './domain/lineReaffirmation.js';
 import { LINE_REAFFIRMATION_CSV_COLUMNS } from './domain/lineReaffirmationRegistry.js';
+// ADR-0158: the Matrix Line Period-Allocation Ledger export (CSV scope #119).
+// Aggregate-only: one summary row plus one row per declared line KIND, over the
+// default period (the last completed calendar quarter — the export names its
+// own window). Share-day totals are exact integers; a refused total is BLANK
+// with its reason in its own column, never a zero. No person, no name, no
+// manager id, no declaration id and no note text in any cell.
+import { buildLinePeriodAllocation, linePeriodAllocationCsvRows } from './domain/linePeriodAllocation.js';
+import { LINE_PERIOD_ALLOCATION_CSV_COLUMNS } from './domain/linePeriodAllocationRegistry.js';
 import { STRUCTURE_HISTORY_CSV_COLUMNS } from './domain/structureHistoryRegistry.js';
 import {
   assessmentReconciliationCsvRows,
@@ -1147,6 +1155,15 @@ export const CSV_EXPORTS = [
   // reason in its own column whenever any line in scope carries no allocation,
   // never printed over the declared lines only and never a zero.
   { key: 'line-reaffirmation', label: 'Matrix line re-affirmation (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'line-reaffirmation', description: 'One workspace summary row plus one row per declared line kind: the line count, how many lines were never given a term, how many are inside their warning window, how many have a term that ran out, how many were re-affirmed but not yet answered by the person, how many the person objected to, how many the line released, how many were re-affirmed at a different share than the line now declares, and how many are in term with both sides answered. Plus the two exact-integer share totals that are the point of the register: the share still CHARGED to a commitment no live answer covers, and the share covered by a live re-affirmed term, with the uncovered-plus-covered identity printed as a claim rather than assumed. NO person, NO name, NO manager id, NO declaration id, NO stated reason, NO objection text and NO free text of any kind. A share total is BLANK with share_refused = true and the reason in its own column whenever any line in scope carries no allocation, never a zero. A released line is counted as still charged because the declaration was never dated out: continuation by absence is never exported as a renewal.' },
+  // CSV scope #119 (Schema v129 unchanged, ADR-0158). Aggregate-only: one summary row
+  // plus one row per declared line KIND, over the default period (the last
+  // completed calendar quarter). Every figure is an exact integer count of rows
+  // or of share-days — hundredths of a person × whole days — and the export
+  // names its own window in every row. A refused share-day total is BLANK with
+  // the reason in its own column, never a zero; a period reaching behind the
+  // retained history's provable coverage is refused outright rather than
+  // projected backwards from today's share.
+  { key: 'line-period-allocation', label: 'Matrix line period allocation (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'line-period-allocation', description: 'One workspace summary row plus one row per declared line kind for the named period (the export reads the last completed calendar quarter and prints period_from, period_to and period_days in every row): the row count, how many rows were priced as time-weighted share-days, how many were refused because the retained change history cannot prove the window, how many were refused because a day inside the overlap carries no declared share, how many the matrix engine itself refused, how many sit outside the period, how many are home-line allocations counted out of scope, how many were retuned inside the period, the exact-integer share-day total, the person counts (priced, refused, over-committed), the over-committed day count, the withheld count, and the state-count identity as a claim. NO person, NO name, NO manager id, NO declaration id, NO note text and NO free text of any kind. A refused total is BLANK with share_days_refused = true and the reason in its own column, never a zero, and one refused person refuses the workspace total rather than letting a partial sum print as the whole.' },
   // CSV scope #116 (Schema v128 unchanged, ADR-0154). Aggregate only: one summary
   // row and one row per level that appears in either cohort. Basis points, counts,
   // the declared cell floor and band, the two verdicts and the refusal reason.
@@ -6290,6 +6307,19 @@ export function buildScopeTable(state, scope, now) {
       const report = buildLineReaffirmation(state, { now, settings: state.settings || {} });
       const rows = lineReaffirmationCsvRows(report);
       const columns = LINE_REAFFIRMATION_CSV_COLUMNS.map((key) => ({ key, header: key }));
+      return { columns, rows };
+    }
+    case 'line-period-allocation': {
+      // CSV scope #119 (Schema v129 unchanged, ADR-0158). Built from the same
+      // read model the panel renders, so an exported figure is provably the
+      // figure that was printed. The export reads the DEFAULT period (the last
+      // completed calendar quarter) and names its window in every row; the
+      // panel reads whatever period the operator names. Aggregate only: no
+      // person, no name, no manager id, no declaration id and no free text. A
+      // refused share-day total is BLANK with its reason in its own column.
+      const report = buildLinePeriodAllocation(state, { now, settings: state.settings || {} });
+      const rows = linePeriodAllocationCsvRows(report);
+      const columns = LINE_PERIOD_ALLOCATION_CSV_COLUMNS.map((key) => ({ key, header: key }));
       return { columns, rows };
     }
     case 'line-exit': {
