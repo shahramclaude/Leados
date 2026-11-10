@@ -42,7 +42,13 @@ import {
   MERIT_PARITY_VERDICTS,
   meritParityLevelLabel,
 } from '../core/domain/meritParityRegistry.js';
-import { MERIT_PARITY_CSV_COLUMNS, buildMeritParity } from '../core/domain/meritParity.js';
+import { MERIT_PARITY_EXPORT_COLUMNS, buildMeritParity } from '../core/domain/meritParity.js';
+import {
+  MERIT_EVIDENCE_CONVENTIONS,
+  MERIT_EVIDENCE_FLOOR,
+  MERIT_EVIDENCE_FRAMEWORKS,
+  MERIT_EVIDENCE_STATES,
+} from '../core/domain/meritEvidenceRegistry.js';
 
 const dash = (v) => (v === null || v === undefined || v === '' ? '—' : String(v));
 const bp = (value) => {
@@ -215,6 +221,136 @@ function structureSection(report) {
           ...MERIT_STRUCTURE_STATES.map((s) => h('li', { class: 'small' }, h('strong', null, s.label), ' ', s.detail))),
         h('ul', { class: 'list-plain stack-xs' },
           ...MERIT_STRUCTURE_FRAMEWORKS.map((f) => h('li', { class: 'small' }, h('strong', null, f.name), ' ', f.applied)))),
+    }),
+  );
+}
+
+/* --------------------------------------------------- ADR-0166: the evidence join */
+
+/**
+ * The THIRD claim on this page, and the reason it has its own section: the pay
+ * authority above says who owned the money, the parity below says what the money
+ * did between cohorts, and this says whether the EVIDENCE under each decision
+ * came from every line the person worked on. None of the three may be read as
+ * any of the others, so they are never merged into one reassuring word.
+ */
+function evidenceSection(report) {
+  const ev = report.evidence;
+  if (!ev) return null;
+  if (!ev.hasCycle) {
+    return card({
+      title: 'Cross-line review evidence',
+      body: h('p', { class: 'muted small' }, 'There is no cycle to join to a review.'),
+    });
+  }
+
+  const counts = ev.totals.stateCounts || {};
+  const stateRows = MERIT_EVIDENCE_STATES.filter((s) => s.key !== 'unknown');
+
+  const decisionTable = ev.rows.length
+    ? table({
+      caption: `The review each pay decision reads, on ${dash(ev.effectiveOn)}`,
+      columns: [
+        {
+          label: 'Person',
+          render: (r) => h('div', { class: 'stack-sm' },
+            h('strong', null, r.personName || (r.missingPerson ? 'not on the roster' : r.personId)),
+            h('span', { class: 'muted tiny' }, `${r.lineN} line(s) on the effective date`)),
+        },
+        {
+          label: 'Evidence',
+          render: (r) => h('div', { class: 'stack-sm' },
+            badge(r.evidenceLabel, toneFor(r.evidenceTone)),
+            h('span', { class: 'muted tiny' }, r.detail)),
+        },
+        {
+          label: 'Review it reads',
+          render: (r) => (r.reviewId
+            ? h('div', { class: 'stack-sm' },
+              h('span', { class: 'small' }, `${dash(r.reviewPeriodStart)} → ${dash(r.reviewPeriodEnd)}`),
+              h('span', { class: 'muted tiny' }, `rating ${dash(r.rating)}, read as of ${dash(r.ratingAsOf)}`))
+            : h('span', { class: 'small muted' }, 'no readable completed review')),
+        },
+        {
+          label: 'Lines asked / answered',
+          render: (r) => h('span', { class: 'small' },
+            `${r.askedN + r.answeredN + r.declinedN + r.unaskedN + r.silentN} in force · ${r.answeredN} answered · ${r.declinedN} declined · ${r.unaskedN} never asked · ${r.silentN} silent`),
+        },
+      ],
+      rows: ev.rows,
+    })
+    : h('p', { class: 'muted small' }, 'The cycle holds no pay decision to join.');
+
+  return h('div', { class: 'stack' },
+    banner({
+      tone: toneFor(ev.verdictTone),
+      title: ev.verdictLabel,
+      body: h('div', { class: 'stack-sm' },
+        h('p', null, ev.verdictDetail),
+        ev.ratePrinted
+          ? h('p', { class: 'small' },
+            `Of ${ev.totals.secondLineJoinedN} second-line pay decision(s), `,
+            h('strong', null, `${ev.totals.secondLineCleanN}`),
+            ` rest on a review every line in force answered (${ev.totals.secondLineCleanPct}%); `,
+            h('strong', null, `${ev.totals.secondLineGapN}`),
+            ' rest on a review whose second line was never asked, never answered, or had no sole assessor.')
+          : h('p', { class: 'small' }, h('strong', null, 'Second-line evidence rate withheld: '), ev.rateWithheldReason),
+        h('p', { class: 'small muted' },
+          `Declared floor ${MERIT_EVIDENCE_FLOOR} second-line decisions before a rate is printed. `,
+          'Every state below is derived on read from the cycle, the reviews the workspace already stores and the dated reporting lines; nothing on this page is stored.')),
+    }),
+    h('div', { class: 'grid-2' },
+      card({
+        title: 'Evidence states across this cycle',
+        subtitle: 'Worst first. A state is a fact about a REVIEW and a LINE; it is never a rating of a person or a manager.',
+        body: h('div', { class: 'stack-sm' },
+          ...stateRows.map((s) => h('div', { class: 'stack-sm' },
+            h('div', { class: 'row-gap' },
+              badge(s.label, toneFor(s.tone)),
+              h('strong', null, String(counts[s.key] || 0))),
+            h('span', { class: 'muted tiny' }, s.detail))),
+          (counts.unknown || 0)
+            ? h('div', { class: 'stack-sm' },
+              h('div', { class: 'row-gap' }, badge(MERIT_EVIDENCE_STATES[0].label, 'bad'), h('strong', null, String(counts.unknown))),
+              h('span', { class: 'muted tiny' }, `${MERIT_EVIDENCE_STATES[0].detail} These decisions are excluded from every rate.`))
+            : null),
+      }),
+      card({
+        title: 'What the join read, and what it refused',
+        subtitle: 'Two claims, printed separately: the counts add up, and every printed figure is computed from the record.',
+        body: h('div', { class: 'stack-sm' },
+          kv('Pay decisions joined', String(ev.totals.rowsN)),
+          kv('Traced to a completed review', String(ev.totals.traceableN)),
+          kv('Could not be traced', String(ev.totals.untraceableN)),
+          kv('Second-line decisions joined', String(ev.totals.secondLineJoinedN)),
+          kv('Lines never asked', String(ev.totals.unaskedLinesN)),
+          kv('Lines asked and silent', String(ev.totals.silentLinesN)),
+          kv('Counts reconcile', ev.reconciles ? 'Yes' : 'NO — do not trust this reading', ev.reconciles ? 'good' : 'bad'),
+          h('p', { class: 'muted small' }, ev.reconcilesDetail),
+          kv('Figures complete', ev.figuresComplete ? 'Yes' : 'No — a needed figure is missing or withheld', ev.figuresComplete ? 'good' : 'warn'),
+          h('p', { class: 'muted small' }, ev.figuresCompleteDetail),
+          ev.refusals.length
+            ? h('ul', { class: 'list-plain stack-xs' },
+              ...ev.refusals.map((r) => h('li', { class: 'small' }, h('strong', null, r.kind.replace(/-/g, ' ')), ' ', r.detail)))
+            : h('p', { class: 'muted small' }, 'No refusal was raised by the join.')),
+      }),
+    ),
+    card({
+      title: 'The review each pay decision reads',
+      subtitle: 'The review id is printed on every row because the join’s whole claim is this review — the one the rating was read from — and never a neighbouring one.',
+      body: decisionTable,
+    }),
+    card({
+      title: 'What this join never does',
+      body: h('div', { class: 'stack-sm' },
+        h('ul', { class: 'list-plain stack-xs' },
+          h('li', { class: 'small' }, h('strong', null, 'It never substitutes another review. '), 'A pay decision whose rating cannot be traced to a completed review reads UNKNOWN and is excluded from every rate.'),
+          h('li', { class: 'small' }, h('strong', null, 'It never invents a line’s contribution. '), 'ADR-0147 records who was asked and what each line said; feedback, 1:1 notes and delegations carry a subject and no authoring line, so no per-line share is printed.'),
+          h('li', { class: 'small' }, h('strong', null, 'It never treats a declined answer as missing evidence. '), 'A decline with a stated reason is a dated human act and counts toward corroboration.'),
+          h('li', { class: 'small' }, h('strong', null, 'It never rates anybody. '), 'Every finding is on a pay decision and a line’s state. The export carries no name, no rating and no review id.'),
+          h('li', { class: 'small' }, h('strong', null, 'It never stores anything. '), `Schema v133 adds one idempotency marker ledger for RULE-MEV-01 and no record of this join. Floor ${MERIT_EVIDENCE_CONVENTIONS.cellFloor} second-line decisions; a withheld rate is BLANK with its reason, never a zero.`)),
+        h('ul', { class: 'list-plain stack-xs' },
+          ...MERIT_EVIDENCE_FRAMEWORKS.map((f) => h('li', { class: 'small' }, h('strong', null, f.name), ' ', f.applied)))),
     }),
   );
 }
@@ -483,7 +619,7 @@ function methodSection(ctx, report) {
               return;
             }
             downloadText(
-              serializeCsv(MERIT_PARITY_CSV_COLUMNS.map((key) => ({ key, header: key })), csv.rows),
+              serializeCsv(MERIT_PARITY_EXPORT_COLUMNS.map((key) => ({ key, header: key })), csv.rows),
               'leados-merit-matrix-parity.csv',
             );
           },
@@ -514,6 +650,8 @@ export function renderMeritMatrixTab(ctx, cycle, now = new Date()) {
     decisionsSection(report),
     levelSection(report),
     findingsSection(report),
+    // ADR-0166: the evidence under the money, as its own third claim.
+    evidenceSection(report),
     reconciliationSection(report),
     methodSection(ctx, report));
 }

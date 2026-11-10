@@ -147,6 +147,8 @@ import { onboardingMatrixRule } from './onboardingMatrixRules.js';
 import { lineExitRule } from './lineExitRules.js';
 import { authorityContinuityRule } from './authorityContinuityRules.js';
 import { matrixInterfaceRule } from './matrixInterfaceRules.js';
+// ADR-0166: the cross-line review-evidence join's one consequence.
+import { meritEvidenceRule } from './meritEvidenceRules.js';
 
 
 // ADR-0087: the Operating Cadence Clock. Reads the finished queue after the
@@ -880,6 +882,15 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // closes prior asks when pairs become `current`, and runs before `seatRule` so
   // opened review obligations roll up in the same atomic transaction.
   matrixInterfaceRule,
+  // ADR-0166: the Cross-Line Review-Evidence Join (RULE-MEV-01). Reads the cycle
+  // and the review records the join already reconciles, and puts ONE dated ask in
+  // front of the manager who holds the pay decision's home line whenever the
+  // evidence behind a pay decision was one line wide. Before finalisation the ask
+  // is "obtain the missing input"; after it, "record the correction path" — two
+  // different questions, never one reassuring word. It never reopens a review,
+  // edits a rating or changes a pay figure, and runs before `seatRule` so the
+  // obligation it opens rolls up the hierarchy in the same atomic transaction.
+  meritEvidenceRule,
   // ADR-0076: the Operating Seat (vertical roll-up + enforced boundaries).
   // It reads the finished record after every module has propagated, then fans
   // each open item up every leadership ancestor in the reporting tree with one

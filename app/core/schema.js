@@ -122,6 +122,9 @@ import { normalizeRetros } from './domain/learning.js';
 import { INTERVENTION_TYPES } from './domain/interventionTypes.js';
 import { normalizeFidelityPlans, normalizeImplementationSnapshot } from './domain/fidelitySchema.js';
 import { normalizeCompBands, normalizeMeritCycles } from './domain/compSchema.js';
+// ADR-0166: the cross-line review-evidence join keeps ONE marker ledger and no
+// record of its own. Fail-closed, like every other marker normalizer.
+import { normalizeMeritEvidenceMarkers } from './domain/meritEvidenceRegistry.js';
 import { normalizeTransitionPrograms } from './domain/transitionSchema.js';
 import { normalizeOrgDesigns } from './domain/orgDesignSchema.js';
 import { normalizeVoiDecisions, normalizeVoiStudies } from './domain/valueOfInformationSchema.js';
@@ -699,7 +702,7 @@ export {
 // interface agreement or escalation route is fabricated without human consent.
 // v132 records who held a 1:1, without assigning a holder to old meetings.
 // Coverage is derived from the current matrix and is never stored as a score.
-export const SCHEMA_VERSION = 132;
+export const SCHEMA_VERSION = 133;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -2744,6 +2747,14 @@ export const COLLECTIONS = [
   // derived on read from the live matrix — never stored.
   'matrixInterfaceAgreements',
   'matrixInterfaceMarkers',
+  // ADR-0166 (Schema v133): the Cross-Line Review-Evidence Join. This collection
+  // holds NOTHING BUT the join's rule-idempotency markers: which pay decisions
+  // have already been issued one dated ask about an unconsulted line. The join
+  // itself stores no row, no state, no rate and no verdict — every figure is
+  // re-derived on read from the merit cycle, the review records ADR-0147 already
+  // keeps and the dated reporting lines. A stored verdict here would be the exact
+  // drift the Bulletproof Reliability Mandate forbids.
+  'meritEvidenceMarkers',
 ];
 
 /** Stable empty state. `now` is an ISO string so the result is a pure value. */
@@ -7955,6 +7966,10 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // dropped with a printed warning, never repaired into synthetic consent.
   state.matrixInterfaceAgreements = normalizeMatrixInterfaceAgreements(raw.matrixInterfaceAgreements, warnings);
   state.matrixInterfaceMarkers = normalizeMatrixInterfaceMarkers(raw.matrixInterfaceMarkers);
+  // ADR-0166: the review-evidence join's idempotency ledger. A malformed marker is
+  // dropped so the ask it guarded can be issued again — never repaired into a
+  // plausible-looking marker that would suppress it.
+  state.meritEvidenceMarkers = normalizeMeritEvidenceMarkers(raw.meritEvidenceMarkers);
   // ADR-0122: a malformed absence row is dropped with a warning, never repaired —
   // an invented absence is an invented unavailability for every cover in the span.
   // Resolved BEFORE links so the `declares-absence-of` provenance edge validates
@@ -8690,6 +8705,14 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  // 132 → 133: ADR-0166 adds ONE marker collection and no record. Nothing about
+  // an existing pay decision, review, line or rating changes, so the migration is
+  // an empty append and every existing workspace reads exactly as before.
+  132: (v132) => ({
+    ...v132,
+    schemaVersion: 133,
+    meritEvidenceMarkers: Array.isArray(v132.meritEvidenceMarkers) ? v132.meritEvidenceMarkers : [],
+  }),
   // 131 → 132: no old meeting acquires an invented holder. Preserve any
   // already-present attribution for validation by normalizeState; otherwise
   // its three fields remain explicitly unknown.

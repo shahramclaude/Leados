@@ -28,7 +28,7 @@ import { createEmptyState, normalizeState, SCHEMA_VERSION } from '../../app/core
 import { createStore, STORAGE_KEY } from '../../app/core/store.js';
 import { createApi } from '../../app/actions.js';
 import { exportWorkspaceCsv, parseCsv, CSV_EXPORTS } from '../../app/core/csv.js';
-import { buildMeritParity, meritParityBriefText, meritParityCsvRows, MERIT_PARITY_CSV_COLUMNS } from '../../app/core/domain/meritParity.js';
+import { buildMeritParity, meritParityBriefText, meritParityCsvRows, MERIT_PARITY_CSV_COLUMNS, MERIT_PARITY_EXPORT_COLUMNS } from '../../app/core/domain/meritParity.js';
 import {
   buildFrozenStructure,
   buildMeritStructure,
@@ -475,7 +475,8 @@ test('CSV #116 carries the structure counts and no manager or person identity', 
   ctx.api.finalizeMeritCycle('merit-1');
   const rows = ctx.api.meritParityCsv().rows;
   for (const row of rows) {
-    assert.deepEqual(Object.keys(row), [...MERIT_PARITY_CSV_COLUMNS], 'exact column parity');
+    // ADR-0166 appends the evidence columns; the existing header is a prefix.
+    assert.deepEqual(Object.keys(row), [...MERIT_PARITY_EXPORT_COLUMNS], 'exact column parity');
     const cell = JSON.stringify(row);
     for (const name of ['Sam', 'Lee', 'Mo', 'Kim', 'Ana', 'Zoe', 'Dana', 'Priya']) {
       assert.equal(cell.includes(name), false, `no person or manager identity (${name})`);
@@ -485,7 +486,7 @@ test('CSV #116 carries the structure counts and no manager or person identity', 
   const exported = exportWorkspaceCsv(ctx.store.state, 'merit-matrix-parity', { now: NOW });
   assert.equal(exported.ok, true, exported.error);
   const parsed = parseCsv(exported.csv);
-  assert.deepEqual(parsed.headers, [...MERIT_PARITY_CSV_COLUMNS]);
+  assert.deepEqual(parsed.headers, [...MERIT_PARITY_EXPORT_COLUMNS]);
   assert.equal(parsed.rows.length, rows.length);
 });
 
@@ -497,7 +498,7 @@ test('the declared vocabulary is closed and the states reconcile by construction
   assert.equal(MERIT_STRUCTURE_STATES[0].rank < MERIT_STRUCTURE_STATES[3].rank, true, 'unrecorded is worse than observed');
   assert.equal(MERIT_STRUCTURE_STATES.find((s) => s.key === 'unrecorded').blocks, true);
   assert.equal(MERIT_STRUCTURE_STATES.find((s) => s.key === 'presumed-current').blocks, false);
-  assert.equal(SCHEMA_VERSION, 132);
+  assert.equal(SCHEMA_VERSION, 133);
 
   const st = structureFor(makeState({ history: fullHistory() }));
   const detail = st.reconcilesDetail;

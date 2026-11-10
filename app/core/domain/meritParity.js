@@ -52,6 +52,8 @@ import {
   meritStructureBriefLines,
 } from './meritStructure.js';
 import { ratingIndex } from './comp.js';
+import { buildMeritEvidenceJoin, meritEvidenceCsvCells } from './meritEvidence.js';
+import { MERIT_EVIDENCE_CSV_COLUMNS } from './meritEvidenceRegistry.js';
 import {
   MERIT_PARITY_CONVENTIONS,
   MERIT_PARITY_COHORTS,
@@ -122,7 +124,7 @@ function emptyCohort(key, extra = {}) {
   };
 }
 
-function emptyReport(today, refusals) {
+function emptyReport(today, refusals, state = null, now = new Date(), settings = null) {
   const verdict = meritParityVerdict('no-cycle');
   return {
     engineVersion: MERIT_PARITY_ENGINE_VERSION,
@@ -172,6 +174,10 @@ function emptyReport(today, refusals) {
       unrecordedHomeN: 0, supersededHomeN: 0, presumedHomeN: 0, projectedHomeN: 0,
       observedHomeN: 0, frozenDifferenceN: 0,
     },
+    // ADR-0166: the cross-line review-evidence join. Present and empty rather
+    // than absent, so a view can never read `undefined` as "the evidence was
+    // fine". A workspace with no cycle has nothing to join.
+    evidence: buildMeritEvidenceJoin(state, { cycle: null, now, settings }),
     refusals,
     reconciles: true,
     reconcilesDetail: 'There are no rows to reconcile.',
@@ -207,12 +213,12 @@ export function buildMeritParity(state, { cycleId = null, now = new Date(), sett
   const cycle = pickMeritParityCycle(state, cycleId);
   const refusals = [];
   if (!cycle) {
-    return emptyReport(today, [{ kind: 'no-cycle', detail: 'There is no merit cycle in this workspace, so there is no pay decision and no cohort to compare.' }]);
+    return emptyReport(today, [{ kind: 'no-cycle', detail: 'There is no merit cycle in this workspace, so there is no pay decision and no cohort to compare.' }], state, now, settings || state?.settings || null);
   }
 
   const effectiveOn = isDay(cycle.effectiveOn) ? String(cycle.effectiveOn).slice(0, 10) : null;
   if (!effectiveOn) {
-    return emptyReport(today, [{ kind: 'no-effective-date', detail: 'The cycle carries no readable effective date, so the line set on the day the money lands cannot be read and is not invented.' }]);
+    return emptyReport(today, [{ kind: 'no-effective-date', detail: 'The cycle carries no readable effective date, so the line set on the day the money lands cannot be read and is not invented.' }], state, now, settings || state?.settings || null);
   }
 
   const people = (Array.isArray(state?.people) ? state.people : []).filter((p) => p && p.id);
@@ -646,6 +652,23 @@ export function buildMeritParity(state, { cycleId = null, now = new Date(), sett
   const structureBlocked = !structure.readable;
   const figuresCompleteFinal = figuresComplete && !structureBlocked;
 
+  /* --------------------------------------- ADR-0166: the review-evidence join */
+  //
+  // Handed the cycle THIS report is reading, so the join cannot be looking at a
+  // different cycle than the money. The join answers a third question that is
+  // neither authority nor parity: was the evidence under this number gathered
+  // from every line the person worked on?
+  //
+  // Handed the report's OWN money verdict, so `figuresComplete` on the join can
+  // never read `yes` over a pool the money reader has already refused. The join
+  // still prints its own counts; it just refuses to certify completeness.
+  const evidence = buildMeritEvidenceJoin(state, {
+    cycle,
+    now,
+    settings: settings || state?.settings || null,
+    moneyComplete: figuresCompleteFinal,
+  });
+
   return {
     engineVersion: MERIT_PARITY_ENGINE_VERSION,
     today,
@@ -657,6 +680,9 @@ export function buildMeritParity(state, { cycleId = null, now = new Date(), sett
     ratingAsOf,
     isMatrix: matrixCohort.rowsN > 0,
     structure: structureReading,
+    // ADR-0166: the cross-line review-evidence join, as its own block. It never
+    // changes a money figure above it, and none of them can change it.
+    evidence,
     frozen: frozenComparison,
     frozenStructure: cycle.audit?.structure || null,
     conventions: { ...MERIT_PARITY_CONVENTIONS },
@@ -766,6 +792,19 @@ export function meritParityBriefText(state, { cycleId = null, now = new Date(), 
 
   }
   if (r.totals.malformedN || r.totals.overflowN) lines.push(`${r.totals.malformedN} malformed row(s) and ${r.totals.overflowN} beyond the read limit; ${r.totals.sourceRowsN} stored row(s) in all.`);
+  // ADR-0166: the evidence under the number, stated as a THIRD claim beside the
+  // authority and the parity. It is never merged into either of them.
+  if (r.evidence) {
+    const ev = r.evidence;
+    if (!ev.hasCycle) {
+      lines.push('Cross-line review evidence: not joined (no cycle).');
+    } else if (ev.ratePrinted) {
+      lines.push(`Cross-line review evidence: of ${ev.totals.secondLineJoinedN} second-line pay decision(s), ${ev.totals.secondLineCleanN} rest on a review every line in force answered (${ev.totals.secondLineCleanPct}%); ${ev.totals.secondLineGapN} rest on a review whose second line was never asked, never answered, or had no sole assessor. This is a PROCEDURE finding about the evidence base, not a rating of anybody.`);
+    } else {
+      lines.push(`Cross-line review evidence: rate REFUSED. ${ev.rateWithheldReason}`);
+    }
+    if (ev.totals.untraceableN) lines.push(`${ev.totals.untraceableN} pay decision(s) read a rating the workspace cannot trace to a completed review; they read UNKNOWN and no other review is substituted.`);
+  }
   lines.push(`Cell floor ${MERIT_PARITY_FLOOR} people per cohort; ${r.matchedLevelN} level-matched cell(s) cleared the floor as well. The export carries no name, no salary and no individual increase.`);
   return lines.join(' ');
 }
@@ -811,6 +850,9 @@ export function meritParityCsvRows(state, { cycleId = null, now = new Date(), se
     frozen_structure_status: r.frozen?.key || 'not-frozen',
     frozen_structure_on: r.frozen?.frozenAt || '',
     frozen_structure_diff_n: String(r.frozen?.differenceN ?? 0),
+    // ADR-0166: the cross-line review-evidence join, exported beside the money
+    // and the structure. Counts only — no person, no manager, no rating, no id.
+    ...meritEvidenceCsvCells(state, { cycle: null, cycleId: r.cycleId, now, settings }),
   };
   const rows = [{
     row_kind: 'summary',
@@ -827,7 +869,7 @@ export function meritParityCsvRows(state, { cycleId = null, now = new Date(), se
     withheld_reason: r.gapWithheld ? r.gapReason : '',
   }];
   const ordered = (row) => Object.fromEntries(
-    MERIT_PARITY_CSV_COLUMNS.map((key) => [key, row[key] === undefined || row[key] === null ? '' : row[key]]),
+    MERIT_PARITY_EXPORT_COLUMNS.map((key) => [key, row[key] === undefined || row[key] === null ? '' : row[key]]),
   );
   for (const level of r.byLevel) {
     rows.push({
@@ -849,4 +891,14 @@ export function meritParityCsvRows(state, { cycleId = null, now = new Date(), se
 }
 
 export { MERIT_PARITY_CSV_COLUMNS };
+
+/**
+ * ADR-0166: the export header is the ADR-0154/0155 header with the evidence
+ * columns APPENDED. Appending — never inserting — is what keeps a consumer that
+ * reads by header working, and it is pinned by test.
+ */
+export const MERIT_PARITY_EXPORT_COLUMNS = Object.freeze([
+  ...MERIT_PARITY_CSV_COLUMNS,
+  ...MERIT_EVIDENCE_CSV_COLUMNS,
+]);
 export const MERIT_PARITY_CSV_DESCRIPTOR_COLUMNS = MERIT_PARITY_CSV_COLUMNS;
