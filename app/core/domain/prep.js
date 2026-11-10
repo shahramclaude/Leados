@@ -302,6 +302,11 @@ export function buildPrepSheet(state, personId, now, settings) {
       openActions: last ? (last.actions || []).filter(isOpenAction).map((a) => a.text) : [],
       recognition: recognition ? { date: recognition.date, what: recognition.what } : null,
       daysSinceHeld: last ? daysSince(last.date, now) : null,
+      // ADR-0165: set when the last meeting is another line's — the prep sheet
+      // is opened by whoever preps the next 1:1, and the notes of a conversation
+      // this seat could not read must not reappear here either.
+      withheld: Boolean(last?.bodyWithheld),
+      withheldReason: last?.bodyWithheldReason || null,
     },
     commitmentCount,
     confidenceLabels: CONFIDENCE_LABELS,

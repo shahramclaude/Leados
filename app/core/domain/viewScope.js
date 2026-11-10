@@ -2,11 +2,13 @@
  * The render-time read boundary. Navigation alone never protected a record.
  * Unknown collections fail closed; the legacy operator view is unchanged.
  * This is a local disclosure contract, NOT protection from the browser owner.
+ * ADR-0165 adds the per-line 1:1 body boundary: fact of meeting yes, content no.
  */
 import { COLLECTIONS, LINK_ENTITY_COLLECTIONS } from '../schema.js';
 import { activeSeat, buildSeats, canSee, projectForSeat } from './seat.js';
 import { grantedRecords } from './disclosure.js';
 import { matrixLineScopeFor } from './matrix.js';
+import { meetingBodyVerdict, stubMeetingBody } from './meetingPrivacy.js';
 
 const PUBLIC_PERSON_FIELDS = ['id', 'name', 'role', 'level', 'team', 'managerId', 'status'];
 /**
@@ -25,6 +27,17 @@ export function scopedViewState(state, seatContext = null, { now = new Date(), s
   out.meta = { ...state.meta };
   out.settings = { ...state.settings };
   for (const [key, rows] of Object.entries(projection.visible)) out[key] = rows;
+  // ADR-0165: a declared reporting line is an accountability, not a readership
+  // of the conversation. Meetings this seat can reach ONLY through an additional
+  // line — and did not hold — keep their FACT (id, person, date, status, holder)
+  // and lose their BODY (notes, mood, agenda, resolved topics, promises). Nothing
+  // is stored; the withheld marker exists only in this per-render projection.
+  if (Array.isArray(out.oneOnOnes)) {
+    out.oneOnOnes = out.oneOnOnes.map((meeting) => {
+      const { withheld, reason } = meetingBodyVerdict(meeting, seat, built);
+      return withheld ? stubMeetingBody(meeting, reason) : meeting;
+    });
+  }
   // ADR-0086: records a live release opens, marked with the release id so a view
   // (and the leak oracle) can tell granted detail from ordinary detail.
   const released = granted || grantedRecords(state, seat, built, { now, settings });
