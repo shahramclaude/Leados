@@ -48,12 +48,15 @@ import {
   matrixLineKind,
   matrixRight,
 } from './matrixRegistry.js';
+import { buildMatrixCoordination } from './matrixCoordination.js';
+import { MATRIX_COORDINATION_SCAN_EVENT } from './matrixCoordinationRegistry.js';
 
 export const MATRIX_EVENTS = Object.freeze({
   DECLARE: 'matrix.line.declared',
   RETUNE: 'matrix.line.retuned',
   END: 'matrix.line.ended',
   CONVENTIONS: 'matrix.conventions.set',
+  COORDINATION_SCAN: MATRIX_COORDINATION_SCAN_EVENT,
 });
 
 export function createMatrixActions(store, { now, idFactory }) {
@@ -153,6 +156,15 @@ export function createMatrixActions(store, { now, idFactory }) {
       if (!check.ok) return check;
       const report = buildMatrixReport(store.state, { now: clock(), settings: settings() });
       return { ok: true, rows: matrixCsvRows(report) };
+    },
+
+    // ADR-0161: a pure, seat-scoped reader over the SAME matrix graph. It is
+    // intentionally not cached or stored: every displayed interface count is
+    // derived from the current reporting lines and allocations.
+    matrixCoordinationReport() {
+      const check = seatFor('declare-matrix-line');
+      if (!check.ok) return check;
+      return { ok: true, report: buildMatrixCoordination(store.state, { now: clock(), settings: settings() }) };
     },
 
     matrixSettings() {
@@ -390,6 +402,27 @@ export function createMatrixActions(store, { now, idFactory }) {
         summary: `Reporting line ended on ${toISO}: ${reason}`.slice(0, 300),
       });
       return saved({ id, toISO });
+    },
+
+    /**
+     * A deliberate structural scan. The report itself remains a pure read; the
+     * scan sends one event through the shared post-commit spine so RULE-MCO-01
+     * can write an idempotent aggregate trace when fragmentation or an
+     * incomplete allocation needs to be visible beyond this panel.
+     */
+    matrixCoordinationScan() {
+      const check = seatFor('declare-matrix-line');
+      if (!check.ok) return check;
+      const at = clock();
+      store.update(() => {}, {
+        type: MATRIX_EVENTS.COORDINATION_SCAN,
+        entity: 'matrixcoordination',
+        entityId: 'matrix',
+        summary: 'Matrix coordination topology scan requested.'.slice(0, 300),
+      });
+      return saved({
+        report: buildMatrixCoordination(store.state, { now: at, settings: settings() }),
+      });
     },
 
     matrixSetConventions(input = {}) {

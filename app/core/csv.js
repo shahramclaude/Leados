@@ -109,6 +109,12 @@ import { LINE_PERIOD_ALLOCATION_CSV_COLUMNS } from './domain/linePeriodAllocatio
 // ADR-0160: the Matrix Line Consumption Reconciliation export (CSV scope #120).
 import { buildLineActivity, lineActivityCsvRows } from './domain/lineActivity.js';
 import { LINE_ACTIVITY_CSV_COLUMNS } from './domain/lineActivityRegistry.js';
+// ADR-0161: Matrix Span Fragmentation & Counterpart-Dyad Coordination Ledger
+// (CSV scope #121). Aggregate topology only — never a person, manager, line,
+// seat or free-text agreement. An incomplete matrix span withholds workspace
+// topology totals rather than publishing a smaller reassuring subtotal.
+import { buildMatrixCoordination, matrixCoordinationCsvRows } from './domain/matrixCoordination.js';
+import { MATRIX_COORDINATION_CSV_COLUMNS, MATRIX_COORDINATION_CSV_DESCRIPTOR } from './domain/matrixCoordinationRegistry.js';
 import { STRUCTURE_HISTORY_CSV_COLUMNS } from './domain/structureHistoryRegistry.js';
 import {
   assessmentReconciliationCsvRows,
@@ -1175,6 +1181,10 @@ export const CSV_EXPORTS = [
   // total is BLANK with its reason in its own column, never a zero, and a
   // shared landing is never divided between the lines it reached.
   { key: 'line-activity', label: 'Matrix line activity (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'line-activity', description: 'One workspace summary row plus one row per declared line kind for the named period (period_from, period_to and period_days printed in every row): the line count, how many lines were priced, how many carried enough attributed activity to be compared, the counts that differ beyond the declared band (more activity than declared, less activity than declared, declared with nothing originated at all), how many were refused rather than compared, how many sat below the declared act floor, how many were dominated by acts that could not be assigned to one declaration, how many were the person\u2019s only priced line, the exact-integer declared share-day total, the attributed / home-manager / ambiguous / unpriced-line / no-declared-line act counts, the declared band and act floor, and two separate claims: whether the counts reconcile and whether every compared share allocated to exactly 1000 per-mille. NO person, NO name, NO manager id, NO declaration id and NO free text of any kind. A refused total is BLANK with withheld_reason set, never a zero. The observed side counts dated ACTS a line holder originated about the person (a brief, a consent answer, a re-affirmation, a settled obligation) \u2014 not hours and not work items \u2014 so the export is a screening reading about which lines are actually being run, never a measure of managerial effort or quality.' },
+  // CSV scope #121 (Schema v130 unchanged, ADR-0161): exact matrix-interface
+  // topology in aggregate only. The descriptor is shared with the registry so
+  // the export catalog cannot paraphrase its privacy or refusal contract.
+  MATRIX_COORDINATION_CSV_DESCRIPTOR,
   // CSV scope #116 (Schema v128 unchanged, ADR-0154). Aggregate only: one summary
   // row and one row per level that appears in either cohort. Basis points, counts,
   // the declared cell floor and band, the two verdicts and the refusal reason.
@@ -6343,6 +6353,16 @@ export function buildScopeTable(state, scope, now) {
       const report = buildLineActivity(state, { now, settings: state.settings || {} });
       const rows = lineActivityCsvRows(report);
       const columns = LINE_ACTIVITY_CSV_COLUMNS.map((key) => ({ key, header: key }));
+      return { columns, rows };
+    }
+    case 'matrix-coordination': {
+      // CSV scope #121 (Schema v130 unchanged, ADR-0161). This calls the exact
+      // same pure model as `#/matrix?panel=coordination`; no person, manager,
+      // line or seat identifier crosses the export boundary. Workspace topology
+      // totals are BLANK when any span is incomplete, never a partial total.
+      const report = buildMatrixCoordination(state, { now, settings: state.settings || {} });
+      const rows = matrixCoordinationCsvRows(report);
+      const columns = MATRIX_COORDINATION_CSV_COLUMNS.map((key) => ({ key, header: key }));
       return { columns, rows };
     }
     case 'line-exit': {

@@ -101,6 +101,7 @@ import { parityRule } from './parityRules.js';
 // other rule on the spine. It is inert unless a seat is explicitly declared.
 import { seatRule } from './seatRules.js';
 import { matrixRule } from './matrixRules.js';
+import { matrixCoordinationRule } from './matrixCoordinationRules.js';
 import { priorityArbitrationRule } from './priorityArbitrationRules.js';
 import { contradictionRule } from './contradictionRules.js';
 // ADR-0147: Matrix Multi-Line Review Stewardship declares its contract like
@@ -789,6 +790,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'matrixRules.js',
     purpose: 'RULE-MTX-01 fans one typed `rolls-up-to` edge from every open work item to EVERY manager in the reporting set of each person it touches who is accountable to more than one manager — the project, product, cross-functional and administrative lines the primary `person.managerId` tree does not contain — so the second manager sees the work in the SAME atomic transaction as the declaration that created the line. It runs immediately before the Operating Seat so one commit carries both fans. Idempotent by exact-edge uniqueness, marker-ledgered, pausable by matrixAutoPropagate, and INERT in a single-chain workspace: a workspace that declares no additional line gains no edges and no decisions. A confidential source contributes a count and never an edge, because a second manager is not a wider audience for a sensitive people record. It never edits a reporting line, an allocation, a roster record or a decision right, never resolves which of two managers OWNS an item (it names both and the ledger prints the ambiguity), and never asserts that work moved.',
     writes: ['links', 'matrixMarkers'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: matrixCoordinationRule,
+    module: 'matrixCoordinationRules.js',
+    purpose: 'RULE-MCO-01 reads the SAME live matrix graph, allocation-completeness gate and reporting-line lifecycle event as RULE-MTX-01. When a line declaration, retune, end, convention change or explicit coordination scan leaves a manager span fragmented across the declared counterpart floor or incomplete because a line allocation cannot be read, it appends exactly ONE identity-free, marker-idempotent structural trace to the shared automation ledger for that topology on that day. It never opens a case, creates a delegation, selects a counterpart, changes a reporting line, fills a missing allocation or recommends a reorganisation. The topology itself remains a pure seat-scoped read and is inert in a single-chain workspace.',
+    writes: ['matrixMarkers'],
     emits: [],
     scansWorkspace: true,
   },

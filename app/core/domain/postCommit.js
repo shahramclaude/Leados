@@ -127,6 +127,11 @@ import { carryoverRule } from './carryoverRules.js';
 // escalation and the agenda-fit gap before the market rebalances attention.
 import { cadenceRule } from './cadenceRules.js';
 import { matrixRule } from './matrixRules.js';
+// ADR-0161: a pure matrix coordination topology is surfaced as one
+// identity-free trace on the shared spine after line lifecycle events. It never
+// creates work or alters a reporting line; the existing Matrix fan-out still
+// owns matrix work propagation.
+import { matrixCoordinationRule } from './matrixCoordinationRules.js';
 // ADR-0143: the Cross-Line Priority Arbitration. Runs AFTER the matrix fan-out so
 // the edges it writes land on a graph that already knows every declared line, and
 // BEFORE the Operating Seat so an obligation issued by an agreed precedence is
@@ -786,6 +791,11 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // transaction carries both, and the seat's own roll-up then sees a graph that
   // already knows the second line. Inert in a single-chain workspace.
   matrixRule,
+  // ADR-0161: matrix span fragmentation is a derived structural reading. On a
+  // reporting-line lifecycle event or explicit scan it writes one idempotent,
+  // aggregate trace for a fragmented or incomplete topology; it never opens a
+  // task, changes an allocation or silently selects an interface owner.
+  matrixCoordinationRule,
   // ADR-0143: the Cross-Line Priority Arbitration (RULE-ARB-01). ONLY an
   // `arbitration.agreed` event (or an explicit scan) makes it run: a proposal is
   // not an agreement and this rule will not issue work off a recommendation. It
