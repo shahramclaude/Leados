@@ -1,3 +1,17 @@
+## 2026-11-10 — Session 224: goal carriage across reporting lines — started, not shipped (two unwired leaf modules; Schema v131 unchanged)
+
+**Doctrine / gates.** `NORTH_STAR.md` verified present with both binding mandates (Matrix Leadership, Bulletproof Reliability); no doctrine edit required. `origin` confirmed as `https://github.com/shahramclaude/Leados.git` on branch `arena/ccbf891d-leados`. Step 3 discovery added two items to `ROADMAP.md` Planned: **goal attainment period close and restatement ledger [VP / CEO × single-chain and matrix]** and **credit-claiming audit over goal line stances [director / VP / CEO × matrix]**.
+
+**Why this item / coverage.** CEO / C-suite was the altitude served longest ago (Session 220). A goal stores one `ownerId` and `chain.js` `spanRates` reads the home-line tree only, so a second-line manager's span omits that person's goals, a goal whose owner has left the roster drops out of every span, and a span above two lines that adds its branches counts a shared goal twice. Targeted item: the Session 223 Planned goal line-attribution and double-counting audit, CEO / C-suite × matrix.
+
+**Shipped.** Nothing user-visible. Committed: `goalCarriageRegistry.js` (closed vocabulary and reserved names), `goalCarriageSchema.js` (fail-closed stance and marker normalizers) and `tests/app/goal-carriage.test.mjs`. **No file in the app imports either module.** Not built: the read model, the stance actions, `RULE-GCA-01`, the panel, the CSV scope, the Schema v132 migration and ADR-0163. The item is filed under In Progress in `ROADMAP.md` with the remaining work listed; the coverage map is unchanged.
+
+**Blocker.** None technical. A pull request was requested while the build was still at the vocabulary/schema stage, so the session was committed as it stood rather than finished.
+
+**Verified.** `node --test tests/app/goal-carriage.test.mjs` **3/3 PASS**; ESLint clean on the three new files; `npm run check:boundary` OK (682 app modules, 212 suites). Display-versus-stored check not applicable: nothing is displayed or stored.
+
+**Unverified / limits.** Full `npm test` **[UNVERIFIED]** — a baseline on untouched `main` was stopped part-way with 24 of the first 530 top-level tests failing (by name, migration, CSV-scope and spine-registration tests, consistent with the stale count pins earlier sessions recorded; causes not inspected). `LeadOS-standalone.html` not rebuilt: nothing imports the new modules, so they cannot enter the bundle, but its embedded source fingerprint is now stale. The design the two modules encode (nine states, two-key attribution) has not been exercised by a reader and may change when one is written.
+
 ## 2026-11-10 — Bilateral operating contracts across shared spans: Matrix Management-Interface Operating-Agreement Register (Session 223, Schema v131, [ADR-0162](./docs/adr/0162-matrix-management-interface-operating-agreements.md), `RULE-MIA-01`, CSV #122, `#/matrix?panel=interfaces`)
 
 **Doctrine / gates.** `NORTH_STAR.md` verified present with both binding mandates (Matrix Leadership, Bulletproof Reliability); no doctrine edit required. `origin` confirmed as `https://github.com/shahramclaude/Leados.git` on branch `arena/e60d7d6b-leados`. Before selecting delivery, Step 3 discovery found and added to `ROADMAP.md` Planned: **Matrix goal & key-result line-attribution and attainment double-counting audit [director / VP / CEO × matrix]** (`goals.js` and `catchball.js` store single `ownerId` with no matrix line scoping; repository-wide absence **[UNVERIFIED]**).
