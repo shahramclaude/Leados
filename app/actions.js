@@ -124,6 +124,17 @@ import {
   roleClarityBriefText,
   roleClarityCsvRows,
 } from './core/domain/roleClarity.js';
+// ADR-0154: Matrix Merit Pool Stewardship & Cohort Parity. One bounded read
+// model over the cycle, the roster and the DATED reporting lines. Nothing is
+// stored; the four reads below keep the panel, the identity-free brief, the CSV
+// export and the attention count on the SAME report, so a screen can never
+// render a different pool than the one that was exported.
+import {
+  buildMeritParity,
+  meritParityAttentionCount,
+  meritParityBriefText,
+  meritParityCsvRows,
+} from './core/domain/meritParity.js';
 // ADR-0122: the Dated Absence Plan. One read (the window plan), three human
 // commands (declare, revoke, scan); availability is derived from the declared
 // windows, never stored.
@@ -20014,6 +20025,26 @@ export function createApi(store, options = {}) {
   });
   api.roleClarityAttentionCount = (options = {}) => ({
     ok: true, count: roleClarityAttentionCount(store.state, roleClarityOptions(options)),
+  });
+  // ADR-0154: the Matrix Merit Pool Stewardship & Cohort Parity reading. An
+  // absent cycle is a printed `no-cycle` report, never `undefined` rendered as
+  // an empty pool.
+  const meritParityOptions = (options = {}) => ({
+    cycleId: options.cycleId || null,
+    now: options.now instanceof Date ? options.now : clock(),
+    settings: store.state.settings || {},
+  });
+  api.meritParityReport = (options = {}) => ({
+    ok: true, report: buildMeritParity(store.state, meritParityOptions(options)),
+  });
+  api.meritParityBriefText = (options = {}) => ({
+    ok: true, text: meritParityBriefText(store.state, meritParityOptions(options)),
+  });
+  api.meritParityCsv = (options = {}) => ({
+    ok: true, rows: meritParityCsvRows(store.state, meritParityOptions(options)),
+  });
+  api.meritParityAttentionCount = (options = {}) => ({
+    ok: true, count: meritParityAttentionCount(store.state, meritParityOptions(options)),
   });
   // ADR-0152: the Matrix Line-Exit Obligation Register. The one remedy command
   // and the scan are in the factory; the aggregate reads are attached here so the

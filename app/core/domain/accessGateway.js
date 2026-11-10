@@ -379,7 +379,13 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // exactly the manager who has to settle it. `lineExitRead` is a declared command
 // on the remedy right (it is seat-checked inside the action), so only the
 // aggregate reads live here.
-'lineExitBoard', 'lineExitBriefText', 'lineExitCsvRows', 'lineExitAttentionCount']);
+'lineExitBoard', 'lineExitBriefText', 'lineExitCsvRows', 'lineExitAttentionCount',
+// ADR-0154: the matrix-merit parity read surface. Registered for the same reason
+// as every module above — a read absent from SAFE_READS is unreadable under
+// enforcement while the merit cycle it reads is still gated. The reading is
+// aggregate-plus-cycle scoped and the export carries no identity at all; it
+// writes nothing, settles no authority and stores no figure.
+'meritParityReport', 'meritParityBriefText', 'meritParityCsv', 'meritParityAttentionCount']);
 const refusal = (reason) => ({ ok: false, code: 'scope-refusal', error: reason, field: 'scope' });
 
 /** ADR-0087: under enforcement, boundary-management commands stay reachable

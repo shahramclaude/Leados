@@ -38,6 +38,8 @@ import {
   retentionCalibration,
 } from '../core/domain/comp.js';
 
+import { renderMeritMatrixTab } from './meritMatrixPanel.js';
+
 const LEVELS = ['ic', 'senior', 'lead', 'manager', 'director', 'vp'];
 const LEVEL_LABELS = {
   ic: 'Individual contributor',
@@ -760,7 +762,7 @@ export function renderMerit(ctx) {
     || null;
   const cycle = cycles.find((row) => row.id === requestedCycle) || fallback;
   const requestedTab = ctx.query?.get?.('panel') || 'allocation';
-  const tab = ['allocation', 'fairness', 'retention', 'calibration', 'method'].includes(requestedTab)
+  const tab = ['allocation', 'fairness', 'retention', 'calibration', 'matrix', 'method'].includes(requestedTab)
     ? requestedTab
     : requestedTab === 'structure' || requestedTab === 'policies' ? 'allocation' : 'allocation';
 
@@ -878,6 +880,7 @@ export function renderMerit(ctx) {
           { key: 'fairness', label: 'Fairness audit', count: reading.flags.filter((flag) => ['adverse-impact', 'unexplained-gap'].includes(flag.id)).length },
           { key: 'retention', label: 'Retention', count: reading.unaddressed.length },
           { key: 'calibration', label: 'Calibration' },
+          { key: 'matrix', label: 'Matrix parity' },
           { key: 'method', label: 'Method' },
         ],
         active: tab,
@@ -890,6 +893,11 @@ export function renderMerit(ctx) {
       tab === 'fairness' ? fairnessSection(reading) : null,
       tab === 'retention' ? retentionSection(reading) : null,
       tab === 'calibration' ? calibrationSection(ctx) : null,
+      // ADR-0154: the matrix merit reading. Two separate claims are printed
+      // side by side on purpose (pay authority vs cohort parity), and the tab
+      // has no control that can settle either — choosing an owner or treating a
+      // descriptive gap as a verdict are human acts this screen cannot perform.
+      tab === 'matrix' ? renderMeritMatrixTab(ctx, cycle, now) : null,
       tab === 'method' ? methodSection(reading) : null,
       auditSection(ctx, reading, cycle));
   };
