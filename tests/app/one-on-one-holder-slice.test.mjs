@@ -137,3 +137,56 @@ test('unknown dates, structural defects and failed persistence never become a re
   assert.match(result.warning, /Could not save/);
   assert.equal(disk.getItem(STORAGE_KEY), bytes, 'the warning corresponds to unchanged stored bytes');
 });
+
+test('matrix coverage panel displays the scoped report cell-for-cell without changing stored meeting data', () => {
+  const { store, api, disk } = harness();
+  const bytes = disk.getItem(STORAGE_KEY);
+  const result = api.oneOnOneLineReport();
+  assert.equal(result.ok, true, result.error);
+  const report = result.report;
+  assert.ok(report.board.statesReconcile);
+  assert.ok(report.board.meetingsReconcile);
+  const expected = report.persons.flatMap((person) => person.lines.map((line) => ({ person, line })));
+
+  const dom = new JSDOM('<!doctype html><html><body></body></html>');
+  const keys = ['window', 'document', 'Node', 'Element', 'HTMLElement', 'Event'];
+  const old = new Map(keys.map((key) => [key, globalThis[key]]));
+  let highBytes;
+  try {
+    for (const key of keys) globalThis[key] = key === 'window' ? dom.window : key === 'document' ? dom.window.document : dom.window[key];
+    const page = renderOneOnOnes({ state: store.state, now: NOW, query: new URLSearchParams(), api, navigate() {} });
+    const coverageTable = [...page.querySelectorAll('table')].find((table) => [...table.querySelectorAll('th')].some((th) => th.textContent === 'Accountable line'));
+    assert.ok(coverageTable, 'the matrix line table is rendered');
+    const actual = [...coverageTable.querySelectorAll('tbody tr')].map((row) => [...row.querySelectorAll('td')].map((cell) => cell.textContent));
+    assert.equal(actual.length, expected.length);
+    for (const [index, { person, line }] of expected.entries()) {
+      assert.deepEqual(actual[index], [
+        person.personName,
+        `${line.managerName} · ${line.role === 'home' ? 'home' : line.kind || 'additional'}`,
+        line.role === 'home' ? 'Home line' : line.shareDeclared ? `${line.sharePct}%` : 'Undeclared — no exemption assumed',
+        line.stateLabel,
+        line.lastHeldOn || 'No attributed held 1:1',
+        line.reason,
+      ]);
+    }
+    assert.ok(page.textContent.includes(`${report.board.okN} on cadence`));
+    assert.ok(page.textContent.includes(`${report.board.pairsN} person–line pairs`));
+    assert.equal(disk.getItem(STORAGE_KEY), bytes, 'reading and rendering the manager panel mutate no stored meeting bytes');
+
+    store.update((draft) => { draft.settings.activeSeatId = 'director'; }, { type: 'test.seat', entity: 'workspace', entityId: 'seat', summary: 'switch to aggregate-only altitude' });
+    highBytes = disk.getItem(STORAGE_KEY);
+    const high = api.oneOnOneLineReport();
+    assert.equal(high.ok, true, high.error);
+    assert.equal(high.report.aggregateWithheld, true);
+    const highPage = renderOneOnOnes({ state: store.state, now: NOW, query: new URLSearchParams(), api, navigate() {} });
+    const highPanel = [...highPage.querySelectorAll('section.card')].find((section) => section.querySelector('h2')?.textContent === 'Matrix 1:1 line coverage');
+    assert.ok(highPanel);
+    assert.match(highPanel.textContent, new RegExp(high.report.aggregateWithheldReason.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+    assert.equal([...highPanel.querySelectorAll('table')].some((table) => [...table.querySelectorAll('th')].some((th) => th.textContent === 'Accountable line')), false, 'higher-altitude withheld cells never render as rows');
+    assert.equal(highPanel.textContent.includes('Sam'), false);
+  } finally {
+    for (const key of keys) globalThis[key] = old.get(key);
+    dom.window.close();
+  }
+  assert.equal(disk.getItem(STORAGE_KEY), highBytes, 'reading and rendering the higher-altitude panel mutate no stored meeting bytes');
+});

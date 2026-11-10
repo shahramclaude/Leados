@@ -1,3 +1,19 @@
+## 2026-11-10 — Session 232: Matrix 1:1 Coverage Card
+
+**Doctrine and sync.** `NORTH_STAR.md` exists and contains both the Matrix Leadership and Bulletproof Reliability mandates. `origin` is `https://github.com/shahramclaude/Leados.git`; branch `arena/85ca9a98-leados` is active.
+
+**Discovery before selection.** Inspected the coverage map, current read model and planned backlog. Added the **Matrix meeting-load & coordination-tax ledger** [frontline / mid-manager / director / VP / CEO × matrix] to ROADMAP Planned: explicit forum duration/recurrence/attendees and declared line allocation, person-once roll-ups, line split refusal when shares do not reconcile, and shared-event reviews without auto-cancelling or scoring people. Targeted repository search found no persisted meeting-hours ledger; repository-wide absence **[UNVERIFIED]**.
+
+**Altitude / structure / duty selected.** Frontline / mid-manager PRIMARY × matrix; single-chain remains supported and unchanged. Each functional or project manager can read whether their own line's 1:1 cadence is due, while a different line's meeting cannot falsely turn it green.
+
+**Built.** Added the read-only Matrix 1:1 line coverage card to `#/oneonones`, backed only by the existing `oneOnOneLineReport` scoped API and canonical matrix DAG. The panel prints exact line status/reason, declared share or explicit unknown-share wording, and only reconciled pair/meeting totals. Structural defects are named. Higher-altitude aggregate-only disclosures print their withholding reason and no protected rows/totals. No new hierarchy, stored value, schema change, export, or automation rule. Existing holder acts still enter the shared store/post-commit event spine; `RULE-OOL-01` remains In Progress.
+
+**Verified (focused).** `node --test tests/app/one-on-one-holder-slice.test.mjs` — **4/4 PASS**. The JSDOM line table matched the scoped API's rows exactly; reported counts matched its reconciled pair and meeting identities; higher-altitude withholding exposed no named rows; rendering left persisted workspace bytes unchanged. Targeted ESLint on `app/views/oneonones.js` and the focused test passed.
+
+**Unverified / limits.** Full test suite, canonical-boundary gate, standalone build, real-browser/assistive-technology walkthrough, encrypted-save durability and authentication **[UNVERIFIED]**. Matrix 1:1 report reads current lines; a meeting may predate a current line, so historical coverage is not established. Director/VP line holders cannot log through this path. No blocker to the read-only card.
+
+**Coverage map / next.** Frontline / mid-manager primary 232; director / VP 229; CEO / C-suite 231. Single-chain 1–188 unchanged; matrix primary 189–198, 200, 203–204, 206, 208–232. Next rotation: director / VP × matrix. The dedicated `#/matrix` tab, claim/release UI, `RULE-OOL-01`, scan and registered CSV remain In Progress.
+
 ## 2026-11-10 — Session 231: the number was right; the assessor was one line wide — Cross-Line Bench-Evidence Sufficiency (Schema v135, ADR-0168)
 
 **Doctrine, sync and orientation.** `NORTH_STAR.md` is present at the repo root and explicitly contains both binding mandates — the Matrix Leadership Mandate (multiple reporting lines; `person.managerId` as the home line with the matrix layer built OVER the hierarchy engine) and the Bulletproof Reliability Mandate (no silent failures; refused-not-zero figures; `balances` vs `auditClean` kept apart). No doctrine augmentation was needed. `origin` is `https://github.com/shahramclaude/Leados.git`; work stayed on `arena/425606cd-leados`. Read the doctrine, the ROADMAP head (Sessions 229–230) and the coverage maps.
