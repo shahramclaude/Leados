@@ -58,6 +58,7 @@ const ROUTES = [
   ['#/matrix?panel=allocation', 'Matrix line period allocation'],
   ['#/matrix?panel=activity', 'Matrix line activity'],
   ['#/matrix?panel=interfaces', 'Matrix management interfaces'],
+  ['#/matrix?panel=goal-carriage', 'Matrix goal carriage'],
   ['#/settings', 'Settings'],
 ];
 

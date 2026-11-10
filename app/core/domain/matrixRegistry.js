@@ -196,6 +196,7 @@ export const MATRIX_PANELS = Object.freeze([
   Object.freeze({ key: 'activity', label: 'Line activity', hint: 'What each line was charged against what it actually originated — and the refusals between them.' }),
   Object.freeze({ key: 'coordination', label: 'Coordination', hint: 'Which matrix spans negotiate with one counterpart and which scatter across several — or cannot be measured.' }),
   Object.freeze({ key: 'interfaces', label: 'Interfaces', hint: 'Bilateral management-interface operating agreements across shared counterpart pairs — terms, joint apex escalation, and expiry.' }),
+  Object.freeze({ key: 'goal-carriage', label: 'Goal carriage', hint: 'Which manager spans carry each active goal, and what adding reporting branches would double-count.' }),
   Object.freeze({ key: 'rights', label: 'Rights', hint: 'Who decides what, for each person on more than one line.' }),
   Object.freeze({ key: 'concordance', label: 'Concordance', hint: 'What the decision log actually did, against the rights declared on each line.' }),
   Object.freeze({ key: 'continuity', label: 'Continuity', hint: 'Which frozen decisions still name the authority that made them — and which have drifted.' }),
