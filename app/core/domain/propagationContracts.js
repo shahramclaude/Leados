@@ -113,6 +113,7 @@ import { structureHistoryRule } from './structureHistoryRules.js';
 import { onboardingMatrixRule } from './onboardingMatrixRules.js';
 import { lineExitRule } from './lineExitRules.js';
 import { authorityContinuityRule } from './authorityContinuityRules.js';
+import { matrixInterfaceRule } from './matrixInterfaceRules.js';
 import { sealRule } from './sealRules.js';
 // ADR-0092: the Differencing Defender declares its contract like every other rule.
 import { differencingRule } from './differencingRules.js';
@@ -871,6 +872,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'authorityContinuityRules.js',
     purpose: 'RULE-ACR-01: drifted frozen decisions (`merit-cycle`, `decision`, `board-memo`) whose settlement is `unsettled` or `stale` are reconciled against today\u2019s live matrix authority. Issues ONE owned, dated delegation to the unique current right holder or unique `matrixJointApex` principal above contesting/multi-principal holders (refusing to guess on diamond ties or unowned rights), closes superseded tasks once settled, and writes typed provenance only (`issues-obligation`, `rolls-up-to` per leadership ancestor in the matrix DAG). Never edits a frozen decision record; idempotent via `authorityReaffirmationMarkers`; bounded by a per-commit cap; inert on automatic commits in single-chain workspaces.',
     writes: ['delegations', 'links', 'authorityReaffirmationMarkers'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: matrixInterfaceRule,
+    module: 'matrixInterfaceRules.js',
+    purpose: 'RULE-MIA-01: reads every active deduplicated unordered manager pair across multi-line people against bilateral management-interface operating agreements (`matrixInterfaceAgreements`), live `matrixJointApex` escalation topology, and active `cadenceForums`. Closes prior review asks once a pair reaches `current` (or disappears / loses its unique apex), issues at most ONE bounded dated review delegation per uncovered pair to its unique `matrixJointApex` principal with typed provenance (`issues-obligation`, `rolls-up-to` per leadership ancestor), and refuses to guess a review owner on diamond ties or disconnected pairs. Never invents an agreement, edits a reporting line, or modifies terms; idempotent via `matrixInterfaceMarkers`; bounded per commit; inert on automatic triggers in single-chain workspaces.',
+    writes: ['delegations', 'links', 'matrixInterfaceMarkers'],
     emits: [],
     scansWorkspace: true,
   },

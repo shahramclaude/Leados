@@ -70,6 +70,13 @@ import {
 import { createLineConsentActions } from './core/domain/lineConsentActions.js';
 import { createLineReaffirmationActions } from './core/domain/lineReaffirmationActions.js';
 import { createAuthorityReaffirmationActions } from './core/domain/authorityReaffirmationActions.js';
+import { createMatrixInterfaceActions } from './core/domain/matrixInterfaceActions.js';
+import {
+  buildMatrixInterfaceReport,
+  matrixInterfaceAttentionCount,
+  matrixInterfaceBriefText,
+  matrixInterfaceCsvRows,
+} from './core/domain/matrixInterface.js';
 import {
   buildLineReaffirmation,
   lineReaffirmationAttentionCount,
@@ -20151,6 +20158,27 @@ export function createApi(store, options = {}) {
   });
   // ADR-0159: Frozen Authority Re-Affirmation & Drift Settlement.
   Object.assign(api, createAuthorityReaffirmationActions(store, { now: clock, idFactory: id }));
+  // ADR-0162: Matrix Management-Interface Operating-Agreement Register.
+  Object.assign(api, createMatrixInterfaceActions(store, { now: clock, idFactory: id }));
+  const interfaceOptions = (options = {}) => ({
+    now: options.now instanceof Date ? options.now : clock(),
+    settings: store.state.settings || {},
+  });
+  api.matrixInterfaceReport = (options = {}) => {
+    const report = buildMatrixInterfaceReport(store.state, interfaceOptions(options));
+    return { ok: true, report, board: report.board };
+  };
+  api.matrixInterfaceBriefText = (options = {}) => {
+    const report = buildMatrixInterfaceReport(store.state, interfaceOptions(options));
+    return { ok: true, text: matrixInterfaceBriefText(report), report };
+  };
+  api.matrixInterfaceCsvRows = (options = {}) => {
+    const report = buildMatrixInterfaceReport(store.state, interfaceOptions(options));
+    return { ok: true, rows: matrixInterfaceCsvRows(report) };
+  };
+  api.matrixInterfaceAttentionCount = (options = {}) => ({
+    ok: true, count: matrixInterfaceAttentionCount(store.state, interfaceOptions(options)),
+  });
   // ADR-0149: Matrix Reorganisation Reconciliation & As-Of Structure Reads. The
   // three writes and the seat-scoped reads are in the factory; the aggregate
   // reads are attached here so the CSV export and the panel read the SAME report,

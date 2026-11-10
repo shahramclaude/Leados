@@ -57,6 +57,7 @@ const ROUTES = [
   ['#/matrix?panel=continuity', 'Matrix authority continuity'],
   ['#/matrix?panel=allocation', 'Matrix line period allocation'],
   ['#/matrix?panel=activity', 'Matrix line activity'],
+  ['#/matrix?panel=interfaces', 'Matrix management interfaces'],
   ['#/settings', 'Settings'],
 ];
 

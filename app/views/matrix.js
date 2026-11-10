@@ -65,6 +65,9 @@ import { renderActivityPanel } from './matrixActivityPanel.js';
 // stable counterpart or many. The coordination panel derives that topology from
 // the same matrix graph, allocation gate, seat scope and automation spine.
 import { renderMatrixCoordinationPanel } from './matrixCoordinationPanel.js';
+// ADR-0162: bilateral management-interface operating agreements across shared
+// counterpart pairs — terms, cadence forum links, joint apex escalation, expiry.
+import { renderMatrixInterfacePanel } from './matrixInterfacePanel.js';
 
 const PANELS = MATRIX_PANELS;
 
@@ -855,6 +858,7 @@ export function renderMatrix(ctx) {
     panel === 'allocation' ? renderPeriodAllocationPanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
     panel === 'activity' ? renderActivityPanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
     panel === 'coordination' ? renderMatrixCoordinationPanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
+    panel === 'interfaces' ? renderMatrixInterfacePanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
     panel === 'rights' ? rightsPanel(ctx, report) : null,
     panel === 'concordance' ? concordancePanel(ctx, report) : null,
     panel === 'continuity' ? renderContinuityPanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,

@@ -146,6 +146,7 @@ import { structureHistoryRule } from './structureHistoryRules.js';
 import { onboardingMatrixRule } from './onboardingMatrixRules.js';
 import { lineExitRule } from './lineExitRules.js';
 import { authorityContinuityRule } from './authorityContinuityRules.js';
+import { matrixInterfaceRule } from './matrixInterfaceRules.js';
 
 
 // ADR-0087: the Operating Cadence Clock. Reads the finished queue after the
@@ -872,6 +873,13 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // superseded tasks once settled. Runs before `seatRule` so opened obligations
   // roll up the hierarchy in the same atomic transaction.
   authorityContinuityRule,
+  // ADR-0162: Matrix Management-Interface Operating-Agreement Register (RULE-MIA-01).
+  // Reads active deduplicated manager pairs against bilateral agreements, live
+  // `matrixJointApex`, and active cadence forums. Issues at most one dated review
+  // ask to the unique joint apex per uncovered pair (refusing diamond ties),
+  // closes prior asks when pairs become `current`, and runs before `seatRule` so
+  // opened review obligations roll up in the same atomic transaction.
+  matrixInterfaceRule,
   // ADR-0076: the Operating Seat (vertical roll-up + enforced boundaries).
   // It reads the finished record after every module has propagated, then fans
   // each open item up every leadership ancestor in the reporting tree with one

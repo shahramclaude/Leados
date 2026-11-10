@@ -155,6 +155,11 @@ export const RECORD_POLICIES = Object.freeze({
   // The marker ledger carries opaque keys only.
   priorityArbitrations: { classKey: 'unit', label: 'Cross-line priority cases', route: '#/arbitration?panel=board' },
   priorityArbitrationMarkers: { classKey: 'unit', label: 'Arbitration idempotency markers', route: '#/arbitration' },
+  // ADR-0162: Bilateral management-interface operating agreements carry named
+  // counterpart pairs and written basis prose, so declared seats read only the
+  // seat-scoped report adapter rather than raw collection rows.
+  matrixInterfaceAgreements: { classKey: 'unit', detailCeiling: 0, label: 'Matrix management-interface operating agreements (report only)', route: '#/matrix?panel=interfaces' },
+  matrixInterfaceMarkers: { classKey: 'unit', detailCeiling: 0, label: 'Matrix management-interface review markers', route: '#/matrix?panel=interfaces' },
   lineMandates: { classKey: 'unit', label: 'Declared line charters', route: '#/contradiction?panel=board' },
   contradictionReviews: { classKey: 'unit', label: 'Contradiction rulings', route: '#/contradiction?panel=log' },
   contradictionMarkers: { classKey: 'unit', label: 'Contradiction idempotency markers', route: '#/contradiction' },
@@ -474,6 +479,13 @@ export const ACTION_RIGHTS = Object.freeze({
   // action strictly narrows standing to the live right holder (or a joint
   // matrix principal above all contesting/multi-principal holders).
   'reaffirm-frozen-authority': { minRank: 1, maxRank: 5, label: 'Stand behind or refer a drifted frozen decision under live matrix authority' },
+  // ADR-0162: Bilateral management-interface operating agreements. Signing or
+  // retiring an interface is open across ranks 1–5 (because project/product leads
+  // without home reports hold matrix interfaces); `matrixInterfaceActions` strictly
+  // restricts first-person signing to the counterpart managers themselves. Setting
+  // workspace interface term/warning conventions is director+.
+  'affirm-matrix-interface': { minRank: 1, maxRank: 5, label: 'Sign, confirm, retire or scan a bilateral management-interface agreement' },
+  'govern-matrix-interface': { minRank: 3, maxRank: 5, label: 'Set matrix management-interface agreement term and warning conventions' },
   // ADR-0149: moving a home line is a SEPARATE act from declaring a second line.
   // Declaring an additional line ADDS accountability; moving the home line
   // REWRITES the tree every other module rolls up through. Open from rank 1
