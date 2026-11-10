@@ -11,9 +11,10 @@
  * person green for the project manager who had not spoken to them in two
  * months, and the other way round. A silent line was masked by a busy one.
  *
- * Session 227 wires the holder, API-level human corrections and conventions.
- * The matrix panel, RULE-OOL-01 and CSV scope #123 below remain RESERVED, not
- * shipped; no automatic silent-line tasks or CSV export are implied.
+ * Session 227 wires the holder, API-level human corrections and conventions;
+ * Session 232 mounts the read-only coverage card on `#/oneonones`. The separate
+ * `#/matrix` tab, RULE-OOL-01 and a registered CSV scope remain unbuilt; no
+ * automatic silent-line tasks or CSV export are implied.
  *
  * Leaf module: no storage, no clock, no DOM, and no import with side effects,
  * so `schema.js`, the read model, the rule, the actions, `csv.js` and the

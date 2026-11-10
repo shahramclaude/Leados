@@ -27,8 +27,7 @@
  *   pairs          = ok + due + overdue + never + new + unproven + exempt
  *   held meetings  = home + line + other + dangling + unattributed
  *
- * Session 227 wires this reader to stored holders and a scoped API adapter.
- * The matrix panel, automatic reminder rule and CSV registration are unbuilt.
+ * Session 227 wires this reader to stored holders and a scoped API adapter; Session 232 mounts a read-only coverage card on `#/oneonones`. The dedicated `#/matrix` tab, automatic reminder rule and CSV registration are unbuilt.
  *
  * Pure module: no DOM, no storage, no implicit clock.
  */

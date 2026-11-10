@@ -60,6 +60,87 @@ function promiseState(action) {
   return badge('open', 'neutral');
 }
 
+/**
+ * Matrix line cadence is deliberately shown beside (not substituted for) the
+ * existing person-wide board. The report API applies the canonical matrix and
+ * seat disclosure rules; this view never reconstructs reporting lines.
+ */
+function matrixLineCoverageCard(ctx) {
+  if (typeof ctx.api.oneOnOneLineReport !== 'function') {
+    return card({ title: 'Matrix 1:1 line coverage', body: h('p', { class: 'text-bad' }, 'The matrix coverage reader is unavailable; line-level cadence is not being inferred from the person-wide board.') });
+  }
+  const result = ctx.api.oneOnOneLineReport();
+  if (!result?.ok || !result.report) {
+    return card({ title: 'Matrix 1:1 line coverage', body: h('p', { class: 'text-bad' }, result?.error || 'The matrix coverage reading failed; no line-level conclusion is available.') });
+  }
+  const report = result.report;
+  if (report.aggregateWithheld) {
+    return card({
+      title: 'Matrix 1:1 line coverage',
+      subtitle: report.scopeLabel,
+      body: h('p', { class: 'muted' }, report.aggregateWithheldReason || 'Aggregate coverage is withheld by the disclosure policy. No totals or unprotected details are shown.'),
+    });
+  }
+  if (!report.isMatrix) {
+    return card({ title: 'Matrix 1:1 line coverage', subtitle: report.scopeLabel, body: h('p', { class: 'muted' }, report.singleChainNote) });
+  }
+
+  const board = report.board;
+  const totalsReconcile = Boolean(board?.statesReconcile && board?.meetingsReconcile);
+  const lines = report.persons.flatMap((person) => person.lines.map((line) => ({ person, line })));
+  const lineRows = lines.map(({ person, line }) => ({
+    personId: person.personId,
+    personName: person.personName,
+    managerId: line.managerId,
+    managerName: line.managerName,
+    role: line.role,
+    kind: line.kind,
+    share: line.role === 'home' ? 'Home line' : line.shareDeclared ? `${line.sharePct}%` : 'Undeclared — no exemption assumed',
+    state: line.stateLabel,
+    tone: line.tone,
+    lastHeld: line.lastHeldOn || 'No attributed held 1:1',
+    reason: line.reason,
+  }));
+  const columns = [
+    { label: 'Person', render: (row) => h('a', { class: 'link', href: `#/people/${encodeURIComponent(row.personId)}` }, row.personName) },
+    { label: 'Accountable line', render: (row) => `${row.managerName} · ${row.role === 'home' ? 'home' : row.kind || 'additional'}` },
+    { label: 'Declared share', render: (row) => row.share },
+    { label: 'Line state', render: (row) => badge(row.state, row.tone) },
+    { label: 'Last attributed 1:1', render: (row) => row.lastHeld },
+    { label: 'Why', render: (row) => h('span', { class: 'muted small' }, row.reason) },
+  ];
+  const refused = report.refusedPersons || [];
+  const body = [
+    report.isMatrix ? null : h('p', { class: 'muted' }, report.singleChainNote),
+    board && totalsReconcile
+      ? h('div', null,
+          h('p', { class: 'small' }, `${board.peopleN} readable people · ${board.pairsN} person–line pairs · ${board.owingN} lines owe a standing 1:1.`),
+          h('div', { class: 'stat-row' },
+            stat({ label: 'On cadence', value: board.okN }),
+            stat({ label: 'Due', value: board.dueN, tone: board.dueN ? 'warn' : '' }),
+            stat({ label: 'Overdue / never', value: `${board.overdueN} / ${board.neverN}`, tone: board.overdueN + board.neverN ? 'bad' : '' }),
+            stat({ label: 'Cannot be read', value: board.unprovenN, tone: board.unprovenN ? 'warn' : '' }),
+            stat({ label: 'People masked by another line', value: board.maskedN, tone: board.maskedN ? 'bad' : '' }),
+          ),
+          h('p', { class: 'muted tiny' }, `Pair identity: ${board.okN} on cadence + ${board.dueN} due + ${board.overdueN} overdue + ${board.neverN} never held + ${board.newN} new + ${board.unprovenN} unreadable + ${board.exemptN} exempt = ${board.pairsN}. Held-meeting attribution: ${board.homeN} home + ${board.lineN} additional + ${board.otherN} other + ${board.danglingN} former holder + ${board.unattributedN} unattributed = ${board.heldN}.`),
+        )
+      : h('p', { class: 'text-bad' }, 'Coverage totals withheld: the pair-state or held-meeting identity does not reconcile. The row details below are not a complete roll-up.'),
+    lineRows.length ? table({ columns, rows: lineRows }) : h('p', { class: 'muted' }, 'No named line rows are available in this seat’s disclosure scope.'),
+    refused.length ? h('div', { class: 'banner banner-caution', role: 'status' },
+      h('div', { class: 'banner-text' },
+        h('strong', null, `${refused.length} reporting-graph issue${refused.length === 1 ? '' : 's'} refused.`),
+        h('ul', null, ...refused.map((row) => h('li', null, `${row.personName}: ${row.reason}`))),
+      ),
+    ) : null,
+    h('p', { class: 'muted tiny' }, `As of ${report.generatedOn}. A meeting is credited only to its recorded holder; an unattributed meeting is not guessed onto either line. This read-only panel uses the existing matrix DAG and never changes meeting records.`),
+  ].filter(Boolean);
+  return card({
+    title: 'Matrix 1:1 line coverage',
+    subtitle: `${report.scopeLabel} · home cadence ${report.conventions.homeCadenceDays} days · additional-line cadence ${report.conventions.lineCadenceDays} days · exempt only below ${report.conventions.minSharePct}% declared share.`,
+    body: h('div', { class: 'stack' }, ...body),
+  });
+}
+
 export function renderOneOnOnes(ctx) {
   const { state, now } = ctx;
   const due = dueMeetings(state, now, state.settings);
@@ -163,6 +244,7 @@ export function renderOneOnOnes(ctx) {
       }),
       stat({ label: 'Skipped or moved', value: skipped, hint: 'reschedules are a signal', tone: skipped > 2 ? 'warn' : '' }),
     ),
+    matrixLineCoverageCard(ctx),
     due.length
       ? card({
           title: 'Up next',
