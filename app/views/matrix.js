@@ -61,6 +61,10 @@ import { renderPeriodAllocationPanel } from './matrixPeriodAllocationPanel.js';
 // share-days to the dated acts each line actually originated about the person in
 // the same window — or refuses, and prints which side it could not read.
 import { renderActivityPanel } from './matrixActivityPanel.js';
+// ADR-0161: a tree span cannot see whether its people couple a manager to one
+// stable counterpart or many. The coordination panel derives that topology from
+// the same matrix graph, allocation gate, seat scope and automation spine.
+import { renderMatrixCoordinationPanel } from './matrixCoordinationPanel.js';
 
 const PANELS = MATRIX_PANELS;
 
@@ -850,6 +854,7 @@ export function renderMatrix(ctx) {
     panel === 'renewal' ? renderReaffirmationPanel(ctx) : null,
     panel === 'allocation' ? renderPeriodAllocationPanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
     panel === 'activity' ? renderActivityPanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
+    panel === 'coordination' ? renderMatrixCoordinationPanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
     panel === 'rights' ? rightsPanel(ctx, report) : null,
     panel === 'concordance' ? concordancePanel(ctx, report) : null,
     panel === 'continuity' ? renderContinuityPanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
