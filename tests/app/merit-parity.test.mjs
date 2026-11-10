@@ -37,6 +37,7 @@ import {
   meritParityBriefText,
   meritParityCsvRows,
   MERIT_PARITY_CSV_COLUMNS,
+  MERIT_PARITY_EXPORT_COLUMNS,
 } from '../../app/core/domain/meritParity.js';
 import {
   MERIT_PARITY_AUTHORITY_STATES,
@@ -407,7 +408,7 @@ test('the reading stores nothing: a reload prints the identical figures and read
   assert.equal(JSON.stringify(ctx.store.state), before, 'reading mutates nothing');
   assert.equal(ctx.store.state.meta.revision, revision, 'and bumps no revision');
   assert.equal(ctx.store.state.schemaVersion, SCHEMA_VERSION);
-  assert.equal(SCHEMA_VERSION, 132);
+  assert.equal(SCHEMA_VERSION, 133);
 
   // Recompute every printed figure from the stored blob and compare.
   const recomputed = buildMeritParity(ctx.store.state, { now: NOW, settings: ctx.store.state.settings });
@@ -432,7 +433,15 @@ test('CSV #116 is registered, exact-column, aggregate-only and reconciles with t
   assert.equal(rows[0].row_kind, 'summary');
   assert.ok(rows.some((row) => row.row_kind === 'level'));
   for (const row of rows) {
-    assert.deepEqual(Object.keys(row), [...MERIT_PARITY_CSV_COLUMNS], 'exact column parity');
+    // ADR-0166 APPENDS the review-evidence columns to this scope; the ADR-0154/
+    // 0155 header stays an in-order prefix, which is the property a consumer
+    // reading by header depends on.
+    assert.deepEqual(Object.keys(row), [...MERIT_PARITY_EXPORT_COLUMNS], 'exact column parity');
+    assert.deepEqual(
+      Object.keys(row).slice(0, MERIT_PARITY_CSV_COLUMNS.length),
+      [...MERIT_PARITY_CSV_COLUMNS],
+      'the existing columns are unchanged and in place',
+    );
     const cell = JSON.stringify(row);
     assert.equal(/Sam|Lee|Mo|Kim|Ana|Zoe|Dana|Priya/.test(cell), false, 'no person or manager identity');
     assert.equal(/\d{5,}/.test(cell.replace(/cell_floor|tolerance_bps/g, '')) && /pay/.test(cell), false);
@@ -451,7 +460,7 @@ test('CSV #116 is registered, exact-column, aggregate-only and reconciles with t
   assert.equal(exported.ok, true, exported.error);
   const parsed = parseCsv(exported.csv);
   assert.equal(parsed.rows.length, rows.length);
-  assert.deepEqual(parsed.headers, [...MERIT_PARITY_CSV_COLUMNS]);
+  assert.deepEqual(parsed.headers, [...MERIT_PARITY_EXPORT_COLUMNS]);
 });
 
 test('a withheld figure exports BLANK with its reason and never a zero', () => {

@@ -153,6 +153,14 @@ import {
   meritParityBriefText,
   meritParityCsvRows,
 } from './core/domain/meritParity.js';
+// ADR-0166: the Cross-Line Review-Evidence Join. A pure read over the SAME cycle
+// the parity report reads, plus one rule id it can name for an explicit scan.
+import {
+  buildMeritEvidenceJoin,
+  meritEvidenceAttentionCount,
+  meritEvidenceBriefText,
+} from './core/domain/meritEvidence.js';
+import { MERIT_EVIDENCE_SCAN_EVENT } from './core/domain/meritEvidenceRules.js';
 import { buildFrozenStructure, buildMeritStructure } from './core/domain/meritStructure.js';
 // ADR-0122: the Dated Absence Plan. One read (the window plan), three human
 // commands (declare, revoke, scan); availability is derived from the declared
@@ -20126,6 +20134,37 @@ export function createApi(store, options = {}) {
   api.meritParityAttentionCount = (options = {}) => ({
     ok: true, count: meritParityAttentionCount(store.state, meritParityOptions(options)),
   });
+  // ADR-0166: the Cross-Line Review-Evidence Join. Attached as its own read and
+  // its own scan so the panel, the brief and the badge read the SAME report, and
+  // so a view can never render `undefined` as "the evidence was complete".
+  api.meritEvidenceReport = (options = {}) => ({
+    ok: true, report: buildMeritEvidenceJoin(store.state, meritParityOptions(options)),
+  });
+  api.meritEvidenceBriefText = (options = {}) => ({
+    ok: true, text: meritEvidenceBriefText(store.state, meritParityOptions(options)),
+  });
+  api.meritEvidenceAttentionCount = (options = {}) => ({
+    ok: true, count: meritEvidenceAttentionCount(store.state, meritParityOptions(options)),
+  });
+  /**
+   * Explicit scan: retry anything a per-transaction cap deferred. It writes only
+   * through RULE-MEV-01, so a scan cannot invent an obligation the rule would not
+   * have issued on the commit itself.
+   */
+  api.scanMeritEvidence = (options = {}) => {
+    store.update(
+      () => {},
+      {
+        type: MERIT_EVIDENCE_SCAN_EVENT,
+        entity: 'workspace',
+        entityId: '',
+        summary: 'Cross-line review-evidence scan requested by the leader',
+        rules: ['comp'],
+      },
+    );
+    const report = buildMeritEvidenceJoin(store.state, meritParityOptions(options));
+    return { ok: true, report, propagations: store.lastPropagations || [] };
+  };
   // ADR-0152: the Matrix Line-Exit Obligation Register. The one remedy command
   // and the scan are in the factory; the aggregate reads are attached here so the
   // CSV export, the attention badge and the panel read the SAME report, and so a
