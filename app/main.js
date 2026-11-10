@@ -272,6 +272,7 @@ import { renderMatrix } from './views/matrix.js';
 // structure that was RECORDED for a day and reconciles the acts against it.
 import { renderStructureHistory } from './views/structureHistory.js';
 import { renderOnboardingMatrixPanel } from './views/onboardingMatrixPanel.js';
+import { renderOnboardingClarityPanel } from './views/onboardingClarityPanel.js';
 import { matrixAttentionCount } from './core/domain/matrix.js';
 import { structureHistoryAttentionCount } from './core/domain/structureHistory.js';
 import { onboardingMatrixAttentionCount } from './core/domain/onboardingMatrix.js';
@@ -592,9 +593,13 @@ const RENDERERS = {
   standby: (ctx) => renderStandby(ctx),
   people: (ctx) => renderPeople(ctx),
   person: (ctx, segments) => renderPerson(ctx, safeDecode(segments[1])),
-  onboarding: (ctx) => (['matrix', 'board', 'case', 'method'].includes(ctx.query?.get?.('panel'))
-    ? renderOnboardingMatrixPanel(ctx)
-    : renderOnboarding(ctx)),
+  onboarding: (ctx) => {
+    const panel = ctx.query?.get?.('panel');
+    if (panel === 'clarity') return renderOnboardingClarityPanel(ctx);
+    return ['matrix', 'board', 'case', 'method'].includes(panel)
+      ? renderOnboardingMatrixPanel(ctx)
+      : renderOnboarding(ctx);
+  },
   oneonones: (ctx) => renderOneOnOnes(ctx),
   feedback: (ctx) => renderFeedback(ctx),
   goals: (ctx) => renderGoals(ctx),

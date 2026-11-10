@@ -24,6 +24,7 @@
  */
 import { h, openModal, closeAllModals, buildForm, toast } from './dom.js';
 import { ONBOARDING_MATRIX_LIMITS } from '../core/domain/onboardingMatrixRegistry.js';
+import { ROLE_CLARITY_DOMAINS, ROLE_CLARITY_DECISION_RIGHTS, ROLE_CLARITY_CRITERIA } from '../core/domain/roleClarityRegistry.js';
 
 const notify = (result, message) => {
   if (!result?.ok) {
@@ -75,6 +76,31 @@ export function openOnboardingBriefDialog(ctx, { planId, line }) {
       value: existing ? (existing.stakeholders || []).join('\n') : '',
       help: `Names only, one per line, up to ${ONBOARDING_MATRIX_LIMITS.stakeholders}. These are THIS line’s introductions; the plan’s own stakeholder list belongs to whoever wrote the plan.`,
     },
+    {
+      name: 'domains',
+      label: 'Accountability domains this line puts on this person',
+      type: 'boolean-block',
+      wide: true,
+      value: existing?.domains || [],
+      options: ROLE_CLARITY_DOMAINS.map((d) => ({ value: d.key, label: d.label })),
+      help: 'Optional, and the only part of this brief any other line can be compared against. Claimed ground in two lines is the normal shape of a matrix — and the one place two managers can grade the same deliverable against different bars. Leave every box unticked and this line cannot be compared; nothing is inferred from the words above.',
+    },
+    {
+      name: 'decisionRight',
+      label: 'Decision right this line gives this person in its domain',
+      type: 'select',
+      value: existing?.decisionRight || '',
+      options: [{ value: '', label: 'Not declared' }, ...ROLE_CLARITY_DECISION_RIGHTS.map((r) => ({ value: r.key, label: r.label }))],
+      help: 'Optional. Decides — they may make the call; Advises — they recommend and this line decides; Informed — they are told. Two lines spread two steps apart (decides vs informed) is a conflict this lens names before it grades anyone.',
+    },
+    {
+      name: 'criteria',
+      label: 'How this line will know success',
+      type: 'select',
+      value: existing?.criteria || '',
+      options: [{ value: '', label: 'Not declared' }, ...ROLE_CLARITY_CRITERIA.map((c) => ({ value: c.key, label: c.label }))],
+      help: 'Optional. Written down — the bar is stated in words; Said, not written — it was spoken; Never stated — nobody on this line has said how success will be read. A spread of two steps means one line will grade against a bar it wrote and another never named one.',
+    },
   ]);
   openModal({
     title: `Write the ${line.kind}-line onboarding brief`,
@@ -93,6 +119,9 @@ export function openOnboardingBriefDialog(ctx, { planId, line }) {
             scope: values.scope,
             firstWork: values.firstWork,
             stakeholders: parseNames(values.stakeholders),
+            domains: Array.isArray(values.domains) ? values.domains : [],
+            decisionRight: values.decisionRight || '',
+            criteria: values.criteria || '',
           });
           if (!notify(result, 'Line brief recorded. The person will be asked to acknowledge it.')) return;
           closeAllModals();

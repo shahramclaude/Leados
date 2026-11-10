@@ -670,7 +670,7 @@ export {
 // hours nobody told them about. Every state, lapse, day count, verdict and total
 // is DERIVED on read from these acts plus the live matrix, so no printed figure
 // can drift from the record that produced it.
-export const SCHEMA_VERSION = 127;
+export const SCHEMA_VERSION = 128;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -8810,6 +8810,21 @@ export const MIGRATIONS = {
   // the record claim a comparison that never happened. The three new
   // conventions are clamped in so the printed floor exists before anyone
   // re-declares it.
+  // ADR-0153: additive 127 → 128. No collection is added, no brief is rewritten
+  // and no mark is invented for one. Existing briefs gain the three OPTIONAL role
+  // marks as EMPTY — a domain set nobody declared, no decision right, no criteria
+  // standing — so every upgraded line reads `unscoped-line` in the Role Clarity
+  // lens instead of a plausible comparison nobody made. A mark back-filled at
+  // upgrade time would be a coarse judgement the line holder never declared.
+  127: (v127) => ({
+    ...v127,
+    schemaVersion: 128,
+    onboardingLineBriefs: Array.isArray(v127.onboardingLineBriefs)
+      ? v127.onboardingLineBriefs.map((brief) => (isPlainObject(brief)
+          ? { ...brief, domains: [], decisionRight: '', criteria: '' }
+          : brief))
+      : [],
+  }),
   // ADR-0152: additive 126 → 127. No collection is added to an existing
   // workspace's obligations and none is re-pointed. The remedy ledger starts
   // EMPTY, which reads as "no ended line has been adjudicated yet" — the honest

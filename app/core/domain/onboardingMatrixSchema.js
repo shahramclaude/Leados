@@ -10,7 +10,16 @@
  *   { id, planId, personId, lineKey, lineRole, lineKind, managerId,
  *     outcome: 'brief' | 'declined', declaredOn, declaredBySeatId,
  *     scope, firstWork, stakeholders[], reason,
+ *     domains[], decisionRight, criteria,
  *     acknowledgedOn, acknowledgedBySeatId, acknowledgement }
+ *
+ * `domains` / `decisionRight` / `criteria` are the OPTIONAL ADR-0153 role marks:
+ * the closed-lexicon accountability domains the line puts on the person, the
+ * closed three-step decision right the person holds on this line, and the
+ * closed three-step standing of this line's success criteria. They are the only
+ * fields any other line can be compared against, they are declared by the line
+ * that wrote the brief or they do not exist, and every unknown value is dropped
+ * (with a printed warning) rather than coerced.
  *
  * plus `onboardingLineBriefMarkers`, which is `RULE-ONB-01`'s idempotency ledger.
  *
@@ -42,6 +51,12 @@ import {
   ONBOARDING_MATRIX_DEFAULTS,
   ONBOARDING_MATRIX_LIMITS,
 } from './onboardingMatrixRegistry.js';
+import {
+  ROLE_CLARITY_DOMAIN_KEYS,
+  ROLE_CLARITY_DECISION_RIGHTS,
+  ROLE_CLARITY_CRITERIA,
+  ROLE_CLARITY_LIMITS,
+} from './roleClarityRegistry.js';
 
 function isPlainObject(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -105,6 +120,57 @@ function normalizeStakeholders(value, warnings, rowId) {
   return out;
 }
 
+/**
+ * ADR-0153 (Schema v128): the OPTIONAL structured role marks a brief may carry.
+ * These are the ONLY fields of a brief any other line can be compared against,
+ * and they are declared by the line that wrote the brief or they do not exist.
+ * Every one is fail-closed and independent:
+ *
+ *   domains      a set of closed-lexicon accountability-domain keys (deduplicated,
+ *                unknown keys dropped with a printed warning, capped).
+ *   decisionRight  one of `decides` / `advises` / `informed`. An unknown value is
+ *                DROPPED to absent (never coerced): a decision right nobody
+ *                declared is not a right the line holds.
+ *   criteria     one of `written` / `verbal` / `unstated`. Same rule.
+ *
+ * A brief with NO marks of any kind is still a valid brief — it is simply not
+ * comparable, and the Role Clarity lens reads the line as `unscoped-line` and
+ * refuses the comparison. Dropping the brief would destroy a manager's words,
+ * which this module never does; ignoring undeclared marks would invent them,
+ * which it never does either.
+ */
+const DECISION_RIGHT_KEYS = new Set(ROLE_CLARITY_DECISION_RIGHTS.map((r) => r.key));
+const CRITERIA_KEYS = new Set(ROLE_CLARITY_CRITERIA.map((c) => c.key));
+
+export function normalizeRoleMarks(raw, warnings, rowId = 'brief') {
+  const out = { domains: [], decisionRight: '', criteria: '' };
+  if (!isPlainObject(raw)) return out;
+  const seen = new Set();
+  for (const value of Array.isArray(raw.domains) ? raw.domains : []) {
+    const key = typeof value === 'string' ? value.trim().toLowerCase() : '';
+    if (!key) continue;
+    if (!ROLE_CLARITY_DOMAIN_KEYS.includes(key)) {
+      warnings.push(`Role clarity: dropped the unknown accountability domain “${key}” on ${rowId}; the lexicon is closed and nothing is guessed into it.`);
+      continue;
+    }
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.domains.push(key);
+    if (out.domains.length >= ROLE_CLARITY_LIMITS.domainsPerBrief) break;
+  }
+  const right = typeof raw.decisionRight === 'string' ? raw.decisionRight.trim().toLowerCase() : '';
+  if (right) {
+    if (DECISION_RIGHT_KEYS.has(right)) out.decisionRight = right;
+    else warnings.push(`Role clarity: dropped the unknown decision right “${right}” on ${rowId}; the scale is closed (decides / advises / informed).`);
+  }
+  const criteria = typeof raw.criteria === 'string' ? raw.criteria.trim().toLowerCase() : '';
+  if (criteria) {
+    if (CRITERIA_KEYS.has(criteria)) out.criteria = criteria;
+    else warnings.push(`Role clarity: dropped the unknown criteria standing “${criteria}” on ${rowId}; the standing is closed (written / verbal / unstated).`);
+  }
+  return out;
+}
+
 function normalizeBrief(raw, warnings) {
   if (!isPlainObject(raw)) {
     warnings.push('Onboarding line briefs: dropped a row that was not an object.');
@@ -137,6 +203,10 @@ function normalizeBrief(raw, warnings) {
     return null;
   }
   const acknowledgedOn = day(raw.acknowledgedOn);
+  // ADR-0153: the optional structured role marks. Only a brief (an outcome this
+  // module reconciles) can carry them; a decline carries none, exactly as it
+  // carries no acknowledgement.
+  const marks = outcome === 'brief' ? normalizeRoleMarks(raw, warnings, rowId) : { domains: [], decisionRight: '', criteria: '' };
   return {
     id: rowId,
     planId,
@@ -155,6 +225,9 @@ function normalizeBrief(raw, warnings) {
     scope: outcome === 'brief' ? scope : '',
     firstWork: outcome === 'brief' ? text(raw.firstWork, ONBOARDING_MATRIX_LIMITS.firstWorkChars) : '',
     stakeholders: outcome === 'brief' ? normalizeStakeholders(raw.stakeholders, warnings, rowId) : [],
+    domains: marks.domains,
+    decisionRight: marks.decisionRight,
+    criteria: marks.criteria,
     reason: outcome === 'declined' ? reason : '',
     // An acknowledgement of a DECLINE is meaningless: there is nothing about the
     // job to acknowledge. It is cleared rather than repaired into a claim.

@@ -115,6 +115,15 @@ import {
   onboardingMatrixBriefText,
   onboardingMatrixCsvRows,
 } from './core/domain/onboardingMatrix.js';
+// ADR-0153: Cross-Line Role Clarity Reconciliation. One bounded read model over
+// the briefs the ledger already stores; the two aggregate reads attached below
+// keep the CSV export, the attention badge and the panel on the SAME report.
+import {
+  buildRoleClarity,
+  roleClarityAttentionCount,
+  roleClarityBriefText,
+  roleClarityCsvRows,
+} from './core/domain/roleClarity.js';
 // ADR-0122: the Dated Absence Plan. One read (the window plan), three human
 // commands (declare, revoke, scan); availability is derived from the declared
 // windows, never stored.
@@ -19984,6 +19993,27 @@ export function createApi(store, options = {}) {
   });
   api.onboardingMatrixAttentionCount = (options = {}) => ({
     ok: true, count: onboardingMatrixAttentionCount(store.state, onboardingMatrixOptions(options)),
+  });
+  // ADR-0153: the seat-checked reads (`roleClarityRead` / `roleClarityBoard`)
+  // are attached by the onboarding factory above. The aggregate reads here keep
+  // the CSV export, the panel and the badge on the same report, and guarantee a
+  // view can never render `undefined` as an empty comparison.
+  const roleClarityOptions = (options = {}) => ({
+    now: options.now instanceof Date ? options.now : clock(),
+    settings: store.state.settings || {},
+  });
+  api.roleClarityAggregate = (options = {}) => ({
+    ok: true,
+    board: buildRoleClarity(store.state, { ...roleClarityOptions(options), limit: options.limit ?? 40 }),
+  });
+  api.roleClarityBriefText = (options = {}) => ({
+    ok: true, text: roleClarityBriefText(store.state, roleClarityOptions(options)),
+  });
+  api.roleClarityCsv = (options = {}) => ({
+    ok: true, rows: roleClarityCsvRows(store.state, roleClarityOptions(options)),
+  });
+  api.roleClarityAttentionCount = (options = {}) => ({
+    ok: true, count: roleClarityAttentionCount(store.state, roleClarityOptions(options)),
   });
   // ADR-0152: the Matrix Line-Exit Obligation Register. The one remedy command
   // and the scan are in the factory; the aggregate reads are attached here so the

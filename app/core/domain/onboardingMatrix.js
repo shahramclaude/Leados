@@ -87,7 +87,7 @@ function activePlansFor(state, personId) {
  * `declaredOn` and then by row id, deterministically, so a printed state cannot
  * depend on array order in the file.
  */
-function briefsByLine(briefs) {
+export function briefsByLine(briefs) {
   const map = new Map();
   const order = new Map();
   const list = Array.isArray(briefs) ? briefs : [];
@@ -320,6 +320,9 @@ export function buildOnboardingMatrixCase(state, plan, { now = new Date(), setti
             firstWork: brief.firstWork,
             stakeholders: [...(brief.stakeholders || [])],
             stakeholdersN: (brief.stakeholders || []).length,
+            domains: [...(brief.domains || [])],
+            decisionRight: brief.decisionRight || '',
+            criteria: brief.criteria || '',
             reason: brief.reason,
             acknowledgedOn: brief.acknowledgedOn,
             acknowledgedBySeatId: brief.acknowledgedBySeatId,
