@@ -183,6 +183,15 @@ function sinceLastCard(sheet) {
     });
   }
   const notes = (last.notes || '').trim();
+  if (last.withheld) {
+    // ADR-0165: the last meeting belongs to another line; the fact it happened
+    // may be shown, its content never reappears on this screen.
+    return card({
+      title: 'Since we last spoke',
+      subtitle: `Last held ${formatDate(last.lastHeldDate)} · ${humanDays(last.daysSinceHeld)}`,
+      body: h('p', { class: 'note note-lock' }, last.withheldReason || 'That conversation belongs to the people in the room; this seat sees that it happened.'),
+    });
+  }
   return card({
     title: 'Since we last spoke',
     subtitle: `Last held ${formatDate(last.lastHeldDate)} · ${humanDays(last.daysSinceHeld)}`,

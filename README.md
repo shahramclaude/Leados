@@ -1,10 +1,10 @@
-## 2026-11-10 — Draft: record who held a 1:1
-
-**Work in progress — not ready to merge or use for confidential notes.** The existing person-level 1:1 read policy can expose one manager's meeting body to another manager with a direct matrix line. This draft does not yet enforce per-line confidentiality, and a selected seat is not authenticated identity.
+## 2026-11-10 — Record who held a 1:1, and keep other lines out of the room
 
 In the full-access operator view, **Log a 1:1** offers an optional holder; under a frontline or mid-manager seat a held meeting is attributed to that seat, including for a direct additional-line report. History displays the stored holder or “Holder not recorded.” Schema v132 leaves older meetings unattributed rather than guessing, and newly detected invalid dates appear as “Date unverified.” A failed local save or queued encrypted save produces a warning.
 
-This is not yet the matrix 1:1 coverage feature: there is no coverage panel, reminder rule, scan, registered CSV export or interactive claim/release control. The API-only report reads **today's** lines and may credit meetings that predate a current line; legacy person-wide cadence is unchanged and can still use fallback dates. Higher-altitude line holders cannot yet log through this path. Complete confidentiality and historical-coverage work before relying on it.
+**Per-line confidentiality is now enforced ([ADR-0165](./docs/adr/0165-per-line-one-on-one-confidentiality.md)).** A declared additional reporting line is an accountability, not a readership: a seat that reaches a person only through a line — or holds any other recorded holder's meeting — sees the **fact** that a 1:1 happened (date, held/skipped status, holder) but never its notes, mood, agenda, resolved topics or promises; the reason is printed in place of the content on `#/oneonones`, the person page and the prep sheet. The seat that HELD the meeting always reads its own record. Unattributed historical meetings remain readable through the reporting tree exactly as before (nothing changes for a single-chain workspace or the undeclared operator view), while an additional line never reads what no holder attests to. The same boundary guards the write doors, so a crafted call cannot edit or pad another line's room. A consented release (ADR-0086) remains the one legitimate cross-boundary path for content. A selected seat is still not authenticated identity.
+
+This is still not the matrix 1:1 coverage feature: there is no coverage panel, reminder rule, scan, registered CSV export or interactive claim/release control. The API-only report reads **today's** lines and may credit meetings that predate a current line; legacy person-wide cadence is unchanged and can still use fallback dates. Higher-altitude line holders cannot yet log through this path. Historical-coverage work remains before relying on the coverage reading.
 
 ## 2026-11-10 — Matrix goal carriage branch-overlap audit
 

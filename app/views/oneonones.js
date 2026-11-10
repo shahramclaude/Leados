@@ -81,7 +81,8 @@ export function renderOneOnOnes(ctx) {
 
   const personFor = (id) => state.people.find((p) => p.id === id) || null;
 
-  const heldRecent = state.oneOnOnes.filter((m) => m.status === 'held').slice(0, 12);
+  const withheldN = state.oneOnOnes.filter((m) => m.bodyWithheld).length;
+  const heldRecent = state.oneOnOnes.filter((m) => m.status === 'held' && !m.bodyWithheld).slice(0, 12);
   const avgQuality = heldRecent.length
     ? Math.round(heldRecent.reduce((sum, m) => sum + gradeMeeting(m).score, 0) / heldRecent.length)
     : null;
@@ -131,13 +132,16 @@ export function renderOneOnOnes(ctx) {
     { class: 'page' },
     pageHeader({
       title: '1:1s',
-      subtitle: `Cadence every ${state.settings.oneOnOneCadenceDays} days. Overdue means 1.5× that.`,
+      subtitle: [
+        `Cadence every ${state.settings.oneOnOneCadenceDays} days. Overdue means 1.5× that.`,
+        withheldN ? `${withheldN} 1:1${withheldN === 1 ? '' : 's'} from another line ${withheldN === 1 ? 'is' : 'are'} shown as the fact that they happened only — never the content.` : null,
+      ].filter(Boolean).join(' '),
       actions: [h('button', { class: 'btn btn-primary', type: 'button', onClick: () => openOneOnOneDialog(ctx) }, 'Log a 1:1')],
     }),
     h(
       'div',
       { class: 'stat-row' },
-      stat({ label: 'Held', value: state.oneOnOnes.filter((m) => m.status === 'held').length, hint: `${state.oneOnOnes.length} logged in total` }),
+      stat({ label: 'Held', value: state.oneOnOnes.filter((m) => m.status === 'held').length, hint: `${state.oneOnOnes.length} logged in total${withheldN ? ` · ${withheldN} fact-only` : ''}` }),
       stat({ label: 'Due or overdue', value: due.length, hint: `${due.filter((d) => d.cadence.status === 'overdue').length} overdue`, tone: due.length ? 'warn' : 'good' }),
       stat({
         label: 'Promises kept',
@@ -252,6 +256,25 @@ export function renderOneOnOnes(ctx) {
             { class: 'meeting-list' },
             ...allMeetings.map((meeting) => {
               const person = personFor(meeting.personId);
+              if (meeting.bodyWithheld) {
+                // ADR-0165: another line's conversation. The fact (date, status,
+                // holder) may be shown; no grade, no note, no promise.
+                return h(
+                  'li',
+                  { class: 'meeting-item meeting-item-withheld' },
+                  h(
+                    'div',
+                    { class: 'meeting-head' },
+                    h('span', { class: 'meeting-date' }, meeting.dateUncertain ? 'Date unverified' : formatDate(meeting.date)),
+                    person ? h('a', { class: 'link', href: `#/people/${person.id}` }, person.name) : h('span', { class: 'muted' }, 'Unknown person'),
+                    badge(meeting.status, meeting.status === 'held' ? 'good' : 'warn'),
+                    meeting.status === 'held' ? h('span', { class: 'muted tiny' }, meeting.heldById
+                      ? `Held by: ${meeting.heldById === 'leader' ? (state.settings.leaderName || 'Workspace leader') : personFor(meeting.heldById)?.name || 'holder not visible'}`
+                      : 'Holder not recorded') : null,
+                  ),
+                  h('p', { class: 'note note-lock' }, meeting.bodyWithheldReason || 'This conversation belongs to the people in the room; this seat sees that it happened.'),
+                );
+              }
               const grade = gradeMeeting(meeting);
               const ledger = reconciledInMeeting(state, meeting.id);
               const settledParts = [

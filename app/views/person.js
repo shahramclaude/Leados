@@ -438,6 +438,15 @@ export function renderPerson(ctx, personId) {
           'ul',
           { class: 'meeting-list' },
           ...recentMeetings.map((meeting) => {
+            if (meeting.bodyWithheld) {
+              // ADR-0165: another line's 1:1 with this person is a fact, not a readable record.
+              return h(
+                'li',
+                { class: 'meeting-item meeting-item-withheld' },
+                h('div', { class: 'meeting-head' }, h('span', { class: 'meeting-date' }, meeting.dateUncertain ? 'Date unverified' : formatDate(meeting.date)), badge(meeting.status, meeting.status === 'held' ? 'good' : 'warn')),
+                h('p', { class: 'note note-lock' }, meeting.bodyWithheldReason || 'This conversation belongs to the people in the room; this seat sees that it happened.'),
+              );
+            }
             const grade = gradeMeeting(meeting);
             return h(
               'li',

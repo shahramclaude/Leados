@@ -43,6 +43,8 @@ import { createAgendaActions } from './core/domain/agendaProvenanceActions.js';
 import { createDutyCoverageActions } from './core/domain/dutyCoverageActions.js';
 import { createMatrixActions } from './core/domain/matrixActions.js';
 import { createOneOnOneLineActions, oneOnOneHolderForLog } from './core/domain/oneOnOneLineActions.js';
+// ADR-0165: the per-line 1:1 body boundary. Meetings another line holds are a fact, not a readable/editable record.
+import { meetingBodyVerdictForState } from './core/domain/meetingPrivacy.js';
 // ADR-0143: the Cross-Line Priority Arbitration. Seven dated human commands on
 // the same reviewed gateway; every score, state and capacity total is derived on
 // read, and only an AGREED precedence issues work (RULE-ARB-01).
@@ -1178,6 +1180,20 @@ function normalizeInterviewers(raw, people) {
   return [...new Set(list.map((value) => String(value || '').trim()).filter((value) => byId.has(value)))];
 }
 
+/**
+ * ADR-0165 — the write door for a meeting body. Returns null when the acting
+ * seat may touch this meeting, or the refusal object to return instead.
+ * An unresolvable boundary REFUSES: it is never a courtesy invitation.
+ */
+function meetingBodyRefusal(state, meeting, at) {
+  const verdict = meetingBodyVerdictForState(state, meeting, at);
+  if (!verdict.ok) return fail(verdict.error);
+  if (verdict.withheld) {
+    return fail('This 1:1 is not this seat’s conversation. The seat sees that it happened — it cannot read, add to or rewrite what was said in it.');
+  }
+  return null;
+}
+
 export function createApi(store, options = {}) {
   const id = options.idFactory || makeId;
   const clock = options.now || (() => new Date());
@@ -1855,6 +1871,8 @@ export function createApi(store, options = {}) {
 
     toggleMeetingAction(meetingId, actionId) {
       const meeting = store.state.oneOnOnes.find((m) => m.id === meetingId);
+      const refused = meeting ? meetingBodyRefusal(store.state, meeting, clock()) : null;
+      if (refused) return refused;
       const action = meeting?.actions.find((a) => a.id === actionId);
       if (!action) return fail('That action no longer exists.');
       if (action.carriedToMeetingId) {
@@ -1884,6 +1902,8 @@ export function createApi(store, options = {}) {
       if (!owner.ok) return fail(owner.error, 'owner');
       const meeting = store.state.oneOnOnes.find((m) => m.id === meetingId);
       if (!meeting) return fail('That 1:1 no longer exists.');
+      const refused = meetingBodyRefusal(store.state, meeting, clock());
+      if (refused) return refused;
       store.update(
         (draft) => {
           const target = draft.oneOnOnes.find((m) => m.id === meetingId);
@@ -2403,6 +2423,8 @@ export function createApi(store, options = {}) {
      */
     setActionOwner(meetingId, actionId, ownerValue) {
       const meeting = store.state.oneOnOnes.find((m) => m.id === meetingId);
+      const refused = meeting ? meetingBodyRefusal(store.state, meeting, clock()) : null;
+      if (refused) return refused;
       const action = meeting?.actions.find((a) => a.id === actionId);
       if (!meeting || !action) return fail('That commitment no longer exists. Reload and try again.');
       const owner = normalizeOwner(ownerValue);
