@@ -1284,6 +1284,32 @@ export function buildMatrixReport(state, { now = new Date(), settings = null } =
 
   const expiringN = findings.rows.filter((f) => f.finding === 'expiring').length;
 
+  // Term exposure is read from ALL scoped allocations, before the people-table
+  // cap. A missing end is not an expired agreement or an inferred renewal.
+  const termRows = allocations.flatMap((person) => person.lines
+    .filter((line) => line.role === 'secondary')
+    .map((line) => {
+      const daysRemaining = line.toISO ? daysBetween(matrix.today, line.toISO) : null;
+      const state = !line.toISO ? 'no-term-declared'
+        : daysRemaining <= matrix.conventions.matrixExpiringDays ? 'ending-soon' : 'dated-term';
+      return { ...line, personId: person.personId, personName: person.name, daysRemaining, state };
+    }));
+  const termCounts = {
+    'no-term-declared': termRows.filter((r) => r.state === 'no-term-declared').length,
+    'ending-soon': termRows.filter((r) => r.state === 'ending-soon').length,
+    'dated-term': termRows.filter((r) => r.state === 'dated-term').length,
+  };
+  const termExposure = {
+    totalN: termRows.length,
+    peopleN: new Set(termRows.map((r) => r.personId)).size,
+    counts: termCounts,
+    rows: termRows.slice(0, MATRIX_LIMITS.people),
+    remainderN: Math.max(0, termRows.length - MATRIX_LIMITS.people),
+    reconciles: Object.values(termCounts).reduce((sum, n) => sum + n, 0) === termRows.length,
+    refusedLineN: matrix.defects.filter((d) => inScope(d.personId)).length,
+  };
+
+
   /* ADR-0141 — the seat reading. Who the matrix made accountable, who the
      workspace can actually seat, and how much open work reaches a manager only
      through a line. Counts reconcile against the work total, so the panel can
@@ -1366,6 +1392,7 @@ export function buildMatrixReport(state, { now = new Date(), settings = null } =
     rightsSummary,
     findings,
     expiringN,
+    termExposure,
     seats: seatsSection,
     governance,
     defects: matrix.defects,
