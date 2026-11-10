@@ -90,6 +90,10 @@ import { LINE_CONSENT_CSV_COLUMNS } from './domain/lineConsentRegistry.js';
 import { buildStructureHistoryReport, structureHistoryCsvRows } from './domain/structureHistory.js';
 import { onboardingMatrixCsvRows, ONBOARDING_MATRIX_CSV_COLUMNS } from './domain/onboardingMatrix.js';
 import { roleClarityCsvRows, ROLE_CLARITY_CSV_COLUMNS } from './domain/roleClarity.js';
+// ADR-0154: the matrix-merit parity rows. Aggregate only — cohort basis points,
+// counts, the declared floor and band and every refusal. No person, no name, no
+// manager id, no cycle label, no salary and no individual increase.
+import { meritParityCsvRows, MERIT_PARITY_CSV_COLUMNS } from './domain/meritParity.js';
 import { lineExitCsvRows } from './domain/lineExit.js';
 import { LINE_EXIT_CSV_COLUMNS } from './domain/lineExitRegistry.js';
 import { STRUCTURE_HISTORY_CSV_COLUMNS } from './domain/structureHistoryRegistry.js';
@@ -1127,6 +1131,10 @@ export const CSV_EXPORTS = [
   // CSV scope #115 (Schema v128, ADR-0153). Aggregate-only: one row per onboarding case × line; no identity, no prose.
   { key: 'role-clarity', label: 'Cross-line role clarity (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'role-clarity', description: 'One row per onboarding case × reporting line for every case where the person sat on more than one reporting line during the window. Each row carries the window dates, the derived case verdict (unbriefed / contested / unscoped-pair / overlapping / partitioned), whether that verdict is open, the line role and kind, whether the line was in force in the window, the line outcome (brief / declined / none), the number of accountability domains the line declared, the sorted closed-lexicon domain keys, the declared decision right (decides / advises / informed), the declared criteria standing (written / verbal / unstated) and how many earlier briefs the current one supersedes. NO person, NO name, NO manager id, NO manager name, NO brief text and NO stakeholder name. A line with no brief exports BLANK marks, never a zero, and a brief with no declared marks exports BLANK, never an imputed one: nothing derived is stored and every figure is recomputed from the stored briefs on read.' },
   { key: 'line-exit', label: 'Matrix line-exit obligations (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'line-exit', description: 'One workspace summary row plus one row per reporting line that has been dated out, carrying the line KIND and a stable position, the day it ended, whether its start and end days support the overlap arithmetic, and the obligation counts by derived state (open with no remedy / retired with a reason / carried to a named manager), how many are past their due day, how many are about a work window that falls entirely outside the line\u2019s life (flagged for retirement, never retired automatically), how many carry no dated window, the age of the oldest open obligation in whole days, the line\u2019s derived verdict and whether that verdict is open. NO person, NO name, NO manager id, NO declaration id and NO free text. An obligation is never re-pointed and never voided by arithmetic, so a line whose end day is not recorded exports line_window_verifiable = false and its obligations read as open rather than settled.' },
+  // CSV scope #116 (Schema v128 unchanged, ADR-0154). Aggregate only: one summary
+  // row and one row per level that appears in either cohort. Basis points, counts,
+  // the declared cell floor and band, the two verdicts and the refusal reason.
+  { key: 'merit-matrix-parity', label: 'Matrix merit pool parity (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'merit-matrix-parity', description: 'One summary row plus one row per level present in either cohort: the cycle status, currency and effective date, the declared cell floor and practical-significance band, pay rows read on the effective date, the second-line and home-line cohort counts (rows and priced people), excluded rows, each cohort median increase in whole basis points (BLANK below the floor), the unadjusted cohort gap and its direction, the second-line share of the pool in basis points (BLANK when the pool moved no money), the zero-increase counts, the level-matched counts and gap per level, the pay-authority verdict with its contested and unowned counts, the parity verdict, and two separate claims: whether the counts RECONCILE and whether every printed figure was complete. NO person, NO name, NO manager id, NO cycle label, NO salary, NO absolute pay and NO individual increase. A withheld median, gap or pool share is BLANK with its reason in withheld_reason, never a zero; a cohort below the declared floor and a pool that moved no money both withhold the comparison rather than reporting parity.' },
   RIGHTS_CONCORDANCE_CSV_DESCRIPTOR,
   { key: 'priority-arbitration', label: 'Cross-line priority arbitration (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'priority-arbitration', description: 'One workspace summary row, one row per live arbitration case (derived state, frozen demand count, line count, disposition counts, the exact-integer verdict and its refusal when a score set is incomplete, the arbiter tie state, the agreed window and review date, dissent count, issued obligation count and the declared capacity claim), and one row per frozen demand carrying ONLY the two declared integers, the chain days and the integer rank. NO person, NO name, NO demand title, NO case id, NO seat id and NO rationale text. A demand missing its cost of delay or job size exports its rank BLANK with the refusal in `withheld_reason`, never a zero. `ranked` and `reconciles` are separate claims: an order can be absent while the counts still add up, and the export says which.' },
   { key: 'cover-standby', label: 'Cover acknowledgement (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'cover-standby', description: 'One aggregate row per declared cover in the active seat’s span (holder rank, cover rank, ask window and its basis, derived standby state, days since the ask, the declared response deadline and days past it, the answer window and its age), one refused-only exposure row per duty line whose only declared covers declined, and one board summary row. NO person, NO name, NO seat id or label, NO duty label, NO note text, NO decision id. The acknowledged rate measures the REGISTER (the named person answered YES to this ask window), never a person’s willingness; an unanswered, lapsed or refused row is its own printed state and is BLANK in the rate column rather than zero.' },
@@ -6216,6 +6224,17 @@ export function buildScopeTable(state, scope, now) {
       // never a zero-length claim that a line said nothing in particular.
       const rows = onboardingMatrixCsvRows(state, { now, settings: state.settings || {} });
       const columns = ONBOARDING_MATRIX_CSV_COLUMNS.map((key) => ({ key, header: key }));
+      return { columns, rows };
+    }
+    case 'merit-matrix-parity': {
+      // CSV scope #116 (Schema v128 unchanged, ADR-0154). Built from the same
+      // read model the panel renders, so an exported figure is provably the
+      // figure that was printed. Aggregate only: basis points and counts, never
+      // a salary, a name, a manager id or an individual increase. A cohort below
+      // the declared floor, an unpriced row and a pool that moved no money all
+      // export BLANK figures with the reason printed, never a zero.
+      const rows = meritParityCsvRows(state, { now, settings: state.settings || {} });
+      const columns = MERIT_PARITY_CSV_COLUMNS.map((key) => ({ key, header: key }));
       return { columns, rows };
     }
     case 'role-clarity': {
