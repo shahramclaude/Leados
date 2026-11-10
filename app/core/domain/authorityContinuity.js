@@ -65,9 +65,10 @@
 import { dayKey } from '../time.js';
 import { LEADER_ID } from './chain.js';
 import { buildSeats, activeSeat } from './seat.js';
-import { buildMatrix, matrixLineScopeFor } from './matrix.js';
+import { buildMatrix, matrixJointApex, matrixLineScopeFor } from './matrix.js';
 import { linksForEntity } from './cases.js';
 import { buildMeritStructure, compareFrozenStructure } from './meritStructure.js';
+import { normalizeAuthorityReaffirmations } from './authorityReaffirmationSchema.js';
 import {
   AUTHORITY_CONTINUITY_CONVENTIONS,
   AUTHORITY_CONTINUITY_CSV_COLUMNS,
@@ -78,6 +79,8 @@ import {
   AUTHORITY_CONTINUITY_TYPE_KEYS,
   AUTHORITY_CONTINUITY_TYPES,
   AUTHORITY_CONTINUITY_VERDICTS,
+  AUTHORITY_REAFFIRMATION_SETTLEMENTS,
+  authoritySettlementMeta,
 } from './authorityContinuityRegistry.js';
 
 const VERDICT_META = new Map(AUTHORITY_CONTINUITY_VERDICTS.map((v) => [v.key, v]));
@@ -217,7 +220,7 @@ function rightHoldersAtDate(matrixAtDate, personId, rightKey) {
  * reader uses, so the two modules can never disagree about whether a cycle
  * drifted.
  */
-function readMeritCycles(state, { now, settings }, cache) {
+function readMeritCycles(state, { now, settings, rosterIds }, cache) {
   const rows = [];
   const cycles = Array.isArray(state?.meritCycles) ? state.meritCycles : [];
   for (const cycle of cycles) {
@@ -233,6 +236,17 @@ function readMeritCycles(state, { now, settings }, cache) {
         : comparison.key === 'not-frozen'
           ? 'unattributed'
           : 'unreadable';
+    const diffPeople = [...new Set(
+      (comparison.differences || [])
+        .map((d) => d?.personId)
+        .filter((pid) => pid && (!rosterIds || rosterIds.has(pid))),
+    )];
+    const fallbackPeople = [...new Set(
+      [
+        ...(Array.isArray(cycle.entries) ? cycle.entries.map((e) => e?.personId) : []),
+        ...(Array.isArray(frozen?.rows) ? frozen.rows.map((r) => r?.personId) : []),
+      ].filter((pid) => pid && (!rosterIds || rosterIds.has(pid))),
+    )];
     rows.push({
       recordId: cycle.id || null,
       type: 'merit-cycle',
@@ -254,6 +268,7 @@ function readMeritCycles(state, { now, settings }, cache) {
             ? `${comparison.differenceN} difference(s) between the frozen structure and the authority in force on ${asOf}.`
             : null,
       subjectN: frozen?.rowN ?? 0,
+      subjectIds: diffPeople.length ? diffPeople : fallbackPeople,
       rightKey: AUTHORITY_CONTINUITY_RIGHTS['merit-cycle'].key,
       rightLabel: AUTHORITY_CONTINUITY_RIGHTS['merit-cycle'].label,
       route: 'frozen-structure',
@@ -351,6 +366,7 @@ function readDecisions(state, { now, settings, nameIndex, rosterIds }, cache) {
       differences: comparison.differences.slice(0, AUTHORITY_CONTINUITY_LIMITS.differencesPerRecord),
       reason: comparison.reason,
       subjectN: subjects.length,
+      subjectIds: subjects.filter((pid) => rosterIds.has(pid)),
       rightKey: AUTHORITY_CONTINUITY_RIGHTS.decision.key,
       rightLabel: AUTHORITY_CONTINUITY_RIGHTS.decision.label,
       route: comparison.route,
@@ -470,11 +486,169 @@ function readBoardMemos(state, { now, settings, rosterIds }, cache) {
 }
 
 /** The display name of a roster person, or their id when they hold no record. */
-function ownerNameOf(state, personId) {
+export function ownerNameOf(state, personId) {
   if (personId === LEADER_ID) return state?.settings?.leaderName || 'You';
   const person = (Array.isArray(state?.people) ? state.people : [])
     .find((p) => p && p.id === personId);
   return text(person?.name) || personId;
+}
+
+/**
+ * Resolve who holds live decision-right authority TODAY for one frozen record.
+ *
+ * Never picks between competing line holders: when a subject's right is
+ * contested across lines or multiple recipients sit under different managers,
+ * every holder is preserved in `holderIds` and `matrixJointApex` computes the
+ * minimal joint principal(s) above them (reporting `apexAmbiguous: true` on a
+ * diamond tie rather than guessing one branch).
+ */
+export function resolveCurrentAuthority(state, row, liveMatrix, rosterIds) {
+  if (!row || row.verdict !== 'drifted') {
+    return {
+      applicable: false,
+      state: 'not-applicable',
+      holderIds: [],
+      underAuthorityIds: [],
+      authorityKey: '',
+      hasUnownedSubject: false,
+      hasContestedSubject: false,
+      targetId: null,
+      apexIds: [],
+      apexAmbiguous: false,
+    };
+  }
+
+  let hasUnownedSubject = false;
+  let hasContestedSubject = false;
+  let holderIds = [];
+
+  if (row.type === 'merit-cycle' || (row.type === 'decision' && row.route === 'subject')) {
+    const subjects = (Array.isArray(row.subjectIds) ? row.subjectIds : [])
+      .filter((pid) => rosterIds.has(pid));
+    if (!subjects.length) {
+      hasUnownedSubject = true;
+    } else {
+      const holderSet = new Set();
+      for (const pid of subjects) {
+        const right = rightHoldersAtDate(liveMatrix, pid, row.rightKey);
+        if (right.state === 'unowned') hasUnownedSubject = true;
+        if (right.state === 'contested') hasContestedSubject = true;
+        for (const h of right.holders) {
+          if (rosterIds.has(h)) holderSet.add(h);
+        }
+      }
+      holderIds = [...holderSet].sort();
+    }
+  } else {
+    // Span route (`decision` with no resolvable subject, or `board-memo`):
+    // if the named person now leads a span today they hold span authority;
+    // otherwise the active line managers above that person in today's matrix
+    // hold authority over their work.
+    const originId = row.authorityPersonId && rosterIds.has(row.authorityPersonId)
+      ? row.authorityPersonId
+      : null;
+    const chainSpan = originId ? Number(liveMatrix?.chain?.nodes?.get(originId)?.span) || 0 : 0;
+    const lineSpan = originId
+      ? (liveMatrix?.linesByManager?.get(originId) || []).filter((l) => l && l.role !== 'primary').length
+      : 0;
+    if (originId && (chainSpan > 0 || lineSpan > 0)) {
+      holderIds = [originId];
+    } else if (originId) {
+      const parentLines = liveMatrix?.linesByPerson?.get(originId) || [];
+      holderIds = [...new Set(parentLines.map((l) => l.managerId).filter((id) => id && rosterIds.has(id)))].sort();
+      if (!holderIds.length && rosterIds.has(LEADER_ID)) holderIds = [LEADER_ID];
+      hasContestedSubject = holderIds.length > 1;
+    } else {
+      hasUnownedSubject = true;
+    }
+  }
+
+  if (!holderIds.length || hasUnownedSubject) {
+    return {
+      applicable: true,
+      state: 'unowned',
+      holderIds,
+      underAuthorityIds: [LEADER_ID],
+      authorityKey: holderIds.length ? `unowned:${holderIds.join(',')}` : `unowned:${LEADER_ID}`,
+      hasUnownedSubject: true,
+      hasContestedSubject,
+      targetId: null,
+      apexIds: [],
+      apexAmbiguous: false,
+    };
+  }
+
+  if (holderIds.length === 1) {
+    return {
+      applicable: true,
+      state: 'clear',
+      holderIds,
+      underAuthorityIds: holderIds,
+      authorityKey: holderIds[0],
+      hasUnownedSubject: false,
+      hasContestedSubject: false,
+      targetId: holderIds[0],
+      apexIds: holderIds,
+      apexAmbiguous: false,
+    };
+  }
+
+  const apex = matrixJointApex(liveMatrix, holderIds);
+  const apexAmbiguous = Boolean(apex.ambiguous || apex.disconnected || !apex.unique);
+  return {
+    applicable: true,
+    state: hasContestedSubject ? 'contested' : 'multi-principal',
+    holderIds,
+    underAuthorityIds: holderIds,
+    authorityKey: holderIds.join(','),
+    hasUnownedSubject: false,
+    hasContestedSubject,
+    targetId: apex.unique ? apex.apexId : null,
+    apexIds: apex.apexIds || [],
+    apexAmbiguous,
+  };
+}
+
+/**
+ * Standing check: may `seat` settle (`stand-behind` / `refer-reopen`) a
+ * drifted frozen record whose live authority is `currentAuthority`?
+ *
+ *  - Full-access operator view and workspace leader (`LEADER_ID`) always may.
+ *  - Unowned right: no subordinate manager may claim a right nobody holds.
+ *  - Single holder `[M]`: `M` or any DAG leadership ancestor of `M`.
+ *  - Multiple / contesting holders `[M1, M2, ...]`: ONLY a common DAG ancestor
+ *    above ALL holders (starting at `matrixJointApex`). Neither competing line
+ *    holder may unilaterally sign off for the other.
+ */
+export function canSettleAuthority(seat, currentAuthority, liveMatrix) {
+  if (!seat || seat.readOnly) {
+    return { allow: false, reason: 'The operating seat is unresolved and read-only.' };
+  }
+  if (!currentAuthority?.applicable) {
+    return { allow: false, reason: 'Only drifted frozen decisions can be settled.' };
+  }
+  if (seat.fullAccess || seat.isLeader || seat.id === LEADER_ID) {
+    return { allow: true, reason: '' };
+  }
+  if (currentAuthority.state === 'unowned') {
+    return {
+      allow: false,
+      reason: 'The relevant decision right is currently unowned on at least one subject, so no subordinate seat may claim it. Declare the right holder on the matrix lines first, or settle from the workspace apex.',
+    };
+  }
+  const coversAll = currentAuthority.holderIds.every((hid) =>
+    hid === seat.id || Boolean(liveMatrix?.nodes?.get(hid)?.ancestors?.has(seat.id)));
+  if (coversAll) return { allow: true, reason: '' };
+  if (currentAuthority.holderIds.length > 1) {
+    return {
+      allow: false,
+      reason: 'Current authority spans multiple managers, so no single line holder may sign off on a peer’s behalf. Escalate to a joint matrix principal above all current right holders.',
+    };
+  }
+  return {
+    allow: false,
+    reason: 'Only the manager who currently holds the relevant right in the live matrix (or a leadership ancestor above them) may settle this drifted record.',
+  };
 }
 
 /**
@@ -620,10 +794,20 @@ export function buildAuthorityContinuity(state, {
   const cache = new Map();
 
   const allRows = [
-    ...readMeritCycles(state, { now, settings: effectiveSettings }, cache),
+    ...readMeritCycles(state, { now, settings: effectiveSettings, rosterIds }, cache),
     ...readDecisions(state, { now, settings: effectiveSettings, nameIndex, rosterIds }, cache),
     ...readBoardMemos(state, { now, settings: effectiveSettings, rosterIds }, cache),
   ];
+
+  // Live matrix TODAY — used ONLY to resolve who holds current authority on a
+  // drifted record and whether an earlier human settlement is still live or
+  // has gone `stale` after a subsequent re-org. Never used to alter `verdict`.
+  const liveMatrix = buildMatrix(state, { now, settings: effectiveSettings });
+  const acts = normalizeAuthorityReaffirmations(state?.authorityReaffirmations);
+  const latestActByKey = new Map();
+  for (const act of acts) {
+    latestActByKey.set(`${act.recordType}|${act.recordId}`, act);
+  }
 
   /* ---- seat scoping ---------------------------------------------------- */
   //
@@ -633,43 +817,107 @@ export function buildAuthorityContinuity(state, {
   // record has no resolvable subject — by the approver's own span.
   const scoped = [];
   const outOfScopeN = { 'merit-cycle': 0, decision: 0, 'board-memo': 0 };
-  for (const row of allRows) {
-    if (!scopeSet) { scoped.push(row); continue; }
-    let visible = false;
-    if (row.type === 'merit-cycle') {
-      const asOfState = asOfStructure(state, row.asOf, { now, settings: effectiveSettings }, cache);
-      visible = [...asOfState.perPerson.keys()].some((id) => inScope(id));
-    } else {
-      const subjects = row.type === 'decision'
-        ? resolveSubjects(state, row.recordId, rosterIds)
-        : [];
-      if (subjects.length) {
-        visible = subjects.some((id) => inScope(id));
+  for (const rawRow of allRows) {
+    let visible = !scopeSet;
+    if (scopeSet) {
+      if (rawRow.type === 'merit-cycle') {
+        const asOfState = asOfStructure(state, rawRow.asOf, { now, settings: effectiveSettings }, cache);
+        visible = [...asOfState.perPerson.keys()].some((id) => inScope(id));
       } else {
-        const resolved = resolveParticipant(nameIndex, row.frozenAuthority || '');
-        visible = resolved.resolved ? inScope(resolved.personId) : false;
+        const subjects = rawRow.type === 'decision'
+          ? resolveSubjects(state, rawRow.recordId, rosterIds)
+          : [];
+        if (subjects.length) {
+          visible = subjects.some((id) => inScope(id));
+        } else {
+          const resolved = resolveParticipant(nameIndex, rawRow.frozenAuthority || '');
+          visible = resolved.resolved ? inScope(resolved.personId) : false;
+        }
       }
     }
-    if (visible) {
-      /* ---- the authority NAME is scoped, not just the record ----------- */
-      //
-      // A record can be in scope because it CONCERNS someone in the seat's
-      // span while the authority it names sits outside it. The concordance
-      // module withholds exactly that name; this register does the same, so a
-      // line manager cannot learn who approved a decision about their person
-      // by reading a panel they are entitled to open. The VERDICT and the
-      // counts always survive — only the name is withheld.
-      if (row.authorityPersonId && !inScope(row.authorityPersonId)) {
-        scoped.push({
-          ...row,
-          authorityName: null,
-          authorityWithheld: true,
-          authorityWithheldReason: 'The authority this record names sits outside this seat’s span, so the name is withheld. The verdict and the counts are unaffected.',
-        });
-        continue;
+    if (!visible) {
+      outOfScopeN[rawRow.type] += 1;
+      continue;
+    }
+
+    const currentAuthorityRaw = resolveCurrentAuthority(state, rawRow, liveMatrix, rosterIds);
+    let currentAuthorityWithheld = false;
+    const holderNames = currentAuthorityRaw.holderIds.map((hid) => {
+      if (!inScope(hid) && seatRow?.id !== hid) {
+        currentAuthorityWithheld = true;
+        return null;
       }
-      scoped.push(row);
-    } else outOfScopeN[row.type] += 1;
+      return ownerNameOf(state, hid);
+    });
+    const targetName = currentAuthorityRaw.targetId
+      ? (inScope(currentAuthorityRaw.targetId) || seatRow?.id === currentAuthorityRaw.targetId
+          ? ownerNameOf(state, currentAuthorityRaw.targetId)
+          : null)
+      : null;
+    if (currentAuthorityRaw.targetId && !targetName) currentAuthorityWithheld = true;
+
+    const currentAuthority = {
+      ...currentAuthorityRaw,
+      holderNames: holderNames.filter(Boolean),
+      targetName,
+      withheld: currentAuthorityWithheld,
+    };
+
+    const act = rawRow.recordId ? latestActByKey.get(`${rawRow.type}|${rawRow.recordId}`) || null : null;
+    let settlement = AUTHORITY_REAFFIRMATION_SETTLEMENTS.NOT_APPLICABLE;
+    let reaffirmation = null;
+    if (act) {
+      const decidedByVisible = inScope(act.decidedBySeatId) || seatRow?.id === act.decidedBySeatId;
+      reaffirmation = {
+        actId: act.id,
+        outcome: act.outcome,
+        decidedOn: act.decidedOn,
+        decidedBySeatId: decidedByVisible ? act.decidedBySeatId : null,
+        decidedByName: decidedByVisible ? ownerNameOf(state, act.decidedBySeatId) : null,
+        decidedByWithheld: !decidedByVisible,
+        via: act.via,
+        underAuthorityIds: act.underAuthorityIds,
+        reason: act.reason,
+        referralDecisionId: act.referralDecisionId,
+      };
+    }
+    if (rawRow.verdict === 'drifted') {
+      if (!act) {
+        settlement = AUTHORITY_REAFFIRMATION_SETTLEMENTS.UNSETTLED;
+      } else {
+        const expected = currentAuthorityRaw.underAuthorityIds;
+        const sameHolders = act.underAuthorityIds.length === expected.length
+          && act.underAuthorityIds.every((id, idx) => id === expected[idx]);
+        if (!sameHolders) {
+          settlement = AUTHORITY_REAFFIRMATION_SETTLEMENTS.STALE;
+        } else if (act.outcome === 'stand-behind') {
+          settlement = AUTHORITY_REAFFIRMATION_SETTLEMENTS.SETTLED;
+        } else {
+          settlement = AUTHORITY_REAFFIRMATION_SETTLEMENTS.REFERRED;
+        }
+      }
+    }
+    const settlementMeta = authoritySettlementMeta(settlement);
+    const standingVerdict = canSettleAuthority(seatRow, currentAuthorityRaw, liveMatrix);
+
+    /* ---- the authority NAME is scoped, not just the record ----------- */
+    const withholdOriginal = Boolean(scopeSet && rawRow.authorityPersonId && !inScope(rawRow.authorityPersonId));
+    scoped.push({
+      ...rawRow,
+      ...(withholdOriginal ? {
+        authorityName: null,
+        authorityWithheld: true,
+        authorityWithheldReason: 'The authority this record names sits outside this seat’s span, so the name is withheld. The verdict and the counts are unaffected.',
+      } : {}),
+      settlement,
+      settlementLabel: settlementMeta.label,
+      settlementTone: settlementMeta.tone,
+      settlementDetail: settlementMeta.detail,
+      currentAuthority,
+      reaffirmation,
+      canSettle: rawRow.verdict === 'drifted' && standingVerdict.allow,
+      settleRefusalReason: rawRow.verdict === 'drifted' && !standingVerdict.allow ? standingVerdict.reason : null,
+    });
   }
 
   /* ---- the population -------------------------------------------------- */
@@ -699,6 +947,10 @@ export function buildAuthorityContinuity(state, {
       coveredN: coveredRows.length,
       uncoveredN: uncoveredRows.length,
       driftedN: rows.filter((row) => row.verdict === 'drifted').length,
+      settledN: rows.filter((row) => row.settlement === 'settled').length,
+      referredN: rows.filter((row) => row.settlement === 'referred').length,
+      staleN: rows.filter((row) => row.settlement === 'stale').length,
+      unsettledDriftedN: rows.filter((row) => row.settlement === 'unsettled').length,
       unattributedN: rows.filter((row) => row.verdict === 'unattributed').length,
       unreadableN: uncoveredRows.length,
       attributableN: rows.filter((row) => row.verdict === 'attributable').length,
@@ -720,6 +972,20 @@ export function buildAuthorityContinuity(state, {
   const driftedN = byVerdict.get('drifted') || 0;
   const unattributedN = byVerdict.get('unattributed') || 0;
   const attributableN = byVerdict.get('attributable') || 0;
+  const settledN = scoped.filter((row) => row.settlement === 'settled').length;
+  const referredN = scoped.filter((row) => row.settlement === 'referred').length;
+  const staleN = scoped.filter((row) => row.settlement === 'stale').length;
+  const unsettledDriftedN = scoped.filter((row) => row.settlement === 'unsettled').length;
+  const ambiguousApexN = scoped.filter((row) =>
+    row.verdict === 'drifted'
+    && (row.settlement === 'unsettled' || row.settlement === 'stale')
+    && row.currentAuthority?.apexAmbiguous,
+  ).length;
+  const unownedAuthorityN = scoped.filter((row) =>
+    row.verdict === 'drifted'
+    && (row.settlement === 'unsettled' || row.settlement === 'stale')
+    && row.currentAuthority?.state === 'unowned',
+  ).length;
   const coveredAgree = coveredN > 0 && driftedN === 0 && unattributedN === 0;
 
   const reasons = [];
@@ -740,6 +1006,39 @@ export function buildAuthorityContinuity(state, {
   const populationClaimReason = populationClaim
     ? `All ${coveredN} comparable frozen decision record(s) still name the authority that was in force on their own date, and the population is complete.`
     : reasons.join(' ');
+
+  /* ---- THE RECONCILED CLAIM (ADR-0159) --------------------------------- */
+  //
+  // Reported BESIDE `populationClaim`, never overwriting it. `populationClaim`
+  // asks whether structure held without intervention; `reconciledClaim` asks
+  // whether every comparable record is either structurally attributable OR has
+  // been explicitly stood behind by today's live authority (with zero
+  // unreadable, unattributed, unsettled, stale or referred records).
+  const reconciledReasons = [];
+  if (coveredN < AUTHORITY_CONTINUITY_CONVENTIONS.populationFloor) {
+    reconciledReasons.push(`Only ${coveredN} frozen decision record(s) could be compared, below the declared floor of ${AUTHORITY_CONTINUITY_CONVENTIONS.populationFloor}.`);
+  }
+  if (uncovered.length) {
+    reconciledReasons.push(`${uncovered.length} unreadable record(s) remain; an unreadable record cannot be settled by re-affirmation.`);
+  }
+  if (unattributedN) {
+    reconciledReasons.push(`${unattributedN} unattributed record(s) name no original authority; missing original attribution cannot be supplied retroactively by re-affirmation.`);
+  }
+  if (unsettledDriftedN) {
+    reconciledReasons.push(`${unsettledDriftedN} drifted record(s) remain unsettled under today's live authority.`);
+  }
+  if (staleN) {
+    reconciledReasons.push(`${staleN} earlier settlement(s) are now stale because live matrix authority moved again.`);
+  }
+  if (referredN) {
+    reconciledReasons.push(`${referredN} drifted record(s) were referred to governed re-decision and do not stand as affirmed.`);
+  }
+  const reconciledClaim = reconciledReasons.length === 0;
+  const reconciledClaimReason = reconciledClaim
+    ? driftedN > 0
+      ? `All ${coveredN} comparable frozen decision record(s) are accounted for (${attributableN} structurally unchanged; ${settledN} drifted and explicitly stood behind by today's live authority), with 0 unreadable and 0 unattributed.`
+      : `All ${coveredN} comparable frozen decision record(s) reproduce their original authority without needing human settlement.`
+    : reconciledReasons.join(' ');
 
   /* ---- the bounded table ----------------------------------------------- */
   const rank = (key) => VERDICT_META.get(key)?.rank ?? 99;
@@ -771,17 +1070,37 @@ export function buildAuthorityContinuity(state, {
     });
   }
 
+  if (ambiguousApexN) {
+    refusals.push({
+      kind: 'ambiguous-joint-apex',
+      detail: `${ambiguousApexN} drifted record(s) have contesting current authorities whose common principals tie in a matrix diamond, so no single principal was guessed automatically; either joint principal or the workspace leader must settle them directly.`,
+    });
+  }
+  if (unownedAuthorityN) {
+    refusals.push({
+      kind: 'unowned-current-right',
+      detail: `${unownedAuthorityN} drifted record(s) have at least one subject whose relevant right is currently unowned in the live matrix, so no subordinate manager was assigned a reconciliation task.`,
+    });
+  }
+
   return {
     engineVersion: AUTHORITY_CONTINUITY_ENGINE_VERSION,
     today,
     hasMatrix: hasDeclaredMatrix(state),
     rows: shown,
+    allRows: ordered,
     rowN: ordered.length,
     remainderN,
     totalN: scoped.length,
     coveredN,
     uncoveredN: uncovered.length,
     driftedN,
+    settledN,
+    referredN,
+    staleN,
+    unsettledDriftedN,
+    ambiguousApexN,
+    unownedAuthorityN,
     unattributedN,
     attributableN,
     uncovered,
@@ -790,6 +1109,8 @@ export function buildAuthorityContinuity(state, {
     coveredAgree,
     populationClaim,
     populationClaimReason,
+    reconciledClaim,
+    reconciledClaimReason,
     populationFloor: AUTHORITY_CONTINUITY_CONVENTIONS.populationFloor,
     refusals,
     outOfScopeN,
@@ -800,6 +1121,7 @@ export function buildAuthorityContinuity(state, {
     rights: AUTHORITY_CONTINUITY_RIGHTS,
     seat: seatRow,
     scope: scopeSet,
+    liveMatrix,
   };
 }
 
@@ -820,6 +1142,9 @@ export function authorityContinuityBriefLines(report) {
   lines.push(`Matrix authority continuity — ${report.totalN} frozen decision record(s) in scope, ${report.coveredN} comparable.`);
   lines.push(report.populationClaimReason);
   lines.push(`Attributable ${report.attributableN}; drifted ${report.driftedN}; no authority named ${report.unattributedN}; unreadable ${report.uncoveredN}.`);
+  if (report.driftedN > 0) {
+    lines.push(`Drift settlement: stood behind ${report.settledN}; referred to re-open ${report.referredN}; stale ${report.staleN}; unsettled ${report.unsettledDriftedN}. ${report.reconciledClaimReason}`);
+  }
   for (const [, bucket] of report.byType) {
     if (!bucket.totalN) continue;
     lines.push(`${bucket.label}: ${bucket.totalN} record(s) — attributable ${bucket.attributableN}, drifted ${bucket.driftedN}, unattributed ${bucket.unattributedN}, unreadable ${bucket.uncoveredN}.`);
@@ -837,6 +1162,11 @@ export function authorityContinuityBriefLines(report) {
  */
 export function authorityContinuityCsvRows(report) {
   if (!report) return [];
+  const settledN = report.settledN ?? 0;
+  const referredN = report.referredN ?? 0;
+  const staleN = report.staleN ?? 0;
+  const unsettledN = report.unsettledDriftedN ?? report.driftedN ?? 0;
+  const settlementReconciles = settledN + referredN + staleN + unsettledN === report.driftedN;
   const base = {
     row_kind: 'summary',
     type: 'all',
@@ -848,13 +1178,23 @@ export function authorityContinuityCsvRows(report) {
     unreadable_n: report.uncoveredN,
     attributable_n: report.attributableN,
     difference_n: report.driftedN,
+    drifted_settled_n: settledN,
+    drifted_referred_n: referredN,
+    drifted_stale_n: staleN,
+    drifted_unsettled_n: unsettledN,
     population_claim: report.populationClaim ? 'granted' : 'refused',
     population_claim_reason: report.populationClaimReason,
-    reconciles: report.coveredN + report.uncoveredN === report.totalN ? 'yes' : 'no',
+    reconciled_claim: report.reconciledClaim ? 'granted' : 'refused',
+    reconciled_claim_reason: report.reconciledClaimReason || '',
+    reconciles: report.coveredN + report.uncoveredN === report.totalN && settlementReconciles ? 'yes' : 'no',
   };
   const rows = [base];
   for (const [, bucket] of report.byType) {
     if (!bucket.totalN) continue;
+    const bSettled = bucket.settledN ?? 0;
+    const bReferred = bucket.referredN ?? 0;
+    const bStale = bucket.staleN ?? 0;
+    const bUnsettled = bucket.unsettledDriftedN ?? bucket.driftedN ?? 0;
     rows.push({
       row_kind: 'type',
       type: bucket.key,
@@ -866,9 +1206,16 @@ export function authorityContinuityCsvRows(report) {
       unreadable_n: bucket.unreadableN,
       attributable_n: bucket.attributableN,
       difference_n: bucket.differenceN,
+      drifted_settled_n: bSettled,
+      drifted_referred_n: bReferred,
+      drifted_stale_n: bStale,
+      drifted_unsettled_n: bUnsettled,
       population_claim: '',
       population_claim_reason: '',
-      reconciles: bucket.coveredN + bucket.uncoveredN === bucket.totalN ? 'yes' : 'no',
+      reconciled_claim: '',
+      reconciled_claim_reason: '',
+      reconciles: bucket.coveredN + bucket.uncoveredN === bucket.totalN
+        && bSettled + bReferred + bStale + bUnsettled === bucket.driftedN ? 'yes' : 'no',
     });
   }
   return rows.map((row) => ({

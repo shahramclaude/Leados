@@ -76,6 +76,10 @@ const groups = [
   // by accident.
   ['reaffirm-matrix-line', 'lineReaffirm lineRelease lineReaffirmationRead lineReaffirmationCandidates lineReaffirmationScan'],
   ['answer-line-reaffirmation', 'lineReaffirmationAccept lineReaffirmationObject'],
+  // ADR-0159: Frozen Authority Re-Affirmation. Standing behind or referring a
+  // drifted frozen decision is strictly checked in the action against live
+  // matrix RAPID authority (`canSettleAuthority`).
+  ['reaffirm-frozen-authority', 'authorityReaffirmStandBehind authorityReaffirmRefer authorityContinuityScan'],
   // ADR-0152: settling an obligation an ENDED line left behind. Recording the
   // remedy is the manager's own act (the action narrows it to a seat that reaches
   // the person, and a carry must name a live line holder); the scan changes no
@@ -394,7 +398,10 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // enforcement while the merit cycle it reads is still gated. The reading is
 // aggregate-plus-cycle scoped and the export carries no identity at all; it
 // writes nothing, settles no authority and stores no figure.
-'meritParityReport', 'meritParityBriefText', 'meritParityCsv', 'meritParityAttentionCount']);
+'meritParityReport', 'meritParityBriefText', 'meritParityCsv', 'meritParityAttentionCount',
+// ADR-0156 / ADR-0159: the authority-continuity and drift-settlement read surface.
+// Seat-scoped inside `buildAuthorityContinuity` (outside-span names withheld).
+'authorityContinuityReport', 'authorityContinuityBriefText', 'authorityContinuityCsvRows', 'authorityContinuityAttentionCount']);
 const refusal = (reason) => ({ ok: false, code: 'scope-refusal', error: reason, field: 'scope' });
 
 /** ADR-0087: under enforcement, boundary-management commands stay reachable

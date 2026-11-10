@@ -111,6 +111,7 @@ import { lineReaffirmationRule } from './lineReaffirmationRules.js';
 import { structureHistoryRule } from './structureHistoryRules.js';
 import { onboardingMatrixRule } from './onboardingMatrixRules.js';
 import { lineExitRule } from './lineExitRules.js';
+import { authorityContinuityRule } from './authorityContinuityRules.js';
 import { sealRule } from './sealRules.js';
 // ADR-0092: the Differencing Defender declares its contract like every other rule.
 import { differencingRule } from './differencingRules.js';
@@ -853,6 +854,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'lineExitRules.js',
     purpose: 'RULE-LEX-01: a reporting line that has been DATED OUT is reconciled against the obligations it left open. For every ended line that still carries an open obligation (an unacknowledged line onboarding brief, an unanswered review input ask), ONE owned, dated settlement ask is issued to the manager who HELD that line, naming the obligations, the day the line ended and the declared settlement window. Typed provenance only (`concerns` from the person to the manager, `issues-obligation` from the person to the task, `rolls-up-to` per leadership ancestor in the matrix DAG). It fires on a line being dated out, on a completed review and on an explicit scan — never on a read. It issues NOTHING for a line key that resolves to no declaration (a task addressed to nobody could never close) and NOTHING for a manager no longer on the roster (an invented heir is the reassignment the module refuses); it never retires an obligation, never carries one, never edits an ask and never rates a person. Idempotent through a marker keyed on the LINE plus the exact open-obligation set, so a settled obligation is not re-chased and a newly opened one on the same line is; bounded by a per-transaction cap whose remainder is counted and retried, and inert in a single-chain workspace.',
     writes: ['delegations', 'links', 'lineExitMarkers'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: authorityContinuityRule,
+    module: 'authorityContinuityRules.js',
+    purpose: 'RULE-ACR-01: drifted frozen decisions (`merit-cycle`, `decision`, `board-memo`) whose settlement is `unsettled` or `stale` are reconciled against today\u2019s live matrix authority. Issues ONE owned, dated delegation to the unique current right holder or unique `matrixJointApex` principal above contesting/multi-principal holders (refusing to guess on diamond ties or unowned rights), closes superseded tasks once settled, and writes typed provenance only (`issues-obligation`, `rolls-up-to` per leadership ancestor in the matrix DAG). Never edits a frozen decision record; idempotent via `authorityReaffirmationMarkers`; bounded by a per-commit cap; inert on automatic commits in single-chain workspaces.',
+    writes: ['delegations', 'links', 'authorityReaffirmationMarkers'],
     emits: [],
     scansWorkspace: true,
   },
