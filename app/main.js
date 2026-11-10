@@ -778,6 +778,11 @@ export function parseRoute(hash) {
     // to this share of me" / "who accepted this project line".
     'line-consent': 'matrix', consent: 'matrix', 'matrix-consent': 'matrix',
     'accepted-share': 'matrix', 'shadow-accountability': 'matrix',
+    // ADR-0156: the names a chief types the week before a board asks — "can
+    // you prove who signed this" / "which of our decisions have drifted".
+    'authority-continuity': 'matrix', 'continuity': 'matrix',
+    'frozen-decisions': 'matrix', 'decision-attribution': 'matrix',
+    'attributable': 'matrix', 'authority-drift': 'matrix',
     // ADR-0149: the names a director types the week after a re-org — "what did
     // the org chart look like last quarter" / "why does this February acceptance
     // read against a manager who was not there".

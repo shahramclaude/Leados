@@ -1,3 +1,7 @@
+## 2026-11-10 — Are our frozen decisions still attributable to the authority that made them?
+
+Open `#/matrix?panel=continuity` for the Matrix Authority Continuity Register. It reads every frozen decision record the workspace stores — a finalised merit cycle, a decided decision record, a committed or frozen board memo — and compares the authority each record names against the authority that was in force on that record's own day. Four verdicts: still attributable, the authority has moved since the record was made, the record names no authority, or the record could not be read. The portfolio claim ("every frozen decision still names the authority that made it") is refused whenever any record could not be read, whenever any covered record disagreed, or whenever fewer than three records could be compared. A record whose authority moved is named, never rewritten, and no person is scored. The export carries counts and verdicts only — no record title, no name, no manager id. No setup or schema change.
+
 ## 2026-11-10 — Matrix line-term exposure
 
 Open `#/matrix?panel=lines` for a seat-scoped register of active additional lines with no declared end date, an end within the configured expiry horizon, or a later dated term. It prints stored dates, whole days remaining, distinct people, refused declarations and any row-cap remainder. Open-ended does not mean renewed or agreed; two-sided re-affirmation is not yet supported. Existing governed End actions remain available. No setup or schema change.
