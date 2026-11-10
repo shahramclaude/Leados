@@ -70,7 +70,7 @@ function verdictSection(report) {
           : h('p', { class: 'small' }, `${report.gapDirectionLabel}: the second-line median is ${bp(report.gapBps)} against the home-line median. This is an UNADJUSTED median difference inside a declared ±${MERIT_PARITY_TOLERANCE_BPS} bp band — descriptive, not causal, and not a finding of unfairness.`)),
     }),
     banner({
-      tone: report.authorityVerdict === 'contested' || report.authorityVerdict === 'unowned' ? 'warn' : 'info',
+      tone: ['unknown', 'contested', 'unowned'].includes(report.authorityVerdict) ? 'warn' : 'info',
       title: `Pay authority: ${report.authorityLabel}`,
       body: h('div', { class: 'stack-sm' },
         h('p', null, report.authorityDetail),
@@ -95,25 +95,25 @@ function statsSection(report) {
       stat({
         label: 'Second-line median',
         value: m.medianPrinted ? bp(m.medianBps) : 'withheld',
-        hint: m.medianPrinted ? `${m.zeroIncreaseN} zero increase(s)` : `fewer than ${MERIT_PARITY_FLOOR} priced people`,
+        hint: m.medianPrinted ? `${m.zeroIncreaseN} zero increase(s)` : m.medianWithheldReason,
         tone: m.medianPrinted ? '' : 'warn',
       }),
       stat({
         label: 'Home-line median',
         value: s.medianPrinted ? bp(s.medianBps) : 'withheld',
-        hint: s.medianPrinted ? `${s.zeroIncreaseN} zero increase(s)` : `fewer than ${MERIT_PARITY_FLOOR} priced people`,
+        hint: s.medianPrinted ? `${s.zeroIncreaseN} zero increase(s)` : s.medianWithheldReason,
         tone: s.medianPrinted ? '' : 'warn',
       }),
       stat({
         label: 'Gap (unadjusted)',
         value: report.gapBps === null ? 'withheld' : bp(report.gapBps),
-        hint: report.gapBps === null ? 'a figure the record cannot support is not printed' : report.gapDirectionLabel,
+        hint: report.gapBps === null ? report.gapReason : report.gapDirectionLabel,
         tone: report.verdict === 'divergent' ? 'warn' : report.gapBps === null ? 'warn' : 'good',
       }),
       stat({
         label: 'Second-line share of the pool',
         value: report.totals.matrixPoolShareBps === null ? 'withheld' : `${(report.totals.matrixPoolShareBps / 100).toFixed(2)}%`,
-        hint: report.totals.matrixPoolShareBps === null ? 'the pool moved no money' : 'of every cent this cycle spends',
+        hint: report.totals.matrixPoolShareBps === null ? report.poolShareReason : 'of every cent this cycle spends',
         tone: report.totals.matrixPoolShareBps === null ? 'warn' : '',
       }),
     ),
@@ -129,7 +129,7 @@ function cohortSection(report) {
       key: spec.key,
       label: h('div', { class: 'stack-sm' }, h('strong', null, spec.label), h('span', { class: 'muted tiny' }, spec.hint)),
       priced: h('div', { class: 'stack-sm' }, h('strong', null, String(c.includedN)), h('span', { class: 'muted tiny' }, `${c.rowsN} row(s) · ${c.excludedN} excluded`)),
-      median: c.medianPrinted ? bp(c.medianBps) : withheld(`Fewer than ${MERIT_PARITY_FLOOR} priced people in this cohort.`),
+      median: c.medianPrinted ? bp(c.medianBps) : withheld(c.medianWithheldReason),
       zero: String(c.zeroIncreaseN),
       levels: c.levelMix.length
         ? h('div', { class: 'row-gap' }, ...c.levelMix.map((l) => badge(`${l.label} ${l.n}`, 'neutral')))
@@ -256,7 +256,7 @@ function findingsSection(report) {
       ? h('div', { class: 'stack' },
         table({ caption: 'Structural findings for this cycle', columns, rows: report.findings }),
         report.cappedFindingsN ? h('p', { class: 'muted small' }, `${report.cappedFindingsN} further finding(s) are past the bounded list and counted, not dropped.`) : null)
-      : emptyState({ title: 'No contradictory structure and no divergence past the band', body: 'Every priced decision had exactly one declared pay holder, and the two cohort medians sat inside the declared band. That is the absence of a printed finding — not proof of fairness.' }),
+      : emptyState({ title: 'No structural finding printed', body: 'An absent finding is not proof of clear authority or fairness. Read the authority verdict, completeness and any withholding reasons above; a refused comparison cannot establish parity.' }),
   });
 }
 

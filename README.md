@@ -4,7 +4,7 @@ Open `#/matrix?panel=lines` for a seat-scoped register of active additional line
 
 ## 2026-11-10 — Incomplete merit pools
 
-In the matrix merit panel, level-matched medians and gaps are withheld with a reason when pay rows are excluded or the read limit is exceeded. The CSV reports the same refusal; a partial pool is not presented as a complete comparison.
+In `#/merit?panel=matrix`, incomplete pools now withhold cohort medians, pool share and cohort/level comparisons with the same reason in the panel, brief and CSV. Excluded, malformed, repeated-recipient and capped rows cannot produce a parity/divergence verdict or a reassuring single-line verdict. Counts reconcile classified, malformed and omitted rows separately from figure completeness. Pool share requires both disclosure floors; an unspent pool prints no gap. No setup or schema change.
 
 ## 2026-11-09 — A declared share of a person is an ask until two people answer it
 
