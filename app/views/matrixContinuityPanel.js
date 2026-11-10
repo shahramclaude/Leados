@@ -1,42 +1,40 @@
 /**
  * app/views/matrixContinuityPanel.js — `#/matrix?panel=continuity`, the Matrix
- * Authority Continuity Register (ADR-0156, Schema v128 unchanged).
+ * Authority Continuity & Drift Settlement Register (ADR-0156, ADR-0159, Schema v130).
  *
- * Four sections, four questions a per-module authority view cannot answer:
+ * Five sections:
  *
- *   Board      the PORTFOLIO claim: are our frozen decisions still attributable
- *              to the authority that made them? The claim and the counts that
- *              support it are printed as SEPARATE claims, and the claim is
- *              refused whenever any part of the population cannot be compared.
- *   Types      one row per frozen decision type, with its covered and uncovered
- *              populations and its verdict counts.
- *   Register   one row per frozen decision record: the date it was made, the
- *              authority it names, the verdict, and why.
+ *   Board      the TWO portfolio claims kept strictly apart:
+ *              (1) `populationClaim`: did structure hold without human
+ *                  intervention? Never overwritten by a re-affirmation.
+ *              (2) `reconciledClaim`: is every comparable frozen record either
+ *                  structurally attributable OR explicitly stood behind by
+ *                  today's live matrix authority (with 0 unreadable, 0
+ *                  unattributed, 0 unsettled, 0 stale and 0 referred)?
+ *   Types      one row per frozen decision type, with covered/uncovered and
+ *              drift-settlement counts.
+ *   Register   one row per frozen decision record: date, named authority,
+ *              verdict, live authority today, settlement state, and interactive
+ *              governed settlement controls (`Stand behind` / `Refer to re-open`)
+ *              when `ctx.api` is connected and the acting seat holds standing.
+ *   Brief/CSV  identity-free brief and aggregate CSV export (#117).
  *   Method     what is stored, what is derived, and what this register refuses.
- *
- * WHAT THIS SCREEN REFUSES TO PRINT
- * ---------------------------------
- *  - A "all attributable" claim over an incomplete population. The absence is
- *    printed beside the claim and the claim is REFUSED.
- *  - A drifted record as a wrong decision. It is a STRUCTURE MOVED UNDER A
- *    DECISION, and the screen says that.
- *  - A manager for a record that names none. It reads `unattributed`.
- *  - A record it could not read, dropped. It is counted and printed with its
- *    reason.
- *  - A total that is not the sum of the printed rows. Under a state mismatch the
- *    panel says so in words instead of printing a reassuring number.
  */
 
 import { h } from '../ui/dom.js';
 import { downloadText } from '../ui/download.js';
 import { card, stat, badge, banner, emptyState, table } from '../ui/components.js';
 import { serializeCsv } from '../core/csv.js';
-import { buildAuthorityContinuity, authorityContinuityBriefLines, authorityContinuityCsvRows } from '../core/domain/authorityContinuity.js';
+import {
+  buildAuthorityContinuity,
+  authorityContinuityBriefLines,
+  authorityContinuityCsvRows,
+} from '../core/domain/authorityContinuity.js';
 import {
   AUTHORITY_CONTINUITY_CSV_COLUMNS,
   AUTHORITY_CONTINUITY_LIMITS,
   AUTHORITY_CONTINUITY_VERDICTS,
-  authorityContinuityVerdict,
+  authoritySettlementMeta,
 } from '../core/domain/authorityContinuityRegistry.js';
 
 const num = (v) => (v === null || v === undefined || v === '' ? '—' : String(v));
@@ -44,12 +42,121 @@ const num = (v) => (v === null || v === undefined || v === '' ? '—' : String(v
 const VERDICT_BY_KEY = new Map(AUTHORITY_CONTINUITY_VERDICTS.map((v) => [v.key, v]));
 
 function toneFor(tone) {
-  return tone === 'bad' ? 'bad' : tone === 'warn' ? 'warn' : tone === 'good' ? 'good' : 'neutral';
+  if (tone === 'bad' || tone === 'danger') return 'bad';
+  if (tone === 'warn' || tone === 'warning' || tone === 'info') return 'warn';
+  if (tone === 'good' || tone === 'positive') return 'good';
+  return 'neutral';
 }
 
 function verdictBadge(key) {
   const meta = VERDICT_BY_KEY.get(key);
   return badge(meta?.label || key, toneFor(meta?.tone));
+}
+
+function settlementBadge(key) {
+  const meta = authoritySettlementMeta(key);
+  return badge(meta.label, toneFor(meta.tone));
+}
+
+function notify(ctx, message, kind = 'info') {
+  if (typeof ctx?.toast === 'function') ctx.toast(message, kind);
+}
+
+function refresh(ctx) {
+  if (typeof ctx?.rerender === 'function') ctx.rerender();
+  else if (typeof ctx?.render === 'function') ctx.render();
+}
+
+function renderLiveAuthorityCell(row) {
+  const auth = row.currentAuthority;
+  if (!auth?.applicable) return h('span', { class: 'muted small' }, '—');
+  if (auth.state === 'unowned') {
+    return h('span', { class: 'small' }, 'Unowned right in live matrix (apex only)');
+  }
+  const names = auth.holderNames?.length
+    ? auth.holderNames.join(', ')
+    : auth.withheld
+      ? 'outside this seat'
+      : '—';
+  if (auth.apexAmbiguous) {
+    return h('span', { class: 'small' }, `${names} · diamond tie (no guessed principal)`);
+  }
+  if (auth.holderIds.length > 1) {
+    const joint = auth.targetName || (auth.withheld ? 'outside this seat' : 'joint apex');
+    return h('span', { class: 'small' }, `${names} · joint principal: ${joint}`);
+  }
+  return h('span', { class: 'small' }, names);
+}
+
+function renderSettlementCell(row, api, ctx) {
+  if (row.verdict !== 'drifted') {
+    return h('span', { class: 'muted small' }, '—');
+  }
+  const parts = [h('div', null, settlementBadge(row.settlement))];
+  if (row.reaffirmation) {
+    const actor = row.reaffirmation.decidedByWithheld
+      ? 'outside this seat'
+      : (row.reaffirmation.decidedByName || 'operator');
+    parts.push(
+      h('div', { class: 'small muted' },
+        `${row.reaffirmation.decidedOn} · ${actor}: “${row.reaffirmation.reason}”`),
+    );
+  }
+  const canWrite = Boolean(
+    api
+    && typeof api.authorityReaffirmStandBehind === 'function'
+    && typeof api.authorityReaffirmRefer === 'function',
+  );
+  if (!canWrite) return h('div', { class: 'stack-xs' }, ...parts);
+
+  if (!row.canSettle) {
+    parts.push(h('div', { class: 'small muted' }, row.settleRefusalReason || 'Standing required to settle.'));
+    return h('div', { class: 'stack-xs' }, ...parts);
+  }
+
+  const inputEl = h('input', {
+    type: 'text',
+    class: 'input input-sm',
+    placeholder: 'State reason (min 8 chars)…',
+    'data-reaffirm-reason': `${row.type}:${row.recordId}`,
+  });
+
+  const runAction = (fn, okMsg) => {
+    const res = fn({
+      recordType: row.type,
+      recordId: row.recordId,
+      reason: inputEl.value,
+    });
+    if (!res?.ok) {
+      notify(ctx, res?.error || 'Settlement refused.', 'error');
+      return;
+    }
+    notify(ctx, okMsg, 'success');
+    refresh(ctx);
+  };
+
+  parts.push(
+    h('div', { class: 'row gap-sm wrap' },
+      inputEl,
+      row.settlement !== 'settled'
+        ? h('button', {
+          type: 'button',
+          class: 'btn btn-sm',
+          'data-reaffirm-stand': `${row.type}:${row.recordId}`,
+          onclick: () => runAction(api.authorityReaffirmStandBehind, 'Recorded stand-behind settlement.'),
+        }, 'Stand behind')
+        : null,
+      row.settlement !== 'referred'
+        ? h('button', {
+          type: 'button',
+          class: 'btn btn-sm',
+          'data-reaffirm-refer': `${row.type}:${row.recordId}`,
+          onclick: () => runAction(api.authorityReaffirmRefer, 'Opened governed re-decision for drifted record.'),
+        }, 'Refer to re-open')
+        : null,
+    ),
+  );
+  return h('div', { class: 'stack-xs' }, ...parts);
 }
 
 /**
@@ -60,6 +167,7 @@ function verdictBadge(key) {
  */
 export function renderContinuityPanel(ctx, opts = {}) {
   const state = ctx?.state || {};
+  const api = ctx?.api || null;
   const report = buildAuthorityContinuity(state, {
     now: opts.now || new Date(),
     settings: opts.settings || state.settings || null,
@@ -81,6 +189,10 @@ export function renderContinuityPanel(ctx, opts = {}) {
     coveredN: bucket.coveredN,
     uncoveredN: bucket.uncoveredN,
     driftedN: bucket.driftedN,
+    settledN: bucket.settledN,
+    referredN: bucket.referredN,
+    staleN: bucket.staleN,
+    unsettledDriftedN: bucket.unsettledDriftedN,
     unattributedN: bucket.unattributedN,
     attributableN: bucket.attributableN,
     unreadableN: bucket.unreadableN,
@@ -88,18 +200,8 @@ export function renderContinuityPanel(ctx, opts = {}) {
   }));
 
   const recordRows = report.rows.map((row) => ({
+    ...row,
     key: row.recordId || `${row.type}-${row.asOf}`,
-    type: row.type,
-    asOf: row.asOf,
-    label: row.label,
-    frozenAuthority: row.frozenAuthority,
-    authorityName: row.authorityName,
-    authorityWithheld: row.authorityWithheld,
-    authorityWithheldReason: row.authorityWithheldReason,
-    verdict: row.verdict,
-    reason: row.reason,
-    route: row.route,
-    differenceN: row.differenceN,
     className: row.verdict === 'attributable' ? '' : 'row-flag',
   }));
 
@@ -123,6 +225,16 @@ export function renderContinuityPanel(ctx, opts = {}) {
         body: report.populationClaimReason,
       }),
 
+    report.driftedN > 0
+      ? banner({
+        tone: report.reconciledClaim ? 'good' : 'warn',
+        title: report.reconciledClaim
+          ? 'Reconciled continuity claim GRANTED (structural drift settled by live authority)'
+          : 'Reconciled continuity claim REFUSED',
+        body: report.reconciledClaimReason,
+      })
+      : null,
+
     h('div', { class: 'stat-grid' },
       stat({
         label: 'Frozen decision records in scope',
@@ -138,8 +250,14 @@ export function renderContinuityPanel(ctx, opts = {}) {
       stat({
         label: 'Authority has moved',
         value: num(report.driftedN),
-        hint: 'the structure moved under the decision',
+        hint: `${report.settledN} stood behind · ${report.referredN} referred · ${report.staleN} stale · ${report.unsettledDriftedN} unsettled`,
         tone: report.driftedN ? 'bad' : '',
+      }),
+      stat({
+        label: 'Unsettled or stale drift',
+        value: num((report.unsettledDriftedN || 0) + (report.staleN || 0)),
+        hint: `${report.unsettledDriftedN} unsettled · ${report.staleN} stale after further drift`,
+        tone: (report.unsettledDriftedN || 0) + (report.staleN || 0) ? 'bad' : 'good',
       }),
       stat({
         label: 'No authority named',
@@ -159,14 +277,39 @@ export function renderContinuityPanel(ctx, opts = {}) {
         hint: `floor ${report.populationFloor} comparable record(s)`,
         tone: report.populationClaim ? 'good' : 'bad',
       }),
+      stat({
+        label: 'Reconciled claim',
+        value: report.reconciledClaim ? 'granted' : 'refused',
+        hint: 'attributable or stood behind by live authority',
+        tone: report.reconciledClaim ? 'good' : 'warn',
+      }),
     ),
+
+    api && typeof api.authorityContinuityScan === 'function'
+      ? h('div', { class: 'row gap' },
+        h('button', {
+          type: 'button',
+          class: 'btn',
+          'data-reaffirm-scan': 'true',
+          onclick: () => {
+            const res = api.authorityContinuityScan();
+            if (!res?.ok) {
+              notify(ctx, res?.error || 'Scan refused.', 'error');
+              return;
+            }
+            notify(ctx, 'Scanned frozen-decision portfolio for unsettled drift.', 'success');
+            refresh(ctx);
+          },
+        }, 'Re-run drift reconciliation scan'),
+      )
+      : null,
 
     card({
       title: 'The population, by frozen decision type',
-      subtitle: 'The covered and uncovered populations are printed separately for each type. An absence is never absorbed into a continuity claim.',
+      subtitle: 'The covered and uncovered populations and the ADR-0159 drift-settlement counts are printed separately for each type. An absence is never absorbed into a continuity claim.',
       body: typeRows.length
         ? table({
-          caption: 'Frozen decision records by type, with covered and uncovered populations',
+          caption: 'Frozen decision records by type, with covered, uncovered and settlement counts',
           columns: [
             { label: 'Type', key: 'label' },
             { label: 'Records', key: 'totalN' },
@@ -174,6 +317,10 @@ export function renderContinuityPanel(ctx, opts = {}) {
             { label: 'Unreadable', key: 'unreadableN' },
             { label: 'Attributable', key: 'attributableN' },
             { label: 'Drifted', key: 'driftedN' },
+            { label: 'Stood behind', key: 'settledN' },
+            { label: 'Referred', key: 'referredN' },
+            { label: 'Stale', key: 'staleN' },
+            { label: 'Unsettled', key: 'unsettledDriftedN' },
             { label: 'No authority', key: 'unattributedN' },
             { label: 'Differences', key: 'differenceN' },
           ],
@@ -184,10 +331,10 @@ export function renderContinuityPanel(ctx, opts = {}) {
 
     card({
       title: 'Every frozen decision record, worst first',
-      subtitle: 'Each row compares the authority the RECORD names against the authority that was in force on the record’s own day. A drifted row is a structure that moved under a decision — never a claim that the decision was wrong.',
+      subtitle: 'Each row compares the authority the RECORD names against the authority in force on the record’s own day, and resolves who holds live matrix authority TODAY so drifted records can be stood behind or referred without editing the frozen record.',
       body: recordRows.length
         ? table({
-          caption: 'Frozen decision records and their authority continuity verdict',
+          caption: 'Frozen decision records, authority continuity verdict, and live drift settlement',
           columns: [
             { label: 'Type', key: 'type' },
             { label: 'Decided on', key: 'asOf' },
@@ -203,6 +350,8 @@ export function renderContinuityPanel(ctx, opts = {}) {
               },
             },
             { label: 'Verdict', render: (row) => verdictBadge(row.verdict) },
+            { label: 'Live authority today', render: (row) => renderLiveAuthorityCell(row) },
+            { label: 'Settlement', render: (row) => renderSettlementCell(row, api, ctx) },
             {
               label: 'Why',
               render: (row) => h('span', { class: 'small muted' }, row.reason || '—'),
@@ -260,11 +409,11 @@ export function renderContinuityPanel(ctx, opts = {}) {
       title: 'Method',
       subtitle: 'What is stored, what is derived, and what this register refuses.',
       body: h('div', { class: 'stack-sm' },
-        h('p', null, 'Nothing is stored by this register. Every figure is derived on read from records the workspace already holds — a finalised merit cycle’s frozen structure block, a decision record’s DACI approver, a board memo’s owner — and from the SAME as-of structure engine (ADR-0155) and the SAME matrix engine (ADR-0140) the rest of the workspace uses. A read writes nothing, so a printed finding cannot drift from the rows it describes.'),
+        h('p', null, 'Frozen decisions are never edited on read or on settlement. Only append-only dated human settlements (`stand-behind` or `refer-reopen`) are stored in `authorityReaffirmations`; every continuity verdict, every live matrix standing check, every staleness flag after a subsequent re-org, and both portfolio claims (`populationClaim` vs `reconciledClaim`) are derived on read.'),
         h('ul', { class: 'stack-sm' },
           ...verdictCounts.map((v) => h('li', null, h('strong', null, `${v.label} (${v.n})`), ' — ', v.detail)),
         ),
-        h('p', { class: 'muted small' }, 'Two claims are kept apart and reported separately: the covered records agreeing is one fact; the whole portfolio agreeing is another. The second is refused whenever the covered population is below the declared floor, whenever any covered record did not agree, or whenever any record could not be read.'),
+        h('p', { class: 'muted small' }, 'Three claims are kept strictly apart: the covered records agreeing, the structural portfolio claim (`populationClaim`), and the human-settled reconciled claim (`reconciledClaim`). Unreadable and unattributed records refuse both portfolio claims and can never be re-affirmed.'),
         ...report.methods.map((m) => h('p', { class: 'small muted' }, h('strong', null, m.name), ' — ', m.why)),
         ...report.types.map((t) => h('p', { class: 'small muted' }, h('strong', null, t.label), ' — ', t.detail)),
       ),

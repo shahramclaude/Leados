@@ -140,6 +140,7 @@ import { lineReaffirmationRule } from './lineReaffirmationRules.js';
 import { structureHistoryRule } from './structureHistoryRules.js';
 import { onboardingMatrixRule } from './onboardingMatrixRules.js';
 import { lineExitRule } from './lineExitRules.js';
+import { authorityContinuityRule } from './authorityContinuityRules.js';
 
 
 // ADR-0087: the Operating Cadence Clock. Reads the finished queue after the
@@ -853,6 +854,14 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // whose remainder is counted and retried by a scan. It runs before the Operating
   // Seat so the obligation it opens rolls up the hierarchy in the SAME transaction.
   lineReaffirmationRule,
+  // ADR-0159: Frozen Authority Re-Affirmation & Drift Settlement (RULE-ACR-01).
+  // Reconciles drifted frozen decisions (`merit-cycle`, `decision`, `board-memo`)
+  // against today's live matrix authority, issuing one owned reconciliation
+  // delegation to the unique current right holder or unique `matrixJointApex`
+  // principal (never guessing on diamond ties or unowned rights) and closing
+  // superseded tasks once settled. Runs before `seatRule` so opened obligations
+  // roll up the hierarchy in the same atomic transaction.
+  authorityContinuityRule,
   // ADR-0076: the Operating Seat (vertical roll-up + enforced boundaries).
   // It reads the finished record after every module has propagated, then fans
   // each open item up every leadership ancestor in the reporting tree with one

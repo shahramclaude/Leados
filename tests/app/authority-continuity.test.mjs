@@ -759,6 +759,6 @@ test('a single-chain workspace with no frozen decisions reads EMPTY, not broken'
   assert.match(r.populationClaimReason, /below the declared floor/);
 });
 
-test('the schema is unchanged by this module', () => {
-  assert.equal(SCHEMA_VERSION, 129, 'ADR-0157 bumped the schema; this register still stores nothing of its own');
+test('the schema reflects ADR-0159 settlement storage while pure reads store nothing', () => {
+  assert.equal(SCHEMA_VERSION, 130, 'ADR-0159 bumped the schema to v130 for append-only settlements');
 });

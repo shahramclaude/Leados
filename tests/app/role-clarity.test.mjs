@@ -439,7 +439,7 @@ test('a hand-edited file cannot smuggle an unknown domain, right or standing int
 /* --------------------------------------------------------------- schema */
 
 test('schema v127→v128 is additive: existing briefs gain EMPTY marks, never invented ones', () => {
-  assert.equal(SCHEMA_VERSION, 129);
+  assert.equal(SCHEMA_VERSION, 130);
   const legacy = createEmptyState(ISO);
   legacy.people = roster();
   legacy.reportingLines = [projectLine()];
@@ -448,7 +448,7 @@ test('schema v127→v128 is additive: existing briefs gain EMPTY marks, never in
   legacy.schemaVersion = 127;
 
   const { raw: migrated } = migrate(JSON.parse(JSON.stringify(legacy)));
-  assert.equal(migrated.schemaVersion, 129);
+  assert.equal(migrated.schemaVersion, 130);
   assert.equal(migrated.onboardingLineBriefs.length, 1);
   assert.deepEqual(migrated.onboardingLineBriefs[0].domains, []);
   assert.equal(migrated.onboardingLineBriefs[0].decisionRight, '');
@@ -478,7 +478,7 @@ test('a single-chain workspace is inert end to end', () => {
 /* -------------------------------------------------------------------- CSV */
 
 test('CSV #115 is aggregate-only, exact-column, and reconciles row-for-row with the board', () => {
-  assert.equal(CSV_EXPORTS.length, 117, 'the register now holds 117 scopes (ADR-0156 #117, ADR-0157 #118)');
+  assert.equal(CSV_EXPORTS.length, 118, 'the register now holds 118 scopes (ADR-0156 #117, ADR-0158 #118)');
   const descriptor = CSV_EXPORTS.find((item) => item.key === 'role-clarity');
   assert.ok(descriptor, 'the role-clarity scope is registered');
   assert.equal(descriptor.group, 'analytics');

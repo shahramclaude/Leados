@@ -69,6 +69,7 @@ import {
 // first-person commands, one scan, and three aggregate reads that report `ok`.
 import { createLineConsentActions } from './core/domain/lineConsentActions.js';
 import { createLineReaffirmationActions } from './core/domain/lineReaffirmationActions.js';
+import { createAuthorityReaffirmationActions } from './core/domain/authorityReaffirmationActions.js';
 import {
   buildLineReaffirmation,
   lineReaffirmationAttentionCount,
@@ -20148,6 +20149,8 @@ export function createApi(store, options = {}) {
   api.lineReaffirmationAttentionCount = (options = {}) => ({
     ok: true, count: lineReaffirmationAttentionCount(store.state, reaffirmOptions(options)),
   });
+  // ADR-0159: Frozen Authority Re-Affirmation & Drift Settlement.
+  Object.assign(api, createAuthorityReaffirmationActions(store, { now: clock, idFactory: id }));
   // ADR-0149: Matrix Reorganisation Reconciliation & As-Of Structure Reads. The
   // three writes and the seat-scoped reads are in the factory; the aggregate
   // reads are attached here so the CSV export and the panel read the SAME report,

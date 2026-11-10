@@ -77,6 +77,11 @@ import {
   normalizeLineReaffirmationSettings,
 } from './domain/lineReaffirmationSchema.js';
 import {
+  normalizeAuthorityReaffirmationMarkers,
+  normalizeAuthorityReaffirmations,
+  normalizeAuthorityReaffirmationSettings,
+} from './domain/authorityReaffirmationSchema.js';
+import {
   normalizeLineMandates,
   normalizeContradictionReviews,
   normalizeContradictionMarkers,
@@ -675,7 +680,13 @@ export {
 // hours nobody told them about. Every state, lapse, day count, verdict and total
 // is DERIVED on read from these acts plus the live matrix, so no printed figure
 // can drift from the record that produced it.
-export const SCHEMA_VERSION = 129;
+// ADR-0159 (Schema v130): Frozen Authority Re-Affirmation (`authorityReaffirmations`,
+// `authorityReaffirmationMarkers`). Append-only dated human settlements on
+// drifted frozen decisions (`merit-cycle`, `decision`, `board-memo`) plus
+// RULE-ACR-01's idempotency ledger. Deliberately EMPTY on upgrade so every
+// drifted record reads `unsettled` until a current right holder or joint
+// matrix principal answers; no frozen record is ever edited.
+export const SCHEMA_VERSION = 130;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -2074,6 +2085,8 @@ export const DEFAULT_SETTINGS = Object.freeze({
   // line's manager has to answer the ask the rule issues. All three printed, all
   // three clamped, none fitted from the record.
   ...normalizeLineReaffirmationSettings({}),
+  // ADR-0159: frozen authority re-affirmation due window + automation pause.
+  ...normalizeAuthorityReaffirmationSettings({}),
 });
 
 export const COLLECTIONS = [
@@ -2701,6 +2714,13 @@ export const COLLECTIONS = [
   // the answers it was computed from.
   'lineReaffirmations',
   'lineReaffirmationMarkers',
+  // ADR-0159 (Schema v130): Frozen Authority Re-Affirmation. Holds ONLY the
+  // dated human answers (`stand-behind` / `refer-reopen`) on drifted frozen
+  // decisions plus RULE-ACR-01's idempotency markers. Settlement state,
+  // staleness after a subsequent re-org, and reconciled claims are DERIVED on
+  // read against the live matrix — never stored.
+  'authorityReaffirmations',
+  'authorityReaffirmationMarkers',
 ];
 
 /** Stable empty state. `now` is an ISO string so the result is a pure value. */
@@ -3435,6 +3455,7 @@ export function normalizeSettings(raw) {
     // here would be silently DROPPED on every load, and the printed term and
     // warning windows would be numbers the record does not hold.
     ...normalizeLineReaffirmationSettings(s),
+    ...normalizeAuthorityReaffirmationSettings(s),
     ...normalizeAgendaSettings(s),
     chainAdoptedHorizons: normalizeAdoptedHorizons(s.chainAdoptedHorizons, DECLARED_HORIZONS),
     chainAdoptedOn: /^\d{4}-\d{2}-\d{2}$/.test(String(s.chainAdoptedOn || '')) ? s.chainAdoptedOn : null,
@@ -7892,6 +7913,11 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // expose, never to fabricate.
   state.lineReaffirmations = normalizeLineReaffirmations(raw.lineReaffirmations, warnings);
   state.lineReaffirmationMarkers = normalizeLineReaffirmationMarkers(raw.lineReaffirmationMarkers);
+  // ADR-0159: malformed settlements are dropped with a printed warning, never
+  // repaired — an invented sign-off on a drifted frozen decision is fabricated
+  // audit evidence.
+  state.authorityReaffirmations = normalizeAuthorityReaffirmations(raw.authorityReaffirmations, warnings);
+  state.authorityReaffirmationMarkers = normalizeAuthorityReaffirmationMarkers(raw.authorityReaffirmationMarkers);
   // ADR-0122: a malformed absence row is dropped with a warning, never repaired —
   // an invented absence is an invented unavailability for every cover in the span.
   // Resolved BEFORE links so the `declares-absence-of` provenance edge validates
@@ -8860,6 +8886,19 @@ export const MIGRATIONS = {
   // agreement nobody gave, and a term invented by a migration is precisely the
   // inheritance-by-silence this module exists to name. The three new conventions
   // are clamped in so the printed windows exist before anyone re-declares them.
+  // ADR-0159: additive 129 → 130. No frozen record is touched and no settlement
+  // is back-filled. Both ledgers start EMPTY so every drifted frozen decision
+  // honestly reads `unsettled` until a human with current matrix standing
+  // stands behind it or refers it to a governed re-decision.
+  129: (v129) => ({
+    ...v129,
+    schemaVersion: 130,
+    authorityReaffirmations: Array.isArray(v129.authorityReaffirmations) ? v129.authorityReaffirmations : [],
+    authorityReaffirmationMarkers: Array.isArray(v129.authorityReaffirmationMarkers) ? v129.authorityReaffirmationMarkers : [],
+    settings: isPlainObject(v129.settings)
+      ? { ...v129.settings, ...normalizeAuthorityReaffirmationSettings(v129.settings) }
+      : { ...DEFAULT_SETTINGS },
+  }),
   128: (v128) => ({
     ...v128,
     schemaVersion: 129,

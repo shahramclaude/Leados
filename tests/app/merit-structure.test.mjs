@@ -497,7 +497,7 @@ test('the declared vocabulary is closed and the states reconcile by construction
   assert.equal(MERIT_STRUCTURE_STATES[0].rank < MERIT_STRUCTURE_STATES[3].rank, true, 'unrecorded is worse than observed');
   assert.equal(MERIT_STRUCTURE_STATES.find((s) => s.key === 'unrecorded').blocks, true);
   assert.equal(MERIT_STRUCTURE_STATES.find((s) => s.key === 'presumed-current').blocks, false);
-  assert.equal(SCHEMA_VERSION, 129, 'ADR-0155 adds no schema version — the freeze lives on the cycle row');
+  assert.equal(SCHEMA_VERSION, 130, 'ADR-0155 adds no schema version — the freeze lives on the cycle row');
 
   const st = structureFor(makeState({ history: fullHistory() }));
   const detail = st.reconcilesDetail;

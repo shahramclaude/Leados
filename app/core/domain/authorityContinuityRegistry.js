@@ -274,9 +274,115 @@ export const AUTHORITY_CONTINUITY_METHOD = Object.freeze([
 /**
  * The CSV export contract (scope #117). Aggregate only: counts, verdicts and
  * type names. NO record id, NO title, NO person id, NO manager id, NO name.
+ *
+ * ADR-0159 adds the four drifted-settlement counts (`drifted_settled_n`,
+ * `drifted_referred_n`, `drifted_stale_n`, `drifted_unsettled_n`) and the
+ * separate `reconciled_claim` / `reconciled_claim_reason` alongside
+ * `population_claim` so a human settlement never overwrites the structural
+ * continuity measurement.
  */
 export const AUTHORITY_CONTINUITY_CSV_COLUMNS = Object.freeze([
   'row_kind', 'type', 'verdict', 'covered_n', 'uncovered_n', 'drifted_n',
   'unattributed_n', 'unreadable_n', 'attributable_n', 'difference_n',
-  'population_claim', 'population_claim_reason', 'reconciles',
+  'drifted_settled_n', 'drifted_referred_n', 'drifted_stale_n', 'drifted_unsettled_n',
+  'population_claim', 'population_claim_reason',
+  'reconciled_claim', 'reconciled_claim_reason',
+  'reconciles',
 ]);
+
+/* ----------------------------------------------------- ADR-0159 settlement */
+
+export const AUTHORITY_REAFFIRMATION_ENGINE_VERSION = 'authority-reaffirmation-2026.11-v1';
+
+/**
+ * The two dated human answers a current authority (or joint matrix principal)
+ * may record on a DRIFTED frozen decision. Neither edits the frozen record.
+ */
+export const AUTHORITY_REAFFIRMATION_OUTCOMES = Object.freeze({
+  STAND_BEHIND: 'stand-behind',
+  REFER_REOPEN: 'refer-reopen',
+});
+
+export const AUTHORITY_REAFFIRMATION_OUTCOME_LIST = Object.freeze([
+  AUTHORITY_REAFFIRMATION_OUTCOMES.STAND_BEHIND,
+  AUTHORITY_REAFFIRMATION_OUTCOMES.REFER_REOPEN,
+]);
+
+/**
+ * Derived settlement state per frozen record. Never stored — recomputed on
+ * every read against today's live matrix so a further re-org immediately turns
+ * an earlier settlement `stale` rather than silently carrying it over.
+ */
+export const AUTHORITY_REAFFIRMATION_SETTLEMENTS = Object.freeze({
+  UNSETTLED: 'unsettled',
+  SETTLED: 'settled',
+  REFERRED: 'referred',
+  STALE: 'stale',
+  NOT_APPLICABLE: 'not-applicable',
+});
+
+export const AUTHORITY_REAFFIRMATION_SETTLEMENT_LIST = Object.freeze([
+  Object.freeze({
+    key: 'unsettled',
+    label: 'Unsettled drift',
+    tone: 'warning',
+    detail: 'Authority drifted and no current right holder or joint principal has answered under today’s structure.',
+  }),
+  Object.freeze({
+    key: 'settled',
+    label: 'Stood behind',
+    tone: 'positive',
+    detail: 'The current authority (or joint matrix principal) has stood behind this frozen record in writing under today’s live structure.',
+  }),
+  Object.freeze({
+    key: 'referred',
+    label: 'Referred to re-open',
+    tone: 'info',
+    detail: 'The current authority declined to stand behind the drifted record as-is and opened a governed re-decision.',
+  }),
+  Object.freeze({
+    key: 'stale',
+    label: 'Settlement stale',
+    tone: 'danger',
+    detail: 'This record was answered earlier, and the live matrix authority moved AGAIN afterwards — a new holder cannot inherit an earlier holder’s sign-off by silence.',
+  }),
+  Object.freeze({
+    key: 'not-applicable',
+    label: 'Not drifted',
+    tone: 'neutral',
+    detail: 'Only drifted records can be settled; attributable records need no settlement, and unattributed or unreadable records are refused rather than papered over.',
+  }),
+]);
+
+export function authoritySettlementMeta(key) {
+  return AUTHORITY_REAFFIRMATION_SETTLEMENT_LIST.find((s) => s.key === key)
+    || AUTHORITY_REAFFIRMATION_SETTLEMENT_LIST[4];
+}
+
+export const AUTHORITY_REAFFIRMATION_BOUNDS = Object.freeze({
+  dueDays: Object.freeze([3, 60]),
+  minReason: 8,
+  maxReason: 500,
+});
+
+export const AUTHORITY_REAFFIRMATION_DEFAULTS = Object.freeze({
+  dueDays: 14,
+});
+
+export const AUTHORITY_REAFFIRMATION_LIMITS = Object.freeze({
+  acts: 600,
+  markers: 800,
+  obligationsPerCommit: 8,
+});
+
+export const AUTHORITY_REAFFIRMATION_RIGHTS = Object.freeze({
+  REAFFIRM: 'reaffirm-frozen-authority',
+});
+
+/** Map continuity record types onto canonical `LINK_ENTITY_TYPES`. */
+export const AUTHORITY_CONTINUITY_LINK_TYPES = Object.freeze({
+  'merit-cycle': 'merit',
+  decision: 'decision',
+  'board-memo': 'boardmemo',
+});
+

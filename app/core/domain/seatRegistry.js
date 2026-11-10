@@ -468,6 +468,12 @@ export const ACTION_RIGHTS = Object.freeze({
   // act and neither side may answer for the other.
   'reaffirm-matrix-line': { minRank: 1, maxRank: 5, label: 'Re-affirm a reporting line you hold, or release it with a reason' },
   'answer-line-reaffirmation': { minRank: 1, maxRank: 5, label: 'Answer for a share taken from your own hours: accept it or object' },
+  // ADR-0159: settling a drifted frozen decision (`stand-behind` vs `refer-reopen`).
+  // Open across leadership ranks 1–5 because a team lead or project lead can
+  // hold the live RAPID right on a matrix line; `canSettleAuthority` in the
+  // action strictly narrows standing to the live right holder (or a joint
+  // matrix principal above all contesting/multi-principal holders).
+  'reaffirm-frozen-authority': { minRank: 1, maxRank: 5, label: 'Stand behind or refer a drifted frozen decision under live matrix authority' },
   // ADR-0149: moving a home line is a SEPARATE act from declaring a second line.
   // Declaring an additional line ADDS accountability; moving the home line
   // REWRITES the tree every other module rolls up through. Open from rank 1
