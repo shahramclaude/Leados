@@ -518,7 +518,7 @@ test('a single-chain workspace with no second line is fully supported and unchan
 /* ------------------------------------------------ 7. schema, CSV, display */
 
 test('schema v124 is additive and the migration writes an EMPTY ledger, never a back-fill', () => {
-  assert.equal(SCHEMA_VERSION, 133);
+  assert.equal(SCHEMA_VERSION, 135);
   const legacy = { schemaVersion: 123, people: roster(), settings: {} };
   const { raw, applied } = migrate(legacy);
   assert.deepEqual(applied, ['123 → 124', '124 → 125', '125 → 126', '126 → 127', '127 → 128', '128 → 129', '129 → 130', '130 → 131', '131 → 132', '132 → 133']);

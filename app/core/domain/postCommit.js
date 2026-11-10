@@ -149,6 +149,8 @@ import { authorityContinuityRule } from './authorityContinuityRules.js';
 import { matrixInterfaceRule } from './matrixInterfaceRules.js';
 // ADR-0166: the cross-line review-evidence join's one consequence.
 import { meritEvidenceRule } from './meritEvidenceRules.js';
+// ADR-0168: the Cross-Line Bench-Evidence Sufficiency reading (RULE-BNE-01).
+import { benchEvidenceRule } from './benchEvidenceRules.js';
 
 
 // ADR-0087: the Operating Cadence Clock. Reads the finished queue after the
@@ -891,6 +893,15 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // edits a rating or changes a pay figure, and runs before `seatRule` so the
   // obligation it opens rolls up the hierarchy in the same atomic transaction.
   meritEvidenceRule,
+  // ADR-0168: the Cross-Line Bench-Evidence Sufficiency reading (RULE-BNE-01).
+  // Reads the readiness ledger and the per-line review states it already grades,
+  // and puts ONE dated ask in front of the manager who holds the claim's home line
+  // *as of its evidence window* whenever the evidence behind a current bench claim
+  // was one line wide. Contested and unowned assessors issue NOTHING and are
+  // counted, because an ask addressed to nobody can never close. It never edits a
+  // rating, a review or a line, and runs before `seatRule` so the obligation it
+  // opens rolls up the hierarchy in the same atomic transaction.
+  benchEvidenceRule,
   // ADR-0076: the Operating Seat (vertical roll-up + enforced boundaries).
   // It reads the finished record after every module has propagated, then fans
   // each open item up every leadership ancestor in the reporting tree with one

@@ -82,6 +82,9 @@ export const MODULE_MANIFESTS = Object.freeze({
   delegations: row('delegations', 'Delegations', ['delegations'], { mode: A, dates: ['delegatedOn'], dues: ['dueOn'], statuses: ['status'] }),
   growth: row('growth', 'Growth plans', ['growthPlans'], { mode: A, statuses: ['status'] }),
   readiness: row('readiness', 'Succession readings', ['readiness'], { mode: A, dates: ['assessedOn'], note: 'A readiness reading names a person; above the manager rank it is a count.' }),
+  // ADR-0168: the cross-line bench-evidence reading is derived on read and stores
+  // only RULE-BNE-01's ask markers. Enterprise material, because a bench claim is.
+  benchEvidence: row('benchEvidence', 'Cross-line bench evidence', ['benchEvidenceMarkers'], { classKey: 'enterprise', dates: ['recordedOn'], note: 'A bench claim opened a dated ask about its own evidence; no person, rating or line is stored.' }),
   onboarding: row('onboarding', 'Onboarding', ['onboarding'], { mode: A, dates: ['startOn'], dues: ['targetOn'] }),
   recognition: row('recognition', 'Recognition', ['recognition'], { mode: A, dates: ['date'] }),
   reviews: row('reviews', 'Performance reviews', ['reviews'], { mode: A, dates: ['openedOn', 'cycleStart'], dues: ['dueOn'], statuses: ['status'] }),

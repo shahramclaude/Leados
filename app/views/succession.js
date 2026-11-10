@@ -32,6 +32,10 @@ import {
   pageHeader, card, stat, badge, banner, tabs, emptyState, kv, table,
 } from '../ui/components.js';
 import { GAP_VERDICTS, SUCCESSION_PREMISE, altitudeByRank } from '../core/domain/successionRegistry.js';
+// ADR-0168: the cross-line bench-evidence reading. It reads the SAME seat context
+// the terminal already resolved, so the register and the bench cannot disagree
+// about which lines a claim rests on.
+import { renderBenchEvidenceTab } from './benchEvidencePanel.js';
 
 /**
  * `ui/components.table` requires an explicit `render` per column, which is the
@@ -53,6 +57,7 @@ const PANELS = [
   { key: 'blanket', label: 'Blanket & concentration' },
   { key: 'chain', label: 'Chain & certification' },
   { key: 'readings', label: 'Frozen readings & exposure' },
+  { key: 'evidence', label: 'Cross-line evidence' },
   { key: 'method', label: 'Method' },
 ];
 const PANEL_ALIAS = {
@@ -61,6 +66,8 @@ const PANEL_ALIAS = {
   blanket: 'blanket', concentration: 'blanket', hhi: 'blanket', understudy: 'blanket',
   chain: 'chain', rollup: 'chain', 'roll-up': 'chain', altitudes: 'chain', diffusion: 'chain',
   readings: 'readings', exposure: 'readings', money: 'readings', money2: 'readings',
+  evidence: 'evidence', 'bench-evidence': 'evidence', 'cross-line': 'evidence', 360: 'evidence',
+  'assessment-evidence': 'evidence', 'succession-evidence': 'evidence',
   method: 'method', frameworks: 'method', refusals: 'method',
 };
 const VERDICT_TONE = { 'certified-gap': 'bad', concentrated: 'warn', covered: 'good', unmeasured: 'neutral' };
@@ -643,6 +650,21 @@ function methodPanel(ctx, r) {
   );
 }
 
+/**
+ * ADR-0168: may this surface print a claim subject's name? The claim register
+ * names a person and a bench seat, so it follows the `readiness` record policy's
+ * detail ceiling (individual class, ceiling rank 2) exactly as every other
+ * succession surface does. Fail closed: an unresolved seat withholds names rather
+ * than printing them.
+ */
+function namesVisibleForSeat(r) {
+  const seat = r?.view?.seat || null;
+  if (!seat) return true; // the cabinet's own projection has already scoped it
+  if (seat.fullAccess) return true;
+  if (seat.readOnly) return false;
+  return Number(seat.rank || 0) <= 2;
+}
+
 /* ------------------------------------------------------------- the view */
 
 export function renderSuccession(ctx) {
@@ -664,6 +686,10 @@ export function renderSuccession(ctx) {
     blanket: () => blanketPanel(ctx, r),
     chain: () => chainPanel(ctx, r),
     readings: () => readingsPanel(ctx, r),
+    // ADR-0168. Reads its OWN report (the readiness ledger joined to the per-line
+    // review states), and reuses the seat the terminal already resolved for the
+    // disclosure decision — no second seat model.
+    evidence: () => renderBenchEvidenceTab(ctx, null, namesVisibleForSeat(r)),
     method: () => methodPanel(ctx, r),
   };
   return h('div', { class: 'view view-succession' },
