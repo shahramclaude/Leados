@@ -1,3 +1,19 @@
+## 2026-11-10 — Session 226: Matrix 1:1 line coverage (frontline / mid-manager × matrix) — started, NOT shipped
+
+**Doctrine and repository gates.** `NORTH_STAR.md` exists and contains both the Matrix Leadership and Bulletproof Reliability mandates; no doctrine edit. `origin` is `https://github.com/shahramclaude/Leados.git`; work is on `arena/f1f4a484-leados`.
+
+**Altitude / structure / duty.** Frontline / mid-manager × matrix (least recently primary: Session 221). Every manager who holds a line on a person owes that person a standing 1:1; today a stored 1:1 names the person and never the holder, so one line's meeting hides another line's silence, and the second line's manager is refused (`scope-refusal`) when recording their own. Both reproduced on untouched `main`.
+
+**What this session leaves behind.** Three modules that nothing in the running app imports — `oneOnOneLineRegistry.js`, `oneOnOneLineSchema.js`, `oneOnOneLines.js` (vocabulary, normalizers, a pure per-(person, line) read model) — and `tests/app/one-on-one-lines.test.mjs`. `LeadOS-standalone.html` re-stamped (bundle byte-identical). The pull request was opened on request at this point, before the feature was wired.
+
+**What it does not.** No stored holder (`schema.js` untouched, still v131), no stamping in `logOneOnOne`, no gateway change, no command, no rule on the automation spine, no panel, no dialog field, no CSV scope, no ADR. Nothing a leader can see or use changed. ADR-0164, Schema v132, `RULE-OOL-01` and the panel key are reserved names only; goal carriage (ADR-0163) also pencils in v132.
+
+**Step 3 discovery (added to ROADMAP Planned).** Social-choice aggregation of competing line priorities; Leader Standard Work & tiered daily management; resource levelling of dated cross-line demands; per-line confidentiality of 1:1 records in a matrix.
+
+**Verified (focused).** New suite **13/13 PASS**, also with the wall clock moved ±400 days; brief and CSV equal the board's own figures and carry no identity. ESLint on the new files, `check:boundary`, `check:links`: PASS. The seven existing suites able to observe the change are identical to untouched `main` (`agenda-queue-writers` 11/11, `canonical-boundary` 7/7, `standalone` 7/7, `server` 4/4, `response-studio` 24/24; `action-bundles` 18/19 and `mission-command-flow` 8/9, one test failing in each, the same one before and after). **Not run:** the full `npm test`. CI's test step already fails on `main`. **[UNVERIFIED]:** that every other suite is individually unchanged (no existing source file is modified).
+
+**Next.** Finish this item before starting another, in this order: the stored holder and its migration (bump the schema pins with it); stamping in `logOneOnOne` and the gateway line scope, so the second line can record its meeting; commands and the governing right; `RULE-OOL-01` with its propagation contract; the panel and the dialog field; the CSV scope; ADR-0164. Turn the suite's "BOUNDARY OF THIS SLICE" test around when the holder is stored.
+
 ## 2026-11-10 — Session 225: Matrix goal branch-overlap audit (CEO / C-suite × matrix; read-only slice)
 
 **Doctrine and repository gates.** `NORTH_STAR.md` exists and explicitly contains both the Matrix Leadership and Bulletproof Reliability mandates; no doctrine augmentation was needed. `origin` is `https://github.com/shahramclaude/Leados.git`; work remains on `arena/ea4c20ff-leados`.
