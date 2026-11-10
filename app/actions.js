@@ -45,6 +45,7 @@ import { createMatrixActions } from './core/domain/matrixActions.js';
 import { createOneOnOneLineActions, oneOnOneHolderForLog } from './core/domain/oneOnOneLineActions.js';
 // ADR-0165: the per-line 1:1 body boundary. Meetings another line holds are a fact, not a readable/editable record.
 import { meetingBodyVerdictForState } from './core/domain/meetingPrivacy.js';
+import { feedbackAuthorForCreate, feedbackBodyVerdictForState } from './core/domain/feedbackPrivacy.js';
 // ADR-0143: the Cross-Line Priority Arbitration. Seven dated human commands on
 // the same reviewed gateway; every score, state and capacity total is derived on
 // read, and only an AGREED precedence issues work (RULE-ARB-01).
@@ -1202,6 +1203,13 @@ function meetingBodyRefusal(state, meeting, at) {
   return null;
 }
 
+function feedbackBodyRefusal(state, item, at) {
+  const verdict = feedbackBodyVerdictForState(state, item, at);
+  if (!verdict.ok) return fail(verdict.error);
+  if (verdict.withheld) return fail('This feedback is not this seat’s conversation. The seat sees that it exists — it cannot read or rewrite its body.');
+  return null;
+}
+
 export function createApi(store, options = {}) {
   const id = options.idFactory || makeId;
   const clock = options.now || (() => new Date());
@@ -1944,6 +1952,8 @@ export function createApi(store, options = {}) {
       if (!personExists(data.personId)) return fail('Choose a person first.', 'personId');
       const behavior = clean(data.behavior) || '';
       if (!behavior) return fail('The behaviour is the one part that cannot be omitted.', 'behavior');
+      const author = feedbackAuthorForCreate(store.state, data.personId, clock());
+      if (!author.ok) return fail(author.error);
       const kind = data.kind === 'constructive' ? 'constructive' : 'praise';
       const date = data.date || today();
       const observedOn = data.observedOn || null;
@@ -1965,6 +1975,7 @@ export function createApi(store, options = {}) {
         followUpOn: data.followUpOn || null,
         followUpDone: false,
         followUpCompletedOn: null,
+        ...author.author,
       };
       const person = store.state.people.find((p) => p.id === data.personId);
       store.update(
@@ -1984,7 +1995,12 @@ export function createApi(store, options = {}) {
     updateFeedback(feedbackId, patch) {
       const existing = store.state.feedback.find((f) => f.id === feedbackId);
       if (!existing) return fail('That feedback record no longer exists.');
-      const next = { ...existing, ...patch, observedOn: patch.observedOn !== undefined ? patch.observedOn || null : existing.observedOn || null };
+      const refused = feedbackBodyRefusal(store.state, existing, clock());
+      if (refused) return refused;
+      if (patch?.personId !== undefined && patch.personId !== existing.personId) return fail('Feedback cannot be reassigned to a different person.');
+      const safePatch = { ...(patch || {}) };
+      for (const key of ['authoredById', 'authoredByBasis', 'authoredAt', 'personId', 'id']) delete safePatch[key];
+      const next = { ...existing, ...safePatch, observedOn: safePatch.observedOn !== undefined ? safePatch.observedOn || null : existing.observedOn || null };
       if (!isCalendarDay(next.date)) return fail('Choose a valid conversation date.', 'date');
       if (next.date > today()) return fail('The feedback conversation cannot be dated in the future.', 'date');
       if (next.observedOn && !isCalendarDay(next.observedOn)) return fail('Choose a valid observation date, or leave it unknown.', 'observedOn');
@@ -1993,7 +2009,7 @@ export function createApi(store, options = {}) {
         (draft) => {
           const item = draft.feedback.find((f) => f.id === feedbackId);
           if (!item) return;
-          Object.assign(item, patch, { observedOn: next.observedOn });
+          Object.assign(item, safePatch, { observedOn: next.observedOn });
         },
         { type: 'feedback.updated', entity: 'feedback', entityId: feedbackId, summary: 'Feedback updated' },
       );
@@ -2001,6 +2017,10 @@ export function createApi(store, options = {}) {
     },
 
     completeFollowUp(feedbackId, done = true) {
+      const existing = store.state.feedback.find((f) => f.id === feedbackId);
+      if (!existing) return fail('That feedback record no longer exists.');
+      const refused = feedbackBodyRefusal(store.state, existing, clock());
+      if (refused) return refused;
       store.update(
         (draft) => {
           const item = draft.feedback.find((f) => f.id === feedbackId);

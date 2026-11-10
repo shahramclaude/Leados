@@ -1,3 +1,7 @@
+## 2026-11-10 — Keep matrix feedback conversations in the room that held them
+
+**Per-line feedback confidentiality ([ADR-0167](./docs/adr/0167-per-line-feedback-confidentiality.md)).** Under a declared manager seat, feedback is now attributed to the seat that recorded it. Its author can read and update the SBI conversation; another tree or matrix-line manager sees that feedback exists and its factual dates/status, but not the situation, behaviour, impact or tags. Historical notes remain unattributed rather than guessing who wrote them; they remain readable through the reporting tree and are withheld from a line-only reader. The same boundary blocks cross-line edits and follow-up changes. Single-chain workspaces and the undeclared operator view behave as before. Schema v134 is additive; historical notes are not rewritten. Operating seats are still local declarations, not authenticated identity.
+
 ## 2026-11-10 — Record who held a 1:1, and keep other lines out of the room
 
 In the full-access operator view, **Log a 1:1** offers an optional holder; under a frontline or mid-manager seat a held meeting is attributed to that seat, including for a direct additional-line report. History displays the stored holder or “Holder not recorded.” Schema v132 leaves older meetings unattributed rather than guessing, and newly detected invalid dates appear as “Date unverified.” A failed local save or queued encrypted save produces a warning.

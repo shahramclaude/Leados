@@ -9,6 +9,7 @@ import { activeSeat, buildSeats, canSee, projectForSeat } from './seat.js';
 import { grantedRecords } from './disclosure.js';
 import { matrixLineScopeFor } from './matrix.js';
 import { meetingBodyVerdict, stubMeetingBody } from './meetingPrivacy.js';
+import { feedbackBodyVerdict, stubFeedbackBody } from './feedbackPrivacy.js';
 
 const PUBLIC_PERSON_FIELDS = ['id', 'name', 'role', 'level', 'team', 'managerId', 'status'];
 /**
@@ -36,6 +37,14 @@ export function scopedViewState(state, seatContext = null, { now = new Date(), s
     out.oneOnOnes = out.oneOnOnes.map((meeting) => {
       const { withheld, reason } = meetingBodyVerdict(meeting, seat, built);
       return withheld ? stubMeetingBody(meeting, reason) : meeting;
+    });
+  }
+  // Session 230: feedback keeps its factual dates and status across a matrix
+  // line, but its SBI body belongs to the recorded conversation holder.
+  if (Array.isArray(out.feedback)) {
+    out.feedback = out.feedback.map((item) => {
+      const { withheld, reason } = feedbackBodyVerdict(item, seat);
+      return withheld ? stubFeedbackBody(item, reason) : item;
     });
   }
   // ADR-0086: records a live release opens, marked with the release id so a view
