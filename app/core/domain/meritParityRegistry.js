@@ -260,11 +260,16 @@ export const MERIT_PARITY_REFUSALS = Object.freeze([
   Object.freeze({ key: 'no-money-moved', label: 'The pool moved no money', detail: 'Every included decision is a zero increase. A gap of zero here is an artefact of an unspent pool, not evidence of parity.' }),
   Object.freeze({ key: 'no-effective-date', label: 'The cycle has no readable effective date', detail: 'The cohort split is read on the day the money takes effect. Without that day there is no structure to read, so no split is invented.' }),
   Object.freeze({ key: 'row-cap', label: 'Rows beyond the bounded read', detail: 'The reading is bounded. Rows past the cap are NOT included in any figure and the remainder is printed so a partial pool is never read as the whole one.' }),
+  // ADR-0155: the two structure refusals. They are separate from every money
+  // refusal because they are about the DAY, not about the money.
+  Object.freeze({ key: 'unrecorded-home-line', label: 'The home line on that day is not in the record', detail: 'This person has recorded home-line history, and none of it covers the day the money takes effect. Their manager that day was never recorded, their pay authority cannot be read, and the row is excluded from the cohort arithmetic rather than projected backwards from today’s roster.' }),
+  Object.freeze({ key: 'presumed-home-line', label: 'Home line presumed as today’s', detail: 'No recorded home-line history exists for this person at all, so nothing says the line ever changed and today’s pointer is used as a PRINTED PRESUMPTION. It is counted and named on every surface; recording the move is what turns it into an observation.' }),
 ]);
 
 /* -------------------------------------------------------------- frameworks */
 
 export const MERIT_PARITY_FRAMEWORKS = Object.freeze([
+  Object.freeze({ key: 'bitemporal', name: 'Snodgrass (1999), valid time vs transaction time', applied: 'The home line printed for a past pay decision is the one the RECORD says held on the day the money took effect, not today’s chart. A move recorded later cannot rewrite what the earlier decision was made under.' }),
   Object.freeze({ key: 'multi-task-agency', name: 'Holmström & Milgrom (1991), multi-task principal–agent', applied: 'When two principals each observe part of a person’s output, effort follows the task whose principal can reward it. The unrewarded line is starved by the measurement, not by the person.' }),
   Object.freeze({ key: 'subjective-measurement', name: 'Baker, Gibbons & Murphy (1994), subjective performance measurement', applied: 'Pay attached to a supervisor who sees only part of the job prices the part they see. The second line’s contribution is real and unpriced.' }),
   Object.freeze({ key: 'unadjusted-gap', name: 'Oaxaca (1973) / Blinder (1973), decomposition', applied: 'Cited as the discipline NOT claimed here: this reading prints an unadjusted descriptive gap and says so. A decomposition on three people per cell is a computation, not a finding.' }),
@@ -311,5 +316,18 @@ export const MERIT_PARITY_CSV_COLUMNS = Object.freeze([
   'parity_verdict',
   'reconciles',
   'figures_complete',
+  // ADR-0155: the structure the money was decided under. Counts only — the
+  // states, the supersessions and the frozen comparison verdict. No manager id
+  // and no person id: who held the line is on the screen, never in the export.
+  'structure_as_of',
+  'structure_observed_n',
+  'structure_projected_n',
+  'structure_presumed_n',
+  'structure_unrecorded_n',
+  'structure_superseded_n',
+  'structure_reconciles',
+  'frozen_structure_status',
+  'frozen_structure_on',
+  'frozen_structure_diff_n',
   'withheld_reason',
 ]);
