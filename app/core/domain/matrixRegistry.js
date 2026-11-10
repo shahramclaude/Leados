@@ -193,6 +193,7 @@ export const MATRIX_PANELS = Object.freeze([
   Object.freeze({ key: 'consent', label: 'Consent', hint: 'A declared share is an ask until the line accepts it and the person acknowledges it.' }),
   Object.freeze({ key: 'rights', label: 'Rights', hint: 'Who decides what, for each person on more than one line.' }),
   Object.freeze({ key: 'concordance', label: 'Concordance', hint: 'What the decision log actually did, against the rights declared on each line.' }),
+  Object.freeze({ key: 'continuity', label: 'Continuity', hint: 'Which frozen decisions still name the authority that made them — and which have drifted.' }),
   Object.freeze({ key: 'seats', label: 'Seats', hint: 'Whose line the work actually reaches — and who the roster cannot seat.' }),
   Object.freeze({ key: 'governance', label: 'Governance', hint: 'Executive view: joint-apex escalations, cross-axis coupling and structural checks.' }),
   Object.freeze({ key: 'queue', label: 'Review', hint: 'The bounded queue, worst first.' }),

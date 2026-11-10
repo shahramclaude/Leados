@@ -462,7 +462,10 @@ test('every printed structure figure equals the recomputed blob across a real re
 /* --------------------------------------------------------- 6. no identity in export */
 
 test('CSV #116 carries the structure counts and no manager or person identity', () => {
-  assert.equal(CSV_EXPORTS.length, 115, 'ADR-0155 adds no new scope');
+  // ADR-0156 added scope #117 (the authority continuity register), so the
+  // registered total moved from 115 to 116. The pin states the total
+  // deliberately so the next session cannot drift the count silently.
+  assert.equal(CSV_EXPORTS.length, 116, 'ADR-0156 adds scope #117');
   const people = roster({ sam: { managerId: 'priya' } });
   const history = fullHistory({
     sam: period('sam', 'dana', '2026-09-01', '2026-11-30'),

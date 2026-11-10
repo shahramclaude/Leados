@@ -1,3 +1,53 @@
+## 2026-11-10 — Matrix authority continuity: the portfolio of frozen decisions (`#/matrix?panel=continuity`, ADR-0156, Schema v128 unchanged)
+
+**Implemented [CEO / C-suite primary × matrix; every altitude reads the same lens].**
+The board asks the **portfolio** question — *are our frozen decisions still
+attributable to the authority that made them?* — and until now the product could
+answer it for exactly ONE decision type. ADR-0155 gave a finalised merit cycle
+the ability to freeze its own structure and prove it; a decided decision record
+and a committed board memo could not reproduce their own authority at all, and a
+March pricing decision naming a CFO who has since left reads *complete and
+clear* in a pack nobody has re-checked.
+
+One bounded read model over the frozen decision records the workspace ALREADY
+stores — a finalised merit cycle, a decided decision record, a
+committed/frozen/superseded board memo — compares each record's **own** named
+authority against the authority in force on that record's **own day**, through
+the SAME as-of structure engine (ADR-0155) over the SAME matrix engine
+(ADR-0140). The merit type reuses ADR-0155's own `compareFrozenStructure`
+contract verbatim, so the two modules cannot disagree.
+
+**Two claims, never collapsed.** *Covered agreement* asks whether the records
+this register CAN compare still name the authority in force; the *portfolio
+claim* asks whether that may be asserted of the whole population. The portfolio
+claim is **REFUSED** whenever the covered population is below the declared
+floor of three, whenever any covered record did not agree, or whenever **any
+record could not be read** — an absence is the one thing a continuity claim
+must never absorb (population completeness, AICPA AU-C 500).
+
+**Four verdicts.** `attributable` (the record names a manager who held the
+relevant right on its own day) · `drifted` (a **structure moved under a
+decision** — never that the decision was wrong) · `unattributed` (the record
+names nobody and is never filled in) · `unreadable` (counted, printed with its
+reason, never dropped).
+
+**Two comparison routes, and the route used is PRINTED.** `subject` — the
+subject resolved through a typed edge (a link to a `person`, or a link to a
+`case` whose `ownerId` is the person); a subject is NEVER guessed from the
+approver's own span. `span` — no resolvable subject, so the approver must have
+been a manager with reports on that date; a **weaker** reading, and the row says
+so.
+
+The rights are the **real RAPID vocabulary** (`pay` for a cycle, `performance`
+for an approval): an invented right name compares against nothing and every
+record would read `drifted`, which is a false alarm in the alarming direction.
+Report, never correct — a drifted record is named, the frozen record is never
+edited to match today and today's reading is never overwritten to agree. No
+person is scored, no manager is invented, no derived figure is stored, no rule,
+no second hierarchy, no schema bump. CSV scope #117 carries counts, verdicts
+and the claim reason only — never a record id, title, person id, manager id,
+name or the date of any individual decision.
+
 ## 2026-11-07 — The bounded epistemic backlog (`#/epistemic`, ADR-0117, Schema v112 unchanged)
 
 **Implemented [frontline (rank 1) primary → every altitude on the same spine].**

@@ -119,11 +119,11 @@ test('every CSV scope round-trips cleanly and preserves unknown values as blank 
   // ADR-0144 adds scope #107 (contradiction audit); ADR-0145 adds scope #108
   // (rights concordance); the pin states the total deliberately so the next
   // session cannot drift the count silently.
-  assert.equal(CSV_EXPORTS.length, 115);
+  assert.equal(CSV_EXPORTS.length, 116);
   // All registered exports, including authority calibration (#74), retention
   // (#76) and the carryover settlement scope (#80), participate in the same
   // round-trip contract; #75 remains reserved.
-  assert.equal(CSV_EXPORTS.length, 115);
+  assert.equal(CSV_EXPORTS.length, 116);
   for (const spec of CSV_EXPORTS) {
     const res = exportWorkspaceCsv(state, spec.key, { now: NOW });
     assert.equal(res.ok, true, `${spec.key} export succeeds`);

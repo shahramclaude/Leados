@@ -54,6 +54,7 @@ const ROUTES = [
   ['#/responses', 'Response studio'],
   ['#/chain', 'Command chain'],
   ['#/catchball', 'Hoshin Kanri & Catchball Cascade'],
+  ['#/matrix?panel=continuity', 'Matrix authority continuity'],
   ['#/settings', 'Settings'],
 ];
 

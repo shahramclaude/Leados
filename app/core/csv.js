@@ -117,6 +117,14 @@ import {
   RIGHTS_CONCORDANCE_CSV_DESCRIPTOR,
 } from './domain/rightsConcordanceRegistry.js';
 import { standbyCsvRows, standbyExportBoard } from './domain/dutyStandby.js';
+// ADR-0156: the Matrix Authority Continuity Register export (CSV scope #117).
+// Aggregate-only and identity-free: one summary row plus one row per frozen
+// decision TYPE — no record id, no title, no person id, no manager id, no name.
+import {
+  buildAuthorityContinuity,
+  authorityContinuityCsvRows,
+} from './domain/authorityContinuity.js';
+import { AUTHORITY_CONTINUITY_CSV_COLUMNS } from './domain/authorityContinuityRegistry.js';
 // ADR-0109: CSV scope #103. Aggregate-only, identity-free, refusal-honest.
 import { jurCsvRows, JUR_CSV_COLUMNS } from './domain/jurisdiction.js';
 // ADR-0107: CSV scope #101. Aggregate-only, identity-free, refusal-honest.
@@ -1136,6 +1144,11 @@ export const CSV_EXPORTS = [
   // the declared cell floor and band, the two verdicts and the refusal reason.
   { key: 'merit-matrix-parity', label: 'Matrix merit pool parity (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'merit-matrix-parity', description: 'One summary row plus one row per level present in either cohort: the cycle status, currency and effective date, the declared cell floor and practical-significance band, pay rows read on the effective date, the second-line and home-line cohort counts (rows and priced people), excluded rows, each cohort median increase in whole basis points (BLANK below the floor), the unadjusted cohort gap and its direction, the second-line share of the pool in basis points (BLANK when the pool moved no money), the zero-increase counts, the level-matched counts and gap per level, the pay-authority verdict with its contested and unowned counts, the parity verdict, and two separate claims: whether the counts RECONCILE and whether every printed figure was complete. NO person, NO name, NO manager id, NO cycle label, NO salary, NO absolute pay and NO individual increase. A withheld median, gap or pool share is BLANK with its reason in withheld_reason, never a zero; a cohort below the declared floor and a pool that moved no money both withhold the comparison rather than reporting parity. ADR-0155 adds the STRUCTURE the money was decided under (same scope #116, no new scope): the effective date the home lines were read for, how many people were observed / projected / presumed / unrecorded, how many home lines the record has since superseded, whether those states reconcile to the roster, and the frozen-structure comparison status with its captured day and difference count. Counts only \u2014 no manager id, no person id: who held the line is on the screen, never in the export. An unrecorded home line exports its row as excluded and forces the comparison to be withheld, never projected backwards from today\u2019s roster.' },
   RIGHTS_CONCORDANCE_CSV_DESCRIPTOR,
+  // CSV scope #117 (Schema v128 unchanged, ADR-0156). Aggregate-only: one summary row
+  // plus one row per frozen decision TYPE. Counts, verdicts and the population
+  // claim reason. No record id, no title, no person id, no manager id, no name
+  // and no date of any individual decision.
+  { key: 'authority-continuity', label: 'Matrix authority continuity (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'authority-continuity', description: 'One summary row plus one row per frozen decision type (finalised merit cycle / decided decision record / board disclosure memo): the covered and UNCOVERED population counts, the counts by verdict (still attributable, authority moved since the record was made, no authority named, could not be read), the total number of differences, whether the POPULATION claim was granted or REFUSED with its printed reason, and whether the counts reconcile to the population. NO record id, NO title, NO person id, NO manager id, NO name and NO date of any individual decision. A record whose authority could not be read is COUNTED and forces the population claim to be refused — an absence is never absorbed into a continuity claim — and the export says so in population_claim_reason rather than exporting a zero.' },
   { key: 'priority-arbitration', label: 'Cross-line priority arbitration (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'priority-arbitration', description: 'One workspace summary row, one row per live arbitration case (derived state, frozen demand count, line count, disposition counts, the exact-integer verdict and its refusal when a score set is incomplete, the arbiter tie state, the agreed window and review date, dissent count, issued obligation count and the declared capacity claim), and one row per frozen demand carrying ONLY the two declared integers, the chain days and the integer rank. NO person, NO name, NO demand title, NO case id, NO seat id and NO rationale text. A demand missing its cost of delay or job size exports its rank BLANK with the refusal in `withheld_reason`, never a zero. `ranked` and `reconciles` are separate claims: an order can be absent while the counts still add up, and the export says which.' },
   { key: 'cover-standby', label: 'Cover acknowledgement (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'cover-standby', description: 'One aggregate row per declared cover in the active seat’s span (holder rank, cover rank, ask window and its basis, derived standby state, days since the ask, the declared response deadline and days past it, the answer window and its age), one refused-only exposure row per duty line whose only declared covers declined, and one board summary row. NO person, NO name, NO seat id or label, NO duty label, NO note text, NO decision id. The acknowledged rate measures the REGISTER (the named person answered YES to this ask window), never a person’s willingness; an unanswered, lapsed or refused row is its own printed state and is BLANK in the rate column rather than zero.' },
   { key: 'outcome-learning', label: 'Outcome learning (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'outcome-learning', description: 'One workspace row, one row per child span, one calibration row and one method row: suppression-safe interval counts of frozen expectations, once-only grades, good/mixed outcomes and late loops; shrunk outside view with Wilson 95% interval, pooled Brier skill, one-sided conformal lateness bound with finite-sample coverage, direction and every refusal named. NO bundle id, NO case id, NO span id or label, NO person, NO title, NO note, NO proof pointer and NO individual grade. A refused rate and a suppressed cell are BLANK rather than zero.' },
@@ -6235,6 +6248,19 @@ export function buildScopeTable(state, scope, now) {
       // export BLANK figures with the reason printed, never a zero.
       const rows = meritParityCsvRows(state, { now, settings: state.settings || {} });
       const columns = MERIT_PARITY_CSV_COLUMNS.map((key) => ({ key, header: key }));
+      return { columns, rows };
+    }
+    case 'authority-continuity': {
+      // CSV scope #117 (Schema v128 unchanged, ADR-0156). Built from the same read model
+      // the panel renders, so an exported figure is provably the figure that
+      // was printed. Aggregate only: counts, verdicts and the population claim
+      // reason — never a record id, a title, a person id, a manager id or a
+      // name. A record whose authority could not be read is COUNTED and forces
+      // the population claim to be REFUSED; the reason travels in
+      // population_claim_reason rather than collapsing into a zero.
+      const report = buildAuthorityContinuity(state, { now, settings: state.settings || {} });
+      const rows = authorityContinuityCsvRows(report);
+      const columns = AUTHORITY_CONTINUITY_CSV_COLUMNS.map((key) => ({ key, header: key }));
       return { columns, rows };
     }
     case 'role-clarity': {

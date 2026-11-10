@@ -46,6 +46,9 @@ import { renderConsentPanel } from './matrixConsentPanel.js';
 // ADR-0152: the line-exit register. A line that is dated out does not close the
 // work it created; this panel reads what it left behind and who settled it.
 import { renderLineExitPanel } from './matrixExitPanel.js';
+// ADR-0156: the authority continuity register. A chief asks about the
+// PORTFOLIO of frozen decisions, not one decision type at a time.
+import { renderContinuityPanel } from './matrixContinuityPanel.js';
 
 const PANELS = MATRIX_PANELS;
 
@@ -834,6 +837,7 @@ export function renderMatrix(ctx) {
     panel === 'consent' ? renderConsentPanel(ctx) : null,
     panel === 'rights' ? rightsPanel(ctx, report) : null,
     panel === 'concordance' ? concordancePanel(ctx, report) : null,
+    panel === 'continuity' ? renderContinuityPanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
     panel === 'seats' ? seatsPanel(ctx, report) : null,
     panel === 'governance' ? governancePanel(ctx, report) : null,
     panel === 'queue' ? queuePanel(ctx, report) : null,
