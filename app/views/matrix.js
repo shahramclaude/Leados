@@ -284,6 +284,29 @@ function linesPanel(ctx, report) {
   const ended = report.inactiveLines || [];
   return h('div', { class: 'stack' },
     h('p', { class: 'lede' }, 'One row per reporting line. A line is dated in, dated out and never deleted: a reporting line that quietly disappeared is an accountability nobody can be asked about.'),
+    card({
+      title: 'Line-term exposure',
+      subtitle: `As of ${report.today}; ending soon means 0–${report.conventions.expiringDays} days inclusive. Home lines are excluded.`,
+      body: h('div', { class: 'stack' },
+        h('p', {}, `${report.termExposure.totalN} active additional line(s), ${report.termExposure.peopleN} distinct person(s). No term declared: ${report.termExposure.counts['no-term-declared']}; ending soon: ${report.termExposure.counts['ending-soon']}; dated term: ${report.termExposure.counts['dated-term']}.`),
+        h('p', { class: 'muted small' }, 'Sunset-clause governance: an explicit term makes a temporary accountability reviewable. An open-ended line is not evidence of consent or a missed renewal. This register does not renew or end a line; use the governed End action below. Two-sided re-affirmation is not yet supported.'),
+        h('p', { class: 'muted small' }, `Category counts reconcile: ${report.termExposure.reconciles ? 'yes' : 'NO — do not rely on these totals'}. Refused declarations in scope: ${report.termExposure.refusedLineN}; refused lines are excluded, not certified as term-reviewed.`),
+        report.termExposure.rows.length ? table({
+          caption: 'Active additional reporting-line terms',
+          columns: [
+            { label: 'Person', key: 'personName' },
+            { label: 'Manager', key: 'managerName' },
+            { label: 'From', render: (row) => row.fromISO || 'not declared' },
+            { label: 'Until', render: (row) => row.toISO || 'not declared' },
+            { label: 'Term state', key: 'state' },
+            { label: 'Days remaining', render: (row) => row.daysRemaining === null ? 'withheld — no end date' : String(row.daysRemaining) },
+            { label: 'Action', render: (row) => h('button', { class: 'btn btn-ghost btn-small', type: 'button', onClick: () => endDialog(ctx, row) }, 'End') },
+          ],
+          rows: report.termExposure.rows,
+        }) : h('p', {}, 'No active additional lines in this seat’s scope.'),
+        report.termExposure.remainderN ? h('p', { class: 'muted small' }, `${report.termExposure.remainderN} further term row(s) withheld by the ${report.conventions.peopleCap}-row cap. Category counts include these rows; the visible table is not the complete register.`) : null,
+      ),
+    }),
     rows.length
       ? card({
         title: 'Active lines',

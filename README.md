@@ -1,3 +1,7 @@
+## 2026-11-10 — Matrix line-term exposure
+
+Open `#/matrix?panel=lines` for a seat-scoped register of active additional lines with no declared end date, an end within the configured expiry horizon, or a later dated term. It prints stored dates, whole days remaining, distinct people, refused declarations and any row-cap remainder. Open-ended does not mean renewed or agreed; two-sided re-affirmation is not yet supported. Existing governed End actions remain available. No setup or schema change.
+
 ## 2026-11-10 — Incomplete merit pools
 
 In the matrix merit panel, level-matched medians and gaps are withheld with a reason when pay rows are excluded or the read limit is exceeded. The CSV reports the same refusal; a partial pool is not presented as a complete comparison.
