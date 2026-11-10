@@ -222,12 +222,12 @@ function levelSection(report) {
           { label: 'Home line only', render: (r) => `${r.singleN} priced` },
           { label: 'Second-line median', render: (r) => (r.printed ? bp(r.matrixMedianBps) : h('span', { class: 'muted tiny' }, 'withheld')) },
           { label: 'Home-line median', render: (r) => (r.printed ? bp(r.singleMedianBps) : h('span', { class: 'muted tiny' }, 'withheld')) },
-          { label: 'Level gap', render: (r) => (r.printed ? bp(r.gapBps) : withheld('below the cell floor', 'Withheld')) },
+          { label: 'Level gap', render: (r) => (r.printed ? bp(r.gapBps) : withheld(r.withheldReason, 'Withheld')) },
         ],
         rows: report.byLevel,
       })
       : emptyState({ title: 'No priced person to compare', body: 'Neither cohort holds a priced pay decision, so no level cell exists.' }),
-    actions: [h('span', { class: 'muted tiny' }, `${report.matchedLevelN} level cell(s) cleared the floor`)],
+    actions: [h('span', { class: 'muted tiny' }, `${report.matchedLevelN} level comparison(s) printed`)],
   });
 }
 

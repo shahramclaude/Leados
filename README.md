@@ -1,3 +1,7 @@
+## 2026-11-10 — Incomplete merit pools
+
+In the matrix merit panel, level-matched medians and gaps are withheld with a reason when pay rows are excluded or the read limit is exceeded. The CSV reports the same refusal; a partial pool is not presented as a complete comparison.
+
 ## 2026-11-09 — A declared share of a person is an ask until two people answer it
 
 `#/matrix?panel=consent` adds the consent protocol the matrix ledger was missing. Declaring a line (ADR-0140) recorded what one manager said; nothing recorded what the other manager and the person answered. The register now prints **declared**, **accepted** and **acknowledged** capacity as three different figures, because "the roll-up adds up" and "somebody agreed to it" are different facts.

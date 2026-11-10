@@ -597,3 +597,31 @@ test('the merit terminal exposes the reading as a tab, rendered from the stored 
   assert.match(text, /Pay authority: Two or more lines hold the pay right/);
   assert.match(text, /Second-line cohort paid less/);
 });
+
+test('partial pools withhold level comparisons in the stored report, export and panel', async () => {
+  const { JSDOM } = await import('jsdom');
+  const dom = new JSDOM('<!doctype html><html><body></body></html>');
+  globalThis.window = dom.window;
+  globalThis.document = dom.window.document;
+  globalThis.Node = dom.window.Node;
+  globalThis.Element = dom.window.Element;
+  globalThis.HTMLElement = dom.window.HTMLElement;
+  globalThis.Event = dom.window.Event;
+  const { renderMeritMatrixTab } = await import('../../app/views/meritMatrixPanel.js');
+  const state = makeState({ rows: [...defaultRows(), payRow('dana', 100000, null)] });
+  const ctx = seed(state);
+  const report = ctx.api.meritParityReport().report;
+  const level = report.byLevel.find((l) => l.key === 'lead');
+  assert.equal(level.printed, false);
+  assert.equal(level.gapBps, null);
+  assert.match(level.withheldReason, /incomplete/);
+  assert.equal(report.matchedLevelN, 0);
+  const exported = meritParityCsvRows(ctx.store.state, { now: NOW }).find((r) => r.level === 'lead');
+  assert.equal(exported.level_gap_bps, '');
+  assert.equal(exported.withheld_reason, level.withheldReason);
+  const node = renderMeritMatrixTab({ api: ctx.api, navigate: () => {}, refresh: () => {}, state: ctx.store.state }, ctx.store.state.meritCycles[0], NOW);
+  assert.match(node.textContent, /pay pool is incomplete/);
+  const reloaded = createStore({ storage: ctx.storage, now: () => NOW });
+  reloaded.load();
+  assert.deepEqual(reportFor(reloaded.state).byLevel, report.byLevel);
+});

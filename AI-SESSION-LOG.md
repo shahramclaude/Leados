@@ -1,3 +1,15 @@
+# 2026-11-10 — Session 213: refuse partial level comparisons
+
+**Doctrine / scope.** Both mandates present; origin `https://github.com/shahramclaude/Leados.git`. Director / VP primary × matrix, also single-chain. Merit parity's overall gap withheld incomplete pools, but its level-matched rows still printed a gap from the remaining rows. The slice reuses existing merit records and matrix read model, with no new event or stored projection; automation and other matrix parity remain unchanged.
+
+**Built.** Withhold level-matched medians and gaps for any excluded row or bounded-read overflow; print the reason in panel and CSV. Added Decision-maker conflict-of-interest and recusal ledger to Planned; domain keyword search found no named model, repository-wide absence [UNVERIFIED].
+
+**Verified.** Initial focused run failed because jsdom was not installed (18 passed, two skipped, one failed). Installed locked dependencies with `npm ci --no-audit --no-fund`; one retry of `node --test tests/app/merit-parity.test.mjs` passed 21/21, including stored-state reload, panel and CSV refusal agreement, and adjacent merit parity cases.
+
+**Unverified / blockers.** Full suite, real-browser accessibility, cap-specific fixture, and other partial-input outputs [UNVERIFIED]. Historical home-line accuracy and broader matrix parity remain In Progress; this is not a guarantee of system-wide reliability. Seats are not authentication. No build blocker.
+
+---
+
 # 2026-11-09 — Session 208: Every line that onboarded this person, or never did (Schema v125, ADR-0150, `RULE-ONB-01`, CSV #112, `#/onboarding?panel=matrix`)
 
 **Doctrine / sync / scope.** `NORTH_STAR.md` verified present with both binding mandates (Matrix Leadership, Bulletproof Reliability); no augmentation needed. Origin confirmed as `https://github.com/shahramclaude/Leados.git`; work stayed on `arena/b3d8dd4f-leados`. **Altitude: frontline / mid-manager PRIMARY** (last primary 204, the most-neglected matrix-primary rung and the rotation Sessions 206 and 207 both named). **Structure: matrix**; a single-chain workspace gains no case, no row, no ask, no edge and no delegation. The item was the discovery Session 207 entered into Planned for exactly this rotation: dual-line onboarding completeness.
