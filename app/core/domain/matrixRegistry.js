@@ -192,6 +192,7 @@ export const MATRIX_PANELS = Object.freeze([
   Object.freeze({ key: 'exit', label: 'Line exit', hint: 'What a line that has ended still owes — and who has settled it.' }),
   Object.freeze({ key: 'consent', label: 'Consent', hint: 'A declared share is an ask until the line accepts it and the person acknowledges it.' }),
   Object.freeze({ key: 'renewal', label: 'Re-affirmation', hint: 'A line has a term. Which commitments does anyone actually agree to today?' }),
+  Object.freeze({ key: 'allocation', label: 'Period allocation', hint: 'What each line actually charged across a named period — time-weighted share-days, or refused.' }),
   Object.freeze({ key: 'rights', label: 'Rights', hint: 'Who decides what, for each person on more than one line.' }),
   Object.freeze({ key: 'concordance', label: 'Concordance', hint: 'What the decision log actually did, against the rights declared on each line.' }),
   Object.freeze({ key: 'continuity', label: 'Continuity', hint: 'Which frozen decisions still name the authority that made them — and which have drifted.' }),

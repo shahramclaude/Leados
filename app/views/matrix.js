@@ -52,6 +52,10 @@ import { renderLineExitPanel } from './matrixExitPanel.js';
 // ADR-0156: the authority continuity register. A chief asks about the
 // PORTFOLIO of frozen decisions, not one decision type at a time.
 import { renderContinuityPanel } from './matrixContinuityPanel.js';
+// ADR-0158: the period-allocation ledger. Every other surface charges a line
+// at today's single share; this panel weighs what a NAMED period actually
+// consumed, in exact integer share-days, or refuses the figure.
+import { renderPeriodAllocationPanel } from './matrixPeriodAllocationPanel.js';
 
 const PANELS = MATRIX_PANELS;
 
@@ -839,6 +843,7 @@ export function renderMatrix(ctx) {
     panel === 'exit' ? renderLineExitPanel(ctx) : null,
     panel === 'consent' ? renderConsentPanel(ctx) : null,
     panel === 'renewal' ? renderReaffirmationPanel(ctx) : null,
+    panel === 'allocation' ? renderPeriodAllocationPanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
     panel === 'rights' ? rightsPanel(ctx, report) : null,
     panel === 'concordance' ? concordancePanel(ctx, report) : null,
     panel === 'continuity' ? renderContinuityPanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,

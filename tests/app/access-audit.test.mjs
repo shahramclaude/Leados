@@ -55,6 +55,7 @@ const ROUTES = [
   ['#/chain', 'Command chain'],
   ['#/catchball', 'Hoshin Kanri & Catchball Cascade'],
   ['#/matrix?panel=continuity', 'Matrix authority continuity'],
+  ['#/matrix?panel=allocation', 'Matrix line period allocation'],
   ['#/settings', 'Settings'],
 ];
 
