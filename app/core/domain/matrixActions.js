@@ -58,6 +58,7 @@ import {
   LINE_INTAKE_RECORDED_EVENT,
   LINE_INTAKE_REROUTED_EVENT,
 } from './lineIntakeRegistry.js';
+import { buildMatrixDemandVariance } from './matrixDemandVariance.js';
 
 export const MATRIX_EVENTS = Object.freeze({
   DECLARE: 'matrix.line.declared',
@@ -707,6 +708,23 @@ export function createMatrixActions(store, { now, idFactory }) {
       }
       managers.sort((a, b) => (a.isLeader ? 1 : 0) - (b.isLeader ? 1 : 0) || a.name.localeCompare(b.name));
       return { ok: true, people, managers };
+    },
+
+    /** ADR-0173: age-weighted decision-queue demand against declared share-days, per line. Pure read. */
+    matrixDemandVarianceReport(input = {}) {
+      const check = seatFor('declare-matrix-line');
+      if (!check.ok) return check;
+      const { seat } = check;
+      const at = clock();
+      const periodKey = input.periodKey ? String(input.periodKey).trim() : null;
+      const visiblePersonIds = seat.fullAccess
+        ? null
+        : new Set([...(seat.scope || []), ...(seat.lineScope || [])]);
+      return {
+        ok: true,
+        report: buildMatrixDemandVariance(store.state, { periodKey, now: at, settings: settings(), visiblePersonIds }),
+        seat: { id: seat.id, fullAccess: seat.fullAccess, rank: seat.rank },
+      };
     },
   };
 }
