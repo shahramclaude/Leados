@@ -102,10 +102,10 @@ const personOf = (report, id) => report.people.find((p) => p.personId === id);
 /* ------------------------------------------------------------- the surface */
 
 test('the panel and the export are registered, and the schema is untouched', () => {
-  assert.equal(SCHEMA_VERSION, 135, 'ADR-0169 adds no collection');
+  assert.equal(SCHEMA_VERSION, 137, 'meeting-share parity adds no collection');
   assert.ok(MATRIX_PANELS.some((p) => p.key === 'meeting-load'));
   assert.ok(CSV_EXPORTS.some((s) => s.key === 'matrix-meeting-load'));
-  assert.equal(MATRIX_MEETING_LOAD_CSV_COLUMNS.length, 35);
+  assert.equal(MATRIX_MEETING_LOAD_CSV_COLUMNS.length, 41);
 });
 
 /* ------------------------------------------------------- exact arithmetic */
@@ -148,6 +148,69 @@ test('minutes are exact: the sitting log, the person rows and the export agree t
   assert.equal(b.spanTaxPermille, permilleOf(215, 925));
   assert.equal(b.spanTaxPermille, 232);
   assert.match(matrixMeetingLoadBriefText(report), /coordination-tax rate is 232 per-mille/);
+});
+
+test('line share parity compares the canonical share-day ledger with exact line-chaired minutes and renders those same figures', () => {
+  const state = baseState();
+  const persisted = JSON.parse(JSON.stringify(state));
+  const reloaded = normalizeState(persisted).state;
+  const report = read(reloaded);
+  const rows = report.lineShareParity.rows.filter((row) => row.personId === 'sam');
+  const project = rows.find((row) => row.managerId === 'project');
+  const product = rows.find((row) => row.managerId === 'product');
+  assert.equal(project.state, 'computed');
+  assert.equal(project.declaredPermille, 400);
+  assert.equal(project.observedMinutes, 90);
+  assert.equal(project.totalMinutes, 270);
+  assert.equal(project.observedPermille, 333);
+  assert.equal(project.deltaPermille, -67);
+  assert.equal(product.declaredPermille, 600);
+  assert.equal(product.observedMinutes, 60);
+  assert.equal(product.observedPermille, 222);
+  assert.equal(report.lineShareParity.board.rowsReconcile, true);
+  assert.equal(report.lineShareParity.board.computedN + report.lineShareParity.board.refusedN, report.lineShareParity.board.rowsN);
+
+  const dom = new JSDOM('<!doctype html><html><body></body></html>', { url: 'https://example.test/' });
+  const globals = ['window', 'document', 'Node', 'Element', 'HTMLElement', 'Event'];
+  const previous = new Map(globals.map((key) => [key, globalThis[key]]));
+  const before = JSON.stringify(state);
+  try {
+    for (const key of globals) globalThis[key] = key === 'document' ? dom.window.document : key === 'window' ? dom.window : dom.window[key];
+    const root = renderMatrixMeetingLoadPanel({ state: reloaded, query: new URLSearchParams({ from: Q3_FROM, to: Q3_TO }), navigate() {} }, { now: NOW });
+    dom.window.document.body.append(root);
+    const text = dom.window.document.body.textContent;
+    assert.match(text, /Observed meeting share vs declared line share/);
+    assert.match(text, /400 ‰/);
+    assert.match(text, /90 \/ 270 min/);
+    assert.match(text, /333 ‰/);
+    const parityTable = [...root.querySelectorAll('table')].find((table) => table.getAttribute('aria-label') === 'Per-person declared share against recorded meeting share');
+    const samProjectRow = [...parityTable.querySelectorAll('tbody tr')].find((row) => row.textContent.startsWith('Sam') && row.textContent.includes('Project Manager'));
+    assert.ok(samProjectRow);
+    const cells = [...samProjectRow.querySelectorAll('td')].map((cell) => cell.textContent.trim());
+    assert.equal(cells[2], `${project.declaredPermille} ‰ (${project.declaredShareDaysH} share-days / ${project.declaredDays} days)`);
+    assert.equal(cells[3], `${project.observedMinutes} / ${project.totalMinutes} min`);
+    assert.equal(cells[4], `${project.observedPermille} ‰`);
+    assert.equal(JSON.stringify(persisted), before, 'reading and rendering do not mutate reloaded stored data');
+  } finally {
+    for (const key of globals) globalThis[key] = previous.get(key);
+  }
+});
+
+test('line-share parity refuses incomplete sitting totals and partial-period structure instead of borrowing a figure', () => {
+  const missingDuration = read(refusedState());
+  const samRefusal = missingDuration.lineShareParity.rows.find((row) => row.personId === 'sam' && row.managerId === 'project');
+  assert.equal(samRefusal.state, 'refused');
+  assert.match(samRefusal.reason, /no readable duration|total is BLANK|could not be read/i);
+  assert.equal(samRefusal.declaredPermille, null);
+  assert.equal(samRefusal.observedPermille, null);
+
+  const changedLine = baseState();
+  changedLine.reportingLines.find((line) => line.id === 'l-sam-project').toISO = '2026-08-31';
+  const partial = read(normalizeState(changedLine).state);
+  const partialRow = partial.lineShareParity.rows.find((row) => row.personId === 'sam' && row.managerId === 'project');
+  assert.equal(partialRow.state, 'refused');
+  assert.match(partialRow.reason, /whole requested period/);
+  assert.equal(partialRow.declaredPermille, null);
 });
 
 test('display equals stored: a reloaded workspace prints the same figures and a read mutates nothing', () => {

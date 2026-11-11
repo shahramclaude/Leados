@@ -200,6 +200,46 @@ function peoplePanel(report) {
   });
 }
 
+function lineShareParityPanel(report) {
+  const parity = report.lineShareParity;
+  if (!parity?.board?.rowsN) return null;
+  const b = parity.board;
+  return card({
+    title: 'Observed meeting share vs declared line share',
+    subtitle: 'For each person and additional line, compare the line’s time-weighted declared share-days with the share of that person’s recorded meeting minutes chaired by that line manager. This is a calendar-mix diagnostic, not a work-output allocation or a manager score.',
+    body: h('div', { class: 'stack-sm' },
+      banner({
+        tone: b.refusedN ? 'warn' : 'info',
+        title: `${b.computedN} comparison(s) computed · ${b.refusedN} refused`,
+        body: `Row counts reconcile: ${b.rowsReconcile ? 'verified' : 'NOT verified'}. Figures complete: ${b.figuresComplete ? 'verified' : 'NOT verified'}. Observed line-chair minutes printed: ${b.printedObservedMinutes}; refused rows remain blank. The current line must cover the full period, the declared share must be provable, and the person must have at least ${report.board.taxFloorMinutes} readable meeting minutes.`,
+      }),
+      table({
+        caption: 'Per-person declared share against recorded meeting share',
+        columns: [
+          { label: 'Person', key: 'person' },
+          { label: 'Line manager', key: 'manager' },
+          { label: 'Declared share', key: 'declared' },
+          { label: 'Meetings chaired by line', key: 'observed' },
+          { label: 'Observed share', key: 'share' },
+          { label: 'Difference', key: 'delta' },
+          { label: 'State / refusal', key: 'state' },
+        ],
+        rows: parity.rows.map((row) => ({
+          person: row.personName,
+          manager: row.managerName,
+          declared: row.declaredPermille === null ? '—' : `${row.declaredPermille} ‰ (${row.declaredShareDaysH} share-days / ${row.declaredDays} days)`,
+          observed: row.observedMinutes === null ? '—' : `${row.observedMinutes} / ${row.totalMinutes} min`,
+          share: row.observedPermille === null ? '—' : `${row.observedPermille} ‰`,
+          delta: row.deltaPermille === null ? '—' : `${row.deltaPermille > 0 ? '+' : ''}${row.deltaPermille} ‰`,
+          state: row.state === 'computed'
+            ? badge('Computed', 'good')
+            : h('div', { class: 'stack-sm' }, badge('Refused', 'warn'), h('span', { class: 'muted small' }, row.reason)),
+        })),
+      }),
+    ),
+  });
+}
+
 function forumPanel(report) {
   if (!report.forums.length) return null;
   return card({
@@ -403,6 +443,7 @@ export function renderMatrixMeetingLoadPanel(ctx, opts = {}) {
       : null,
 
     peoplePanel(report),
+    lineShareParityPanel(report),
     forumPanel(report),
     chairPanel(report),
     refusalPanel(report),

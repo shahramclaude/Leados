@@ -45,7 +45,7 @@ import { dayKey } from '../time.js';
 import { LEADER_ID } from './chain.js';
 import { buildMatrix, matrixLineScope } from './matrix.js';
 import { activeSeat, buildSeats } from './seat.js';
-import { resolveAllocationWindow } from './linePeriodAllocation.js';
+import { buildLinePeriodAllocation, resolveAllocationWindow } from './linePeriodAllocation.js';
 import { FORUM_CADENCE_LABELS, FORUM_KIND_LABELS } from './cadenceRegistry.js';
 import {
   MATRIX_MEETING_LOAD_BOUNDS,
@@ -194,6 +194,7 @@ export function buildMatrixMeetingLoad(state = {}, {
       placements: emptyPlacements(),
       placementMinutes: emptyPlacements(),
       chairs: new Map(),
+      lineManagerMinutes: new Map(),
       forums: new Map(),
       durationRefusalN: 0,
       attendanceRefusalN: 0,
@@ -349,6 +350,9 @@ export function buildMatrixMeetingLoad(state = {}, {
       person.chargedMinutes += minutes;
       person.placements[placementKey] += 1;
       person.placementMinutes[placementKey] += minutes;
+      if (placementKey === 'line' && chairId) {
+        person.lineManagerMinutes.set(chairId, (person.lineManagerMinutes.get(chairId) || 0) + minutes);
+      }
       person.forums.set(forum.id, {
         forumId: forum.id,
         title: forum.title || 'Untitled forum',
@@ -438,6 +442,7 @@ export function buildMatrixMeetingLoad(state = {}, {
       homeMinutes: refused ? null : person.placementMinutes.home,
       selfMinutes: refused ? null : person.placementMinutes.self,
       lineMinutes: refused ? null : person.placementMinutes.line,
+      lineManagerMinutes: refused ? null : Object.fromEntries(person.lineManagerMinutes),
       otherMinutes: refused ? null : person.placementMinutes.other,
       noChairMinutes: refused ? null : person.placementMinutes['no-chair'],
       forumsN: person.forums.size,
@@ -613,6 +618,67 @@ export function buildMatrixMeetingLoad(state = {}, {
     sessionsOmittedN,
   };
 
+  // Compare each current additional line's declared share-days with the share
+  // of that person's recorded meeting minutes chaired by the same line manager.
+  // The parity claim is deliberately refused for partial-period line histories:
+  // this ledger's sitting placement is a current-structure reading, so using it
+  // as historical attribution would manufacture a time-travel hierarchy.
+  const allocation = buildLinePeriodAllocation(state, { from: window.from, to: window.to, now: at, settings: cfg });
+  const parityRows = [];
+  const parityReasons = new Set();
+  for (const allocPerson of allocation.persons || []) {
+    const meetingPerson = personRows.find((row) => row.personId === allocPerson.personId);
+    const uniqueManagers = new Map();
+    for (const line of allocPerson.lines || []) {
+      if (!line.managerId || line.state === 'out-of-scope-home' || !line.inWindow) continue;
+      const existing = uniqueManagers.get(line.managerId) || [];
+      existing.push(line);
+      uniqueManagers.set(line.managerId, existing);
+    }
+    for (const [managerId, lines] of uniqueManagers) {
+      const line = lines[0];
+      const reasons = [];
+      if (lines.length !== 1) reasons.push('More than one declaration for this person names the same manager; meeting minutes cannot be split between them.');
+      if (line.state !== 'computed') reasons.push(line.reason || `The declared share is ${line.state}; no parity figure is supported.`);
+      if (line.fromISO > window.from || (line.toISO && line.toISO < window.to)) reasons.push('The line was not in force for the whole requested period; sitting attribution is not projected across a changed reporting structure.');
+      if (!meetingPerson || meetingPerson.state !== 'measured') reasons.push(meetingPerson?.reason || 'No complete measured meeting total supports the observed share.');
+      const totalMinutes = meetingPerson?.minutes;
+      const observedMinutes = meetingPerson?.lineManagerMinutes?.[managerId] ?? 0;
+      if (meetingPerson?.state === 'measured' && totalMinutes < MATRIX_MEETING_LOAD_BOUNDS.taxFloorMinutes) {
+        reasons.push(`The person has ${totalMinutes} recorded minute(s), below the declared ${MATRIX_MEETING_LOAD_BOUNDS.taxFloorMinutes}-minute comparison floor.`);
+      }
+      const valid = reasons.length === 0 && window.valid && Number.isInteger(line.shareDaysH);
+      const declaredPermille = valid ? Math.round((line.shareDaysH * 10) / line.daysInWindow) : null;
+      const observedPermille = valid ? permilleOf(observedMinutes, totalMinutes) : null;
+      parityRows.push({
+        personId: allocPerson.personId, personName: allocPerson.personName, managerId, managerName: line.managerName,
+        declarationId: line.declarationId, declaredShareDaysH: valid ? line.shareDaysH : null,
+        declaredDays: valid ? line.daysInWindow : null, declaredPermille,
+        observedMinutes: valid ? observedMinutes : null, totalMinutes: valid ? totalMinutes : null, observedPermille,
+        deltaPermille: valid ? observedPermille - declaredPermille : null,
+        state: valid ? 'computed' : 'refused', reason: valid ? null : reasons.join(' '),
+      });
+    }
+  }
+  const parityBoard = {
+    rowsN: parityRows.length,
+    rowsOmittedN: Math.max(0, parityRows.length - MATRIX_MEETING_LOAD_BOUNDS.rows),
+    computedN: parityRows.filter((row) => row.state === 'computed').length,
+    refusedN: parityRows.filter((row) => row.state === 'refused').length,
+    observedMinutes: parityRows.reduce((sum, row) => sum + (row.observedMinutes || 0), 0),
+    printedObservedMinutes: parityRows.filter((row) => row.state === 'computed').reduce((sum, row) => sum + row.observedMinutes, 0),
+    rowsReconcile: false,
+    figuresComplete: parityRows.length > 0 && parityRows.length <= MATRIX_MEETING_LOAD_BOUNDS.rows
+      && parityRows.every((row) => row.state === 'computed'),
+  };
+  parityBoard.rowsReconcile = parityBoard.computedN + parityBoard.refusedN === parityBoard.rowsN
+    && parityBoard.printedObservedMinutes === parityRows.filter((row) => row.state === 'computed').reduce((sum, row) => sum + row.observedMinutes, 0);
+  for (const row of parityRows) if (row.reason) parityReasons.add(row.reason);
+  parityRows.sort((a, b) => (a.state === 'refused' ? -1 : 0) - (b.state === 'refused' ? -1 : 0)
+    || Math.abs(b.deltaPermille || 0) - Math.abs(a.deltaPermille || 0)
+    || String(a.personName).localeCompare(String(b.personName))
+    || String(a.managerName).localeCompare(String(b.managerName)));
+
   const hasLines = matrix.lines.some((line) => line.role !== 'primary' && line.active !== false);
   const seatView = seat
     ? { id: seat.id, label: seat.label || seat.id, rank: seat.rank ?? null, fullAccess: Boolean(seat.fullAccess) }
@@ -627,6 +693,7 @@ export function buildMatrixMeetingLoad(state = {}, {
     fullAccess,
     hasLines,
     isMatrix: hasLines,
+    lineShareParity: { rows: parityRows.slice(0, MATRIX_MEETING_LOAD_BOUNDS.rows), board: parityBoard, reasons: [...parityReasons] },
     conventions: MATRIX_MEETING_LOAD_CONVENTIONS,
     method: MATRIX_MEETING_LOAD_METHOD,
     placements: MATRIX_MEETING_LOAD_PLACEMENTS,
@@ -669,6 +736,8 @@ export function matrixMeetingLoadBriefText(report) {
   } else {
     lines.push(`The span coordination-tax rate is ${b.spanTaxPermille} per-mille — ${b.crossLineMinutes} of ${b.chargedMinutes} recorded person-minutes convened outside the home line, over ${b.measuredPeopleN} measured person(s).`);
   }
+  const parity = report.lineShareParity?.board;
+  if (parity) lines.push(`Line meeting-share parity: ${parity.computedN} of ${parity.rowsN} line/person comparison(s) computed and ${parity.refusedN} refused; these compare each line’s declared share-days with the recorded meeting-minute share chaired by that manager, and are not a measure of work output.`);
   if (b.refusedSittingsN) {
     const parts = report.sessionRefusals.filter((r) => r.sittingN > 0).map((r) => `${r.sittingN} ${r.label.toLowerCase()}`);
     lines.push(`${b.refusedSittingsN} sitting(s) were refused rather than charged: ${parts.join(', ')}.`);
@@ -752,6 +821,12 @@ export function matrixMeetingLoadCsvRows(report) {
         : '',
       minutes_reconcile: isSummary ? b.minutesReconcile : '',
       figures_complete: isSummary ? b.figuresComplete : b.figuresComplete,
+      line_parity_rows_n: isSummary ? report.lineShareParity?.board.rowsN ?? 0 : '',
+      line_parity_rows_omitted_n: isSummary ? report.lineShareParity?.board.rowsOmittedN ?? 0 : '',
+      line_parity_computed_n: isSummary ? report.lineShareParity?.board.computedN ?? 0 : '',
+      line_parity_refused_n: isSummary ? report.lineShareParity?.board.refusedN ?? 0 : '',
+      line_parity_rows_reconcile: isSummary ? report.lineShareParity?.board.rowsReconcile ?? false : '',
+      line_parity_figures_complete: isSummary ? report.lineShareParity?.board.figuresComplete ?? false : '',
     };
   };
   return [bucket(null), ...kinds.map((kind) => bucket(kind))];

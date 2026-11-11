@@ -308,6 +308,12 @@ export const MATRIX_MEETING_LOAD_CSV_COLUMNS = Object.freeze([
   'tax_floor_people',
   'minutes_reconcile',
   'figures_complete',
+  'line_parity_rows_n',
+  'line_parity_rows_omitted_n',
+  'line_parity_computed_n',
+  'line_parity_refused_n',
+  'line_parity_rows_reconcile',
+  'line_parity_figures_complete',
 ]);
 
 export const MATRIX_MEETING_LOAD_LIMITS_TEXT = Object.freeze(
