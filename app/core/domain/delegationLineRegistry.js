@@ -3,13 +3,7 @@
  * Attribution & Shared-Contributor Load Reconciliation (ADR-0178, Schema v143,
  * `RULE-DLA-01`, CSV scope #133, `#/matrix?panel=asks`).
  *
- * STATUS (Session 242, 2026-11-11): FOUNDATION ONLY — NOT YET WIRED. Nothing
- * outside `delegationLineSchema.js` and their own test suite imports this
- * module. `SCHEMA_VERSION` is still 142. ADR-0178, Schema v143, `RULE-DLA-01`,
- * CSV scope #133 and the `asks` panel named in this file are RESERVED
- * identifiers for the remaining slices (ROADMAP.md, "In Progress"), not things
- * that exist. Every sentence below about what the register, the rule or the
- * panel "does" describes the agreed design those slices must meet.
+ * STATUS (Session 243, 2026-11-11): SHIPPED — Schema v143, RULE-DLA-01, CSV #133 and `#/matrix?panel=asks` are wired end to end.
  *
  * THE DUTY. A frontline contributor in a matrix answers to a functional manager
  * and a project or product manager. Both hand over dated work, and each of them

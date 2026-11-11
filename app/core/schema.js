@@ -27,6 +27,7 @@ import { normalizeReportingLines, normalizeMatrixMarkers, normalizeMatrixSetting
 import { normalizeOneOnOneHolder, normalizeOneOnOneLineMarkers, normalizeOneOnOneLineSettings } from './domain/oneOnOneLineSchema.js';
 import { normalizeHiringLineMarkers, normalizeHiringLinePlans, normalizeHiringLineSettings } from './domain/hiringLineSchema.js';
 import { normalizeTransferPriceActs, normalizeTransferPriceMarkers, normalizeTransferPriceSettings } from './domain/transferPriceSchema.js';
+import { normalizeDelegationLineActs, normalizeDelegationLineMarkers, normalizeDelegationLineSettings } from './domain/delegationLineSchema.js';
 // ADR-0143 (Schema v120): the Cross-Line Priority Arbitration's fail-closed
 // normalizers. Every stored row is a human act; every score, state and count is
 // re-derived on read, so a printed order cannot drift from the integers it ranks.
@@ -742,7 +743,7 @@ export {
 // idempotency ledger). Deliberately EMPTY on upgrade: no price is ever inferred
 // from pay, a budget line or a title, so every borrowed share-day of every
 // existing workspace reads `no agreed price` — refused, never zero.
-export const SCHEMA_VERSION = 142;
+export const SCHEMA_VERSION = 143;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -2152,6 +2153,8 @@ export const DEFAULT_SETTINGS = Object.freeze({
   ...normalizeHiringLineSettings({}),
   // ADR-0177: transfer-price ask window + automation pause.
   ...normalizeTransferPriceSettings({}),
+  // ADR-0178: cross-line ask budget, due window and automation pause.
+  ...normalizeDelegationLineSettings({}),
 });
 
 export const COLLECTIONS = [
@@ -2851,6 +2854,9 @@ export const COLLECTIONS = [
   // marker ledger. No charge, credit, net, agreement state or total is stored.
   'transferPriceActs',
   'transferPriceMarkers',
+  // ADR-0178: append-only ask-to-line attribution and RULE-DLA-01 markers.
+  'delegationLineActs',
+  'delegationLineMarkers',
 ];
 
 /** Stable empty state. `now` is an ISO string so the result is a pure value. */
@@ -8103,6 +8109,8 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // dropped with a counted warning — never repaired into a price nobody agreed.
   state.transferPriceActs = normalizeTransferPriceActs(raw.transferPriceActs, warnings);
   state.transferPriceMarkers = normalizeTransferPriceMarkers(raw.transferPriceMarkers);
+  state.delegationLineActs = normalizeDelegationLineActs(raw.delegationLineActs, state, warnings);
+  state.delegationLineMarkers = normalizeDelegationLineMarkers(raw.delegationLineMarkers);
   // ADR-0122: a malformed absence row is dropped with a warning, never repaired —
   // an invented absence is an invented unavailability for every cover in the span.
   // Resolved BEFORE links so the `declares-absence-of` provenance edge validates
@@ -8838,6 +8846,8 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  // 142 → 143: attribution starts empty; no existing ask is guessed onto a line.
+  142: (v142) => ({ ...v142, schemaVersion: 143, delegationLineActs: Array.isArray(v142.delegationLineActs) ? v142.delegationLineActs : [], delegationLineMarkers: Array.isArray(v142.delegationLineMarkers) ? v142.delegationLineMarkers : [] }),
   // 141 → 142: ADR-0177 adds two EMPTY collections. No reporting line, share,
   // budget or person changes, and no price is fabricated: every borrowed
   // share-day reads `no agreed price` until two managers sign one.

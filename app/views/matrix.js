@@ -90,6 +90,7 @@ import { renderMatrixDoaPanel } from './matrixDoaPanel.js';
 import { renderMatrixOneOnOnePanel } from './matrixOneOnOnePanel.js';
 import { renderMatrixHiringPanel } from './matrixHiringPanel.js';
 import { renderMatrixChargebackPanel } from './matrixChargebackPanel.js';
+import { renderMatrixDelegationLinePanel } from './matrixDelegationLinePanel.js';
 
 const PANELS = MATRIX_PANELS;
 
@@ -892,6 +893,7 @@ export function renderMatrix(ctx) {
     panel === 'authority' ? renderMatrixDoaPanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
     panel === 'one-on-ones' ? renderMatrixOneOnOnePanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
     panel === 'hiring' ? renderMatrixHiringPanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
+    panel === 'asks' ? renderMatrixDelegationLinePanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
     panel === 'chargeback' ? renderMatrixChargebackPanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
     panel === 'continuity' ? renderContinuityPanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
     panel === 'seats' ? seatsPanel(ctx, report) : null,

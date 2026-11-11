@@ -162,6 +162,7 @@ import { benchRegressionRule } from './benchRegressionRules.js';
 import { oneOnOneLineRule } from './oneOnOneLineRules.js';
 import { hiringLineRule } from './hiringLineRules.js';
 import { transferPriceRule } from './transferPriceRules.js';
+import { delegationLineRule } from './delegationLineRules.js';
 
 
 // ADR-0087: the Operating Cadence Clock. Reads the finished queue after the
@@ -957,6 +958,8 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // transaction. Inert until the first price act exists; never signs a key,
   // posts a charge or edits a budget.
   transferPriceRule,
+  // ADR-0178: shared-contributor overload across every active reporting line.
+  delegationLineRule,
   // ADR-0076: the Operating Seat (vertical roll-up + enforced boundaries).
   // It reads the finished record after every module has propagated, then fans
   // each open item up every leadership ancestor in the reporting tree with one
