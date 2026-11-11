@@ -155,6 +155,7 @@ import { matrixInterfaceRule } from './matrixInterfaceRules.js';
 import { meritEvidenceRule } from './meritEvidenceRules.js';
 // ADR-0168: the Cross-Line Bench-Evidence Sufficiency reading (RULE-BNE-01).
 import { benchEvidenceRule } from './benchEvidenceRules.js';
+import { benchRegressionRule } from './benchRegressionRules.js';
 
 
 // ADR-0087: the Operating Cadence Clock. Reads the finished queue after the
@@ -912,6 +913,16 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // rating, a review or a line, and runs before `seatRule` so the obligation it
   // opens rolls up the hierarchy in the same atomic transaction.
   benchEvidenceRule,
+  // ADR-0172: the Bench-Claim Evidence Regression Watch (RULE-BRG-01). Freezes
+  // one dated evidence reading per bench claim per completed review, compares
+  // consecutive windows (frozen previous against live later, under a rating
+  // gate), and puts ONE dated ask in front of the home-line holder as of the
+  // later window's end when the ground moved under an unchanged rating. Older
+  // pairs, open questions, declaration problems and structural changes issue
+  // NOTHING and are counted. It never edits a rating, a review, a line or a
+  // frozen reading, and runs before `seatRule` so the obligation it opens rolls
+  // up the hierarchy in the same atomic transaction.
+  benchRegressionRule,
   // ADR-0076: the Operating Seat (vertical roll-up + enforced boundaries).
   // It reads the finished record after every module has propagated, then fans
   // each open item up every leadership ancestor in the reporting tree with one

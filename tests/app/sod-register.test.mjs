@@ -188,7 +188,7 @@ const tableByCaption = (node, caption) => [...node.querySelectorAll('table')]
  * ===================================================================== */
 
 test('the register is wired into the matrix, the export catalogue and the shared spine without a schema move', () => {
-  assert.equal(SCHEMA_VERSION, 136, 'the intake gate (ADR-0171) moved the schema to v136; the SoD register itself needs no migration');
+  assert.equal(SCHEMA_VERSION, 137, 'the regression watch (ADR-0172) moved the schema to v137; the SoD register itself needs no migration');
   assert.ok(MATRIX_PANELS.some((panel) => panel.key === 'sod'));
   const scope = CSV_EXPORTS.find((entry) => entry.key === 'matrix-sod');
   assert.ok(scope, 'the aggregate scope is in the catalogue');
