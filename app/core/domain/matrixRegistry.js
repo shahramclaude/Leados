@@ -200,6 +200,7 @@ export const MATRIX_PANELS = Object.freeze([
   Object.freeze({ key: 'goal-carriage', label: 'Goal carriage', hint: 'Which manager spans carry each active goal, and what adding reporting branches would double-count.' }),
   Object.freeze({ key: 'rights', label: 'Rights', hint: 'Who decides what, for each person on more than one line.' }),
   Object.freeze({ key: 'concordance', label: 'Concordance', hint: 'What the decision log actually did, against the rights declared on each line.' }),
+  Object.freeze({ key: 'sod', label: 'Segregation', hint: 'Which decided calls had one hand both initiate and authorize — or an authorizing hand that reported to the initiating one, on any line.' }),
   Object.freeze({ key: 'continuity', label: 'Continuity', hint: 'Which frozen decisions still name the authority that made them — and which have drifted.' }),
   Object.freeze({ key: 'seats', label: 'Seats', hint: 'Whose line the work actually reaches — and who the roster cannot seat.' }),
   Object.freeze({ key: 'governance', label: 'Governance', hint: 'Executive view: joint-apex escalations, cross-axis coupling and structural checks.' }),

@@ -461,7 +461,7 @@ test('CSV #116 appends the evidence columns, keeps the existing ones, and carrie
     stewardship: { requests: [ask(id, '2026-11-01', '2026-11-08')], answers: [answer(id, 'input', '2026-11-05')] },
   }));
   const state = makeState({ reviews });
-  assert.equal(CSV_EXPORTS.length, 123, 'ADR-0166 extends an existing scope; ADR-0168 registers #123; ADR-0169 registers #124 (matrix-meeting-load)');
+  assert.equal(CSV_EXPORTS.length, 124, 'ADR-0166 extends an existing scope; ADR-0168 registers #123; ADR-0169 registers #124 (matrix-meeting-load); ADR-0170 registers #125, so 124 are registered');
 
   // The old header is a PREFIX of the new one, in order.
   assert.deepEqual(

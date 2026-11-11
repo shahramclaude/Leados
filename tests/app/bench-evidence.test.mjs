@@ -447,7 +447,7 @@ test('the rule is inert on a single-chain workspace and on every other event', (
 /* ------------------------------ 7. the export carries no identity -------- */
 
 test('CSV scope #123 is aggregate-only, reconciles to the panel and names nobody', () => {
-  assert.equal(CSV_EXPORTS.length, 123, 'ADR-0169 registers scope #124 on top of ADR-0168\u2019s #123');
+  assert.equal(CSV_EXPORTS.length, 124, 'ADR-0169 registers scope #124 on top of ADR-0168\u2019s #123; ADR-0170 registers #125 (124 registered)');
   const state = makeState({
     readinessRows: [readiness('sam'), readiness('zoe'), readiness('ana')],
     lines: projectLines(['sam', 'zoe', 'ana']),

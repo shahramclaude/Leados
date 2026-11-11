@@ -478,7 +478,7 @@ test('a single-chain workspace is inert end to end', () => {
 /* -------------------------------------------------------------------- CSV */
 
 test('CSV #115 is aggregate-only, exact-column, and reconciles row-for-row with the board', () => {
-  assert.equal(CSV_EXPORTS.length, 123, 'the register now holds 123 scopes (ADR-0162 #122, ADR-0168 #123, ADR-0169 #124)');
+  assert.equal(CSV_EXPORTS.length, 124, 'the register now holds 124 scopes (ADR-0162 #122, ADR-0168 #123, ADR-0169 #124, ADR-0170 #125; #75 stays reserved)');
   const descriptor = CSV_EXPORTS.find((item) => item.key === 'role-clarity');
   assert.ok(descriptor, 'the role-clarity scope is registered');
   assert.equal(descriptor.group, 'analytics');

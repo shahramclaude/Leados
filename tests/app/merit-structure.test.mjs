@@ -465,7 +465,7 @@ test('CSV #116 carries the structure counts and no manager or person identity', 
   // ADR-0156 added scope #117 (the authority continuity register), so the
   // registered total moved from 115 to 116. The pin states the total
   // deliberately so the next session cannot drift the count silently.
-  assert.equal(CSV_EXPORTS.length, 123, 'ADR-0156..0158 + ADR-0160..0162 brought the register to 121 scopes; ADR-0168 adds #123 and ADR-0169 adds #124');
+  assert.equal(CSV_EXPORTS.length, 124, 'ADR-0156..0158 + ADR-0160..0162 brought the register to 121 scopes; ADR-0168 adds #123 and ADR-0169 adds #124; ADR-0170 registers #125, so 124 are registered');
   const people = roster({ sam: { managerId: 'priya' } });
   const history = fullHistory({
     sam: period('sam', 'dana', '2026-09-01', '2026-11-30'),

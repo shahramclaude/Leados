@@ -75,6 +75,10 @@ import { renderGoalCarriagePanel } from './matrixGoalCarriagePanel.js';
 // stored each sitting's duration and room since Schema v93; this panel reads those
 // minutes per person and per line, and refuses any sitting it cannot read.
 import { renderMatrixMeetingLoadPanel } from './matrixMeetingLoadPanel.js';
+// ADR-0170: the segregation-of-duties register. The decision log names a Driver
+// and an Approver; this panel reads the two against each other and against the
+// reporting graph of the decision day — every line, not only the home chain.
+import { renderMatrixSodPanel } from './matrixSodPanel.js';
 
 const PANELS = MATRIX_PANELS;
 
@@ -870,6 +874,7 @@ export function renderMatrix(ctx) {
     panel === 'goal-carriage' ? renderGoalCarriagePanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`), seat: report.seat }) : null,
     panel === 'rights' ? rightsPanel(ctx, report) : null,
     panel === 'concordance' ? concordancePanel(ctx, report) : null,
+    panel === 'sod' ? renderMatrixSodPanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
     panel === 'continuity' ? renderContinuityPanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
     panel === 'seats' ? seatsPanel(ctx, report) : null,
     panel === 'governance' ? governancePanel(ctx, report) : null,
