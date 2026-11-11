@@ -52,6 +52,12 @@ import { buildMatrixCoordination } from './matrixCoordination.js';
 import { MATRIX_COORDINATION_SCAN_EVENT } from './matrixCoordinationRegistry.js';
 import { buildSodRegister } from './sodRegister.js';
 import { SOD_REVIEW_EVENT, SOD_RULE_ID } from './sodRegisterRegistry.js';
+import { buildLineIntakeGate, lineCeiling, quarterWindow } from './lineIntake.js';
+import {
+  LINE_INTAKE_BOUNDS,
+  LINE_INTAKE_RECORDED_EVENT,
+  LINE_INTAKE_REROUTED_EVENT,
+} from './lineIntakeRegistry.js';
 
 export const MATRIX_EVENTS = Object.freeze({
   DECLARE: 'matrix.line.declared',
@@ -59,6 +65,8 @@ export const MATRIX_EVENTS = Object.freeze({
   END: 'matrix.line.ended',
   CONVENTIONS: 'matrix.conventions.set',
   COORDINATION_SCAN: MATRIX_COORDINATION_SCAN_EVENT,
+  INTAKE_RECORDED: LINE_INTAKE_RECORDED_EVENT,
+  INTAKE_REROUTED: LINE_INTAKE_REROUTED_EVENT,
 });
 
 export function createMatrixActions(store, { now, idFactory }) {
@@ -478,6 +486,227 @@ export function createMatrixActions(store, { now, idFactory }) {
         summary: `Matrix conventions re-declared: balance tolerance ${next.matrixBalanceHundredths} hundredths, expiring window ${next.matrixExpiringDays} day(s), auto-propagation ${next.matrixAutoPropagate ? 'on' : 'off'}.`.slice(0, 300),
       });
       return saved({ conventions: next });
+    },
+
+    /* ------------------------------------------------- the intake gate (ADR-0171) */
+
+    /**
+     * Record a dated intake act against a declared line and its running
+     * period — or refuse it. The gate is the control: if the running total
+     * for the line and period, plus this intake, would breach the line's
+     * declared share-day ceiling, the intake is REFUSED with the reason
+     * printed, unless the caller supplies an explicit human override
+     * (`override: true` with a reason), in which case the over-share is
+     * recorded as a fact. An unprovable ceiling admits nothing.
+     */
+    matrixRecordIntake(input = {}) {
+      const check = seatFor('declare-matrix-line');
+      if (!check.ok) return check;
+      const { seat, built } = check;
+
+      const personId = String(input.personId || '').trim();
+      const managerId = String(input.managerId || 'leader').trim() || 'leader';
+      if (!personId) return fail('Name the person this intake is about.', 'personId');
+      if (!activePerson(personId)) return fail('That person is not on the active roster.', 'personId');
+      if (managerId !== LEADER_ID && !activePerson(managerId)) return fail('That manager is not on the active roster.', 'managerId');
+      if (personId === managerId) return fail('A person cannot fund their own intake line.', 'managerId');
+
+      const eligible = declarationEligibility(seat, built, personId, managerId);
+      if (!eligible.ok) return fail(eligible.error, eligible.field);
+
+      const title = String(input.title || '').trim().slice(0, LINE_INTAKE_BOUNDS.titleChars);
+      if (!title) return fail('Name the work being taken on. An unnamed intake cannot be gated.', 'title');
+
+      const shareDays = Number(input.shareDays);
+      if (!Number.isFinite(shareDays) || shareDays <= 0 || shareDays > LINE_INTAKE_BOUNDS.maxShareDaysPerIntake) {
+        return fail(`State the share-days this intake consumes as a positive number up to ${LINE_INTAKE_BOUNDS.maxShareDaysPerIntake} person-days.`, 'shareDays');
+      }
+      const shareDaysH = Math.round(shareDays * 100);
+
+      const at = clock();
+      const dateRaw = String(input.date || '').trim();
+      const date = /^\d{4}-\d{2}-\d{2}$/.test(dateRaw) ? dateRaw : dayKey(at);
+      if (new Date(`${date}T00:00:00.000Z`).toISOString().slice(0, 10) !== date) {
+        return fail('Give the intake date as a real calendar day (YYYY-MM-DD).', 'date');
+      }
+      const window = quarterWindow(date);
+      if (!window) return fail('The intake date is not a readable calendar day.', 'date');
+
+      // The line must be in force on the intake date.
+      const row = lines().find((r) => r && r.personId === personId && r.managerId === managerId
+        && String(r.fromISO || '').slice(0, 10) <= date
+        && (!r.toISO || String(r.toISO).slice(0, 10) >= date));
+      if (!row) {
+        return fail('No declared line for that person and manager is in force on the intake date. Declare the line first, or date the intake inside its window.', 'managerId');
+      }
+
+      const ceiling = lineCeiling(store.state, personId, managerId, window.periodKey, { now: at });
+      if (ceiling.state !== 'computed') {
+        return fail(`The gate admits nothing against an unprovable ceiling: ${ceiling.reason}`, 'managerId');
+      }
+      const consumedH = (Array.isArray(store.state.lineIntakes) ? store.state.lineIntakes : [])
+        .filter((r) => r && r.personId === personId && r.managerId === managerId
+          && r.periodKey === window.periodKey && r.status !== 're-routed')
+        .reduce((acc, r) => acc + (Number.isInteger(r.shareDaysH) ? r.shareDaysH : 0), 0);
+      const wouldBeH = consumedH + shareDaysH;
+      const override = input.override === true;
+      const overrideReason = String(input.overrideReason || '').trim().slice(0, LINE_INTAKE_BOUNDS.reasonChars);
+      if (wouldBeH > ceiling.ceilingH) {
+        if (!override) {
+          return fail(`Refused: this intake would take the line to ${(wouldBeH / 100).toFixed(2)} person-days against a declared ceiling of ${(ceiling.ceilingH / 100).toFixed(2)} for ${window.periodKey}. Accept the over-share with a reason, re-route to another line, or retune the declaration.`, 'shareDays');
+        }
+        if (!overrideReason) {
+          return fail('An over-share override needs a printed reason: why is this line going past its declared share-days?', 'overrideReason');
+        }
+      }
+
+      const intakeId = idFactory('intake');
+      const personName = built.chain.byId.get(personId)?.name || personId;
+      const managerName = managerId === LEADER_ID
+        ? (built.chain.nodes.get(LEADER_ID)?.name || 'the workspace leader')
+        : (built.chain.byId.get(managerId)?.name || managerId);
+      const status = wouldBeH > ceiling.ceilingH ? 'over-share' : 'recorded';
+      store.update((draft) => {
+        draft.lineIntakes = Array.isArray(draft.lineIntakes) ? draft.lineIntakes : [];
+        draft.lineIntakes.push({
+          id: intakeId,
+          personId,
+          managerId,
+          periodKey: window.periodKey,
+          shareDaysH,
+          title,
+          date,
+          status,
+          overrideReason: status === 'over-share' ? overrideReason : '',
+          reroutedFrom: null,
+          reroutedTo: null,
+          recordedAt: at.toISOString(),
+          recordedBySeatId: seat.fullAccess ? null : seat.id,
+        });
+      }, {
+        type: MATRIX_EVENTS.INTAKE_RECORDED,
+        entity: 'lineintake',
+        entityId: intakeId,
+        summary: `Intake recorded: ${personName} under ${managerName} for ${window.periodKey} — ${title} (${(shareDaysH / 100).toFixed(2)} person-days, ${status}).`.slice(0, 300),
+      });
+      return saved({ id: intakeId, personId, managerId, periodKey: window.periodKey, shareDaysH, status });
+    },
+
+    /**
+     * Re-route a live intake to another line: the old intake is voided
+     * (append-only, status `re-routed`) and a new intake is recorded on the
+     * target line through the same gate check. The funding history is not
+     * rewritten; it is extended.
+     */
+    matrixRerouteIntake(input = {}) {
+      const check = seatFor('declare-matrix-line');
+      if (!check.ok) return check;
+      const { seat, built } = check;
+
+      const intakeId = String(input.intakeId || '').trim();
+      const toManagerId = String(input.toManagerId || 'leader').trim() || 'leader';
+      const existing = (Array.isArray(store.state.lineIntakes) ? store.state.lineIntakes : [])
+        .find((r) => r && r.id === intakeId) || null;
+      if (!existing) return fail('No such intake to re-route.', 'intakeId');
+      if (existing.status === 're-routed') return fail('That intake was already re-routed. Only a live intake can be re-routed.', 'intakeId');
+
+      const personId = existing.personId;
+      if (toManagerId !== LEADER_ID && !activePerson(toManagerId)) return fail('That manager is not on the active roster.', 'toManagerId');
+      if (toManagerId === existing.managerId) return fail('That is the line already funding this intake.', 'toManagerId');
+      const eligible = declarationEligibility(seat, built, personId, toManagerId);
+      if (!eligible.ok) return fail(eligible.error, eligible.field);
+
+      const at = clock();
+      const window = quarterWindow(existing.date);
+      const ceiling = lineCeiling(store.state, personId, toManagerId, window.periodKey, { now: at });
+      if (ceiling.state !== 'computed') {
+        return fail(`The target line's ceiling cannot be priced: ${ceiling.reason}`, 'toManagerId');
+      }
+      const consumedH = (Array.isArray(store.state.lineIntakes) ? store.state.lineIntakes : [])
+        .filter((r) => r && r.personId === personId && r.managerId === toManagerId
+          && r.periodKey === window.periodKey && r.status !== 're-routed')
+        .reduce((acc, r) => acc + (Number.isInteger(r.shareDaysH) ? r.shareDaysH : 0), 0);
+      if (consumedH + existing.shareDaysH > ceiling.ceilingH) {
+        return fail(`Refused: re-routing would take the target line to ${((consumedH + existing.shareDaysH) / 100).toFixed(2)} person-days against a declared ceiling of ${(ceiling.ceilingH / 100).toFixed(2)} for ${window.periodKey}. Accept the over-share on the target line instead, or retune its declaration.`, 'toManagerId');
+      }
+
+      const newId = idFactory('intake');
+      const personName = built.chain.byId.get(personId)?.name || personId;
+      const fromName = existing.managerId === LEADER_ID
+        ? (built.chain.nodes.get(LEADER_ID)?.name || 'the workspace leader')
+        : (built.chain.byId.get(existing.managerId)?.name || existing.managerId);
+      const toName = toManagerId === LEADER_ID
+        ? (built.chain.nodes.get(LEADER_ID)?.name || 'the workspace leader')
+        : (built.chain.byId.get(toManagerId)?.name || toManagerId);
+      store.update((draft) => {
+        draft.lineIntakes = Array.isArray(draft.lineIntakes) ? draft.lineIntakes : [];
+        const old = draft.lineIntakes.find((r) => r && r.id === intakeId);
+        if (old) { old.status = 're-routed'; old.reroutedTo = newId; }
+        draft.lineIntakes.push({
+          id: newId,
+          personId,
+          managerId: toManagerId,
+          periodKey: existing.periodKey,
+          shareDaysH: existing.shareDaysH,
+          title: existing.title,
+          date: existing.date,
+          status: 'recorded',
+          overrideReason: '',
+          reroutedFrom: intakeId,
+          reroutedTo: null,
+          recordedAt: at.toISOString(),
+          recordedBySeatId: seat.fullAccess ? null : seat.id,
+        });
+      }, {
+        type: MATRIX_EVENTS.INTAKE_REROUTED,
+        entity: 'lineintake',
+        entityId: newId,
+        summary: `Intake re-routed: ${personName} from ${fromName} to ${toName} for ${existing.periodKey} — ${existing.title}.`.slice(0, 300),
+      });
+      return saved({ id: newId, fromIntakeId: intakeId, personId, toManagerId });
+    },
+
+    /** The gate report for a period (default: the running quarter). */
+    matrixIntakeReport(input = {}) {
+      const check = seatFor('declare-matrix-line');
+      if (!check.ok) return check;
+      const { seat, built } = check;
+      const at = clock();
+      const periodKey = input.periodKey ? String(input.periodKey).trim() : null;
+      const visiblePersonIds = seat.fullAccess
+        ? null
+        : new Set([...(seat.scope || []), ...(seat.lineScope || [])]);
+      return {
+        ok: true,
+        report: buildLineIntakeGate(store.state, { periodKey, now: at, settings: settings(), visiblePersonIds }),
+        seat: { id: seat.id, fullAccess: seat.fullAccess, rank: seat.rank },
+        built: undefined,
+      };
+    },
+
+    /** The people and lines a seat may record intakes for. */
+    matrixIntakeCandidates() {
+      const check = seatFor('declare-matrix-line');
+      if (!check.ok) return check;
+      const { seat, built } = check;
+      const scope = seat.fullAccess
+        ? new Set(built.chain.byId.keys())
+        : new Set([...(seat.scope || []), ...(seat.lineScope || [])]);
+      const people = [];
+      for (const personId of scope) {
+        const node = built.chain.byId.get(personId);
+        if (!node) continue;
+        people.push({ personId, name: node.name, homeManagerId: node.rawManagerId || LEADER_ID });
+      }
+      people.sort((a, b) => a.name.localeCompare(b.name));
+      const managers = [];
+      for (const node of built.chain.nodes.values()) {
+        if (node.id !== LEADER_ID && !built.chain.byId.has(node.id)) continue;
+        if (!seat.fullAccess && node.id !== LEADER_ID && !scope.has(node.id)) continue;
+        managers.push({ managerId: node.id, name: node.name, isLeader: node.id === LEADER_ID });
+      }
+      managers.sort((a, b) => (a.isLeader ? 1 : 0) - (b.isLeader ? 1 : 0) || a.name.localeCompare(b.name));
+      return { ok: true, people, managers };
     },
   };
 }

@@ -79,6 +79,7 @@ import { renderMatrixMeetingLoadPanel } from './matrixMeetingLoadPanel.js';
 // and an Approver; this panel reads the two against each other and against the
 // reporting graph of the decision day — every line, not only the home chain.
 import { renderMatrixSodPanel } from './matrixSodPanel.js';
+import { renderMatrixIntakePanel } from './matrixIntakePanel.js';
 
 const PANELS = MATRIX_PANELS;
 
@@ -875,6 +876,7 @@ export function renderMatrix(ctx) {
     panel === 'rights' ? rightsPanel(ctx, report) : null,
     panel === 'concordance' ? concordancePanel(ctx, report) : null,
     panel === 'sod' ? renderMatrixSodPanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
+    panel === 'intake' ? renderMatrixIntakePanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
     panel === 'continuity' ? renderContinuityPanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
     panel === 'seats' ? seatsPanel(ctx, report) : null,
     panel === 'governance' ? governancePanel(ctx, report) : null,
