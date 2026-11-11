@@ -68,6 +68,8 @@ import { renderMatrixCoordinationPanel } from './matrixCoordinationPanel.js';
 // ADR-0162: bilateral management-interface operating agreements across shared
 // counterpart pairs — terms, cadence forum links, joint apex escalation, expiry.
 import { renderMatrixInterfacePanel } from './matrixInterfacePanel.js';
+// ADR-0175: the Matrix Pattern Repair Register (owner, dated remedy, review verdict).
+import { renderMatrixRemedyPanel } from './matrixRemedyPanel.js';
 // Session 225 read-only slice: current goal carriage through the canonical
 // matrix DAG, with branch overlap printed separately from distinct span totals.
 import { renderGoalCarriagePanel } from './matrixGoalCarriagePanel.js';
@@ -880,6 +882,7 @@ export function renderMatrix(ctx) {
     panel === 'rights' ? rightsPanel(ctx, report) : null,
     panel === 'concordance' ? concordancePanel(ctx, report) : null,
     panel === 'sod' ? renderMatrixSodPanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
+    panel === 'remedies' ? renderMatrixRemedyPanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
     panel === 'intake' ? renderMatrixIntakePanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
     panel === 'demand-variance' ? renderMatrixDemandVariancePanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
     panel === 'authority' ? renderMatrixDoaPanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,

@@ -75,6 +75,7 @@ import { createLineConsentActions } from './core/domain/lineConsentActions.js';
 import { createLineReaffirmationActions } from './core/domain/lineReaffirmationActions.js';
 import { createAuthorityReaffirmationActions } from './core/domain/authorityReaffirmationActions.js';
 import { createMatrixInterfaceActions } from './core/domain/matrixInterfaceActions.js';
+import { createMatrixRemedyActions } from './core/domain/matrixRemedyActions.js';
 import {
   buildMatrixInterfaceReport,
   matrixInterfaceAttentionCount,
@@ -20362,6 +20363,7 @@ export function createApi(store, options = {}) {
   Object.assign(api, createAuthorityReaffirmationActions(store, { now: clock, idFactory: id }));
   // ADR-0162: Matrix Management-Interface Operating-Agreement Register.
   Object.assign(api, createMatrixInterfaceActions(store, { now: clock, idFactory: id }));
+  Object.assign(api, createMatrixRemedyActions(store, { now: clock, idFactory: id }));
   const interfaceOptions = (options = {}) => ({
     now: options.now instanceof Date ? options.now : clock(),
     settings: store.state.settings || {},

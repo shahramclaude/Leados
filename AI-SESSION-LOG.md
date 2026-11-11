@@ -1,3 +1,7 @@
+## 2026-11-11 — Session 238: Merge Matrix Pattern Repair Register from conflicting PR #263 onto `main` (`Schema v139`, `ADR-0175`, `CSV #129`, `#/matrix?panel=remedies`)
+
+**Context & resolution.** PR #263 (`34a0c30` on `arena/6ff403f2-leados` — Matrix Pattern Repair Register) was the sole open, conflicting PR on GitHub after PRs #264–#269 landed on `main` (`5ff6f08`). Merged `34a0c30` into `arena/f8ad8856-leados`, renumbered its colliding identifiers cleanly on top of `main` (`ADR-0170` → `ADR-0175` at `docs/adr/0175-matrix-pattern-repair-register.md`, `SCHEMA_VERSION` `138 → 139` with additive `MIGRATIONS[138]` for `matrixRemedies`, `CSV_EXPORTS.length` `128 → 129` for `matrix-remedies`, 23 `MATRIX_PANELS` retaining `sod`, `intake`, `demand-variance`, `authority` and `remedies`), rebuilt `LeadOS-standalone.html`, and verified all focused, adjacent, lint, link, boundary and standalone checks.
+
 ## 2026-11-11 — Session 237: a seat approved within its budget while nobody checked its standing ceiling — Standing Delegation-of-Authority (DoA) Schedule & Cross-Line Limit Conformance (Schema v138, ADR-0174, `RULE-DOA-01`, CSV #128, `#/matrix?panel=authority`)
 
 **Doctrine / sync / orientation.** `NORTH_STAR.md` exists and explicitly contains both the Matrix Leadership Mandate and the Bulletproof Reliability Mandate. `origin` matches `https://github.com/shahramclaude/Leados.git`; work is on active branch `arena/2a1f9a93-leados` branched from `main` at `c91cdc3`.
@@ -79,6 +83,30 @@
 **Unverified / limits / failures not caused here.** The full suite was **not** run; an early background run was discarded because files were edited while it was running, so there is no clean full-suite baseline from this session. `propagation-ledger` ran 28 pass / 3 fail, and the same three tests fail identically on an untouched `git archive` export of `main` at `d017c38` (two byte-identity comparisons of the demo workspace across savepoint/collapse strategies, and a stale schema pin of 119 against 135); they were not touched. Also on `main` before any edit, and likewise left alone: six additive-migration and CSV subtests failing in the first results of that discarded run (before any file had been edited), `operating-cadence` at 15/17, and pins that are stale by inspection — a catalogue count of 104 in `allocation`, `calibrated-allocation` and `capital-portfolio` (it was 123 on `main`), and rule counts of 90 in `diligence-ledger`, `hindsight` and `outcome-learning` and 94 in `board-room` (it was 104 on `main`). Real-browser and assistive-technology behaviour **[UNVERIFIED]**. Seat scoping is verified for one seat (a director). The demo workspace reads 84 of 84 tested decisions as same-hand because its seed records one name in both roles; decisions opened by an automation rule carry the roles that rule pre-filled.
 
 **Coverage map / next.** CEO / C-suite primary 234; director / VP 233; frontline / mid-manager 232. Structure: single-chain 1–188; MATRIX primary 189–198, 200, 203–204, 206, 208–234. Next rotation: **frontline / mid-manager × matrix** (last primary 232). Remainder In Progress: a compensating-control record and an owned ask to the seat above the hand (schema move), rights-pair conflicts from declared rights, approval chains, dated custody. Repository: branch `arena/05463269-leados`; the commit, push and pull-request results are reported in the session's closing report and are not asserted here, because this entry is written before them.
+
+## 2026-11-10 — Session 234 (PR #263, merged Session 238 as Schema v139, ADR-0175, CSV #129): a recurring pattern with no owner recurs by default — Matrix Pattern Repair Register
+
+**Doctrine, sync and orientation.** `NORTH_STAR.md` exists at the repo root with both binding mandates present. Sync check passed on `arena/6ff403f2-leados` from `d017c38`. No doctrine edit.
+
+**Discovery (Step 3).** The ADR-0146 recurrence lens (Session 198) found repeated structural signatures across distinct decisions but gave them no owner, remedy, review date or post-change check. The SoD register planned for this altitude was not buildable as written: no executor field and no conflict rights exist in the code, so it stays in Planned. A second new gap was found while building: remedy-owner continuity across line exit and reorganisation (Planned).
+
+**Altitude / structure / duty selected.** **CEO / C-suite PRIMARY × matrix** (last primary 231; rotation due). Single-chain workspaces have no line and therefore no pattern; the panel says so. The duty, in the operator's words: *we keep seeing the same design failure across three decisions — who owns the fix, what did we decide to change, when do we look, and did the decision log move?*
+
+**Built.** A pure read model (`matrixRemedy.js`), a declared vocabulary and refusal set (`matrixRemedyRegistry.js`), a fail-closed normaliser (`matrixRemedySchema.js`), one command (`matrixRemedyActions.js`, `declare-matrix-remedy`, rank 4–5 or full access), the panel (`#/matrix?panel=remedies`), CSV scope #129 (`matrix-remedies`), and one additive collection `matrixRemedies` (Schema v139 on merge, empty on upgrade). The concordance now exports identity-free recurrence signatures so the register and the ADR-0146 lens read one recurrence.
+
+**What is stored.** Only the human act: signature key, owner, remedy text, optional basis, decision date, review date, declaring seat, `status: active`. The verdict, window, count and any “cleared” flag are re-derived on every read.
+
+**Verdict and refusals.** Equal disjoint windows around the remedy date; `pending` before review; `refused` with a printed reason for no baseline, thin review, or a duplicate remedy; `cleared`, `reduced` or `unchanged` otherwise. Owners outside the seat's reach are withheld by name; owners off the roster are shown as defects, never repaired.
+
+**Verified.**
+- `tests/app/matrix-remedy.test.mjs` — **18/18 PASS**.
+- End-to-end through the real store and `createApi` with `guardApi`: declare → persist → reload → read back shows the stored owner, review date and a printed refusal; a second declaration is refused.
+- `rights-concordance` 28/28; `access-audit` PASS; `verify:standalone` 7/7.
+- `check:boundary` OK; `check:links` OK; ESLint exit 0 on every changed module.
+
+**Unverified.** Real-browser rendering and screen-reader behaviour of the new panel (the panel is on the `access-audit` route list, which runs axe-core in JSDOM only).
+
+**Coverage map / next.** CEO / C-suite primary 234 (last primary 231); director / VP 233; frontline / mid-manager 232. Structure: single-chain 1–188; MATRIX primary 189–198, 200, 203–204, 206, 208–234. Next rotation: **frontline / mid-manager × matrix** (oldest last primary, 232). Remaining work on this item, In Progress: remedy supersession, review-due reminder (`RULE-RMD-01`), per-owner roll-up.
 
 ## 2026-11-10 — Session 233: the meeting hours were already stored and nobody had multiplied them — Matrix Meeting-Load & Coordination-Tax Ledger (Schema v135 unchanged, ADR-0169, CSV #124)
 

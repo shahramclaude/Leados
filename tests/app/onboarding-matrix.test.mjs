@@ -468,7 +468,7 @@ test('the rule is registered 1:1 on the spine and is inert on an unrelated event
 /* -------------------------------------------------------- 7. schema + file */
 
 test('schema v125 is additive: a v124 file gains an EMPTY ledger and clamped windows', () => {
-  assert.equal(SCHEMA_VERSION, 135);
+  assert.equal(SCHEMA_VERSION, 139);
   const v124 = {
     ...createEmptyState(ISO),
     schemaVersion: 124,
@@ -479,7 +479,7 @@ test('schema v125 is additive: a v124 file gains an EMPTY ledger and clamped win
   delete v124.onboardingLineBriefs;
   delete v124.onboardingLineBriefMarkers;
   const { raw: migrated } = migrate(JSON.parse(JSON.stringify(v124)));
-  assert.equal(migrated.schemaVersion, 135);
+  assert.equal(migrated.schemaVersion, 139);
   assert.deepEqual(migrated.onboardingLineBriefs, [], 'a brief invented at upgrade time would be words nobody said');
   assert.deepEqual(migrated.onboardingLineBriefMarkers, []);
   assert.equal(migrated.settings.onboardingBriefDays, 7);
