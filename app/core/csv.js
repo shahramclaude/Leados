@@ -119,6 +119,8 @@ import { buildMatrixMeetingLoad, matrixMeetingLoadCsvRows } from './domain/matri
 import { MATRIX_MEETING_LOAD_CSV_COLUMNS } from './domain/matrixMeetingLoadRegistry.js';
 import { buildSodRegister, sodRegisterCsvRows } from './domain/sodRegister.js';
 import { SOD_CSV_COLUMNS } from './domain/sodRegisterRegistry.js';
+import { buildLineIntakeGate, lineIntakeCsvRows } from './domain/lineIntake.js';
+import { LINE_INTAKE_CSV_COLUMNS } from './domain/lineIntakeRegistry.js';
 // ADR-0161: Matrix Span Fragmentation & Counterpart-Dyad Coordination Ledger
 // (CSV scope #121). Aggregate topology only — never a person, manager, line,
 // seat or free-text agreement. An incomplete matrix span withholds workspace
@@ -1202,6 +1204,13 @@ export const CSV_EXPORTS = [
   // NO decision id, NO decision title, NO decision date and NO free text of any
   // kind. `counts_reconcile` exports whether every identity the panel prints held.
   { key: 'matrix-sod', label: 'Segregation of duties (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'matrix-sod', description: 'One workspace row plus one row per conflict class for the cross-line segregation-of-duties register, read for the acting seat on read_on: the decided decisions on the record, read, beyond the read cap, outside the seat and inside it; how many name one initiating (Driver) and one authorizing (Approver) hand that both resolve to a roster person, and how many could not be tested and why (no approver, no driver, a role naming several people, a hand that is not one roster person); the tested decisions that carry a conflict, split by recorded reversibility (one-way / two-way), those whose independence cannot be read for the decision day, and those with two independent hands; the findings per class (one hand initiating and authorizing, an authorizing hand accountable to the initiating hand, a custodian authorizing) with the home-chain / second-line split, the findings resting on a printed presumption and the direct lines carrying a stewardship right; the seat above the senior hand on the decision day (one, several, none, not readable); the conflict shares in per-mille with whether each is withheld; and whether the counts reconcile. NO person, NO name, NO decision id, NO decision title, NO decision date and NO free text of any kind. A refused share is BLANK with its withheld flag set, never a zero.' },
+  // CSV scope #126 (Schema v136, ADR-0171): the Matrix Line Intake Gate and
+  // Share-Day WIP Ceiling, aggregate only. One workspace row plus one row per
+  // gate verdict. Every figure is an exact integer count of intakes or of
+  // share-days — hundredths of a person-day — or BLANK when a ceiling could
+  // not be priced. NO person, NO name, NO manager id, NO declaration id, NO
+  // intake id, NO intake title, NO intake date and NO free text of any kind.
+  { key: 'matrix-intake', label: 'Matrix line intake gate (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'matrix-intake', description: 'One workspace row plus one row per gate verdict for the Matrix Line Intake Gate and Share-Day WIP Ceiling, read for the acting seat on read_on: lines in scope, live intakes, recorded intakes, intakes over share, intakes re-routed, lines within ceiling, lines exhausted, lines over share, lines whose ceiling could not be priced, declared share-days, consumed share-days, headroom share-days, figures_complete and counts_reconcile. A refused ceiling or headroom exports BLANK, never a zero. NO person, NO name, NO manager id, NO declaration id, NO intake id, NO intake title, NO intake date and NO free text of any kind.' },
   { key: 'line-reaffirmation', label: 'Matrix line re-affirmation (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'line-reaffirmation', description: 'One workspace summary row plus one row per declared line kind: the line count, how many lines were never given a term, how many are inside their warning window, how many have a term that ran out, how many were re-affirmed but not yet answered by the person, how many the person objected to, how many the line released, how many were re-affirmed at a different share than the line now declares, and how many are in term with both sides answered. Plus the two exact-integer share totals that are the point of the register: the share still CHARGED to a commitment no live answer covers, and the share covered by a live re-affirmed term, with the uncovered-plus-covered identity printed as a claim rather than assumed. NO person, NO name, NO manager id, NO declaration id, NO stated reason, NO objection text and NO free text of any kind. A share total is BLANK with share_refused = true and the reason in its own column whenever any line in scope carries no allocation, never a zero. A released line is counted as still charged because the declaration was never dated out: continuation by absence is never exported as a renewal.' },
   // CSV scope #119 (Schema v129 unchanged, ADR-0158). Aggregate-only: one summary row
   // plus one row per declared line KIND, over the default period (the last
@@ -6327,6 +6336,16 @@ export function buildScopeTable(state, scope, now) {
       const report = buildSodRegister(state, { now, settings: state.settings || {} });
       const rows = sodRegisterCsvRows(report);
       const columns = SOD_CSV_COLUMNS.map((key) => ({ key, header: key }));
+      return { columns, rows };
+    }
+    case 'matrix-intake': {
+      // CSV scope #126 (Schema v136, ADR-0171). Built from the same read model
+      // the panel renders, so an exported count is provably the count that was
+      // printed. Aggregate only: no person, no line, no intake id or title, no
+      // date. A refused ceiling or headroom is BLANK with its flag set.
+      const report = buildLineIntakeGate(state, { now, settings: state.settings || {} });
+      const rows = lineIntakeCsvRows(report);
+      const columns = LINE_INTAKE_CSV_COLUMNS.map((key) => ({ key, header: key }));
       return { columns, rows };
     }
     case 'review-stewardship': {

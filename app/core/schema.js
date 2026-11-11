@@ -128,6 +128,7 @@ import { normalizeMeritEvidenceMarkers } from './domain/meritEvidenceRegistry.js
 // ADR-0168: the bench-evidence reading's own idempotency ledger. Zero imports in
 // `benchEvidenceRegistry.js`, so `schema.js` reads the vocabulary without a cycle.
 import { normalizeBenchEvidenceMarkers } from './domain/benchEvidenceRegistry.js';
+import { normalizeLineIntakes } from './domain/lineIntakeRegistry.js';
 import { normalizeTransitionPrograms } from './domain/transitionSchema.js';
 import { normalizeOrgDesigns } from './domain/orgDesignSchema.js';
 import { normalizeVoiDecisions, normalizeVoiStudies } from './domain/valueOfInformationSchema.js';
@@ -705,7 +706,7 @@ export {
 // interface agreement or escalation route is fabricated without human consent.
 // v132 records who held a 1:1, without assigning a holder to old meetings.
 // Coverage is derived from the current matrix and is never stored as a score.
-export const SCHEMA_VERSION = 135;
+export const SCHEMA_VERSION = 136;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -2767,6 +2768,14 @@ export const COLLECTIONS = [
   // verdict here would be the exact drift the Bulletproof Reliability Mandate
   // forbids.
   'benchEvidenceMarkers',
+  // ADR-0171 (Schema v136): the Matrix Line Intake Gate and Share-Day WIP
+  // Ceiling. Holds ONLY dated intake acts recorded through the gate: which line
+  // funded what work, dated to its period, consuming how many share-days, with
+  // the gate verdict attached. The ceiling itself is NOT stored — every figure
+  // is re-derived on read from the dated declarations and intake acts. A stored
+  // ceiling would be the exact drift the Bulletproof Reliability Mandate
+  // forbids; a stored verdict would be the drift too.
+  'lineIntakes',
 ];
 
 /** Stable empty state. `now` is an ISO string so the result is a pure value. */
@@ -7989,6 +7998,9 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // dropped so the ask it guarded can be issued again — never repaired into a
   // plausible-looking marker that would suppress it.
   state.benchEvidenceMarkers = normalizeBenchEvidenceMarkers(raw.benchEvidenceMarkers);
+  // ADR-0171: malformed intake-act rows are dropped with a warning, never
+  // repaired — an invented intake is an invented claim on someone's ceiling.
+  state.lineIntakes = normalizeLineIntakes(raw.lineIntakes);
   // ADR-0122: a malformed absence row is dropped with a warning, never repaired —
   // an invented absence is an invented unavailability for every cover in the span.
   // Resolved BEFORE links so the `declares-absence-of` provenance edge validates
@@ -8731,6 +8743,14 @@ export const MIGRATIONS = {
     ...v134,
     schemaVersion: 135,
     benchEvidenceMarkers: Array.isArray(v134.benchEvidenceMarkers) ? v134.benchEvidenceMarkers : [],
+  }),
+  // 135 → 136: ADR-0171 adds the lineIntakes collection. Every existing workspace
+  // reads exactly as before: the gate ledger starts empty and every ceiling is
+  // re-derived on read from the dated declarations already kept.
+  135: (v135) => ({
+    ...v135,
+    schemaVersion: 136,
+    lineIntakes: Array.isArray(v135.lineIntakes) ? v135.lineIntakes : [],
   }),
   // 133 → 134: feedback author attribution is additive. Historical notes stay
   // explicitly unattributed; no manager or room is inferred during migration.
