@@ -184,6 +184,27 @@ export function lcalConventionsFromSettings(state = {}) {
   };
 }
 
+/**
+ * ADR-0180: the five `lcal*` conventions in their STORED shape, for
+ * `normalizeSettings`. They were declared in `DEFAULT_SETTINGS` (Schema v56)
+ * and never named by the loader, so a stored value was discarded on every load
+ * and this module always read the default.
+ *
+ * Deliberately a re-keying of `lcalConventionsFromSettings` and nothing more:
+ * one reader, one set of bounds. The value the loader keeps is exactly the
+ * value the engine would have used.
+ */
+export function normalizeLeaderCalibrationSettings(settings = {}) {
+  const c = lcalConventionsFromSettings({ settings });
+  return {
+    lcalMinSamples: c.minSamples,
+    lcalVerdictSamples: c.verdictSamples,
+    lcalOverconfidencePp: c.overconfidencePp,
+    lcalBadReliability: c.badReliability,
+    lcalWarnReliability: c.warnReliability,
+  };
+}
+
 /* -------------------------------------------------------------- arithmetic */
 
 function round4(value) {

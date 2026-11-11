@@ -21,6 +21,7 @@ import { SCHEMA_VERSION } from '../core/schema.js';
 import { CSV_EXPORTS } from '../core/csv.js';
 import { inspectExportGovernance } from '../core/domain/export-governance.js';
 import { openExportDisclosureDialog } from '../ui/export-dialogs.js';
+import { renderConventionRegisterCard } from './conventionRegisterCard.js';
 
 export function renderSettings(ctx) {
   const { state, now } = ctx;
@@ -527,6 +528,9 @@ export function renderSettings(ctx) {
         ),
       }),
     ),
+    // ADR-0180: which conventions and automation switches are in force, and
+    // whether a reload keeps them — derived from the settings above, stored nowhere.
+    renderConventionRegisterCard(ctx),
     card({
       title: 'Protect this browser copy',
       subtitle: ctx.isEncrypted

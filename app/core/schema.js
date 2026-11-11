@@ -28,6 +28,11 @@ import { normalizeOneOnOneHolder, normalizeOneOnOneLineMarkers, normalizeOneOnOn
 import { normalizeHiringLineMarkers, normalizeHiringLinePlans, normalizeHiringLineSettings } from './domain/hiringLineSchema.js';
 import { normalizeTransferPriceActs, normalizeTransferPriceMarkers, normalizeTransferPriceSettings } from './domain/transferPriceSchema.js';
 import { normalizeDelegationLineActs, normalizeDelegationLineMarkers, normalizeDelegationLineSettings } from './domain/delegationLineSchema.js';
+// ADR-0180 (Session 246): the settings load receipt — a stored convention the
+// loader does not carry is NAMED in a load warning, never dropped in silence —
+// and the Leader Calibration conventions in their stored shape.
+import { settingsLoadReceipt } from './domain/conventionRegisterSchema.js';
+import { normalizeLeaderCalibrationSettings } from './domain/leaderCalibration.js';
 // ADR-0143 (Schema v120): the Cross-Line Priority Arbitration's fail-closed
 // normalizers. Every stored row is a human act; every score, state and count is
 // re-derived on read, so a printed order cannot drift from the integers it ranks.
@@ -3600,6 +3605,22 @@ export function normalizeSettings(raw) {
     // key not listed would be dropped on every load.
     ...normalizeTransferPriceSettings(s),
     ...normalizeAgendaSettings(s),
+    // ADR-0180 (Session 246): SIX engines declared conventions this object never
+    // named, so every load discarded them — 30 keys, with no warning. Three of
+    // them have a setter a leader can reach (`matrixSetConventions`,
+    // `differencesSetConventions`, `fitSetConventions`): a paused propagation
+    // switch came back ON and a raised disclosure floor fell back to its
+    // default at the next reload. Each engine's OWN normalizer is spread here,
+    // so the bounds are declared once and the loaded value is exactly the value
+    // the engine reads. `tests/app/convention-persistence.test.mjs` now fails
+    // the build when any exported `normalize*Settings` is not carried here —
+    // the guard the eight comments above asked for and nothing enforced.
+    ...normalizeMatrixSettings(s),
+    ...normalizeDelegationLineSettings(s),
+    ...normalizeStructureHistorySettings(s),
+    ...normalizeDifferencesSettings(s),
+    ...normalizeFitSettings(s),
+    ...normalizeLeaderCalibrationSettings(s),
     chainAdoptedHorizons: normalizeAdoptedHorizons(s.chainAdoptedHorizons, DECLARED_HORIZONS),
     chainAdoptedOn: /^\d{4}-\d{2}-\d{2}$/.test(String(s.chainAdoptedOn || '')) ? s.chainAdoptedOn : null,
     chainAdoptedReadingId: typeof s.chainAdoptedReadingId === 'string' && s.chainAdoptedReadingId.trim()
@@ -7112,6 +7133,11 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   const state = createEmptyState(now);
   state.schemaVersion = SCHEMA_VERSION;
   state.settings = normalizeSettings(raw.settings);
+  // ADR-0180: every stored settings key is carried, retired, or NAMED. A key
+  // this version does not recognise used to vanish here without a word; the
+  // leader now reads its name in the load banner.
+  const settingsReceipt = settingsLoadReceipt(raw.settings, state.settings);
+  if (settingsReceipt.warning) warnings.push(settingsReceipt.warning);
   if (raw.settings?.pulseMinResponses !== undefined && Number(raw.settings.pulseMinResponses) !== state.settings.pulseMinResponses) {
     warnings.push('Pulse privacy floor was repaired to the supported range of 3–25 responses; the default is 5.');
   }
