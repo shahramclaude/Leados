@@ -86,6 +86,10 @@ const groups = [
   // are enforced inside `matrixInterfaceActions`.
   ['affirm-matrix-interface', 'matrixInterfaceAffirm matrixInterfaceRetire matrixInterfaceScan'],
   ['govern-matrix-interface', 'matrixInterfaceSetConventions'],
+  // ADR-0170: recording a dated remedy for a recurring matrix pattern. The action
+  // narrows it to a span-level seat, refuses a pattern the seat cannot see, and
+  // refuses a second active remedy for the same pattern.
+  ['declare-matrix-remedy', 'matrixRemedyDeclare'],
   ['govern-oneonone-lines', 'oneOnOneLineSetConventions'],
   // ADR-0152: settling an obligation an ENDED line left behind. Recording the
   // remedy is the manager's own act (the action narrows it to a seat that reaches

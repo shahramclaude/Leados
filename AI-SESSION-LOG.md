@@ -1,3 +1,30 @@
+## 2026-11-10 — Session 234: a recurring pattern with no owner recurs by default — Matrix Pattern Repair Register (Schema v136, ADR-0170, CSV #125)
+
+**Doctrine, sync and orientation.** `NORTH_STAR.md` exists at the repo root with both binding mandates present. Sync check passed on `arena/6ff403f2-leados` from `d017c38`. No doctrine edit.
+
+**Discovery (Step 3).** The ADR-0146 recurrence lens (Session 198) found repeated structural signatures across distinct decisions but gave them no owner, remedy, review date or post-change check. The SoD register planned for this altitude was not buildable as written: no executor field and no conflict rights exist in the code, so it stays in Planned. A second new gap was found while building: remedy-owner continuity across line exit and reorganisation (Planned).
+
+**Altitude / structure / duty selected.** **CEO / C-suite PRIMARY × matrix** (last primary 231; rotation due). Single-chain workspaces have no line and therefore no pattern; the panel says so. The duty, in the operator's words: *we keep seeing the same design failure across three decisions — who owns the fix, what did we decide to change, when do we look, and did the decision log move?*
+
+**Built.** A pure read model (`matrixRemedy.js`), a declared vocabulary and refusal set (`matrixRemedyRegistry.js`), a fail-closed normaliser (`matrixRemedySchema.js`), one command (`matrixRemedyActions.js`, `declare-matrix-remedy`, rank 4–5 or full access), the panel (`#/matrix?panel=remedies`), CSV scope #125, and one additive collection `matrixRemedies` (Schema v136, empty on upgrade). The concordance now exports identity-free recurrence signatures so the register and the ADR-0146 lens read one recurrence.
+
+**What is stored.** Only the human act: signature key, owner, remedy text, optional basis, decision date, review date, declaring seat, `status: active`. The verdict, window, count and any “cleared” flag are re-derived on every read.
+
+**Verdict and refusals.** Equal disjoint windows around the remedy date; `pending` before review; `refused` with a printed reason for no baseline, thin review, or a duplicate remedy; `cleared`, `reduced` or `unchanged` otherwise. Owners outside the seat's reach are withheld by name; owners off the roster are shown as defects, never repaired.
+
+**Verified.**
+- `tests/app/matrix-remedy.test.mjs` — **18/18 PASS**.
+- End-to-end through the real store and `createApi` with `guardApi`: declare → persist → reload → read back shows the stored owner, review date and a printed refusal; a second declaration is refused.
+- `rights-concordance` 28/28; `access-audit` 14/14; `verify:standalone` 7/7 (703 modules, 10,779,644 bytes; absolute ceiling raised from 10,760,000 to 10,800,000 with the reason recorded in the test).
+- `check:boundary` OK; `check:links` OK (1,052 links); ESLint exit 0 on every changed module.
+- Full `npm test`, compared test-by-test with a clean `HEAD` tree: 3,679 tests, 3,455 pass, 224 fail here; `HEAD` 3,661 tests, 3,436 pass, 225 fail. **Zero new failures.** The 224 are pre-existing (migration-history and stale count pins in older suites) and are NOT fixed in this session. One `HEAD` failure passes now (`review-stewardship` CSV-count pin corrected to 124).
+
+**Corrections made in this session.** Stale pins moved with the head (`SCHEMA_VERSION` 135 → 136 across the head-version tests; CSV scope pins 123 → 124 where they track the head count; migration-history lists extended with `135 → 136`). The standalone ceiling was raised with a recorded reason. A stray re-export in the panel that pointed at a nonexistent module was removed before any run.
+
+**Unverified.** Real-browser rendering and screen-reader behaviour of the new panel (the panel is on the `access-audit` route list, which runs axe-core in JSDOM only). The 224 pre-existing failures are not investigated here.
+
+**Coverage map / next.** CEO / C-suite primary 234 (last primary 231); director / VP 233; frontline / mid-manager 232. Structure: single-chain 1–188; MATRIX primary 189–198, 200, 203–204, 206, 208–234. Next rotation: **frontline / mid-manager × matrix** (oldest last primary, 232). Remaining work on this item, In Progress: remedy supersession, review-due reminder (`RULE-RMD-01`), per-owner roll-up.
+
 ## 2026-11-10 — Session 233: the meeting hours were already stored and nobody had multiplied them — Matrix Meeting-Load & Coordination-Tax Ledger (Schema v135 unchanged, ADR-0169, CSV #124)
 
 **Doctrine, sync and orientation.** `NORTH_STAR.md` exists at the repo root and explicitly contains both binding mandates — the Matrix Leadership Mandate (multiple reporting lines, no double-counted person, no silently chosen owner) and the Bulletproof Reliability Mandate (no displayed-vs-stored deviation, figures refused with a reason rather than defaulted). No doctrine augmentation was needed. `origin` is `https://github.com/shahramclaude/Leados.git`; work stayed on `arena/fc31a4ac-leados`. Orientation: top of ROADMAP, the last three log entries, the matrix registry/panels, and the cadence domain (`cadenceForums`, `cadenceSessions`).

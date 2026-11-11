@@ -123,7 +123,7 @@ test('every CSV scope round-trips cleanly and preserves unknown values as blank 
   // ADR-0162 adds scope #122 (matrix management-interface agreements).
   // The pin states the total deliberately so the next session cannot drift the
   // catalog count silently.
-  assert.equal(CSV_EXPORTS.length, 123);
+  assert.equal(CSV_EXPORTS.length, 124);
   for (const spec of CSV_EXPORTS) {
     const res = exportWorkspaceCsv(state, spec.key, { now: NOW });
     assert.equal(res.ok, true, `${spec.key} export succeeds`);

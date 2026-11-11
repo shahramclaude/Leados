@@ -116,6 +116,9 @@ import { LINE_ACTIVITY_CSV_COLUMNS } from './domain/lineActivityRegistry.js';
 // person, no chair, no forum title, no sitting day. A refused rate is BLANK with
 // its reason in its own column, never a zero.
 import { buildMatrixMeetingLoad, matrixMeetingLoadCsvRows } from './domain/matrixMeetingLoad.js';
+// ADR-0170: the Matrix Pattern Repair Register (aggregate remedy states and verdicts).
+import { buildMatrixRemedyReport, matrixRemedyCsvRows } from './domain/matrixRemedy.js';
+import { MATRIX_REMEDY_CSV_COLUMNS } from './domain/matrixRemedyRegistry.js';
 import { MATRIX_MEETING_LOAD_CSV_COLUMNS } from './domain/matrixMeetingLoadRegistry.js';
 // ADR-0161: Matrix Span Fragmentation & Counterpart-Dyad Coordination Ledger
 // (CSV scope #121). Aggregate topology only — never a person, manager, line,
@@ -1193,6 +1196,12 @@ export const CSV_EXPORTS = [
   // independent minute totals reconcile, and whether every sitting and person in
   // scope could be read at all.
   { key: 'matrix-meeting-load', label: 'Matrix meeting load (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'matrix-meeting-load', description: 'One workspace summary row plus one row per forum kind for the named window (period_from, period_to and period_days printed in every row): the forum and sitting counts, the sittings that could not be read (no recorded duration, no attendees recorded, an attendee not on the roster, a forum not in the register), the sittings outside the window, the exact recorded person-minute total and its split into cross-line (chaired by someone other than the person\u2019s home manager), home-manager, one declared line, two declared lines, no declared line and the person\u2019s own forum, the attendee-sitting count, the person counts (measured, refused, no recorded attendance, withheld outside the seat), the coordination-tax rate in per-mille with whether it is withheld and why, the declared floors, and TWO separate claims: whether the minute totals reconcile and whether every figure was complete. NO person, NO name, NO chair, NO forum title, NO sitting date and NO free text of any kind. A refused rate is BLANK with withheld_reason set, never a zero, and minutes refused by an unreadable sitting are never printed as a total.' },
+  // CSV scope #125 (Schema v136, ADR-0170): the Matrix Pattern Repair Register,
+  // aggregate only. One summary row per remedy state and verdict bucket, then one
+  // row per recurring structural pattern. Identity-free: NO owner, NO person, NO
+  // decision, NO line identifier and NO remedy text. A verdict or window count that
+  // cannot be read is BLANK, never zero, and every verdict is re-derived on read.
+  { key: 'matrix-remedies', label: 'Matrix pattern remedies (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'matrix-remedies', description: 'One summary row per remedy state (remedy on record, no remedy on record), one per verdict bucket (pending, refused, unchanged, reduced, cleared) and one row per recurring structural pattern: its finding kind, the line kinds in force, the affected rights, its distinct decision count, its remedy state, its verdict, the matching-decision count in the baseline window, the audited decisions in the review window, and the review date. Verdicts exist only on or after the review date; before it, and where the record cannot support a reading, the cell is BLANK. NO person, NO owner, NO decision, NO line and NO remedy text is exported.' },
   { key: 'line-reaffirmation', label: 'Matrix line re-affirmation (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'line-reaffirmation', description: 'One workspace summary row plus one row per declared line kind: the line count, how many lines were never given a term, how many are inside their warning window, how many have a term that ran out, how many were re-affirmed but not yet answered by the person, how many the person objected to, how many the line released, how many were re-affirmed at a different share than the line now declares, and how many are in term with both sides answered. Plus the two exact-integer share totals that are the point of the register: the share still CHARGED to a commitment no live answer covers, and the share covered by a live re-affirmed term, with the uncovered-plus-covered identity printed as a claim rather than assumed. NO person, NO name, NO manager id, NO declaration id, NO stated reason, NO objection text and NO free text of any kind. A share total is BLANK with share_refused = true and the reason in its own column whenever any line in scope carries no allocation, never a zero. A released line is counted as still charged because the declaration was never dated out: continuation by absence is never exported as a renewal.' },
   // CSV scope #119 (Schema v129 unchanged, ADR-0158). Aggregate-only: one summary row
   // plus one row per declared line KIND, over the default period (the last
@@ -6298,6 +6307,15 @@ export function buildScopeTable(state, scope, now) {
       const cells = benchEvidenceCsvCells(state, { now, settings: state.settings || {} });
       const columns = BENCH_EVIDENCE_CSV_COLUMNS.map((key) => ({ key, header: key }));
       return { columns, rows: [cells] };
+    }
+    case 'matrix-remedies': {
+      // CSV scope #125 (Schema v136, ADR-0170). Built from the same read model the
+      // panel renders, so an exported figure is provably the figure that was printed.
+      // Aggregate and identity-free; a refused or pending cell is BLANK.
+      const report = buildMatrixRemedyReport(state, { now, settings: state.settings || {} });
+      const rows = matrixRemedyCsvRows(report);
+      const columns = MATRIX_REMEDY_CSV_COLUMNS.map((key) => ({ key, header: key }));
+      return { columns, rows };
     }
     case 'matrix-meeting-load': {
       // CSV scope #124 (Schema v135 unchanged, ADR-0169). Built from the same

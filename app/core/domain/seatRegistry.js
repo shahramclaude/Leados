@@ -160,6 +160,7 @@ export const RECORD_POLICIES = Object.freeze({
   // seat-scoped report adapter rather than raw collection rows.
   matrixInterfaceAgreements: { classKey: 'unit', detailCeiling: 0, label: 'Matrix management-interface operating agreements (report only)', route: '#/matrix?panel=interfaces' },
   matrixInterfaceMarkers: { classKey: 'unit', detailCeiling: 0, label: 'Matrix management-interface review markers', route: '#/matrix?panel=interfaces' },
+  matrixRemedies: { classKey: 'unit', detailCeiling: 0, label: 'Matrix pattern remedies (dated acts; verdicts re-derived on read)', route: '#/matrix?panel=remedies' },
   // ADR-0168: RULE-BNE-01's idempotency ledger names no person and carries no
   // rating, so it is unit-class with NO detail printed at any ceiling.
   benchEvidenceMarkers: { classKey: 'unit', detailCeiling: 0, label: 'Bench-evidence ask markers', route: '#/succession?panel=evidence' },
@@ -421,6 +422,10 @@ export const ACTION_RIGHTS = Object.freeze({
   // operator view's job: an undeclared workspace has no seat to cover.
   'declare-duty-cover': { minRank: 1, maxRank: 5, label: 'Declare a stand-in for a duty line' },
   'govern-duty-cover': { minRank: 4, maxRank: 5, label: 'Re-declare the duty-coverage conventions' },
+  // ADR-0170: a span-level seat names an owner, a dated remedy and a review date for
+  // ONE recurring matrix pattern visible in that seat. The action refuses a pattern
+  // the record does not show and a second active remedy for the same pattern.
+  'declare-matrix-remedy': { minRank: 4, maxRank: 5, label: 'Record a dated remedy for a recurring matrix pattern' },
   // ADR-0122: every leadership seat declares ITS OWN absence window — the date
   // range the register was missing. Self-service by design: an absence is the
   // seat holder's own dated act, and the span above reads it rolled up.

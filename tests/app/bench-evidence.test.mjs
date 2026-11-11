@@ -447,7 +447,7 @@ test('the rule is inert on a single-chain workspace and on every other event', (
 /* ------------------------------ 7. the export carries no identity -------- */
 
 test('CSV scope #123 is aggregate-only, reconciles to the panel and names nobody', () => {
-  assert.equal(CSV_EXPORTS.length, 123, 'ADR-0169 registers scope #124 on top of ADR-0168\u2019s #123');
+  assert.equal(CSV_EXPORTS.length, 124, 'ADR-0169 registers scope #124 on top of ADR-0168\u2019s #123');
   const state = makeState({
     readinessRows: [readiness('sam'), readiness('zoe'), readiness('ana')],
     lines: projectLines(['sam', 'zoe', 'ana']),
@@ -484,8 +484,8 @@ test('CSV scope #123 is aggregate-only, reconciles to the panel and names nobody
 test('schema v135 adds one empty marker ledger and changes no record', () => {
   const v134 = { schemaVersion: 134, people: [{ id: 'p', name: 'P' }], readiness: [readiness('sam')] };
   const migrated = migrate(v134).raw;
-  assert.equal(SCHEMA_VERSION, 135);
-  assert.equal(migrated.schemaVersion, 135);
+  assert.equal(SCHEMA_VERSION, 136);
+  assert.equal(migrated.schemaVersion, 136);
   assert.deepEqual(migrated.benchEvidenceMarkers, []);
   assert.deepEqual(migrated.readiness, v134.readiness, 'no rating is touched');
   assert.deepEqual(migrated.people, v134.people);

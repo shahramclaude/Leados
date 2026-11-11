@@ -479,6 +479,17 @@ export function buildRightsConcordance(state, {
     oneOffObservationN,
     rows: recurrenceShown,
     remainderN: recurrenceAll.length - recurrenceShown.length,
+    /* ADR-0170: every recurring-or-not structural signature with the dated
+       decisions behind it — identity-free (no decision, person or line id).
+       The remedy register reads these dates for its before/after check. */
+    signatures: [...recurrenceGroups.entries()].map(([signatureKey, group]) => ({
+      signatureKey,
+      kind: group.kind,
+      lineKinds: group.lineKinds,
+      rightKeys: group.rightKeys,
+      decisionN: group.decisionIds.size,
+      decidedOns: [...group.dates].sort(),
+    })).sort((a, b) => a.signatureKey.localeCompare(b.signatureKey)),
     identity: {
       observations: recurrenceObservationN === recurringObservationN + oneOffObservationN,
       queue: recurrenceShown.length + (recurrenceAll.length - recurrenceShown.length) === recurrenceAll.length,
@@ -511,6 +522,8 @@ export function buildRightsConcordance(state, {
     },
     decisions: {
       totalN: decisionsAll.length,
+      /* ADR-0170: the dates of audited decisions in scope (identity-free). */
+      auditedDates: decisionRows.map((r) => r.decidedOn),
       completedN: completed.length,
       auditedN,
       withFindingsN,

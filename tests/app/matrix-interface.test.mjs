@@ -140,7 +140,7 @@ function seedThreePairMatrix(draft) {
 /* ----------------------------------------------------- 1. Schema & Spine */
 
 test('schema v131 registers additive collections, clamped settings, gateway rights, CSV #122 and spine contract', () => {
-  assert.equal(SCHEMA_VERSION, 135);
+  assert.equal(SCHEMA_VERSION, 136);
   assert.ok(MATRIX_PANELS.some((p) => p.key === 'interfaces'));
   assert.ok(ACTION_RIGHTS['affirm-matrix-interface']);
   assert.ok(ACTION_RIGHTS['govern-matrix-interface']);
@@ -165,7 +165,7 @@ test('schema v131 registers additive collections, clamped settings, gateway righ
   const v130 = { schemaVersion: 130, people: [], settings: { matrixInterfaceDefaultTermDays: 999, matrixInterfaceDueWarnDays: -5 } };
   const { raw, applied } = migrate(v130);
   assert.deepEqual(applied, ['130 → 131', '131 → 132', '132 → 133']);
-  assert.equal(raw.schemaVersion, 135);
+  assert.equal(raw.schemaVersion, 136);
   assert.deepEqual(raw.matrixInterfaceAgreements, []);
   assert.deepEqual(raw.matrixInterfaceMarkers, []);
   assert.equal(raw.settings.matrixInterfaceDefaultTermDays, 365);

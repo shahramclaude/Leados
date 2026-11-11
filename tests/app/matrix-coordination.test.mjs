@@ -118,7 +118,7 @@ function seed(rawState) {
 }
 
 test('the new panel and automation contract are registered without a schema move', () => {
-  assert.equal(SCHEMA_VERSION, 135);
+  assert.equal(SCHEMA_VERSION, 136);
   assert.ok(MATRIX_PANELS.some((panel) => panel.key === 'coordination'));
   assert.ok(DEFAULT_POST_COMMIT_RULES.includes(matrixCoordinationRule));
   assert.ok(PROPAGATION_CONTRACTS.some((contract) => contract.rule === matrixCoordinationRule));

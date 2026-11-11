@@ -237,7 +237,12 @@ test('standalone artifact exists and is a single inline HTML document', () => {
   // 15,408 bytes per module, DOWN from Session 229's 15,451. The 24,000-byte
   // density guard is unchanged and is what still catches a module inlined twice;
   // this absolute ceiling only tracks the real capability added.
-  assert.ok(bytes < 10_760_000, `standalone file is unexpectedly large (${bytes} bytes)`);
+  // Session 234 (Schema v136, ADR-0170) adds the Matrix Pattern Repair Register:
+  // three pure modules (matrixRemedy.js, matrixRemedyRegistry.js, matrixRemedySchema.js),
+  // the action and panel modules and the CSV/seat/access wiring. The ceiling moves
+  // from 10,760,000 to 10,800,000 to track that capability and nothing else; the
+  // 24,000-byte density guard below is unchanged and still catches a module inlined twice.
+  assert.ok(bytes < 10_800_000, `standalone file is unexpectedly large (${bytes} bytes)`);
   const declaredModules = Number((html.match(/content="[^"]*?(\d+) source modules/) || [])[1]);
   assert.ok(declaredModules > 100, `expected the build to declare its module count (got ${declaredModules})`);
   const bytesPerModule = Math.round(bytes / declaredModules);
