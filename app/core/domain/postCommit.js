@@ -164,6 +164,7 @@ import { hiringLineRule } from './hiringLineRules.js';
 import { transferPriceRule } from './transferPriceRules.js';
 import { delegationLineRule } from './delegationLineRules.js';
 import { lineHorizonRule } from './lineHorizonRules.js';
+import { workTurnRule } from './workTurnRules.js';
 
 
 // ADR-0087: the Operating Cadence Clock. Reads the finished queue after the
@@ -961,6 +962,15 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   transferPriceRule,
   // ADR-0178: shared-contributor overload across every active reporting line.
   delegationLineRule,
+  // ADR-0181: the Non-Promotable Work Turn Ledger (RULE-NPW-01). Puts one
+  // rotation ask in front of the manager whose pool concentrates its
+  // non-promotable asks on one person, and one in front of the single seat
+  // above every line of a person who carries a fair turn from each line and
+  // too much in sum; closes its own ask when the reading clears. Registered
+  // before `seatRule` so the ask is in the record when the Operating Seat fans
+  // the same transaction up every leadership span, and `sealRule` attests all
+  // of it in one seal. Inert until the first classification act exists.
+  workTurnRule,
   // ADR-0179: the Matrix Forward Allocation Horizon (RULE-LHZ-01). Sweeps the
   // dated reporting-line declarations forward over the declared lead window and
   // puts each exposure that begins inside it in front of the ONE seat that owns

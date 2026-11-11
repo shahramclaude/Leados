@@ -132,9 +132,11 @@ test('every CSV scope round-trips cleanly and preserves unknown values as blank 
 // ADR-0177 adds #132 (line chargeback), ADR-0178 adds #133 (cross-line ask
 // attribution) and ADR-0179 adds #134 (matrix forward allocation horizon,
 // aggregate only) — 134 registered, because #75 remains reserved.
+// ADR-0181 adds #135 (non-promotable work turns, one identity-free summary
+// row) — 135 registered.
 // The pin states the total deliberately so the next session cannot drift the
 // catalog count silently.
-assert.equal(CSV_EXPORTS.length, 134);
+assert.equal(CSV_EXPORTS.length, 135);
   for (const spec of CSV_EXPORTS) {
     const res = exportWorkspaceCsv(state, spec.key, { now: NOW });
     assert.equal(res.ok, true, `${spec.key} export succeeds`);

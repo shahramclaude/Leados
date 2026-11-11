@@ -28,6 +28,7 @@ import { normalizeOneOnOneHolder, normalizeOneOnOneLineMarkers, normalizeOneOnOn
 import { normalizeHiringLineMarkers, normalizeHiringLinePlans, normalizeHiringLineSettings } from './domain/hiringLineSchema.js';
 import { normalizeTransferPriceActs, normalizeTransferPriceMarkers, normalizeTransferPriceSettings } from './domain/transferPriceSchema.js';
 import { normalizeDelegationLineActs, normalizeDelegationLineMarkers, normalizeDelegationLineSettings } from './domain/delegationLineSchema.js';
+import { normalizeWorkTurnActs, normalizeWorkTurnMarkers, normalizeWorkTurnSettings } from './domain/workTurnSchema.js';
 // ADR-0180 (Session 246): the settings load receipt — a stored convention the
 // loader does not carry is NAMED in a load warning, never dropped in silence —
 // and the Leader Calibration conventions in their stored shape.
@@ -748,7 +749,12 @@ export {
 // idempotency ledger). Deliberately EMPTY on upgrade: no price is ever inferred
 // from pay, a budget line or a title, so every borrowed share-day of every
 // existing workspace reads `no agreed price` — refused, never zero.
-export const SCHEMA_VERSION = 143;
+// v144 adds the Non-Promotable Work Turn Ledger (ADR-0181): `workTurnActs`
+// (append-only dated acts declaring one ask non-promotable or promotable) and
+// `workTurnMarkers` (`RULE-NPW-01`'s bounded idempotency ledger). Deliberately
+// EMPTY on upgrade: no kind is ever inferred from a title, a role or a person,
+// so every existing ask reads `not classified` — refused, never guessed.
+export const SCHEMA_VERSION = 144;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -2160,6 +2166,9 @@ export const DEFAULT_SETTINGS = Object.freeze({
   ...normalizeTransferPriceSettings({}),
   // ADR-0178: cross-line ask budget, due window and automation pause.
   ...normalizeDelegationLineSettings({}),
+  // ADR-0181: work-turn look-back window, floor, over-turn threshold, ask
+  // window and automation pause.
+  ...normalizeWorkTurnSettings({}),
 });
 
 export const COLLECTIONS = [
@@ -2862,6 +2871,10 @@ export const COLLECTIONS = [
   // ADR-0178: append-only ask-to-line attribution and RULE-DLA-01 markers.
   'delegationLineActs',
   'delegationLineMarkers',
+  // ADR-0181 (Schema v144): append-only work-kind classification acts and
+  // RULE-NPW-01's marker ledger. No pool, turn, share or verdict is stored.
+  'workTurnActs',
+  'workTurnMarkers',
 ];
 
 /** Stable empty state. `now` is an ISO string so the result is a pure value. */
@@ -3617,6 +3630,7 @@ export function normalizeSettings(raw) {
     // the guard the eight comments above asked for and nothing enforced.
     ...normalizeMatrixSettings(s),
     ...normalizeDelegationLineSettings(s),
+    ...normalizeWorkTurnSettings(s),
     ...normalizeStructureHistorySettings(s),
     ...normalizeDifferencesSettings(s),
     ...normalizeFitSettings(s),
@@ -8137,6 +8151,12 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.transferPriceMarkers = normalizeTransferPriceMarkers(raw.transferPriceMarkers);
   state.delegationLineActs = normalizeDelegationLineActs(raw.delegationLineActs, state, warnings);
   state.delegationLineMarkers = normalizeDelegationLineMarkers(raw.delegationLineMarkers);
+  // ADR-0181 (Schema v144): a malformed classification act, an act naming a
+  // kind outside the closed list, or one naming a person other than the ask's
+  // owner is dropped with a counted warning — never repaired into a kind
+  // nobody declared. Resolved after delegations so the owner check is real.
+  state.workTurnActs = normalizeWorkTurnActs(raw.workTurnActs, state, warnings);
+  state.workTurnMarkers = normalizeWorkTurnMarkers(raw.workTurnMarkers);
   // ADR-0122: a malformed absence row is dropped with a warning, never repaired —
   // an invented absence is an invented unavailability for every cover in the span.
   // Resolved BEFORE links so the `declares-absence-of` provenance edge validates
@@ -8872,6 +8892,15 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  // 143 → 144: ADR-0181 adds two EMPTY collections. No ask, person or reporting
+  // line changes and no kind is fabricated: every existing ask reads
+  // `not classified` until a manager who reaches the person declares one.
+  143: (v143) => ({
+    ...v143,
+    schemaVersion: 144,
+    workTurnActs: Array.isArray(v143.workTurnActs) ? v143.workTurnActs : [],
+    workTurnMarkers: Array.isArray(v143.workTurnMarkers) ? v143.workTurnMarkers : [],
+  }),
   // 142 → 143: attribution starts empty; no existing ask is guessed onto a line.
   142: (v142) => ({ ...v142, schemaVersion: 143, delegationLineActs: Array.isArray(v142.delegationLineActs) ? v142.delegationLineActs : [], delegationLineMarkers: Array.isArray(v142.delegationLineMarkers) ? v142.delegationLineMarkers : [] }),
   // 141 → 142: ADR-0177 adds two EMPTY collections. No reporting line, share,

@@ -99,6 +99,13 @@ const groups = [
   // more than one span, so it stays in the full-access operator view.
   ['attribute-delegation-line', 'delegationLineAttribute'],
   ['govern-delegation-lines', 'delegationLineScan'],
+  // ADR-0181: classifying an ask is open at every leadership rank, because the
+  // frontline lead who hands the work out is exactly who knows what kind it is;
+  // the action narrows it to a seat that REACHES the person (span or declared
+  // line) and refuses the person's own seat. Re-running RULE-NPW-01 and changing
+  // the conventions is director+.
+  ['classify-work-turn', 'workTurnClassify'],
+  ['govern-work-turns', 'workTurnScan workTurnSetConventions'],
   ['govern-hiring-lines', 'hiringLineScan'],
   // ADR-0177: a transfer price is a TWO-KEY act. Proposing, confirming and
   // retiring are open at every leadership rank because a project lead with no
@@ -456,6 +463,10 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 'hiringLineReport',
 // ADR-0178: seat-scoped cross-line ask attribution report.
 'delegationLineReport',
+// ADR-0181: seat-scoped inside `buildWorkTurns` — people and pools outside the
+// seat are counted, never listed, and the altitude disclosure ladder decides
+// whether names, leaders or counts are returned.
+'workTurnReport',
 // ADR-0177: the chargeback statement is scoped INSIDE the read model — a seat
 // reads the line accounts it reaches and every piece that names one of them;
 // the rest is counted as withheld and names outside the seat are withheld.
