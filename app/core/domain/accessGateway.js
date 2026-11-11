@@ -86,6 +86,9 @@ const groups = [
   // are enforced inside `matrixInterfaceActions`.
   ['affirm-matrix-interface', 'matrixInterfaceAffirm matrixInterfaceRetire matrixInterfaceScan'],
   ['govern-matrix-interface', 'matrixInterfaceSetConventions'],
+  // ADR-0174: Standing Delegation-of-Authority Schedule & Limit Conformance.
+  ['declare-doa-limit', 'doaDeclareLimit doaRetireLimit doaPriceDecision doaScan'],
+  ['govern-doa-schedule', 'doaSetConventions'],
   ['govern-oneonone-lines', 'oneOnOneLineSetConventions'],
   // ADR-0152: settling an obligation an ENDED line left behind. Recording the
   // remedy is the manager's own act (the action narrows it to a seat that reaches
@@ -417,6 +420,8 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // ADR-0162: Matrix Management-Interface Operating-Agreement read surface.
 // Seat-scoped inside `buildMatrixInterfaceReport` and aggregate-only in brief/CSV.
 'matrixInterfaceReport', 'matrixInterfaceBriefText', 'matrixInterfaceCsvRows', 'matrixInterfaceAttentionCount', 'matrixInterfaceCandidates',
+// ADR-0174: Standing Delegation-of-Authority Schedule read surface.
+'doaReport', 'doaBriefText', 'doaCsvRows', 'doaAttentionCount', 'doaCandidates',
 // A seat-scoped report; aggregate-only cells are withheld by the adapter.
 'oneOnOneLineReport']);
 const refusal = (reason) => ({ ok: false, code: 'scope-refusal', error: reason, field: 'scope' });

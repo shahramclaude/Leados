@@ -115,6 +115,7 @@ import { onboardingMatrixRule } from './onboardingMatrixRules.js';
 import { lineExitRule } from './lineExitRules.js';
 import { authorityContinuityRule } from './authorityContinuityRules.js';
 import { matrixInterfaceRule } from './matrixInterfaceRules.js';
+import { doaScheduleRule } from './doaScheduleRules.js';
 import { meritEvidenceRule } from './meritEvidenceRules.js';
 import { benchEvidenceRule } from './benchEvidenceRules.js';
 import { benchRegressionRule } from './benchRegressionRules.js';
@@ -916,6 +917,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'matrixInterfaceRules.js',
     purpose: 'RULE-MIA-01: reads every active deduplicated unordered manager pair across multi-line people against bilateral management-interface operating agreements (`matrixInterfaceAgreements`), live `matrixJointApex` escalation topology, and active `cadenceForums`. Closes prior review asks once a pair reaches `current` (or disappears / loses its unique apex), issues at most ONE bounded dated review delegation per uncovered pair to its unique `matrixJointApex` principal with typed provenance (`issues-obligation`, `rolls-up-to` per leadership ancestor), and refuses to guess a review owner on diamond ties or disconnected pairs. Never invents an agreement, edits a reporting line, or modifies terms; idempotent via `matrixInterfaceMarkers`; bounded per commit; inert on automatic triggers in single-chain workspaces.',
     writes: ['delegations', 'links', 'matrixInterfaceMarkers'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: doaScheduleRule,
+    module: 'doaScheduleRules.js',
+    purpose: 'RULE-DOA-01: evaluates spending mandates, committed/spent budget lines and priced decided decisions against dated integer-cent standing Delegation-of-Authority limits (`doaSchedule`) across the canonical single-chain or matrix DAG (`buildMatrix` / `buildMatrixAsOf`), including grantor nemo-dat, cross-line anti-splitting (`second-line-limit`), and one-over-one covering escalation. Closes prior open ratification asks once resolved or superseded, issues at most ONE bounded dated ratification delegation per open breach to the unique covering senior seat or unique `matrixJointApex` principal with typed provenance (`issues-obligation`, `rolls-up-to` per leadership ancestor), and abstains cleanly on diamond ties, above-apex breaches or unreadable as-of graphs. Never blocks, revokes or mutates an underlying commitment; idempotent via `doaMarkers`; fast-exits in O(1) when no standing schedule is declared.',
+    writes: ['delegations', 'links', 'doaMarkers'],
     emits: [],
     scansWorkspace: true,
   },

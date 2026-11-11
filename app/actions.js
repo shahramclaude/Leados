@@ -81,6 +81,13 @@ import {
   matrixInterfaceBriefText,
   matrixInterfaceCsvRows,
 } from './core/domain/matrixInterface.js';
+import { createDoaScheduleActions } from './core/domain/doaScheduleActions.js';
+import {
+  buildDoaReport,
+  doaAttentionCount,
+  doaBriefText,
+  doaCsvRows,
+} from './core/domain/doaSchedule.js';
 import {
   buildLineReaffirmation,
   lineReaffirmationAttentionCount,
@@ -20373,6 +20380,27 @@ export function createApi(store, options = {}) {
   };
   api.matrixInterfaceAttentionCount = (options = {}) => ({
     ok: true, count: matrixInterfaceAttentionCount(store.state, interfaceOptions(options)),
+  });
+  // ADR-0174: Standing Delegation-of-Authority Schedule & Cross-Line Limit Conformance.
+  Object.assign(api, createDoaScheduleActions({ store, uid: id, now: clock }));
+  const doaOptions = (options = {}) => ({
+    now: options.now instanceof Date ? options.now : clock(),
+    settings: store.state.settings || {},
+  });
+  api.doaReport = (options = {}) => {
+    const report = buildDoaReport(store.state, doaOptions(options));
+    return { ok: true, report, board: report.board };
+  };
+  api.doaBriefText = (options = {}) => {
+    const report = buildDoaReport(store.state, doaOptions(options));
+    return { ok: true, text: doaBriefText(report), report };
+  };
+  api.doaCsvRows = (options = {}) => {
+    const report = buildDoaReport(store.state, doaOptions(options));
+    return { ok: true, rows: doaCsvRows(report) };
+  };
+  api.doaAttentionCount = (options = {}) => ({
+    ok: true, count: doaAttentionCount(store.state, doaOptions(options)),
   });
   // ADR-0149: Matrix Reorganisation Reconciliation & As-Of Structure Reads. The
   // three writes and the seat-scoped reads are in the factory; the aggregate

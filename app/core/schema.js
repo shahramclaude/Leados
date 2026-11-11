@@ -88,6 +88,11 @@ import {
   normalizeMatrixInterfaceSettings,
 } from './domain/matrixInterfaceSchema.js';
 import {
+  normalizeDoaMarkers,
+  normalizeDoaSchedule,
+  normalizeDoaSettings,
+} from './domain/doaScheduleSchema.js';
+import {
   normalizeLineMandates,
   normalizeContradictionReviews,
   normalizeContradictionMarkers,
@@ -712,7 +717,11 @@ export {
 // completed review, never rewritten) plus RULE-BRG-01's idempotency markers.
 // Pair verdicts are re-derived on read; a stored verdict would be the drift
 // the Bulletproof Reliability Mandate forbids.
-export const SCHEMA_VERSION = 137;
+// v138 adds the Standing Delegation-of-Authority (DoA) Schedule & Cross-Line
+// Limit Conformance ledger (ADR-0174): `doaSchedule` (append-only dated integer-
+// cent limits, retirements, and explicit decision pricing) plus `doaMarkers`
+// (`RULE-DOA-01`). Starts empty so no standing limit is inferred from title or rank.
+export const SCHEMA_VERSION = 138;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -2115,6 +2124,8 @@ export const DEFAULT_SETTINGS = Object.freeze({
   ...normalizeAuthorityReaffirmationSettings({}),
   // ADR-0162: management-interface agreement term, warning window, review ask window + pause.
   ...normalizeMatrixInterfaceSettings({}),
+  // ADR-0174: standing delegation-of-authority ratification due window + automation pause.
+  ...normalizeDoaSettings({}),
   // Matrix 1:1 coverage: explicit defaults, with no inferred historical holders.
   ...normalizeOneOnOneLineSettings({}),
 });
@@ -2757,6 +2768,11 @@ export const COLLECTIONS = [
   // derived on read from the live matrix — never stored.
   'matrixInterfaceAgreements',
   'matrixInterfaceMarkers',
+  // ADR-0174 (Schema v138): Standing Delegation-of-Authority Schedule &
+  // RULE-DOA-01 ratification markers. Conformance verdicts and covering-seat
+  // resolutions are derived on read from the live/as-of matrix — never stored.
+  'doaSchedule',
+  'doaMarkers',
   // ADR-0166 (Schema v133): the Cross-Line Review-Evidence Join. This collection
   // holds NOTHING BUT the join's rule-idempotency markers: which pay decisions
   // have already been issued one dated ask about an unconsulted line. The join
@@ -3532,6 +3548,7 @@ export function normalizeSettings(raw) {
     ...normalizeLineReaffirmationSettings(s),
     ...normalizeAuthorityReaffirmationSettings(s),
     ...normalizeMatrixInterfaceSettings(s),
+    ...normalizeDoaSettings(s),
     ...normalizeOneOnOneLineSettings(s),
     ...normalizeAgendaSettings(s),
     chainAdoptedHorizons: normalizeAdoptedHorizons(s.chainAdoptedHorizons, DECLARED_HORIZONS),
@@ -8010,6 +8027,10 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // dropped with a printed warning, never repaired into synthetic consent.
   state.matrixInterfaceAgreements = normalizeMatrixInterfaceAgreements(raw.matrixInterfaceAgreements, warnings);
   state.matrixInterfaceMarkers = normalizeMatrixInterfaceMarkers(raw.matrixInterfaceMarkers);
+  // ADR-0174: malformed standing-authority schedule acts are dropped with a
+  // printed warning — never repaired into synthetic signing authority.
+  state.doaSchedule = normalizeDoaSchedule(raw.doaSchedule, warnings);
+  state.doaMarkers = normalizeDoaMarkers(raw.doaMarkers);
   // ADR-0166: the review-evidence join's idempotency ledger. A malformed marker is
   // dropped so the ask it guarded can be issued again — never repaired into a
   // plausible-looking marker that would suppress it.
@@ -8787,6 +8808,18 @@ export const MIGRATIONS = {
     schemaVersion: 137,
     benchRegressionReadings: Array.isArray(v136.benchRegressionReadings) ? v136.benchRegressionReadings : [],
     benchRegressionMarkers: Array.isArray(v136.benchRegressionMarkers) ? v136.benchRegressionMarkers : [],
+  }),
+  // 137 → 138: ADR-0174 adds `doaSchedule` and `doaMarkers` plus clamped DoA
+  // ratification conventions. Both ledgers start empty so no standing signing
+  // limit is invented from job title or rank on upgrade.
+  137: (v137) => ({
+    ...v137,
+    schemaVersion: 138,
+    doaSchedule: Array.isArray(v137.doaSchedule) ? v137.doaSchedule : [],
+    doaMarkers: Array.isArray(v137.doaMarkers) ? v137.doaMarkers : [],
+    settings: isPlainObject(v137.settings)
+      ? { ...v137.settings, ...normalizeDoaSettings(v137.settings) }
+      : { ...DEFAULT_SETTINGS },
   }),
   // 133 → 134: feedback author attribution is additive. Historical notes stay
   // explicitly unattributed; no manager or room is inferred during migration.
