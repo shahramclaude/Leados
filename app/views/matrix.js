@@ -88,6 +88,7 @@ import { renderMatrixDemandVariancePanel } from './matrixDemandVariancePanel.js'
 import { renderMatrixDoaPanel } from './matrixDoaPanel.js';
 // ADR-0164: Matrix 1:1 Line Coverage completion panel (Schema v140).
 import { renderMatrixOneOnOnePanel } from './matrixOneOnOnePanel.js';
+import { renderMatrixHiringPanel } from './matrixHiringPanel.js';
 
 const PANELS = MATRIX_PANELS;
 
@@ -889,6 +890,7 @@ export function renderMatrix(ctx) {
     panel === 'demand-variance' ? renderMatrixDemandVariancePanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
     panel === 'authority' ? renderMatrixDoaPanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
     panel === 'one-on-ones' ? renderMatrixOneOnOnePanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
+    panel === 'hiring' ? renderMatrixHiringPanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
     panel === 'continuity' ? renderContinuityPanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
     panel === 'seats' ? seatsPanel(ctx, report) : null,
     panel === 'governance' ? governancePanel(ctx, report) : null,

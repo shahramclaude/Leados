@@ -168,6 +168,9 @@ export const RECORD_POLICIES = Object.freeze({
   matrixRemedies: { classKey: 'unit', detailCeiling: 0, label: 'Matrix pattern remedies (dated acts; verdicts re-derived on read)', route: '#/matrix?panel=remedies' },
   // ADR-0164: RULE-OOL-01 ask & observation ledger.
   oneOnOneLineMarkers: { classKey: 'unit', detailCeiling: 0, label: 'Matrix 1:1 coverage ask & observation markers', route: '#/matrix?panel=one-on-ones' },
+  // ADR-0176: Cross-Line Selection Corroboration.
+  hiringLinePlans: { classKey: 'unit', detailCeiling: 0, label: 'Co-hiring line plans (dated acts; verdicts re-derived on read)', route: '#/matrix?panel=hiring' },
+  hiringLineMarkers: { classKey: 'unit', detailCeiling: 0, label: 'Co-hiring assessment ask & observation markers', route: '#/matrix?panel=hiring' },
   // ADR-0168: RULE-BNE-01's idempotency ledger names no person and carries no
   // rating, so it is unit-class with NO detail printed at any ceiling.
   benchEvidenceMarkers: { classKey: 'unit', detailCeiling: 0, label: 'Bench-evidence ask markers', route: '#/succession?panel=evidence' },
@@ -547,6 +550,7 @@ export const ACTION_RIGHTS = Object.freeze({
   'answer-branch-reading': { minRank: 1, maxRank: 5, label: 'Answer a branch reading request as that branch’s leader' },
   'log-oneonone': { minRank: 1, maxRank: 2, label: 'Log a 1:1' },
   'govern-oneonone-lines': { minRank: 3, maxRank: 5, label: 'Scan silent 1:1 lines and set matrix 1:1 coverage conventions' },
+  'govern-hiring-lines': { minRank: 3, maxRank: 5, label: 'Scan co-hiring lines for declared managers who have not assessed a candidate' },
   'log-feedback': { minRank: 1, maxRank: 2, label: 'Give feedback' },
   'log-conflict': { minRank: 1, maxRank: 2, label: 'Log a conflict' },
   'record-review': { minRank: 1, maxRank: 2, label: 'Record a review' },

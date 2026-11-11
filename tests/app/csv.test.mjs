@@ -131,7 +131,7 @@ test('every CSV scope round-trips cleanly and preserves unknown values as blank 
 // — 130 registered, because #75 remains reserved.
 // The pin states the total deliberately so the next session cannot drift the
 // catalog count silently.
-assert.equal(CSV_EXPORTS.length, 130);
+assert.equal(CSV_EXPORTS.length, 131);
   for (const spec of CSV_EXPORTS) {
     const res = exportWorkspaceCsv(state, spec.key, { now: NOW });
     assert.equal(res.ok, true, `${spec.key} export succeeds`);

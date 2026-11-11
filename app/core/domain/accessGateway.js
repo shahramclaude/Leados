@@ -94,6 +94,10 @@ const groups = [
   // refuses a second active remedy for the same pattern.
   ['declare-matrix-remedy', 'matrixRemedyDeclare'],
   ['govern-oneonone-lines', 'oneOnOneLineSetConventions oneOnOneLineScan'],
+  // ADR-0176: re-running RULE-HLC-01 is director+. Declaring or withdrawing a
+  // line plan deliberately has NO seat-scoped adapter: it names managers in
+  // more than one span, so it stays in the full-access operator view.
+  ['govern-hiring-lines', 'hiringLineScan'],
   // ADR-0152: settling an obligation an ENDED line left behind. Recording the
   // remedy is the manager's own act (the action narrows it to a seat that reaches
   // the person, and a carry must name a live line holder); the scan changes no
@@ -427,7 +431,10 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // ADR-0174: Standing Delegation-of-Authority Schedule read surface.
 'doaReport', 'doaBriefText', 'doaCsvRows', 'doaAttentionCount', 'doaCandidates',
 // A seat-scoped report; aggregate-only cells are withheld by the adapter.
-'oneOnOneLineReport']);
+'oneOnOneLineReport',
+// ADR-0176: seat-scoped inside `buildHiringLines` (out-of-span managers and
+// candidate names withheld; undeclared requisitions read only by the operator).
+'hiringLineReport']);
 const refusal = (reason) => ({ ok: false, code: 'scope-refusal', error: reason, field: 'scope' });
 
 /** ADR-0087: under enforcement, boundary-management commands stay reachable

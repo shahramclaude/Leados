@@ -148,6 +148,8 @@ import { DOA_CSV_COLUMNS, DOA_CSV_DESCRIPTOR } from './domain/doaScheduleRegistr
 // and small-cell/differencing protected from the shared read model.
 import { buildProtectedOneOnOneLines, oneOnOneLineCsvRows } from './domain/oneOnOneLines.js';
 import { ONE_ON_ONE_LINE_CSV_COLUMNS, ONE_ON_ONE_LINE_CSV_DESCRIPTOR } from './domain/oneOnOneLineRegistry.js';
+import { buildHiringLines, hiringLineCsvRows } from './domain/hiringLines.js';
+import { HIRING_LINE_CSV_COLUMNS, HIRING_LINE_CSV_DESCRIPTOR } from './domain/hiringLineRegistry.js';
 import { STRUCTURE_HISTORY_CSV_COLUMNS } from './domain/structureHistoryRegistry.js';
 import {
   assessmentReconciliationCsvRows,
@@ -1299,6 +1301,8 @@ export const CSV_EXPORTS = [
   // CSV scope #130 (Schema v140, ADR-0164): Matrix 1:1 Line Coverage, aggregate
   // only, small-cell and repeated-release protected.
   ONE_ON_ONE_LINE_CSV_DESCRIPTOR,
+  // #131 (Schema v141, ADR-0176): co-hiring line corroboration, aggregate only.
+  HIRING_LINE_CSV_DESCRIPTOR,
 ];
 
 function personLookup(state) {
@@ -6355,6 +6359,15 @@ export function buildScopeTable(state, scope, now) {
       const report = buildMatrixRemedyReport(state, { now, settings: state.settings || {} });
       const rows = matrixRemedyCsvRows(report);
       const columns = MATRIX_REMEDY_CSV_COLUMNS.map((key) => ({ key, header: key }));
+      return { columns, rows };
+    }
+    case 'hiring-lines': {
+      // CSV scope #131 (Schema v141, ADR-0176). Built from the SAME seat-scoped
+      // read model the panel renders, so an exported count is provably the count
+      // that was printed. One identity-free summary row; a withheld rate is BLANK.
+      const report = buildHiringLines(state, { now, settings: state.settings || {} });
+      const rows = hiringLineCsvRows(report);
+      const columns = HIRING_LINE_CSV_COLUMNS.map((key) => ({ key, header: key }));
       return { columns, rows };
     }
     case 'one-on-one-lines': {

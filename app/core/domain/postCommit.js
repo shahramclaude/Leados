@@ -160,6 +160,7 @@ import { benchEvidenceRule } from './benchEvidenceRules.js';
 import { benchRegressionRule } from './benchRegressionRules.js';
 // ADR-0164 (Schema v140): Matrix 1:1 Line Coverage (RULE-OOL-01).
 import { oneOnOneLineRule } from './oneOnOneLineRules.js';
+import { hiringLineRule } from './hiringLineRules.js';
 
 
 // ADR-0087: the Operating Cadence Clock. Reads the finished queue after the
@@ -941,6 +942,12 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // atomic transaction. Inert in single-chain workspaces and pausable via
   // `oneOnOneLineAutoPropagate`.
   oneOnOneLineRule,
+  // ADR-0176: Cross-Line Selection Corroboration (RULE-HLC-01). Asks the NAMED
+  // manager of a declared reporting line that has not assessed a final/offer
+  // stage candidate, once, and closes its own ask when the line speaks. Runs
+  // before the seat rule so the ask rolls up in the same transaction. Inert
+  // until a line plan is declared; never blocks an offer.
+  hiringLineRule,
   // ADR-0076: the Operating Seat (vertical roll-up + enforced boundaries).
   // It reads the finished record after every module has propagated, then fans
   // each open item up every leadership ancestor in the reporting tree with one

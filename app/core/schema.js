@@ -25,6 +25,7 @@ import { normalizeSeatIdentities, normalizeIdentityMarkers, normalizeIdentitySet
 import { normalizeDutyCovers, normalizeDutyCoverageMarkers, normalizeDutyCoverageSettings } from './domain/dutyCoverageSchema.js';
 import { normalizeReportingLines, normalizeMatrixMarkers, normalizeMatrixSettings } from './domain/matrixSchema.js';
 import { normalizeOneOnOneHolder, normalizeOneOnOneLineMarkers, normalizeOneOnOneLineSettings } from './domain/oneOnOneLineSchema.js';
+import { normalizeHiringLineMarkers, normalizeHiringLinePlans, normalizeHiringLineSettings } from './domain/hiringLineSchema.js';
 // ADR-0143 (Schema v120): the Cross-Line Priority Arbitration's fail-closed
 // normalizers. Every stored row is a human act; every score, state and count is
 // re-derived on read, so a printed order cannot drift from the integers it ranks.
@@ -729,7 +730,12 @@ export {
 // v140 completes Matrix 1:1 Line Coverage (ADR-0164): adds `oneOnOneLineMarkers`
 // (`RULE-OOL-01`'s bounded idempotency/observation ledger). Deliberately EMPTY
 // on upgrade; existing meetings never gain synthetic `heldById` attribution.
-export const SCHEMA_VERSION = 140;
+// v141 adds Cross-Line Selection Corroboration (ADR-0176): `hiringLinePlans`
+// (append-only dated acts declaring which managers a hire on a requisition will
+// report to) and `hiringLineMarkers` (`RULE-HLC-01`'s bounded idempotency ledger).
+// Deliberately EMPTY on upgrade: no line plan is ever inferred from a team name,
+// an interview panel or a title, so every existing requisition reads `undeclared`.
+export const SCHEMA_VERSION = 141;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -2136,6 +2142,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   ...normalizeDoaSettings({}),
   // Matrix 1:1 coverage: explicit defaults, with no inferred historical holders.
   ...normalizeOneOnOneLineSettings({}),
+  ...normalizeHiringLineSettings({}),
 });
 
 export const COLLECTIONS = [
@@ -2827,6 +2834,10 @@ export const COLLECTIONS = [
   // ADR-0164 (Schema v140): RULE-OOL-01's bounded silent-line ask and unreadable
   // observation marker ledger. Never stores synthetic holders or inferred state.
   'oneOnOneLineMarkers',
+  // ADR-0176 (Schema v141): dated co-hiring line-plan acts and RULE-HLC-01's
+  // marker ledger. No line state, verdict or rate is stored.
+  'hiringLinePlans',
+  'hiringLineMarkers',
 ];
 
 /** Stable empty state. `now` is an ISO string so the result is a pure value. */
@@ -3565,6 +3576,7 @@ export function normalizeSettings(raw) {
     ...normalizeMatrixInterfaceSettings(s),
     ...normalizeDoaSettings(s),
     ...normalizeOneOnOneLineSettings(s),
+    ...normalizeHiringLineSettings(s),
     ...normalizeAgendaSettings(s),
     chainAdoptedHorizons: normalizeAdoptedHorizons(s.chainAdoptedHorizons, DECLARED_HORIZONS),
     chainAdoptedOn: /^\d{4}-\d{2}-\d{2}$/.test(String(s.chainAdoptedOn || '')) ? s.chainAdoptedOn : null,
@@ -8066,6 +8078,10 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.matrixRemedies = normalizeMatrixRemedies(raw.matrixRemedies, warnings);
   // ADR-0164 (Schema v140): RULE-OOL-01's bounded idempotency & observation ledger.
   state.oneOnOneLineMarkers = normalizeOneOnOneLineMarkers(raw.oneOnOneLineMarkers);
+  // ADR-0176 (Schema v141): malformed line-plan acts are dropped with a counted
+  // warning, never repaired into a plan nobody declared.
+  state.hiringLinePlans = normalizeHiringLinePlans(raw.hiringLinePlans, state, warnings);
+  state.hiringLineMarkers = normalizeHiringLineMarkers(raw.hiringLineMarkers);
   // ADR-0122: a malformed absence row is dropped with a warning, never repaired —
   // an invented absence is an invented unavailability for every cover in the span.
   // Resolved BEFORE links so the `declares-absence-of` provenance edge validates
@@ -8801,6 +8817,14 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  // 140 → 141: ADR-0176 adds two EMPTY collections. No requisition, candidate,
+  // evidence record or reporting line changes; no line plan is fabricated.
+  140: (v140) => ({
+    ...v140,
+    schemaVersion: 141,
+    hiringLinePlans: Array.isArray(v140.hiringLinePlans) ? v140.hiringLinePlans : [],
+    hiringLineMarkers: Array.isArray(v140.hiringLineMarkers) ? v140.hiringLineMarkers : [],
+  }),
   // 139 → 140: ADR-0164 completes Matrix 1:1 Line Coverage by adding
   // `oneOnOneLineMarkers` (`RULE-OOL-01`). Starts empty on upgrade; existing
   // meetings keep their `heldById: null` rather than fabricating attribution.

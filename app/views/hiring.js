@@ -335,6 +335,8 @@ function renderIndex(ctx) {
     actions: [
       h('button', { class: 'btn btn-secondary', type: 'button', onClick: () => openRequisitionDialog(ctx) }, 'Open a role'),
       h('button', { class: 'btn btn-ghost', type: 'button', onClick: exportHiringCsv }, 'Export hiring CSV'),
+      // ADR-0176: which of the managers a hire will report to have assessed the candidate.
+      h('a', { class: 'btn btn-ghost', href: '#/matrix?panel=hiring' }, 'Reporting lines for hires'),
       h(
         'button',
         {
@@ -550,6 +552,7 @@ function renderDetail(ctx, requisition) {
     actions: [
       h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => ctx.navigate('#/hiring') }, '← All roles'),
       statusBadge(requisition.status),
+      h('a', { class: 'btn btn-ghost', href: '#/matrix?panel=hiring' }, 'Reporting lines for this hire'),
       row.active
         ? h('a', { class: 'btn btn-ghost', href: `#/scenarios?hireReq=${encodeURIComponent(requisition.id)}` }, 'Simulate Brooks hire')
         : null,
