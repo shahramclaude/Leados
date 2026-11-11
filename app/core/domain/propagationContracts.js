@@ -120,6 +120,7 @@ import { meritEvidenceRule } from './meritEvidenceRules.js';
 import { benchEvidenceRule } from './benchEvidenceRules.js';
 import { benchRegressionRule } from './benchRegressionRules.js';
 import { oneOnOneLineRule } from './oneOnOneLineRules.js';
+import { hiringLineRule } from './hiringLineRules.js';
 import { sealRule } from './sealRules.js';
 // ADR-0092: the Differencing Defender declares its contract like every other rule.
 import { differencingRule } from './differencingRules.js';
@@ -934,6 +935,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'oneOnOneLineRules.js',
     purpose: 'RULE-OOL-01: reads the Matrix 1:1 Line Coverage board (`buildOneOnOneLines`) on meeting, reporting-line, roster, and convention commits plus explicit `oneonone.line.scan` scans. Closes prior open cadence asks when a line settles/exempts/disappears or becomes unproven/off-roster, issues at most ONE bounded dated ask per proven silent on-roster pair per commit (capped at 8) with typed provenance (`concerns`, `issues-obligation`, `rolls-up-to` per leadership ancestor in the matrix DAG), records bounded observation markers for unproven/off-roster/unattributed lines without opening blame tasks, never creates meetings or edits attribution, is marker-idempotent, pausable via `oneOnOneLineAutoPropagate` (explicit scan always runs), and is strictly inert in single-chain workspaces.',
     writes: ['delegations', 'links', 'oneOnOneLineMarkers'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: hiringLineRule,
+    module: 'hiringLineRules.js',
+    purpose: 'RULE-HLC-01: reads the Cross-Line Selection Corroboration register (`buildHiringLines`, ADR-0176) with the whole-workspace operator view on line-plan acts, candidate evidence / stage / decision events, requisition updates and explicit `hiring.line.scan` scans. For every decision-stage candidate on an in-flight requisition whose DECLARED line plan names a manager that is on the panel but silent, or was never asked, it issues at most ONE dated delegation per (candidate, manager, plan act) to that named manager, with typed `concerns` (requisition), `issues-obligation` (candidate) and `rolls-up-to` (every roster ancestor of the manager in the matrix DAG) provenance, bounded per commit with the remainder counted. It closes its own asks once the line is heard or represented, the candidate leaves the final/offer stage, the plan is re-declared or withdrawn, or the requisition stops being in flight, and records an observation — never a task — for a declared manager who left the roster. It never blocks an offer, moves a candidate, records evidence, edits a plan or substitutes one manager for another, and it is inert until a line plan exists.',
+    writes: ['delegations', 'links', 'hiringLineMarkers'],
     emits: [],
     scansWorkspace: true,
   },
