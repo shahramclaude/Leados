@@ -63,6 +63,7 @@ The ledger grades the **allocation a manager made**. It stores no rating of any 
 - **A re-delegated ask starts unclassified.** Handing an ask back and re-delegating it creates a new ask for the new person; the kind declared for the old one is not carried over.
 - **The idempotency ledger is bounded.** Beyond 2,000 markers the oldest markers of asks that are no longer open are evicted, so a finding that old could be asked about again.
 - **Two owner states have no test fixture.** `ambiguous` and `off-roster` are implemented and reconciled in the counts; this session's suite exercises `unique` and `leader-held` only.
+- **A carrier who has left the roster is counted, not listed.** An ask held by an archived person stays in the window's population. A seat without full access counts it as outside the seat. The full-access operator still reads it and its class: a non-promotable one is shown as on no line and charged to no pool, the person gets no row and no verdict, and the ask row carries their record id where the name would be, because names are read from the active graph. Archiving the person who carried most of a pool's asks therefore shrinks that pool and can end its finding; the rule then closes its own ask. The six identities still hold. This was checked by running it in Session 247; no test pins it.
 
 ## Consequences
 
