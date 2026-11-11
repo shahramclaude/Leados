@@ -80,6 +80,8 @@ import { renderMatrixMeetingLoadPanel } from './matrixMeetingLoadPanel.js';
 // reporting graph of the decision day — every line, not only the home chain.
 import { renderMatrixSodPanel } from './matrixSodPanel.js';
 import { renderMatrixIntakePanel } from './matrixIntakePanel.js';
+// ADR-0173: age-weighted decision-queue demand against declared share-days.
+import { renderMatrixDemandVariancePanel } from './matrixDemandVariancePanel.js';
 
 const PANELS = MATRIX_PANELS;
 
@@ -877,6 +879,7 @@ export function renderMatrix(ctx) {
     panel === 'concordance' ? concordancePanel(ctx, report) : null,
     panel === 'sod' ? renderMatrixSodPanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
     panel === 'intake' ? renderMatrixIntakePanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
+    panel === 'demand-variance' ? renderMatrixDemandVariancePanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
     panel === 'continuity' ? renderContinuityPanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
     panel === 'seats' ? seatsPanel(ctx, report) : null,
     panel === 'governance' ? governancePanel(ctx, report) : null,

@@ -346,6 +346,11 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // hide the ledger from exactly the seats that declared it. The report is built
 // under the acting seat, so a seat sees only its own span.
 'matrixReport', 'matrixBriefText', 'matrixCsvRows', 'matrixCoordinationReport', 'matrixSettings', 'matrixCandidates',
+// ADR-0173: the demand-variance read surface. Same reasoning as every module
+// above — a read absent from SAFE_READS is unreadable under enforcement while
+// its writes are still gated, which would hide the ledger from exactly the
+// seats that declared it.
+'matrixDemandVarianceReport',
 // ADR-0143: the arbitration register's read surface. Registered for the same
 // reason as every module above — a read absent from SAFE_READS is unreadable
 // under enforcement while its writes are still gated, which would hide the case
