@@ -163,6 +163,11 @@ export const RECORD_POLICIES = Object.freeze({
   // ADR-0168: RULE-BNE-01's idempotency ledger names no person and carries no
   // rating, so it is unit-class with NO detail printed at any ceiling.
   benchEvidenceMarkers: { classKey: 'unit', detailCeiling: 0, label: 'Bench-evidence ask markers', route: '#/succession?panel=evidence' },
+  // ADR-0172: frozen window readings name a claim and a review but carry no
+  // assessment, and the rule's markers carry the pair snapshot — unit-class
+  // with NO detail printed at any ceiling, read through the report adapter.
+  benchRegressionReadings: { classKey: 'unit', detailCeiling: 0, label: 'Bench-regression frozen readings (report only)', route: '#/succession?panel=evidence' },
+  benchRegressionMarkers: { classKey: 'unit', detailCeiling: 0, label: 'Bench-regression ask markers', route: '#/succession?panel=evidence' },
   lineMandates: { classKey: 'unit', label: 'Declared line charters', route: '#/contradiction?panel=board' },
   contradictionReviews: { classKey: 'unit', label: 'Contradiction rulings', route: '#/contradiction?panel=log' },
   contradictionMarkers: { classKey: 'unit', label: 'Contradiction idempotency markers', route: '#/contradiction' },

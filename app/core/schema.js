@@ -129,6 +129,7 @@ import { normalizeMeritEvidenceMarkers } from './domain/meritEvidenceRegistry.js
 // `benchEvidenceRegistry.js`, so `schema.js` reads the vocabulary without a cycle.
 import { normalizeBenchEvidenceMarkers } from './domain/benchEvidenceRegistry.js';
 import { normalizeLineIntakes } from './domain/lineIntakeRegistry.js';
+import { normalizeBenchRegressionReadings, normalizeBenchRegressionMarkers } from './domain/benchRegressionRegistry.js';
 import { normalizeTransitionPrograms } from './domain/transitionSchema.js';
 import { normalizeOrgDesigns } from './domain/orgDesignSchema.js';
 import { normalizeVoiDecisions, normalizeVoiStudies } from './domain/valueOfInformationSchema.js';
@@ -706,7 +707,12 @@ export {
 // interface agreement or escalation route is fabricated without human consent.
 // v132 records who held a 1:1, without assigning a holder to old meetings.
 // Coverage is derived from the current matrix and is never stored as a score.
-export const SCHEMA_VERSION = 136;
+// v137 adds the Bench-Claim Evidence Regression Watch (ADR-0172):
+// `benchRegressionReadings` (one dated evidence reading per bench claim per
+// completed review, never rewritten) plus RULE-BRG-01's idempotency markers.
+// Pair verdicts are re-derived on read; a stored verdict would be the drift
+// the Bulletproof Reliability Mandate forbids.
+export const SCHEMA_VERSION = 137;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -2776,6 +2782,20 @@ export const COLLECTIONS = [
   // ceiling would be the exact drift the Bulletproof Reliability Mandate
   // forbids; a stored verdict would be the drift too.
   'lineIntakes',
+  // ADR-0172 (Schema v137): the Bench-Claim Evidence Regression Watch.
+  // `benchRegressionReadings` holds ONLY dated evidence readings — one per
+  // bench claim per completed review (the claim, the review, the window, the
+  // evidence state through the shared ADR-0168 precedence, the line counts,
+  // the rating at freeze time, the freeze day). A reading is a claim state,
+  // never a person score, and is NEVER rewritten once frozen.
+  // `benchRegressionMarkers` is RULE-BRG-01's idempotency ledger. Pair verdicts
+  // are re-derived on read from frozen previous windows and live later
+  // windows; a stored verdict would be the exact drift the Bulletproof
+  // Reliability Mandate forbids. Deliberately EMPTY on upgrade: no window has
+  // been frozen in an existing workspace, and a history invented at upgrade
+  // time would be evidence nobody recorded.
+  'benchRegressionReadings',
+  'benchRegressionMarkers',
 ];
 
 /** Stable empty state. `now` is an ISO string so the result is a pure value. */
@@ -8001,6 +8021,11 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // ADR-0171: malformed intake-act rows are dropped with a warning, never
   // repaired — an invented intake is an invented claim on someone's ceiling.
   state.lineIntakes = normalizeLineIntakes(raw.lineIntakes);
+  // ADR-0172: a malformed frozen reading is dropped, never repaired — a
+  // repaired "previous window" would be a history nobody recorded. A malformed
+  // marker is dropped so the ask it guarded can be issued again.
+  state.benchRegressionReadings = normalizeBenchRegressionReadings(raw.benchRegressionReadings);
+  state.benchRegressionMarkers = normalizeBenchRegressionMarkers(raw.benchRegressionMarkers);
   // ADR-0122: a malformed absence row is dropped with a warning, never repaired —
   // an invented absence is an invented unavailability for every cover in the span.
   // Resolved BEFORE links so the `declares-absence-of` provenance edge validates
@@ -8751,6 +8776,17 @@ export const MIGRATIONS = {
     ...v135,
     schemaVersion: 136,
     lineIntakes: Array.isArray(v135.lineIntakes) ? v135.lineIntakes : [],
+  }),
+  // 136 → 137: ADR-0172 adds the benchRegressionReadings and
+  // benchRegressionMarkers collections. Every existing workspace reads exactly
+  // as before: the watch ledger starts empty (no window has been frozen, so
+  // every pair reads `uncomparable` until the scan freezes history) and every
+  // pair verdict is re-derived on read.
+  136: (v136) => ({
+    ...v136,
+    schemaVersion: 137,
+    benchRegressionReadings: Array.isArray(v136.benchRegressionReadings) ? v136.benchRegressionReadings : [],
+    benchRegressionMarkers: Array.isArray(v136.benchRegressionMarkers) ? v136.benchRegressionMarkers : [],
   }),
   // 133 → 134: feedback author attribution is additive. Historical notes stay
   // explicitly unattributed; no manager or room is inferred during migration.

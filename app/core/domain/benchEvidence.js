@@ -126,6 +126,121 @@ function reviewForWindow(reviews, personId, windowEnd) {
   return { review: best ? best.review : null, eligibleN };
 }
 
+/**
+ * Resolve ONE claim's evidence state against ONE review (ADR-0168, DECLARED
+ * PRECEDENCE, worst first).
+ *
+ * This is the SAME precedence the point-in-time register applies — moved here
+ * verbatim (Session 236, ADR-0172) so the regression watch's freezer and the
+ * register resolve a review through one code path. The panel, the brief, the
+ * CSV, RULE-BNE-01 and RULE-BRG-01 cannot disagree about a word, because there
+ * is only one function that utters it.
+ *
+ * @param {object} args
+ * @param {object|null} args.review the completed review to resolve against, or
+ *   null where no eligible review exists (reads `no-review`, never a neighbour)
+ * @param {object|null} args.stewardship ADR-0147's stewardship for the review
+ * @param {number} args.eligibleN how many reviews existed for the person where
+ *   none was eligible (printed, so \"none read\" is a counted fact)
+ * @param {string|null} args.windowEnd last day of the evidence window the claim
+ *   was read against (printed on the `no-review` row)
+ * @param {string} args.right the line right that makes an assessor
+ * @returns {{ evidenceState:string, detail:string, eligibleLines:Array,
+ *   secondaryLines:Array, inPeriodSecondary:Array,
+ *   counts:{unaskedN:number, silentN:number, awaitingN:number, answeredN:number,
+ *   declinedN:number} }}
+ */
+export function resolveClaimEvidenceState({ review = null, stewardship = null, eligibleN = 0, windowEnd = null, right = 'performance' } = {}) {
+  const eligibleLines = review && stewardship && Array.isArray(stewardship.periodLines) ? stewardship.periodLines : [];
+  const secondaryLines = review && stewardship && Array.isArray(stewardship.secondaryLines) ? stewardship.secondaryLines : [];
+  const inPeriodSecondary = secondaryLines.filter((l) => l.inPeriod);
+  const unasked = inPeriodSecondary.filter((l) => l.lineState === 'unasked');
+  // ASKED and still inside its window is its own fact, never a silence.
+  const silent = inPeriodSecondary.filter((l) => l.lineState === 'overdue');
+  const awaiting = inPeriodSecondary.filter((l) => l.lineState === 'asked');
+  const answered = inPeriodSecondary.filter((l) => l.lineState === 'answered' || l.lineState === 'declined');
+  const declined = inPeriodSecondary.filter((l) => l.lineState === 'declined');
+  const counts = {
+    unaskedN: unasked.length,
+    silentN: silent.length,
+    awaitingN: awaiting.length,
+    answeredN: answered.length,
+    declinedN: declined.length,
+  };
+
+  let evidenceState;
+  let detail = '';
+  if (!review) {
+    evidenceState = 'no-review';
+    detail = `No completed review covers a period ending on or before ${windowEnd}, so this claim's line evidence cannot be read. ${eligibleN} review(s) exist for this person and none is eligible; none is substituted.`;
+  } else if (stewardship.assessorState === 'contested') {
+    evidenceState = 'contested-assessor';
+    detail = `Two or more lines held the ${right} right for the review period ${stewardship.periodStart}–${stewardship.periodEnd}. The packet has no sole author and this claim is attributed to no line.`;
+  } else if (stewardship.assessorState === 'unowned') {
+    evidenceState = 'unowned-assessor';
+    detail = `No line held the ${right} right for the review period ${stewardship.periodStart}–${stewardship.periodEnd}, so the assessment has no entitled author.`;
+  } else if (!eligibleLines.length) {
+    // A completed review whose period lines cannot be resolved at all. This is
+    // a record defect, not "one line": it is unreadable and withheld.
+    evidenceState = 'no-review';
+    detail = `The review ${review.id} is complete but its reporting lines could not be resolved for the period, so the claim's line evidence is unknown rather than assumed complete.`;
+  } else if (!inPeriodSecondary.length) {
+    evidenceState = 'single-line';
+    detail = `One reporting line was in force for the review period ${stewardship.periodStart}–${stewardship.periodEnd}, so there is no second line that could have been missed.`;
+  } else if (unasked.length) {
+    evidenceState = 'line-unasked';
+    detail = `${unasked.length} line(s) were in force for the review period ${stewardship.periodStart}–${stewardship.periodEnd} and were never asked what they saw. This is a defect in the evidence behind the claim, not a finding about the person.`;
+  } else if (silent.length) {
+    evidenceState = 'line-silent';
+    detail = `${silent.length} line(s) were asked and did not answer inside their declared window. That is a dated act of not answering and is printed as such, never as "never asked".`;
+  } else if (awaiting.length) {
+    // Asked, still inside its window: the question is open, and it is NOT a
+    // silence. It carries its own state word so no reader can mistake it for
+    // one.
+    evidenceState = 'line-awaiting';
+    detail = `${awaiting.length} line(s) were asked and their declared window has not closed yet. The question is open, not unanswered — the reading is re-derived on every render.`;
+  } else if (!answered.length) {
+    evidenceState = 'home-line-only';
+    detail = `Every line in force was asked, and the only contribution on record came from the home line. The packet was properly run and its observation is one line wide.`;
+  } else {
+    evidenceState = 'corroborated';
+    detail = `Every line in force was asked, and each answered in its own words or declined with a stated reason. This is a claim about the PROCEDURE, never about the person's readiness.`;
+  }
+
+  return { evidenceState, detail, eligibleLines, secondaryLines, inPeriodSecondary, counts };
+}
+
+/**
+ * Resolve the manager holding a person's HOME line as of one day (ADR-0149),
+ * in THREE states that are never collapsed — the same discipline ADR-0155
+ * applies to a frozen pay decision:
+ *
+ *   observed          a recorded home-line period covers the day
+ *   presumed-current  this person has NO recorded structure history at all, so
+ *                     today's roster pointer is PRESUMED to have held on that
+ *                     day. Printed as a presumption on every row and in the ask.
+ *   unrecorded        records exist for this person and none covers the day: the
+ *                     home line is UNKNOWN, and no pointer is projected back.
+ *
+ * Shared verbatim with the regression watch (ADR-0172): the seat an ask is
+ * addressed to is resolved through one code path, so RULE-BNE-01 and
+ * RULE-BRG-01 cannot disagree about who holds a claim.
+ */
+export function resolveHomeLineAsOf({ ledger = null, person = null, personId = '', day = null } = {}) {
+  const homeObservation = homeLineOn(ledger, personId, day);
+  const historyForPerson = ledger?.byPerson?.get?.(personId) || [];
+  let homeLineState = 'unrecorded';
+  let homeManagerId = null;
+  if (homeObservation.state === 'observed' && homeObservation.managerId) {
+    homeLineState = 'observed';
+    homeManagerId = homeObservation.managerId;
+  } else if (!historyForPerson.length) {
+    homeLineState = 'presumed-current';
+    homeManagerId = person?.managerId || null;
+  }
+  return { homeLineState, homeManagerId, homeKnown: Boolean(homeManagerId) };
+}
+
 /** An empty state-count map, in the DECLARED order. */
 function emptyStateCounts() {
   const out = {};
@@ -266,27 +381,13 @@ export function buildBenchEvidenceRead(state = {}, { now = new Date(), settings 
     // The readiness engine's own verdict on THIS claim, never re-derived here.
     const assessment = assess(state, record.personId, at, cfg, record.seat);
 
-    // The as-of home line on the window's last day (ADR-0149), in THREE states that
-    // are never collapsed — the same discipline ADR-0155 applies to a frozen pay
-    // decision:
-    //   observed          a recorded home-line period covers the day
-    //   presumed-current  this person has NO recorded structure history at all, so
-    //                     today's roster pointer is PRESUMED to have held on that
-    //                     day. Printed as a presumption on every row and in the ask.
-    //   unrecorded        records exist for this person and none covers the day: the
-    //                     home line is UNKNOWN, and no pointer is projected back.
-    const homeObservation = homeLineOn(ledger, record.personId, window.end);
-    const historyForPerson = ledger?.byPerson?.get?.(record.personId) || [];
-    let homeLineState = 'unrecorded';
-    let homeManagerId = null;
-    if (homeObservation.state === 'observed' && homeObservation.managerId) {
-      homeLineState = 'observed';
-      homeManagerId = homeObservation.managerId;
-    } else if (!historyForPerson.length) {
-      homeLineState = 'presumed-current';
-      homeManagerId = person.managerId || null;
-    }
-    const homeKnown = Boolean(homeManagerId);
+    // The as-of home line on the window's last day, through the ONE shared
+    // resolver (ADR-0149; three states never collapsed) — so RULE-BNE-01 and
+    // RULE-BRG-01 cannot disagree about the seat an ask is addressed to.
+    const home = resolveHomeLineAsOf({ ledger, person, personId: record.personId, day: window.end });
+    const homeLineState = home.homeLineState;
+    const homeManagerId = home.homeManagerId;
+    const homeKnown = home.homeKnown;
 
     let stewardship = null;
     let lines = [];
@@ -300,54 +401,18 @@ export function buildBenchEvidenceRead(state = {}, { now = new Date(), settings 
     }
 
     /* ------------------------------------------------------ state resolution */
-    // DECLARED PRECEDENCE, worst first. The first matching rule wins, so the panel,
-    // the brief, the CSV and the rule cannot disagree about a word.
-    let evidenceState;
-    let detail = '';
-    if (!review) {
-      evidenceState = 'no-review';
-      detail = `No completed review covers a period ending on or before ${window.end}, so this claim's line evidence cannot be read. ${resolved.eligibleN} review(s) exist for this person and none is eligible; none is substituted.`;
-    } else if (stewardship.assessorState === 'contested') {
-      evidenceState = 'contested-assessor';
-      detail = `Two or more lines held the ${conv.right} right for the review period ${stewardship.periodStart}–${stewardship.periodEnd}. The packet has no sole author and this claim is attributed to no line.`;
-    } else if (stewardship.assessorState === 'unowned') {
-      evidenceState = 'unowned-assessor';
-      detail = `No line held the ${conv.right} right for the review period ${stewardship.periodStart}–${stewardship.periodEnd}, so the assessment has no entitled author.`;
-    } else {
-      const inPeriodSecondary = secondaryLines.filter((l) => l.inPeriod);
-      const unasked = inPeriodSecondary.filter((l) => l.lineState === 'unasked');
-      // ASKED and still inside its window is its own fact, never a silence.
-      const silent = inPeriodSecondary.filter((l) => l.lineState === 'overdue');
-      const awaiting = inPeriodSecondary.filter((l) => l.lineState === 'asked');
-      const answered = inPeriodSecondary.filter((l) => l.lineState === 'answered' || l.lineState === 'declined');
-      if (!eligibleLines.length) {
-        // A completed review whose period lines cannot be resolved at all. This is
-        // a record defect, not "one line": it is unreadable and withheld.
-        evidenceState = 'no-review';
-        detail = `The review ${review.id} is complete but its reporting lines could not be resolved for the period, so the claim's line evidence is unknown rather than assumed complete.`;
-      } else if (!inPeriodSecondary.length) {
-        evidenceState = 'single-line';
-        detail = `One reporting line was in force for the review period ${stewardship.periodStart}–${stewardship.periodEnd}, so there is no second line that could have been missed.`;
-      } else if (unasked.length) {
-        evidenceState = 'line-unasked';
-        detail = `${unasked.length} line(s) were in force for the review period ${stewardship.periodStart}–${stewardship.periodEnd} and were never asked what they saw. This is a defect in the evidence behind the claim, not a finding about the person.`;
-      } else if (silent.length) {
-        evidenceState = 'line-silent';
-        detail = `${silent.length} line(s) were asked and did not answer inside their declared window. That is a dated act of not answering and is printed as such, never as "never asked".`;
-      } else if (awaiting.length) {
-        // Asked, still inside its window: the question is open, and it is NOT a
-        // silence. It carries its own state word so no reader can mistake it for
-        // one.
-        evidenceState = 'line-awaiting';
-        detail = `${awaiting.length} line(s) were asked and their declared window has not closed yet. The question is open, not unanswered — the reading is re-derived on every render.`;
-      } else if (!answered.length) {
-        evidenceState = 'home-line-only';
-        detail = `Every line in force was asked, and the only contribution on record came from the home line. The packet was properly run and its observation is one line wide.`;
-      } else {
-        evidenceState = 'corroborated';
-        detail = `Every line in force was asked, and each answered in its own words or declined with a stated reason. This is a claim about the PROCEDURE, never about the person's readiness.`;
-      }
-    }
+    // DECLARED PRECEDENCE, worst first, through the ONE shared resolver — so the
+    // register, the brief, the CSV, RULE-BNE-01 and the regression watch's
+    // freezer (ADR-0172) cannot disagree about a word.
+    const resolution = resolveClaimEvidenceState({
+      review,
+      stewardship,
+      eligibleN: resolved.eligibleN,
+      windowEnd: window.end,
+      right: conv.right,
+    });
+    const evidenceState = resolution.evidenceState;
+    const detail = resolution.detail;
 
     const stateMeta = benchEvidenceState(evidenceState);
     stateCounts[evidenceState] += 1;

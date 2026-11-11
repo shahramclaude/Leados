@@ -171,6 +171,14 @@ import {
   benchEvidenceBriefText,
 } from './core/domain/benchEvidence.js';
 import { BENCH_EVIDENCE_SCAN_EVENT } from './core/domain/benchEvidenceRules.js';
+// ADR-0172: the Bench-Claim Evidence Regression Watch. Frozen window readings
+// compared consecutive-pair by consecutive-pair, plus the rule id its scan names.
+import {
+  buildBenchRegressionRead,
+  benchRegressionAttentionCount,
+  benchRegressionBriefText,
+} from './core/domain/benchRegression.js';
+import { BENCH_REGRESSION_SCAN_EVENT } from './core/domain/benchRegressionRules.js';
 import { buildFrozenStructure, buildMeritStructure } from './core/domain/meritStructure.js';
 // ADR-0122: the Dated Absence Plan. One read (the window plan), three human
 // commands (declare, revoke, scan); availability is derived from the declared
@@ -20201,6 +20209,44 @@ export function createApi(store, options = {}) {
     return {
       ok: true,
       report: buildBenchEvidenceRead(store.state, benchEvidenceOptions(options)),
+      propagations: store.lastPropagations || [],
+      saved: !store.persistError,
+      warning: store.persistError || null,
+    };
+  };
+  const benchRegressionOptions = (options = {}) => ({
+    now: options.now instanceof Date ? options.now : clock(),
+    settings: store.state.settings || {},
+  });
+  api.benchRegressionRead = (options = {}) => ({
+    ok: true, report: buildBenchRegressionRead(store.state, benchRegressionOptions(options)),
+  });
+  api.benchRegressionBriefText = (options = {}) => ({
+    ok: true, text: benchRegressionBriefText(store.state, benchRegressionOptions(options)),
+  });
+  api.benchRegressionAttentionCount = (options = {}) => ({
+    ok: true, count: benchRegressionAttentionCount(store.state, benchRegressionOptions(options)),
+  });
+  /**
+   * Explicit scan: freeze what is missing and retry anything the
+   * per-transaction cap deferred. It writes only through RULE-BRG-01, so a scan
+   * cannot invent a reading or an obligation the rule would not have written on
+   * the commit itself.
+   */
+  api.scanBenchRegression = (options = {}) => {
+    store.update(
+      () => {},
+      {
+        type: BENCH_REGRESSION_SCAN_EVENT,
+        entity: 'workspace',
+        entityId: '',
+        summary: 'Bench-claim evidence regression scan requested by the leader',
+        rules: ['succession'],
+      },
+    );
+    return {
+      ok: true,
+      report: buildBenchRegressionRead(store.state, benchRegressionOptions(options)),
       propagations: store.lastPropagations || [],
       saved: !store.persistError,
       warning: store.persistError || null,

@@ -117,6 +117,7 @@ import { authorityContinuityRule } from './authorityContinuityRules.js';
 import { matrixInterfaceRule } from './matrixInterfaceRules.js';
 import { meritEvidenceRule } from './meritEvidenceRules.js';
 import { benchEvidenceRule } from './benchEvidenceRules.js';
+import { benchRegressionRule } from './benchRegressionRules.js';
 import { sealRule } from './sealRules.js';
 // ADR-0092: the Differencing Defender declares its contract like every other rule.
 import { differencingRule } from './differencingRules.js';
@@ -899,6 +900,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'benchEvidenceRules.js',
     purpose: 'RULE-BNE-01: a current bench claim (a succession readiness reading) is joined to the review its evidence window reads and to the per-line states ADR-0147 already stores. For a claim whose review had a second line in force that was never asked, was asked and went silent, or had a contested or unowned assessor, it issues ONE owned, dated delegation to the manager who held the person\u2019s HOME line as of the evidence window \u2014 \u201cobtain the missing observation\u201d, or \u201cobtain the outstanding line answer\u201d where the line\u2019s own window is still open. Typed provenance only (`concerns` from the person to the ask, `issues-obligation` from the review to the ask, `rolls-up-to` per leadership ancestor in the matrix DAG). Contested, unowned or unreadable assessors and claims with no readable as-of home line issue NOTHING and are counted, because an ask addressed to nobody can never close. It never edits a readiness rating, a review, a line or a succession reading; it is idempotent through a per-claim-per-state marker, bounded by a per-transaction cap whose remainder is counted and retried by the scan, and inert on every other event and in a single-chain workspace.',
     writes: ['delegations', 'links', 'benchEvidenceMarkers'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: benchRegressionRule,
+    module: 'benchRegressionRules.js',
+    purpose: 'RULE-BRG-01: a bench claim\u2019s consecutive review windows are compared \u2014 the previous window\u2019s FROZEN reading against the later window read LIVE, under a rating gate (the frozen rating against the current one). On `review.completed` and on scan it freezes one dated reading per watched claim per completed review (never rewritten), and for a LATEST pair reading `regressed` it issues ONE owned, dated delegation \u2014 \u201cre-ground this bench claim\u201d, with both windows, both states and the unchanged rating printed \u2014 to the manager holding the home line as of the later window\u2019s end. Typed provenance only (`concerns` from the person to the ask, `issues-obligation` from the later review to the ask, `rolls-up-to` per leadership ancestor in the matrix DAG). Older pairs, open questions, contested or unowned assessors, single-line pairs and unreadable windows issue NOTHING and are counted; a claim with no readable home line is NOTED under a key that never blocks the ask, so the scan issues it when the seat appears. It never edits a rating, a review, a line or a frozen reading; it is idempotent through a per-pair marker carrying the pair snapshot, bounded by per-transaction caps whose remainder is counted and retried by the scan, and inert on every other event. In a single-chain workspace it freezes history and issues no ask.',
+    writes: ['delegations', 'links', 'benchRegressionReadings', 'benchRegressionMarkers'],
     emits: [],
     scansWorkspace: true,
   },

@@ -29,6 +29,7 @@
 import { h, toast } from '../ui/dom.js';
 import { card, stat, badge, banner, table, kv, emptyState } from '../ui/components.js';
 import { downloadText } from '../ui/download.js';
+import { renderBenchRegressionSection, readRegressionFor } from './benchRegressionPanel.js';
 import {
   BENCH_EVIDENCE_CONVENTIONS,
   BENCH_EVIDENCE_FLOOR,
@@ -309,7 +310,7 @@ function methodSection(report) {
  * @param {object|null} report  an already-built report (used by focused renders)
  * @param {boolean} namesVisible whether names may be printed at this seat
  */
-export function renderBenchEvidenceTab(ctx, report = null, namesVisible = true) {
+export function renderBenchEvidenceTab(ctx, report = null, namesVisible = true, regressionReport = null) {
   const resolved = report ? { report } : readFor(ctx);
   const r = resolved.report;
   if (!r) {
@@ -320,6 +321,9 @@ export function renderBenchEvidenceTab(ctx, report = null, namesVisible = true) 
     }));
   }
   const showNames = report ? namesVisible : (namesVisibleFor(ctx) && namesVisible);
+  // ADR-0172: the regression watch resolves its own report (or takes the focused
+  // suite's prebuilt one) and renders as a section of the same duty screen.
+  const reg = regressionReport ? { report: regressionReport } : readRegressionFor(ctx);
   return h('div', { class: 'stack', 'data-testid': 'bench-evidence-tab' },
     header(r),
     banner({
@@ -332,6 +336,7 @@ export function renderBenchEvidenceTab(ctx, report = null, namesVisible = true) 
     claimsSection(r),
     registerSection(r, { namesVisible: showNames }),
     findingsSection(r),
+    renderBenchRegressionSection(ctx, reg.report || null, showNames),
     exportSection(ctx, r),
     methodSection(r));
 }
