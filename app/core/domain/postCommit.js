@@ -161,6 +161,7 @@ import { benchRegressionRule } from './benchRegressionRules.js';
 // ADR-0164 (Schema v140): Matrix 1:1 Line Coverage (RULE-OOL-01).
 import { oneOnOneLineRule } from './oneOnOneLineRules.js';
 import { hiringLineRule } from './hiringLineRules.js';
+import { transferPriceRule } from './transferPriceRules.js';
 
 
 // ADR-0087: the Operating Cadence Clock. Reads the finished queue after the
@@ -948,6 +949,14 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // before the seat rule so the ask rolls up in the same transaction. Inert
   // until a line plan is declared; never blocks an offer.
   hiringLineRule,
+  // ADR-0177: the Cross-Line Labour Chargeback & Internal Transfer-Price Ledger
+  // (RULE-TPL-01). Puts the missing key of a one-key price proposal in front of
+  // the NAMED counterpart manager, and an unpriced pair of the last completed
+  // quarter in front of the borrowing manager, once each, and closes its own
+  // asks. Runs before the seat rule so the ask rolls up in the same atomic
+  // transaction. Inert until the first price act exists; never signs a key,
+  // posts a charge or edits a budget.
+  transferPriceRule,
   // ADR-0076: the Operating Seat (vertical roll-up + enforced boundaries).
   // It reads the finished record after every module has propagated, then fans
   // each open item up every leadership ancestor in the reporting tree with one

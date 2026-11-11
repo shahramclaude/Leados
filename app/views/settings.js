@@ -72,6 +72,7 @@ export function renderSettings(ctx) {
     ['1:1 cadence', `${s.oneOnOneCadenceDays} days`],
     ['Matrix 1:1 additional-line governance', s.oneOnOneLineAutoPropagate === false ? `Paused — additional-line interval ${s.oneOnOneLineCadenceDays ?? 30}d (exempt < ${s.oneOnOneLineMinSharePct ?? 20}%); explicit scan runs RULE-OOL-01` : `On — RULE-OOL-01 asks due in ${s.oneOnOneLineAskDueDays ?? 7}d (additional-line ${s.oneOnOneLineCadenceDays ?? 30}d, exempt < ${s.oneOnOneLineMinSharePct ?? 20}%)`],
     ['Co-hiring line corroboration', s.hiringLineAutoPropagate === false ? `Paused — explicit scan still runs RULE-HLC-01 (ask window ${s.hiringLineAskDueDays ?? 5}d)` : `On — RULE-HLC-01 asks a declared line manager who has not assessed a final/offer-stage candidate (ask window ${s.hiringLineAskDueDays ?? 5}d)`],
+    ['Transfer-price ledger', s.transferPriceAutoPropagate === false ? `Paused — explicit scan still runs RULE-TPL-01 (ask window ${s.transferPriceAskDueDays ?? 7}d)` : `On — RULE-TPL-01 asks the manager who holds the missing key of a proposed price, and the borrowing manager of a pair left unpriced in the last completed quarter (ask window ${s.transferPriceAskDueDays ?? 7}d). Inert until a first price is recorded`],
     ['Feedback target', `${s.feedbackTargetDays} days`],
     ['Observation → conversation convention', `${s.feedbackLatencyTargetDays} days`],
     ['Goal check-in', `${s.goalCheckinDays} days`],

@@ -26,6 +26,7 @@ import { normalizeDutyCovers, normalizeDutyCoverageMarkers, normalizeDutyCoverag
 import { normalizeReportingLines, normalizeMatrixMarkers, normalizeMatrixSettings } from './domain/matrixSchema.js';
 import { normalizeOneOnOneHolder, normalizeOneOnOneLineMarkers, normalizeOneOnOneLineSettings } from './domain/oneOnOneLineSchema.js';
 import { normalizeHiringLineMarkers, normalizeHiringLinePlans, normalizeHiringLineSettings } from './domain/hiringLineSchema.js';
+import { normalizeTransferPriceActs, normalizeTransferPriceMarkers, normalizeTransferPriceSettings } from './domain/transferPriceSchema.js';
 // ADR-0143 (Schema v120): the Cross-Line Priority Arbitration's fail-closed
 // normalizers. Every stored row is a human act; every score, state and count is
 // re-derived on read, so a printed order cannot drift from the integers it ranks.
@@ -735,7 +736,13 @@ export {
 // report to) and `hiringLineMarkers` (`RULE-HLC-01`'s bounded idempotency ledger).
 // Deliberately EMPTY on upgrade: no line plan is ever inferred from a team name,
 // an interview panel or a title, so every existing requisition reads `undeclared`.
-export const SCHEMA_VERSION = 141;
+// v142 adds the Cross-Line Labour Chargeback & Internal Transfer-Price Ledger
+// (ADR-0177): `transferPriceActs` (append-only dated two-key acts — propose,
+// confirm, retire) and `transferPriceMarkers` (`RULE-TPL-01`'s bounded
+// idempotency ledger). Deliberately EMPTY on upgrade: no price is ever inferred
+// from pay, a budget line or a title, so every borrowed share-day of every
+// existing workspace reads `no agreed price` — refused, never zero.
+export const SCHEMA_VERSION = 142;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -2143,6 +2150,8 @@ export const DEFAULT_SETTINGS = Object.freeze({
   // Matrix 1:1 coverage: explicit defaults, with no inferred historical holders.
   ...normalizeOneOnOneLineSettings({}),
   ...normalizeHiringLineSettings({}),
+  // ADR-0177: transfer-price ask window + automation pause.
+  ...normalizeTransferPriceSettings({}),
 });
 
 export const COLLECTIONS = [
@@ -2838,6 +2847,10 @@ export const COLLECTIONS = [
   // marker ledger. No line state, verdict or rate is stored.
   'hiringLinePlans',
   'hiringLineMarkers',
+  // ADR-0177 (Schema v142): dated two-key transfer-price acts and RULE-TPL-01's
+  // marker ledger. No charge, credit, net, agreement state or total is stored.
+  'transferPriceActs',
+  'transferPriceMarkers',
 ];
 
 /** Stable empty state. `now` is an ISO string so the result is a pure value. */
@@ -3577,6 +3590,9 @@ export function normalizeSettings(raw) {
     ...normalizeDoaSettings(s),
     ...normalizeOneOnOneLineSettings(s),
     ...normalizeHiringLineSettings(s),
+    // ADR-0177: named here because this object is rebuilt field by field — a
+    // key not listed would be dropped on every load.
+    ...normalizeTransferPriceSettings(s),
     ...normalizeAgendaSettings(s),
     chainAdoptedHorizons: normalizeAdoptedHorizons(s.chainAdoptedHorizons, DECLARED_HORIZONS),
     chainAdoptedOn: /^\d{4}-\d{2}-\d{2}$/.test(String(s.chainAdoptedOn || '')) ? s.chainAdoptedOn : null,
@@ -8082,6 +8098,11 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // warning, never repaired into a plan nobody declared.
   state.hiringLinePlans = normalizeHiringLinePlans(raw.hiringLinePlans, state, warnings);
   state.hiringLineMarkers = normalizeHiringLineMarkers(raw.hiringLineMarkers);
+  // ADR-0177 (Schema v142): a malformed price act, a key signed from the wrong
+  // seat or side, or a confirmation whose terms differ from its proposal is
+  // dropped with a counted warning — never repaired into a price nobody agreed.
+  state.transferPriceActs = normalizeTransferPriceActs(raw.transferPriceActs, warnings);
+  state.transferPriceMarkers = normalizeTransferPriceMarkers(raw.transferPriceMarkers);
   // ADR-0122: a malformed absence row is dropped with a warning, never repaired —
   // an invented absence is an invented unavailability for every cover in the span.
   // Resolved BEFORE links so the `declares-absence-of` provenance edge validates
@@ -8817,6 +8838,15 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  // 141 → 142: ADR-0177 adds two EMPTY collections. No reporting line, share,
+  // budget or person changes, and no price is fabricated: every borrowed
+  // share-day reads `no agreed price` until two managers sign one.
+  141: (v141) => ({
+    ...v141,
+    schemaVersion: 142,
+    transferPriceActs: Array.isArray(v141.transferPriceActs) ? v141.transferPriceActs : [],
+    transferPriceMarkers: Array.isArray(v141.transferPriceMarkers) ? v141.transferPriceMarkers : [],
+  }),
   // 140 → 141: ADR-0176 adds two EMPTY collections. No requisition, candidate,
   // evidence record or reporting line changes; no line plan is fabricated.
   140: (v140) => ({
