@@ -50,6 +50,8 @@ import {
 } from './matrixRegistry.js';
 import { buildMatrixCoordination } from './matrixCoordination.js';
 import { MATRIX_COORDINATION_SCAN_EVENT } from './matrixCoordinationRegistry.js';
+import { buildSodRegister } from './sodRegister.js';
+import { SOD_REVIEW_EVENT, SOD_RULE_ID } from './sodRegisterRegistry.js';
 
 export const MATRIX_EVENTS = Object.freeze({
   DECLARE: 'matrix.line.declared',
@@ -422,6 +424,30 @@ export function createMatrixActions(store, { now, idFactory }) {
       });
       return saved({
         report: buildMatrixCoordination(store.state, { now: at, settings: settings() }),
+      });
+    },
+
+    /**
+     * Record a segregation-of-duties review (ADR-0170). The register itself is
+     * a pure read; this sends ONE event through the shared post-commit spine so
+     * RULE-SOD-01 can append an identity-free, marker-idempotent trace of the
+     * reading. `recorded` is false when the same reading of the same record was
+     * already recorded today, or when there was no decided decision to read.
+     */
+    matrixSodReview() {
+      const check = seatFor('declare-matrix-line');
+      if (!check.ok) return check;
+      const at = clock();
+      store.update(() => {}, {
+        type: SOD_REVIEW_EVENT,
+        entity: 'sodreview',
+        entityId: 'matrix',
+        summary: 'Segregation-of-duties review requested.',
+      });
+      const recorded = (store.lastPropagations || []).some((effect) => effect && effect.ruleId === SOD_RULE_ID);
+      return saved({
+        recorded,
+        report: buildSodRegister(store.state, { now: at, settings: settings() }),
       });
     },
 

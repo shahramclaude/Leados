@@ -121,9 +121,11 @@ test('every CSV scope round-trips cleanly and preserves unknown values as blank 
   // ADR-0158 adds scope #119 (line period allocation); ADR-0160 adds scope #120
   // (line activity); ADR-0161 adds scope #121 (matrix coordination topology);
   // ADR-0162 adds scope #122 (matrix management-interface agreements).
+  // ADR-0168 adds #123, ADR-0169 adds #124 and ADR-0170 adds #125 (segregation of
+  // duties, aggregate only) — 124 registered, because #75 remains reserved.
   // The pin states the total deliberately so the next session cannot drift the
   // catalog count silently.
-  assert.equal(CSV_EXPORTS.length, 123);
+  assert.equal(CSV_EXPORTS.length, 124);
   for (const spec of CSV_EXPORTS) {
     const res = exportWorkspaceCsv(state, spec.key, { now: NOW });
     assert.equal(res.ok, true, `${spec.key} export succeeds`);

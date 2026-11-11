@@ -132,6 +132,10 @@ import { matrixRule } from './matrixRules.js';
 // creates work or alters a reporting line; the existing Matrix fan-out still
 // owns matrix work propagation.
 import { matrixCoordinationRule } from './matrixCoordinationRules.js';
+// ADR-0170: a recorded segregation-of-duties review. The register itself is a
+// pure read; an explicit review writes one identity-free line to the shared
+// ledger so "we reviewed it" is a dated fact rather than a memory.
+import { sodRegisterRule } from './sodRegisterRules.js';
 // ADR-0143: the Cross-Line Priority Arbitration. Runs AFTER the matrix fan-out so
 // the edges it writes land on a graph that already knows every declared line, and
 // BEFORE the Operating Seat so an obligation issued by an agreed precedence is
@@ -801,6 +805,12 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // aggregate trace for a fragmented or incomplete topology; it never opens a
   // task, changes an allocation or silently selects an interface owner.
   matrixCoordinationRule,
+  // ADR-0170: the Cross-Line Segregation-of-Duties Register (RULE-SOD-01). ONLY
+  // an explicit, human-requested review makes it run — never a decision being
+  // logged, decided or edited. It re-reads the register with the operator view
+  // and appends one identity-free, marker-idempotent trace of that reading. It
+  // opens no case, issues no task, edits no decision and names no person.
+  sodRegisterRule,
   // ADR-0143: the Cross-Line Priority Arbitration (RULE-ARB-01). ONLY an
   // `arbitration.agreed` event (or an explicit scan) makes it run: a proposal is
   // not an agreement and this rule will not issue work off a recommendation. It

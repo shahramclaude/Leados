@@ -74,7 +74,7 @@ const FINDING_META = new Map(RIGHTS_CONCORDANCE_FINDINGS.map((f) => [f.key, f]))
  * recorded with the leader's own name still resolves — the leader holds the
  * home line's rights over their direct reports like any other manager.
  */
-function buildNameIndex(state) {
+export function buildNameIndex(state) {
   const index = new Map();
   const add = (name, personId) => {
     const key = String(name || '').trim().toLowerCase();
@@ -96,7 +96,7 @@ function buildNameIndex(state) {
  * `{ resolved: true, personId }` or `{ resolved: false, reason }` where the
  * reason is `not-on-roster` or `ambiguous` — the two honest failure modes.
  */
-function resolveParticipant(nameIndex, rawName) {
+export function resolveParticipant(nameIndex, rawName) {
   const key = String(rawName || '').trim().toLowerCase();
   if (!key) return { resolved: false, reason: 'not-on-roster' };
   const ids = nameIndex.get(key);
@@ -110,7 +110,7 @@ function resolveParticipant(nameIndex, rawName) {
  * decision log itself uses (`decisions.js: splitParticipants`): commas,
  * semicolons, ampersands and the word "and".
  */
-function splitParticipants(value) {
+export function splitParticipants(value) {
   return String(value || '')
     .split(/[,;&]|\band\b/i)
     .map((entry) => entry.trim())

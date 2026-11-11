@@ -237,7 +237,14 @@ test('standalone artifact exists and is a single inline HTML document', () => {
   // 15,408 bytes per module, DOWN from Session 229's 15,451. The 24,000-byte
   // density guard is unchanged and is what still catches a module inlined twice;
   // this absolute ceiling only tracks the real capability added.
-  assert.ok(bytes < 10_760_000, `standalone file is unexpectedly large (${bytes} bytes)`);
+  // Session 234 (Schema v135 unchanged, ADR-0170) adds four real bundled modules
+  // (sodRegister.js, sodRegisterRegistry.js, sodRegisterRules.js and the
+  // matrixSodPanel.js view) plus the matrix panel/rule/CSV wiring: 10,809,904
+  // bytes / 702 modules = 15,399 bytes per module, DOWN from 15,408 on main
+  // (10,754,567 bytes / 698 modules). The 24,000-byte density guard is unchanged
+  // and is what still catches a module inlined twice; this absolute ceiling only
+  // tracks the real capability added.
+  assert.ok(bytes < 10_820_000, `standalone file is unexpectedly large (${bytes} bytes)`);
   const declaredModules = Number((html.match(/content="[^"]*?(\d+) source modules/) || [])[1]);
   assert.ok(declaredModules > 100, `expected the build to declare its module count (got ${declaredModules})`);
   const bytesPerModule = Math.round(bytes / declaredModules);

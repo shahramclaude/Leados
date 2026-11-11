@@ -117,6 +117,8 @@ import { LINE_ACTIVITY_CSV_COLUMNS } from './domain/lineActivityRegistry.js';
 // its reason in its own column, never a zero.
 import { buildMatrixMeetingLoad, matrixMeetingLoadCsvRows } from './domain/matrixMeetingLoad.js';
 import { MATRIX_MEETING_LOAD_CSV_COLUMNS } from './domain/matrixMeetingLoadRegistry.js';
+import { buildSodRegister, sodRegisterCsvRows } from './domain/sodRegister.js';
+import { SOD_CSV_COLUMNS } from './domain/sodRegisterRegistry.js';
 // ADR-0161: Matrix Span Fragmentation & Counterpart-Dyad Coordination Ledger
 // (CSV scope #121). Aggregate topology only — never a person, manager, line,
 // seat or free-text agreement. An incomplete matrix span withholds workspace
@@ -1193,6 +1195,13 @@ export const CSV_EXPORTS = [
   // independent minute totals reconcile, and whether every sitting and person in
   // scope could be read at all.
   { key: 'matrix-meeting-load', label: 'Matrix meeting load (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'matrix-meeting-load', description: 'One workspace summary row plus one row per forum kind for the named window (period_from, period_to and period_days printed in every row): the forum and sitting counts, the sittings that could not be read (no recorded duration, no attendees recorded, an attendee not on the roster, a forum not in the register), the sittings outside the window, the exact recorded person-minute total and its split into cross-line (chaired by someone other than the person\u2019s home manager), home-manager, one declared line, two declared lines, no declared line and the person\u2019s own forum, the attendee-sitting count, the person counts (measured, refused, no recorded attendance, withheld outside the seat), the coordination-tax rate in per-mille with whether it is withheld and why, the declared floors, and TWO separate claims: whether the minute totals reconcile and whether every figure was complete. NO person, NO name, NO chair, NO forum title, NO sitting date and NO free text of any kind. A refused rate is BLANK with withheld_reason set, never a zero, and minutes refused by an unreadable sitting are never printed as a total.' },
+  // CSV scope #125 (Schema v135 unchanged, ADR-0170): the segregation-of-duties
+  // register, aggregate only. One workspace row plus one row per conflict class.
+  // Every figure is an exact integer count of decided decisions or of findings;
+  // a refused share exports BLANK with its own withheld flag. NO person, NO name,
+  // NO decision id, NO decision title, NO decision date and NO free text of any
+  // kind. `counts_reconcile` exports whether every identity the panel prints held.
+  { key: 'matrix-sod', label: 'Segregation of duties (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'matrix-sod', description: 'One workspace row plus one row per conflict class for the cross-line segregation-of-duties register, read for the acting seat on read_on: the decided decisions on the record, read, beyond the read cap, outside the seat and inside it; how many name one initiating (Driver) and one authorizing (Approver) hand that both resolve to a roster person, and how many could not be tested and why (no approver, no driver, a role naming several people, a hand that is not one roster person); the tested decisions that carry a conflict, split by recorded reversibility (one-way / two-way), those whose independence cannot be read for the decision day, and those with two independent hands; the findings per class (one hand initiating and authorizing, an authorizing hand accountable to the initiating hand, a custodian authorizing) with the home-chain / second-line split, the findings resting on a printed presumption and the direct lines carrying a stewardship right; the seat above the senior hand on the decision day (one, several, none, not readable); the conflict shares in per-mille with whether each is withheld; and whether the counts reconcile. NO person, NO name, NO decision id, NO decision title, NO decision date and NO free text of any kind. A refused share is BLANK with its withheld flag set, never a zero.' },
   { key: 'line-reaffirmation', label: 'Matrix line re-affirmation (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'line-reaffirmation', description: 'One workspace summary row plus one row per declared line kind: the line count, how many lines were never given a term, how many are inside their warning window, how many have a term that ran out, how many were re-affirmed but not yet answered by the person, how many the person objected to, how many the line released, how many were re-affirmed at a different share than the line now declares, and how many are in term with both sides answered. Plus the two exact-integer share totals that are the point of the register: the share still CHARGED to a commitment no live answer covers, and the share covered by a live re-affirmed term, with the uncovered-plus-covered identity printed as a claim rather than assumed. NO person, NO name, NO manager id, NO declaration id, NO stated reason, NO objection text and NO free text of any kind. A share total is BLANK with share_refused = true and the reason in its own column whenever any line in scope carries no allocation, never a zero. A released line is counted as still charged because the declaration was never dated out: continuation by absence is never exported as a renewal.' },
   // CSV scope #119 (Schema v129 unchanged, ADR-0158). Aggregate-only: one summary row
   // plus one row per declared line KIND, over the default period (the last
@@ -6308,6 +6317,16 @@ export function buildScopeTable(state, scope, now) {
       const report = buildMatrixMeetingLoad(state, { now, settings: state.settings || {} });
       const rows = matrixMeetingLoadCsvRows(report);
       const columns = MATRIX_MEETING_LOAD_CSV_COLUMNS.map((key) => ({ key, header: key }));
+      return { columns, rows };
+    }
+    case 'matrix-sod': {
+      // CSV scope #125 (Schema v135 unchanged, ADR-0170). Built from the same
+      // read model the panel renders, so an exported count is provably the
+      // count that was printed. Aggregate only: no person, no decision id, no
+      // title, no decision day. A refused share is BLANK with its withheld flag.
+      const report = buildSodRegister(state, { now, settings: state.settings || {} });
+      const rows = sodRegisterCsvRows(report);
+      const columns = SOD_CSV_COLUMNS.map((key) => ({ key, header: key }));
       return { columns, rows };
     }
     case 'review-stewardship': {

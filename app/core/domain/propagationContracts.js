@@ -102,6 +102,7 @@ import { parityRule } from './parityRules.js';
 import { seatRule } from './seatRules.js';
 import { matrixRule } from './matrixRules.js';
 import { matrixCoordinationRule } from './matrixCoordinationRules.js';
+import { sodRegisterRule } from './sodRegisterRules.js';
 import { priorityArbitrationRule } from './priorityArbitrationRules.js';
 import { contradictionRule } from './contradictionRules.js';
 // ADR-0147: Matrix Multi-Line Review Stewardship declares its contract like
@@ -800,6 +801,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     rule: matrixCoordinationRule,
     module: 'matrixCoordinationRules.js',
     purpose: 'RULE-MCO-01 reads the SAME live matrix graph, allocation-completeness gate and reporting-line lifecycle event as RULE-MTX-01. When a line declaration, retune, end, convention change or explicit coordination scan leaves a manager span fragmented across the declared counterpart floor or incomplete because a line allocation cannot be read, it appends exactly ONE identity-free, marker-idempotent structural trace to the shared automation ledger for that topology on that day. It never opens a case, creates a delegation, selects a counterpart, changes a reporting line, fills a missing allocation or recommends a reorganisation. The topology itself remains a pure seat-scoped read and is inert in a single-chain workspace.',
+    writes: ['matrixMarkers'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: sodRegisterRule,
+    module: 'sodRegisterRules.js',
+    purpose: 'RULE-SOD-01 records a segregation-of-duties REVIEW on the shared ledger. It runs on exactly one event — an explicit, human-requested review — and never when a decision is logged, decided or edited. It re-reads the Cross-Line Segregation-of-Duties Register (ADR-0170) on the whole workspace with the operator view: every decided decision whose Driver and Approver resolve to one roster person each, tested for one hand holding both roles, for an Approver who reported to the Driver on the decision day over the home chain or only through a declared second line (the same matrix graph RULE-MTX-01 fans work through, read as of that day), and for an Approver who owns a typed-linked case. It then appends exactly ONE identity-free, marker-idempotent trace carrying the counts — read, tested, conflicted, irreversible, by class, with no seat above the hand, unreadable and not testable — for that reading on that day. It opens no case, issues no delegation, edits no decision, revokes no right and names no person, decision or line.',
     writes: ['matrixMarkers'],
     emits: [],
     scansWorkspace: true,
