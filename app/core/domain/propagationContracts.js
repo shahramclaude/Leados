@@ -119,6 +119,7 @@ import { doaScheduleRule } from './doaScheduleRules.js';
 import { meritEvidenceRule } from './meritEvidenceRules.js';
 import { benchEvidenceRule } from './benchEvidenceRules.js';
 import { benchRegressionRule } from './benchRegressionRules.js';
+import { oneOnOneLineRule } from './oneOnOneLineRules.js';
 import { sealRule } from './sealRules.js';
 // ADR-0092: the Differencing Defender declares its contract like every other rule.
 import { differencingRule } from './differencingRules.js';
@@ -925,6 +926,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'doaScheduleRules.js',
     purpose: 'RULE-DOA-01: evaluates spending mandates, committed/spent budget lines and priced decided decisions against dated integer-cent standing Delegation-of-Authority limits (`doaSchedule`) across the canonical single-chain or matrix DAG (`buildMatrix` / `buildMatrixAsOf`), including grantor nemo-dat, cross-line anti-splitting (`second-line-limit`), and one-over-one covering escalation. Closes prior open ratification asks once resolved or superseded, issues at most ONE bounded dated ratification delegation per open breach to the unique covering senior seat or unique `matrixJointApex` principal with typed provenance (`issues-obligation`, `rolls-up-to` per leadership ancestor), and abstains cleanly on diamond ties, above-apex breaches or unreadable as-of graphs. Never blocks, revokes or mutates an underlying commitment; idempotent via `doaMarkers`; fast-exits in O(1) when no standing schedule is declared.',
     writes: ['delegations', 'links', 'doaMarkers'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: oneOnOneLineRule,
+    module: 'oneOnOneLineRules.js',
+    purpose: 'RULE-OOL-01: reads the Matrix 1:1 Line Coverage board (`buildOneOnOneLines`) on meeting, reporting-line, roster, and convention commits plus explicit `oneonone.line.scan` scans. Closes prior open cadence asks when a line settles/exempts/disappears or becomes unproven/off-roster, issues at most ONE bounded dated ask per proven silent on-roster pair per commit (capped at 8) with typed provenance (`concerns`, `issues-obligation`, `rolls-up-to` per leadership ancestor in the matrix DAG), records bounded observation markers for unproven/off-roster/unattributed lines without opening blame tasks, never creates meetings or edits attribution, is marker-idempotent, pausable via `oneOnOneLineAutoPropagate` (explicit scan always runs), and is strictly inert in single-chain workspaces.',
+    writes: ['delegations', 'links', 'oneOnOneLineMarkers'],
     emits: [],
     scansWorkspace: true,
   },

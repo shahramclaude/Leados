@@ -126,11 +126,12 @@ test('every CSV scope round-trips cleanly and preserves unknown values as blank 
 // ADR-0172 adds #127 (bench-claim regression watch, aggregate only);
 // ADR-0173 adds #127 (matrix demand-variance early warning, aggregate only);
 // ADR-0174 adds #128 (standing Delegation-of-Authority schedule, aggregate only);
-// ADR-0175 adds #129 (matrix pattern remedies, aggregate only)
-// — 129 registered, because #75 remains reserved.
+// ADR-0175 adds #129 (matrix pattern remedies, aggregate only);
+// ADR-0164 adds #130 (matrix 1:1 line coverage, aggregate & small-cell protected)
+// — 130 registered, because #75 remains reserved.
 // The pin states the total deliberately so the next session cannot drift the
 // catalog count silently.
-assert.equal(CSV_EXPORTS.length, 129);
+assert.equal(CSV_EXPORTS.length, 130);
   for (const spec of CSV_EXPORTS) {
     const res = exportWorkspaceCsv(state, spec.key, { now: NOW });
     assert.equal(res.ok, true, `${spec.key} export succeeds`);

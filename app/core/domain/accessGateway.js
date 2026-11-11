@@ -93,7 +93,7 @@ const groups = [
   // narrows it to a span-level seat, refuses a pattern the seat cannot see, and
   // refuses a second active remedy for the same pattern.
   ['declare-matrix-remedy', 'matrixRemedyDeclare'],
-  ['govern-oneonone-lines', 'oneOnOneLineSetConventions'],
+  ['govern-oneonone-lines', 'oneOnOneLineSetConventions oneOnOneLineScan'],
   // ADR-0152: settling an obligation an ENDED line left behind. Recording the
   // remedy is the manager's own act (the action narrows it to a seat that reaches
   // the person, and a carry must name a live line holder); the scan changes no

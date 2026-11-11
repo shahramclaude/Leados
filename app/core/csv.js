@@ -144,6 +144,10 @@ import { MATRIX_INTERFACE_CSV_COLUMNS, MATRIX_INTERFACE_CSV_DESCRIPTOR } from '.
 // ADR-0174: Standing Delegation-of-Authority Schedule & Limit Conformance (CSV scope #128, Schema v138).
 import { buildDoaReport, doaCsvRows } from './domain/doaSchedule.js';
 import { DOA_CSV_COLUMNS, DOA_CSV_DESCRIPTOR } from './domain/doaScheduleRegistry.js';
+// ADR-0164 (Schema v140): Matrix 1:1 Line Coverage (CSV scope #130). Aggregate
+// and small-cell/differencing protected from the shared read model.
+import { buildProtectedOneOnOneLines, oneOnOneLineCsvRows } from './domain/oneOnOneLines.js';
+import { ONE_ON_ONE_LINE_CSV_COLUMNS, ONE_ON_ONE_LINE_CSV_DESCRIPTOR } from './domain/oneOnOneLineRegistry.js';
 import { STRUCTURE_HISTORY_CSV_COLUMNS } from './domain/structureHistoryRegistry.js';
 import {
   assessmentReconciliationCsvRows,
@@ -1292,6 +1296,9 @@ export const CSV_EXPORTS = [
   // note — an exported file can never reconstruct who escalated what to whom.
   { key: 'escalation-economy', label: 'Escalation economy (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'escalation-economy', description: 'One workspace row, one row per leadership altitude and one row per decision class: recorded decision moments, absorbed and escalated counts, escalation rate with its Wilson 95% interval, escalation yield with its interval, the declared tax in units/hours/person-days, mean rungs crossed, saturated and unstable queue counts, graded commitments with Brier and skill, the declared floors and a verdict. NO person id, NO seat name, NO escalation title, NO proposed action, NO note. Every refused figure is BLANK rather than zero.' },
   { key: 'value-stream-exchange', label: 'Value Stream Exchange (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'value-stream-exchange', description: 'Peer SLA, critical-path, altitude roll-up and carryover aggregates with small-cell suppression; no names, titles, notes or contract IDs.' },
+  // CSV scope #130 (Schema v140, ADR-0164): Matrix 1:1 Line Coverage, aggregate
+  // only, small-cell and repeated-release protected.
+  ONE_ON_ONE_LINE_CSV_DESCRIPTOR,
 ];
 
 function personLookup(state) {
@@ -6348,6 +6355,15 @@ export function buildScopeTable(state, scope, now) {
       const report = buildMatrixRemedyReport(state, { now, settings: state.settings || {} });
       const rows = matrixRemedyCsvRows(report);
       const columns = MATRIX_REMEDY_CSV_COLUMNS.map((key) => ({ key, header: key }));
+      return { columns, rows };
+    }
+    case 'one-on-one-lines': {
+      // CSV scope #130 (Schema v140, ADR-0164). Built from the SAME protected
+      // read model the panel renders (`buildProtectedOneOnOneLines`), so small-cell
+      // and differencing protection guarantees withheld figures stay BLANK.
+      const report = buildProtectedOneOnOneLines(state, { now, settings: state.settings || {} });
+      const rows = oneOnOneLineCsvRows(report);
+      const columns = ONE_ON_ONE_LINE_CSV_COLUMNS.map((key) => ({ key, header: key }));
       return { columns, rows };
     }
     case 'matrix-meeting-load': {

@@ -126,17 +126,50 @@ function matrixLineCoverageCard(ctx) {
         )
       : h('p', { class: 'text-bad' }, 'Coverage totals withheld: the pair-state or held-meeting identity does not reconcile. The row details below are not a complete roll-up.'),
     lineRows.length ? table({ columns, rows: lineRows }) : h('p', { class: 'muted' }, 'No named line rows are available in this seat’s disclosure scope.'),
+    report.claimable?.length && report.actor?.canClaim && typeof ctx.api.oneOnOneLineClaim === 'function'
+      ? h('div', { class: 'stack' },
+          h('p', { class: 'small muted' }, 'Unattributed held 1:1s you may claim as yours:'),
+          h('div', { class: 'row-actions' },
+            ...report.claimable.map((item) => h('button', {
+              class: 'btn btn-tiny btn-ghost',
+              type: 'button',
+              onClick: () => {
+                const res = ctx.api.oneOnOneLineClaim(item.meetingId);
+                if (!res?.ok) { toast(res?.error || 'Could not claim this 1:1.', 'bad'); return; }
+                toast(`Claimed 1:1 with ${item.personName} on ${item.date}.`, 'good');
+                if (typeof ctx.refresh === 'function') ctx.refresh();
+              },
+            }, `Claim ${item.personName} (${item.date})`)),
+          ),
+        )
+      : null,
     refused.length ? h('div', { class: 'banner banner-caution', role: 'status' },
       h('div', { class: 'banner-text' },
         h('strong', null, `${refused.length} reporting-graph issue${refused.length === 1 ? '' : 's'} refused.`),
         h('ul', null, ...refused.map((row) => h('li', null, `${row.personName}: ${row.reason}`))),
       ),
     ) : null,
-    h('p', { class: 'muted tiny' }, `As of ${report.generatedOn}. A meeting is credited only to its recorded holder; an unattributed meeting is not guessed onto either line. This read-only panel uses the existing matrix DAG and never changes meeting records.`),
+    h('p', { class: 'muted tiny' }, `As of ${report.generatedOn}. A meeting is credited only to its recorded holder; an unattributed meeting is not guessed onto either line. Open #/matrix?panel=one-on-ones for CSV #130, disclosure controls, and convention governance.`),
   ].filter(Boolean);
+  const actions = [
+    h('a', { class: 'btn btn-tiny btn-ghost', href: '#/matrix?panel=one-on-ones' }, 'Matrix 1:1 panel'),
+  ];
+  if (report.actor?.canScan && typeof ctx.api.oneOnOneLineScan === 'function') {
+    actions.push(h('button', {
+      class: 'btn btn-tiny btn-primary',
+      type: 'button',
+      onClick: () => {
+        const res = ctx.api.oneOnOneLineScan();
+        if (!res?.ok) { toast(res?.error || 'Silent-line scan refused.', 'bad'); return; }
+        toast('Scanned matrix 1:1 line coverage for silent lines.', 'good');
+        if (typeof ctx.refresh === 'function') ctx.refresh();
+      },
+    }, 'Scan silent lines'));
+  }
   return card({
     title: 'Matrix 1:1 line coverage',
     subtitle: `${report.scopeLabel} · home cadence ${report.conventions.homeCadenceDays} days · additional-line cadence ${report.conventions.lineCadenceDays} days · exempt only below ${report.conventions.minSharePct}% declared share.`,
+    actions,
     body: h('div', { class: 'stack' }, ...body),
   });
 }
