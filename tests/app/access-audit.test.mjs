@@ -62,6 +62,7 @@ const ROUTES = [
   ['#/matrix?panel=meeting-load', 'Matrix meeting load'],
   ['#/matrix?panel=sod', 'Matrix segregation of duties'],
   ['#/matrix?panel=remedies', 'Matrix pattern remedies'],
+  ['#/matrix?panel=one-on-ones', 'Matrix 1:1 line coverage'],
   ['#/settings', 'Settings'],
 ];
 

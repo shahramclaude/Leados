@@ -24,7 +24,7 @@ import { normalizeSeatIdentities, normalizeIdentityMarkers, normalizeIdentitySet
 // ADR-0121 (Schema v114): the Duty Coverage Register's fail-closed normalizers.
 import { normalizeDutyCovers, normalizeDutyCoverageMarkers, normalizeDutyCoverageSettings } from './domain/dutyCoverageSchema.js';
 import { normalizeReportingLines, normalizeMatrixMarkers, normalizeMatrixSettings } from './domain/matrixSchema.js';
-import { normalizeOneOnOneHolder, normalizeOneOnOneLineSettings } from './domain/oneOnOneLineSchema.js';
+import { normalizeOneOnOneHolder, normalizeOneOnOneLineMarkers, normalizeOneOnOneLineSettings } from './domain/oneOnOneLineSchema.js';
 // ADR-0143 (Schema v120): the Cross-Line Priority Arbitration's fail-closed
 // normalizers. Every stored row is a human act; every score, state and count is
 // re-derived on read, so a printed order cannot drift from the integers it ranks.
@@ -726,7 +726,10 @@ export {
 // (append-only dated acts naming an owner, a remedy and a review date against a
 // recurring structural signature). Deliberately EMPTY on upgrade: no remedy, owner
 // or review date is ever fabricated; verdicts are re-derived on every read.
-export const SCHEMA_VERSION = 139;
+// v140 completes Matrix 1:1 Line Coverage (ADR-0164): adds `oneOnOneLineMarkers`
+// (`RULE-OOL-01`'s bounded idempotency/observation ledger). Deliberately EMPTY
+// on upgrade; existing meetings never gain synthetic `heldById` attribution.
+export const SCHEMA_VERSION = 140;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -2821,6 +2824,9 @@ export const COLLECTIONS = [
   // dated first-person remedy acts. No verdict, count or "cleared" flag is stored:
   // a stored verdict would drift from the decision log beneath it.
   'matrixRemedies',
+  // ADR-0164 (Schema v140): RULE-OOL-01's bounded silent-line ask and unreadable
+  // observation marker ledger. Never stores synthetic holders or inferred state.
+  'oneOnOneLineMarkers',
 ];
 
 /** Stable empty state. `now` is an ISO string so the result is a pure value. */
@@ -8058,6 +8064,8 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.benchRegressionMarkers = normalizeBenchRegressionMarkers(raw.benchRegressionMarkers);
   // ADR-0175: malformed remedy rows are dropped with a counted warning, never repaired.
   state.matrixRemedies = normalizeMatrixRemedies(raw.matrixRemedies, warnings);
+  // ADR-0164 (Schema v140): RULE-OOL-01's bounded idempotency & observation ledger.
+  state.oneOnOneLineMarkers = normalizeOneOnOneLineMarkers(raw.oneOnOneLineMarkers);
   // ADR-0122: a malformed absence row is dropped with a warning, never repaired —
   // an invented absence is an invented unavailability for every cover in the span.
   // Resolved BEFORE links so the `declares-absence-of` provenance edge validates
@@ -8793,6 +8801,14 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  // 139 → 140: ADR-0164 completes Matrix 1:1 Line Coverage by adding
+  // `oneOnOneLineMarkers` (`RULE-OOL-01`). Starts empty on upgrade; existing
+  // meetings keep their `heldById: null` rather than fabricating attribution.
+  139: (v139) => ({
+    ...v139,
+    schemaVersion: 140,
+    oneOnOneLineMarkers: Array.isArray(v139.oneOnOneLineMarkers) ? v139.oneOnOneLineMarkers : [],
+  }),
   // 138 → 139: ADR-0175 adds ONE collection (`matrixRemedies`) and no record.
   // Nothing about an existing pattern, decision, line or owner changes; the
   // migration is an empty append.

@@ -70,6 +70,7 @@ export function renderSettings(ctx) {
     ['Action-bundle review checkpoint', s.bundleAutoPropagate === false ? 'Paused — typed provenance remains on; explicit scan reconciles links' : 'On — adoption creates one owned cross-module review checkpoint'],
     ['Response Studio follow-up', s.responseAutoPropagate === false ? 'Paused — scheduling keeps its date but creates no follow-up work' : 'On — a scheduled response gets one owned checkpoint or governed decision'],
     ['1:1 cadence', `${s.oneOnOneCadenceDays} days`],
+    ['Matrix 1:1 additional-line governance', s.oneOnOneLineAutoPropagate === false ? `Paused — additional-line interval ${s.oneOnOneLineCadenceDays ?? 30}d (exempt < ${s.oneOnOneLineMinSharePct ?? 20}%); explicit scan runs RULE-OOL-01` : `On — RULE-OOL-01 asks due in ${s.oneOnOneLineAskDueDays ?? 7}d (additional-line ${s.oneOnOneLineCadenceDays ?? 30}d, exempt < ${s.oneOnOneLineMinSharePct ?? 20}%)`],
     ['Feedback target', `${s.feedbackTargetDays} days`],
     ['Observation → conversation convention', `${s.feedbackLatencyTargetDays} days`],
     ['Goal check-in', `${s.goalCheckinDays} days`],

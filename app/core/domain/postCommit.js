@@ -158,6 +158,8 @@ import { meritEvidenceRule } from './meritEvidenceRules.js';
 // ADR-0168: the Cross-Line Bench-Evidence Sufficiency reading (RULE-BNE-01).
 import { benchEvidenceRule } from './benchEvidenceRules.js';
 import { benchRegressionRule } from './benchRegressionRules.js';
+// ADR-0164 (Schema v140): Matrix 1:1 Line Coverage (RULE-OOL-01).
+import { oneOnOneLineRule } from './oneOnOneLineRules.js';
 
 
 // ADR-0087: the Operating Cadence Clock. Reads the finished queue after the
@@ -934,6 +936,11 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // frozen reading, and runs before `seatRule` so the obligation it opens rolls
   // up the hierarchy in the same atomic transaction.
   benchRegressionRule,
+  // ADR-0164 (Schema v140): Matrix 1:1 Line Coverage (RULE-OOL-01). Runs before
+  // `seatRule` so opened silent-line asks roll up the matrix DAG in the same
+  // atomic transaction. Inert in single-chain workspaces and pausable via
+  // `oneOnOneLineAutoPropagate`.
+  oneOnOneLineRule,
   // ADR-0076: the Operating Seat (vertical roll-up + enforced boundaries).
   // It reads the finished record after every module has propagated, then fans
   // each open item up every leadership ancestor in the reporting tree with one

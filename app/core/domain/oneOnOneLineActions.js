@@ -7,9 +7,14 @@ import { dayKey } from '../time.js';
 import { LEADER_ID } from './chain.js';
 import { activeSeat, buildSeats, canAct, canSee } from './seat.js';
 import { buildMatrix, matrixLineScope } from './matrix.js';
-import { buildOneOnOneLines } from './oneOnOneLines.js';
+import { buildProtectedOneOnOneLines } from './oneOnOneLines.js';
 import { validateOneOnOneLineConventions } from './oneOnOneLineSchema.js';
-import { ONE_ON_ONE_LINE_EVENTS, ONE_ON_ONE_LINE_LIMITS, ONE_ON_ONE_LINE_RIGHTS } from './oneOnOneLineRegistry.js';
+import {
+  ONE_ON_ONE_LINE_EVENTS,
+  ONE_ON_ONE_LINE_LIMITS,
+  ONE_ON_ONE_LINE_RIGHTS,
+  ONE_ON_ONE_LINE_RULE_ID,
+} from './oneOnOneLineRegistry.js';
 
 const fail = (error, field = 'scope') => ({ ok: false, error, field });
 const text = (value) => typeof value === 'string' ? value.trim() : '';
@@ -64,26 +69,7 @@ function saved(store, extra = {}) {
   };
 }
 
-/** Never expose unsuppressed aggregate-only cells through the read API. */
-function safeReport(report) {
-  const aggregateOnly = !report.seat.fullAccess && Number(report.seat.rank) > 2;
-  const mixed = !report.seat.fullAccess && (report.board.countedOnlyN > 0 || report.board.aggregateRefusedN > 0);
-  if (!aggregateOnly && !mixed) return { ...report, aggregateWithheld: false };
-  const persons = aggregateOnly ? [] : report.persons;
-  const refusedPersons = aggregateOnly ? [] : report.refusedPersons;
-  return {
-    ...report,
-    isMatrix: aggregateOnly ? null : Boolean(persons.length || refusedPersons.length),
-    persons,
-    refusedPersons,
-    claimable: aggregateOnly ? [] : report.claimable,
-    kinds: [],
-    board: null,
-    aggregateWithheld: true,
-    aggregateWithheldReason: 'Aggregate 1:1 coverage is withheld until small-cell and repeated-release disclosure protection is implemented. Directly visible rows remain available at manager altitude.',
-  };
-}
-
+/** Apply small-cell, subtraction-safe, and repeated-release disclosure protection. */
 export function createOneOnOneLineActions(store, { now = () => new Date() } = {}) {
   const clock = () => { const value = now(); return value instanceof Date ? value : new Date(value); };
   const context = () => resolve(store.state, clock());
@@ -92,9 +78,10 @@ export function createOneOnOneLineActions(store, { now = () => new Date() } = {}
 
   return {
     oneOnOneLineReport() {
-      const report = buildOneOnOneLines(store.state, { now: clock(), settings: store.state.settings || {} });
+      const at = clock();
+      const report = buildProtectedOneOnOneLines(store.state, { now: at, settings: store.state.settings || {} });
       if (report.seat.readOnly) return fail('The operating seat is unresolved; no 1:1 coverage can be read.');
-      return { ok: true, report: safeReport(report) };
+      return { ok: true, report };
     },
 
     oneOnOneLineClaim(meetingId, input = {}) {
@@ -158,8 +145,8 @@ export function createOneOnOneLineActions(store, { now = () => new Date() } = {}
         return fail('These workspace-wide conventions may be changed only in the full-access operator view.');
       }
       if (!input || typeof input !== 'object' || Array.isArray(input)) return fail('Provide coverage conventions as a patch.', 'conventions');
-      const allowed = new Set(['oneOnOneLineCadenceDays', 'oneOnOneLineMinSharePct']);
-      if (Object.keys(input).some((key) => !allowed.has(key))) return fail('Only the additional-line interval and share floor are configurable in this slice.', 'conventions');
+      const allowed = new Set(['oneOnOneLineCadenceDays', 'oneOnOneLineMinSharePct', 'oneOnOneLineAskDueDays', 'oneOnOneLineAutoPropagate']);
+      if (Object.keys(input).some((key) => !allowed.has(key))) return fail('Unrecognized matrix 1:1 line convention field.', 'conventions');
       const valid = validateOneOnOneLineConventions(input);
       if (!valid.ok) return valid;
       store.update((draft) => { draft.settings = { ...draft.settings, ...valid.patch }; }, {
@@ -167,6 +154,22 @@ export function createOneOnOneLineActions(store, { now = () => new Date() } = {}
         summary: 'Updated the matrix 1:1 coverage conventions.',
       });
       return saved(store, { conventions: valid.patch });
+    },
+
+    oneOnOneLineScan() {
+      const { seat } = context();
+      const right = canAct(ONE_ON_ONE_LINE_RIGHTS.GOVERN, seat);
+      if (seat.readOnly || (!seat.fullAccess && !right.allow)) {
+        return fail(right.reason || 'Scanning silent 1:1 lines requires director rank or the workspace operator view.');
+      }
+      store.update(() => {}, {
+        type: ONE_ON_ONE_LINE_EVENTS.SCAN,
+        entity: 'workspace',
+        entityId: 'one-on-one-lines',
+        summary: `Scanned matrix 1:1 line coverage for silent lines and resolved asks (${ONE_ON_ONE_LINE_RULE_ID}).`,
+      });
+      const effects = (store.lastPropagations || []).filter((p) => p && p.ruleId === ONE_ON_ONE_LINE_RULE_ID);
+      return saved(store, { effects });
     },
   };
 }

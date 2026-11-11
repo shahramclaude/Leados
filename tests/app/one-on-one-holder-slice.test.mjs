@@ -44,8 +44,8 @@ function harness() {
 
 test('matrix managers log their own holder, preserve it on disk, and the history displays the stored holder', () => {
   const { store, api, disk } = harness();
-  assert.equal(SCHEMA_VERSION, 139);
-  assert.deepEqual(migrate({ schemaVersion: 131, oneOnOnes: [{ personId: 'sam' }], settings: {} }).applied, ['131 → 132', '132 → 133', '133 → 134', '134 → 135', '135 → 136', '136 → 137', '137 → 138', '138 → 139']);
+  assert.equal(SCHEMA_VERSION, 140);
+  assert.deepEqual(migrate({ schemaVersion: 131, oneOnOnes: [{ personId: 'sam' }], settings: {} }).applied, ['131 → 132', '132 → 133', '133 → 134', '134 → 135', '135 → 136', '136 → 137', '137 → 138', '138 → 139', '139 → 140']);
   assert.equal(store.state.oneOnOnes[0].heldById, null, 'migration does not invent historical holders');
   const home = api.logOneOnOne({ personId: 'sam', date: '2026-11-09', status: 'held', actions: [{ text: 'Home-only commitment', owner: 'leader' }] });
   assert.equal(home.ok, true);
@@ -107,7 +107,7 @@ test('claims and releases are first-person, persisted and visible to the shared 
   store.update((draft) => { draft.settings.activeSeatId = 'director'; }, { type: 'test.seat', entity: 'workspace', entityId: 'seat', summary: 'switch' });
   const report = api.oneOnOneLineReport();
   assert.equal(report.ok, true, report.error);
-  assert.equal(report.report.actor.canScan, false, 'the unimplemented scan is not advertised as available');
+  assert.equal(report.report.actor.canScan, true, 'director rank can invoke silent-line scan under govern-oneonone-lines');
   assert.equal(report.report.aggregateWithheld, true);
   assert.equal(report.report.board, null, 'a higher-altitude seat cannot recover unprotected aggregate cells');
   assert.deepEqual(report.report.persons, []);

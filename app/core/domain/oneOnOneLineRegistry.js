@@ -1,8 +1,8 @@
 /**
  * app/core/domain/oneOnOneLineRegistry.js — closed vocabulary, conventions,
  * limits, CSV schema and named method of Matrix 1:1 Line Coverage
- * (Schema v132; ADR-0164, `#/matrix?panel=one-on-ones`, `RULE-OOL-01`,
- * and CSV scope #123 are reserved, not yet shipped).
+ * (Schema v132 → v140; ADR-0164, `#/matrix?panel=one-on-ones`, `RULE-OOL-01`,
+ * and CSV scope #130).
  *
  * THE DEFECT THIS NAMES. A 1:1 was stored as `{ personId, date, status }` —
  * who it was WITH, never who HELD it. The cadence engine therefore answered
@@ -10,11 +10,6 @@
  * the wrong question: the functional manager's weekly meeting turned the
  * person green for the project manager who had not spoken to them in two
  * months, and the other way round. A silent line was masked by a busy one.
- *
- * Session 227 wires the holder, API-level human corrections and conventions;
- * Session 232 mounts the read-only coverage card on `#/oneonones`. The separate
- * `#/matrix` tab, RULE-OOL-01 and a registered CSV scope remain unbuilt; no
- * automatic silent-line tasks or CSV export are implied.
  *
  * Leaf module: no storage, no clock, no DOM, and no import with side effects,
  * so `schema.js`, the read model, the rule, the actions, `csv.js` and the
@@ -161,6 +156,8 @@ export const ONE_ON_ONE_LINE_LIMITS = Object.freeze({
   holderIdMax: 80,
 });
 
+export const ONE_ON_ONE_LINE_RULE_RELATIONS = Object.freeze(['concerns', 'issues-obligation', 'rolls-up-to']);
+
 export const ONE_ON_ONE_LINE_METHOD = Object.freeze([
   Object.freeze({
     name: 'A 1:1 credits the line whose manager held it',
@@ -179,8 +176,8 @@ export const ONE_ON_ONE_LINE_METHOD = Object.freeze([
     why: 'The home line is held to the workspace’s existing 1:1 interval. An additional line is held to its own declared interval, and one below the declared share floor owes no standing 1:1 and is printed as exempt. A line with no declared share cannot be exempted: there is no evidence it is small.',
   }),
   Object.freeze({
-    name: 'A finding is not an automated reminder',
-    why: 'This slice reports silent lines but does not create or close reminder tasks. The planned RULE-OOL-01 remains unimplemented.',
+    name: 'Bounded silent-line asks without inventing blame (`RULE-OOL-01`)',
+    why: 'For every proven silent line (`overdue` or `never`), `RULE-OOL-01` issues at most one bounded, marker-idempotent dated ask addressed to that line’s manager (and closes it automatically once held or ended). Unreadable lines (`unproven`) and structural defects record idempotent observations only and never blame a manager for an unattributed meeting.',
   }),
 ]);
 
@@ -190,11 +187,11 @@ export const ONE_ON_ONE_LINE_LIMITS_TEXT = Object.freeze([
   'Attribution is read against the lines in force TODAY. A meeting held by a manager whose line has since ended is counted under “no line today”, and a 1:1 between a person and a manager credits that pair even when it predates the line’s declared start — the pair was in conversation.',
   'A cadence is a recorded conversation, not its quality. An on-cadence line says a 1:1 was logged, not that it was useful, and a skipped or moved meeting credits nothing.',
   'Only people on more than one line are read here. A person on a single line is fully served by the existing 1:1 cadence, which this register does not change.',
-  'The report adapter withholds aggregate coverage at higher altitudes or in mixed-detail scopes until small-cell and repeated-release disclosure protection exists. Existing per-line confidentiality is not yet enforced.',
+  'Higher-altitude and mixed-detail reads enforce the 3-person small-cell disclosure floor, complementary suppression (`planAggregateSuppression`), and repeated-release differencing protection against the publication register (`#/differencing`).',
 ]);
 
 /**
- * Reserved, unregistered CSV scope #123: one workspace summary row plus one row per
+ * Registered CSV scope #130 (ADR-0164): one workspace summary row plus one row per
  * line role and declared kind. NO person id, NO name, NO manager id, NO
  * meeting id, NO meeting date and NO free text.
  */

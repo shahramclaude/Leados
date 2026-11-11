@@ -37,6 +37,10 @@ import { LEADER_ID } from './chain.js';
 import { cadence } from './oneonone.js';
 import { activeSeat, buildSeats, canAct, canSee } from './seat.js';
 import { buildMatrix, matrixLineScopeFor } from './matrix.js';
+import { MATRIX_FLOORS } from './matrixRegistry.js';
+import { planAggregateSuppression } from './aggregateDeterminacy.js';
+import { planRelease } from './differencing.js';
+import { DIFFERENCING_VERDICTS } from './differencingRegistry.js';
 import { normalizeOneOnOneLineSettings } from './oneOnOneLineSchema.js';
 import {
   ONE_ON_ONE_ATTRIBUTIONS,
@@ -516,8 +520,7 @@ export function buildOneOnOneLines(state = {}, { now = new Date(), settings = nu
       canAttribute: Boolean(seat.fullAccess),
       canClaim: !seat.fullAccess && canLog,
       canGovern: Boolean(seat.fullAccess) && !seat.readOnly && canAct(ONE_ON_ONE_LINE_RIGHTS.GOVERN, seat).allow,
-      // The scan command is reserved, not implemented in this slice.
-      canScan: false,
+      canScan: !seat.readOnly && (Boolean(seat.fullAccess) || canAct(ONE_ON_ONE_LINE_RIGHTS.GOVERN, seat).allow),
     },
     scope: seat.fullAccess ? 'workspace' : 'seat',
     scopeLabel,
@@ -530,10 +533,329 @@ export function buildOneOnOneLines(state = {}, { now = new Date(), settings = nu
   };
 }
 
+function suppressedKindRow(kind, why, reason) {
+  const blankStates = Object.fromEntries(ONE_ON_ONE_LINE_STATE_KEYS.map((stateKey) => [stateKey, null]));
+  return {
+    ...kind,
+    pairsN: null,
+    owingN: null,
+    states: blankStates,
+    suppressed: true,
+    suppressedWhy: why,
+    suppressedReason: reason,
+  };
+}
+
+function suppressKindBreakdown(kinds, board, floor) {
+  if (!Array.isArray(kinds) || !kinds.length) {
+    return { kinds: [], kindsWithheld: false, kindsWithheldReason: null };
+  }
+  const keyOf = (k) => `${k.role}|${k.kind}`;
+  const plan = planAggregateSuppression({
+    cells: kinds.map((k) => ({
+      key: keyOf(k),
+      count: k.pairsN,
+      open: k.owingN,
+      overdue: k.states.overdue + k.states.never,
+    })),
+    totals: {
+      count: board.pairsN,
+      open: board.owingN,
+      overdue: board.overdueN + board.neverN,
+    },
+    floor,
+  });
+  if (plan.totalsSuppressed) {
+    return {
+      kinds: [],
+      kindsWithheld: true,
+      kindsWithheldReason: `Line-kind breakdown is withheld: complementary suppression cannot protect a sub-floor line kind (< ${floor} pairs) against the board totals.`,
+    };
+  }
+  const suppressSet = new Set(plan.suppress);
+  const mandatorySet = new Set(plan.mandatory);
+  return {
+    kindsWithheld: false,
+    kindsWithheldReason: null,
+    kinds: kinds.map((k) => {
+      const key = keyOf(k);
+      if (!suppressSet.has(key)) {
+        return { ...k, suppressed: false, suppressedWhy: null, suppressedReason: null };
+      }
+      const why = mandatorySet.has(key) ? 'floor' : 'complementary';
+      const reason = why === 'floor'
+        ? `Withheld: fewer than ${floor} (person, line) pairs in this kind.`
+        : `Withheld by complementary suppression so a sub-floor line kind cannot be recovered from the total.`;
+      return suppressedKindRow(k, why, reason);
+    }),
+  };
+}
+
+/**
+ * Small-cell, subtraction-safe and repeated-release disclosure protection
+ * for `oneOnOneLineReport()` and CSV #130. Never guesses a zero for a withheld
+ * count, and never exposes aggregate-only rows below `MATRIX_FLOORS.cellN`.
+ */
+export function protectOneOnOneLineReport(report, {
+  repeatedReleaseBlocked = false,
+  repeatedReleaseReason = null,
+} = {}) {
+  if (!report || !report.seat) return report;
+  const floor = MATRIX_FLOORS.cellN;
+  const markUnsuppressed = (rows) => (rows || []).map((k) => ({
+    ...k,
+    suppressed: false,
+    suppressedWhy: null,
+    suppressedReason: null,
+  }));
+
+  if (report.seat.fullAccess) {
+    return {
+      ...report,
+      aggregateWithheld: false,
+      aggregateWithheldReason: null,
+      kindsWithheld: false,
+      kindsWithheldReason: null,
+      kinds: markUnsuppressed(report.kinds),
+    };
+  }
+
+  const higherAltitude = Number(report.seat.rank) > 2;
+  const persons = higherAltitude ? [] : report.persons;
+  const refusedPersons = higherAltitude ? [] : report.refusedPersons;
+  const claimable = higherAltitude ? [] : report.claimable;
+
+  if (!report.isMatrix) {
+    return {
+      ...report,
+      persons,
+      refusedPersons,
+      claimable,
+      kinds: [],
+      aggregateWithheld: false,
+      aggregateWithheldReason: null,
+      kindsWithheld: false,
+      kindsWithheldReason: null,
+    };
+  }
+
+  if (repeatedReleaseBlocked) {
+    return {
+      ...report,
+      isMatrix: higherAltitude ? null : Boolean(persons.length || refusedPersons.length),
+      persons,
+      refusedPersons,
+      claimable,
+      kinds: [],
+      board: null,
+      aggregateWithheld: true,
+      aggregateWithheldReason: repeatedReleaseReason || 'Aggregate 1:1 coverage is withheld by repeated-release differencing protection against the publication register (#/differencing).',
+      kindsWithheld: true,
+      kindsWithheldReason: null,
+    };
+  }
+
+  if (higherAltitude) {
+    const b = report.board;
+    if (b.peopleN < floor) {
+      return {
+        ...report,
+        isMatrix: null,
+        persons: [],
+        refusedPersons: [],
+        claimable: [],
+        kinds: [],
+        board: null,
+        aggregateWithheld: true,
+        aggregateWithheldReason: `Aggregate 1:1 coverage is withheld: fewer than ${floor} multi-line people fall in this seat’s scope (small-cell disclosure floor is ${floor}).`,
+        kindsWithheld: true,
+        kindsWithheldReason: null,
+      };
+    }
+    const kindPlan = suppressKindBreakdown(report.kinds, b, floor);
+    const hideStructural = b.structuralRefusedN > 0 && b.structuralRefusedN < floor;
+    const safeBoard = hideStructural
+      ? {
+        ...b,
+        structuralRefusedN: null,
+        aggregateRefusedN: null,
+        structuralRefusedWithheldReason: `Structural refusal count withheld below the ${floor}-person small-cell floor.`,
+      }
+      : b;
+    return {
+      ...report,
+      persons: [],
+      refusedPersons: [],
+      claimable: [],
+      board: safeBoard,
+      kinds: kindPlan.kinds,
+      kindsWithheld: kindPlan.kindsWithheld,
+      kindsWithheldReason: kindPlan.kindsWithheldReason,
+      aggregateWithheld: false,
+      aggregateWithheldReason: null,
+    };
+  }
+
+  // Manager / lead altitude (rank <= 2): direct rows are visible. When
+  // aggregate-only descendants also sit in scope (`mixed`), ensure
+  // subtracting visible rows cannot expose a sub-floor subgroup.
+  const b = report.board;
+  const mixed = b.countedOnlyN > 0 || b.aggregateRefusedN > 0;
+  if (!mixed) {
+    return {
+      ...report,
+      aggregateWithheld: false,
+      aggregateWithheldReason: null,
+      kindsWithheld: false,
+      kindsWithheldReason: null,
+      kinds: markUnsuppressed(report.kinds),
+    };
+  }
+
+  const hiddenN = b.countedOnlyN + b.aggregateRefusedN;
+  const subFloorSubgroup = hiddenN < floor
+    || (b.countedOnlyN > 0 && b.countedOnlyN < floor)
+    || (b.aggregateRefusedN > 0 && b.aggregateRefusedN < floor);
+  if (subFloorSubgroup) {
+    return {
+      ...report,
+      isMatrix: Boolean(persons.length || refusedPersons.length),
+      persons,
+      refusedPersons,
+      claimable,
+      kinds: [],
+      board: null,
+      aggregateWithheld: true,
+      aggregateWithheldReason: `Aggregate 1:1 totals and line-kind breakdowns are withheld: fewer than ${floor} aggregate-only descendants sit outside direct detail, so subtracting visible rows would disclose them. Directly visible rows remain available below.`,
+      kindsWithheld: true,
+      kindsWithheldReason: null,
+    };
+  }
+
+  // Mixed scope with >= floor hidden descendants: check residual kind totals so
+  // subtracting visible lines from a kind row cannot isolate < floor pairs.
+  const visibleByKind = new Map();
+  for (const person of persons) {
+    for (const line of person.lines) {
+      const k = `${line.role}|${line.kind}`;
+      const cur = visibleByKind.get(k) || { pairsN: 0, owingN: 0, overdueN: 0 };
+      cur.pairsN += 1;
+      if (line.owes) cur.owingN += 1;
+      if (line.silent) cur.overdueN += 1;
+      visibleByKind.set(k, cur);
+    }
+  }
+  const residualKinds = report.kinds.map((k) => {
+    const v = visibleByKind.get(`${k.role}|${k.kind}`) || { pairsN: 0, owingN: 0, overdueN: 0 };
+    return {
+      ...k,
+      pairsN: Math.max(0, k.pairsN - v.pairsN),
+      owingN: Math.max(0, k.owingN - v.owingN),
+      states: {
+        ...k.states,
+        overdue: Math.max(0, k.states.overdue + k.states.never - v.overdueN),
+        never: 0,
+      },
+    };
+  });
+  const residualBoard = {
+    pairsN: residualKinds.reduce((s, r) => s + r.pairsN, 0),
+    owingN: residualKinds.reduce((s, r) => s + r.owingN, 0),
+    overdueN: residualKinds.reduce((s, r) => s + r.states.overdue, 0),
+    neverN: 0,
+  };
+  const residualPlan = suppressKindBreakdown(residualKinds, residualBoard, floor);
+  if (residualPlan.kindsWithheld) {
+    return {
+      ...report,
+      persons,
+      refusedPersons,
+      claimable,
+      board: b,
+      kinds: [],
+      kindsWithheld: true,
+      kindsWithheldReason: residualPlan.kindsWithheldReason,
+      aggregateWithheld: false,
+      aggregateWithheldReason: null,
+    };
+  }
+  const suppressedByKey = new Map(residualPlan.kinds.map((k) => [`${k.role}|${k.kind}`, k]));
+  return {
+    ...report,
+    persons,
+    refusedPersons,
+    claimable,
+    board: b,
+    kindsWithheld: false,
+    kindsWithheldReason: null,
+    aggregateWithheld: false,
+    aggregateWithheldReason: null,
+    kinds: report.kinds.map((k) => {
+      const res = suppressedByKey.get(`${k.role}|${k.kind}`);
+      if (!res || !res.suppressed) {
+        return { ...k, suppressed: false, suppressedWhy: null, suppressedReason: null };
+      }
+      return suppressedKindRow(k, res.suppressedWhy, res.suppressedReason);
+    }),
+  };
+}
+
+/**
+ * Shared protected read-model helper used by both `oneOnOneLineActions.js`
+ * (`oneOnOneLineReport`) and `app/core/csv.js` (CSV #130 `one-on-one-lines`),
+ * guaranteeing identical small-cell, subtraction-safe, and differencing
+ * suppression on screen and in exports.
+ */
+export function buildProtectedOneOnOneLines(state, {
+  now = new Date(),
+  settings = null,
+  matrix = null,
+  seat = null,
+} = {}) {
+  const report = buildOneOnOneLines(state, { now, settings: settings || state?.settings || {}, matrix, seat });
+  if (!report || !report.seat) return report;
+  let repeatedReleaseBlocked = false;
+  let repeatedReleaseReason = null;
+  if (
+    !report.seat.fullAccess
+    && Number(report.seat.rank) > 2
+    && report.isMatrix
+    && Array.isArray(state?.differenceReleases)
+    && state.differenceReleases.some((r) => r && r.route === 'oneonones')
+  ) {
+    const plan = planRelease({
+      state,
+      route: 'oneonones',
+      now,
+      seatId: report.seat.id,
+      register: state.differenceReleases,
+    });
+    if (
+      plan
+      && (
+        plan.verdict === DIFFERENCING_VERDICTS.DETERMINED
+        || (plan.refused && !plan.refusedEmpty)
+        || plan.alreadyRecoveredN > 0
+        || (plan.candidate?.totals || []).some((t) => !t.printed)
+      )
+    ) {
+      repeatedReleaseBlocked = true;
+      repeatedReleaseReason = 'Aggregate 1:1 coverage is withheld by repeated-release differencing protection: publishing alongside existing releases in the Publication register (#/differencing) would determine a withheld value.';
+    }
+  }
+  return protectOneOnOneLineReport(report, { repeatedReleaseBlocked, repeatedReleaseReason });
+}
+
 /* ------------------------------------------------------------------- outputs */
 
 /** One identity-free paragraph. Safe to paste into a leadership note. */
 export function oneOnOneLineBriefText(report) {
+  if (report.aggregateWithheld || !report.board) {
+    return [
+      `Matrix 1:1 line coverage — read from ${report.scope === 'workspace' ? 'the whole workspace' : 'the acting seat’s span and its declared lines'} on ${report.generatedOn}.`,
+      report.aggregateWithheldReason || 'Aggregate 1:1 coverage totals are withheld under the disclosure policy.',
+    ].join(' ');
+  }
   const b = report.board;
   const c = report.conventions;
   const lines = [`Matrix 1:1 line coverage — read from ${report.scope === 'workspace' ? 'the whole workspace' : 'the acting seat’s span and its declared lines'} on ${report.generatedOn}.`];
@@ -556,23 +878,31 @@ export function oneOnOneLineBriefText(report) {
   if (b.uncertainDateN) lines.push(`${plural(b.uncertainDateN, 'held 1:1')} has an unverified date; fallback dates are not used as evidence.`);
   if (b.futureHeldN) lines.push(`${plural(b.futureHeldN, 'future-dated held 1:1')} was excluded because it has not yet happened.`);
   if (b.withheldN) lines.push(`${plural(b.withheldN, 'person', 'people')} on more than one line ${b.withheldN === 1 ? 'sits' : 'sit'} outside this seat and ${b.withheldN === 1 ? 'is' : 'are'} counted here only as withheld.`);
+  if (report.kindsWithheld && report.kindsWithheldReason) lines.push(report.kindsWithheldReason);
   return lines.join(' ');
 }
 
-/** Reserved CSV helper: the scope is not registered in the running app. */
+/** CSV scope #130 helper: aggregate-only and refusal-honest (withheld cells stay BLANK). */
 export function oneOnOneLineCsvRows(report) {
-  const b = report.board;
   const c = report.conventions;
   const base = {
     generated_on: report.generatedOn,
     scope: report.scope,
-    disclosure: report.disclosure,
+    disclosure: report.aggregateWithheld ? 'withheld' : report.disclosure,
     home_cadence_days: c.homeCadenceDays,
     line_cadence_days: c.lineCadenceDays,
     min_share_pct: c.minSharePct,
     engine_version: report.engineVersion,
   };
   const blank = Object.fromEntries(ONE_ON_ONE_LINE_CSV_COLUMNS.map((key) => [key, '']));
+  if (report.aggregateWithheld || !report.board) {
+    return [{
+      ...blank,
+      ...base,
+      row_type: 'summary',
+    }];
+  }
+  const b = report.board;
   const rows = [{
     ...blank,
     ...base,
@@ -599,6 +929,17 @@ export function oneOnOneLineCsvRows(report) {
     meeting_classes_reconcile: b.meetingsReconcile,
   }];
   for (const kind of report.kinds) {
+    if (kind.suppressed) {
+      rows.push({
+        ...blank,
+        ...base,
+        disclosure: kind.suppressedWhy === 'floor' ? 'suppressed-floor' : 'suppressed-complementary',
+        row_type: 'line-kind',
+        line_role: kind.role,
+        line_kind: kind.kind,
+      });
+      continue;
+    }
     const sum = ONE_ON_ONE_LINE_STATE_KEYS.reduce((total, key) => total + kind.states[key], 0);
     rows.push({
       ...blank,
