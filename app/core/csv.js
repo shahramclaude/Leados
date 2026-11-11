@@ -154,6 +154,9 @@ import { buildTransferPriceLedger, transferPriceCsvRows } from './domain/transfe
 import { TRANSFER_PRICE_CSV_COLUMNS, TRANSFER_PRICE_CSV_DESCRIPTOR } from './domain/transferPriceRegistry.js';
 import { buildDelegationLines, delegationLineCsvRows } from './domain/delegationLines.js';
 import { DELEGATION_LINE_CSV_COLUMNS, DELEGATION_LINE_CSV_DESCRIPTOR } from './domain/delegationLineRegistry.js';
+// ADR-0179: the Matrix Forward Allocation Horizon's aggregate-only export.
+import { buildLineHorizon, lineHorizonCsvRows } from './domain/lineHorizon.js';
+import { LINE_HORIZON_CSV_COLUMNS, LINE_HORIZON_CSV_DESCRIPTOR } from './domain/lineHorizonRegistry.js';
 import { STRUCTURE_HISTORY_CSV_COLUMNS } from './domain/structureHistoryRegistry.js';
 import {
   assessmentReconciliationCsvRows,
@@ -1311,6 +1314,9 @@ export const CSV_EXPORTS = [
   TRANSFER_PRICE_CSV_DESCRIPTOR,
   // #133 (Schema v143, ADR-0178): identity-free ask attribution aggregate.
   DELEGATION_LINE_CSV_DESCRIPTOR,
+  // #134 (Schema v143 unchanged, ADR-0179): matrix forward allocation horizon,
+  // aggregate only — workspace, ISO-week and person-verdict rows.
+  LINE_HORIZON_CSV_DESCRIPTOR,
 ];
 
 function personLookup(state) {
@@ -6372,6 +6378,18 @@ export function buildScopeTable(state, scope, now) {
     case 'delegation-lines': {
       const report = buildDelegationLines(state, { now, settings: state.settings || {} });
       return { columns: DELEGATION_LINE_CSV_COLUMNS.map((key) => ({ key, header: key })), rows: delegationLineCsvRows(report) };
+    }
+    case 'line-horizon': {
+      // CSV scope #134 (Schema v143 unchanged, ADR-0179). Built from the SAME
+      // seat-scoped read model the panel renders, so an exported figure is
+      // provably the figure that was printed. Aggregate only: one workspace
+      // row, one row per ISO week and one row per person verdict — no person,
+      // manager, line or seat identifier and no free text crosses the boundary.
+      // A share-day total an undeclared person-day or refused line touches is
+      // BLANK with its reason in its own column — never a zero, never a
+      // partial sum.
+      const report = buildLineHorizon(state, { now, settings: state.settings || {} });
+      return { columns: LINE_HORIZON_CSV_COLUMNS.map((key) => ({ key, header: key })), rows: lineHorizonCsvRows(report) };
     }
     case 'line-chargeback': {
       // CSV scope #132 (Schema v142, ADR-0177). Built from the SAME seat-scoped

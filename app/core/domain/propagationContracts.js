@@ -123,6 +123,7 @@ import { oneOnOneLineRule } from './oneOnOneLineRules.js';
 import { hiringLineRule } from './hiringLineRules.js';
 import { transferPriceRule } from './transferPriceRules.js';
 import { delegationLineRule } from './delegationLineRules.js';
+import { lineHorizonRule } from './lineHorizonRules.js';
 import { sealRule } from './sealRules.js';
 // ADR-0092: the Differencing Defender declares its contract like every other rule.
 import { differencingRule } from './differencingRules.js';
@@ -961,6 +962,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'transferPriceRules.js',
     purpose: 'RULE-TPL-01: reads the Cross-Line Labour Chargeback & Internal Transfer-Price Ledger (`buildTransferPriceLedger`, ADR-0177) with the whole-workspace operator view over the LAST COMPLETED CALENDAR QUARTER on transfer-price acts (propose / confirm / retire) and explicit `transfer.price.scan` scans. For every price proposal still holding ONE key it issues at most one dated delegation to the NAMED manager who holds the missing key; for every directed pair of lines that consumed share-days in the closed quarter with no agreed price and no proposal covering them it keeps at most one open dated delegation per (pair, quarter) with the BORROWING manager, and issues one more only after a price between that pair has died (declined, withdrawn or voided). Asks carry typed `issues-obligation` (counterpart manager) and matrix-DAG `rolls-up-to` provenance, are idempotent through `transferPriceMarkers`, bounded at 8 per commit with the remainder counted, and close themselves — with the actual reason written on the task — once the key is turned, the proposal is declined or withdrawn, or every share-day of that pair’s quarter is under a proposed or agreed price; an ask about an older quarter is re-read against its own quarter, so the calendar rolling over closes nothing. A key held by the workspace leader or by a manager who left the roster is recorded as an observation, never reassigned. Inert until the first price act exists; pausable via `transferPriceAutoPropagate`. Never signs a key, posts a charge, edits a budget, a reporting line or an agreement.',
     writes: ['delegations', 'links', 'transferPriceMarkers'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: lineHorizonRule,
+    module: 'lineHorizonRules.js',
+    purpose: 'RULE-LHZ-01: reads the Matrix Forward Allocation Horizon (`buildLineHorizon`, ADR-0179) on every reporting-line act, convention change and roster change, on explicit `matrix.horizon.scan` / `matrix.scan` scans, and on any other operational write while a declared line boundary sits inside the lead window (`matrixExpiringDays`) or one of its own asks is open. For each exposure that begins inside that window it issues at most ONE dated ask per commit (capped at 8, remainder counted) to the ONE roster seat that owns the fix — the lowest seat above every line in force for an over-booking, above the lines with no declared share for an unknown split, or the home-line manager for an unallocated remainder — with typed `issues-obligation` (the person) and matrix-DAG `rolls-up-to` (every roster ancestor of the owner) provenance. A leader-held, tied or off-roster owner is observed in one identity-free `matrixMarkers` entry and nobody is substituted. It closes its own ask — with the reason written on the task — when the ledger no longer reads the exposure or the owning seat changed, never because the day arrived, and never re-asks an exposure a person answered while it stands. It never edits a line, a share, a date or a roster record; pausable via `matrixAutoPropagate` (an explicit scan always runs); strictly inert in single-chain workspaces.',
+    writes: ['delegations', 'links', 'matrixMarkers'],
     emits: [],
     scansWorkspace: true,
   },

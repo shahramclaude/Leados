@@ -55,7 +55,7 @@ import { ensureEntityLink } from './automation.js';
 import { formatShareH } from './matrix.js';
 import { normalizeMatrixSettings } from './matrixSchema.js';
 import { MATRIX_SHARE_STATES, matrixLineKind } from './matrixRegistry.js';
-import { MATRIX_SCAN_EVENT } from './matrixRules.js';
+import { DERIVED_EVENT_PREFIXES, MATRIX_SCAN_EVENT } from './matrixRules.js';
 import {
   lineHorizonExposureSummary,
   lineHorizonExposures,
@@ -84,14 +84,9 @@ const SCANS = new Set([LINE_HORIZON_SCAN_EVENT, MATRIX_SCAN_EVENT]);
 
 /**
  * Events written BY the spine, never by a person acting on the record. This is
- * RULE-MTX-01's list verbatim (`DERIVED_EVENT_PREFIXES`, matrixRules.js, where
- * it is module-private). Exporting that one predicate and importing it here is
- * part of wiring this rule into the spine; until then the two must be kept equal.
+ * RULE-MTX-01's list verbatim, imported from `matrixRules.js`
+ * (`DERIVED_EVENT_PREFIXES`) — the shared predicate, not a private copy.
  */
-const DERIVED_EVENT_PREFIXES = Object.freeze([
-  'automation.', 'seat.', 'matrix.', 'propagation.', 'vault.', 'workspace.',
-  'settings.', 'demo.', 'import.', 'export.', 'lock.', 'crypto.', 'epistemic.',
-]);
 
 /** The first words of a completion note this rule wrote, so it can tell its own closes from a human's. */
 export const LINE_HORIZON_CLOSED_PREFIX = `Closed by ${LINE_HORIZON_RULE_ID}:`;

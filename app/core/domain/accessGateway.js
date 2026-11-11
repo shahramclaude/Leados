@@ -58,7 +58,7 @@ const groups = [
   // managers involved or the span above both — a peer cannot restructure another
   // span.
   ['record-structure-change', 'structureRecordMove structureImportDesign structureSeedCurrent structureScan structureHistoryCandidates'],
-  ['declare-matrix-line', 'matrixDeclareLine matrixRetuneLine matrixEndLine matrixSetConventions matrixReport matrixBriefText matrixCsvRows matrixCoordinationReport matrixCoordinationScan matrixSodReview matrixSettings matrixCandidates lineConsentRead lineConsentCandidates lineConsentScan matrixRecordIntake matrixRerouteIntake matrixIntakeReport matrixIntakeCandidates'],
+  ['declare-matrix-line', 'matrixDeclareLine matrixRetuneLine matrixEndLine matrixSetConventions matrixReport matrixBriefText matrixCsvRows matrixCoordinationReport matrixCoordinationScan matrixSodReview matrixSettings matrixCandidates lineConsentRead lineConsentCandidates lineConsentScan matrixRecordIntake matrixRerouteIntake matrixIntakeReport matrixIntakeCandidates matrixHorizonReport matrixHorizonScan'],
   // ADR-0148: answering a declared share is TWO first-person acts, split on the
   // spine rather than in prose. `accept-matrix-line` is the manager's own
   // answer (accept or decline the line they were given); it is open at every
@@ -367,6 +367,15 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // hide the ledger from exactly the seats that declared it. The report is built
 // under the acting seat, so a seat sees only its own span.
 'matrixReport', 'matrixBriefText', 'matrixCsvRows', 'matrixCoordinationReport', 'matrixSettings', 'matrixCandidates',
+// ADR-0179: the Matrix Forward Allocation Horizon's read surface. Registered
+// for the same reason as every module above — a read absent from SAFE_READS is
+// unreadable under enforcement while its writes are still gated, which would
+// hide the forward reading from exactly the seat that declared its lines. The
+// report is built under the acting seat inside `buildLineHorizon` (today's
+// wall, exactly as the live ledger draws it); `matrixHorizonScan` is a WRITE
+// (it runs the shared spine) and is therefore NOT a safe read — it stays on
+// the declared `declare-matrix-line` right.
+'matrixHorizonReport',
 // ADR-0173: the demand-variance read surface. Same reasoning as every module
 // above — a read absent from SAFE_READS is unreadable under enforcement while
 // its writes are still gated, which would hide the ledger from exactly the

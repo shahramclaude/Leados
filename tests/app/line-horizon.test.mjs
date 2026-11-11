@@ -1,18 +1,17 @@
 /**
- * ADR-0179 (PROPOSED — part 1 of 2) — Matrix Forward Allocation Horizon.
- * Schema v143 unchanged.
+ * ADR-0179 — Matrix Forward Allocation Horizon (Schema v143 unchanged).
  *
- * WHAT THIS SUITE COVERS, AND WHAT IT DOES NOT
- * -------------------------------------------
- * The three modules of this slice are exercised IN ISOLATION:
+ * WHAT THIS SUITE COVERS
+ * ----------------------
  *   lineHorizonRegistry.js   the closed vocabulary;
  *   lineHorizon.js           the pure forward read model, brief and CSV rows;
- *   lineHorizonRules.js      RULE-LHZ-01, called directly on a workspace draft.
- *
- * Nothing here is wired into the app yet: there is no panel, no action, no CSV
- * scope, and the rule is NOT on the post-commit spine. The first test pins that
- * on purpose, so the wiring step has to replace it with the positive
- * registration check instead of this suite quietly reading as "shipped".
+ *   lineHorizonRules.js      RULE-LHZ-01, called directly on a plain draft AND
+ *                            registered on the real post-commit spine;
+ *   the wiring               `#/matrix?panel=horizon`, `matrixHorizonReport` /
+ *                            `matrixHorizonScan` on both gateway lists, CSV
+ *                            scope #134, the contract, the view dispatch and
+ *                            the panel itself (DOM figures == the report the
+ *                            action returned; a render stores nothing).
  *
  * The contract proved here:
  *   - the first figures are the live ledger's figures (one engine, not two);
@@ -23,19 +22,26 @@
  *     does not move that wall;
  *   - the rule asks ONE seat, once, survives a normalisation round trip without
  *     asking again, closes its own ask when the exposure is gone, and never
- *     picks among managers.
+ *     picks among managers;
+ *   - under the REAL spine — copy-on-write savepoint, derived-event cascade,
+ *     the Operating Seat's roll-up and the seal — the rule issues exactly one
+ *     ask in one atomic commit, persists it, and does not ask twice.
  */
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { JSDOM, VirtualConsole } from 'jsdom';
 
 import { createEmptyState, normalizeState, SCHEMA_VERSION } from '../../app/core/schema.js';
+import { createStore, STORAGE_KEY } from '../../app/core/store.js';
+import { createApi } from '../../app/actions.js';
 import { addDays } from '../../app/core/time.js';
 import { activeSeat, buildSeats } from '../../app/core/domain/seat.js';
-import { buildMatrix, matrixAllocations, matrixLineScope } from '../../app/core/domain/matrix.js';
+import { buildMatrix, buildMatrixReport, matrixAllocations, matrixLineScope } from '../../app/core/domain/matrix.js';
 import { MATRIX_FLOORS, MATRIX_PANELS } from '../../app/core/domain/matrixRegistry.js';
 import { DEFAULT_POST_COMMIT_RULES } from '../../app/core/domain/postCommit.js';
 import { PROPAGATION_CONTRACTS } from '../../app/core/domain/propagationContracts.js';
+import { API_RIGHTS, SAFE_READS } from '../../app/core/domain/accessGateway.js';
 import { CSV_EXPORTS } from '../../app/core/csv.js';
 import {
   buildLineHorizon,
@@ -57,6 +63,8 @@ import {
   LINE_HORIZON_SCAN_EVENT,
   LINE_HORIZON_VERDICT_KEYS,
 } from '../../app/core/domain/lineHorizonRegistry.js';
+import { renderMatrixHorizonPanel } from '../../app/views/matrixHorizonPanel.js';
+import { renderMatrix } from '../../app/views/matrix.js';
 
 // A Wednesday, so the first week bucket is a short one (Wed–Sun, five days).
 const NOW = new Date('2026-11-11T12:00:00.000Z');
@@ -118,7 +126,7 @@ function fixture({ settings = {}, mutate = null } = {}) {
   return normalizeState(state, { now: NOW }).state;
 }
 
-/** Call the rule the way the spine would, but directly: it is not registered yet. */
+/** Call the rule directly on a plain draft — the unit path. The spine proof below runs the registered rule under the real engine. */
 function runRule(draft, type, { now = NOW, derived = false } = {}) {
   const log = [];
   const warnings = [];
@@ -142,12 +150,32 @@ const ruleMarkers = (draft) => draft.matrixMarkers.filter((m) => m.ruleId === LI
 
 /* ------------------------------------------------------- 0. honest boundary */
 
-test('this slice is NOT wired yet: no schema move, no panel, no CSV scope, no rule on the spine', () => {
-  assert.equal(SCHEMA_VERSION, 143);
-  assert.equal(MATRIX_PANELS.some((panel) => panel.key === 'horizon'), false, 'no #/matrix?panel=horizon exists yet');
-  assert.equal(CSV_EXPORTS.some((scope) => scope.key === LINE_HORIZON_CSV_DESCRIPTOR.key), false, 'CSV scope line-horizon is not registered yet');
-  assert.equal(DEFAULT_POST_COMMIT_RULES.includes(lineHorizonRule), false, 'RULE-LHZ-01 is not on the post-commit spine yet');
-  assert.equal(PROPAGATION_CONTRACTS.some((contract) => contract.rule === lineHorizonRule), false);
+test('the horizon is wired end to end: panel, actions, gateway, CSV #134, rule and contract', () => {
+  assert.equal(SCHEMA_VERSION, 143, 'ADR-0179 adds no schema move');
+  assert.ok(MATRIX_PANELS.some((panel) => panel.key === 'horizon'), 'the #/matrix?panel=horizon tab exists');
+  assert.ok(MATRIX_PANELS.some((panel) => panel.key === 'chargeback'), 'the previous panel is untouched');
+
+  const scope = CSV_EXPORTS.find((item) => item.key === LINE_HORIZON_CSV_DESCRIPTOR.key);
+  assert.equal(scope, LINE_HORIZON_CSV_DESCRIPTOR, 'CSV scope line-horizon is registered');
+  assert.equal(CSV_EXPORTS.length, 134, 'the register holds every scope through #134 (the pin states the total so it cannot drift silently)');
+  assert.equal(CSV_EXPORTS[CSV_EXPORTS.length - 1], LINE_HORIZON_CSV_DESCRIPTOR, 'appended, so every earlier scope index is unchanged');
+
+  const ruleIndex = DEFAULT_POST_COMMIT_RULES.indexOf(lineHorizonRule);
+  assert.ok(ruleIndex > 0, 'RULE-LHZ-01 is on the post-commit spine');
+  assert.equal(DEFAULT_POST_COMMIT_RULES[ruleIndex + 1].id, 'seatRule', 'immediately before seatRule: an ask issued here rolls up in the same transaction');
+  const contract = PROPAGATION_CONTRACTS.find((row) => row.rule === lineHorizonRule);
+  assert.ok(contract, 'one contract per rule');
+  assert.match(contract.purpose, /RULE-LHZ-01/);
+  assert.deepEqual(contract.writes, ['delegations', 'links', 'matrixMarkers']);
+  assert.equal(contract.scansWorkspace, true);
+  assert.equal(PROPAGATION_CONTRACTS.length, DEFAULT_POST_COMMIT_RULES.length, 'rule/contract parity');
+
+  // The gateway: the report is a SAFE_READ under enforcement; the scan writes
+  // through the spine, so it stays on a declared right and is never safe.
+  assert.ok(SAFE_READS.has('matrixHorizonReport'), 'the report is readable under enforcement');
+  assert.equal(SAFE_READS.has('matrixHorizonScan'), false, 'the scan is a write and is not a safe read');
+  assert.equal(API_RIGHTS.matrixHorizonReport, 'declare-matrix-line');
+  assert.equal(API_RIGHTS.matrixHorizonScan, 'declare-matrix-line');
 });
 
 /* ---------------------------------------------------------------- 1. registry */
@@ -431,6 +459,14 @@ test('a home share that lapses is a dated event, and the split it leaves unknown
   assert.equal(ask.dueOn, '2026-11-20');
   assert.match(ask.expectedOutcome, /holds 2 reporting lines and 1 of them carries no declared share/);
   assert.match(ask.expectedOutcome, /No share was filled in automatically/);
+  // Roll-up provenance follows the matrix DAG — and the synthetic leader is
+  // excluded, exactly as RULE-SEAT-01's ancestorsOf excludes it.
+  const edges = draft.links.filter((link) => link.sourceType === 'delegation' && link.sourceId === ask.id
+    && link.relation === 'rolls-up-to');
+  assert.ok(edges.some((link) => link.targetId === 'vp' && link.ruleId === LINE_HORIZON_RULE_ID),
+    'the ask rolls up to the VP seat above the owner');
+  assert.equal(edges.some((link) => link.targetId === 'leader'), false,
+    'the synthetic leader is not a roll-up target — the same convention as RULE-SEAT-01');
 });
 
 /* --------------------------------------------------------------- 6. the seat */
@@ -730,4 +766,212 @@ test('asks are bounded per commit and the remainder is counted, then follows', (
   assert.equal(asksOf(draft).length, 13, 'the remainder follows on the next write');
   assert.deepEqual(runRule(draft, 'decision.created').effects, []);
   assert.equal(new Set(ruleLinks(draft, 'issues-obligation').map((l) => l.sourceId)).size, 13, 'one ask per exposed person');
+});
+
+/* ------------------------------------------------- 9. the real spine */
+
+function spineBoot({ settings = {} } = {}) {
+  const map = new Map();
+  const storage = {
+    getItem: (key) => map.get(key) ?? null,
+    setItem: (key, value) => map.set(key, String(value)),
+    removeItem: (key) => map.delete(key),
+  };
+  let seq = 0;
+  const idFactory = (prefix) => `${prefix}-spine-${++seq}`;
+  const state = fixture({ settings: { activeSeatId: 'vp', sealEnabled: true, ...settings } });
+  map.set(STORAGE_KEY, JSON.stringify(state));
+  const store = createStore({ storage, now: () => NOW, idFactory });
+  store.load();
+  const api = createApi(store, { now: () => NOW, idFactory });
+  return { map, storage, store, api };
+}
+
+test('under the REAL spine the rule issues one ask in one atomic commit — savepoint, cascade, seat roll-up and seal', () => {
+  const { map, store, api } = spineBoot();
+
+  // An ordinary operational write. The rule sweeps because the declared line
+  // `r-cat` starts on 23 Nov, inside the 14-day lead window — no scan, no
+  // structural event, exactly how an unrelated write walks an exposure in.
+  const created = api.addCase({ title: 'Horizon spine proof', kind: 'risk', ownerId: 'cat', openedOn: '2026-11-11' });
+  assert.equal(created.ok, true, created?.error || 'the operational write is accepted');
+
+  const lhz = (store.lastPropagations || []).filter((effect) => effect && effect.ruleId === LINE_HORIZON_RULE_ID);
+  assert.deepEqual(lhz.map((effect) => effect.action), ['delegated', 'observed'],
+    'one ask and one identity-free marker from RULE-LHZ-01 in the same commit');
+
+  // The ask, its typed provenance and the marker are PERSISTED, not just in memory.
+  const asks = asksOf(store.state);
+  assert.equal(asks.length, 1, 'exactly one ask — the derived cascade did not ask twice');
+  assert.equal(asks[0].personId, 'vp', 'Finn, Petra and Pria each hold part of Cat; the one seat above all three is Vera');
+  assert.equal(asks[0].status, 'active');
+  assert.match(asks[0].dueOn, /^\d{4}-\d{2}-\d{2}$/);
+  assert.equal(ruleLinks(store.state, 'issues-obligation').length, 1);
+  assert.equal(ruleLinks(store.state, 'issues-obligation')[0].summary, 'Forward allocation exposure: over-committed from 2026-11-23.');
+  // The ask's owner (Vera) sits directly under the synthetic leader, which is
+  // not a roll-up target under the same convention as RULE-SEAT-01 — so the
+  // ask itself carries no edge, while the seat rule's own fan-out (the case,
+  // owned by Cat) IS in the same commit's links.
+  const seatRollups = store.state.links.filter((link) => link.ruleId === 'RULE-SEAT-01' && link.relation === 'rolls-up-to');
+  assert.ok(seatRollups.length >= 1, 'the Operating Seat rolled work up in the same commit');
+  assert.equal(store.state.links.some((link) => link.ruleId === LINE_HORIZON_RULE_ID && link.relation === 'rolls-up-to'), false,
+    'no roll-up edge for an owner whose only ancestor is the excluded synthetic leader');
+  assert.equal(ruleMarkers(store.state).length, 1);
+
+  // The seat roll-up and the seal ran over the SAME transaction.
+  assert.ok((store.lastPropagations || []).some((effect) => effect && effect.ruleId === 'RULE-SEAT-01'),
+    'the Operating Seat fanned the same commit (an operational write under a declared seat)');
+  const seals = store.state.events.filter((event) => event.type === 'audit.seal');
+  assert.equal(seals.length, 1, 'exactly one audit.seal covers this commit');
+  assert.match(seals[0].summary, /^prev=/);
+
+  // The bytes on disk carry the ask — not only the in-memory draft.
+  const stored = JSON.parse(map.get(STORAGE_KEY));
+  assert.equal(stored.delegations.filter((task) => String(task.support || '').includes(LINE_HORIZON_RULE_ID)).length, 1,
+    'one ask in the persisted bytes');
+
+  // display == stored: a fresh store over the same storage reads the same ask,
+  // and the panel figure IS the stored open-ask count.
+  let seq = 0;
+  const reboot = createStore({
+    storage: { getItem: (k) => map.get(k) ?? null, setItem: (k, v) => map.set(k, String(v)), removeItem: (k) => map.delete(k) },
+    now: () => NOW,
+    idFactory: (prefix) => `${prefix}-reboot-${++seq}`,
+  });
+  reboot.load();
+  const report = buildLineHorizon(reboot.state, { now: NOW });
+  const storedOpen = reboot.state.delegations.filter((task) => String(task.support || '').includes(LINE_HORIZON_RULE_ID)
+    && task.status === 'active').length;
+  assert.equal(report.asks.openN, 1);
+  assert.equal(report.asks.openN, storedOpen, 'the printed figure is the stored figure');
+
+  // A second ordinary write: the ask stands and is not re-issued.
+  const second = api.addCase({ title: 'Second write', kind: 'risk', ownerId: 'cat', openedOn: '2026-11-11' });
+  assert.equal(second.ok, true, second?.error);
+  const lhzAgain = (store.lastPropagations || []).filter((effect) => effect && effect.ruleId === LINE_HORIZON_RULE_ID);
+  assert.deepEqual(lhzAgain, [], 'idempotent under the spine: no second ask, no second marker');
+  assert.equal(asksOf(store.state).length, 1);
+});
+
+/* ------------------------------------------------------ 10. the panel */
+
+function bootDocument() {
+  const vc = new VirtualConsole();
+  const dom = new JSDOM('<!doctype html><html><body><div id="view"></div><div id="modal-root"></div></body></html>', {
+    url: 'https://leados.test/', pretendToBeVisual: true, virtualConsole: vc,
+  });
+  globalThis.window = dom.window;
+  globalThis.document = dom.window.document;
+  globalThis.Node = dom.window.Node;
+  globalThis.Element = dom.window.Element;
+  globalThis.HTMLElement = dom.window.HTMLElement;
+  return dom;
+}
+
+test('the panel prints the report the action returns, and a render stores nothing', () => {
+  const dom = bootDocument();
+  const errors = [];
+  dom.window.addEventListener('error', (event) => errors.push(String(event.message)));
+
+  // Operator view (no declared seat): the whole workspace, no withheld names.
+  const map = new Map();
+  const storage = {
+    getItem: (key) => map.get(key) ?? null,
+    setItem: (key, value) => map.set(key, String(value)),
+    removeItem: (key) => map.delete(key),
+  };
+  let seq = 0;
+  const idFactory = (prefix) => `${prefix}-panel-${++seq}`;
+  map.set(STORAGE_KEY, JSON.stringify(fixture()));
+  const store = createStore({ storage, now: () => NOW, idFactory });
+  store.load();
+  const api = createApi(store, { now: () => NOW, idFactory });
+
+  const before = JSON.stringify(store.state);
+  const result = api.matrixHorizonReport({ weeks: null });
+  assert.equal(result.ok, true, result?.error);
+  const report = result.report;
+
+  const node = renderMatrixHorizonPanel({
+    api,
+    state: store.state,
+    query: new URLSearchParams('panel=horizon'),
+    navigate() {},
+    refresh() {},
+  }, { now: NOW });
+  dom.window.document.body.append(node);
+  const text = node.textContent;
+
+  // The window on the screen is the window the action computed.
+  assert.ok(text.includes(`${report.window.from} → ${report.window.to}`), 'horizon range printed');
+
+  const tables = [...node.querySelectorAll('table')];
+  const tableByCaption = (caption) => tables.find((table) => table.getAttribute('aria-label') === caption);
+
+  // Row-for-row: the printed rows are the report's rows.
+  const weekTable = tableByCaption('ISO weeks of the horizon');
+  assert.ok(weekTable, 'the weeks table exists');
+  assert.equal(weekTable.querySelectorAll('tbody tr').length, report.weeks.length);
+
+  const peopleTable = tableByCaption('Person verdicts with today and last-day states');
+  assert.ok(peopleTable, 'the people table exists');
+  assert.equal(peopleTable.querySelectorAll('tbody tr').length, report.people.length);
+  const firstRow = peopleTable.querySelector('tbody tr');
+  assert.equal(firstRow.querySelector('td').textContent, report.people[0].name, 'the first printed person is the report’s first row');
+  assert.equal(firstRow.querySelectorAll('td')[1].textContent, report.people[0].verdictLabel, 'the printed verdict label is the report’s');
+
+  // The verdict counts printed are the report's counts, and they add to the headcount.
+  const verdictTable = tableByCaption('Person verdicts across the horizon');
+  assert.ok(verdictTable, 'the verdicts table exists');
+  const printedCounts = [...verdictTable.querySelectorAll('tbody tr')]
+    .map((row) => Number(row.querySelectorAll('td')[1].textContent));
+  assert.equal(printedCounts.reduce((sum, count) => sum + count, 0), report.board.peopleN,
+    'the six printed verdict counts add to the printed headcount');
+  assert.deepEqual(printedCounts, report.verdictDefs.map((def) => report.board.verdicts[def.key]),
+    'every printed verdict count is the computed count');
+
+  // A withheld total is printed as withheld with ITS reason — never a zero.
+  const attributedStat = [...node.querySelectorAll('.stat')]
+    .find((el) => el.querySelector('.stat-label')?.textContent === 'Attributed share-days');
+  assert.ok(attributedStat, 'the attributed share-days stat exists');
+  assert.equal(report.board.readingComplete, false, 'this fixture has undeclared person-days');
+  assert.equal(attributedStat.querySelector('.stat-value').textContent, 'withheld');
+  assert.equal(attributedStat.querySelector('.stat-hint').textContent, report.board.withheldReason,
+    'the printed reason is the computed reason');
+
+  // Every printed person row is a report row — nothing rendered that the
+  // action did not return (and the operator view's scope is the workspace, so
+  // every fixture person is legitimately listed).
+  const printedNames = [...peopleTable.querySelectorAll('tbody tr')].map((row) => row.querySelector('td').textContent);
+  assert.deepEqual(printedNames, report.people.map((row) => row.name), 'the printed people are exactly the report rows, in order');
+
+  // A render mutates no stored byte.
+  assert.equal(JSON.stringify(store.state), before, 'display == stored: reading and rendering change nothing');
+  assert.deepEqual(errors, [], 'no jsdom errors during render');
+});
+
+test('the #/matrix?panel=horizon tab dispatches to the horizon panel', () => {
+  const dom = bootDocument();
+  const errors = [];
+  dom.window.addEventListener('error', (event) => errors.push(String(event.message)));
+
+  const state = fixture();
+  const node = renderMatrix({
+    api: {
+      matrixReport: () => ({ ok: true, report: buildMatrixReport(state, { now: NOW, settings: state.settings }) }),
+      matrixHorizonReport: () => ({ ok: true, report: buildLineHorizon(state, { now: NOW }) }),
+    },
+    query: new URLSearchParams('panel=horizon'),
+    navigate() {},
+    refresh() {},
+  });
+  dom.window.document.body.append(node);
+  const text = node.textContent;
+
+  assert.match(text, /Matrix Forward Allocation Horizon/, 'the horizon panel body is on the page, not the desk default');
+  assert.equal(text.includes('Reading refused'), false, 'the horizon report was read successfully');
+  assert.match(text, /ISO weeks of the horizon/, 'the weeks table rendered through the dispatch');
+  assert.match(text, /Person verdicts across the horizon/, 'the verdicts table rendered through the dispatch');
+  assert.equal(text.includes('The reconciliation: does the roll-up add up?'), false, 'the desk panel did not render');
+  assert.deepEqual(errors, [], 'no jsdom errors through renderMatrix');
 });

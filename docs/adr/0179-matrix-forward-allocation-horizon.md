@@ -1,8 +1,8 @@
 # ADR-0179 — Matrix Forward Allocation Horizon
 
-**Status:** Proposed — 2026-11-11. **Part 1 of 2 is implemented and NOT wired**: the read model, the vocabulary and the rule module exist with their own suite and are imported by nothing in the app. No panel, action, CSV scope or post-commit registration exists yet, so there is no user-visible change.  
+**Status:** Accepted — 2026-11-11 (Session 245; built on Session 244's part 1). Fully wired: the panel `#/matrix?panel=horizon`, the `matrixHorizonReport` (safe read) and `matrixHorizonScan` (spine write) actions with both access-gateway lists, CSV scope #134, and `RULE-LHZ-01` registered immediately before `seatRule` in both the rule spine and the propagation contracts — with a spine-level proof that the rule issues one ask in one atomic commit under the savepoint, the derived-event cascade, the seat roll-up and the seal.  
 **Schema:** v143, unchanged  
-**Surface (planned, not built):** `#/matrix?panel=horizon` · CSV #134 `line-horizon` · `RULE-LHZ-01`
+**Surface:** `#/matrix?panel=horizon` · CSV #134 `line-horizon` · `RULE-LHZ-01`
 
 ## Context
 
