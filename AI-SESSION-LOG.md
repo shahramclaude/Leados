@@ -1,3 +1,17 @@
+## 2026-11-11 — Session 246: declared conventions survive a reload; Conventions-in-Force Register (ADR-0180 Accepted, Schema v143 unchanged)
+
+**Doctrine / sync.** `NORTH_STAR.md` exists with both the Matrix Leadership and Bulletproof Reliability mandates; no augmentation needed. Origin is `https://github.com/shahramclaude/Leados.git`. Work stayed on `arena/95095e2a-leados` from `9f2fe50`; `npm ci` reinstalled.
+
+**Discovery and selection.** Took the Session 244 DEFECT (matrix conventions lost on reload) and measured it before fixing: `normalizeSettings` discarded the conventions of **six** engines, 30 keys, not three. Chosen because it is the oldest-rung default (CEO / C-suite × matrix, last primary 241) and a control failure: a paused automation came back on. Step-3 gap added to Planned: **automation pause permit** (owner, reason, expiry on a switched-off control; functional-safety bypass management) — 0 hits in `app/` and `ROADMAP.md`.
+
+**Built.** (1) The six owner normalizers spread into `normalizeSettings`; `normalizeLeaderCalibrationSettings` added as a re-keying of the existing reader. (2) `settingsLoadReceipt` in `normalizeState`: every stored settings key is carried, retired, or named in a `Settings:` load warning (shown by Today's existing banner and by the new card). (3) `buildConventionRegister` + `conventionRegisterBriefText` (pure) and the "Conventions in force" card on `#/settings`. (4) ADR-0180, INDEX rows for 0180 and the missing 0178, standalone rebuilt (11,293,353 bytes / 751 modules). No schema bump, no new rule, no CSV scope.
+
+**Verified (one focused pass).** `tests/app/convention-persistence.test.mjs` **9/9**; with the six spreads removed 8 of 9 fail. Real store + action layer: `matrixSetConventions` / `differencesSetConventions` / `fitSetConventions` → persisted bytes → fresh store over the same storage, equal value for value; un-paused write rolls up to both of a shared person's managers, paused-and-reloaded write reaches neither. Settings card figures == register fields == stored byte text; a render stores nothing. `npm run lint`, `check:boundary`, `check:links` pass. Adjacent code: 21 suites that load state, read the six engines or render Settings were run on the base commit and on this tree — the same 25 tests fail in both, by name and with the same failure text (stale pins, pre-existing), none new; `standalone` 7/7; the 11 `a11y` tests of `access-audit` (axe on every screen including `#/settings`) pass.
+
+**Unverified / flagged.** Full `npm test` not run (red on `main` with stale pins; not chased). Real-browser / assistive-technology behaviour **[UNVERIFIED]**. The register reads switches; it does not prove what each one gates. Found and logged, not fixed: two rule switches that cannot be stored, one that gates nothing, four conventions that differ between upgraded and new workspaces, `updateSettings` accepting uncarried keys, and the operating model's labour rate having no setter.
+
+**Coverage.** CEO / C-suite primary 246 (matrix through 246). No blocker.
+
 ## 2026-11-11 — Session 245: Matrix Forward Allocation Horizon shipped end to end (ADR-0179 Accepted, Schema v143 unchanged)
 
 **Doctrine / sync.** `NORTH_STAR.md` exists and contains both the Matrix Leadership and Bulletproof Reliability mandates; no augmentation was needed. Origin is `https://github.com/shahramclaude/Leados.git`. Work stayed on `arena/f103fbca-leados` from `8127bcd`; `npm ci` reinstalled (node_modules had not persisted).
