@@ -97,6 +97,8 @@ const groups = [
   // ADR-0176: re-running RULE-HLC-01 is director+. Declaring or withdrawing a
   // line plan deliberately has NO seat-scoped adapter: it names managers in
   // more than one span, so it stays in the full-access operator view.
+  ['attribute-delegation-line', 'delegationLineAttribute'],
+  ['govern-delegation-lines', 'delegationLineScan'],
   ['govern-hiring-lines', 'hiringLineScan'],
   // ADR-0177: a transfer price is a TWO-KEY act. Proposing, confirming and
   // retiring are open at every leadership rank because a project lead with no
@@ -443,6 +445,8 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // ADR-0176: seat-scoped inside `buildHiringLines` (out-of-span managers and
 // candidate names withheld; undeclared requisitions read only by the operator).
 'hiringLineReport',
+// ADR-0178: seat-scoped cross-line ask attribution report.
+'delegationLineReport',
 // ADR-0177: the chargeback statement is scoped INSIDE the read model — a seat
 // reads the line accounts it reaches and every piece that names one of them;
 // the rest is counted as withheld and names outside the seat are withheld.

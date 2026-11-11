@@ -2,13 +2,7 @@
  * app/core/domain/delegationLineSchema.js — fail-closed normalization for
  * Cross-Line Ask Attribution (ADR-0178, Schema v143).
  *
- * STATUS (Session 242, 2026-11-11): FOUNDATION ONLY — NOT YET WIRED.
- * `app/core/schema.js` does not import these normalizers: `SCHEMA_VERSION` is
- * still 142, neither collection is in `COLLECTIONS`, the three settings are not
- * in `DEFAULT_SETTINGS`, and there is no migration. ADR-0178, Schema v143 and
- * `RULE-DLA-01` are RESERVED identifiers (ROADMAP.md, "In Progress"). The
- * functions below are complete and tested (`tests/app/delegation-lines.test.mjs`);
- * "WHAT IS STORED" describes the shape the wiring slice will store.
+ * STATUS (Session 243, 2026-11-11): SHIPPED and wired into Schema v143.
  *
  * WHAT IS STORED
  *   `delegationLineActs`     append-only dated attribution ACTS. One act names the

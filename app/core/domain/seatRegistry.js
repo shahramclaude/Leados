@@ -175,6 +175,8 @@ export const RECORD_POLICIES = Object.freeze({
   // through the seat-scoped `buildTransferPriceLedger` adapter, never as raw rows.
   transferPriceActs: { classKey: 'unit', detailCeiling: 0, label: 'Transfer-price acts (dated two-key acts; charges re-derived on read)', route: '#/matrix?panel=chargeback' },
   transferPriceMarkers: { classKey: 'unit', detailCeiling: 0, label: 'Transfer-price ask & observation markers', route: '#/matrix?panel=chargeback' },
+  delegationLineActs: { classKey: 'unit', detailCeiling: 0, label: 'Cross-line ask attribution acts (report only)', route: '#/matrix?panel=asks' },
+  delegationLineMarkers: { classKey: 'unit', detailCeiling: 0, label: 'Cross-line overload reconciliation markers', route: '#/matrix?panel=asks' },
   // ADR-0168: RULE-BNE-01's idempotency ledger names no person and carries no
   // rating, so it is unit-class with NO detail printed at any ceiling.
   benchEvidenceMarkers: { classKey: 'unit', detailCeiling: 0, label: 'Bench-evidence ask markers', route: '#/succession?panel=evidence' },
@@ -554,6 +556,8 @@ export const ACTION_RIGHTS = Object.freeze({
   'answer-branch-reading': { minRank: 1, maxRank: 5, label: 'Answer a branch reading request as that branch’s leader' },
   'log-oneonone': { minRank: 1, maxRank: 2, label: 'Log a 1:1' },
   'govern-oneonone-lines': { minRank: 3, maxRank: 5, label: 'Scan silent 1:1 lines and set matrix 1:1 coverage conventions' },
+  'attribute-delegation-line': { minRank: 1, maxRank: 5, label: 'Attribute an open ask to a reporting line you hold' },
+  'govern-delegation-lines': { minRank: 3, maxRank: 5, label: 'Scan cross-line ask overload reconciliation' },
   'govern-hiring-lines': { minRank: 3, maxRank: 5, label: 'Scan co-hiring lines for declared managers who have not assessed a candidate' },
   // ADR-0177: signing one's OWN side of a transfer price is open at every
   // leadership rank; the action refuses any seat that is not that side's manager.

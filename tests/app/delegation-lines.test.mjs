@@ -1,12 +1,6 @@
 /**
- * Cross-Line Ask Attribution — FOUNDATION ONLY (Session 242, 2026-11-11).
- *
- * This suite covers exactly what exists: the closed vocabulary
- * (`delegationLineRegistry.js`) and the fail-closed stored-shape normalizers
- * (`delegationLineSchema.js`). Neither module is wired into the schema, the
- * post-commit spine, the gateway, the CSV exports or a view yet, so nothing here
- * asserts a schema version, a rule count, a CSV scope or a panel — those belong
- * to the remaining slices listed under "In Progress" in ROADMAP.md.
+ * ADR-0178 — Cross-Line Ask Attribution & Shared-Contributor Load Reconciliation.
+ * Focused contracts for vocabulary, fail-closed storage and exact stored → read → CSV identity.
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -61,12 +55,12 @@ test('vocabulary: every closed key carries its label, CSV columns are distinct, 
   assert.equal(R.DELEGATION_LINE_CSV_DESCRIPTOR.sensitive, false);
 });
 
-test('honest status: the foundation is NOT wired into the workspace schema yet', () => {
-  // These two assertions are meant to FAIL the day the stored shape is wired:
-  // that commit must replace them with the real registration checks (schema
-  // version, empty migration, spine parity, gateway, seat policy, panel, CSV).
-  assert.equal(COLLECTIONS.includes('delegationLineActs'), false);
-  assert.equal(Object.hasOwn(DEFAULT_SETTINGS, 'delegationLineBudget'), false);
+test('stored shape is registered without inventing an attribution', () => {
+  assert.equal(COLLECTIONS.includes('delegationLineActs'), true);
+  assert.equal(COLLECTIONS.includes('delegationLineMarkers'), true);
+  assert.equal(DEFAULT_SETTINGS.delegationLineBudget, 6);
+  assert.equal(DEFAULT_SETTINGS.delegationLineAskDueDays, 5);
+  assert.equal(DEFAULT_SETTINGS.delegationLineAutoPropagate, true);
 });
 
 test('settings: declared defaults, bounded integers, an explicit pause, and no coercion of a non-number', () => {
@@ -178,4 +172,44 @@ test('markers: duplicate, keyless and unknown-kind rows are dropped; a bad date 
   const capped = normalizeDelegationLineMarkers(overCap);
   assert.equal(capped.length, R.DELEGATION_LINE_LIMITS.markers);
   assert.equal(capped[0].key, 'k3', 'the oldest markers are the ones dropped');
+});
+
+test('matrix read partitions the stored workload exactly and CSV prints the same computed figures', async () => {
+  const { createEmptyState, normalizeState } = await import('../../app/core/schema.js');
+  const { buildDelegationLines, delegationLineCsvRows } = await import('../../app/core/domain/delegationLines.js');
+  const raw = createEmptyState(T2);
+  raw.people = [
+    { id: 'dir', name: 'Director', level: 'director', managerId: null, status: 'active' },
+    { id: 'fm', name: 'Functional manager', level: 'manager', managerId: 'dir', status: 'active' },
+    { id: 'pm', name: 'Project manager', level: 'manager', managerId: 'dir', status: 'active' },
+    { id: 'sam', name: 'Sam', level: 'ic', managerId: 'fm', status: 'active' },
+  ];
+  const lineBase = { declaredAt: T1, fromISO: '2026-01-01', toISO: null, note: '', history: [] };
+  raw.reportingLines = [
+    { ...lineBase, id: 'homealloc', personId: 'sam', managerId: 'fm', kind: 'functional', shareH: 50, rights: ['assignment'] },
+    { ...lineBase, id: 'projectline', personId: 'sam', managerId: 'pm', kind: 'project', shareH: 50, rights: [] },
+  ];
+  raw.delegations = Array.from({ length: 7 }, (_, i) => ({ id: `ask${i}`, personId: 'sam', title: `Ask ${i}`, expectedOutcome: 'Done', authority: 'act-inform', delegatedOn: '2026-11-01', dueOn: '2026-11-20', status: 'active', checkins: [], createdAt: T1 }));
+  raw.delegationLineActs = [
+    { id: 'act0', delegationId: 'ask0', personId: 'sam', lineId: 'home:sam', managerId: 'fm', lineKind: 'functional', basis: 'declared', byId: null, at: T2 },
+    { id: 'act1', delegationId: 'ask1', personId: 'sam', lineId: 'projectline', managerId: 'pm', lineKind: 'project', basis: 'declared', byId: null, at: T2 },
+  ];
+  const { state, warnings } = normalizeState(raw, { now: new Date(T2) });
+  assert.deepEqual(warnings, []);
+  const before = JSON.stringify(state);
+  const report = buildDelegationLines(state, { now: new Date(T2) });
+  assert.equal(JSON.stringify(state), before, 'read mutates no stored byte');
+  assert.equal(report.board.asksReadN, 7);
+  assert.deepEqual(report.board.classes, { attributed: 2, 'sole-line': 0, 'rule-issued': 0, unattributed: 5, stale: 0 });
+  assert.equal(report.board.verdicts.overloaded, 1);
+  assert.equal(report.board.classesReconcile, true);
+  assert.equal(report.board.verdictsReconcile, true);
+  assert.equal(report.board.linesReconcile, true);
+  assert.equal(report.board.charterReconcile, true);
+  const [csv] = delegationLineCsvRows(report);
+  assert.equal(csv.asks_read, report.board.asksReadN);
+  assert.equal(csv.asks_attributed, report.board.classes.attributed);
+  assert.equal(csv.asks_unattributed, report.board.classes.unattributed);
+  assert.equal(csv.verdict_overloaded, report.board.verdicts.overloaded);
+  assert.equal(csv.classes_reconcile, true);
 });

@@ -1,3 +1,15 @@
+## 2026-11-11 — Session 243: Cross-Line Ask Attribution shipped (Schema v143, ADR-0178, RULE-DLA-01, CSV #133)
+
+**Doctrine / sync.** `NORTH_STAR.md` exists and explicitly contains the Matrix Leadership and Bulletproof Reliability mandates; no augmentation was needed. Origin is `https://github.com/shahramclaude/Leados.git`. Work stayed on `arena/8831c05c-leados` from `6ffc521`.
+
+**Discovery and selection.** Added **Matrix issue-selling & retaliation-safe escalation covenant** `[frontline / mid-manager / director × matrix]` to Planned; targeted term-level absence is **[UNVERIFIED]**. Chose the In Progress Session-242 ask-attribution item for **frontline / mid-manager PRIMARY × matrix**, with director / VP joint-apex receipt, because it was the unfinished oldest rotation and the existing delegation queue silently pooled multiple principals.
+
+**Built.** Completed ADR-0178 end to end: Schema v143 empty migration and fail-closed collections/settings; pure seat-scoped read model with exact class/verdict/line/charter reconciliation; manager-owned append-only attribution action; shared-spine `RULE-DLA-01` unique-joint-apex reconciliation and closure; rights/gateway/record-policy registration; `#/matrix?panel=asks`; aggregate CSV #133; and doctrine-aligned documentation. Single-chain workspaces derive their sole line and issue no matrix reconciliation.
+
+**Verified (one focused pass).** `tests/app/delegation-lines.test.mjs` **8/8 PASS** and `standalone.test.mjs` **7/7 PASS** after rebuilding the 11,209,922-byte / 743-module artifact. The fixture normalized real stored state, rebuilt the board without changing one stored byte, asserted all four identities, then asserted CSV cells equal the board's exact values. Targeted ESLint PASS; `npm run check:boundary` PASS (745 app modules, 229 suites, 23 doc checks). Rule smoke issued exactly one ask to the unique joint apex with typed provenance. Full suite, standalone rebuild and real-browser/AT walkthrough **[UNVERIFIED]**.
+
+**Coverage.** frontline / mid-manager primary 243; director / VP 240; CEO / C-suite 241. Matrix primary through 243; single-chain inert. No blocker.
+
 ## 2026-11-11 — Session 242 (INCOMPLETE): Cross-Line Ask Attribution — vocabulary and stored-shape foundation only, not wired
 
 **Doctrine / sync / orientation.** `NORTH_STAR.md` present with both binding mandates (Matrix Leadership; Bulletproof Reliability) — no augmentation needed. `origin` is `https://github.com/shahramclaude/Leados.git`; work ran on `arena/320865f5-leados` from `main` at `f3e3347`.

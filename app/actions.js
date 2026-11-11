@@ -45,6 +45,7 @@ import { createMatrixActions } from './core/domain/matrixActions.js';
 import { createOneOnOneLineActions, oneOnOneHolderForLog } from './core/domain/oneOnOneLineActions.js';
 import { createHiringLineActions } from './core/domain/hiringLineActions.js';
 import { createTransferPriceActions } from './core/domain/transferPriceActions.js';
+import { createDelegationLineActions } from './core/domain/delegationLineActions.js';
 // ADR-0165: the per-line 1:1 body boundary. Meetings another line holds are a fact, not a readable/editable record.
 import { meetingBodyVerdictForState } from './core/domain/meetingPrivacy.js';
 import { feedbackAuthorForCreate, feedbackBodyVerdictForState } from './core/domain/feedbackPrivacy.js';
@@ -20055,6 +20056,8 @@ export function createApi(store, options = {}) {
   Object.assign(api, createOneOnOneLineActions(store, { now: clock }));
   // ADR-0176: Cross-Line Selection Corroboration (line plans + RULE-HLC-01 scan).
   Object.assign(api, createHiringLineActions(store, { now: clock, idFactory: id }));
+  // ADR-0178: ask-to-line attribution and shared-contributor reconciliation.
+  Object.assign(api, createDelegationLineActions(store, { now: clock, idFactory: id }));
   // ADR-0177: the Cross-Line Labour Chargeback & Internal Transfer-Price Ledger.
   // Proposing, confirming and retiring a price are first-person two-key acts
   // through the same reviewed gateway; every charge is derived on read.

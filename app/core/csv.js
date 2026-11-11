@@ -152,6 +152,8 @@ import { buildHiringLines, hiringLineCsvRows } from './domain/hiringLines.js';
 import { HIRING_LINE_CSV_COLUMNS, HIRING_LINE_CSV_DESCRIPTOR } from './domain/hiringLineRegistry.js';
 import { buildTransferPriceLedger, transferPriceCsvRows } from './domain/transferPrice.js';
 import { TRANSFER_PRICE_CSV_COLUMNS, TRANSFER_PRICE_CSV_DESCRIPTOR } from './domain/transferPriceRegistry.js';
+import { buildDelegationLines, delegationLineCsvRows } from './domain/delegationLines.js';
+import { DELEGATION_LINE_CSV_COLUMNS, DELEGATION_LINE_CSV_DESCRIPTOR } from './domain/delegationLineRegistry.js';
 import { STRUCTURE_HISTORY_CSV_COLUMNS } from './domain/structureHistoryRegistry.js';
 import {
   assessmentReconciliationCsvRows,
@@ -1307,6 +1309,8 @@ export const CSV_EXPORTS = [
   HIRING_LINE_CSV_DESCRIPTOR,
   // #132 (Schema v142, ADR-0177): cross-line chargeback, aggregate only.
   TRANSFER_PRICE_CSV_DESCRIPTOR,
+  // #133 (Schema v143, ADR-0178): identity-free ask attribution aggregate.
+  DELEGATION_LINE_CSV_DESCRIPTOR,
 ];
 
 function personLookup(state) {
@@ -6364,6 +6368,10 @@ export function buildScopeTable(state, scope, now) {
       const rows = matrixRemedyCsvRows(report);
       const columns = MATRIX_REMEDY_CSV_COLUMNS.map((key) => ({ key, header: key }));
       return { columns, rows };
+    }
+    case 'delegation-lines': {
+      const report = buildDelegationLines(state, { now, settings: state.settings || {} });
+      return { columns: DELEGATION_LINE_CSV_COLUMNS.map((key) => ({ key, header: key })), rows: delegationLineCsvRows(report) };
     }
     case 'line-chargeback': {
       // CSV scope #132 (Schema v142, ADR-0177). Built from the SAME seat-scoped
