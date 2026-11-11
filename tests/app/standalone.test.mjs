@@ -243,7 +243,12 @@ test('standalone artifact exists and is a single inline HTML document', () => {
   // bytes / 709 modules = 15,372 bytes per module. Keep the per-module density
   // guard unchanged (it catches duplicate inlining); this absolute ceiling
   // accommodates the actual source-to-artifact delta without masking duplication.
-  assert.ok(bytes < 10_920_000, `standalone file is unexpectedly large (${bytes} bytes)`);
+  // ADR-0174 (Session 237) adds 6 source modules (doaScheduleRegistry,
+  // doaScheduleSchema, doaSchedule, doaScheduleActions, doaScheduleRules,
+  // matrixDoaPanel) plus ADR-0173's modules on main: 10,990,130 bytes / 718
+  // source modules = 15,307 bytes/module (down from 15,372). The 24,000-byte
+  // per-module density guard remains unchanged.
+  assert.ok(bytes < 11_080_000, `standalone file is unexpectedly large (${bytes} bytes)`);
   const declaredModules = Number((html.match(/content="[^"]*?(\d+) source modules/) || [])[1]);
   assert.ok(declaredModules > 100, `expected the build to declare its module count (got ${declaredModules})`);
   const bytesPerModule = Math.round(bytes / declaredModules);

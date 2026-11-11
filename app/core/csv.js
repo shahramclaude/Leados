@@ -138,6 +138,9 @@ import { MATRIX_COORDINATION_CSV_COLUMNS, MATRIX_COORDINATION_CSV_DESCRIPTOR } f
 // Aggregate only — never names a person, manager, forum, escalation seat or basis text.
 import { buildMatrixInterfaceReport, matrixInterfaceCsvRows } from './domain/matrixInterface.js';
 import { MATRIX_INTERFACE_CSV_COLUMNS, MATRIX_INTERFACE_CSV_DESCRIPTOR } from './domain/matrixInterfaceRegistry.js';
+// ADR-0174: Standing Delegation-of-Authority Schedule & Limit Conformance (CSV scope #128, Schema v138).
+import { buildDoaReport, doaCsvRows } from './domain/doaSchedule.js';
+import { DOA_CSV_COLUMNS, DOA_CSV_DESCRIPTOR } from './domain/doaScheduleRegistry.js';
 import { STRUCTURE_HISTORY_CSV_COLUMNS } from './domain/structureHistoryRegistry.js';
 import {
   assessmentReconciliationCsvRows,
@@ -1221,6 +1224,8 @@ export const CSV_EXPORTS = [
   { key: 'matrix-intake', label: 'Matrix line intake gate (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'matrix-intake', description: 'One workspace row plus one row per gate verdict for the Matrix Line Intake Gate and Share-Day WIP Ceiling, read for the acting seat on read_on: lines in scope, live intakes, recorded intakes, intakes over share, intakes re-routed, lines within ceiling, lines exhausted, lines over share, lines whose ceiling could not be priced, declared share-days, consumed share-days, headroom share-days, figures_complete and counts_reconcile. A refused ceiling or headroom exports BLANK, never a zero. NO person, NO name, NO manager id, NO declaration id, NO intake id, NO intake title, NO intake date and NO free text of any kind.' },
   // CSV scope #128 (Schema v137 unchanged, ADR-0173): the Matrix Demand-Variance Early Warning, aggregate only. One workspace row for the named window: open decisions in the window, how many are attributed to a declared line versus unassigned, ambiguous-line, unresolvable or outside the seat; lines carrying demand split by within/at/over-ceiling and ceiling-unprovable/no-demand; age-weighted demand-days against declared share-day ceiling-days and the variance; figures_complete and counts_reconcile; the Little's Law flow observation or its withholding reason. A refused figure is BLANK with its flag set, never a zero. NO person, NO name, NO manager id, NO decision id, NO decision title, NO date and NO free text of any kind.
   { key: 'matrix-demand-variance', label: 'Matrix demand-variance early warning (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'matrix-demand-variance', description: 'One workspace row for the Matrix Demand-Variance Early Warning: open decisions in the window, attributed, unassigned, ambiguous-line, unresolvable and outside-seat counts; lines carrying demand by verdict; age-weighted demand-days, declared share-day ceiling-days and variance-days; figures_complete and counts_reconcile; the flow observation (lambda, mean age, implied WIP) or its withholding reason. NO person, NO name, NO manager id, NO decision id, NO decision title, NO date and NO free text of any kind. A refused figure is BLANK with its flag set, never a zero.' },
+  // CSV scope #128 (Schema v138, ADR-0174): Standing Delegation-of-Authority Schedule & Limit Conformance, aggregate only.
+  DOA_CSV_DESCRIPTOR,
   { key: 'line-reaffirmation', label: 'Matrix line re-affirmation (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'line-reaffirmation', description: 'One workspace summary row plus one row per declared line kind: the line count, how many lines were never given a term, how many are inside their warning window, how many have a term that ran out, how many were re-affirmed but not yet answered by the person, how many the person objected to, how many the line released, how many were re-affirmed at a different share than the line now declares, and how many are in term with both sides answered. Plus the two exact-integer share totals that are the point of the register: the share still CHARGED to a commitment no live answer covers, and the share covered by a live re-affirmed term, with the uncovered-plus-covered identity printed as a claim rather than assumed. NO person, NO name, NO manager id, NO declaration id, NO stated reason, NO objection text and NO free text of any kind. A share total is BLANK with share_refused = true and the reason in its own column whenever any line in scope carries no allocation, never a zero. A released line is counted as still charged because the declaration was never dated out: continuation by absence is never exported as a renewal.' },
   // CSV scope #119 (Schema v129 unchanged, ADR-0158). Aggregate-only: one summary row
   // plus one row per declared line KIND, over the default period (the last
@@ -6368,7 +6373,7 @@ export function buildScopeTable(state, scope, now) {
       return { columns, rows };
     }
     case 'matrix-demand-variance': {
-      // CSV scope #128 (Schema v137 unchanged, ADR-0173). Built from the same
+      // CSV scope #127 (Schema v137 unchanged, ADR-0173). Built from the same
       // read model the panel renders, so an exported count is provably the
       // count that was printed. Aggregate only: no person, no line, no decision
       // id or title, no date. A refused figure is BLANK with its flag set.
@@ -6376,6 +6381,15 @@ export function buildScopeTable(state, scope, now) {
       const rows = matrixDemandVarianceCsvRows(report);
       const columns = DEMAND_VARIANCE_CSV_COLUMNS.map((key) => ({ key, header: key }));
       return { columns, rows };
+    }
+    case 'matrix-doa': {
+      // CSV scope #128 (Schema v138, ADR-0174). Built from `buildDoaReport` so
+      // every exported aggregate integer matches the rendered panel verbatim.
+      // Aggregate only: no person, seat, commitment id/title, currency amount
+      // or free text. Refused rates export BLANK with conformance_withheld=true.
+      const report = buildDoaReport(state, { now, settings: state.settings || {} });
+      const rows = doaCsvRows(report);
+      return { columns: DOA_CSV_COLUMNS, rows };
     }
     case 'review-stewardship': {
       // CSV scope #109 (Schema v122, ADR-0147). Built from the same read model the

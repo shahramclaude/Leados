@@ -208,6 +208,7 @@ export const MATRIX_PANELS = Object.freeze([
   Object.freeze({ key: 'queue', label: 'Review', hint: 'The bounded queue, worst first.' }),
   Object.freeze({ key: 'method', label: 'Method', hint: 'What is declared, what is derived, and what is refused.' }),
   Object.freeze({ key: 'demand-variance', label: 'Demand variance', hint: 'Age-weighted decision-queue demand against each declared line\u2019s share-days — and the refusals between them.' }),
+  Object.freeze({ key: 'authority', label: 'Authority limits', hint: 'Standing Delegation-of-Authority (DoA) schedule in exact integer cents, cross-line anti-splitting conformance, and one-over-one covering resolution.' }),
 ]);
 
 export const MATRIX_PANEL_KEYS = Object.freeze(MATRIX_PANELS.map((p) => p.key));

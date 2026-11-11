@@ -151,6 +151,8 @@ import { onboardingMatrixRule } from './onboardingMatrixRules.js';
 import { lineExitRule } from './lineExitRules.js';
 import { authorityContinuityRule } from './authorityContinuityRules.js';
 import { matrixInterfaceRule } from './matrixInterfaceRules.js';
+// ADR-0174: Standing Delegation-of-Authority Schedule & Limit Conformance (RULE-DOA-01).
+import { doaScheduleRule } from './doaScheduleRules.js';
 // ADR-0166: the cross-line review-evidence join's one consequence.
 import { meritEvidenceRule } from './meritEvidenceRules.js';
 // ADR-0168: the Cross-Line Bench-Evidence Sufficiency reading (RULE-BNE-01).
@@ -895,6 +897,15 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // closes prior asks when pairs become `current`, and runs before `seatRule` so
   // opened review obligations roll up in the same atomic transaction.
   matrixInterfaceRule,
+  // ADR-0174: Standing Delegation-of-Authority Schedule & Cross-Line Limit
+  // Conformance (RULE-DOA-01). Evaluates spending mandates, committed/spent
+  // budget lines and priced decided decisions against dated integer-cent
+  // standing authority limits, closes superseded tasks, and issues at most ONE
+  // bounded dated ratification delegation per open breach to the unique
+  // covering senior seat or unique `matrixJointApex` principal (abstaining on
+  // diamond ties and above-apex breaches). Runs before `seatRule` so opened
+  // ratification obligations roll up in the same atomic transaction.
+  doaScheduleRule,
   // ADR-0166: the Cross-Line Review-Evidence Join (RULE-MEV-01). Reads the cycle
   // and the review records the join already reconciles, and puts ONE dated ask in
   // front of the manager who holds the pay decision's home line whenever the

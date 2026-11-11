@@ -82,6 +82,8 @@ import { renderMatrixSodPanel } from './matrixSodPanel.js';
 import { renderMatrixIntakePanel } from './matrixIntakePanel.js';
 // ADR-0173: age-weighted decision-queue demand against declared share-days.
 import { renderMatrixDemandVariancePanel } from './matrixDemandVariancePanel.js';
+// ADR-0174: standing Delegation-of-Authority schedule & cross-line limit conformance.
+import { renderMatrixDoaPanel } from './matrixDoaPanel.js';
 
 const PANELS = MATRIX_PANELS;
 
@@ -880,6 +882,7 @@ export function renderMatrix(ctx) {
     panel === 'sod' ? renderMatrixSodPanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
     panel === 'intake' ? renderMatrixIntakePanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
     panel === 'demand-variance' ? renderMatrixDemandVariancePanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
+    panel === 'authority' ? renderMatrixDoaPanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
     panel === 'continuity' ? renderContinuityPanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
     panel === 'seats' ? seatsPanel(ctx, report) : null,
     panel === 'governance' ? governancePanel(ctx, report) : null,

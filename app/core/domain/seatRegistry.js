@@ -160,6 +160,10 @@ export const RECORD_POLICIES = Object.freeze({
   // seat-scoped report adapter rather than raw collection rows.
   matrixInterfaceAgreements: { classKey: 'unit', detailCeiling: 0, label: 'Matrix management-interface operating agreements (report only)', route: '#/matrix?panel=interfaces' },
   matrixInterfaceMarkers: { classKey: 'unit', detailCeiling: 0, label: 'Matrix management-interface review markers', route: '#/matrix?panel=interfaces' },
+  // ADR-0174: Standing delegation-of-authority schedule and RULE-DOA-01 markers
+  // are surfaced exclusively via the seat-scoped `buildDoaReport` adapter.
+  doaSchedule: { classKey: 'unit', detailCeiling: 0, label: 'Standing delegation-of-authority schedule (report only)', route: '#/matrix?panel=authority' },
+  doaMarkers: { classKey: 'unit', detailCeiling: 0, label: 'Delegation-of-authority ratification markers', route: '#/matrix?panel=authority' },
   // ADR-0168: RULE-BNE-01's idempotency ledger names no person and carries no
   // rating, so it is unit-class with NO detail printed at any ceiling.
   benchEvidenceMarkers: { classKey: 'unit', detailCeiling: 0, label: 'Bench-evidence ask markers', route: '#/succession?panel=evidence' },
@@ -494,6 +498,10 @@ export const ACTION_RIGHTS = Object.freeze({
   // workspace interface term/warning conventions is director+.
   'affirm-matrix-interface': { minRank: 1, maxRank: 5, label: 'Sign, confirm, retire or scan a bilateral management-interface agreement' },
   'govern-matrix-interface': { minRank: 3, maxRank: 5, label: 'Set matrix management-interface agreement term and warning conventions' },
+  // ADR-0174: Standing delegation-of-authority schedule. Downward-span standing,
+  // anti-self-grant and nemo-dat ceilings are enforced in `doaScheduleActions`.
+  'declare-doa-limit': { minRank: 1, maxRank: 5, label: 'Declare, retire, price or scan standing delegation-of-authority limits' },
+  'govern-doa-schedule': { minRank: 3, maxRank: 5, label: 'Set delegation-of-authority ratification window and propagation conventions' },
   // ADR-0149: moving a home line is a SEPARATE act from declaring a second line.
   // Declaring an additional line ADDS accountability; moving the home line
   // REWRITES the tree every other module rolls up through. Open from rank 1

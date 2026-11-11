@@ -760,5 +760,5 @@ test('a single-chain workspace with no frozen decisions reads EMPTY, not broken'
 });
 
 test('the schema reflects ADR-0159/0162 matrix settlement & interface storage while pure reads store nothing', () => {
-  assert.equal(SCHEMA_VERSION, 137, 'ADR-0172 (bench-claim regression watch) is the current head');
+  assert.equal(SCHEMA_VERSION, 138, 'ADR-0174 (standing DoA schedule) is the current head');
 });
