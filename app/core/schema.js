@@ -87,6 +87,7 @@ import {
   normalizeMatrixInterfaceMarkers,
   normalizeMatrixInterfaceSettings,
 } from './domain/matrixInterfaceSchema.js';
+import { normalizeMatrixRemedies } from './domain/matrixRemedySchema.js';
 import {
   normalizeDoaMarkers,
   normalizeDoaSchedule,
@@ -721,7 +722,11 @@ export {
 // Limit Conformance ledger (ADR-0174): `doaSchedule` (append-only dated integer-
 // cent limits, retirements, and explicit decision pricing) plus `doaMarkers`
 // (`RULE-DOA-01`). Starts empty so no standing limit is inferred from title or rank.
-export const SCHEMA_VERSION = 138;
+// v139 adds the Matrix Pattern Repair Register (ADR-0175): `matrixRemedies`
+// (append-only dated acts naming an owner, a remedy and a review date against a
+// recurring structural signature). Deliberately EMPTY on upgrade: no remedy, owner
+// or review date is ever fabricated; verdicts are re-derived on every read.
+export const SCHEMA_VERSION = 139;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -2812,6 +2817,10 @@ export const COLLECTIONS = [
   // time would be evidence nobody recorded.
   'benchRegressionReadings',
   'benchRegressionMarkers',
+  // ADR-0175 (Schema v139): the Matrix Pattern Repair Register. Holds ONLY the
+  // dated first-person remedy acts. No verdict, count or "cleared" flag is stored:
+  // a stored verdict would drift from the decision log beneath it.
+  'matrixRemedies',
 ];
 
 /** Stable empty state. `now` is an ISO string so the result is a pure value. */
@@ -8047,6 +8056,8 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // marker is dropped so the ask it guarded can be issued again.
   state.benchRegressionReadings = normalizeBenchRegressionReadings(raw.benchRegressionReadings);
   state.benchRegressionMarkers = normalizeBenchRegressionMarkers(raw.benchRegressionMarkers);
+  // ADR-0175: malformed remedy rows are dropped with a counted warning, never repaired.
+  state.matrixRemedies = normalizeMatrixRemedies(raw.matrixRemedies, warnings);
   // ADR-0122: a malformed absence row is dropped with a warning, never repaired —
   // an invented absence is an invented unavailability for every cover in the span.
   // Resolved BEFORE links so the `declares-absence-of` provenance edge validates
@@ -8782,6 +8793,14 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  // 138 → 139: ADR-0175 adds ONE collection (`matrixRemedies`) and no record.
+  // Nothing about an existing pattern, decision, line or owner changes; the
+  // migration is an empty append.
+  138: (v138) => ({
+    ...v138,
+    schemaVersion: 139,
+    matrixRemedies: Array.isArray(v138.matrixRemedies) ? v138.matrixRemedies : [],
+  }),
   // 134 → 135: ADR-0168 adds ONE marker collection and no record. Nothing about an
   // existing readiness rating, review, line or seating changes, so the migration is
   // an empty append and every existing workspace reads exactly as before.

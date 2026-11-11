@@ -337,7 +337,7 @@ test('a single-chain workspace gains no row, no warning and no verdict change', 
 /* ------------------------------------------------- 7. schema / spine */
 
 test('schema v122 is additive: existing reviews gain an EMPTY stewardship and nothing is invented', () => {
-  assert.equal(SCHEMA_VERSION, 138);
+  assert.equal(SCHEMA_VERSION, 139);
   const { raw, applied } = migrate({
     schemaVersion: 121,
     appId: 'leados',
@@ -347,7 +347,7 @@ test('schema v122 is additive: existing reviews gain an EMPTY stewardship and no
     reviews: [{ id: 'rev-old', personId: 'sam', periodStart: '2026-01-01', periodEnd: '2026-03-31', status: 'complete', manager: { rating: 'meets-expectations' } }],
     settings: { reviewStewardshipAnswerDays: 999 },
   });
-  assert.deepEqual(applied, ['121 → 122', '122 → 123', '123 → 124', '124 → 125', '125 → 126', '126 → 127', '127 → 128', '128 → 129', '129 → 130', '130 → 131', '131 → 132', '132 → 133', '133 → 134', '134 → 135', '135 → 136', '136 → 137', '137 → 138']);
+  assert.deepEqual(applied, ['121 → 122', '122 → 123', '123 → 124', '124 → 125', '125 → 126', '126 → 127', '127 → 128', '128 → 129', '129 → 130', '130 → 131', '131 → 132', '132 → 133', '133 → 134', '134 → 135', '135 → 136', '136 → 137', '137 → 138', '138 → 139']);
   assert.deepEqual(raw.reviews[0].stewardship, { requests: [], answers: [] });
   assert.equal(raw.settings.reviewStewardshipAnswerDays, 60, 'clamped to the declared bound, not fitted');
 });
@@ -357,7 +357,7 @@ test('the rule and its contract are 1:1 on the shared spine, and the CSV scope e
   const idx = DEFAULT_POST_COMMIT_RULES.indexOf(reviewStewardshipRule);
   assert.ok(idx > 0, 'RULE-SRV-01 is registered');
   assert.ok(DEFAULT_POST_COMMIT_RULES.findIndex((r) => r.name === 'seatRule') > idx, 'it runs before the Operating Seat so its work rolls up in the same transaction');
-  assert.equal(CSV_SCOPE_COUNT, 128);
+  assert.equal(CSV_SCOPE_COUNT, 129);
 });
 
 // Named for readability above; the pin states the total deliberately so the next

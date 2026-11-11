@@ -89,6 +89,10 @@ const groups = [
   // ADR-0174: Standing Delegation-of-Authority Schedule & Limit Conformance.
   ['declare-doa-limit', 'doaDeclareLimit doaRetireLimit doaPriceDecision doaScan'],
   ['govern-doa-schedule', 'doaSetConventions'],
+  // ADR-0175: recording a dated remedy for a recurring matrix pattern. The action
+  // narrows it to a span-level seat, refuses a pattern the seat cannot see, and
+  // refuses a second active remedy for the same pattern.
+  ['declare-matrix-remedy', 'matrixRemedyDeclare'],
   ['govern-oneonone-lines', 'oneOnOneLineSetConventions'],
   // ADR-0152: settling an obligation an ENDED line left behind. Recording the
   // remedy is the manager's own act (the action narrows it to a seat that reaches

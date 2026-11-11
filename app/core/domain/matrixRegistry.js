@@ -202,6 +202,7 @@ export const MATRIX_PANELS = Object.freeze([
   Object.freeze({ key: 'rights', label: 'Rights', hint: 'Who decides what, for each person on more than one line.' }),
   Object.freeze({ key: 'concordance', label: 'Concordance', hint: 'What the decision log actually did, against the rights declared on each line.' }),
   Object.freeze({ key: 'sod', label: 'Segregation', hint: 'Which decided calls had one hand both initiate and authorize — or an authorizing hand that reported to the initiating one, on any line.' }),
+  Object.freeze({ key: 'remedies', label: 'Remedies', hint: 'Which recurring matrix pattern has a named owner and a dated remedy, and whether the decisions changed by the review date — or why no verdict exists.' }),
   Object.freeze({ key: 'continuity', label: 'Continuity', hint: 'Which frozen decisions still name the authority that made them — and which have drifted.' }),
   Object.freeze({ key: 'seats', label: 'Seats', hint: 'Whose line the work actually reaches — and who the roster cannot seat.' }),
   Object.freeze({ key: 'governance', label: 'Governance', hint: 'Executive view: joint-apex escalations, cross-axis coupling and structural checks.' }),
