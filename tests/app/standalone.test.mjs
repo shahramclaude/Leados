@@ -251,7 +251,14 @@ test('standalone artifact exists and is a single inline HTML document', () => {
   // Register (matrixRemedy, matrixRemedyRegistry, matrixRemedySchema,
   // matrixRemedyActions, matrixRemedyPanel) -> 723 source modules. The 24,000-byte
   // per-module density guard below remains unchanged.
-  assert.ok(bytes < 11_120_000, `standalone file is unexpectedly large (${bytes} bytes)`);
+  // ADR-0177 (Session 241, Schema v142) adds 6 source modules for the Cross-Line
+  // Labour Chargeback & Internal Transfer-Price Ledger (transferPriceRegistry,
+  // transferPriceSchema, transferPrice, transferPriceActions, transferPriceRules,
+  // matrixChargebackPanel). Measured build: 11,182,493 bytes / 737 source modules
+  // = 15,172 bytes per module, level with Session 240's 15,172 (11,090,433 / 731).
+  // The ceiling moves only because the module count moved; the unchanged
+  // 24,000-byte density guard below is what still catches a module inlined twice.
+  assert.ok(bytes < 11_210_000, `standalone file is unexpectedly large (${bytes} bytes)`);
   const declaredModules = Number((html.match(/content="[^"]*?(\d+) source modules/) || [])[1]);
   assert.ok(declaredModules > 100, `expected the build to declare its module count (got ${declaredModules})`);
   const bytesPerModule = Math.round(bytes / declaredModules);

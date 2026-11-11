@@ -461,7 +461,7 @@ test('CSV #116 appends the evidence columns, keeps the existing ones, and carrie
     stewardship: { requests: [ask(id, '2026-11-01', '2026-11-08')], answers: [answer(id, 'input', '2026-11-05')] },
   }));
   const state = makeState({ reviews });
-  assert.equal(CSV_EXPORTS.length, 131, 'ADR-0166 extends #116; ADR-0168..0175 register through #129, ADR-0164 #130 (130 registered; #75 stays reserved)');
+  assert.equal(CSV_EXPORTS.length, 132, 'ADR-0166 extends #116; ADR-0168..0175 register through #129, ADR-0164 #130 (130 registered; #75 stays reserved)');
 
   // The old header is a PREFIX of the new one, in order.
   assert.deepEqual(
@@ -488,12 +488,12 @@ test('CSV #116 appends the evidence columns, keeps the existing ones, and carrie
 });
 
 test('the schema migration adds one empty marker ledger and changes no record', () => {
-  assert.equal(SCHEMA_VERSION, 141);
+  assert.equal(SCHEMA_VERSION, 142);
   const v132 = { ...createEmptyState(ISO), schemaVersion: 132 };
   delete v132.meritEvidenceMarkers;
   const out = migrate(v132);
   assert.ok(out.applied.includes('132 → 133'), 'the v132 → v133 step still runs');
-  assert.deepEqual(out.applied.slice(-3), ['138 → 139', '139 → 140', '140 → 141'], 'and the head is ADR-0176\'s empty co-hiring line-plan ledger');
+  assert.deepEqual(out.applied.slice(-3), ['139 → 140', '140 → 141', '141 → 142'], 'and the head is ADR-0177\'s empty transfer-price ledger');
   assert.deepEqual(out.raw.meritEvidenceMarkers, []);
   // A malformed marker is dropped, never repaired into a plausible suppression.
   assert.deepEqual(normalizeMeritEvidenceMarkers([{ kind: 'obligation' }, null, 5]), []);

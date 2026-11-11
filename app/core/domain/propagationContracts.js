@@ -121,6 +121,7 @@ import { benchEvidenceRule } from './benchEvidenceRules.js';
 import { benchRegressionRule } from './benchRegressionRules.js';
 import { oneOnOneLineRule } from './oneOnOneLineRules.js';
 import { hiringLineRule } from './hiringLineRules.js';
+import { transferPriceRule } from './transferPriceRules.js';
 import { sealRule } from './sealRules.js';
 // ADR-0092: the Differencing Defender declares its contract like every other rule.
 import { differencingRule } from './differencingRules.js';
@@ -943,6 +944,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'hiringLineRules.js',
     purpose: 'RULE-HLC-01: reads the Cross-Line Selection Corroboration register (`buildHiringLines`, ADR-0176) with the whole-workspace operator view on line-plan acts, candidate evidence / stage / decision events, requisition updates and explicit `hiring.line.scan` scans. For every decision-stage candidate on an in-flight requisition whose DECLARED line plan names a manager that is on the panel but silent, or was never asked, it issues at most ONE dated delegation per (candidate, manager, plan act) to that named manager, with typed `concerns` (requisition), `issues-obligation` (candidate) and `rolls-up-to` (every roster ancestor of the manager in the matrix DAG) provenance, bounded per commit with the remainder counted. It closes its own asks once the line is heard or represented, the candidate leaves the final/offer stage, the plan is re-declared or withdrawn, or the requisition stops being in flight, and records an observation — never a task — for a declared manager who left the roster. It never blocks an offer, moves a candidate, records evidence, edits a plan or substitutes one manager for another, and it is inert until a line plan exists.',
     writes: ['delegations', 'links', 'hiringLineMarkers'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: transferPriceRule,
+    module: 'transferPriceRules.js',
+    purpose: 'RULE-TPL-01: reads the Cross-Line Labour Chargeback & Internal Transfer-Price Ledger (`buildTransferPriceLedger`, ADR-0177) with the whole-workspace operator view over the LAST COMPLETED CALENDAR QUARTER on transfer-price acts (propose / confirm / retire) and explicit `transfer.price.scan` scans. For every price proposal still holding ONE key it issues at most one dated delegation to the NAMED manager who holds the missing key; for every directed pair of lines that consumed share-days in the closed quarter with no agreed price and no proposal covering them it keeps at most one open dated delegation per (pair, quarter) with the BORROWING manager, and issues one more only after a price between that pair has died (declined, withdrawn or voided). Asks carry typed `issues-obligation` (counterpart manager) and matrix-DAG `rolls-up-to` provenance, are idempotent through `transferPriceMarkers`, bounded at 8 per commit with the remainder counted, and close themselves — with the actual reason written on the task — once the key is turned, the proposal is declined or withdrawn, or every share-day of that pair’s quarter is under a proposed or agreed price; an ask about an older quarter is re-read against its own quarter, so the calendar rolling over closes nothing. A key held by the workspace leader or by a manager who left the roster is recorded as an observation, never reassigned. Inert until the first price act exists; pausable via `transferPriceAutoPropagate`. Never signs a key, posts a charge, edits a budget, a reporting line or an agreement.',
+    writes: ['delegations', 'links', 'transferPriceMarkers'],
     emits: [],
     scansWorkspace: true,
   },

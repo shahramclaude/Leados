@@ -171,6 +171,10 @@ export const RECORD_POLICIES = Object.freeze({
   // ADR-0176: Cross-Line Selection Corroboration.
   hiringLinePlans: { classKey: 'unit', detailCeiling: 0, label: 'Co-hiring line plans (dated acts; verdicts re-derived on read)', route: '#/matrix?panel=hiring' },
   hiringLineMarkers: { classKey: 'unit', detailCeiling: 0, label: 'Co-hiring assessment ask & observation markers', route: '#/matrix?panel=hiring' },
+  // ADR-0177: transfer-price acts and RULE-TPL-01 markers are surfaced only
+  // through the seat-scoped `buildTransferPriceLedger` adapter, never as raw rows.
+  transferPriceActs: { classKey: 'unit', detailCeiling: 0, label: 'Transfer-price acts (dated two-key acts; charges re-derived on read)', route: '#/matrix?panel=chargeback' },
+  transferPriceMarkers: { classKey: 'unit', detailCeiling: 0, label: 'Transfer-price ask & observation markers', route: '#/matrix?panel=chargeback' },
   // ADR-0168: RULE-BNE-01's idempotency ledger names no person and carries no
   // rating, so it is unit-class with NO detail printed at any ceiling.
   benchEvidenceMarkers: { classKey: 'unit', detailCeiling: 0, label: 'Bench-evidence ask markers', route: '#/succession?panel=evidence' },
@@ -551,6 +555,10 @@ export const ACTION_RIGHTS = Object.freeze({
   'log-oneonone': { minRank: 1, maxRank: 2, label: 'Log a 1:1' },
   'govern-oneonone-lines': { minRank: 3, maxRank: 5, label: 'Scan silent 1:1 lines and set matrix 1:1 coverage conventions' },
   'govern-hiring-lines': { minRank: 3, maxRank: 5, label: 'Scan co-hiring lines for declared managers who have not assessed a candidate' },
+  // ADR-0177: signing one's OWN side of a transfer price is open at every
+  // leadership rank; the action refuses any seat that is not that side's manager.
+  'agree-transfer-price': { minRank: 1, maxRank: 5, label: 'Sign your own side of a transfer price between two lines' },
+  'govern-transfer-prices': { minRank: 3, maxRank: 5, label: 'Scan transfer prices for missing keys and unpriced pairs, and set the ask window' },
   'log-feedback': { minRank: 1, maxRank: 2, label: 'Give feedback' },
   'log-conflict': { minRank: 1, maxRank: 2, label: 'Log a conflict' },
   'record-review': { minRank: 1, maxRank: 2, label: 'Record a review' },

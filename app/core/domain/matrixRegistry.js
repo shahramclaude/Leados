@@ -212,6 +212,7 @@ export const MATRIX_PANELS = Object.freeze([
   Object.freeze({ key: 'authority', label: 'Authority limits', hint: 'Standing Delegation-of-Authority (DoA) schedule in exact integer cents, cross-line anti-splitting conformance, and one-over-one covering resolution.' }),
   Object.freeze({ key: 'one-on-ones', label: '1:1 Line coverage', hint: 'Per-line 1:1 coverage, held-by attribution, masked silent lines, and silent-line asks (ADR-0164).' }),
   Object.freeze({ key: 'hiring', label: 'Co-hiring', hint: 'Which of the managers a hire will report to have actually assessed the candidate before the offer closes (ADR-0176).' }),
+  Object.freeze({ key: 'chargeback', label: 'Chargeback', hint: 'What each line owes the line that lent it people, under two-key transfer prices — in exact integer cents that must net to zero, or refused (ADR-0177).' }),
 ]);
 
 export const MATRIX_PANEL_KEYS = Object.freeze(MATRIX_PANELS.map((p) => p.key));

@@ -98,6 +98,14 @@ const groups = [
   // line plan deliberately has NO seat-scoped adapter: it names managers in
   // more than one span, so it stays in the full-access operator view.
   ['govern-hiring-lines', 'hiringLineScan'],
+  // ADR-0177: a transfer price is a TWO-KEY act. Proposing, confirming and
+  // retiring are open at every leadership rank because a project lead with no
+  // home-line reports is exactly who borrows; the action narrows each to the
+  // seat's OWN side of the pair (the lender key by the lending manager, the
+  // borrower key by the borrowing manager), so no seat can sign for its
+  // counterpart. Re-running RULE-TPL-01 and setting the conventions is director+.
+  ['agree-transfer-price', 'transferPricePropose transferPriceConfirm transferPriceRetire'],
+  ['govern-transfer-prices', 'transferPriceScan transferPriceSetConventions'],
   // ADR-0152: settling an obligation an ENDED line left behind. Recording the
   // remedy is the manager's own act (the action narrows it to a seat that reaches
   // the person, and a carry must name a live line holder); the scan changes no
@@ -434,7 +442,11 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 'oneOnOneLineReport',
 // ADR-0176: seat-scoped inside `buildHiringLines` (out-of-span managers and
 // candidate names withheld; undeclared requisitions read only by the operator).
-'hiringLineReport']);
+'hiringLineReport',
+// ADR-0177: the chargeback statement is scoped INSIDE the read model — a seat
+// reads the line accounts it reaches and every piece that names one of them;
+// the rest is counted as withheld and names outside the seat are withheld.
+'transferPriceReport']);
 const refusal = (reason) => ({ ok: false, code: 'scope-refusal', error: reason, field: 'scope' });
 
 /** ADR-0087: under enforcement, boundary-management commands stay reachable
