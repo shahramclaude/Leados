@@ -59,6 +59,8 @@ import {
   LINE_INTAKE_REROUTED_EVENT,
 } from './lineIntakeRegistry.js';
 import { buildMatrixDemandVariance } from './matrixDemandVariance.js';
+import { buildLineHorizon } from './lineHorizon.js';
+import { LINE_HORIZON_RULE_ID, LINE_HORIZON_SCAN_EVENT } from './lineHorizonRegistry.js';
 
 export const MATRIX_EVENTS = Object.freeze({
   DECLARE: 'matrix.line.declared',
@@ -68,6 +70,7 @@ export const MATRIX_EVENTS = Object.freeze({
   COORDINATION_SCAN: MATRIX_COORDINATION_SCAN_EVENT,
   INTAKE_RECORDED: LINE_INTAKE_RECORDED_EVENT,
   INTAKE_REROUTED: LINE_INTAKE_REROUTED_EVENT,
+  HORIZON_SCAN: LINE_HORIZON_SCAN_EVENT,
 });
 
 export function createMatrixActions(store, { now, idFactory }) {
@@ -725,6 +728,50 @@ export function createMatrixActions(store, { now, idFactory }) {
         report: buildMatrixDemandVariance(store.state, { periodKey, now: at, settings: settings(), visiblePersonIds }),
         seat: { id: seat.id, fullAccess: seat.fullAccess, rank: seat.rank },
       };
+    },
+
+    /* ------------------------------------- the forward horizon (ADR-0179) */
+
+    /**
+     * The Matrix Forward Allocation Horizon: the dated reporting-line
+     * declarations read FORWARD, one ISO week bucket at a time. A pure read —
+     * it stores nothing, and the seat scoping happens inside the read model
+     * (today's wall, exactly as the live ledger draws it). `weeks` outside the
+     * declared bounds (1–26) is refused by the window itself with the bound
+     * printed; it is never clamped.
+     */
+    matrixHorizonReport(input = {}) {
+      const check = seatFor('declare-matrix-line');
+      if (!check.ok) return check;
+      const weeks = input.weeks === undefined ? null : input.weeks;
+      return {
+        ok: true,
+        report: buildLineHorizon(store.state, { now: clock(), settings: settings(), weeks }),
+        seat: { id: check.seat.id, fullAccess: check.seat.fullAccess, rank: check.seat.rank },
+      };
+    },
+
+    /**
+     * An explicit forward-reading scan: one event through the shared
+     * post-commit spine so RULE-LHZ-01 sweeps the lead window now instead of
+     * waiting for the next unrelated write. The report returned is re-derived
+     * AFTER the commit, so what the panel refreshes to is what the scan left
+     * on the record — never a pre-scan figure beside a post-scan ledger.
+     */
+    matrixHorizonScan() {
+      const check = seatFor('declare-matrix-line');
+      if (!check.ok) return check;
+      const at = clock();
+      store.update(() => {}, {
+        type: MATRIX_EVENTS.HORIZON_SCAN,
+        entity: 'workspace',
+        entityId: 'matrix-horizon',
+        summary: 'Forward allocation horizon scan requested.'.slice(0, 300),
+      });
+      return saved({
+        report: buildLineHorizon(store.state, { now: at, settings: settings() }),
+        effects: (store.lastPropagations || []).filter((x) => x && x.ruleId === LINE_HORIZON_RULE_ID),
+      });
     },
   };
 }

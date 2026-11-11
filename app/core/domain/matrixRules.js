@@ -53,7 +53,13 @@ const MATRIX_TRIGGER_SET = new Set([
   MATRIX_SCAN_EVENT,
 ]);
 
-const DERIVED_EVENT_PREFIXES = Object.freeze([
+/**
+ * Events written BY the spine, never by a person acting on the record. This
+ * predicate is shared: RULE-LHZ-01 (ADR-0179) imports this exact list rather
+ * than keeping a private copy, so the two rules can never disagree about what
+ * counts as an operational write.
+ */
+export const DERIVED_EVENT_PREFIXES = Object.freeze([
   'automation.', 'seat.', 'matrix.', 'propagation.', 'vault.', 'workspace.',
   'settings.', 'demo.', 'import.', 'export.', 'lock.', 'crypto.', 'epistemic.',
 ]);

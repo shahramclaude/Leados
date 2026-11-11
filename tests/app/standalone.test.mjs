@@ -258,7 +258,13 @@ test('standalone artifact exists and is a single inline HTML document', () => {
   // = 15,172 bytes per module, level with Session 240's 15,172 (11,090,433 / 731).
   // The ceiling moves only because the module count moved; the unchanged
   // 24,000-byte density guard below is what still catches a module inlined twice.
-  assert.ok(bytes < 11_210_000, `standalone file is unexpectedly large (${bytes} bytes)`);
+  // ADR-0179 (Session 245, Schema v143 unchanged) adds 1 source module
+  // (matrixHorizonPanel) plus the panel's dispatch and the horizon actions.
+  // Measured build: 11,279,005 bytes / 747 source modules = 15,099 bytes per
+  // module, DOWN from 15,172. The ceiling moves only because real capability
+  // was added; the 24,000-byte density guard below is unchanged and is what
+  // still catches a module inlined twice.
+  assert.ok(bytes < 11_300_000, `standalone file is unexpectedly large (${bytes} bytes)`);
   const declaredModules = Number((html.match(/content="[^"]*?(\d+) source modules/) || [])[1]);
   assert.ok(declaredModules > 100, `expected the build to declare its module count (got ${declaredModules})`);
   const bytesPerModule = Math.round(bytes / declaredModules);

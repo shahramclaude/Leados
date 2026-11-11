@@ -163,6 +163,7 @@ import { oneOnOneLineRule } from './oneOnOneLineRules.js';
 import { hiringLineRule } from './hiringLineRules.js';
 import { transferPriceRule } from './transferPriceRules.js';
 import { delegationLineRule } from './delegationLineRules.js';
+import { lineHorizonRule } from './lineHorizonRules.js';
 
 
 // ADR-0087: the Operating Cadence Clock. Reads the finished queue after the
@@ -960,6 +961,15 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   transferPriceRule,
   // ADR-0178: shared-contributor overload across every active reporting line.
   delegationLineRule,
+  // ADR-0179: the Matrix Forward Allocation Horizon (RULE-LHZ-01). Sweeps the
+  // dated reporting-line declarations forward over the declared lead window and
+  // puts each exposure that begins inside it in front of the ONE seat that owns
+  // the fix — once, and it closes its own ask when the ledger no longer reads
+  // the exposure. Registered immediately before `seatRule` so an ask issued
+  // here is already in the record when the Operating Seat fans the same
+  // transaction's open work up every leadership span, and `sealRule` attests
+  // all of it in one seal. Inert in single-chain workspaces.
+  lineHorizonRule,
   // ADR-0076: the Operating Seat (vertical roll-up + enforced boundaries).
   // It reads the finished record after every module has propagated, then fans
   // each open item up every leadership ancestor in the reporting tree with one

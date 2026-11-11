@@ -193,6 +193,7 @@ export const MATRIX_PANELS = Object.freeze([
   Object.freeze({ key: 'consent', label: 'Consent', hint: 'A declared share is an ask until the line accepts it and the person acknowledges it.' }),
   Object.freeze({ key: 'renewal', label: 'Re-affirmation', hint: 'A line has a term. Which commitments does anyone actually agree to today?' }),
   Object.freeze({ key: 'allocation', label: 'Period allocation', hint: 'What each line actually charged across a named period — time-weighted share-days, or refused.' }),
+  Object.freeze({ key: 'horizon', label: 'Horizon', hint: 'Who rolls off which line, when, and who is double-booked on a day that has not arrived — the dated declarations read forward (ADR-0179).' }),
   Object.freeze({ key: 'intake', label: 'Intake gate', hint: 'The Matrix Line Intake Gate and Share-Day WIP Ceiling: recorded intakes against each line\u2019s declared share-day ceiling, per period — and the refusals between them.' }),
   Object.freeze({ key: 'activity', label: 'Line activity', hint: 'What each line was charged against what it actually originated — and the refusals between them.' }),
   Object.freeze({ key: 'meeting-load', label: 'Meeting load', hint: 'Recorded meeting minutes per person and per line — and how much of that time is convened outside the home line.' }),
