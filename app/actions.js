@@ -346,6 +346,7 @@ import {
   FORECAST_CHALLENGE_STATUSES,
   IMPACT_ALPHAS,
   IMPACT_INTERVENTION_IDS,
+  normalizeSettings,
   normalizeTalkingPoints,
   applyTalkingPointPolicy,
   SCHEMA_VERSION,
@@ -1362,6 +1363,17 @@ export function createApi(store, options = {}) {
     ...createConflictActions(store, { now: clock, idFactory: id }),
     /* ------------------------------------------------------------ settings */
     updateSettings(patch, permitInput = null) {
+      // Validate the persistence vocabulary before permits, ids or writes.
+      if (!patch || typeof patch !== 'object' || Array.isArray(patch)
+        || ![Object.prototype, null].includes(Object.getPrototypeOf(patch))) {
+        return fail('Settings must be a plain patch object. Nothing was saved.', 'patch');
+      }
+      const vocabulary = normalizeSettings(store.state.settings);
+      for (const key of Reflect.ownKeys(patch)) {
+        if (typeof key !== 'string' || !Object.hasOwn(vocabulary, key)) {
+          return fail(`Unknown setting “${String(key).slice(0, 80)}”. Nothing was saved.`, 'patch');
+        }
+      }
       // ADR-0182: an OPTIONAL permit beside a pause. Validated before anything is
       // written, so a refused permit leaves both the switch and the ledger
       // untouched — a half-applied authority is the failure this forbids.
@@ -1592,6 +1604,24 @@ export function createApi(store, options = {}) {
       if (Object.hasOwn(next, 'networkAutoPropagate')) {
         if (typeof next.networkAutoPropagate !== 'boolean') {
           return fail('Automatic influence-network follow-through must be either on or off.', 'networkAutoPropagate');
+        }
+      }
+      // Existing field-specific parsing above remains supported. After that,
+      // reject any value the loader would drop, clamp, trim or repair. Compare
+      // JSON structure (not property order), including nested conventions.
+      const roundTrip = normalizeSettings({ ...store.state.settings, ...next });
+      const same = (a, b) => {
+        if (a === null || b === null || typeof a !== 'object' || typeof b !== 'object') {
+          return a === b && (typeof a !== 'number' || Number.isFinite(a)) && a !== undefined;
+        }
+        if (Array.isArray(a) !== Array.isArray(b)) return false;
+        const keys = Object.keys(a);
+        return keys.length === Object.keys(b).length
+          && keys.every((key) => Object.hasOwn(b, key) && same(a[key], b[key]));
+      };
+      for (const [key, value] of Object.entries(next)) {
+        if (!same(value, roundTrip[key])) {
+          return fail(`Setting “${key}” would change on reload. Choose a schema-valid value; nothing was saved.`, key);
         }
       }
       store.update(

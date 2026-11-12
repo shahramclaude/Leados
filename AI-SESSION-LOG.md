@@ -1,3 +1,11 @@
+## 2026-11-12 — Session 249: Settings write/read-back fidelity gate
+
+Doctrine and remote confirmed; all four mandates present. Built a closed persistence-vocabulary and exact reload-projection gate in `updateSettings`, before writes. Serves all altitudes × matrix/single-chain; accepted writes retain the shared automation, roll-up and seal path. Core-trust override of default frontline/mid-manager rotation; receiving-consent remains Planned, not partially shipped. No schema bump, new screen or media asset; no Higgsfield/external AI used or connection claimed. Benchmark: AJV/JSON Schema and Zod validation principles, native reload-fidelity comparison; product parity **[BENCHMARK-UNVERIFIED]**.
+
+New gap added to ROADMAP Planned: work-rotation outcome review (PDCA and displacement effects): did relief occur without moving overload onto the recipient's other lines? No causal verdict without attributable effort/capacity evidence.
+
+Focused verification: settings-write-fidelity + pause-permits + convention-persistence **27/27**, including actual store reload and byte-identical state/storage on rejection. Initial adjacent imports blocked by missing jsdom, resolved with locked npm ci. One fixture correction: whitespace is preserved by loader, so use a truly truncated 121-character name. No production fix retry needed. Full suite/browser/other specialized settings mutation doors remain **[UNVERIFIED]**. README unchanged (no setup/screen change). Changed-file ESLint and diff whitespace check PASS; standalone rebuilt at 11,394,551 bytes / 763 modules / schema v145. Publication results recorded in final report.
+
 ## 2026-11-11 — Session 247: Non-Promotable Work Turn Ledger (ADR-0181 Accepted, Schema v143 → v144, `RULE-NPW-01`, CSV #135)
 
 **Doctrine / sync.** `NORTH_STAR.md` exists with both the Matrix Leadership and Bulletproof Reliability mandates; no augmentation needed. Origin is `https://github.com/shahramclaude/Leados.git`. Work stayed on `arena/08578eef-leados` from `e85970a`; `npm ci` reinstalled.
