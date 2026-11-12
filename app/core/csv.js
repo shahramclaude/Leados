@@ -157,6 +157,8 @@ import { DELEGATION_LINE_CSV_COLUMNS, DELEGATION_LINE_CSV_DESCRIPTOR } from './d
 // ADR-0179: the Matrix Forward Allocation Horizon's aggregate-only export.
 import { buildLineHorizon, lineHorizonCsvRows } from './domain/lineHorizon.js';
 import { LINE_HORIZON_CSV_COLUMNS, LINE_HORIZON_CSV_DESCRIPTOR } from './domain/lineHorizonRegistry.js';
+import { buildWorkTurns, workTurnCsvRows } from './domain/workTurns.js';
+import { WORK_TURN_CSV_COLUMNS, WORK_TURN_CSV_DESCRIPTOR } from './domain/workTurnRegistry.js';
 import { STRUCTURE_HISTORY_CSV_COLUMNS } from './domain/structureHistoryRegistry.js';
 import {
   assessmentReconciliationCsvRows,
@@ -1317,6 +1319,9 @@ export const CSV_EXPORTS = [
   // #134 (Schema v143 unchanged, ADR-0179): matrix forward allocation horizon,
   // aggregate only — workspace, ISO-week and person-verdict rows.
   LINE_HORIZON_CSV_DESCRIPTOR,
+  // #135 (Schema v144, ADR-0181): non-promotable work turns, one identity-free
+  // summary row.
+  WORK_TURN_CSV_DESCRIPTOR,
 ];
 
 function personLookup(state) {
@@ -6390,6 +6395,14 @@ export function buildScopeTable(state, scope, now) {
       // partial sum.
       const report = buildLineHorizon(state, { now, settings: state.settings || {} });
       return { columns: LINE_HORIZON_CSV_COLUMNS.map((key) => ({ key, header: key })), rows: lineHorizonCsvRows(report) };
+    }
+    case 'work-turns': {
+      // CSV scope #135 (Schema v144, ADR-0181). Built from the SAME seat-scoped
+      // read model the panel renders, so an exported count is provably the
+      // count that was printed. One identity-free summary row: no person,
+      // manager, ask title or free text crosses the boundary.
+      const report = buildWorkTurns(state, { now, settings: state.settings || {} });
+      return { columns: WORK_TURN_CSV_COLUMNS.map((key) => ({ key, header: key })), rows: workTurnCsvRows(report) };
     }
     case 'line-chargeback': {
       // CSV scope #132 (Schema v142, ADR-0177). Built from the SAME seat-scoped

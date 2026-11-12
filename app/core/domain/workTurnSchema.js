@@ -1,0 +1,156 @@
+/**
+ * app/core/domain/workTurnSchema.js — fail-closed normalization for the
+ * Non-Promotable Work Turn Ledger (ADR-0181, Schema v144).
+ *
+ * WHAT IS STORED
+ *   `workTurnActs`     append-only dated classification ACTS. One act names the
+ *                      ask (a delegation), the person it was handed to, ONE kind
+ *                      from the closed list, and the seat that declared it. The
+ *                      latest act per ask is the effective one.
+ *   `workTurnMarkers`  RULE-NPW-01's bounded idempotency / observation ledger.
+ *   five settings      `workTurnWindowDays`, `workTurnMinAsks`,
+ *                      `workTurnFactorPct`, `workTurnAskDueDays`,
+ *                      `workTurnAutoPropagate`.
+ *
+ * WHAT IS NEVER STORED. A pool, a turn, a fair share, a verdict, a "carries too
+ * much" flag, a next-in-turn name. Every one is derived on read from the acts,
+ * the delegations, the ADR-0178 attributions and the live matrix graph, so a
+ * printed figure cannot drift from its record. The delegation row itself is NOT
+ * changed.
+ *
+ * FAIL CLOSED. A malformed act is DROPPED with a counted warning — never
+ * repaired into a classification nobody made. An act whose person differs from
+ * the delegation's owner is dropped, not re-pointed. An act naming a kind that
+ * is not in the closed list is dropped, not defaulted.
+ */
+
+import {
+  WORK_TURN_BOUNDS,
+  WORK_TURN_DEFAULTS,
+  WORK_TURN_KINDS,
+  WORK_TURN_LIMITS,
+  WORK_TURN_SETTING_KEYS,
+} from './workTurnRegistry.js';
+
+const isPlainObject = (v) => Boolean(v && typeof v === 'object' && !Array.isArray(v));
+const str = (v) => (typeof v === 'string' ? v.trim() : '');
+
+function isoOrNull(value) {
+  if (typeof value !== 'string' || !value.trim()) return null;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
+
+function boundedInt(value, [min, max], fallback) {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.min(max, Math.max(min, Math.round(value)))
+    : fallback;
+}
+
+export function normalizeWorkTurnSettings(raw = {}) {
+  const src = isPlainObject(raw) ? raw : {};
+  const K = WORK_TURN_SETTING_KEYS;
+  return {
+    [K.windowDays]: boundedInt(src[K.windowDays], WORK_TURN_BOUNDS.windowDays, WORK_TURN_DEFAULTS.windowDays),
+    [K.minAsks]: boundedInt(src[K.minAsks], WORK_TURN_BOUNDS.minAsks, WORK_TURN_DEFAULTS.minAsks),
+    [K.factorPct]: boundedInt(src[K.factorPct], WORK_TURN_BOUNDS.factorPct, WORK_TURN_DEFAULTS.factorPct),
+    [K.askDueDays]: boundedInt(src[K.askDueDays], WORK_TURN_BOUNDS.askDueDays, WORK_TURN_DEFAULTS.askDueDays),
+    [K.autoPropagate]: src[K.autoPropagate] !== false,
+  };
+}
+
+/**
+ * The effective act per ask: the LATEST by timestamp; on an exact tie the
+ * later-appended act wins. Returns `Map<delegationId, { act, index, actN }>`.
+ */
+export function effectiveWorkTurnActs(acts) {
+  const out = new Map();
+  (Array.isArray(acts) ? acts : []).forEach((act, index) => {
+    if (!act || !act.delegationId) return;
+    const prev = out.get(act.delegationId);
+    if (!prev) { out.set(act.delegationId, { act, index, actN: 1 }); return; }
+    prev.actN += 1;
+    if (String(act.at) >= String(prev.act.at)) { prev.act = act; prev.index = index; }
+  });
+  return out;
+}
+
+/**
+ * Bound the ledger WITHOUT ever dropping an effective classification.
+ * Superseded acts are evicted oldest-first. If every remaining act is the
+ * effective one for its ask, the ledger is returned OVER the cap rather than
+ * silently un-classifying work somebody classified.
+ */
+export function compactWorkTurnActs(acts, cap = WORK_TURN_LIMITS.acts) {
+  const list = Array.isArray(acts) ? acts : [];
+  if (list.length <= cap) return list;
+  const keep = new Set([...effectiveWorkTurnActs(list).values()].map((entry) => entry.index));
+  let excess = list.length - cap;
+  const out = [];
+  list.forEach((act, index) => {
+    if (excess > 0 && !keep.has(index)) { excess -= 1; return; }
+    out.push(act);
+  });
+  return out;
+}
+
+/**
+ * @param raw       stored acts
+ * @param state     the state being normalized (delegations already normalized)
+ * @param warnings  load warnings (mutated)
+ */
+export function normalizeWorkTurnActs(raw, state = {}, warnings = []) {
+  const arr = Array.isArray(raw) ? raw : [];
+  const owners = new Map((state.delegations || []).filter(Boolean).map((d) => [d.id, d.personId]));
+  const out = [];
+  const seen = new Set();
+  let malformed = 0;
+  let orphaned = 0;
+  let mismatched = 0;
+  for (const item of arr) {
+    if (!isPlainObject(item)) { malformed += 1; continue; }
+    const id = str(item.id);
+    const delegationId = str(item.delegationId);
+    const personId = str(item.personId);
+    const kind = WORK_TURN_KINDS.includes(item.kind) ? item.kind : null;
+    const byId = str(item.byId) || null;
+    const at = isoOrNull(item.at);
+    if (!id || id.length > WORK_TURN_LIMITS.idMax || seen.has(id)
+      || !delegationId || delegationId.length > 2 * WORK_TURN_LIMITS.idMax
+      || !personId || personId.length > WORK_TURN_LIMITS.idMax
+      || !kind || !at || (byId && byId.length > WORK_TURN_LIMITS.idMax)) { malformed += 1; continue; }
+    if (!owners.has(delegationId)) { orphaned += 1; continue; }
+    if (owners.get(delegationId) !== personId) { mismatched += 1; continue; }
+    seen.add(id);
+    out.push({ id, delegationId, personId, kind, byId, at });
+  }
+  if (malformed) warnings.push(`Work turns: dropped ${malformed} malformed classification act(s); no kind was repaired or guessed`);
+  if (orphaned) warnings.push(`Work turns: dropped ${orphaned} classification act(s) whose ask no longer exists`);
+  if (mismatched) warnings.push(`Work turns: dropped ${mismatched} classification act(s) naming a person other than the ask’s owner; none was re-pointed`);
+  return compactWorkTurnActs(out);
+}
+
+export function normalizeWorkTurnMarkers(raw) {
+  const arr = Array.isArray(raw) ? raw : [];
+  const out = [];
+  const seen = new Set();
+  for (const item of arr) {
+    if (!isPlainObject(item)) continue;
+    const key = str(item.key).slice(0, 320);
+    if (!key || seen.has(key)) continue;
+    const kind = item.kind === 'ask' || item.kind === 'observation' ? item.kind : null;
+    if (!kind) continue;
+    seen.add(key);
+    out.push({
+      key,
+      kind,
+      subject: str(item.subject).slice(0, 160),
+      taskId: str(item.taskId).slice(0, 80) || null,
+      state: str(item.state).slice(0, 24),
+      summary: str(item.summary).slice(0, 280),
+      at: isoOrNull(item.at),
+    });
+  }
+  const cap = WORK_TURN_LIMITS.markers;
+  return out.length > cap ? out.slice(out.length - cap) : out;
+}

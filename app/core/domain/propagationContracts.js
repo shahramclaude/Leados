@@ -124,6 +124,7 @@ import { hiringLineRule } from './hiringLineRules.js';
 import { transferPriceRule } from './transferPriceRules.js';
 import { delegationLineRule } from './delegationLineRules.js';
 import { lineHorizonRule } from './lineHorizonRules.js';
+import { workTurnRule } from './workTurnRules.js';
 import { sealRule } from './sealRules.js';
 // ADR-0092: the Differencing Defender declares its contract like every other rule.
 import { differencingRule } from './differencingRules.js';
@@ -962,6 +963,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'transferPriceRules.js',
     purpose: 'RULE-TPL-01: reads the Cross-Line Labour Chargeback & Internal Transfer-Price Ledger (`buildTransferPriceLedger`, ADR-0177) with the whole-workspace operator view over the LAST COMPLETED CALENDAR QUARTER on transfer-price acts (propose / confirm / retire) and explicit `transfer.price.scan` scans. For every price proposal still holding ONE key it issues at most one dated delegation to the NAMED manager who holds the missing key; for every directed pair of lines that consumed share-days in the closed quarter with no agreed price and no proposal covering them it keeps at most one open dated delegation per (pair, quarter) with the BORROWING manager, and issues one more only after a price between that pair has died (declined, withdrawn or voided). Asks carry typed `issues-obligation` (counterpart manager) and matrix-DAG `rolls-up-to` provenance, are idempotent through `transferPriceMarkers`, bounded at 8 per commit with the remainder counted, and close themselves — with the actual reason written on the task — once the key is turned, the proposal is declined or withdrawn, or every share-day of that pair’s quarter is under a proposed or agreed price; an ask about an older quarter is re-read against its own quarter, so the calendar rolling over closes nothing. A key held by the workspace leader or by a manager who left the roster is recorded as an observation, never reassigned. Inert until the first price act exists; pausable via `transferPriceAutoPropagate`. Never signs a key, posts a charge, edits a budget, a reporting line or an agreement.',
     writes: ['delegations', 'links', 'transferPriceMarkers'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: workTurnRule,
+    module: 'workTurnRules.js',
+    purpose: 'RULE-NPW-01: reads the Non-Promotable Work Turn Ledger (`buildWorkTurns`, ADR-0181) with the whole-workspace operator view on classification acts, convention changes, explicit `work.turn.scan` scans, ask attribution / edit / hand-back, reporting-line acts and roster changes (a person updated, archived or restored). For a manager pool that concentrates its non-promotable asks on one person it keeps at most one open dated delegation with THAT manager; for a person on two or more lines who is within a fair turn on each line and over the per-person average in sum it keeps at most one with the single roster seat above every line they hold (the joint apex). It asks at most once per finding signature, closes its own ask when the reading clears, is capped at 8 asks per commit with the remainder counted, and records an observation instead of an ask when the owner is the workspace leader, off the roster or tied between incomparable seats. It never classifies or reassigns an ask, never stores a turn, share or verdict, never rates a person, and is INERT until the first classification act exists.',
+    writes: ['delegations', 'links', 'workTurnMarkers'],
     emits: [],
     scansWorkspace: true,
   },

@@ -215,6 +215,7 @@ export const MATRIX_PANELS = Object.freeze([
   Object.freeze({ key: 'hiring', label: 'Co-hiring', hint: 'Which of the managers a hire will report to have actually assessed the candidate before the offer closes (ADR-0176).' }),
   Object.freeze({ key: 'asks', label: 'Cross-line asks', hint: 'Which reporting line issued each open ask, and whether the shared contributor is overloaded across all principals (ADR-0178).' }),
   Object.freeze({ key: 'chargeback', label: 'Chargeback', hint: 'What each line owes the line that lent it people, under two-key transfer prices — in exact integer cents that must net to zero, or refused (ADR-0177).' }),
+  Object.freeze({ key: 'turns', label: 'Work turns', hint: 'Who keeps being handed the work that advances nobody, whose turn is next in each manager\u2019s pool, and who carries a fair turn from every line and too much in sum (ADR-0181).' }),
 ]);
 
 export const MATRIX_PANEL_KEYS = Object.freeze(MATRIX_PANELS.map((p) => p.key));
