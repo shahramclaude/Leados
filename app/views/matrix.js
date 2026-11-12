@@ -93,6 +93,9 @@ import { renderMatrixHiringPanel } from './matrixHiringPanel.js';
 import { renderMatrixChargebackPanel } from './matrixChargebackPanel.js';
 import { renderMatrixDelegationLinePanel } from './matrixDelegationLinePanel.js';
 import { renderMatrixWorkTurnPanel } from './matrixWorkTurnPanel.js';
+// ADR-0183: the DSM partitioning slice. Exact SCC partitioning of the typed
+// dependency graph, with the canonical matrix DAG for line reach and joint apex.
+import { renderMatrixDependencyCyclePanel } from './matrixDependencyCyclePanel.js';
 
 const PANELS = MATRIX_PANELS;
 
@@ -898,6 +901,7 @@ export function renderMatrix(ctx) {
     panel === 'hiring' ? renderMatrixHiringPanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
     panel === 'asks' ? renderMatrixDelegationLinePanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
     panel === 'turns' ? renderMatrixWorkTurnPanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
+    panel === 'cycles' ? renderMatrixDependencyCyclePanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
     panel === 'chargeback' ? renderMatrixChargebackPanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
     panel === 'continuity' ? renderContinuityPanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
     panel === 'seats' ? seatsPanel(ctx, report) : null,

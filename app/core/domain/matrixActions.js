@@ -59,6 +59,9 @@ import {
   LINE_INTAKE_REROUTED_EVENT,
 } from './lineIntakeRegistry.js';
 import { buildMatrixDemandVariance } from './matrixDemandVariance.js';
+// ADR-0183: the DSM partitioning slice. A pure read: it stores no block, no
+// verdict and no apex, so an exported figure is the computed figure.
+import { buildDependencyCycles } from './dependencyCycle.js';
 import { buildLineHorizon } from './lineHorizon.js';
 import { LINE_HORIZON_RULE_ID, LINE_HORIZON_SCAN_EVENT } from './lineHorizonRegistry.js';
 
@@ -726,6 +729,22 @@ export function createMatrixActions(store, { now, idFactory }) {
       return {
         ok: true,
         report: buildMatrixDemandVariance(store.state, { periodKey, now: at, settings: settings(), visiblePersonIds }),
+        seat: { id: seat.id, fullAccess: seat.fullAccess, rank: seat.rank },
+      };
+    },
+
+    /** ADR-0183: exact dependency feedback-cycle partition and its line reach. Pure read. */
+    matrixDependencyCycleReport() {
+      const check = seatFor('declare-matrix-line');
+      if (!check.ok) return check;
+      const { seat } = check;
+      const at = clock();
+      const visiblePersonIds = seat.fullAccess
+        ? null
+        : new Set([...(seat.scope || []), ...(seat.lineScope || [])]);
+      return {
+        ok: true,
+        report: buildDependencyCycles(store.state, { now: at, settings: settings(), visiblePersonIds }),
         seat: { id: seat.id, fullAccess: seat.fullAccess, rank: seat.rank },
       };
     },

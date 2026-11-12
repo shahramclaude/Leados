@@ -158,7 +158,7 @@ test('the register is registered end to end: schema v145, two collections, the s
   assert.ok(SAFE_READS.has('pausePermitReport'));
   assert.equal(ACTION_RIGHTS['permit-automation-pause'].minRank, 4, 'director+ may silence a workspace-wide control');
 
-  assert.equal(CSV_EXPORTS.length, 136);
+  assert.equal(CSV_EXPORTS.length, 137);
   const scope = CSV_EXPORTS.find((e) => e.key === 'automation-pause-permits');
   assert.ok(scope, 'CSV #136 is registered');
   assert.equal(scope.sensitive, false);

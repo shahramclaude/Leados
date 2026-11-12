@@ -278,10 +278,17 @@ test('standalone artifact exists and is a single inline HTML document', () => {
   // and is what still catches a module inlined twice.
   // Session 250 adds the evidence-bounds reader and one 65,006-byte generated
   // instructional diagram (base64 in the offline file). The density guard is unchanged.
-  assert.ok(bytes < 11_520_000, `standalone file is unexpectedly large (${bytes} bytes)`);
-  const diagram = fs.readFileSync(path.join(ROOT, 'app/assets/work-turn-evidence.jpg'));
-  assert.ok(html.includes(`data:image/jpeg;base64,${diagram.toString('base64')}`), 'the offline artifact embeds the exact diagram bytes');
-  assert.doesNotMatch(html, /\.\/app\/assets\/work-turn-evidence\.jpg/, 'offline diagram must not depend on the app folder');
+  // ADR-0183 (Session 251) adds the DSM partitioning registry, reader, panel,
+  // their wiring and one 27,562-byte generated instructional diagram. Measured
+  // build: 11,559,951 bytes / 767 source modules = 15,072 bytes per module,
+  // still far below the unchanged 24,000 density guard. The absolute ceiling
+  // moves only because real capability and a real asset were added.
+  assert.ok(bytes < 11_650_000, `standalone file is unexpectedly large (${bytes} bytes)`);
+  for (const asset of ['app/assets/work-turn-evidence.jpg', 'app/assets/dependency-cycle-dsm.jpg']) {
+    const diagram = fs.readFileSync(path.join(ROOT, asset));
+    assert.ok(html.includes(`data:image/jpeg;base64,${diagram.toString('base64')}`), `the offline artifact embeds the exact bytes of ${asset}`);
+    assert.doesNotMatch(html, new RegExp(`\\./${asset.replaceAll('/', '\\/').replaceAll('.', '\\.')}`), `${asset} must not depend on the app folder offline`);
+  }
   const declaredModules = Number((html.match(/content="[^"]*?(\d+) source modules/) || [])[1]);
   assert.ok(declaredModules > 100, `expected the build to declare its module count (got ${declaredModules})`);
   const bytesPerModule = Math.round(bytes / declaredModules);

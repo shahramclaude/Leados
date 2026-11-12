@@ -38,6 +38,15 @@ const OUT = path.isAbsolute(outArg) ? outArg : path.resolve(ROOT, outArg);
 const MINIFY = !args.includes('--no-minify');
 const WORK_TURN_DIAGRAM = 'app/assets/work-turn-evidence.jpg';
 const WORK_TURN_DIAGRAM_URL = `./${WORK_TURN_DIAGRAM}`;
+// ADR-0183 (Session 251): the DSM partitioning diagram is a real generated
+// asset, not a placeholder. Inline the exact bytes into the offline file too,
+// or the portable copy would ship a broken image.
+const DEPENDENCY_CYCLE_DIAGRAM = 'app/assets/dependency-cycle-dsm.jpg';
+const DEPENDENCY_CYCLE_DIAGRAM_URL = `./${DEPENDENCY_CYCLE_DIAGRAM}`;
+const DIAGRAMS = Object.freeze([
+  Object.freeze({ file: WORK_TURN_DIAGRAM, url: WORK_TURN_DIAGRAM_URL }),
+  Object.freeze({ file: DEPENDENCY_CYCLE_DIAGRAM, url: DEPENDENCY_CYCLE_DIAGRAM_URL }),
+]);
 
 if (!OUT.toLowerCase().endsWith('.html')) {
   throw new Error('The standalone output must be an .html file.');
@@ -62,7 +71,7 @@ function walkJs(dir) {
 
 function sourceFingerprint(files) {
   const hash = crypto.createHash('sha256');
-  for (const rel of ['index.html', 'app/styles.css', WORK_TURN_DIAGRAM, ...files]) {
+  for (const rel of ['index.html', 'app/styles.css', ...DIAGRAMS.map((d) => d.file), ...files]) {
     hash.update(rel);
     hash.update('\0');
     hash.update(fs.readFileSync(path.join(ROOT, rel)));
@@ -134,15 +143,19 @@ const result = await build({
   },
 });
 
-// The normal app serves the real diagram from app/assets. Inline the exact
-// same bytes into the offline file; fail the build if the view stops referencing
-// it instead of shipping an apparently self-contained file with a broken image.
+// The normal app serves every real diagram from app/assets. Inline the exact
+// same bytes into the offline file; fail the build if a view stops referencing
+// one instead of shipping an apparently self-contained file with a broken image.
 const bundledSource = result.outputFiles[0].text;
-if (!bundledSource.includes(WORK_TURN_DIAGRAM_URL)) {
-  throw new Error('Standalone build could not find the work-turn evidence diagram in the bundle.');
+let inlinedSource = bundledSource;
+for (const diagram of DIAGRAMS) {
+  if (!bundledSource.includes(diagram.url)) {
+    throw new Error(`Standalone build could not find the generated diagram ${diagram.file} in the bundle.`);
+  }
+  const data = `data:image/jpeg;base64,${fs.readFileSync(path.join(ROOT, diagram.file)).toString('base64')}`;
+  inlinedSource = inlinedSource.replaceAll(diagram.url, data);
 }
-const diagramData = `data:image/jpeg;base64,${fs.readFileSync(path.join(ROOT, WORK_TURN_DIAGRAM)).toString('base64')}`;
-const bundle = escapeForInlineScript(bundledSource.replaceAll(WORK_TURN_DIAGRAM_URL, diagramData));
+const bundle = escapeForInlineScript(inlinedSource);
 const css = escapeForInlineStyle(read('app/styles.css'));
 let html = read('index.html');
 const moduleCount = Object.keys(result.metafile?.inputs || {}).length;

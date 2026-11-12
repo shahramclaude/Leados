@@ -131,6 +131,11 @@ import { LINE_INTAKE_CSV_COLUMNS } from './domain/lineIntakeRegistry.js';
 // ADR-0173: Matrix Demand-Variance Early Warning (CSV scope #128, Schema v137 unchanged). Aggregate only — counts and share-days, no person, no line, no decision id or title, no date, no free text.
 import { buildMatrixDemandVariance, matrixDemandVarianceCsvRows } from './domain/matrixDemandVariance.js';
 import { DEMAND_VARIANCE_CSV_COLUMNS } from './domain/matrixDemandVarianceRegistry.js';
+// ADR-0183 (Session 251, Schema v145 unchanged): the DSM partitioning slice.
+// CSV scope #137 — aggregate and identity-free, built from the SAME reader the
+// `#/matrix?panel=cycles` panel renders.
+import { buildDependencyCycles, dependencyCycleCsvRows } from './domain/dependencyCycle.js';
+import { DEPENDENCY_CYCLE_CSV_COLUMNS, DEPENDENCY_CYCLE_CSV_DESCRIPTOR } from './domain/dependencyCycleRegistry.js';
 // ADR-0161: Matrix Span Fragmentation & Counterpart-Dyad Coordination Ledger
 // (CSV scope #121). Aggregate topology only — never a person, manager, line,
 // seat or free-text agreement. An incomplete matrix span withholds workspace
@@ -1327,6 +1332,10 @@ export const CSV_EXPORTS = [
   // #136 (Schema v145, ADR-0182): automation pause permits, one identity-free
   // summary row — no switch key, no authoriser, no reason text.
   PAUSE_PERMIT_CSV_DESCRIPTOR,
+  // #137 (Schema v145 unchanged, ADR-0183): cross-boundary dependency feedback
+  // cycles, one workspace row + one row per ownership state + one row per
+  // coupled feedback block. Counts only; no id, name, line, title or note.
+  DEPENDENCY_CYCLE_CSV_DESCRIPTOR,
 ];
 
 function personLookup(state) {
@@ -6409,6 +6418,17 @@ export function buildScopeTable(state, scope, now) {
       // — the reason text of a pause never leaves the browser inside an export.
       const report = buildPausePermits(state, { now, settings: state.settings || {} });
       return { columns: PAUSE_PERMIT_CSV_COLUMNS.map((key) => ({ key, header: key })), rows: pausePermitCsvRows(report) };
+    }
+    case 'matrix-dependency-cycles': {
+      // CSV scope #137 (ADR-0183, Schema v145 unchanged). Built from the SAME
+      // reader the panel renders, so an exported count is provably the count
+      // that was printed. Aggregate only: no person, manager, line id, record
+      // id, title, note or record date. A refused claim prints its reason.
+      const report = buildDependencyCycles(state, { now, settings: state.settings || {} });
+      return {
+        columns: DEPENDENCY_CYCLE_CSV_COLUMNS.map((key) => ({ key, header: key })),
+        rows: dependencyCycleCsvRows(report),
+      };
     }
     case 'work-turns': {
       // CSV scope #135 (Schema v144, ADR-0181). Built from the SAME seat-scoped
