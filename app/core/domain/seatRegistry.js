@@ -571,6 +571,11 @@ export const ACTION_RIGHTS = Object.freeze({
   'classify-work-turn': { minRank: 1, maxRank: 5, label: 'Classify an ask you can reach as non-promotable or promotable' },
   'govern-work-turns': { minRank: 3, maxRank: 5, label: 'Scan non-promotable work turns and set the turn conventions' },
   'govern-hiring-lines': { minRank: 3, maxRank: 5, label: 'Scan co-hiring lines for declared managers who have not assessed a candidate' },
+  // ADR-0184: recording a dated workforce move is a manager deed at every
+  // leadership rank — the action narrows it to a person the seat reaches. The
+  // intended SHAPE of the workforce is a whole-workspace plan and is director+.
+  'record-workforce-move': { minRank: 1, maxRank: 5, label: 'Record a dated workforce move for a person you reach' },
+  'govern-workforce-plan': { minRank: 3, maxRank: 5, label: 'Declare the workforce’s intended shape, scan the plan and set its conventions' },
   // ADR-0177: signing one's OWN side of a transfer price is open at every
   // leadership rank; the action refuses any seat that is not that side's manager.
   'agree-transfer-price': { minRank: 1, maxRank: 5, label: 'Sign your own side of a transfer price between two lines' },

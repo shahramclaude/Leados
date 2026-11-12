@@ -136,6 +136,13 @@ import { DEMAND_VARIANCE_CSV_COLUMNS } from './domain/matrixDemandVarianceRegist
 // `#/matrix?panel=cycles` panel renders.
 import { buildDependencyCycles, dependencyCycleCsvRows } from './domain/dependencyCycle.js';
 import { DEPENDENCY_CYCLE_CSV_COLUMNS, DEPENDENCY_CYCLE_CSV_DESCRIPTOR } from './domain/dependencyCycleRegistry.js';
+// ADR-0184 (Schema v146): the Workforce Stock-Flow (Markov manpower) Plan.
+// CSV scope #138 — aggregate and identity-free, built from the SAME reader the
+// `#/matrix?panel=stock-flow` panel renders: one workspace row and one row per
+// level, rates BLANK with their reason where a cell was withheld, and never a
+// person, id, name, manager, line or free text.
+import { buildWorkforceFlow, workforceFlowCsvRows } from './domain/workforceFlow.js';
+import { WORKFORCE_FLOW_CSV_COLUMNS, WORKFORCE_FLOW_CSV_DESCRIPTOR } from './domain/workforceFlowRegistry.js';
 // ADR-0161: Matrix Span Fragmentation & Counterpart-Dyad Coordination Ledger
 // (CSV scope #121). Aggregate topology only — never a person, manager, line,
 // seat or free-text agreement. An incomplete matrix span withholds workspace
@@ -1336,6 +1343,10 @@ export const CSV_EXPORTS = [
   // cycles, one workspace row + one row per ownership state + one row per
   // coupled feedback block. Counts only; no id, name, line, title or note.
   DEPENDENCY_CYCLE_CSV_DESCRIPTOR,
+  // #138 (Schema v146, ADR-0184): the workforce stock-flow plan, one workspace
+  // row + one row per level. Rates and projections are BLANK with a reason where
+  // refused; no person, id, name, manager, line or free text.
+  WORKFORCE_FLOW_CSV_DESCRIPTOR,
 ];
 
 function personLookup(state) {
@@ -6418,6 +6429,18 @@ export function buildScopeTable(state, scope, now) {
       // — the reason text of a pause never leaves the browser inside an export.
       const report = buildPausePermits(state, { now, settings: state.settings || {} });
       return { columns: PAUSE_PERMIT_CSV_COLUMNS.map((key) => ({ key, header: key })), rows: pausePermitCsvRows(report) };
+    }
+    case 'matrix-workforce-stock-flow': {
+      // CSV scope #138 (ADR-0184, Schema v146). Built from the SAME reader the
+      // panel renders, so an exported rate is provably the rate that was
+      // printed. Aggregate only: no person, id, name, manager, line or free
+      // text. A withheld rate is BLANK with its reason in `row_reason` — never
+      // a zero, and never a borrowed figure.
+      const report = buildWorkforceFlow(state, { now, settings: state.settings || {} });
+      return {
+        columns: WORKFORCE_FLOW_CSV_COLUMNS.map((key) => ({ key, header: key })),
+        rows: workforceFlowCsvRows(report),
+      };
     }
     case 'matrix-dependency-cycles': {
       // CSV scope #137 (ADR-0183, Schema v145 unchanged). Built from the SAME

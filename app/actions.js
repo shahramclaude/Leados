@@ -48,6 +48,10 @@ import { createTransferPriceActions } from './core/domain/transferPriceActions.j
 import { createDelegationLineActions } from './core/domain/delegationLineActions.js';
 import { createWorkTurnActions } from './core/domain/workTurnActions.js';
 import { createPausePermitActions } from './core/domain/pausePermitActions.js';
+// ADR-0184: the Workforce Stock-Flow (Markov manpower) Plan. Recording a move
+// and declaring an intended shape are dated human acts through the same reviewed
+// gateway; every rate, exposure, projection and gap is derived on read.
+import { createWorkforceFlowActions } from './core/domain/workforceFlowActions.js';
 import { validatePermitRequest } from './core/domain/pausePermitActions.js';
 import { PAUSE_PERMIT_EVENTS, PAUSE_PERMIT_LIMITS, PAUSE_PERMIT_SCOPES } from './core/domain/pausePermitRegistry.js';
 // ADR-0165: the per-line 1:1 body boundary. Meetings another line holds are a fact, not a readable/editable record.
@@ -20169,6 +20173,8 @@ export function createApi(store, options = {}) {
   // authority and brings the switch back up in one commit. Every state, reach
   // flag and count is derived on read and RULE-PMP-01 runs in the same commit.
   Object.assign(api, createPausePermitActions(store, { now: clock, idFactory: id }));
+  // ADR-0184: the Workforce Stock-Flow Plan (moves, intended shapes, RULE-WFS-01).
+  Object.assign(api, createWorkforceFlowActions(store, { now: clock, idFactory: id }));
   // ADR-0177: the Cross-Line Labour Chargeback & Internal Transfer-Price Ledger.
   // Proposing, confirming and retiring a price are first-person two-key acts
   // through the same reviewed gateway; every charge is derived on read.

@@ -74,6 +74,14 @@ import {
   normalizeStructureHistoryMarkers,
   normalizeStructureHistorySettings,
 } from './domain/structureHistorySchema.js';
+// ADR-0184 (Schema v146): Workforce Stock-Flow (Markov manpower) Plan — the
+// fail-closed normalizers and the settings resolver.
+import {
+  normalizeWorkforceFlowActs,
+  normalizeWorkforceFlowTargets,
+  normalizeWorkforceFlowMarkers,
+  normalizeWorkforceFlowSettings,
+} from './domain/workforceFlowSchema.js';
 import {
   normalizeOnboardingLineBriefs,
   normalizeOnboardingLineBriefMarkers,
@@ -757,7 +765,16 @@ export {
 // `workTurnMarkers` (`RULE-NPW-01`'s bounded idempotency ledger). Deliberately
 // EMPTY on upgrade: no kind is ever inferred from a title, a role or a person,
 // so every existing ask reads `not classified` — refused, never guessed.
-export const SCHEMA_VERSION = 145;
+// v146 adds the Workforce Stock-Flow (Markov manpower) Plan (ADR-0184):
+// `workforceFlowActs` (append-only dated MOVE acts — one kind, an origin level,
+// a destination level and the day it took effect), `workforceFlowTargets`
+// (append-only dated declarations of an intended headcount at a level by a day)
+// and `workforceFlowMarkers` (`RULE-WFS-01`'s bounded idempotency ledger).
+// Deliberately EMPTY on upgrade: the roster stores TODAY'S level per person and
+// nothing about how they reached it, so an upgraded workspace has no recorded
+// history and the plan reads `no move has ever been recorded here` — refused,
+// never a rate estimated from a snapshot that was never taken.
+export const SCHEMA_VERSION = 146;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -2173,6 +2190,9 @@ export const DEFAULT_SETTINGS = Object.freeze({
   // window and automation pause.
   ...normalizeWorkTurnSettings({}),
   ...normalizePausePermitSettings({}),
+  // ADR-0184: stock-flow observation window, projection horizon, exposure floor,
+  // ask window and automation pause.
+  ...normalizeWorkforceFlowSettings({}),
 });
 
 export const COLLECTIONS = [
@@ -2884,6 +2904,12 @@ export const COLLECTIONS = [
   // expiry mark or count is stored — every one is re-derived on read.
   'pausePermits',
   'pausePermitMarkers',
+  // ADR-0184 (Schema v146): append-only workforce move acts, intended-shape
+  // declarations and RULE-WFS-01's marker ledger. No rate, exposure, projected
+  // headcount, wait time or gap is stored — every one is re-derived on read.
+  'workforceFlowActs',
+  'workforceFlowTargets',
+  'workforceFlowMarkers',
 ];
 
 /** Stable empty state. `now` is an ISO string so the result is a pure value. */
@@ -3644,6 +3670,10 @@ export function normalizeSettings(raw) {
     // key not listed would be dropped on every load, and the grace and default
     // windows printed by the register would be numbers the record does not hold.
     ...normalizePausePermitSettings(s),
+    // ADR-0184: named here because this object is rebuilt field by field — a key
+    // not listed would be dropped on every load, and the exposure floor the
+    // register prints would be a number the record does not hold.
+    ...normalizeWorkforceFlowSettings(s),
     ...normalizeStructureHistorySettings(s),
     ...normalizeDifferencesSettings(s),
     ...normalizeFitSettings(s),
@@ -8180,6 +8210,16 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.pausePermits = normalizePausePermits(raw.pausePermits, Object.keys(state.settings || {})
     .filter((key) => typeof state.settings[key] === 'boolean'), warnings);
   state.pausePermitMarkers = normalizePausePermitMarkers(raw.pausePermitMarkers);
+  // ADR-0184 (Schema v146): a move act that is not a declared kind, names an
+  // unknown level, contradicts its own declared direction, lands on a day that
+  // has not arrived, or duplicates a person-day is dropped with a counted
+  // warning — never repaired into a transition that never happened. Resolved
+  // AFTER people so the person and start-day checks are real. Targets whose
+  // horizon has already passed are dropped separately: an intended shape is a
+  // plan, not a note about the past.
+  state.workforceFlowActs = normalizeWorkforceFlowActs(raw.workforceFlowActs, state, now.slice(0, 10), warnings);
+  state.workforceFlowTargets = normalizeWorkforceFlowTargets(raw.workforceFlowTargets, now.slice(0, 10), warnings);
+  state.workforceFlowMarkers = normalizeWorkforceFlowMarkers(raw.workforceFlowMarkers);
   // ADR-0122: a malformed absence row is dropped with a warning, never repaired —
   // an invented absence is an invented unavailability for every cover in the span.
   // Resolved BEFORE links so the `declares-absence-of` provenance edge validates
@@ -8919,6 +8959,20 @@ export const MIGRATIONS = {
   // conventions. No switch value changes: a workspace already running with a
   // control off keeps it off, and that pause simply reads `unpermitted` until
   // somebody puts an authority on it. Nothing is fabricated.
+  // ADR-0184: additive 145 → 146. An existing workspace has a roster full of
+  // levels it reached by some unrecorded history, so all three ledgers start
+  // EMPTY — "no move has ever been recorded here", which is a different claim
+  // from "nobody has ever been promoted". Nothing is back-filled: a history
+  // invented at upgrade time would fabricate the very transition counts this
+  // module is careful to earn.
+  145: (v145) => ({
+    ...v145,
+    schemaVersion: 146,
+    workforceFlowActs: Array.isArray(v145.workforceFlowActs) ? v145.workforceFlowActs : [],
+    workforceFlowTargets: Array.isArray(v145.workforceFlowTargets) ? v145.workforceFlowTargets : [],
+    workforceFlowMarkers: Array.isArray(v145.workforceFlowMarkers) ? v145.workforceFlowMarkers : [],
+    settings: { ...(v145.settings || {}), ...normalizeWorkforceFlowSettings(v145.settings || {}) },
+  }),
   144: (v144) => ({
     ...v144,
     schemaVersion: 145,
