@@ -136,11 +136,12 @@ export const WORK_TURN_PLACEMENT_REASONS = Object.freeze({
 });
 
 /** One state per manager pool read. Closed, in precedence order. */
-export const WORK_TURN_POOL_STATES = Object.freeze(['partial', 'below-floor', 'share-undeclared', 'concentrated', 'even']);
+export const WORK_TURN_POOL_STATES = Object.freeze(['partial', 'below-floor', 'share-undeclared', 'share-zero', 'concentrated', 'even']);
 export const WORK_TURN_POOL_STATE_LABELS = Object.freeze({
   partial: 'Partly outside this seat',
   'below-floor': 'Too few asks to read',
   'share-undeclared': 'A share is not declared',
+  'share-zero': 'The pool’s shares sum to zero',
   concentrated: 'One person carries the turn',
   even: 'Turns are spread',
 });
@@ -148,6 +149,7 @@ export const WORK_TURN_POOL_STATE_REASONS = Object.freeze({
   partial: 'At least one person this manager holds is outside the reading seat, so the pool’s total is not known here. A turn computed over part of a pool could flatter or accuse; it is refused.',
   'below-floor': 'The pool has fewer than two people, or fewer non-promotable asks in the window than the declared floor. No pattern is claimed from that few.',
   'share-undeclared': 'At least one person in the pool is split across lines with a share missing, so nobody’s fair turn on this line can be computed. Nothing is split evenly.',
+  'share-zero': 'Every share in the pool is declared but their sum is zero, so a share-weighted turn would divide by zero and is refused.',
   concentrated: 'At least one person carries two or more of the pool’s non-promotable asks AND at least the declared multiple of their share-weighted fair turn.',
   even: 'Every person is below the declared multiple of their share-weighted fair turn.',
 });
@@ -194,14 +196,31 @@ export const WORK_TURN_DETAIL_REASONS = Object.freeze({
 
 export const WORK_TURN_RULE_RELATIONS = Object.freeze(['issues-obligation', 'rolls-up-to']);
 
+/** One state per manager pool. Refusals are counted rather than dropped. */
+export const WORK_TURN_RANK_STATES = Object.freeze([
+  'stable', 'uncertain', 'partial', 'matrix-defect', 'missing-share',
+  'too-few', 'no-evidence', 'unreadable-asks',
+]);
+
+export const WORK_TURN_RANK_REASONS = Object.freeze({
+  stable: 'The same people have the lowest share-weighted count in every resolution of the recorded uncertainties. This is a count-based turn, not evidence of capacity or consent.',
+  uncertain: 'Unclassified or unplaced asks can change who has the lowest share-weighted count. Resolve their kind or line before relying on one next turn.',
+  partial: 'Part of this pool is outside the reading seat; no complete turn can be identified.',
+  'matrix-defect': 'The matrix engine refused a related reporting line, so the pool or its shares may be incomplete.',
+  'missing-share': 'At least one pool member has no provable line share; no split is invented.',
+  'too-few': 'Fewer than two members have a positive share on this line; no one is selected by default.',
+  'no-evidence': 'No eligible member has a classified or unresolved ask in the window; no turn is inferred.',
+  'unreadable-asks': 'Ask identifiers or ranking inputs cannot be read uniquely and exactly; no turn is inferred.',
+});
+
 export const WORK_TURN_METHOD = Object.freeze([
   'A classification is a dated, append-only act by a manager who reaches the person, declaring ONE ask as non-promotable or promotable. The latest act per ask is the effective one. It is never inferred from a title, a role, a team or who the person is, and the person is never asked to classify their own ask.',
   'The reading covers asks handed over inside the declared look-back window that are open or done. An ask that was handed back is counted apart and carried by nobody. An ask an automation rule issued — one carrying a rule’s obligation link, or a rule identifier in its support note — is counted apart: it is not a manager’s choice of person.',
   'A non-promotable ask is charged to the pool of the manager whose line it came down: the recorded attribution (ADR-0178) when it names a line the person still holds, or the person’s only line. On a person with two or more lines and no attribution it is charged to NO pool.',
   'A pool is one manager and every person they hold on an active line, home or additional. A person’s fair turn in a pool is the pool’s total × their declared share on that line ÷ the pool’s total share — in exact integers. Someone who gives a line a fifth of their time owes it a fifth of a turn.',
-  'A person is over a fair turn when they carry two or more of the pool’s asks AND asks × total share × 100 ≥ threshold % × pool total × their share — one integer comparison, no rounding. A pool below the declared floor, with one person, with a share missing, or partly outside the reading seat makes NO claim.',
+  'A person is over a fair turn when they carry two or more of the pool’s asks AND asks × total share × 100 ≥ threshold % × pool total × their share — one integer comparison, no rounding. A pool below the declared floor, with one person, with a share missing, with zero total share, or partly outside the reading seat makes NO claim.',
   'A person on two or more lines is stacked when every pool they sit in was read, none is over a fair turn with them, non-promotable asks came down two or more of their lines, and in sum they carry two or more asks AND asks × people read × 100 ≥ threshold % × all non-promotable asks read — tested only once the non-promotable asks read reach the declared floor. This is the finding only a matrix has. When someone carries two or more asks and one of their pools cannot be read, they read “a pool could not be read”, never “within”.',
-  'The next turn in a pool is the person, or the tied people, with the lowest carried-to-share ratio. A tie is printed as a tie; nobody is picked.',
+  'A next turn is named only when the same people have the lowest carried-to-share ratio across every resolution of recorded unclassified or unplaced asks. For each member the lower count is classified and placed; the upper also includes unresolved asks that could belong to this pool. Possible minima are shown when the set can change, ties stay ties, and missing shares or refused lines withhold the reading. The same unplaced ask may be possible in several pools, but is not charged to any. Counts do not establish effort, capacity or consent.',
   'RULE-NPW-01 puts one dated rotation ask in front of the manager of a concentrated pool, and one in front of the single seat above every line a stacked person holds, at most once per finding, and closes its own ask when the reading clears. An owner that is the workspace leader, off the roster, or tied between two incomparable seats is recorded as an observation; nobody is substituted.',
   'This ledger grades the ALLOCATION a manager made. It stores no rating of any person, no reason an ask was accepted, and no personal characteristic of anyone.',
 ]);
@@ -218,6 +237,9 @@ export const WORK_TURN_CSV_COLUMNS = Object.freeze([
   'findings', 'findings_pool', 'findings_stack',
   'owner_unique', 'owner_leader_held', 'owner_ambiguous', 'owner_off_roster', 'owners_reconcile',
   'open_rotation_asks', 'ask_due_days',
+  'turn_rank_stable', 'turn_rank_uncertain', 'turn_rank_partial', 'turn_rank_matrix_defect',
+  'turn_rank_missing_share', 'turn_rank_too_few', 'turn_rank_no_evidence', 'turn_rank_unreadable_asks', 'turn_ranks_reconcile',
+  'pool_share_zero',
 ]);
 
 export const WORK_TURN_CSV_DESCRIPTOR = Object.freeze({
@@ -226,5 +248,5 @@ export const WORK_TURN_CSV_DESCRIPTOR = Object.freeze({
   group: 'analytics',
   sensitive: false,
   filenameSlug: 'work-turns',
-  description: 'One summary row for the asks the acting seat may read inside the declared look-back window: how they divide between handed back, issued by automation and read (reconciled to the asks in the window); how the asks read divide between non-promotable, promotable and not classified (reconciled separately); how the non-promotable asks are placed on a named line, a single derived line, no line and a line no longer held (reconciled separately); how many people read under each of the five verdicts (reconciled separately); how many manager pools read under each of the five states (reconciled separately); how many findings there are and where each one lands (reconciled separately); and how many rotation asks are open. NO person, NO manager, NO ask title and NO free text.',
+  description: 'One summary row for the asks the acting seat may read inside the declared look-back window: how they divide between handed back, issued by automation and read (reconciled to the asks in the window); how the asks read divide between non-promotable, promotable and not classified (reconciled separately); how the non-promotable asks are placed on a named line, a single derived line, no line and a line no longer held (reconciled separately); how many people read under each of the five verdicts (reconciled separately); how many manager pools read under each of the six states (reconciled separately); the separately reconciled next-turn evidence and refusal states; how many findings there are and where each one lands (reconciled separately); and how many rotation asks are open. NO person, NO manager, NO ask title and NO free text.',
 });

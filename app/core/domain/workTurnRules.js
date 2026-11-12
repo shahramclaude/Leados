@@ -52,6 +52,10 @@ export const WORK_TURN_TRIGGER_EVENTS = new Set([
 ]);
 
 export const WORK_TURN_CLOSED_PREFIX = `Closed by ${WORK_TURN_RULE_ID}:`;
+export const WORK_TURN_OLD_GUIDANCE = 'The ledger names who is next in turn (#/matrix?panel=turns).';
+// No longer than the replaced sentence: a correction cannot truncate a human's
+// existing text when the bounded delegation is loaded again.
+export const WORK_TURN_GUIDANCE = 'Check evidence, capacity and consent: #/matrix?panel=turns.';
 
 const clip = (value, n = 280) => String(value || '').trim().slice(0, n);
 
@@ -66,7 +70,7 @@ function askText(finding, { dueOn, windowDays, factorPct }) {
   if (finding.kind === 'pool') {
     return {
       title: `Rotate the next non-promotable ask in your team: ${finding.carriedN} of ${finding.totalN} went to ${who}`,
-      expectedOutcome: `By ${dueOn}, decide who takes the next piece of work that has to be done and advances nobody. In the last ${windowDays} days ${who} carried ${finding.carriedN} of the ${finding.totalN} non-promotable asks that came down your line — at least ${factorPct}% of a share-weighted fair turn. The ledger names who is next in turn (#/matrix?panel=turns). No ask was reassigned automatically.`,
+      expectedOutcome: `By ${dueOn}, decide who takes the next piece of work that has to be done and advances nobody. In the last ${windowDays} days ${who} carried ${finding.carriedN} of the ${finding.totalN} classified and placed non-promotable asks that came down your line — at least ${factorPct}% of their share-weighted turn over that recorded subset. ${WORK_TURN_GUIDANCE} The ledger may refuse a single next turn. No ask was reassigned automatically.`,
       summary: 'A manager’s pool concentrates its non-promotable asks on one person.',
     };
   }
@@ -115,6 +119,7 @@ export function workTurnRule(draft, ctx = {}) {
   let issued = 0;
   let deferred = 0;
   let observed = 0;
+  let guidanceUpdated = 0;
 
   // 1. Close the rule's own asks whose finding is gone or whose owner moved.
   const open = new Set();
@@ -123,7 +128,17 @@ export function workTurnRule(draft, ctx = {}) {
     const task = draft.delegations.find((d) => d && d.id === marker.taskId && d.status === 'active');
     if (!task) continue;
     const finding = owed.get(marker.subject);
-    if (finding && finding.ownerId === task.personId) { open.add(marker.subject); continue; }
+    if (finding && finding.ownerId === task.personId) {
+      // Correct only the exact sentence from the old rule template. Preserve
+      // all other human edits, and record the correction through the spine.
+      if (typeof task.expectedOutcome === 'string' && task.expectedOutcome.includes(WORK_TURN_OLD_GUIDANCE)) {
+        task.expectedOutcome = task.expectedOutcome.replace(WORK_TURN_OLD_GUIDANCE, WORK_TURN_GUIDANCE);
+        task.updatedAt = nowIso;
+        guidanceUpdated += 1;
+      }
+      open.add(marker.subject);
+      continue;
+    }
     task.status = 'done';
     task.completedOn = today;
     task.completionNote = `${WORK_TURN_CLOSED_PREFIX} the ledger no longer reads this finding, or the seat that owns it changed.`;
@@ -200,6 +215,7 @@ export function workTurnRule(draft, ctx = {}) {
   }
 
   if (closed) effect(ctx, out, 'completed', `Closed ${closed} non-promotable work rotation ask(s) whose finding cleared.`);
+  if (guidanceUpdated) effect(ctx, out, 'updated', `Corrected the next-turn guidance on ${guidanceUpdated} existing rotation ask(s); other edits were preserved.`);
   if (issued) effect(ctx, out, 'delegated', `Issued ${issued} non-promotable work rotation ask(s), due ${dueOn}.`);
   if (observed) effect(ctx, out, 'observed', `Recorded ${observed} finding(s) with no single owning seat; nobody was substituted.`);
   if (deferred) effect(ctx, out, 'deferred', `${deferred} rotation ask(s) were not issued in this commit (cap ${WORK_TURN_LIMITS.asksPerCommit}); they follow on the next write.`);

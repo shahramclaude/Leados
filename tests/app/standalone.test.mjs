@@ -276,7 +276,12 @@ test('standalone artifact exists and is a single inline HTML document', () => {
   // module, DOWN from 14,979 (11,339,650 / 757). The ceiling moves only because
   // real capability was added; the 24,000-byte density guard below is unchanged
   // and is what still catches a module inlined twice.
-  assert.ok(bytes < 11_420_000, `standalone file is unexpectedly large (${bytes} bytes)`);
+  // Session 250 adds the evidence-bounds reader and one 65,006-byte generated
+  // instructional diagram (base64 in the offline file). The density guard is unchanged.
+  assert.ok(bytes < 11_520_000, `standalone file is unexpectedly large (${bytes} bytes)`);
+  const diagram = fs.readFileSync(path.join(ROOT, 'app/assets/work-turn-evidence.jpg'));
+  assert.ok(html.includes(`data:image/jpeg;base64,${diagram.toString('base64')}`), 'the offline artifact embeds the exact diagram bytes');
+  assert.doesNotMatch(html, /\.\/app\/assets\/work-turn-evidence\.jpg/, 'offline diagram must not depend on the app folder');
   const declaredModules = Number((html.match(/content="[^"]*?(\d+) source modules/) || [])[1]);
   assert.ok(declaredModules > 100, `expected the build to declare its module count (got ${declaredModules})`);
   const bytesPerModule = Math.round(bytes / declaredModules);

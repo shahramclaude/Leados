@@ -45,7 +45,7 @@ import {
 } from '../core/domain/workTurnRegistry.js';
 
 const BAD = new Set(['over-turn', 'stacked', 'concentrated', 'unplaced', 'stale']);
-const WARN = new Set(['unread', 'partial', 'share-undeclared', 'unclassified', 'leader-held', 'ambiguous', 'off-roster']);
+const WARN = new Set(['unread', 'partial', 'share-undeclared', 'share-zero', 'unclassified', 'leader-held', 'ambiguous', 'off-roster']);
 const GOOD = new Set(['within', 'even', 'promotable', 'attributed', 'sole-line', 'unique']);
 const tone = (key) => (BAD.has(key) ? 'bad' : WARN.has(key) ? 'warn' : GOOD.has(key) ? 'good' : 'neutral');
 const shareText = (shareH) => (shareH === null || shareH === undefined ? 'not declared' : `${shareH}%`);
@@ -67,7 +67,7 @@ function act(ctx, result, ok) {
 function boardCard(ctx, report, now) {
   const b = report.board;
   const reconciles = b.populationReconciles && b.classesReconcile && b.placementsReconcile
-    && b.verdictsReconcile && b.poolsReconcile && b.ownersReconcile;
+    && b.verdictsReconcile && b.poolsReconcile && b.ownersReconcile && b.turnRanksReconcile;
   const alarming = b.findingsN > 0 || b.verdicts.unplaced > 0;
   const actions = [
     report.actor.canGovern ? h('button', {
@@ -96,7 +96,7 @@ function boardCard(ctx, report, now) {
       reconciles
         ? banner({
           tone: alarming ? 'warn' : 'good',
-          title: 'All six count identities reconcile',
+          title: 'All seven count identities reconcile',
           body: h('pre', { class: 'small', 'data-testid': 'npw-brief' }, workTurnBriefText(report)),
         })
         : banner({
@@ -110,6 +110,7 @@ function boardCard(ctx, report, now) {
         stat({ label: 'Not classified', value: String(b.classes.unclassified), tone: b.classes.unclassified ? 'warn' : 'good' }),
         stat({ label: 'Over a fair turn', value: String(b.verdicts['over-turn']), tone: b.verdicts['over-turn'] ? 'bad' : 'good', hint: `${b.pools.concentrated} pool(s) concentrated` }),
         stat({ label: 'Stacked across lines', value: String(b.verdicts.stacked), tone: b.verdicts.stacked ? 'bad' : 'good', hint: `${report.sharedPeopleN} on more than one line` }),
+        stat({ label: 'Stable next-turn sets', value: String(b.turnRanks.stable), hint: `${b.turnRanks.uncertain} uncertain · refusals itemised below` }),
         stat({ label: 'Open rotation asks', value: String(b.openRotationAsksN), hint: WORK_TURN_RULE_ID })),
       report.detail.withheld
         ? banner({ tone: 'info', title: 'Detail is withheld at this altitude', body: report.detail.reason })
@@ -124,7 +125,7 @@ function poolsCard(report) {
   const memberRows = report.pools.flatMap((pool) => pool.members.map((member) => ({ ...member, pool })));
   return card({
     title: 'Pools',
-    subtitle: 'One manager and everyone they hold on an active line, home or additional. A fair turn is weighted by the share of the person that line holds.',
+    subtitle: 'Turns use classified and placed ask counts, weighted by line share. Unresolved asks can change the result. A count is not effort, capacity or consent; consult the receiving lines before moving work.',
     body: h('div', { class: 'stack' },
       table({
         caption: 'Manager pools and whose turn is next',
@@ -132,8 +133,9 @@ function poolsCard(report) {
           { label: 'Manager', render: (p) => p.managerName },
           { label: 'State', render: (p) => badge(WORK_TURN_POOL_STATE_LABELS[p.stateKey], tone(p.stateKey), WORK_TURN_POOL_STATE_REASONS[p.stateKey]) },
           { label: 'People', render: (p) => (p.hiddenN ? `${p.memberN} (${p.hiddenN} outside this seat)` : String(p.memberN)) },
-          { label: 'Non-promotable asks', render: (p) => String(p.totalN) },
-          { label: 'Next turn', render: (p) => (p.nextTurn ? `${p.nextTurn.names.join(', ')}${p.nextTurn.tied ? ' (tied)' : ''}` : '—') },
+          { label: 'Classified and placed asks', render: (p) => String(p.totalN) },
+          { label: 'Unresolved asks possible here', render: (p) => (p.turnRank.unresolvedN === null ? 'refused' : String(p.turnRank.unresolvedN)) },
+          { label: 'Next turn, under recorded bounds', render: (p) => p.turnRank.text },
         ],
         rows: report.pools,
       }),
@@ -144,8 +146,10 @@ function poolsCard(report) {
           { label: 'Person', render: (m) => m.name },
           { label: 'Line', render: (m) => m.kind },
           { label: 'Share of the person', render: (m) => shareText(m.shareH) },
-          { label: 'Carried', render: (m) => String(m.carriedN) },
-          { label: 'Fair turn', render: (m) => (m.turnText ? `${m.turnText}${m.turnApprox === null ? '' : ` ≈ ${m.turnApprox}`}` : 'refused') },
+          { label: 'Classified and placed', render: (m) => String(m.carriedN) },
+          { label: 'Unresolved possible here', render: (m) => String(m.unresolvedN) },
+          { label: 'Count bounds', render: (m) => `${m.carriedN}–${m.upperN}` },
+          { label: 'Turn from placed asks', render: (m) => (m.turnText ? `${m.turnText}${m.turnApprox === null ? '' : ` ≈ ${m.turnApprox}`}` : 'refused') },
           { label: 'Reading', render: (m) => (m.over ? badge('Over a fair turn', 'bad') : '—') },
         ],
         rows: memberRows,
@@ -299,7 +303,20 @@ export function renderMatrixWorkTurnPanel(ctx, { now = new Date() } = {}) {
     findingsCard(report),
     asksCard(ctx, report),
     conventionsCard(ctx, report),
-    card({ title: `Method and refusal contract (${WORK_TURN_ADR})`, body: h('ol', { class: 'stack small' }, ...report.method.map((line) => h('li', {}, line))) }));
+    card({
+      title: `Method and refusal contract (${WORK_TURN_ADR})`,
+      body: h('div', { class: 'stack' },
+        h('figure', { style: { margin: '0' } },
+          h('img', {
+            src: './app/assets/work-turn-evidence.jpg',
+            alt: 'Classified, unclassified and unplaced asks inform bounds. The result can be stable, uncertain or refused.',
+            loading: 'lazy', width: '896', height: '296', 'data-testid': 'npw-evidence-diagram',
+            style: { width: '100%', 'max-width': '896px', height: 'auto' },
+          }),
+          h('figcaption', { class: 'small' }, 'Conceptual diagram, not workspace data. Missing shares or refused lines can also prevent a ranking.')),
+        h('ol', { class: 'stack small' }, ...report.method.map((line) => h('li', {}, line))),
+      ),
+    }));
 }
 
 export default renderMatrixWorkTurnPanel;
