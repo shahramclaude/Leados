@@ -4815,6 +4815,110 @@ export function buildDemoState(now = new Date()) {
     });
   });
 
+  /* ======================================================================
+   * Workforce move history (ADR-0184, Schema v146)
+   *
+   * A stock-flow plan needs a RECORDED history, and the roster only stores
+   * today's level. These are dated human acts, not an inference — and they are
+   * written so the history RECONCILES with the roster:
+   *
+   *   - every arrival is dated on the person's own recorded start day, so a hire
+   *     can never precede the day the person exists in this workspace;
+   *   - every exit is dated on the last day the person's departure record
+   *     already carries, so the ledger and the retention tab cannot disagree;
+   *   - the level each person holds TODAY is the level their last recorded move
+   *     led to. Walking these moves backwards from today therefore lands on the
+   *     same stock the roster stores, which is exactly the check the reader runs.
+   *
+   * Writing it any other way would make the demo contradict itself, and the
+   * module's whole point is that it refuses to invent a history.
+   * ==================================================================== */
+  const record = (kind, personId, fromLevel, toLevel, effectiveOn, note = '') => {
+    state.workforceFlowActs.push({
+      id: id('wfm'),
+      kind,
+      personId,
+      fromLevel,
+      toLevel,
+      effectiveOn,
+      note,
+      recordedOn: effectiveOn,
+      recordedById: null,
+      at: `${effectiveOn}T09:00:00.000Z`,
+      withdrawn: false,
+      withdrawnOn: null,
+      withdrawnById: null,
+      withdrawnReason: null,
+      withdrawnAt: null,
+    });
+  };
+  const personById = (pid) => (state.people || []).find((p) => p && p.id === pid) || null;
+  const levelOf = (pid) => personById(pid)?.level || null;
+  const startOf = (pid) => personById(pid)?.startDate || null;
+
+  // ARRIVALS. Each one is dated on that person's own first day, and enters at the
+  // rung their earliest recorded move left from.
+  const arrivals = [
+    { pid: priya, level: 'ic' },
+    { pid: jordan, level: 'ic' },
+    { pid: mei, level: 'ic' },
+    { pid: samuel, level: 'manager' }, // hired straight into the seat, no IC stair-step
+    { pid: freya, level: 'ic' },
+  ];
+  for (const entry of arrivals) {
+    const day = startOf(entry.pid);
+    if (!day) continue;
+    record('hire', entry.pid, null, entry.level, day, 'Joined the platform team.');
+  }
+
+  // PROMOTIONS. Dated inside the observation window so the entry and senior rungs
+  // carry real exposure. The destination of each one is the rung the next move
+  // (or today) finds the person in.
+  record('promotion', priya, 'ic', 'lead', at(340), 'Took the second delivery stream.');
+  record('promotion', jordan, 'ic', 'senior', at(96), 'Owned the migration end to end.');
+  record('promotion', mei, 'ic', 'senior', at(200), 'Made the on-call rota work.');
+  // The rung each person sits in today must be the destination of their last
+  // move, or the reader reports a contradiction instead of a rate.
+  for (const pid of [priya, jordan, mei, samuel, freya]) {
+    const last = [...state.workforceFlowActs].reverse().find((a) => a.personId === pid && a.toLevel);
+    if (last && last.toLevel !== levelOf(pid)) {
+      throw new Error(`demo workforce ledger disagrees with the roster for ${pid}: ${last.toLevel} recorded, ${levelOf(pid)} stored`);
+    }
+  }
+
+  // EXITS. Taken from the departure records that are already in this workspace —
+  // never hand-written a second time, so the two tabs cannot drift apart — but
+  // only for people the ROSTER has archived. Today this demo also carries
+  // departure rows for two people the roster still lists as active; those are a
+  // pre-existing inconsistency in the fixture, and writing an exit for them here
+  // would make this ledger contradict the roster in exactly the way the reader
+  // reports. The roster is the authority on who holds stock, so no exit is
+  // invented for them. (Logged as a gap: the retention tab and the roster need a
+  // reconciliation rule of their own.)
+  for (const departure of state.departures) {
+    const person = personById(departure.personId);
+    if (!person || !person.level || !departure.lastDay) continue;
+    if (person.status !== 'archived') continue;
+    record(
+      departure.type === 'involuntary' ? 'attrition-involuntary' : 'attrition-voluntary',
+      person.id,
+      person.level,
+      null,
+      departure.lastDay,
+      departure.exitNote || '',
+    );
+  }
+
+  // The intended shape: hold four people in the entry rung, three at lead and
+  // one at director by the end of the coming year. A gap here is a QUESTION for
+  // the chief — the module never turns it into a recommendation.
+  const targetDay = addDays(today, 400);
+  state.workforceFlowTargets.push(
+    { id: id('wft'), level: 'ic', headcount: 4, byOn: targetDay, note: 'Two more analysts if the numbers work holds.', declaredOn: at(20), declaredById: null, retired: false, retiredOn: null, retiredById: null, at: ts(20) },
+    { id: id('wft'), level: 'lead', headcount: 3, byOn: targetDay, note: 'A lead under each of the two streams, plus one floating.', declaredOn: at(20), declaredById: null, retired: false, retiredOn: null, retiredById: null, at: ts(20) },
+    { id: id('wft'), level: 'director', headcount: 1, byOn: targetDay, note: '', declaredOn: at(20), declaredById: null, retired: false, retiredOn: null, retiredById: null, at: ts(20) },
+  );
+
   // Pay data for the people still here. Priya sits below band and has not had a
   // level change on record; Jordan is inside band; Samuel is new to the role.
   const pay = {

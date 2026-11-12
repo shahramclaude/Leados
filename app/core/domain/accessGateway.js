@@ -115,6 +115,13 @@ const groups = [
   ['permit-automation-pause', 'pausePermitGrant pausePermitRevoke'],
   ['govern-automation-pauses', 'pausePermitScan pausePermitSetConventions'],
   ['govern-hiring-lines', 'hiringLineScan'],
+  // ADR-0184: recording a dated workforce move is a manager act against a person
+  // they reach — the ACTION narrows it to that person's span or declared lines,
+  // and refuses anybody else. Declaring or retiring the intended shape of the
+  // workforce is director+ (it is a plan for the whole workspace), and so are
+  // the convention setter and the scan.
+  ['record-workforce-move', 'workforceFlowRecordMove workforceFlowWithdrawMove'],
+  ['govern-workforce-plan', 'workforceFlowDeclareTarget workforceFlowRetireTarget workforceFlowScan workforceFlowSetConventions'],
   // ADR-0177: a transfer price is a TWO-KEY act. Proposing, confirming and
   // retiring are open at every leadership rank because a project lead with no
   // home-line reports is exactly who borrows; the action narrows each to the
@@ -487,7 +494,12 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // ADR-0177: the chargeback statement is scoped INSIDE the read model — a seat
 // reads the line accounts it reaches and every piece that names one of them;
 // the rest is counted as withheld and names outside the seat are withheld.
-'transferPriceReport']);
+'transferPriceReport',
+// ADR-0184: the stock-flow plan is scoped INSIDE the read model — the visible
+// person population bounds the acts read, and the altitude disclosure ladder
+// decides whether level rows, rates and the projection are returned or counts
+// only. A withheld row is a printed reason, never a zero.
+'workforceFlowReport']);
 const refusal = (reason) => ({ ok: false, code: 'scope-refusal', error: reason, field: 'scope' });
 
 /** ADR-0087: under enforcement, boundary-management commands stay reachable

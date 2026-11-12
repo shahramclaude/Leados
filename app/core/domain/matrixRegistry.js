@@ -220,6 +220,10 @@ export const MATRIX_PANELS = Object.freeze([
   // connected components of the typed dependency graph, the condensation
   // order, and the reporting-line reach of each coupled feedback block.
   Object.freeze({ key: 'cycles', label: 'Feedback cycles', hint: 'Which work waits on itself in a closed loop, and whether that loop crosses reporting lines no single manager can settle (ADR-0183).' }),
+  // ADR-0184 (Session 252): the workforce as a system of stocks and flows — the
+  // estimated level-by-level transition matrix, exposure-corrected rates with
+  // their refusals, the projection and the declared-shape gap.
+  Object.freeze({ key: 'stock-flow', label: 'Stock-flow', hint: 'How the workforce moves between levels, what that implies for the pyramid in four quarters, and how far that is from the shape you declared (ADR-0184).' }),
 ]);
 
 export const MATRIX_PANEL_KEYS = Object.freeze(MATRIX_PANELS.map((p) => p.key));

@@ -135,10 +135,12 @@ test('every CSV scope round-trips cleanly and preserves unknown values as blank 
 // ADR-0181 adds #135 (non-promotable work turns, one identity-free summary
 // row).
 // ADR-0182 adds #136 (automation pause permits, one identity-free summary row
-// with no switch key, no authoriser and no reason text) — 136 registered.
+// with no switch key, no authoriser and no reason text).
+// ADR-0184 adds #138 (workforce stock-flow: one workspace summary row plus one
+// row per roster level, identity-free) — 138 registered.
 // The pin states the total deliberately so the next session cannot drift the
 // catalog count silently.
-assert.equal(CSV_EXPORTS.length, 137);
+assert.equal(CSV_EXPORTS.length, 138);
   for (const spec of CSV_EXPORTS) {
     const res = exportWorkspaceCsv(state, spec.key, { now: NOW });
     assert.equal(res.ok, true, `${spec.key} export succeeds`);

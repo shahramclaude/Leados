@@ -167,6 +167,8 @@ import { lineHorizonRule } from './lineHorizonRules.js';
 import { workTurnRule } from './workTurnRules.js';
 // ADR-0182 (Schema v145): the Automation Pause Permit Register (RULE-PMP-01).
 import { pausePermitRule } from './pausePermitRules.js';
+// ADR-0184 (Schema v146): the Workforce Stock-Flow Plan (RULE-WFS-01).
+import { workforceFlowRule } from './workforceFlowRules.js';
 
 
 // ADR-0087: the Operating Cadence Clock. Reads the finished queue after the
@@ -989,6 +991,15 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // transaction's open work up every leadership span, and `sealRule` attests
   // all of it in one seal. Inert in single-chain workspaces.
   lineHorizonRule,
+  // ADR-0184: RULE-WFS-01. Notices a stock-flow plan the record cannot support —
+  // no move ever recorded, a projection with no declared shape, or rates withheld
+  // for lack of exposure — and puts ONE dated ask in front of the single seat
+  // above every reporting line. Registered before `seatRule` so the ask is in the
+  // record when the Operating Seat fans the same transaction up every span, and
+  // before `sealRule` so the seal covers it. Never writes a move or a target on
+  // anybody's behalf, never estimates a rate to fill a hole, and is inert with
+  // nobody on the roster.
+  workforceFlowRule,
   // ADR-0076: the Operating Seat (vertical roll-up + enforced boundaries).
   // It reads the finished record after every module has propagated, then fans
   // each open item up every leadership ancestor in the reporting tree with one

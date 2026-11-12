@@ -126,6 +126,7 @@ import { delegationLineRule } from './delegationLineRules.js';
 import { lineHorizonRule } from './lineHorizonRules.js';
 import { workTurnRule } from './workTurnRules.js';
 import { pausePermitRule } from './pausePermitRules.js';
+import { workforceFlowRule } from './workforceFlowRules.js';
 import { sealRule } from './sealRules.js';
 // ADR-0092: the Differencing Defender declares its contract like every other rule.
 import { differencingRule } from './differencingRules.js';
@@ -980,6 +981,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'pausePermitRules.js',
     purpose: 'RULE-PMP-01: reads the Automation Pause Permit Register (`buildPausePermits`, ADR-0182) with the whole-workspace operator view on settings writes, permit grant / revoke, convention changes, explicit `automation.pause.scan` scans, reporting-line acts and roster changes. For every declared automatic switch that is OFF with no permit in force — whether the permit ran out (`expired`) or none was ever recorded (`unpermitted`) — and whose off-period has stood past the declared grace, it keeps at most ONE open dated delegation with the single seat that can authorise a workspace-wide pause (the joint apex of the reporting graph), naming the consequence and the two ways to resolve it. Asks carry matrix-DAG `rolls-up-to` provenance, are idempotent per pause signature, bounded at 6 per commit with the remainder counted, and close themselves when the pause is permitted or the switch comes back on. A pause whose authorising seat is the workspace leader, off the roster or tied between incomparable seats is recorded as an observation; nobody is substituted. It never flips a switch, never writes or revokes a permit, never rates a person and never judges why somebody paused; pausable via `pausePermitAutoPropagate`; INERT while every switch is on and no permit exists.',
     writes: ['delegations', 'links', 'pausePermitMarkers'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: workforceFlowRule,
+    module: 'workforceFlowRules.js',
+    purpose: 'RULE-WFS-01: reads the Workforce Stock-Flow (Markov manpower) Plan (`buildWorkforceFlow`, ADR-0184) with the whole-workspace operator view on recorded moves, withdrawn moves, declared or retired intended shapes, convention changes, explicit `workforce.flow.scan` scans and every roster or departure act. It raises at most ONE open dated ask per finding, bounded at 4 per commit with the remainder counted: (a) `history-missing` — a roster at or above the declared minimum with NO move ever recorded, so every projection is refused for want of a history the record never held; (b) `target-missing` — a projection that is printable while no intended shape has been declared, so the comparison claim is refused rather than made against the projection itself; (c) `exposure-thin` — a level whose moves exist but whose exposure sits below the declared floor, so its headcount is carried forward unchanged and the row says so. Asks name the single seat above every reporting line (the joint apex), carry matrix-DAG `rolls-up-to` provenance and `issues-obligation` to the owner, are idempotent per finding signature, and close themselves when the finding clears. A leader-held, off-roster or tied apex is observed once and nobody is substituted. It never writes a move, a target or a rate, never fills a thin cell with a borrowed rate, asks about the RECORD and the declared SHAPE rather than any person, and is inert with nobody on the roster; pausable via `workforceFlowAutoPropagate`.',
+    writes: ['delegations', 'links', 'workforceFlowMarkers'],
     emits: [],
     scansWorkspace: true,
   },
