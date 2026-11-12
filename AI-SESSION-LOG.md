@@ -1,3 +1,17 @@
+## 2026-11-12 — Session 252: demand-variance CSV prints the computed row (Schema v145 unchanged)
+
+**Built:** repaired the `#/matrix?panel=demand-variance` export, which passed row objects and column definitions to `serializeCsv` in reverse order and therefore emitted blank cells. The active panel download action now uses `matrixDemandVarianceCsvText(report)`, which serializes the exact identity-free rows returned by the report reader, with the canonical column-first contract, and passes the filename/content/MIME using `downloadText`'s actual options-object API. No schema, data or automation writes.
+
+**Altitude / structure / duty:** every leader's seat-scoped demand-variance view (frontline, mid-manager, director, VP and CEO) × matrix and single-chain. Duty: export the already-computed decision queue/capacity finding without introducing a display-to-file discrepancy.
+
+**Benchmark:** RFC 4180-compatible output and formula-neutralization through LeadOS's canonical CSV serializer; the focused regression parses the export and compares header order and every cell to the exact computed row. This meets the repository's defined internal standard. No third-party CSV parser/interoperability pass was run: **[BENCHMARK-UNVERIFIED]** for independent consumer parity. No AI model/tool or Higgsfield asset is applicable to this export repair; none was used.
+
+**Proactive discovery:** added **Matrix change-impact line sign-off coverage** to Planned: per affected person, the record lacks dated review requests/responses for each distinct active reporting line. Targeted `app/core` and `app/views` search found no such mechanism; repo-wide absence **[UNVERIFIED]**.
+
+**Verified:** `node --test --test-name-pattern='panel download uses' tests/app/matrix-demand-variance.test.mjs` — 1/1 PASS: clicked the rendered button, captured the emitted Blob and filename, and checked byte-for-byte parity with the computed aggregate row, exact columns and identity-free content; changed-file ESLint and `git diff --check` PASS. The full focused file was run once: the new test passed, while 3 existing unrelated assertions failed (stale expected schema v142 vs actual v145, an outdated refusal-text expectation, and an identity-free-export date expectation). Not modified. Actual browser download and independent CSV consumer compatibility **[UNVERIFIED]**. No asset generated.
+
+**Why / next:** fix a known silent export failure before adding further analysis. Next: Matrix change-impact line sign-off coverage, frontline through CEO × matrix; do not imply silence is approval or manager review is employee consent.
+
 ## 2026-11-12 — Session 251: work that waits on itself, and the manager who cannot settle the loop (ADR-0183, Schema v145 unchanged, CSV #137, `#/matrix?panel=cycles`)
 
 **Doctrine / sync / scope.** `NORTH_STAR.md` present with all four binding mandates (Matrix Leadership, Bulletproof Reliability, Visual/Content Integrity, Competitive Benchmark) — Step 0.5 augmentation was already present, no change needed. Origin confirmed as `https://github.com/shahramclaude/Leados.git`; work stayed on `arena/fe43f700-leados`. **Altitude: director / VP PRIMARY**, the rotation Session 250 named; **structure: matrix**, with a single-chain workspace fully supported and printing no cross-line finding when one branch holds the loop. Selected the Session-203 Planned DSM/SCC capability, sliced to the partitioning join that could ship complete.

@@ -32,7 +32,7 @@ import { MATRIX_PANELS } from '../../app/core/domain/matrixRegistry.js';
 import { buildMatrixDemandVariance, matrixDemandVarianceBriefText, matrixDemandVarianceCsvRows } from '../../app/core/domain/matrixDemandVariance.js';
 import { DEMAND_VARIANCE_CSV_COLUMNS } from '../../app/core/domain/matrixDemandVarianceRegistry.js';
 import { CSV_EXPORTS, exportWorkspaceCsv, parseCsv } from '../../app/core/csv.js';
-import { renderMatrixDemandVariancePanel } from '../../app/views/matrixDemandVariancePanel.js';
+import { matrixDemandVarianceCsvText, renderMatrixDemandVariancePanel } from '../../app/views/matrixDemandVariancePanel.js';
 
 const NOW = new Date('2026-11-11T12:00:00.000Z'); // today: 2026-Q4 runs Oct 1–Dec 31 = 92 days
 const STAMP = '2020-01-01T00:00:00.000Z';
@@ -292,4 +292,46 @@ test('the panel renders the board and the brief, displaying stored figures', () 
   assert.ok(text.includes('36.80'), 'the ceiling is printed');
   assert.ok(text.includes('63.00'), 'the demand is printed');
   assert.ok(text.includes('26.20'), 'the variance is printed');
+});
+
+test('the panel download uses canonical columns and exactly the computed aggregate row', async () => {
+  const state = fixture();
+  const report = read(state);
+  const expectedText = matrixDemandVarianceCsvText(report);
+  const parsed = parseCsv(expectedText);
+  const expected = matrixDemandVarianceCsvRows(report)[0];
+  assert.deepEqual(parsed.headers, [...DEMAND_VARIANCE_CSV_COLUMNS]);
+  assert.equal(parsed.rows.length, 1);
+  assert.deepEqual(parsed.rows[0], DEMAND_VARIANCE_CSV_COLUMNS.map((key) => String(expected[key] ?? '')));
+  assert.ok(parsed.rows[0].some((cell) => cell === '63.00' || cell === '6300'), 'the CSV contains non-empty computed values');
+  const exported = `${parsed.headers.join(',')}\n${parsed.rows[0].join(',')}`;
+  assert.ok(!exported.includes('Kim') && !exported.includes('Milo') && !exported.includes('Vendor'), 'the panel export remains aggregate-only');
+
+  const originalCreate = URL.createObjectURL;
+  const originalRevoke = URL.revokeObjectURL;
+  let blob = null;
+  let filename = '';
+  try {
+    URL.createObjectURL = (value) => { blob = value; return 'blob:matrix-demand-variance-test'; };
+    URL.revokeObjectURL = () => {};
+    withDom((dom) => {
+      dom.window.document.addEventListener('click', (event) => {
+        if (event.target?.tagName === 'A') {
+          filename = event.target.download;
+          event.preventDefault();
+        }
+      }, true);
+      const panel = renderMatrixDemandVariancePanel({ state }, { now: NOW });
+      dom.window.document.body.appendChild(panel);
+      const button = panel.querySelector('button');
+      assert.ok(button, 'the aggregate download action is present');
+      button.click();
+    });
+  } finally {
+    URL.createObjectURL = originalCreate;
+    URL.revokeObjectURL = originalRevoke;
+  }
+  assert.ok(blob, 'click produced a file blob');
+  assert.equal(filename, 'matrix-demand-variance-2026-Q4.csv');
+  assert.equal(await blob.text(), expectedText, 'downloaded file is byte-for-byte the computed aggregate CSV');
 });

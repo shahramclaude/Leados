@@ -30,6 +30,21 @@ const toneFor = (verdict) => {
   return v ? v.tone : 'neutral';
 };
 
+/** Serialize the same aggregate rows the panel displays, using the canonical RFC 4180 column-first contract. */
+export function matrixDemandVarianceCsvText(report) {
+  const columns = DEMAND_VARIANCE_CSV_COLUMNS.map((key) => ({ key, header: key }));
+  return serializeCsv(columns, matrixDemandVarianceCsvRows(report));
+}
+
+function downloadDemandVarianceCsv(report) {
+  const csv = matrixDemandVarianceCsvText(report);
+  downloadText({
+    filename: `matrix-demand-variance-${report.board.periodKey || 'unreadable'}.csv`,
+    text: csv,
+    mime: 'text/csv',
+  });
+}
+
 function boardPanel(report) {
   const b = report.board;
   if (!b.periodKey) {
@@ -167,11 +182,7 @@ function flowPanel(report) {
 
 function briefPanel(report) {
   const brief = matrixDemandVarianceBriefText(report);
-  const csvRows = matrixDemandVarianceCsvRows(report);
-  const downloadCsv = () => {
-    const csv = serializeCsv(csvRows, DEMAND_VARIANCE_CSV_COLUMNS);
-    downloadText(csv, `matrix-demand-variance-${report.board.periodKey || 'unreadable'}.csv`, 'text/csv');
-  };
+  const downloadCsv = () => downloadDemandVarianceCsv(report);
   return card({
     title: 'The brief (identity-free)',
     subtitle: 'The paragraph that goes upward. It names no person, no line and no decision.',
@@ -204,13 +215,6 @@ export function renderMatrixDemandVariancePanel(ctx, opts = {}) {
   const state = ctx?.state || {};
   const now = opts.now || new Date();
   const report = buildMatrixDemandVariance(state, { now, settings: state.settings || null });
-  const brief = matrixDemandVarianceBriefText(report);
-  const csvRows = matrixDemandVarianceCsvRows(report);
-
-  const downloadCsv = () => {
-    const csv = serializeCsv(csvRows, DEMAND_VARIANCE_CSV_COLUMNS);
-    downloadText(csv, `matrix-demand-variance-${report.board.periodKey || 'unreadable'}.csv`, 'text/csv');
-  };
 
   return h('div', { class: 'stack' },
     h('p', { class: 'lede' }, 'The accountability ledger can see a line’s declared share; the decision log can see the calls still open. Nothing compared the age-weighted demand piling up on each declared line against what that line declared it could carry — so a cross-line overload was visible nowhere, and a single-line backlog looked like ordinary queueing. This panel is the comparison, with every refusal printed.'),
