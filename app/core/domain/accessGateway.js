@@ -396,6 +396,11 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // its writes are still gated, which would hide the ledger from exactly the
 // seats that declared it.
 'matrixDemandVarianceReport',
+// ADR-0183: the dependency feedback-cycle register's read surface. A pure read
+// absent from SAFE_READS would be unreadable under enforcement while the
+// matrix writes stay gated — hiding the coupled blocks from exactly the
+// director/VP seat that has to convene the joint forum.
+'matrixDependencyCycleReport',
 // ADR-0143: the arbitration register's read surface. Registered for the same
 // reason as every module above — a read absent from SAFE_READS is unreadable
 // under enforcement while its writes are still gated, which would hide the case
