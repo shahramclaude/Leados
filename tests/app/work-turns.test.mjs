@@ -55,7 +55,10 @@ import {
   workTurnRuleIssuedIds,
   workTurnSignature,
 } from '../../app/core/domain/workTurns.js';
-import { WORK_TURN_CLOSED_PREFIX, WORK_TURN_TRIGGER_EVENTS, workTurnRule } from '../../app/core/domain/workTurnRules.js';
+import { rankWorkTurnBounds } from '../../app/core/domain/workTurnBounds.js';
+import {
+  WORK_TURN_CLOSED_PREFIX, WORK_TURN_GUIDANCE, WORK_TURN_OLD_GUIDANCE, WORK_TURN_TRIGGER_EVENTS, workTurnRule,
+} from '../../app/core/domain/workTurnRules.js';
 import {
   compactWorkTurnActs,
   effectiveWorkTurnActs,
@@ -73,6 +76,7 @@ import {
   WORK_TURN_PLACEMENT_REASONS,
   WORK_TURN_POOL_STATES,
   WORK_TURN_POOL_STATE_LABELS,
+  WORK_TURN_RANK_STATES,
   WORK_TURN_RIGHTS,
   WORK_TURN_RULE_ID,
   WORK_TURN_RULE_RELATIONS,
@@ -200,10 +204,121 @@ function runRule(draft, type, { now = NOW } = {}) {
   return { effects, recorded };
 }
 
+/* ----------------------------------------- robust next-turn evidence bounds */
+
+test('interval ranking agrees with exhaustive integer resolutions, including changing ties', () => {
+  const triples = (values) => values.flatMap((a) => values.flatMap((b) => values.map((c) => [a, b, c])));
+  for (const lower of triples([0, 1, 2])) {
+    for (const unknown of triples([0, 1, 2])) {
+      for (const shares of triples([40, 100])) {
+        const rows = lower.map((n, i) => ({ personId: `p${i}`, lowerN: n, upperN: n + unknown[i], shareH: shares[i] }));
+        const union = new Set();
+        let intersection = new Set(rows.map((r) => r.personId));
+        for (let a = rows[0].lowerN; a <= rows[0].upperN; a += 1) {
+          for (let b = rows[1].lowerN; b <= rows[1].upperN; b += 1) {
+            for (let c = rows[2].lowerN; c <= rows[2].upperN; c += 1) {
+              const values = [a, b, c];
+              const minima = rows.filter((r, i) => rows.every((other, j) => values[i] * other.shareH <= values[j] * r.shareH))
+                .map((r) => r.personId);
+              minima.forEach((id) => union.add(id));
+              intersection = new Set([...intersection].filter((id) => minima.includes(id)));
+            }
+          }
+        }
+        const actual = rankWorkTurnBounds(rows);
+        const ids = rows.map((r) => r.personId);
+        assert.deepEqual(actual.possible, ids.filter((id) => union.has(id)), JSON.stringify(rows));
+        assert.deepEqual(actual.certain, ids.filter((id) => intersection.has(id)), JSON.stringify(rows));
+        assert.equal(actual.stable, union.size === intersection.size, JSON.stringify(rows));
+      }
+    }
+  }
+  assert.equal(rankWorkTurnBounds([{ personId: 'x', lowerN: 0, upperN: 1, shareH: 100 }]), null);
+  assert.equal(rankWorkTurnBounds([{ personId: 'x', lowerN: 0, upperN: 1, shareH: 100 }, { personId: 'x', lowerN: 0, upperN: 1, shareH: 100 }]), null);
+  assert.equal(rankWorkTurnBounds([{ personId: 'x', lowerN: 0, upperN: 1, shareH: 100 }, { personId: 'y', lowerN: 0, upperN: 1, shareH: 0 }]), null);
+  assert.equal(rankWorkTurnBounds([{ personId: 'x', lowerN: 0, upperN: Number.MAX_SAFE_INTEGER, shareH: 100 }, { personId: 'y', lowerN: 0, upperN: 1, shareH: 100 }]), null);
+});
+
+test('a missing classification can change a tie; recording it restores the exact set in either structure', () => {
+  const unknown = read(fixture({ classified: true }));
+  const pm = poolOf(unknown, 'pm');
+  assert.deepEqual([pm.turnRank.state, pm.turnRank.unresolvedN, pm.nextTurn], ['uncertain', 1, null]);
+  assert.deepEqual(pm.turnRank.possiblePersonIds, ['gus', 'hal']);
+  assert.deepEqual(pm.turnRank.certainPersonIds, ['hal']);
+  assert.deepEqual([memberOf(unknown, 'pm', 'gus').carriedN, memberOf(unknown, 'pm', 'gus').upperN], [0, 1]);
+
+  const resolved = read(fixture({ classified: true, mutate: (s) => {
+    s.workTurnActs.push(kindAct('w8', 'g1', 'gus', 'promotable'));
+  } }));
+  assert.deepEqual(poolOf(resolved, 'pm').nextTurn, { personIds: ['gus', 'hal'], names: ['Gus Gray', 'Hal Hart'], tied: true });
+  assert.equal(poolOf(resolved, 'pm').turnRank.state, 'stable');
+
+  const single = read(fixture({ classified: true, mutate: (s) => { s.reportingLines = []; s.delegationLineActs = []; } }));
+  assert.equal(single.structure, 'single-chain');
+  assert.equal(poolOf(single, 'pm').turnRank.state, 'uncertain');
+  assert.equal(single.board.turnRanksReconcile, true);
+});
+
+test('line attribution narrows bounds; an unplaced ask is possible on either line but charged to neither', () => {
+  const attributed = read(fixture({ classified: true, mutate: (s) => {
+    s.delegations.push(ask('c3', 'cat', 'Unclassified project work'));
+    s.delegationLineActs.push(lineAct('l3', 'c3', 'cat', 'p-cat', 'pm', 'project'));
+  } }));
+  assert.equal(memberOf(attributed, 'fm', 'cat').unresolvedN, 0);
+  assert.equal(memberOf(attributed, 'pm', 'cat').unresolvedN, 1);
+
+  const unplaced = read(fixture({ classified: true, mutate: (s) => {
+    s.delegations.push(ask('c3', 'cat', 'Unplaced non-promotable work'));
+    s.workTurnActs.push(kindAct('w8', 'c3', 'cat', 'non-promotable'));
+  } }));
+  assert.equal(unplaced.board.classes['non-promotable'], 7, 'the person and ask are counted once');
+  assert.equal(unplaced.board.placements.unplaced, 1);
+  assert.equal(poolOf(unplaced, 'fm').totalN, 5);
+  assert.equal(poolOf(unplaced, 'pm').totalN, 1);
+  assert.equal(memberOf(unplaced, 'fm', 'cat').unresolvedN, 1);
+  assert.equal(memberOf(unplaced, 'pm', 'cat').unresolvedN, 1);
+  assert.equal(unplaced.board.turnRanksReconcile, true);
+  const director = read(fixture({ classified: true }), 'dir');
+  assert.equal(poolOf(director, 'pm').turnRank.state, 'withheld');
+  assert.equal(JSON.stringify(poolOf(director, 'pm').turnRank).includes('Gus'), false);
+});
+
+test('missing shares, refused lines, duplicate asks and a zero-share pool refuse rather than guess', () => {
+  const missing = read(fixture({ classified: true, mutate: (s) => { s.reportingLines.find((l) => l.id === 'p-cat').shareH = null; } }));
+  assert.equal(poolOf(missing, 'fm').turnRank.state, 'missing-share');
+  assert.equal(poolOf(missing, 'fm').nextTurn, null);
+
+  const defective = draftOf(fixture({ classified: true }));
+  defective.reportingLines.push(line('bad-line', 'cat', 'missing-manager', 'project', 10));
+  assert.equal(poolOf(read(defective), 'fm').turnRank.state, 'matrix-defect');
+  assert.equal(poolOf(read(defective), 'pm').turnRank.state, 'matrix-defect');
+
+  const duplicate = draftOf(fixture({ classified: true }));
+  duplicate.delegations.push({ ...duplicate.delegations.find((d) => d.id === 'g1'), personId: 'hal' });
+  assert.equal(poolOf(read(duplicate), 'pm').turnRank.state, 'unreadable-asks');
+  assert.equal(poolOf(read(duplicate), 'pm').nextTurn, null);
+
+  const zero = read(fixture({ classified: true, mutate: (s) => {
+    s.reportingLines.find((l) => l.id === 'p-cat').shareH = 0;
+    s.reportingLines.push(line('h-gus', 'gus', 'pm', 'functional', 0), line('h-hal', 'hal', 'pm', 'functional', 0));
+    for (let i = 2; i <= 4; i += 1) s.delegations.push(ask(`g${i}`, 'gus', 'Extra work'));
+    for (let i = 1; i <= 4; i += 1) s.workTurnActs.push(kindAct(`zg${i}`, `g${i}`, 'gus', 'non-promotable'));
+  } }));
+  const zeroPool = poolOf(zero, 'pm');
+  assert.equal(zeroPool.shareSum, 0);
+  assert.equal(zeroPool.stateKey, 'share-zero');
+  assert.equal(zero.board.pools['share-undeclared'], 0, 'zero is not an undeclared share');
+  assert.equal(workTurnCsvRows(zero)[0].pool_share_zero, 1);
+  assert.equal(workTurnCsvRows(zero)[0].pool_share_undeclared, 0);
+  assert.equal(zeroPool.turnRank.state, 'too-few');
+  assert.equal(zeroPool.nextTurn, null);
+  assert.ok(zeroPool.members.every((m) => m.turnText === null && m.over === false));
+});
+
 /* ------------------------------------------------------------ 1. the wiring */
 
 test('the ledger is wired end to end: schema, panel, both gateway lists, spine order, contract and CSV scope', () => {
-  assert.equal(SCHEMA_VERSION, 144);
+  assert.equal(SCHEMA_VERSION, 145);
   assert.ok(COLLECTIONS.includes('workTurnActs') && COLLECTIONS.includes('workTurnMarkers'));
   const empty = createEmptyState(ISO);
   assert.deepEqual(empty.workTurnActs, []);
@@ -248,9 +363,9 @@ test('the ledger is wired end to end: schema, panel, both gateway lists, spine o
   assert.deepEqual(PROPAGATION_CONTRACTS[cAt].writes, ['delegations', 'links', 'workTurnMarkers']);
   assert.equal(PROPAGATION_CONTRACTS.length, DEFAULT_POST_COMMIT_RULES.length, 'contracts == rules');
 
-  // CSV scope #135, appended last.
-  assert.equal(CSV_EXPORTS.length, 135);
-  assert.equal(CSV_EXPORTS[CSV_EXPORTS.length - 1], WORK_TURN_CSV_DESCRIPTOR);
+  // CSV scope #135 remains in place; Session 248 added scope #136 after it.
+  assert.equal(CSV_EXPORTS.length, 136);
+  assert.equal(CSV_EXPORTS[134], WORK_TURN_CSV_DESCRIPTOR);
   assert.equal(WORK_TURN_CSV_DESCRIPTOR.key, 'work-turns');
   assert.equal(new Set(WORK_TURN_CSV_COLUMNS).size, WORK_TURN_CSV_COLUMNS.length, 'no duplicate column');
 
@@ -330,12 +445,16 @@ test('pools, share-weighted fair turns, verdicts and owners match a hand calcula
   const pm = poolOf(report, 'pm');
   assert.deepEqual([pm.totalN, pm.shareSum, pm.stateKey], [1, 240, 'below-floor']);
   assert.equal(pm.members.some((m) => m.over), false, 'a pool below the floor accuses nobody');
-  // Gus and Hal are tied at nothing carried: the tie is printed, nobody is picked.
-  assert.deepEqual(pm.nextTurn, { personIds: ['gus', 'hal'], names: ['Gus Gray', 'Hal Hart'], tied: true });
+  // Gus has an unclassified ask: it could break the apparent tie with Hal.
+  // Hal is always among the minima, but Gus is not, so no fixed tie is claimed.
+  assert.equal(pm.nextTurn, null);
+  assert.equal(pm.turnRank.state, 'uncertain');
+  assert.deepEqual(pm.turnRank.possiblePersonIds, ['gus', 'hal']);
+  assert.deepEqual(pm.turnRank.certainPersonIds, ['hal']);
 
   // Five pools: Dora's, Finn's, the workspace leader's, Petra's and Vera's.
   assert.equal(b.poolsReadN, 5);
-  assert.deepEqual(b.pools, { partial: 0, 'below-floor': 4, 'share-undeclared': 0, concentrated: 1, even: 0 });
+  assert.deepEqual(b.pools, { partial: 0, 'below-floor': 4, 'share-undeclared': 0, 'share-zero': 0, concentrated: 1, even: 0 });
 
   // People: Ann is over a fair turn in Finn's pool.
   assert.equal(personOf(report, 'ann').verdict, 'over-turn');
@@ -668,6 +787,38 @@ test('a pool partly outside the reading seat makes no claim: no turn over part o
 
 /* ------------------------------------------------------- 6. the rule */
 
+test('the real spine corrects legacy guidance without losing human text, rolls up and survives reload', () => {
+  const seed = draftOf(fixture({ classified: true, settings: { activeSeatId: 'dir', sealEnabled: true } }));
+  runRule(seed, WORK_TURN_EVENTS.CLASSIFIED);
+  const legacy = ruleAsks(seed).find((d) => d.personId === 'fm');
+  assert.ok(legacy);
+  const oldText = `Human preface. ${WORK_TURN_OLD_GUIDANCE} Human note: ${'x'.repeat(3900)}`;
+  assert.ok(oldText.length <= 4000);
+  legacy.expectedOutcome = oldText;
+  const values = new Map([[STORAGE_KEY, JSON.stringify(seed)]]);
+  const storage = { getItem: (k) => values.get(k) ?? null, setItem: (k, v) => values.set(k, String(v)), removeItem: (k) => values.delete(k) };
+  let n = 0;
+  const idFactory = (prefix) => `${prefix}-repair-${++n}`;
+  const store = createStore({ storage, now: () => NOW, idFactory });
+  store.load();
+  const api = createApi(store, { now: () => NOW, idFactory });
+  const result = api.workTurnScan();
+  assert.equal(result.ok, true, result?.error);
+  assert.ok(result.propagations.some((e) => e.ruleId === WORK_TURN_RULE_ID && e.action === 'updated'));
+  const expected = oldText.replace(WORK_TURN_OLD_GUIDANCE, WORK_TURN_GUIDANCE);
+  assert.ok(WORK_TURN_GUIDANCE.length <= WORK_TURN_OLD_GUIDANCE.length);
+  assert.equal(store.state.delegations.find((d) => d.id === legacy.id).expectedOutcome, expected);
+  assert.deepEqual(store.state.links.filter((l) => l.ruleId === WORK_TURN_RULE_ID && l.sourceId === legacy.id && l.relation === 'rolls-up-to')
+    .map((l) => l.targetId).sort(), ['dir', 'vp']);
+  assert.ok(result.propagations.some((e) => e.ruleId === 'RULE-SEAL-01'));
+  const reboot = createStore({ storage, now: () => NOW, idFactory });
+  reboot.load();
+  assert.equal(reboot.state.delegations.find((d) => d.id === legacy.id).expectedOutcome, expected);
+  const again = api.workTurnScan();
+  assert.equal(again.ok, true);
+  assert.equal(again.propagations.some((e) => e.ruleId === WORK_TURN_RULE_ID && e.action === 'updated'), false);
+});
+
 test('RULE-NPW-01 asks the one owning seat once, survives a round trip, and closes its own ask', () => {
   const draft = draftOf(fixture({ classified: true }));
   const first = runRule(draft, WORK_TURN_EVENTS.CLASSIFIED);
@@ -865,7 +1016,7 @@ test('under the REAL spine a classification, the rotation ask, the seat roll-up 
 
   // The bytes on disk carry the acts, the ask and the marker.
   const stored = JSON.parse(map.get(STORAGE_KEY));
-  assert.equal(stored.schemaVersion, 144);
+  assert.equal(stored.schemaVersion, 145);
   assert.equal(stored.workTurnActs.length, 4);
   assert.equal(stored.workTurnMarkers.length, 1);
   assert.equal(stored.delegations.filter((d) => String(d.support || '').includes(WORK_TURN_RULE_ID)).length, 1);
@@ -1009,15 +1160,15 @@ test('schema v144: the migration adds two empty collections and fabricates no ki
   delete v143.workTurnActs;
   delete v143.workTurnMarkers;
   const migrated = migrate(v143);
-  assert.deepEqual(migrated.applied, ['143 → 144']);
-  assert.equal(migrated.raw.schemaVersion, 144);
+  assert.deepEqual(migrated.applied, ['143 → 144', '144 → 145']);
+  assert.equal(migrated.raw.schemaVersion, 145);
   assert.deepEqual(migrated.raw.workTurnActs, []);
   assert.deepEqual(migrated.raw.workTurnMarkers, []);
   assert.equal(migrated.raw.delegations.length, v143.delegations.length, 'no ask changed');
   const report = read(normalizeState(migrated.raw, { now: NOW }).state);
   assert.equal(report.board.classes.unclassified, report.board.asksReadN, 'every existing ask reads not classified');
 
-  // Idempotent: a v144 workspace is not migrated again, and a v143 file that
+  // Idempotent: the current workspace is not migrated again, and a v143 file that
   // already carries acts (a hand-edited or partly upgraded export) keeps them.
   const again = migrate(migrated.raw);
   assert.deepEqual(again.applied, []);
@@ -1174,23 +1325,25 @@ test('the panel prints the report the action returned, a render stores nothing, 
 
   // The brief on the screen IS the brief of the report the action returned.
   assert.equal(node.querySelector('[data-testid="npw-brief"]').textContent, workTurnBriefText(report));
-  assert.match(node.textContent, /All six count identities reconcile/);
+  assert.match(node.textContent, /All seven count identities reconcile/);
 
   // Pools: one printed row per report pool, in order, with the computed state and next turn.
   const pools = cellsOf(tableByCaption(node, 'Manager pools and whose turn is next'));
   assert.deepEqual(pools.map((row) => row[0]), report.pools.map((p) => p.managerName));
   assert.deepEqual(pools.map((row) => Number(row[3])), report.pools.map((p) => p.totalN));
   const finnRow = pools.find((row) => row[0] === 'Finn Functional');
-  assert.deepEqual(finnRow, ['Finn Functional', WORK_TURN_POOL_STATE_LABELS.concentrated, '4', '5', 'Dan Dove']);
+  assert.deepEqual(finnRow, ['Finn Functional', WORK_TURN_POOL_STATE_LABELS.concentrated, '4', '5', '0', 'Dan Dove']);
   assert.equal(WORK_TURN_POOL_STATE_LABELS.concentrated, 'One person carries the turn');
-  assert.equal(pools.find((row) => row[0] === 'Petra Project')[4], 'Gus Gray, Hal Hart (tied)', 'a tie is printed as a tie');
+  const petraPool = poolOf(report, 'pm');
+  assert.equal(pools.find((row) => row[0] === 'Petra Project')[5], petraPool.turnRank.text);
+  assert.match(petraPool.turnRank.text, /Uncertain — possible: Gus Gray, Hal Hart/);
 
   // Members: the printed fair turn is the exact fraction and its truncated rendering.
   const members = cellsOf(tableByCaption(node, 'Pool members and fair turns'));
   const annRow = members.find((row) => row[0] === 'Finn Functional' && row[1] === 'Ann Able');
-  assert.deepEqual(annRow.slice(3), ['100%', '3', '5 × 100 ÷ 360 ≈ 1.38', 'Over a fair turn']);
+  assert.deepEqual(annRow.slice(3), ['100%', '3', '0', '3–3', '5 × 100 ÷ 360 ≈ 1.38', 'Over a fair turn']);
   const catRow = members.find((row) => row[0] === 'Finn Functional' && row[1] === 'Cat Cole');
-  assert.deepEqual(catRow.slice(3), ['60%', '1', '5 × 60 ÷ 360 ≈ 0.83', '—']);
+  assert.deepEqual(catRow.slice(3), ['60%', '1', '0', '1–1', '5 × 60 ÷ 360 ≈ 0.83', '—']);
   assert.equal(members.length, report.pools.reduce((acc, p) => acc + p.members.length, 0));
 
   // People and findings: exactly the report rows.
@@ -1202,8 +1355,15 @@ test('the panel prints the report the action returned, a render stores nothing, 
   assert.deepEqual(findings.map((row) => row[2]), report.findings.map((f) => `${f.carriedN} of ${f.totalN}`));
   assert.match(findings[1][3], /Dora Director/);
 
-  // The method the screen prints is the method the engine runs under.
+  // The method and purpose-built conceptual asset are real and accessible; the
+  // image carries no workspace data and the text remains available without it.
   assert.equal(node.querySelectorAll('ol li').length, WORK_TURN_METHOD.length);
+  const diagram = node.querySelector('[data-testid="npw-evidence-diagram"]');
+  assert.equal(diagram.getAttribute('src'), './app/assets/work-turn-evidence.jpg');
+  assert.match(diagram.getAttribute('alt'), /stable, uncertain or refused/);
+  const image = fs.readFileSync(path.resolve('app/assets/work-turn-evidence.jpg'));
+  assert.deepEqual([...image.subarray(0, 2)], [0xff, 0xd8], 'the displayed asset is a JPEG, not a placeholder');
+  assert.deepEqual([...image.subarray(-2)], [0xff, 0xd9]);
 
   // Every kind and line badge in the ask table explains itself in the registry's own words.
   const askTable = tableByCaption(node, 'Asks handed over inside the look-back window');
@@ -1226,6 +1386,24 @@ test('the panel prints the report the action returned, a render stores nothing, 
   const act = store.state.workTurnActs.find((a) => a.delegationId === 'g1');
   assert.deepEqual([act.personId, act.kind, act.byId], ['gus', 'non-promotable', null]);
   assert.equal(JSON.parse(map.get(STORAGE_KEY)).workTurnActs.some((a) => a.delegationId === 'g1'), true, 'the act is on disk');
+  const after = api.workTurnReport().report;
+  assert.equal(poolOf(after, 'pm').turnRank.state, 'stable');
+  assert.deepEqual(poolOf(after, 'pm').nextTurn.names, ['Hal Hart']);
+  const updatedNode = renderMatrixWorkTurnPanel({ ...ctx, state: store.state }, { now: NOW });
+  const updatedRow = cellsOf(tableByCaption(updatedNode, 'Manager pools and whose turn is next')).find((row) => row[0] === 'Petra Project');
+  assert.equal(updatedRow[5], poolOf(after, 'pm').turnRank.text, 'rendered rank equals the current computed rank');
+  const reboot = createStore({ storage: {
+    getItem: (key) => map.get(key) ?? null, setItem: (key, value) => map.set(key, String(value)), removeItem: (key) => map.delete(key),
+  }, now: () => NOW });
+  reboot.load();
+  assert.deepEqual(poolOf(buildWorkTurns(reboot.state, { now: NOW }), 'pm').turnRank, poolOf(after, 'pm').turnRank,
+    'the same bounds are reconstructed from the persisted acts');
+  const exported = exportWorkspaceCsv(store.state, 'work-turns', { now: NOW });
+  const [head, data] = exported.csv.trim().split(/\r?\n/);
+  const cells = Object.fromEntries(head.split(',').map((key, index) => [key, data.split(',')[index]]));
+  assert.equal(Number(cells.turn_rank_stable), after.board.turnRanks.stable);
+  assert.equal(Number(cells.turn_rank_uncertain), after.board.turnRanks.uncertain);
+  assert.equal(cells.turn_ranks_reconcile, String(after.board.turnRanksReconcile));
 
   // Choosing nothing is refused by the action, not repaired by the screen.
   const idle = node.querySelector('[data-testid="npw-classify-f1"]');
@@ -1320,9 +1498,10 @@ test('the closed vocabularies the screen and the file use are exactly the ones t
   const report = read(fixture({ classified: true }));
   assert.deepEqual(Object.keys(report.board.verdicts), [...WORK_TURN_VERDICTS]);
   assert.deepEqual(Object.keys(report.board.pools), [...WORK_TURN_POOL_STATES]);
+  assert.deepEqual(Object.keys(report.board.turnRanks), [...WORK_TURN_RANK_STATES]);
   assert.equal(report.method, WORK_TURN_METHOD);
   const brief = workTurnBriefText(report);
-  assert.equal(brief.split('\n').length, 8);
+  assert.equal(brief.split('\n').length, 9);
   assert.equal(brief.includes('NO'), false, 'every identity reads yes');
   assert.equal(JSON.stringify(report.board).includes('Ann'), false, 'the board itself carries no identity');
 });

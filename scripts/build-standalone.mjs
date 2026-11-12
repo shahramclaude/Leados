@@ -36,6 +36,8 @@ const outIndex = args.indexOf('--out');
 const outArg = outIndex !== -1 ? args[outIndex + 1] : 'LeadOS-standalone.html';
 const OUT = path.isAbsolute(outArg) ? outArg : path.resolve(ROOT, outArg);
 const MINIFY = !args.includes('--no-minify');
+const WORK_TURN_DIAGRAM = 'app/assets/work-turn-evidence.jpg';
+const WORK_TURN_DIAGRAM_URL = `./${WORK_TURN_DIAGRAM}`;
 
 if (!OUT.toLowerCase().endsWith('.html')) {
   throw new Error('The standalone output must be an .html file.');
@@ -60,10 +62,10 @@ function walkJs(dir) {
 
 function sourceFingerprint(files) {
   const hash = crypto.createHash('sha256');
-  for (const rel of ['index.html', 'app/styles.css', ...files]) {
+  for (const rel of ['index.html', 'app/styles.css', WORK_TURN_DIAGRAM, ...files]) {
     hash.update(rel);
     hash.update('\0');
-    hash.update(read(rel));
+    hash.update(fs.readFileSync(path.join(ROOT, rel)));
     hash.update('\0');
   }
   return hash.digest('hex');
@@ -132,7 +134,15 @@ const result = await build({
   },
 });
 
-const bundle = escapeForInlineScript(result.outputFiles[0].text);
+// The normal app serves the real diagram from app/assets. Inline the exact
+// same bytes into the offline file; fail the build if the view stops referencing
+// it instead of shipping an apparently self-contained file with a broken image.
+const bundledSource = result.outputFiles[0].text;
+if (!bundledSource.includes(WORK_TURN_DIAGRAM_URL)) {
+  throw new Error('Standalone build could not find the work-turn evidence diagram in the bundle.');
+}
+const diagramData = `data:image/jpeg;base64,${fs.readFileSync(path.join(ROOT, WORK_TURN_DIAGRAM)).toString('base64')}`;
+const bundle = escapeForInlineScript(bundledSource.replaceAll(WORK_TURN_DIAGRAM_URL, diagramData));
 const css = escapeForInlineStyle(read('app/styles.css'));
 let html = read('index.html');
 const moduleCount = Object.keys(result.metafile?.inputs || {}).length;

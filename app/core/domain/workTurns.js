@@ -34,6 +34,7 @@ import { buildMatrix, matrixJointApex, matrixLineScope, personAllocation } from 
 import { activeSeat, buildSeats, canAct } from './seat.js';
 import { effectiveDelegationLineActs } from './delegationLineSchema.js';
 import { effectiveWorkTurnActs, normalizeWorkTurnSettings } from './workTurnSchema.js';
+import { rankWorkTurnBounds } from './workTurnBounds.js';
 import {
   WORK_TURN_CLASSES,
   WORK_TURN_CSV_COLUMNS,
@@ -46,6 +47,8 @@ import {
   WORK_TURN_OWNER_STATES,
   WORK_TURN_PLACEMENTS,
   WORK_TURN_POOL_STATES,
+  WORK_TURN_RANK_REASONS,
+  WORK_TURN_RANK_STATES,
   WORK_TURN_RIGHTS,
   WORK_TURN_SETTING_KEYS,
   WORK_TURN_VERDICTS,
@@ -144,11 +147,11 @@ export function buildWorkTurns(state, { now = new Date(), settings = null, matri
     asksInWindowN: 0, asksNotReadN: 0, asksReturnedN: 0, asksRuleIssuedN: 0, asksReadN: 0,
     classes: counts(WORK_TURN_CLASSES), placements: counts(WORK_TURN_PLACEMENTS),
     peopleReadN: 0, carriersN: 0, verdicts: counts(WORK_TURN_VERDICTS),
-    poolsReadN: 0, pools: counts(WORK_TURN_POOL_STATES),
+    poolsReadN: 0, pools: counts(WORK_TURN_POOL_STATES), turnRanks: counts(WORK_TURN_RANK_STATES),
     findingsN: 0, findingKinds: counts(WORK_TURN_FINDING_KINDS), owners: counts(WORK_TURN_OWNER_STATES),
     openRotationAsksN: 0,
     populationReconciles: false, classesReconcile: false, placementsReconcile: false,
-    verdictsReconcile: false, poolsReconcile: false, ownersReconcile: false,
+    verdictsReconcile: false, poolsReconcile: false, ownersReconcile: false, turnRanksReconcile: false,
   };
 
   /* ------------------------------------------------------------- 1. the asks */
@@ -156,6 +159,31 @@ export function buildWorkTurns(state, { now = new Date(), settings = null, matri
   const delegations = Array.isArray(state?.delegations) ? state.delegations : [];
   const kinds = effectiveWorkTurnActs(state?.workTurnActs || []);
   const lineActs = effectiveDelegationLineActs(state?.delegationLineActs || []);
+
+  // Duplicate or missing ask ids make classifications and line acts ambiguous.
+  // Examine the whole window, including returned and rule-issued asks: an id
+  // collision with one of those must not make another ask disappear silently.
+  const idsInWindow = new Map();
+  const invalidAskPeople = new Set();
+  for (const ask of delegations) {
+    if (!ask || typeof ask.delegatedOn !== 'string' || ask.delegatedOn < from || ask.delegatedOn > today) continue;
+    if (typeof ask.id !== 'string' || !ask.id.trim()) { invalidAskPeople.add(ask.personId); continue; }
+    const people = idsInWindow.get(ask.id) || [];
+    people.push(ask.personId);
+    idsInWindow.set(ask.id, people);
+  }
+  for (const people of idsInWindow.values()) {
+    if (people.length > 1) for (const personId of people) invalidAskPeople.add(personId);
+  }
+
+  // Each entry is one unresolved ask, not a guessed classification. A valid
+  // recorded line restricts an unclassified ask to that line; no/stale line
+  // makes it possible on each current line, never actually charged to one.
+  const uncertainByPerson = new Map();
+  const addUncertain = (personId, knownLine) => {
+    if (!uncertainByPerson.has(personId)) uncertainByPerson.set(personId, []);
+    uncertainByPerson.get(personId).push(knownLine ? { lineId: knownLine.lineId, managerId: knownLine.managerId } : null);
+  };
 
   /** personId → { nptN, unreadableN, byLine: Map<lineId, askId[]> } */
   const carry = new Map();
@@ -204,7 +232,15 @@ export function buildWorkTurns(state, { now = new Date(), settings = null, matri
         load.get(ask.personId).push(ask.id);
       } else {
         c.unreadableN += 1;
+        addUncertain(ask.personId, null);
       }
+    } else if (classKey === 'unclassified') {
+      const alloc = allocOf(ask.personId);
+      const attribution = lineActs.get(ask.id);
+      const recorded = attribution && attribution.act.personId === ask.personId
+        ? alloc.lines.find((l) => l.lineId === attribution.act.lineId && l.managerId === attribution.act.managerId)
+        : null;
+      addUncertain(ask.personId, recorded || null);
     }
 
     askRows.push({
@@ -234,6 +270,11 @@ export function buildWorkTurns(state, { now = new Date(), settings = null, matri
     poolMembers.get(line.managerId).push({ personId: line.personId, lineId: line.id, kind: line.kind });
   }
   const poolReadable = (managerId) => full || managerId === seat.id || Boolean(seat.scope?.has(managerId));
+  // A refused line could hide a member or a competing line; do not rank that
+  // pool from the surviving graph. This is deliberately conservative, including
+  // defects the matrix engine reports from historical declarations.
+  const defectPeople = new Set((graph.defects || []).map((d) => d.personId));
+  const defectManagers = new Set((graph.defects || []).map((d) => d.managerId));
 
   const pools = [];
   const poolByManager = new Map();
@@ -245,6 +286,8 @@ export function buildWorkTurns(state, { now = new Date(), settings = null, matri
     const members = all.filter((m) => visiblePerson(m.personId)).map((m) => {
       const allocLine = allocOf(m.personId).lines.find((l) => l.lineId === m.lineId) || null;
       const askIds = load.get(m.personId) || [];
+      const unresolvedN = (uncertainByPerson.get(m.personId) || [])
+        .filter((line) => !line || (line.lineId === m.lineId && line.managerId === managerId)).length;
       return {
         personId: m.personId,
         name: nameOf(m.personId),
@@ -252,6 +295,8 @@ export function buildWorkTurns(state, { now = new Date(), settings = null, matri
         kind: m.kind,
         shareH: allocLine && Number.isInteger(allocLine.shareH) ? allocLine.shareH : null,
         carriedN: askIds.length,
+        unresolvedN,
+        upperN: askIds.length + unresolvedN,
         askIds: [...askIds].sort(byText),
         turnNumer: null,
         turnDenom: null,
@@ -268,11 +313,12 @@ export function buildWorkTurns(state, { now = new Date(), settings = null, matri
     if (hiddenN > 0) stateKey = 'partial';
     else if (members.length < 2 || totalN < minAsks) stateKey = 'below-floor';
     else if (!sharesKnown) stateKey = 'share-undeclared';
+    else if (shareSum <= 0) stateKey = 'share-zero';
     else stateKey = 'even';
 
     // The fair turn is printed wherever it can be computed exactly, including
     // below the floor; the over-turn CLAIM is made only in a tested pool.
-    if (hiddenN === 0 && sharesKnown) {
+    if (hiddenN === 0 && sharesKnown && shareSum > 0) {
       for (const m of members) {
         m.turnNumer = totalN * m.shareH;
         m.turnDenom = shareSum;
@@ -285,19 +331,45 @@ export function buildWorkTurns(state, { now = new Date(), settings = null, matri
       if (stateKey === 'even' && members.some((m) => m.over)) stateKey = 'concentrated';
     }
 
-    // Next turn: the lowest carried-to-share ratio, compared by cross-multiplication.
-    let nextTurn = null;
-    if (hiddenN === 0 && sharesKnown && members.length >= 2 && totalN >= 1) {
-      let best = [];
-      for (const m of members) {
-        if (m.shareH <= 0) continue;
-        if (!best.length) { best = [m]; continue; }
-        const cmp = m.carriedN * best[0].shareH - best[0].carriedN * m.shareH;
-        if (cmp < 0) best = [m];
-        else if (cmp === 0) best.push(m);
-      }
-      if (best.length) nextTurn = { personIds: best.map((m) => m.personId), names: best.map((m) => m.name), tied: best.length > 1 };
+    // A lowest ratio over the classified/placed subset alone can name the wrong
+    // person. Bound each member's count over all resolutions of the unclassified
+    // or unplaced asks, and name a turn only if its complete set is invariant.
+    const matrixDefect = defectManagers.has(managerId) || all.some((m) => defectPeople.has(m.personId));
+    const eligible = members.filter((m) => Number.isInteger(m.shareH) && m.shareH > 0);
+    let rankState;
+    let bounds = null;
+    if (hiddenN) rankState = 'partial';
+    else if (matrixDefect) rankState = 'matrix-defect';
+    else if (!sharesKnown) rankState = 'missing-share';
+    else if (members.some((m) => m.shareH < 0 || m.shareH > 100)) rankState = 'unreadable-asks';
+    else if (eligible.length < 2) rankState = 'too-few';
+    else if (members.some((m) => invalidAskPeople.has(m.personId))) rankState = 'unreadable-asks';
+    else if (!eligible.some((m) => m.upperN > 0)) rankState = 'no-evidence';
+    else {
+      bounds = rankWorkTurnBounds(eligible.map((m) => ({
+        personId: m.personId, shareH: m.shareH, lowerN: m.carriedN, upperN: m.upperN,
+      })));
+      rankState = !bounds ? 'unreadable-asks' : bounds.stable ? 'stable' : 'uncertain';
     }
+    const names = new Map(members.map((m) => [m.personId, m.name]));
+    const possiblePersonIds = bounds?.possible || [];
+    const certainPersonIds = bounds?.certain || [];
+    const possibleNames = possiblePersonIds.map((id) => names.get(id));
+    const certainNames = certainPersonIds.map((id) => names.get(id));
+    const nextTurn = rankState === 'stable'
+      ? { personIds: possiblePersonIds, names: possibleNames, tied: possiblePersonIds.length > 1 }
+      : null;
+    const rankText = nextTurn ? `${nextTurn.names.join(', ')}${nextTurn.tied ? ' (tied)' : ''}`
+      : rankState === 'uncertain' ? `Uncertain — possible: ${possibleNames.join(', ')}. Classify or attribute unresolved asks.`
+        : `Refused — ${WORK_TURN_RANK_REASONS[rankState]}`;
+    const turnRank = {
+      state: rankState,
+      reason: WORK_TURN_RANK_REASONS[rankState],
+      text: rankText,
+      // A partial or defective graph does not prove the pool's unresolved total.
+      unresolvedN: hiddenN || matrixDefect ? null : members.reduce((acc, m) => acc + m.unresolvedN, 0),
+      possiblePersonIds, possibleNames, certainPersonIds, certainNames,
+    };
 
     const pool = {
       managerId,
@@ -310,10 +382,12 @@ export function buildWorkTurns(state, { now = new Date(), settings = null, matri
       shareSum,
       members,
       nextTurn,
+      turnRank,
     };
     pools.push(pool);
     poolByManager.set(managerId, pool);
     board.pools[stateKey] += 1;
+    board.turnRanks[rankState] += 1;
   }
   board.poolsReadN = pools.length;
 
@@ -426,6 +500,7 @@ export function buildWorkTurns(state, { now = new Date(), settings = null, matri
   board.placementsReconcile = sum(board.placements) === nptN;
   board.verdictsReconcile = sum(board.verdicts) === board.peopleReadN;
   board.poolsReconcile = sum(board.pools) === board.poolsReadN;
+  board.turnRanksReconcile = sum(board.turnRanks) === board.poolsReadN;
   board.ownersReconcile = sum(board.owners) === board.findingsN && sum(board.findingKinds) === board.findingsN;
 
   /* ------------------------------------------- 5. what this seat is shown */
@@ -446,7 +521,13 @@ export function buildWorkTurns(state, { now = new Date(), settings = null, matri
     const leads = (id) => poolMembers.has(id);
     shownPools = pools.map((pool) => (pool.members.every((m) => leads(m.personId))
       ? pool
-      : { ...pool, members: [], nextTurn: null }));
+      : {
+        ...pool, members: [], nextTurn: null,
+        turnRank: {
+          state: 'withheld', reason: WORK_TURN_DETAIL_REASONS.leaders, text: 'Withheld at this altitude',
+          unresolvedN: null, possiblePersonIds: [], possibleNames: [], certainPersonIds: [], certainNames: [],
+        },
+      }));
     shownPeople = people.filter((p) => leads(p.personId));
     shownAsks = askRows.filter((a) => leads(a.personId)).slice(0, WORK_TURN_LIMITS.askRows);
     shownFindings = findings.map((f) => (f.personIds.every(leads)
@@ -498,7 +579,8 @@ export function workTurnBriefText(report) {
     `Non-promotable: ${b.classes['non-promotable']}; promotable: ${b.classes.promotable}; not classified: ${b.classes.unclassified}; classes reconcile: ${yn(b.classesReconcile)}`,
     `Placed on a named line: ${b.placements.attributed}; single line: ${b.placements['sole-line']}; no line: ${b.placements.unplaced}; line no longer held: ${b.placements.stale}; placements reconcile: ${yn(b.placementsReconcile)}`,
     `People read: ${b.peopleReadN}; carrying non-promotable work: ${b.carriersN}; over a fair turn: ${b.verdicts['over-turn']}; stacked across lines: ${b.verdicts.stacked}; on no line: ${b.verdicts.unplaced}; pool not read: ${b.verdicts.unread}; within: ${b.verdicts.within}; verdicts reconcile: ${yn(b.verdictsReconcile)}`,
-    `Pools read: ${b.poolsReadN}; concentrated: ${b.pools.concentrated}; spread: ${b.pools.even}; too few asks: ${b.pools['below-floor']}; share not declared: ${b.pools['share-undeclared']}; partly outside this seat: ${b.pools.partial}; pools reconcile: ${yn(b.poolsReconcile)}`,
+    `Pools read: ${b.poolsReadN}; concentrated: ${b.pools.concentrated}; spread: ${b.pools.even}; too few asks: ${b.pools['below-floor']}; share missing: ${b.pools['share-undeclared']}; total share zero: ${b.pools['share-zero']}; partly outside this seat: ${b.pools.partial}; pools reconcile: ${yn(b.poolsReconcile)}`,
+    `Next-turn evidence: ${b.turnRanks.stable} stable; ${b.turnRanks.uncertain} uncertain; ${b.turnRanks.partial} partial; ${b.turnRanks['matrix-defect']} refused lines; ${b.turnRanks['missing-share']} missing share; ${b.turnRanks['too-few']} fewer than two eligible; ${b.turnRanks['no-evidence']} no evidence; ${b.turnRanks['unreadable-asks']} unreadable asks; ranks reconcile: ${yn(b.turnRanksReconcile)}. Count-based only; not capacity or consent.`,
     `Findings: ${b.findingsN} (pool ${b.findingKinds.pool}, stacked ${b.findingKinds.stack}); owners reconcile: ${yn(b.ownersReconcile)}; open rotation asks: ${b.openRotationAsksN}`,
     `Conventions: floor ${report.minAsks} asks; over-turn at ${report.factorPct}% of a fair turn.`,
   ].join('\n');
@@ -561,6 +643,16 @@ export function workTurnCsvRows(report) {
     owners_reconcile: b.ownersReconcile,
     open_rotation_asks: b.openRotationAsksN,
     ask_due_days: report.conventions[K.askDueDays],
+    turn_rank_stable: b.turnRanks.stable,
+    turn_rank_uncertain: b.turnRanks.uncertain,
+    turn_rank_partial: b.turnRanks.partial,
+    turn_rank_matrix_defect: b.turnRanks['matrix-defect'],
+    turn_rank_missing_share: b.turnRanks['missing-share'],
+    turn_rank_too_few: b.turnRanks['too-few'],
+    turn_rank_no_evidence: b.turnRanks['no-evidence'],
+    turn_rank_unreadable_asks: b.turnRanks['unreadable-asks'],
+    turn_ranks_reconcile: b.turnRanksReconcile,
+    pool_share_zero: b.pools['share-zero'],
   });
   return [row];
 }
