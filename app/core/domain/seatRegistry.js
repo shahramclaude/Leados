@@ -181,6 +181,10 @@ export const RECORD_POLICIES = Object.freeze({
   // through the seat-scoped `buildWorkTurns` adapter, never as raw rows.
   workTurnActs: { classKey: 'unit', detailCeiling: 0, label: 'Non-promotable work classification acts (report only)', route: '#/matrix?panel=turns' },
   workTurnMarkers: { classKey: 'unit', detailCeiling: 0, label: 'Non-promotable work rotation markers', route: '#/matrix?panel=turns' },
+  // ADR-0182: permits and RULE-PMP-01 markers are surfaced only through the
+  // seat-scoped `buildPausePermits` adapter, never as raw rows.
+  pausePermits: { classKey: 'unit', detailCeiling: 0, label: 'Automation pause permits (dated authority over a silenced control; states re-derived on read)', route: '#/settings?panel=pause-permits' },
+  pausePermitMarkers: { classKey: 'unit', detailCeiling: 0, label: 'Automation pause authority ask & observation markers', route: '#/settings?panel=pause-permits' },
   // ADR-0168: RULE-BNE-01's idempotency ledger names no person and carries no
   // rating, so it is unit-class with NO detail printed at any ceiling.
   benchEvidenceMarkers: { classKey: 'unit', detailCeiling: 0, label: 'Bench-evidence ask markers', route: '#/succession?panel=evidence' },
@@ -675,6 +679,12 @@ export const ACTION_RIGHTS = Object.freeze({
   // re-declaring the floors that price EVERY response is director+ and the
   // handler additionally requires the full-access root seat.
   'record-outcome-learning': { minRank: 1, maxRank: 5, label: 'Scan the outcome-learning ledger or pre-register one reviewed probability' },
+  // ADR-0182: silencing an automatic control is an authority over EVERY span the
+  // rule reads, so the right is director+. The action narrows it further: a
+  // scoped seat must BE the single seat above every reporting line, so no line
+  // manager can silence a rule that carries another manager's work.
+  'permit-automation-pause': { minRank: 4, maxRank: 5, label: 'Grant or withdraw a dated permit for a silenced automatic control' },
+  'govern-automation-pauses': { minRank: 4, maxRank: 5, label: 'Scan the pause-permit register or re-declare its conventions' },
   'govern-outcome-learning': { minRank: 4, maxRank: 5, label: 'Re-declare the outcome-learning conventions' },
   // ADR-0118: a portfolio arbitration commits capital, work and messaging across
   // several spans at once, and the comparison it rests on is portfolio material.

@@ -29,6 +29,9 @@ import { normalizeHiringLineMarkers, normalizeHiringLinePlans, normalizeHiringLi
 import { normalizeTransferPriceActs, normalizeTransferPriceMarkers, normalizeTransferPriceSettings } from './domain/transferPriceSchema.js';
 import { normalizeDelegationLineActs, normalizeDelegationLineMarkers, normalizeDelegationLineSettings } from './domain/delegationLineSchema.js';
 import { normalizeWorkTurnActs, normalizeWorkTurnMarkers, normalizeWorkTurnSettings } from './domain/workTurnSchema.js';
+// ADR-0182 (Schema v145): the Automation Pause Permit Register. Fail-closed
+// normalizers for dated permits and RULE-PMP-01's marker ledger.
+import { normalizePausePermitMarkers, normalizePausePermits, normalizePausePermitSettings } from './domain/pausePermitSchema.js';
 // ADR-0180 (Session 246): the settings load receipt — a stored convention the
 // loader does not carry is NAMED in a load warning, never dropped in silence —
 // and the Leader Calibration conventions in their stored shape.
@@ -754,7 +757,7 @@ export {
 // `workTurnMarkers` (`RULE-NPW-01`'s bounded idempotency ledger). Deliberately
 // EMPTY on upgrade: no kind is ever inferred from a title, a role or a person,
 // so every existing ask reads `not classified` — refused, never guessed.
-export const SCHEMA_VERSION = 144;
+export const SCHEMA_VERSION = 145;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -2169,6 +2172,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   // ADR-0181: work-turn look-back window, floor, over-turn threshold, ask
   // window and automation pause.
   ...normalizeWorkTurnSettings({}),
+  ...normalizePausePermitSettings({}),
 });
 
 export const COLLECTIONS = [
@@ -2875,6 +2879,11 @@ export const COLLECTIONS = [
   // RULE-NPW-01's marker ledger. No pool, turn, share or verdict is stored.
   'workTurnActs',
   'workTurnMarkers',
+  // ADR-0182 (Schema v145): dated permits authorising the silence of an
+  // automatic control, and RULE-PMP-01's marker ledger. No state, reach flag,
+  // expiry mark or count is stored — every one is re-derived on read.
+  'pausePermits',
+  'pausePermitMarkers',
 ];
 
 /** Stable empty state. `now` is an ISO string so the result is a pure value. */
@@ -3631,6 +3640,10 @@ export function normalizeSettings(raw) {
     ...normalizeMatrixSettings(s),
     ...normalizeDelegationLineSettings(s),
     ...normalizeWorkTurnSettings(s),
+    // ADR-0182: named here because this object is rebuilt field by field — a
+    // key not listed would be dropped on every load, and the grace and default
+    // windows printed by the register would be numbers the record does not hold.
+    ...normalizePausePermitSettings(s),
     ...normalizeStructureHistorySettings(s),
     ...normalizeDifferencesSettings(s),
     ...normalizeFitSettings(s),
@@ -8157,6 +8170,16 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // nobody declared. Resolved after delegations so the owner check is real.
   state.workTurnActs = normalizeWorkTurnActs(raw.workTurnActs, state, warnings);
   state.workTurnMarkers = normalizeWorkTurnMarkers(raw.workTurnMarkers);
+  // ADR-0182 (Schema v145): a malformed permit, one whose reason or compensating
+  // measure is below the declared floor, one naming a switch this workspace does
+  // not declare, or one whose window is unusable is dropped with a counted
+  // warning — never repaired into an authority nobody granted.
+  // The declared set is read from the settings just normalized: a permit naming
+  // a key this workspace does not carry is an authority over a switch that gates
+  // nothing, and is dropped rather than printed as a governed control.
+  state.pausePermits = normalizePausePermits(raw.pausePermits, Object.keys(state.settings || {})
+    .filter((key) => typeof state.settings[key] === 'boolean'), warnings);
+  state.pausePermitMarkers = normalizePausePermitMarkers(raw.pausePermitMarkers);
   // ADR-0122: a malformed absence row is dropped with a warning, never repaired —
   // an invented absence is an invented unavailability for every cover in the span.
   // Resolved BEFORE links so the `declares-absence-of` provenance edge validates
@@ -8892,6 +8915,17 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  // 144 → 145: ADR-0182 adds two EMPTY collections and four declared
+  // conventions. No switch value changes: a workspace already running with a
+  // control off keeps it off, and that pause simply reads `unpermitted` until
+  // somebody puts an authority on it. Nothing is fabricated.
+  144: (v144) => ({
+    ...v144,
+    schemaVersion: 145,
+    pausePermits: Array.isArray(v144.pausePermits) ? v144.pausePermits : [],
+    pausePermitMarkers: Array.isArray(v144.pausePermitMarkers) ? v144.pausePermitMarkers : [],
+    settings: { ...(v144.settings || {}), ...normalizePausePermitSettings(v144.settings || {}) },
+  }),
   // 143 → 144: ADR-0181 adds two EMPTY collections. No ask, person or reporting
   // line changes and no kind is fabricated: every existing ask reads
   // `not classified` until a manager who reaches the person declares one.

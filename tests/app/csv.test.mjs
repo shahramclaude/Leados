@@ -133,10 +133,12 @@ test('every CSV scope round-trips cleanly and preserves unknown values as blank 
 // attribution) and ADR-0179 adds #134 (matrix forward allocation horizon,
 // aggregate only) — 134 registered, because #75 remains reserved.
 // ADR-0181 adds #135 (non-promotable work turns, one identity-free summary
-// row) — 135 registered.
+// row).
+// ADR-0182 adds #136 (automation pause permits, one identity-free summary row
+// with no switch key, no authoriser and no reason text) — 136 registered.
 // The pin states the total deliberately so the next session cannot drift the
 // catalog count silently.
-assert.equal(CSV_EXPORTS.length, 135);
+assert.equal(CSV_EXPORTS.length, 136);
   for (const spec of CSV_EXPORTS) {
     const res = exportWorkspaceCsv(state, spec.key, { now: NOW });
     assert.equal(res.ok, true, `${spec.key} export succeeds`);

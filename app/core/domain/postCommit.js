@@ -165,6 +165,8 @@ import { transferPriceRule } from './transferPriceRules.js';
 import { delegationLineRule } from './delegationLineRules.js';
 import { lineHorizonRule } from './lineHorizonRules.js';
 import { workTurnRule } from './workTurnRules.js';
+// ADR-0182 (Schema v145): the Automation Pause Permit Register (RULE-PMP-01).
+import { pausePermitRule } from './pausePermitRules.js';
 
 
 // ADR-0087: the Operating Cadence Clock. Reads the finished queue after the
@@ -971,6 +973,13 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // the same transaction up every leadership span, and `sealRule` attests all
   // of it in one seal. Inert until the first classification act exists.
   workTurnRule,
+  // ADR-0182: RULE-PMP-01. Notices an automatic control silenced with no permit
+  // and puts one dated authority ask in front of the single seat that can
+  // authorise a workspace-wide pause. Runs BEFORE the seat rule so the ask is in
+  // the record when the Operating Seat fans the same transaction up every span,
+  // and before `sealRule` so the seal covers it. Never flips a switch, never
+  // writes a permit on anybody's behalf, and is inert while every switch is on.
+  pausePermitRule,
   // ADR-0179: the Matrix Forward Allocation Horizon (RULE-LHZ-01). Sweeps the
   // dated reporting-line declarations forward over the declared lead window and
   // puts each exposure that begins inside it in front of the ONE seat that owns

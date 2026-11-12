@@ -125,6 +125,7 @@ import { transferPriceRule } from './transferPriceRules.js';
 import { delegationLineRule } from './delegationLineRules.js';
 import { lineHorizonRule } from './lineHorizonRules.js';
 import { workTurnRule } from './workTurnRules.js';
+import { pausePermitRule } from './pausePermitRules.js';
 import { sealRule } from './sealRules.js';
 // ADR-0092: the Differencing Defender declares its contract like every other rule.
 import { differencingRule } from './differencingRules.js';
@@ -971,6 +972,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'workTurnRules.js',
     purpose: 'RULE-NPW-01: reads the Non-Promotable Work Turn Ledger (`buildWorkTurns`, ADR-0181) with the whole-workspace operator view on classification acts, convention changes, explicit `work.turn.scan` scans, ask attribution / edit / hand-back, reporting-line acts and roster changes (a person updated, archived or restored). For a manager pool that concentrates its non-promotable asks on one person it keeps at most one open dated delegation with THAT manager; for a person on two or more lines who is within a fair turn on each line and over the per-person average in sum it keeps at most one with the single roster seat above every line they hold (the joint apex). It asks at most once per finding signature, closes its own ask when the reading clears, is capped at 8 asks per commit with the remainder counted, and records an observation instead of an ask when the owner is the workspace leader, off the roster or tied between incomparable seats. It never classifies or reassigns an ask, never stores a turn, share or verdict, never rates a person, and is INERT until the first classification act exists.',
     writes: ['delegations', 'links', 'workTurnMarkers'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: pausePermitRule,
+    module: 'pausePermitRules.js',
+    purpose: 'RULE-PMP-01: reads the Automation Pause Permit Register (`buildPausePermits`, ADR-0182) with the whole-workspace operator view on settings writes, permit grant / revoke, convention changes, explicit `automation.pause.scan` scans, reporting-line acts and roster changes. For every declared automatic switch that is OFF with no permit in force — whether the permit ran out (`expired`) or none was ever recorded (`unpermitted`) — and whose off-period has stood past the declared grace, it keeps at most ONE open dated delegation with the single seat that can authorise a workspace-wide pause (the joint apex of the reporting graph), naming the consequence and the two ways to resolve it. Asks carry matrix-DAG `rolls-up-to` provenance, are idempotent per pause signature, bounded at 6 per commit with the remainder counted, and close themselves when the pause is permitted or the switch comes back on. A pause whose authorising seat is the workspace leader, off the roster or tied between incomparable seats is recorded as an observation; nobody is substituted. It never flips a switch, never writes or revokes a permit, never rates a person and never judges why somebody paused; pausable via `pausePermitAutoPropagate`; INERT while every switch is on and no permit exists.',
+    writes: ['delegations', 'links', 'pausePermitMarkers'],
     emits: [],
     scansWorkspace: true,
   },

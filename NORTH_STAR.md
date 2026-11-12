@@ -57,6 +57,27 @@ counted and explained, never dropped. Evidence: the reconciliation contract in
 `app/core/domain/matrix.js` (`balances` vs `auditClean`), the fail-closed
 normalizers in `app/core/schema.js`, `npm run check:boundary`.
 
+## Visual / content integrity mandate (binding — added 2026-11-12)
+Any user-facing visual, onboarding asset or communication piece must be the real
+produced asset, not a placeholder, a grey box or generic stock filler. A
+placeholder visual layer is a stub and fails the technical baseline below for the
+same reason a code stub does. Where a specialised generation tool sets a better
+bar than hand-written markup can reach, that tool is the path; where the asset is
+generated, its provenance is recorded.
+
+## Competitive benchmark mandate (binding — added 2026-11-12)
+For any capability LeadOS implements that overlaps what a specialised external AI
+tool, model or platform already does well — visual generation, forecasting,
+natural-language analysis, recommendation or scoring engines, summarisation, and
+the rest — LeadOS's own implementation, whether built natively or assembled by
+integrating an external tool, must **match or exceed the quality of the best known
+tool capable of that task**. "Adequate", "passable" and "good enough" are rejected
+as standards whenever a visibly better bar exists in the market. Where the better
+path is integration, integrate properly. Where it is native, engineer it up to
+that bar. Saying plainly that the bar is NOT cleared — marked
+`[BENCHMARK-UNVERIFIED]` — is always permitted and is never a substitute for
+trying. This applies to substance and intelligence, not only to visuals.
+
 ## Cross-module automation mandate
 A unified case/event/decision data model should trigger automatic, parallel updates across all relevant modules (coaching, risk, finance, stakeholder, decision log, etc.) via a generalized event-driven engine — not one-off hardcoded links.
 

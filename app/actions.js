@@ -47,6 +47,9 @@ import { createHiringLineActions } from './core/domain/hiringLineActions.js';
 import { createTransferPriceActions } from './core/domain/transferPriceActions.js';
 import { createDelegationLineActions } from './core/domain/delegationLineActions.js';
 import { createWorkTurnActions } from './core/domain/workTurnActions.js';
+import { createPausePermitActions } from './core/domain/pausePermitActions.js';
+import { validatePermitRequest } from './core/domain/pausePermitActions.js';
+import { PAUSE_PERMIT_EVENTS, PAUSE_PERMIT_LIMITS, PAUSE_PERMIT_SCOPES } from './core/domain/pausePermitRegistry.js';
 // ADR-0165: the per-line 1:1 body boundary. Meetings another line holds are a fact, not a readable/editable record.
 import { meetingBodyVerdictForState } from './core/domain/meetingPrivacy.js';
 import { feedbackAuthorForCreate, feedbackBodyVerdictForState } from './core/domain/feedbackPrivacy.js';
@@ -1307,10 +1310,68 @@ export function createApi(store, options = {}) {
     return { ok: true, delegationId: del.id };
   }
 
+  /**
+   * ADR-0182: the permit a bare automation pause may carry as its second
+   * argument. Validated with the SAME validator the grant door uses, so the two
+   * ways of pausing one control can never disagree about what a permit is.
+   */
+  function buildPausePermit(patch, permitInput, at) {
+    const keys = Object.keys(patch || {}).filter((k) => patch[k] === false && /Auto[A-Z][a-z]+$/.test(k));
+    if (keys.length !== 1) {
+      return fail('A permit authorises the silence of exactly ONE switch. Pause one control per permit, so one authoriser answers for it.', 'permit', { refusals: ['bad-window'] });
+    }
+    const key = keys[0];
+    if (permitInput.key !== undefined && permitInput.key !== key) {
+      return fail('The permit names a different switch than the one being paused. One pause, one authority, named the same.', 'permit', { refusals: ['unknown-switch'] });
+    }
+    // The caller IS the one switching this control off, so the switch reading
+    // `on` right now is the state being changed — not a reason to refuse.
+    const check = validatePermitRequest(store.state, { ...permitInput, key }, { asPause: true, today: dayKey(at) });
+    if (check.failed.length) {
+      return fail(`The permit was refused: ${check.failed.join(', ')}. Nothing was saved and the switch did not move.`, 'permit', { refusals: check.failed });
+    }
+    const existing = Array.isArray(store.state.pausePermits) ? store.state.pausePermits : [];
+    if (existing.length >= PAUSE_PERMIT_LIMITS.permits) {
+      return fail('The permit ledger is at its declared cap; revoke or export before granting another.', 'permit', { refusals: ['ledger-full'] });
+    }
+    // The switch value is read from the patch, so the permit describes the pause
+    // that is about to be written rather than the state that preceded it.
+    return {
+      ok: true,
+      permit: {
+        id: id('pmp'),
+        key,
+        authoriserId: null,
+        reason: check.reasonText,
+        mitigation: check.mitigationText,
+        scope: PAUSE_PERMIT_SCOPES.includes(permitInput.scope) ? permitInput.scope : 'workspace',
+        scopeTargetId: permitInput.scopeTargetId ? String(permitInput.scopeTargetId).slice(0, PAUSE_PERMIT_LIMITS.idMax) : null,
+        counterpartId: permitInput.counterpartId ? String(permitInput.counterpartId).slice(0, PAUSE_PERMIT_LIMITS.idMax) : null,
+        from: check.first,
+        to: check.last,
+        at: at.toISOString(),
+        revoked: false,
+        revokedOn: null,
+        revokedById: null,
+        revokedReason: null,
+      },
+    };
+  }
+
   const api = {
     ...createConflictActions(store, { now: clock, idFactory: id }),
     /* ------------------------------------------------------------ settings */
-    updateSettings(patch) {
+    updateSettings(patch, permitInput = null) {
+      // ADR-0182: an OPTIONAL permit beside a pause. Validated before anything is
+      // written, so a refused permit leaves both the switch and the ledger
+      // untouched — a half-applied authority is the failure this forbids.
+      let permit = null;
+      if (permitInput !== undefined && permitInput !== null) {
+        if (typeof permitInput !== 'object' || Array.isArray(permitInput)) return fail('The permit beside an automation pause must be a declared object.', 'permit');
+        const built = buildPausePermit(patch, permitInput, clock());
+        if (!built.ok) return built;
+        permit = built.permit;
+      }
       const next = { ...patch };
       if (Object.hasOwn(next, 'pulseMinResponses')) {
         const value = next.pulseMinResponses;
@@ -1536,10 +1597,20 @@ export function createApi(store, options = {}) {
       store.update(
         (draft) => {
           draft.settings = { ...draft.settings, ...next };
+          // The permit is written in the SAME atomic commit as the switch, so
+          // RULE-PMP-01 sees a governed pause and never an anonymous one.
+          if (permit) draft.pausePermits = [permit, ...(Array.isArray(draft.pausePermits) ? draft.pausePermits : [])];
         },
-        { type: 'settings.updated', entity: 'settings', summary: `Settings updated (${Object.keys(next).join(', ') || 'no change'})` },
+        {
+          type: permit ? PAUSE_PERMIT_EVENTS.REQUESTED : 'settings.updated',
+          entity: 'settings',
+          entityId: permit ? permit.key : '',
+          summary: permit
+            ? `Paused ${permit.key} under permit ${permit.id} to ${permit.to}: ${Object.keys(next).filter((k) => k !== permit.key).join(', ') || 'one switch'}.`
+            : `Settings updated (${Object.keys(next).join(', ') || 'no change'})`,
+        },
       );
-      return { ok: true, warning: store.persistError || null };
+      return { ok: true, warning: store.persistError || null, permitId: permit ? permit.id : null };
     },
 
     /**
@@ -20063,6 +20134,11 @@ export function createApi(store, options = {}) {
   // manager's own dated act through the same reviewed gateway; pools, fair
   // turns and verdicts are derived on read and RULE-NPW-01 runs in the commit.
   Object.assign(api, createWorkTurnActions(store, { now: clock, idFactory: id }));
+  // ADR-0182: the Automation Pause Permit Register. Granting a permit writes the
+  // permit AND flips the switch in one atomic commit; revoking withdraws the
+  // authority and brings the switch back up in one commit. Every state, reach
+  // flag and count is derived on read and RULE-PMP-01 runs in the same commit.
+  Object.assign(api, createPausePermitActions(store, { now: clock, idFactory: id }));
   // ADR-0177: the Cross-Line Labour Chargeback & Internal Transfer-Price Ledger.
   // Proposing, confirming and retiring a price are first-person two-key acts
   // through the same reviewed gateway; every charge is derived on read.

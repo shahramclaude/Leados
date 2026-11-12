@@ -6,6 +6,7 @@
 import { activeSeat, buildSeats, canAct, canSee, recordPeople } from './seat.js';
 import { responsibleNodeId } from './chain.js';
 import { matrixLineScopeFor } from './matrix.js';
+import { PAUSE_PERMIT_RIGHTS } from './pausePermitRegistry.js';
 import { routeVerdict } from './seatRegistry.js';
 import { validateMissionCommands } from './mission.js';
 import { captureBriefCase } from './missionCaptureBrief.js';
@@ -106,6 +107,13 @@ const groups = [
   // the conventions is director+.
   ['classify-work-turn', 'workTurnClassify'],
   ['govern-work-turns', 'workTurnScan workTurnSetConventions'],
+  // ADR-0182: granting or withdrawing a permit for a silenced automatic control
+  // is director+ (it governs the whole workspace's automatic behaviour). The
+  // ACTION further narrows it: a seat that is not the full-access operator must
+  // BE the single seat above every reporting line, so no line manager can
+  // silence a control that reads another manager's work.
+  ['permit-automation-pause', 'pausePermitGrant pausePermitRevoke'],
+  ['govern-automation-pauses', 'pausePermitScan pausePermitSetConventions'],
   ['govern-hiring-lines', 'hiringLineScan'],
   // ADR-0177: a transfer price is a TWO-KEY act. Proposing, confirming and
   // retiring are open at every leadership rank because a project lead with no
@@ -467,6 +475,10 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // seat are counted, never listed, and the altitude disclosure ladder decides
 // whether names, leaders or counts are returned.
 'workTurnReport',
+// ADR-0182: seat-scoped inside `buildPausePermits` — the altitude disclosure
+// ladder decides whether switch keys, authorisers and reason text are returned,
+// or counts only.
+'pausePermitReport',
 // ADR-0177: the chargeback statement is scoped INSIDE the read model — a seat
 // reads the line accounts it reaches and every piece that names one of them;
 // the rest is counted as withheld and names outside the seat are withheld.
@@ -556,6 +568,24 @@ export function guardApiCall(state, name, args, nowMs = undefined) {
     if (!patch || typeof patch !== 'object' || Array.isArray(patch)) return refusal('Settings updates must be a declared patch object.');
     const keys = Object.keys(patch);
     if (keys.some((k) => !k.endsWith('AutoPropagate'))) return refusal('Under a declared seat, settings updates are limited to module automation pauses. Use the rank-gated seat/disclosure commands for identity and disclosure.');
+    // ADR-0182: a pause taken HERE is not a permit. It is still allowed — this
+    // is how every control in the app has always been switched off, and
+    // blocking it would break a leader's hand rather than govern it. But the
+    // 2nd argument is now a PERMIT: pass one and the register records the
+    // authoriser, the reason, the compensating measure and the end date in the
+    // same commit; omit it and the pause reads `unpermitted`, is printed as
+    // such, and RULE-PMP-01 escalates it. The register refuses to let a silence
+    // be anonymous; it does not refuse the silence.
+    if (args[1] !== undefined && args[1] !== null) {
+      if (typeof args[1] !== 'object' || Array.isArray(args[1])) return refusal('The permit beside an automation pause must be a declared object.');
+      const keysToPause = keys.filter((k) => patch[k] === false);
+      if (keysToPause.length !== 1) return refusal('A permit authorises the silence of exactly ONE switch. Pause one control per permit, so one authoriser answers for it.');
+      const permitKey = args[1].key;
+      if (permitKey !== undefined && permitKey !== keysToPause[0]) return refusal('The permit names a different switch than the one being paused. One pause, one authority, named the same.');
+      if (seat.readOnly) return refusal('Resolve the operating seat before permitting a pause.');
+      const rank = canAct(PAUSE_PERMIT_RIGHTS.GRANT, seat);
+      if (!rank.allow) return refusal(rank.reason);
+    }
     return { ok: true, seat, built };
   }
   if (name.startsWith('missionCapture') || name === 'saveMissionCapturePreview') {

@@ -94,6 +94,14 @@ export function renderConventionRegisterCard(ctx) {
       register.switchesOff.length
         ? h('ul', { 'data-crg': 'switchesOff' }, ...register.switchesOff.map((key) => h('li', null, code(key))))
         : h('p', { class: 'muted', 'data-crg': 'switchesOff' }, 'None — every automation switch is on.'),
+      // ADR-0182: this register can say WHICH switches are off. It can say
+      // nothing about who silenced them or until when, and it should not look
+      // as though it has. The authority beside each silence lives in its own
+      // register, and this is the door to it.
+      h('p', { class: 'muted small', 'data-crg': 'pausePermits' },
+        'Which switch is off, and who authorised it, are different questions. ',
+        h('a', { href: '#/settings?panel=pause-permits' }, 'Pause permits'),
+        ' records the authoriser, the reason, the end date and the compensating measure beside every silenced control — and prints the ones that have none.'),
       register.switchesIndeterminate.length
         ? h('p', { class: 'text-bad', 'data-crg': 'switchesIndeterminate' }, `Not readable as on or off: ${register.switchesIndeterminate.join(', ')}.`)
         : null,
@@ -161,7 +169,10 @@ export function renderConventionRegisterCard(ctx) {
   return card({
     title: 'Conventions in force',
     subtitle: 'Every declared number and automation switch this workspace runs under, read through the same loader a reload uses.',
-    actions: [h('button', { class: 'btn btn-small btn-ghost', type: 'button', onClick: () => openBrief(register) }, 'Text brief')],
+    actions: [
+      h('a', { class: 'btn btn-small', href: '#/settings?panel=pause-permits' }, 'Pause permits'),
+      h('button', { class: 'btn btn-small btn-ghost', type: 'button', onClick: () => openBrief(register) }, 'Text brief'),
+    ],
     body,
     attrs: { 'data-card': 'convention-register' },
   });
