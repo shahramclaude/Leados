@@ -159,6 +159,8 @@ import { buildLineHorizon, lineHorizonCsvRows } from './domain/lineHorizon.js';
 import { LINE_HORIZON_CSV_COLUMNS, LINE_HORIZON_CSV_DESCRIPTOR } from './domain/lineHorizonRegistry.js';
 import { buildWorkTurns, workTurnCsvRows } from './domain/workTurns.js';
 import { WORK_TURN_CSV_COLUMNS, WORK_TURN_CSV_DESCRIPTOR } from './domain/workTurnRegistry.js';
+import { buildPausePermits, pausePermitCsvRows } from './domain/pausePermits.js';
+import { PAUSE_PERMIT_CSV_COLUMNS, PAUSE_PERMIT_CSV_DESCRIPTOR } from './domain/pausePermitRegistry.js';
 import { STRUCTURE_HISTORY_CSV_COLUMNS } from './domain/structureHistoryRegistry.js';
 import {
   assessmentReconciliationCsvRows,
@@ -1322,6 +1324,9 @@ export const CSV_EXPORTS = [
   // #135 (Schema v144, ADR-0181): non-promotable work turns, one identity-free
   // summary row.
   WORK_TURN_CSV_DESCRIPTOR,
+  // #136 (Schema v145, ADR-0182): automation pause permits, one identity-free
+  // summary row — no switch key, no authoriser, no reason text.
+  PAUSE_PERMIT_CSV_DESCRIPTOR,
 ];
 
 function personLookup(state) {
@@ -6395,6 +6400,15 @@ export function buildScopeTable(state, scope, now) {
       // partial sum.
       const report = buildLineHorizon(state, { now, settings: state.settings || {} });
       return { columns: LINE_HORIZON_CSV_COLUMNS.map((key) => ({ key, header: key })), rows: lineHorizonCsvRows(report) };
+    }
+    case 'automation-pause-permits': {
+      // CSV scope #136 (Schema v145, ADR-0182). Built from the SAME seat-scoped
+      // read model the panel renders, so an exported count is provably the
+      // count that was printed. One identity-free summary row: no switch key,
+      // no authoriser, no person, no line and no free text crosses the boundary
+      // — the reason text of a pause never leaves the browser inside an export.
+      const report = buildPausePermits(state, { now, settings: state.settings || {} });
+      return { columns: PAUSE_PERMIT_CSV_COLUMNS.map((key) => ({ key, header: key })), rows: pausePermitCsvRows(report) };
     }
     case 'work-turns': {
       // CSV scope #135 (Schema v144, ADR-0181). Built from the SAME seat-scoped

@@ -133,6 +133,9 @@ import { renderReviews, renderReviewDetail } from './views/reviews.js';
 // navigation tree that could disagree with the first.
 import { renderReviewStewardshipPanel } from './views/reviewStewardshipPanel.js';
 import { renderSettings } from './views/settings.js';
+// ADR-0182: the Automation Pause Permit Register — who authorised the silence,
+// why, and until when.
+import { renderPausePermitPanel } from './views/pausePermitPanel.js';
 import { renderVault } from './views/vault.js';
 import { renderPrepSheet } from './views/prep.js';
 import { renderOnboarding } from './views/onboarding.js';
@@ -672,7 +675,10 @@ const RENDERERS = {
     ? renderReviewStewardshipPanel(ctx)
     : renderReviews(ctx)),
   review: (ctx, segments) => renderReviewDetail(ctx, safeDecode(segments[1])),
-  settings: (ctx) => renderSettings(ctx),
+  // ADR-0182: `#/settings?panel=pause-permits` is a sibling screen of Settings,
+  // not a tab inside it, so the register renders its own page rather than
+  // burying a governance record below a scroll of thresholds.
+  settings: (ctx) => (ctx.query?.get?.('panel') === 'pause-permits' ? renderPausePermitPanel(ctx) : renderSettings(ctx)),
   prep: (ctx, segments) => renderPrepSheet(ctx, safeDecode(segments[1])),
 };
 
