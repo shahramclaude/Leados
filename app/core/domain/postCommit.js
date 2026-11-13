@@ -162,6 +162,7 @@ import { benchRegressionRule } from './benchRegressionRules.js';
 import { oneOnOneLineRule } from './oneOnOneLineRules.js';
 import { hiringLineRule } from './hiringLineRules.js';
 import { transferPriceRule } from './transferPriceRules.js';
+import { chargebackPostingRule } from './chargebackPostingRules.js';
 import { delegationLineRule } from './delegationLineRules.js';
 import { lineHorizonRule } from './lineHorizonRules.js';
 import { workTurnRule } from './workTurnRules.js';
@@ -973,6 +974,13 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // transaction. Inert until the first price act exists; never signs a key,
   // posts a charge or edits a budget.
   transferPriceRule,
+  // ADR-0194: the Chargeback Period Posting ledger (RULE-CBP-01). Immediately
+  // after the transfer-price rule, deliberately: once the keys RULE-TPL-01
+  // chased are turned and the quarter statement reads COMPLETE, this rule puts
+  // the one posting ask in front of the joint apex of the statement's lines —
+  // in the same transaction that completed the statement. Inert until the
+  // first price act exists; never posts, reverses or binds an envelope.
+  chargebackPostingRule,
   // ADR-0178: shared-contributor overload across every active reporting line.
   delegationLineRule,
   // ADR-0181: the Non-Promotable Work Turn Ledger (RULE-NPW-01). Puts one

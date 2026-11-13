@@ -240,6 +240,11 @@ export const MATRIX_PANELS = Object.freeze([
   // ADR-0193 (Session 261): the cross-line goal commitment conflict register —
   // the two promises two lines have each taken on the same person, compared.
   Object.freeze({ key: 'commitments', label: 'Commitment conflicts', hint: 'What each line has promised of one shared person, the exact days two promises collide, the measure they move in opposite directions, and the day the concurrent effort exceeds one whole person (ADR-0193).' }),
+  // ADR-0194 (Session 262): the chargeback period posting ledger — the dated
+  // human act that turns a COMPLETE quarter statement into a period fact bound
+  // to named budget envelopes, with reversals, drift audits and binding decay
+  // printed, never corrected.
+  Object.freeze({ key: 'postings', label: 'Postings', hint: 'Which closed quarters’ chargeback statements have been posted as dated period facts against named budget envelopes, which are complete and still unposted, and which posted figures the record no longer reproduces (ADR-0194).' }),
 ]);
 
 export const MATRIX_PANEL_KEYS = Object.freeze(MATRIX_PANELS.map((p) => p.key));

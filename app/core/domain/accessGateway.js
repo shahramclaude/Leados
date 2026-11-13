@@ -190,7 +190,15 @@ const groups = [
   // borrower key by the borrowing manager), so no seat can sign for its
   // counterpart. Re-running RULE-TPL-01 and setting the conventions is director+.
   ['agree-transfer-price', 'transferPricePropose transferPriceConfirm transferPriceRetire'],
-  ['govern-transfer-prices', 'transferPriceScan transferPriceSetConventions'],
+  // ADR-0194: re-running RULE-CBP-01 and setting the posting conventions ride
+  // the SAME chargeback governance right — one ledger, one governor.
+  ['govern-transfer-prices', 'transferPriceScan transferPriceSetConventions chargebackPostingScan chargebackPostingSetConventions'],
+  // ADR-0194: posting a period chargeback statement — and reversing one — is a
+  // VP+ act, deliberately above the director rank that governs the scan: the
+  // posting binds the WHOLE workspace statement, not one span, and the figures
+  // are the statement engine's own (the action refuses typed amounts; it only
+  // accepts envelope bindings and a note).
+  ['post-chargeback', 'chargebackPost chargebackReversePosting'],
   // ADR-0152: settling an obligation an ENDED line left behind. Recording the
   // remedy is the manager's own act (the action narrows it to a seat that reaches
   // the person, and a carry must name a live line holder); the scan changes no
@@ -575,6 +583,10 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // reads the line accounts it reaches and every piece that names one of them;
 // the rest is counted as withheld and names outside the seat are withheld.
 'transferPriceReport',
+// ADR-0194: the posting ledger is scoped INSIDE the read model — accounts and
+// envelope names outside the seat are counted and withheld; posting documents,
+// totals and audit verdicts are workspace facts and are returned as counts.
+'chargebackPostingReport',
 // ADR-0184: the stock-flow plan is scoped INSIDE the read model — the visible
 // person population bounds the acts read, and the altitude disclosure ladder
 // decides whether level rows, rates and the projection are returned or counts

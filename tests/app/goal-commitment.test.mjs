@@ -173,7 +173,7 @@ test('the engine registers its rights, its pause, its export and its place on th
   // Export, panel and spine.
   const scope = CSV_EXPORTS.find((row) => row.key === GOAL_COMMITMENT_CSV_SCOPE);
   assert.ok(scope, 'the register has its own CSV scope');
-  assert.equal(CSV_EXPORTS.length, 145, 'the register is scope #145 and nothing else moved');
+  assert.equal(CSV_EXPORTS.length, 146, 'the register is scope #145 and nothing else moved');
   assert.ok(MATRIX_PANELS.some((row) => row.key === GOAL_COMMITMENT_PANEL), 'the matrix view carries the commitments panel');
   assert.equal(DEFAULT_POST_COMMIT_RULES.length, PROPAGATION_CONTRACTS.length, 'spine and audit registry stay in parity');
   const spine = DEFAULT_POST_COMMIT_RULES.map((rule) => rule.id);
@@ -185,7 +185,7 @@ test('the engine registers its rights, its pause, its export and its place on th
 });
 
 test('schema v153 carries the ledger, the markers and the conventions', () => {
-  assert.equal(SCHEMA_VERSION, 153);
+  assert.equal(SCHEMA_VERSION, 154);
   assert.ok(COLLECTIONS.includes('goalCommitments') && COLLECTIONS.includes('goalCommitmentMarkers'));
   assert.ok(MIGRATIONS['152'], 'v152 state migrates forward');
   const state = fixture();

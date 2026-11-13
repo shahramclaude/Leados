@@ -27,6 +27,11 @@ import { normalizeReportingLines, normalizeMatrixMarkers, normalizeMatrixSetting
 import { normalizeOneOnOneHolder, normalizeOneOnOneLineMarkers, normalizeOneOnOneLineSettings } from './domain/oneOnOneLineSchema.js';
 import { normalizeHiringLineMarkers, normalizeHiringLinePlans, normalizeHiringLineSettings } from './domain/hiringLineSchema.js';
 import { normalizeTransferPriceActs, normalizeTransferPriceMarkers, normalizeTransferPriceSettings } from './domain/transferPriceSchema.js';
+import {
+  normalizeChargebackPostingMarkers,
+  normalizeChargebackPostings,
+  normalizeChargebackPostingSettings,
+} from './domain/chargebackPostingSchema.js';
 import { normalizeDelegationLineActs, normalizeDelegationLineMarkers, normalizeDelegationLineSettings } from './domain/delegationLineSchema.js';
 import { normalizeWorkTurnActs, normalizeWorkTurnMarkers, normalizeWorkTurnSettings } from './domain/workTurnSchema.js';
 // ADR-0182 (Schema v145): the Automation Pause Permit Register. Fail-closed
@@ -851,7 +856,17 @@ export {
 // results, no measure off its title, and no line is guessed from
 // `person.managerId`. An upgraded workspace therefore opens printing
 // `nothing declared` for every goal — an absence, never a compatibility claim.
-export const SCHEMA_VERSION = 153;
+// v154 adds the Chargeback Period Posting & Budget-Envelope Binding ledger
+// (ADR-0194): `chargebackPostings` (append-only dated acts — a posting that
+// freezes one period × one currency of the COMPLETE whole-workspace chargeback
+// statement, per-line integer cents bound to that line's own budget envelope
+// or an explicit written no-envelope declaration, and dated reversals with a
+// written reason) and `chargebackPostingMarkers` (`RULE-CBP-01`'s bounded
+// idempotency ledger). Both start EMPTY, and nothing is inferred at upgrade:
+// no past quarter is back-posted, no binding is guessed from an envelope's
+// owner, and an upgraded workspace opens with every completed quarter reading
+// `postable` or `not postable` on its own evidence — never already closed.
+export const SCHEMA_VERSION = 154;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -2297,6 +2312,10 @@ export const DEFAULT_SETTINGS = Object.freeze({
   // load, refused (never clamped) by the setter, and printed on the Method
   // card. None is fitted from the record.
   ...normalizeGoalCommitmentSettings({}),
+  // ADR-0194: the chargeback-posting conventions — the posting ask window and
+  // the automation pause. Clamped on load, refused (never clamped) by the
+  // setter, and printed on the panel. None is fitted from the record.
+  ...normalizeChargebackPostingSettings({}),
 });
 
 export const COLLECTIONS = [
@@ -3055,6 +3074,13 @@ export const COLLECTIONS = [
   // and the reporting graph.
   'goalCommitments',
   'goalCommitmentMarkers',
+  // ADR-0194 (Schema v154): the Chargeback Period Posting ledger. Append-only
+  // dated posting/reversal acts plus RULE-CBP-01's marker ledger. No posting
+  // state, audit verdict or binding state is stored — each is re-derived on
+  // read against the live statement engine and the live envelopes, so a
+  // printed verdict cannot drift from its evidence.
+  'chargebackPostings',
+  'chargebackPostingMarkers',
 ];
 
 /** Stable empty state. `now` is an ISO string so the result is a pure value. */
@@ -3839,6 +3865,10 @@ export function normalizeSettings(raw) {
     // field, so a goal-commitment convention not spread here would vanish on
     // every load and the pause census would never see the conflict switch.
     ...normalizeGoalCommitmentSettings(s),
+    // ADR-0194: named here for the same reason — this object is rebuilt field
+    // by field, so a posting convention not spread here would vanish on every
+    // load and the pause census would never see the posting switch.
+    ...normalizeChargebackPostingSettings(s),
     ...normalizeStructureHistorySettings(s),
     ...normalizeDifferencesSettings(s),
     ...normalizeFitSettings(s),
@@ -8388,6 +8418,13 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // dropped with a counted warning — never repaired into a price nobody agreed.
   state.transferPriceActs = normalizeTransferPriceActs(raw.transferPriceActs, warnings);
   state.transferPriceMarkers = normalizeTransferPriceMarkers(raw.transferPriceMarkers);
+  // ADR-0194 (Schema v154): a posting whose rows do not sum to its totals,
+  // whose totals do not net to zero, or whose frozen claims do not read
+  // complete is dropped with a counted warning — a hand-edited file cannot
+  // manufacture a period close. Bindings to envelopes that later changed are
+  // KEPT as signed; decay is the read model's finding, not a load repair.
+  state.chargebackPostings = normalizeChargebackPostings(raw.chargebackPostings, warnings);
+  state.chargebackPostingMarkers = normalizeChargebackPostingMarkers(raw.chargebackPostingMarkers);
   state.delegationLineActs = normalizeDelegationLineActs(raw.delegationLineActs, state, warnings);
   state.delegationLineMarkers = normalizeDelegationLineMarkers(raw.delegationLineMarkers);
   // ADR-0181 (Schema v144): a malformed classification act, an act naming a
@@ -9163,6 +9200,19 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  // 153 → 154: ADR-0194 adds two EMPTY ledgers and two declared conventions.
+  // No posting is inferred from the statements that could have been posted: a
+  // complete quarter that nobody turned into a period fact IS unposted, and
+  // back-filling a posting at upgrade time would fabricate the dated human act
+  // this ledger exists to record. An upgraded workspace opens with every
+  // quarter reading `postable` or `not postable` on its own evidence.
+  153: (v153) => ({
+    ...v153,
+    schemaVersion: 154,
+    chargebackPostings: Array.isArray(v153.chargebackPostings) ? v153.chargebackPostings : [],
+    chargebackPostingMarkers: Array.isArray(v153.chargebackPostingMarkers) ? v153.chargebackPostingMarkers : [],
+    settings: { ...(v153.settings || {}), ...normalizeChargebackPostingSettings(v153.settings || {}) },
+  }),
   // 152 → 153: ADR-0193 adds two EMPTY ledgers and five declared conventions.
   // No commitment is inferred from the goals that already exist: a goal's
   // `dueDate` is not a window, its key results are not an effort, its title is
