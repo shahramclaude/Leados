@@ -10,6 +10,7 @@ import { PAUSE_PERMIT_RIGHTS } from './pausePermitRegistry.js';
 import { CHANGE_SATURATION_RIGHTS } from './changeSaturationRegistry.js';
 import { AAR_CORROBORATION_RIGHTS } from './aarCorroborationRegistry.js';
 import { STANDARD_WORK_RIGHTS } from './standardWorkRegistry.js';
+import { PRIORITY_BALLOT_RIGHTS } from './priorityRankingRegistry.js';
 import { routeVerdict } from './seatRegistry.js';
 import { validateMissionCommands } from './mission.js';
 import { captureBriefCase } from './missionCaptureBrief.js';
@@ -95,13 +96,20 @@ const groups = [
   // managers involved or the span above both — a peer cannot restructure another
   // span.
   ['record-structure-change', 'structureRecordMove structureImportDesign structureSeedCurrent structureScan structureHistoryCandidates'],
-  ['declare-matrix-line', 'matrixDeclareLine matrixRetuneLine matrixEndLine matrixSetConventions matrixReport matrixBriefText matrixCsvRows matrixCoordinationReport matrixCoordinationScan matrixSodReview matrixSettings matrixCandidates lineConsentRead lineConsentCandidates lineConsentScan matrixRecordIntake matrixRerouteIntake matrixIntakeReport matrixIntakeCandidates matrixHorizonReport matrixHorizonScan matrixDependencyCycleReport matrixInterfaceAlignmentReport'],
+  ['declare-matrix-line', 'matrixDeclareLine matrixRetuneLine matrixEndLine matrixSetConventions matrixReport matrixBriefText matrixCsvRows matrixCoordinationReport matrixCoordinationScan matrixSodReview matrixSettings matrixCandidates lineConsentRead lineConsentCandidates lineConsentScan matrixRecordIntake matrixRerouteIntake matrixIntakeReport matrixIntakeCandidates matrixHorizonReport matrixHorizonScan matrixDependencyCycleReport matrixInterfaceAlignmentReport matrixPriorityCandidates'],
   ['govern-dependency-cycles', 'matrixDependencyCycleScan matrixDependencyCycleSetConventions'],
   // ADR-0189: scanning the product–organisation interface alignment matrix and
   // setting its conventions. The pure read sits on `declare-matrix-line` and in
   // SAFE_READS; the scan (which runs the shared spine) and the conventions stay
   // on this declared right.
   ['govern-interface-alignment', 'matrixInterfaceAlignmentScan matrixInterfaceAlignmentSetConventions'],
+  // ADR-0191: the pure priority-ballot read sits on the read right and in
+  // SAFE_READS; opening a round and casting a ballot are declared commands under
+  // their own rights, and the scan/conventions stay on the governing right.
+  [PRIORITY_BALLOT_RIGHTS.READ, 'matrixPriorityReport matrixPriorityBriefText matrixPriorityCsvRows matrixPriorityAttentionCount'],
+  [PRIORITY_BALLOT_RIGHTS.DECLARE, 'matrixPriorityDeclareRound matrixPriorityWithdrawRound'],
+  [PRIORITY_BALLOT_RIGHTS.CAST, 'matrixPriorityCastBallot'],
+  [PRIORITY_BALLOT_RIGHTS.GOVERN, 'matrixPriorityScan matrixPrioritySetConventions'],
   // ADR-0148: answering a declared share is TWO first-person acts, split on the
   // spine rather than in prose. `accept-matrix-line` is the manager's own
   // answer (accept or decline the line they were given); it is open at every
@@ -455,6 +463,10 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // enforcement while the matrix writes stay gated — hiding the misalignment
 // from exactly the seat that has to convene the two holders.
 'matrixInterfaceAlignmentReport',
+// ADR-0191: the priority-ballot read surface. Registered for the same reason as
+// every module above — a read absent from SAFE_READS is unreadable under
+// enforcement while its writes are still gated.
+'matrixPriorityReport', 'matrixPriorityBriefText', 'matrixPriorityCsvRows', 'matrixPriorityAttentionCount',
 // ADR-0143: the arbitration register's read surface. Registered for the same
 // reason as every module above — a read absent from SAFE_READS is unreadable
 // under enforcement while its writes are still gated, which would hide the case

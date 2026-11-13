@@ -634,6 +634,15 @@ export const ACTION_RIGHTS = Object.freeze({
   'declare-standard-work': { minRank: 1, maxRank: 5, label: 'Declare or retire a standard-work routine for yourself or a leader you hold a line over' },
   'record-standard-work': { minRank: 1, maxRank: 5, label: 'Record your own standard-work check, or your own tier act on an abnormality addressed to you' },
   'govern-standard-work': { minRank: 3, maxRank: 5, label: 'Set the standard-work read window, lapse run and tier window' },
+  // ADR-0191: the cross-line priority ballot. Declaring a round freezes one
+  // person's work set for the lines that share them — a management act at any
+  // leadership altitude, so the action narrows it rather than the rank. Casting
+  // is the line holder's own first-person act. Governing the deadline, the ask
+  // window and the ballot floor is director-and-above.
+  'read-priority-ballots': { minRank: 1, maxRank: 5, label: 'Read the cross-line priority ballot board' },
+  'declare-priority-round': { minRank: 2, maxRank: 5, label: 'Open or withdraw a priority round for a person you report to, or whose line you hold' },
+  'cast-priority-ballot': { minRank: 1, maxRank: 5, label: 'Cast your line’s one ballot over a frozen priority round' },
+  'govern-priority-ballots': { minRank: 3, maxRank: 5, label: 'Scan priority-ballot conditions and set the deadline, ask window and ballot floor' },
   // ADR-0150: onboarding a person into a matrix. Writing a line's brief is the act
   // of the manager who HOLDS that line, at whatever altitude that line's manager
   // sits (a project lead with no home-line reports gets this exactly as a

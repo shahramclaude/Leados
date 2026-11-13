@@ -132,6 +132,7 @@ import { aarCorroborationRule } from './aarCorroborationRules.js';
 import { dependencyCycleRule } from './dependencyCycleRules.js';
 import { interfaceAlignmentRule } from './interfaceAlignmentRules.js';
 import { standardWorkRule } from './standardWorkRules.js';
+import { priorityRule } from './priorityRankingRules.js';
 import { sealRule } from './sealRules.js';
 // ADR-0092: the Differencing Defender declares its contract like every other rule.
 import { differencingRule } from './differencingRules.js';
@@ -1041,6 +1042,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     rule: standardWorkRule,
     module: 'standardWorkRules.js',
     purpose: 'RULE-LSW-01: reads Leader Standard Work & Tiered Daily Management (`buildStandardWork`, ADR-0190) with the whole-workspace view on every operational write. A routine whose most recent closed slots — at least the declared lapse run — hold no completed check becomes ONE dated go-and-see ask to the manager of the line the routine is owed under; an abnormality escalated to a leader becomes ONE dated ask in that leader’s queue, due at the end of the declared tier window. Asks are idempotent per condition signature, carry matrix-DAG `rolls-up-to` provenance, close themselves when the condition clears or its seat moves, and are bounded per commit. Where the owner holds several lines and named none, the named line ended, the holder left the roster or the next tier is the workspace leader, it records an identity-free `matrixMarkers` observation and asks nobody. It never records a check, never acts for a tier and never rates a leader.',
+    writes: ['delegations', 'links', 'matrixMarkers'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: priorityRule,
+    module: 'priorityRankingRules.js',
+    purpose: 'RULE-SOC-01: reads the Cross-Line Priority Ballot & Social-Choice Aggregation register (`buildPriorityRanking`, ADR-0191) with the whole-workspace view on round, ballot and withdrawal writes, reporting-line and roster changes, convention changes and explicit `priority.scan` / `matrix.scan` scans. It files at most ONE open dated ask per condition (bounded at 6 per commit, remainder counted): (a) `overdue-ballot` — a frozen line holder has not cast a ballot by the round deadline — addressed to THAT frozen holder only (never to a later holder of the same line and never to the person being ranked); (b) `cycle` — the cast ballots hold a majority cycle, so no Condorcet winner exists — addressed to the LOWEST joint apex of the lines that were asked, naming the Schwartz top cycle and the beatpath completion. Asks carry typed `issues-obligation` and matrix-DAG `rolls-up-to` provenance, are idempotent per deterministic condition signature (`soc1:…`), and close themselves when the condition clears or its seat moves. An ambiguous-apex, leader-held or off-roster condition records ONE identity-free `matrixMarkers` observation (`kind: \'priority-ballot\'`) and substitutes nobody. It never casts a ballot, never edits a ranking, never withdraws a round, never breaks a cycle silently and never rates a person; pausable via `priorityBallotAutoPropagate` (the pause governs EVERY path, including explicit scans).',
     writes: ['delegations', 'links', 'matrixMarkers'],
     emits: [],
     scansWorkspace: true,

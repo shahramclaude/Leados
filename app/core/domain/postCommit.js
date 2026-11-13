@@ -176,6 +176,7 @@ import { dependencyCycleRule } from './dependencyCycleRules.js';
 import { aarCorroborationRule } from './aarCorroborationRules.js';
 import { interfaceAlignmentRule } from './interfaceAlignmentRules.js';
 import { standardWorkRule } from './standardWorkRules.js';
+import { priorityRule } from './priorityRankingRules.js';
 
 
 // ADR-0087: the Operating Cadence Clock. Reads the finished queue after the
@@ -1059,6 +1060,15 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // and asks nobody. It never records a check or a tier act and never rates a
   // leader. Registered immediately before `seatRule` and `sealRule`.
   standardWorkRule,
+  // ADR-0191: the Cross-Line Priority Ballot register (RULE-SOC-01). Reads the
+  // ONE reader with the whole-workspace view. An overdue frozen ballot becomes
+  // ONE dated ask to the holder the round froze — never to a later holder of the
+  // same line; a majority cycle becomes ONE dated ask to the lines' lowest joint
+  // apex naming the cycle. With no single apex, a leader-held apex or an
+  // off-roster holder it records an identity-free `matrixMarkers` observation
+  // and asks nobody. It never casts a ballot, never withdraws a round and never
+  // rates a person. Registered immediately before `seatRule` and `sealRule`.
+  priorityRule,
   // ADR-0076: the Operating Seat (vertical roll-up + enforced boundaries).
   // It reads the finished record after every module has propagated, then fans
   // each open item up every leadership ancestor in the reporting tree with one

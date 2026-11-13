@@ -109,6 +109,14 @@ import {
   normalizeStandardWorkSettings,
   normalizeStandardWorkTierActs,
 } from './domain/standardWorkSchema.js';
+// ADR-0191 (Schema v151): frozen cross-line priority rounds and first-person
+// ballots. Rounds normalize before their ballots resolve, so a ballot that
+// names a round the loader refused is dropped rather than orphaned.
+import {
+  normalizePriorityBallotSettings,
+  normalizePriorityRoundLedger,
+  normalizePriorityVotes,
+} from './domain/priorityRankingSchema.js';
 // ADR-0185 (Schema v147): dated Matrix change-impact requests and first-person
 // line responses. Request snapshots normalize before their responses resolve.
 import {
@@ -823,7 +831,7 @@ export {
 // about what the change puts on a person, and a capacity inferred from level, pay
 // or meeting load would be a limit its author never agreed to. An upgraded
 // workspace therefore opens printing `no capacity declared` — refused, never zero.
-export const SCHEMA_VERSION = 150;
+export const SCHEMA_VERSION = 151;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -2258,6 +2266,11 @@ export const DEFAULT_SETTINGS = Object.freeze({
   // ADR-0190: leader standard work conventions (window, slot floor, lapse run,
   // tier window, working week, automation switch).
   ...normalizeStandardWorkSettings({}),
+  // ADR-0191: the cross-line priority ballot conventions — the ballot deadline,
+  // the follow-up ask window and the ballot floor below which no aggregate is
+  // claimed. Clamped on load, refused (never clamped) by the setter, and printed
+  // on the Method card. None is fitted from the record.
+  ...normalizePriorityBallotSettings({}),
 });
 
 export const COLLECTIONS = [
@@ -3000,6 +3013,12 @@ export const COLLECTIONS = [
   'standardWorkRoutines',
   'standardWorkChecks',
   'standardWorkTierActs',
+  // ADR-0191 (Schema v151): the Cross-Line Priority Ballot register. Two
+  // append-only ledgers — frozen rounds and first-person ballots. No pairwise
+  // count, winner, cycle, beatpath, ranking or coverage state is stored; every
+  // one is re-derived on read from the ballots and the reporting graph.
+  'priorityRounds',
+  'priorityBallots',
 ];
 
 /** Stable empty state. `now` is an ISO string so the result is a pure value. */
@@ -3776,6 +3795,10 @@ export function normalizeSettings(raw) {
     // prints would be a number the record does not hold.
     ...normalizeInterfaceAlignmentSettings(s),
     ...normalizeStandardWorkSettings(s),
+    // ADR-0191: named here for the same reason — this object is rebuilt field by
+    // field, so a ballot convention not spread here would vanish on every load
+    // and the pause census would never see the ballot switch.
+    ...normalizePriorityBallotSettings(s),
     ...normalizeStructureHistorySettings(s),
     ...normalizeDifferencesSettings(s),
     ...normalizeFitSettings(s),
@@ -7752,6 +7775,8 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.standardWorkRoutines = normalizeStandardWorkRoutines(raw.standardWorkRoutines, warnings);
   state.standardWorkChecks = normalizeStandardWorkChecks(raw.standardWorkChecks, state.standardWorkRoutines, warnings);
   state.standardWorkTierActs = normalizeStandardWorkTierActs(raw.standardWorkTierActs, state.standardWorkChecks, warnings);
+  state.priorityRounds = normalizePriorityRoundLedger(raw.priorityRounds, warnings);
+  state.priorityBallots = normalizePriorityVotes(raw.priorityBallots, state.priorityRounds, warnings);
   state.changeImpactRequests = normalizeChangeImpactRequests(raw.changeImpactRequests, warnings, todayDay);
   state.changeImpactResponses = normalizeChangeImpactResponses(
     raw.changeImpactResponses,
@@ -9100,6 +9125,18 @@ export const MIGRATIONS = {
   // No routine is inferred from one-on-ones, meetings, walks or audits already on
   // record: a routine is a standard a leader DECLARED, and inventing one at
   // upgrade time would make people owe slots nobody agreed to.
+  150: (v150) => ({
+    ...v150,
+    schemaVersion: 151,
+    // 150 → 151: ADR-0191 adds two EMPTY ledgers and four declared conventions.
+    // No round is inferred from the portfolio, and no ballot is inferred from a
+    // manager's existing ordering: a ballot is a first-person act against a
+    // set that was FROZEN, and inventing one at upgrade time would fabricate a
+    // vote nobody cast.
+    priorityRounds: Array.isArray(v150.priorityRounds) ? v150.priorityRounds : [],
+    priorityBallots: Array.isArray(v150.priorityBallots) ? v150.priorityBallots : [],
+    settings: { ...(v150.settings || {}), ...normalizePriorityBallotSettings(v150.settings || {}) },
+  }),
   149: (v149) => ({
     ...v149,
     schemaVersion: 150,
