@@ -14,7 +14,7 @@
 
 **Higgsfield Asset Mandate.** `list_connector_tools('higgsfield')` → `unsupported`. Blocker reported; the method diagram `app/assets/standard-work-tiers.jpg` (22,377 bytes) was generated with the Arena image tool, inspected, and is rendered on the Method panel and inlined in the standalone.
 
-**Unverified / limits.** Full `npm test` (241 files) **[UNVERIFIED]** — a full run does not finish in a session on this sandbox; ~225 suites were edited for pins and not executed. Real-browser and assistive-technology walkthrough **[UNVERIFIED]**. Mann's structured-time percentages are quoted from memory of the 2005 text and the mapping to five altitudes is ADR-0190's own **[UNVERIFIED]**. A daily routine owes every declared weekday: holidays and absences read as unrecorded until the calendar slice is built.
+**Unverified / limits.** Full `npm test` (241 files) **[UNVERIFIED]** — a full run does not finish in a session on this sandbox; 171 existing suites were edited for pins and 160 of them were not executed. Real-browser and assistive-technology walkthrough **[UNVERIFIED]**. Mann's structured-time percentages are quoted from memory of the 2005 text and the mapping to five altitudes is ADR-0190's own **[UNVERIFIED]**. A daily routine owes every declared weekday: holidays and absences read as unrecorded until the calendar slice is built.
 
 ## 2026-11-13 — Session 257: Product–organisation interface alignment matrix (ADR-0189, Schema v149 unchanged, RULE-OIA-01, CSV #142)
 
