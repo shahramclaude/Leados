@@ -225,6 +225,9 @@ export const MATRIX_PANELS = Object.freeze([
   // estimated level-by-level transition matrix, exposure-corrected rates with
   // their refusals, the projection and the declared-shape gap.
   Object.freeze({ key: 'stock-flow', label: 'Stock-flow', hint: 'How the workforce moves between levels, what that implies for the pyramid in four quarters, and how far that is from the shape you declared (ADR-0184).' }),
+  // ADR-0186 (Session 254): the change-saturation ledger — what each line is putting
+  // on one person at once, against a capacity a human declared.
+  Object.freeze({ key: 'change-saturation', label: 'Change saturation', hint: 'Every change each person is carrying right now, summed across the lines that put it there, against the absorptive capacity somebody declared — and the clearance question for the next approval (ADR-0186).' }),
 ]);
 
 export const MATRIX_PANEL_KEYS = Object.freeze(MATRIX_PANELS.map((p) => p.key));

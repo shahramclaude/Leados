@@ -141,7 +141,7 @@ test('every CSV scope round-trips cleanly and preserves unknown values as blank 
 // review coverage, one identity-free workspace summary row) — 139 registered.
 // The pin states the total deliberately so the next session cannot drift the
 // catalog count silently.
-assert.equal(CSV_EXPORTS.length, 139);
+assert.equal(CSV_EXPORTS.length, 140);
   for (const spec of CSV_EXPORTS) {
     const res = exportWorkspaceCsv(state, spec.key, { now: NOW });
     assert.equal(res.ok, true, `${spec.key} export succeeds`);

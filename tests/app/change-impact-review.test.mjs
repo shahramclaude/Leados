@@ -167,7 +167,7 @@ function request(api, lineKey = 'line-sam-pm', dueOn = '2026-11-20') {
 /* ------------------------------------------------------------- registration */
 
 test('Schema v147 is additive; Matrix surface and scoped API rights are registered without lowering Changes', () => {
-  assert.equal(SCHEMA_VERSION, 147);
+  assert.equal(SCHEMA_VERSION, 148);
   assert.deepEqual(createEmptyState(ISO).changeImpactRequests, []);
   assert.deepEqual(createEmptyState(ISO).changeImpactResponses, []);
   assert.ok(MATRIX_PANELS.some((panel) => panel.key === 'change-impacts'));
@@ -185,8 +185,13 @@ test('Schema v147 is additive; Matrix surface and scoped API rights are register
     'changeImpactReviewBoard', 'changeImpactReviewCandidates', 'changeImpactReviewBriefText',
     'changeImpactReviewCsvRows', 'changeImpactReviewAttentionCount',
   ]) assert.ok(SAFE_READS.has(name), `${name} is a registered scoped read`);
-  assert.equal(CSV_EXPORTS.at(-1), CHANGE_IMPACT_CSV_DESCRIPTOR);
-  assert.equal(CSV_EXPORTS.length, 139);
+  // `CSV_EXPORTS.at(-1)` here was a positional landmine: it asserted that this
+  // module is the NEWEST scope, which ADR-0186 legitimately invalidated when it
+  // appended #140. Registration and identity are the real contract, so pin those
+  // and pin the total, which is the number a session must state deliberately.
+  assert.ok(CSV_EXPORTS.includes(CHANGE_IMPACT_CSV_DESCRIPTOR), 'the descriptor this module exports is the one in the registry');
+  assert.equal(CSV_EXPORTS.filter((item) => item.filenameSlug === CHANGE_IMPACT_CSV_DESCRIPTOR.filenameSlug).length, 1, 'registered exactly once, under its own filename');
+  assert.equal(CSV_EXPORTS.length, 140, 'ADR-0186 appended matrix-change-saturation after this scope');
 
   const state = fixture();
   const lineScope = matrixLineScopeFor(state, { now: NOW, settings: state.settings });
@@ -197,8 +202,8 @@ test('Schema v147 is additive; Matrix surface and scoped API rights are register
   assert.equal(routeVerdict('matrix', frontline).allow, true, 'the dedicated Matrix surface remains available');
 
   const migrated = migrate({ schemaVersion: 146, settings: {}, changes: [] });
-  assert.deepEqual(migrated.applied, ['146 → 147']);
-  assert.equal(migrated.raw.schemaVersion, 147);
+  assert.deepEqual(migrated.applied, ['146 → 147', '147 → 148']);
+  assert.equal(migrated.raw.schemaVersion, 148);
   assert.deepEqual(migrated.raw.changeImpactRequests, []);
   assert.deepEqual(migrated.raw.changeImpactResponses, []);
 });

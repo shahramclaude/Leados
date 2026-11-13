@@ -169,6 +169,8 @@ import { workTurnRule } from './workTurnRules.js';
 import { pausePermitRule } from './pausePermitRules.js';
 // ADR-0184 (Schema v146): the Workforce Stock-Flow Plan (RULE-WFS-01).
 import { workforceFlowRule } from './workforceFlowRules.js';
+// ADR-0186 (Schema v148): the Cross-Line Change Saturation Ledger (RULE-CSA-01).
+import { changeSaturationRule } from './changeSaturationRules.js';
 
 
 // ADR-0087: the Operating Cadence Clock. Reads the finished queue after the
@@ -1000,6 +1002,16 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // anybody's behalf, never estimates a rate to fill a hole, and is inert with
   // nobody on the roster.
   workforceFlowRule,
+  // ADR-0186: RULE-CSA-01. Notices a change portfolio the record cannot bound —
+  // people carrying a day over a declared ceiling, demands with no ceiling in force
+  // for anybody, demands whose line no longer owns them, and ceilings whose window
+  // has passed — and puts ONE dated ask in front of the single seat above every
+  // reporting line of the affected people. Registered before `seatRule` so the ask
+  // is in the record when the Operating Seat fans the same transaction up every
+  // span, and before `sealRule` so the seal covers it. It never declares a demand or
+  // a ceiling on anybody's behalf, never blocks a change, and is inert with nobody
+  // on the roster.
+  changeSaturationRule,
   // ADR-0076: the Operating Seat (vertical roll-up + enforced boundaries).
   // It reads the finished record after every module has propagated, then fans
   // each open item up every leadership ancestor in the reporting tree with one

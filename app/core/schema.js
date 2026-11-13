@@ -82,6 +82,12 @@ import {
   normalizeWorkforceFlowMarkers,
   normalizeWorkforceFlowSettings,
 } from './domain/workforceFlowSchema.js';
+import {
+  normalizeChangeSaturationActs,
+  normalizeChangeSaturationCeilings,
+  normalizeChangeSaturationMarkers,
+  normalizeChangeSaturationSettings,
+} from './domain/changeSaturationSchema.js';
 // ADR-0185 (Schema v147): dated Matrix change-impact requests and first-person
 // line responses. Request snapshots normalize before their responses resolve.
 import {
@@ -785,7 +791,18 @@ export {
 // first-person reviewed/declined act per request, with an explicit valid-through
 // date for a review). Both ledgers start empty: no response, line coverage or
 // request is inferred from an existing change record.
-export const SCHEMA_VERSION = 147;
+// v148 adds the Cross-Line Change Saturation & Absorptive-Capacity Ledger
+// (ADR-0186): `changeSaturationActs` (append-only dated demand acts — one person,
+// one open change that already names them among its impacts, the declaring line,
+// a declared weight band and a dated window), `changeSaturationCeilings`
+// (append-only dated declarations of the concurrent change weight a person or a
+// pool will absorb) and `changeSaturationMarkers` (`RULE-CSA-01`'s bounded
+// idempotency ledger). Deliberately EMPTY on upgrade, and no convention defaults
+// a capacity: a change record's status, go-live date or effort triple says nothing
+// about what the change puts on a person, and a capacity inferred from level, pay
+// or meeting load would be a limit its author never agreed to. An upgraded
+// workspace therefore opens printing `no capacity declared` — refused, never zero.
+export const SCHEMA_VERSION = 148;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -2204,6 +2221,10 @@ export const DEFAULT_SETTINGS = Object.freeze({
   // ADR-0184: stock-flow observation window, projection horizon, exposure floor,
   // ask window and automation pause.
   ...normalizeWorkforceFlowSettings({}),
+  // ADR-0186: the saturation read window, the pool disclosure floor, the ask
+  // window and the automation pause. NO capacity default: a ceiling is a human
+  // declaration, so an unset one stays unset and the register prints the refusal.
+  ...normalizeChangeSaturationSettings({}),
 });
 
 export const COLLECTIONS = [
@@ -2925,6 +2946,13 @@ export const COLLECTIONS = [
   // line responses. No state, currentness, coverage or approval is stored.
   'changeImpactRequests',
   'changeImpactResponses',
+  // ADR-0186 (Schema v148): dated change demands per person and line, dated
+  // absorptive-capacity ceilings per person or pool, and RULE-CSA-01's marker
+  // ledger. No load, exposure, peak, days-over figure, verdict or clearance is
+  // stored — every one is re-derived on read.
+  'changeSaturationActs',
+  'changeSaturationCeilings',
+  'changeSaturationMarkers',
 ];
 
 /** Stable empty state. `now` is an ISO string so the result is a pure value. */
@@ -3689,6 +3717,9 @@ export function normalizeSettings(raw) {
     // not listed would be dropped on every load, and the exposure floor the
     // register prints would be a number the record does not hold.
     ...normalizeWorkforceFlowSettings(s),
+    // ADR-0186: named here for the same reason — the read window and the pool
+    // disclosure floor are printed by the panel, so they must be carried.
+    ...normalizeChangeSaturationSettings(s),
     ...normalizeStructureHistorySettings(s),
     ...normalizeDifferencesSettings(s),
     ...normalizeFitSettings(s),
@@ -8245,6 +8276,18 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.workforceFlowActs = normalizeWorkforceFlowActs(raw.workforceFlowActs, state, now.slice(0, 10), warnings);
   state.workforceFlowTargets = normalizeWorkforceFlowTargets(raw.workforceFlowTargets, now.slice(0, 10), warnings);
   state.workforceFlowMarkers = normalizeWorkforceFlowMarkers(raw.workforceFlowMarkers);
+  // ADR-0186 (Schema v148): a demand act that names a change this workspace does
+  // not hold, names a person the change never claimed as impacted, contradicts a
+  // declared band or window, or duplicates one line's statement about one change is
+  // dropped with a counted warning — never repaired into a burden nobody declared.
+  // Resolved AFTER people, changes and reporting lines so the person, impact and
+  // (at the action) line checks are real. A ceiling whose whole window has passed
+  // SURVIVES the reload — only the door refuses to create one, because expiry is a
+  // state time produces, and the register prints it as expired history rather than
+  // letting an expired limit disappear and read as no limit was ever set.
+  state.changeSaturationActs = normalizeChangeSaturationActs(raw.changeSaturationActs, state, now.slice(0, 10), warnings);
+  state.changeSaturationCeilings = normalizeChangeSaturationCeilings(raw.changeSaturationCeilings, state, now.slice(0, 10), warnings);
+  state.changeSaturationMarkers = normalizeChangeSaturationMarkers(raw.changeSaturationMarkers);
   // ADR-0122: a malformed absence row is dropped with a warning, never repaired —
   // an invented absence is an invented unavailability for every cover in the span.
   // Resolved BEFORE links so the `declares-absence-of` provenance edge validates
@@ -8980,6 +9023,19 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  // 147 → 148: ADR-0186 adds three EMPTY collections and four declared conventions.
+  // No demand, band, window or ceiling is back-filled from the change records that
+  // already exist: the impacts a change carries say WHO moved, never what the
+  // move cost them, and inventing a capacity at upgrade time would fabricate the
+  // one declaration this register exists to hold a human to.
+  147: (v147) => ({
+    ...v147,
+    schemaVersion: 148,
+    changeSaturationActs: Array.isArray(v147.changeSaturationActs) ? v147.changeSaturationActs : [],
+    changeSaturationCeilings: Array.isArray(v147.changeSaturationCeilings) ? v147.changeSaturationCeilings : [],
+    changeSaturationMarkers: Array.isArray(v147.changeSaturationMarkers) ? v147.changeSaturationMarkers : [],
+    settings: { ...(v147.settings || {}), ...normalizeChangeSaturationSettings(v147.settings || {}) },
+  }),
   // 146 → 147: ADR-0185 adds two EMPTY append-only ledgers. Existing changes
   // carry no line review requests or first-person answers; no historical
   // coverage is back-filled from the roster or the general change record.

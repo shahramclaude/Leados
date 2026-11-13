@@ -98,6 +98,7 @@ import { renderMatrixWorkTurnPanel } from './matrixWorkTurnPanel.js';
 // dependency graph, with the canonical matrix DAG for line reach and joint apex.
 import { renderMatrixDependencyCyclePanel } from './matrixDependencyCyclePanel.js';
 import { renderMatrixWorkforceFlowPanel } from './matrixWorkforceFlowPanel.js';
+import { renderMatrixChangeSaturationPanel } from './matrixChangeSaturationPanel.js';
 
 const PANELS = MATRIX_PANELS;
 
@@ -906,6 +907,7 @@ export function renderMatrix(ctx) {
     panel === 'turns' ? renderMatrixWorkTurnPanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
     panel === 'cycles' ? renderMatrixDependencyCyclePanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
     panel === 'stock-flow' ? renderMatrixWorkforceFlowPanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
+    panel === 'change-saturation' ? renderMatrixChangeSaturationPanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
     panel === 'chargeback' ? renderMatrixChargebackPanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
     panel === 'continuity' ? renderContinuityPanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
     panel === 'seats' ? seatsPanel(ctx, report) : null,
