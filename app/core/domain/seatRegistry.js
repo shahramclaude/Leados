@@ -645,6 +645,17 @@ export const ACTION_RIGHTS = Object.freeze({
   'declare-priority-round': { minRank: 2, maxRank: 5, label: 'Open or withdraw a priority round for a person you report to, or whose line you hold' },
   'cast-priority-ballot': { minRank: 1, maxRank: 5, label: 'Cast your line’s one ballot over a frozen priority round' },
   'govern-priority-ballots': { minRank: 3, maxRank: 5, label: 'Scan priority-ballot conditions and set the deadline, ask window and ballot floor' },
+  // ADR-0193: the Cross-Line Goal Commitment Conflict register. Declaring what
+  // YOUR line's goal consumes of a shared person is a first-person act at any
+  // leadership altitude — a project lead with no home-line reports is exactly who
+  // gets handed a shared person — so the ACTION narrows it to the line the actor
+  // holds rather than the rank narrowing it. Releasing is the same seat's own
+  // act. Governing the horizon, the ask threshold and the attribution floor is
+  // director-and-above, the window every other matrix register uses.
+  'read-goal-commitments': { minRank: 1, maxRank: 5, label: 'Read the cross-line goal commitment conflict board' },
+  'declare-goal-commitment': { minRank: 1, maxRank: 5, label: 'Declare or re-baseline what a line you hold promises of a shared person' },
+  'release-goal-commitment': { minRank: 1, maxRank: 5, label: 'Release a commitment your own line declared' },
+  'govern-goal-commitments': { minRank: 3, maxRank: 5, label: 'Scan goal-commitment conditions and set the horizon, ask threshold and attribution floor' },
   // ADR-0150: onboarding a person into a matrix. Writing a line's brief is the act
   // of the manager who HOLDS that line, at whatever altitude that line's manager
   // sits (a project lead with no home-line reports gets this exactly as a

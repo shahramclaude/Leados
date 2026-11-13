@@ -208,18 +208,19 @@ function withDom(run) {
 /* ---------------------------------------------------------- 1. registration */
 
 test('registration: schema v151, two ledgers, CSV #144, RULE-SOC-01 as spine rule 121, rights and pause switch', () => {
-  assert.equal(SCHEMA_VERSION, 152);
+  assert.equal(SCHEMA_VERSION, 153);
   for (const key of ['priorityRounds', 'priorityBallots']) assert.ok(COLLECTIONS.includes(key), `${key} is a declared collection`);
   const scope = CSV_EXPORTS.find((entry) => entry.key === PRIORITY_BALLOT_CSV_SCOPE);
   assert.ok(scope, 'CSV #144 is registered');
   assert.equal(scope.sensitive, false, 'the export is aggregate-only');
-  assert.equal(CSV_EXPORTS.length, 144);
+  assert.equal(CSV_EXPORTS.length, 145);
   const contract = PROPAGATION_CONTRACTS.find((c) => c.rule?.id === 'priorityRule');
   assert.ok(contract, 'RULE-SOC-01 declares its propagation contract');
   assert.deepEqual(contract.writes, ['delegations', 'links', 'matrixMarkers']);
-  assert.equal(DEFAULT_POST_COMMIT_RULES.length, 121);
+  assert.equal(DEFAULT_POST_COMMIT_RULES.length, 122);
   assert.equal(PROPAGATION_CONTRACTS.length, DEFAULT_POST_COMMIT_RULES.length, 'one contract per spine rule');
-  assert.deepEqual(DEFAULT_POST_COMMIT_RULES.slice(-3).map((rule) => rule.id), ['priorityRule', 'seatRule', 'sealRule']);
+  assert.deepEqual(DEFAULT_POST_COMMIT_RULES.slice(-4).map((rule) => rule.id), ['priorityRule', 'goalCommitmentRule', 'seatRule', 'sealRule'],
+    'RULE-SOC-01 stays ahead of the goal-commitment rule (ADR-0193), the seat roll-up and the seal');
   assert.equal(ACTION_RIGHTS['cast-priority-ballot'].minRank, 1, 'casting is open to every rank; the action narrows it to the frozen holder');
   assert.equal(ACTION_RIGHTS['govern-priority-ballots'].minRank, 3);
   assert.ok(SAFE_READS.has('matrixPriorityReport'));

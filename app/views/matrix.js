@@ -104,6 +104,10 @@ import { renderMatrixChangeSaturationPanel } from './matrixChangeSaturationPanel
 // channels, read from the typed-link spine against the recorded channels.
 import { renderMatrixInterfaceAlignmentPanel } from './matrixInterfaceAlignmentPanel.js';
 import { renderMatrixPriorityPanel } from './matrixPriorityPanel.js';
+// ADR-0193: the goal commitment conflict register. Every other goal surface is
+// one line's view of its own objective; this panel is the only place two
+// lines' promises about the SAME person are read against each other.
+import { renderMatrixGoalCommitmentPanel } from './matrixGoalCommitmentPanel.js';
 
 const PANELS = MATRIX_PANELS;
 
@@ -915,6 +919,7 @@ export function renderMatrix(ctx) {
     panel === 'change-saturation' ? renderMatrixChangeSaturationPanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
     panel === 'alignment' ? renderMatrixInterfaceAlignmentPanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
     panel === 'priority' ? renderMatrixPriorityPanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
+    panel === 'commitments' ? renderMatrixGoalCommitmentPanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
     panel === 'chargeback' ? renderMatrixChargebackPanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
     panel === 'continuity' ? renderContinuityPanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
     panel === 'seats' ? seatsPanel(ctx, report) : null,

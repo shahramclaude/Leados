@@ -189,7 +189,7 @@ const identityTokens = () => [
 /* ------------------------------------------- 1. additive, unchanged schema */
 
 test('Schema v118 is unchanged: no new collection, event, rule, action, export spec or convention', () => {
-  assert.equal(SCHEMA_VERSION, 152);
+  assert.equal(SCHEMA_VERSION, 153);
   // The pre-existing `state.spanReadings` collection is ADR-0100's span
   // CALIBRATION ledger, not this read model. `report.spanReadings` is a pure
   // projection of the two ADR-0129 ledgers and never reads that collection.
@@ -203,7 +203,7 @@ test('Schema v118 is unchanged: no new collection, event, rule, action, export s
   assert.equal(JSON.stringify(state), before, 'reading the roll-up is a pure read: nothing is stored');
   assert.equal(report.spanReadings.engineVersion, DUTY_READING_ROLLUP_ENGINE_VERSION);
   // No new export spec and no new row kind.
-  assert.equal(CSV_EXPORTS.length, 144);
+  assert.equal(CSV_EXPORTS.length, 145);
   assert.equal(CSV_EXPORTS.filter((s) => s.key === 'duty-coverage').length, 1);
   // No new event type, right, action or convention.
   assert.deepEqual(Object.keys(DUTY_COVERAGE_EVENTS).sort(),
@@ -463,7 +463,7 @@ test('the roll-up feeds the existing brief, both CSV registries, the Desk, Metho
   assert.equal(exported.columnCount, 66);
   const header = exported.csv.split('\r\n')[0];
   for (const key of SPAN_READINGS_CSV_COLUMNS) assert.ok(header.includes(key), `#duty-cover header carries ${key}`);
-  assert.equal(CSV_EXPORTS.length, 144);
+  assert.equal(CSV_EXPORTS.length, 145);
 
   // BLANK (not 0) below rank 3, where no withheld cell exists to govern.
   seat(h, 'mgr-deep1');

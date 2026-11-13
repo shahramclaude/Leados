@@ -209,20 +209,20 @@ function withDom(run) {
 /* ---------------------------------------------------------- 1. registration */
 
 test('registration: schema v150, three ledgers, CSV #143, RULE-LSW-01 as spine rule 120, rights and pause switch', () => {
-  assert.equal(SCHEMA_VERSION, 152);
+  assert.equal(SCHEMA_VERSION, 153);
   for (const key of ['standardWorkRoutines', 'standardWorkChecks', 'standardWorkTierActs']) assert.ok(COLLECTIONS.includes(key), `${key} is a declared collection`);
   const scope = CSV_EXPORTS.find((entry) => entry.key === STANDARD_WORK_CSV_SCOPE);
   assert.ok(scope, 'CSV #143 is registered');
   assert.equal(scope.sensitive, false, 'the export is aggregate-only');
-  assert.equal(CSV_EXPORTS.length, 144);
+  assert.equal(CSV_EXPORTS.length, 145);
   const contract = PROPAGATION_CONTRACTS.find((c) => c.rule?.id === 'standardWorkRule');
   assert.ok(contract, 'RULE-LSW-01 declares its propagation contract');
   assert.deepEqual(contract.writes, ['delegations', 'links', 'matrixMarkers']);
-  assert.equal(DEFAULT_POST_COMMIT_RULES.length, 121);
+  assert.equal(DEFAULT_POST_COMMIT_RULES.length, 122);
   assert.equal(PROPAGATION_CONTRACTS.length, DEFAULT_POST_COMMIT_RULES.length, 'one contract per spine rule');
-  const tail = DEFAULT_POST_COMMIT_RULES.slice(-4).map((rule) => rule.id);
-  assert.deepEqual(tail, ['standardWorkRule', 'priorityRule', 'seatRule', 'sealRule'],
-    'RULE-LSW-01 stays ahead of the seat roll-up and the seal; later rules register between them');
+  const tail = DEFAULT_POST_COMMIT_RULES.slice(-5).map((rule) => rule.id);
+  assert.deepEqual(tail, ['standardWorkRule', 'priorityRule', 'goalCommitmentRule', 'seatRule', 'sealRule'],
+    'RULE-LSW-01 stays ahead of the priority, goal-commitment (ADR-0193), seat roll-up and seal rules; later rules register between them');
   assert.deepEqual(ACTION_RIGHTS['record-standard-work'].minRank, 1, 'recording is open to the frontline');
   assert.equal(ACTION_RIGHTS['govern-standard-work'].minRank, 3);
   assert.ok(SAFE_READS.has('standardWorkReport'));

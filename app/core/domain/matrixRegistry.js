@@ -237,6 +237,9 @@ export const MATRIX_PANELS = Object.freeze([
   // frozen work set, ranked by each line that shares them, aggregated by a
   // declared social-choice rule instead of a score.
   Object.freeze({ key: 'priority', label: 'Priority ballots', hint: 'What each line that shares one person puts first, the exact Condorcet winner or the majority cycle between them, and the beatpath completion when the lines genuinely disagree (ADR-0191).' }),
+  // ADR-0193 (Session 261): the cross-line goal commitment conflict register —
+  // the two promises two lines have each taken on the same person, compared.
+  Object.freeze({ key: 'commitments', label: 'Commitment conflicts', hint: 'What each line has promised of one shared person, the exact days two promises collide, the measure they move in opposite directions, and the day the concurrent effort exceeds one whole person (ADR-0193).' }),
 ]);
 
 export const MATRIX_PANEL_KEYS = Object.freeze(MATRIX_PANELS.map((p) => p.key));

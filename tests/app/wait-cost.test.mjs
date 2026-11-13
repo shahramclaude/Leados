@@ -166,11 +166,11 @@ function harness() {
 
 describe('schema v64: migration, clamps, normalizers', () => {
   test('SCHEMA_VERSION is 64 and the 63→64 migration is additive and empty', () => {
-    assert.equal(SCHEMA_VERSION, 152);
+    assert.equal(SCHEMA_VERSION, 153);
     assert.equal(typeof MIGRATIONS[63], 'function');
     const migrated = migrate({ schemaVersion: 63, settings: {}, people: [], cases: [] });
-    assert.deepEqual(migrated.applied, ['63 → 64', '64 → 65', '65 → 66', '66 → 67', '67 → 68', '68 → 69', '69 → 70', '70 → 71', '71 → 72', '72 → 73', '73 → 74', '74 → 75', '75 → 76', '76 → 77', '77 → 78', '78 → 79', '79 → 80', '80 → 81', '81 → 82', '82 → 83', '83 → 84', '84 → 85', '85 → 86', '86 → 87', '87 → 88', '88 → 89', '89 → 90', '90 → 91', '91 → 92', '92 → 93', '93 → 94', '94 → 95', '95 → 96', '96 → 97', '97 → 98', '98 → 99', '99 → 100', '100 → 101', '101 → 102', '102 → 103', '103 → 104', '104 → 105', '105 → 106', '106 → 107', '107 → 108', '108 → 109', '109 → 110', '110 → 111', '111 → 112', '112 → 113', '113 → 114', '114 → 115', '115 → 116', '116 → 117', '117 → 118', '118 → 119', '119 → 120', '120 → 121', '121 → 122', '122 → 123', '123 → 124', '124 → 125', '125 → 126', '126 → 127', '127 → 128', '128 → 129', '129 → 130', '130 → 131', '131 → 132', '132 → 133', '133 → 134', '134 → 135', '135 → 136', '136 → 137', '137 → 138', '138 → 139', '139 → 140', '140 → 141', '141 → 142', '142 → 143', '143 → 144', '144 → 145', '145 → 146', '146 → 147', '147 → 148', '148 → 149', '149 → 150', '150 → 151', '151 → 152']);
-    assert.equal(migrated.raw.schemaVersion, 152);
+    assert.deepEqual(migrated.applied, ['63 → 64', '64 → 65', '65 → 66', '66 → 67', '67 → 68', '68 → 69', '69 → 70', '70 → 71', '71 → 72', '72 → 73', '73 → 74', '74 → 75', '75 → 76', '76 → 77', '77 → 78', '78 → 79', '79 → 80', '80 → 81', '81 → 82', '82 → 83', '83 → 84', '84 → 85', '85 → 86', '86 → 87', '87 → 88', '88 → 89', '89 → 90', '90 → 91', '91 → 92', '92 → 93', '93 → 94', '94 → 95', '95 → 96', '96 → 97', '97 → 98', '98 → 99', '99 → 100', '100 → 101', '101 → 102', '102 → 103', '103 → 104', '104 → 105', '105 → 106', '106 → 107', '107 → 108', '108 → 109', '109 → 110', '110 → 111', '111 → 112', '112 → 113', '113 → 114', '114 → 115', '115 → 116', '116 → 117', '117 → 118', '118 → 119', '119 → 120', '120 → 121', '121 → 122', '122 → 123', '123 → 124', '124 → 125', '125 → 126', '126 → 127', '127 → 128', '128 → 129', '129 → 130', '130 → 131', '131 → 132', '132 → 133', '133 → 134', '134 → 135', '135 → 136', '136 → 137', '137 → 138', '138 → 139', '139 → 140', '140 → 141', '141 → 142', '142 → 143', '143 → 144', '144 → 145', '145 → 146', '146 → 147', '147 → 148', '148 → 149', '149 → 150', '150 → 151', '151 → 152', '152 → 153']);
+    assert.equal(migrated.raw.schemaVersion, 153);
     assert.deepEqual(migrated.raw.waitPrices, []);
     assert.deepEqual(migrated.raw.waitExposures, []);
     assert.deepEqual(migrated.raw.waitCostMarkers, []);
@@ -179,7 +179,7 @@ describe('schema v64: migration, clamps, normalizers', () => {
   test('a v63 workspace normalizes into v64 with the three new collections', () => {
     const raw = { schemaVersion: 63, settings: {}, people: [], cases: [] };
     const { state, warnings } = normalizeState(migrate(raw).raw, { now: NOW });
-    assert.equal(state.schemaVersion, 152);
+    assert.equal(state.schemaVersion, 153);
     assert.deepEqual(state.waitPrices, []);
     assert.deepEqual(state.waitExposures, []);
     assert.deepEqual(state.waitCostMarkers, []);
@@ -620,7 +620,7 @@ describe('RULE-WAIT-01..05 on the post-commit spine', () => {
 
 describe('CSV scope #54 (waitcost)', () => {
   test('the scope is registered and exportable', () => {
-    assert.equal(CSV_EXPORTS.length, 144);
+    assert.equal(CSV_EXPORTS.length, 145);
     assert.ok(CSV_EXPORTS.some((s) => s.key === 'waitcost' && s.filenameSlug === 'cost-of-waiting'));
     const result = exportWorkspaceCsv(fixtureState(), 'waitcost', { now: NOW });
     assert.equal(result.ok, true);

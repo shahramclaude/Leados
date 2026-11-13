@@ -760,5 +760,5 @@ test('a single-chain workspace with no frozen decisions reads EMPTY, not broken'
 });
 
 test('the schema reflects ADR-0159/0162 matrix settlement & interface storage while pure reads store nothing', () => {
-  assert.equal(SCHEMA_VERSION, 152, 'ADR-0164 (matrix 1:1 line coverage completion) is the current head');
+  assert.equal(SCHEMA_VERSION, 153, 'ADR-0164 (matrix 1:1 line coverage completion) is the current head');
 });

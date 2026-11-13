@@ -133,6 +133,7 @@ import { dependencyCycleRule } from './dependencyCycleRules.js';
 import { interfaceAlignmentRule } from './interfaceAlignmentRules.js';
 import { standardWorkRule } from './standardWorkRules.js';
 import { priorityRule } from './priorityRankingRules.js';
+import { goalCommitmentRule } from './goalCommitmentRules.js';
 import { sealRule } from './sealRules.js';
 // ADR-0092: the Differencing Defender declares its contract like every other rule.
 import { differencingRule } from './differencingRules.js';
@@ -1051,6 +1052,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'priorityRankingRules.js',
     purpose: 'RULE-SOC-01: reads the Cross-Line Priority Ballot & Social-Choice Aggregation register (`buildPriorityRanking`, ADR-0191) with the whole-workspace view on round, ballot and withdrawal writes, reporting-line and roster changes, convention changes and explicit `priority.scan` / `matrix.scan` scans. It files at most ONE open dated ask per condition (bounded at 6 per commit, remainder counted): (a) `overdue-ballot` — a frozen line holder has not cast a ballot by the round deadline — addressed to THAT frozen holder only (never to a later holder of the same line and never to the person being ranked); (b) `cycle` — the cast ballots hold a majority cycle, so no Condorcet winner exists — addressed to the LOWEST joint apex of the lines that were asked, naming the Schwartz top cycle and the beatpath completion. Asks carry typed `issues-obligation` and matrix-DAG `rolls-up-to` provenance, are idempotent per deterministic condition signature (`soc1:…`), and close themselves when the condition clears or its seat moves. An ambiguous-apex, leader-held or off-roster condition records ONE identity-free `matrixMarkers` observation (`kind: \'priority-ballot\'`) and substitutes nobody. It never casts a ballot, never edits a ranking, never withdraws a round, never breaks a cycle silently and never rates a person; pausable via `priorityBallotAutoPropagate` (the pause governs EVERY path, including explicit scans).',
     writes: ['delegations', 'links', 'matrixMarkers'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: goalCommitmentRule,
+    module: 'goalCommitmentRules.js',
+    purpose: "RULE-GCC-01: reads the Cross-Line Goal Commitment Conflict register ('buildGoalCommitments', ADR-0193) with the whole-workspace view on commitment declaration, re-baseline and release writes, goal writes, reporting-line and roster changes, convention changes and explicit `goalCommitment.scan` / `matrix.scan` scans. It files at most ONE open dated ask per condition (bounded at 6 per commit, remainder counted), partitioned so one fact files exactly one ask: (a) `target-conflict` — two lines committed the same person over at least the declared minimum of overlapping days and named the SAME measure in OPPOSITE directions — addressed to the LOWEST joint apex of the two holders, because neither promise can be kept by working harder; (b) `capacity-overcommit` — on the exact peak day inside the declared horizon the live commitments this person carries add up to more than one whole person — addressed to the lowest joint apex of EVERY holder carrying a commitment on that day; (c) `line-share-exceeded` — one named line's own commitments peak above that line's OWN declared share while the person's whole week still fits — addressed to THAT line's holder and never escalated above them, and filed only where (b) did not fire so the same week is never double-asked. A bare window collision is printed on the panel and never escalated. Asks carry typed `issues-obligation` and matrix-DAG `rolls-up-to` provenance, are idempotent per deterministic condition signature ('gcc1:…'), and close themselves when the condition clears or its seat moves. An ambiguous-apex, leader-held or off-roster condition records ONE identity-free `matrixMarkers` observation (kind: 'goal-commitment') and substitutes nobody. It never edits a commitment, never narrows a window, never re-points a goal, never releases a promise, never infers a measure from a goal's title or key results and never rates a person; pausable via `goalCommitmentAutoPropagate` (the pause governs EVERY path, including explicit scans).",
+    writes: ['delegations', 'links', 'goalCommitmentMarkers'],
     emits: [],
     scansWorkspace: true,
   },

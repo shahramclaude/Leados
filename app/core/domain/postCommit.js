@@ -177,6 +177,7 @@ import { aarCorroborationRule } from './aarCorroborationRules.js';
 import { interfaceAlignmentRule } from './interfaceAlignmentRules.js';
 import { standardWorkRule } from './standardWorkRules.js';
 import { priorityRule } from './priorityRankingRules.js';
+import { goalCommitmentRule } from './goalCommitmentRules.js';
 
 
 // ADR-0087: the Operating Cadence Clock. Reads the finished queue after the
@@ -1069,6 +1070,19 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // and asks nobody. It never casts a ballot, never withdraws a round and never
   // rates a person. Registered immediately before `seatRule` and `sealRule`.
   priorityRule,
+  // ADR-0193: the Cross-Line Goal Commitment Conflict register (RULE-GCC-01).
+  // Reads the ONE reader with the whole-workspace view. An opposed-target
+  // collision becomes ONE dated ask to the two lines' lowest joint apex; a week
+  // fuller than one person becomes ONE dated ask to the joint apex of every line
+  // carrying it; a line whose own commitments peak above its own declared share
+  // — while the whole week still fits — becomes ONE dated ask to THAT holder and
+  // is never escalated above them. With no single apex, a leader-held apex or an
+  // off-roster holder it records an identity-free `matrixMarkers` observation
+  // and asks nobody. A bare window collision is printed on the panel and never
+  // escalated. It never edits a commitment, never narrows a window, never
+  // re-points a goal, never infers a measure from goal text and never rates a
+  // person. Registered immediately before `seatRule` and `sealRule`.
+  goalCommitmentRule,
   // ADR-0076: the Operating Seat (vertical roll-up + enforced boundaries).
   // It reads the finished record after every module has propagated, then fans
   // each open item up every leadership ancestor in the reporting tree with one
