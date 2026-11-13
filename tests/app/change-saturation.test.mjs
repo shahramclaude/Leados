@@ -941,7 +941,8 @@ test('147 → 148 is additive: three EMPTY collections, four conventions, nothin
     settings: { leaderName: 'Old', activeSeatId: null },
   };
   const next = MIGRATIONS[147](v147);
-  assert.equal(next.schemaVersion, 149);
+  // MIGRATION 147 → 148 stops at 148 by definition; the head is 149 after ADR-0188.
+  assert.equal(next.schemaVersion, 148);
   assert.deepEqual(next.changeSaturationActs, []);
   assert.deepEqual(next.changeSaturationCeilings, []);
   assert.deepEqual(next.changeSaturationMarkers, []);
