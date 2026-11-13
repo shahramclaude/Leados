@@ -31,11 +31,24 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 
-import { createEmptyState, normalizeState, SCHEMA_VERSION } from '../../app/core/schema.js';
+import {
+  createEmptyState,
+  DEFAULT_SETTINGS,
+  normalizeSettings,
+  normalizeState,
+  SCHEMA_VERSION,
+} from '../../app/core/schema.js';
 import { createStore, STORAGE_KEY } from '../../app/core/store.js';
 import { createApi } from '../../app/actions.js';
-import { guardApi } from '../../app/core/domain/accessGateway.js';
-import { SAFE_READS } from '../../app/core/domain/accessGateway.js';
+import { API_RIGHTS, guardApi, SAFE_READS } from '../../app/core/domain/accessGateway.js';
+import { ACTION_RIGHTS } from '../../app/core/domain/seatRegistry.js';
+import { DEFAULT_POST_COMMIT_RULES } from '../../app/core/domain/postCommit.js';
+import { contractFor, PROPAGATION_CONTRACTS } from '../../app/core/domain/propagationContracts.js';
+import {
+  PAUSE_PERMIT_MATRIX_REACH_SWITCHES,
+  PAUSE_PERMIT_REACH_RULES,
+} from '../../app/core/domain/pausePermitRegistry.js';
+import { buildPausePermits } from '../../app/core/domain/pausePermits.js';
 import { MATRIX_PANELS } from '../../app/core/domain/matrixRegistry.js';
 import { CSV_EXPORTS, exportWorkspaceCsv, parseCsv } from '../../app/core/csv.js';
 import {
@@ -43,12 +56,22 @@ import {
   dependencyCycleBriefText,
   dependencyCycleComponents,
   dependencyCycleCsvRows,
+  dependencyCycleTearSensitivity,
 } from '../../app/core/domain/dependencyCycle.js';
+import { dependencyCycleRule } from '../../app/core/domain/dependencyCycleRules.js';
+import {
+  DEPENDENCY_CYCLE_CLOSED_PREFIX,
+  normalizeDependencyCycleSettings,
+} from '../../app/core/domain/dependencyCycleSchema.js';
 import {
   DEPENDENCY_CYCLE_CSV_COLUMNS,
   DEPENDENCY_CYCLE_CSV_SCOPE,
+  DEPENDENCY_CYCLE_LIMITS,
   DEPENDENCY_CYCLE_OWNER_STATES,
   DEPENDENCY_CYCLE_RELATIONS,
+  DEPENDENCY_CYCLE_RIGHT,
+  DEPENDENCY_CYCLE_RULE_ID,
+  DEPENDENCY_CYCLE_SETTING_KEYS,
 } from '../../app/core/domain/dependencyCycleRegistry.js';
 import { renderMatrixDependencyCyclePanel } from '../../app/views/matrixDependencyCyclePanel.js';
 
@@ -125,7 +148,7 @@ function seed(rawState) {
   const store = createStore({ storage, now: () => NOW, idFactory });
   store.load();
   const rawApi = createApi(store, { now: () => NOW, idFactory });
-  return { store, api: guardApi(rawApi, store, { now: () => NOW.getTime() }) };
+  return { store, values, api: guardApi(rawApi, store, { now: () => NOW.getTime() }) };
 }
 
 function withDom(run) {
@@ -399,4 +422,443 @@ test('the JSDOM panel prints the computed board and the real generated diagram',
     assert.equal((html.match(/<h1/g) || []).length, 0, 'a panel never adds a second h1');
   });
   assert.equal(report.board.verdict, 'cross-line-cycles');
+});
+
+/* ------------------------------------------- 8. ADR-0187 spine & rights */
+
+test('ADR-0187 registration: RULE-CYC-01 on spine before seatRule, contract parity, pause permit switch, rights and conventions', () => {
+  assert.equal(PROPAGATION_CONTRACTS.length, DEFAULT_POST_COMMIT_RULES.length);
+  assert.ok(DEFAULT_POST_COMMIT_RULES.includes(dependencyCycleRule));
+  assert.equal(DEFAULT_POST_COMMIT_RULES.at(-1).name, 'sealRule');
+  assert.equal(DEFAULT_POST_COMMIT_RULES.at(-2).name, 'seatRule');
+  assert.equal(DEFAULT_POST_COMMIT_RULES.at(-3), dependencyCycleRule);
+
+  const contract = contractFor(dependencyCycleRule);
+  assert.ok(contract);
+  assert.equal(contract.module, 'dependencyCycleRules.js');
+  assert.match(contract.purpose, /RULE-CYC-01/);
+  assert.deepEqual(contract.writes, ['delegations', 'links', 'matrixMarkers']);
+
+  assert.equal(API_RIGHTS.matrixDependencyCycleScan, DEPENDENCY_CYCLE_RIGHT);
+  assert.equal(API_RIGHTS.matrixDependencyCycleSetConventions, DEPENDENCY_CYCLE_RIGHT);
+  assert.deepEqual(ACTION_RIGHTS[DEPENDENCY_CYCLE_RIGHT], {
+    minRank: 3,
+    maxRank: 5,
+    label: 'Scan dependency feedback cycles on the shared spine and set cycle conventions',
+  });
+
+  assert.ok(PAUSE_PERMIT_MATRIX_REACH_SWITCHES.includes('dependencyCycleAutoPropagate'));
+  assert.equal(PAUSE_PERMIT_REACH_RULES.dependencyCycleAutoPropagate, 'dependencyCycleRules.js');
+
+  assert.equal(DEFAULT_SETTINGS.dependencyCycleAskDueDays, 7);
+  assert.equal(DEFAULT_SETTINGS.dependencyCycleAutoPropagate, true);
+  const norm = normalizeSettings({ dependencyCycleAskDueDays: 14, dependencyCycleAutoPropagate: false });
+  assert.equal(norm.dependencyCycleAskDueDays, 14);
+  assert.equal(norm.dependencyCycleAutoPropagate, false);
+  assert.deepEqual(normalizeDependencyCycleSettings({ dependencyCycleAskDueDays: 999, dependencyCycleAutoPropagate: false }), {
+    dependencyCycleAskDueDays: 30,
+    dependencyCycleAutoPropagate: false,
+  });
+});
+
+/* ----------------------- 9. exhaustive + hand-worked tear sensitivity */
+
+test('dependencyCycleTearSensitivity matches brute-force single-pair deletion across ALL 512 directed 3-node graphs (including self-arcs)', () => {
+  const ids = ['a', 'b', 'c'];
+  const cells = [];
+  for (const from of ids) for (const to of ids) cells.push([from, to]);
+
+  for (let mask = 0; mask < (1 << cells.length); mask += 1) {
+    const pairArcs = cells
+      .filter((_, bit) => (mask & (1 << bit)) !== 0)
+      .map(([from, to], i) => ({
+        from,
+        to,
+        relation: 'informs',
+        linkId: `l-${i}`,
+      }));
+    const sccs = bruteComponents(ids, pairArcs);
+    for (const compIds of sccs) {
+      const compSet = new Set(compIds);
+      const internal = pairArcs.filter((a) => compSet.has(a.from) && compSet.has(a.to));
+      const hasSelf = internal.some((a) => a.from === a.to);
+      if (compIds.length === 1 && !hasSelf) continue;
+
+      const got = dependencyCycleTearSensitivity(compIds, internal);
+      assert.equal(got.evaluated, true);
+      assert.equal(got.reconciles, true);
+      assert.equal(got.internalPairsN, internal.length);
+
+      let wantBreak = 0;
+      let wantPartial = 0;
+      let wantPersist = 0;
+      for (const cand of got.candidates) {
+        const remainingArcs = internal.filter((a) => !(a.from === cand.from && a.to === cand.to));
+        const subSccs = bruteComponents(compIds, remainingArcs);
+        let remFeedbackBlocks = 0;
+        let coupledNodes = 0;
+        for (const sc of subSccs) {
+          const scSelf = sc.length === 1 && remainingArcs.some((a) => a.from === sc[0] && a.to === sc[0]);
+          if (sc.length > 1 || scSelf) {
+            remFeedbackBlocks += 1;
+            coupledNodes += sc.length;
+          }
+        }
+        const wantFreed = compIds.length - coupledNodes;
+        assert.equal(cand.freedNodesN, wantFreed, `freedNodes mismatch on mask ${mask} pair ${cand.pairKey}`);
+        assert.equal(cand.remainingFeedbackBlocksN, remFeedbackBlocks, `remainingFeedbackBlocks mismatch on mask ${mask}`);
+        if (remFeedbackBlocks === 0) wantBreak += 1;
+        else if (wantFreed > 0) wantPartial += 1;
+        else wantPersist += 1;
+      }
+      assert.equal(got.singleArcBreakN, wantBreak, `singleArcBreakN mismatch on mask ${mask}`);
+      assert.equal(got.partialTearN, wantPartial, `partialTearN mismatch on mask ${mask}`);
+      assert.equal(got.persistentArcN, wantPersist, `persistentArcN mismatch on mask ${mask}`);
+    }
+  }
+});
+
+test('hand-worked tear sensitivity distinguishes 1-arc break, core-shrinking tear, multi-arc-only clique, parallel links and bound refusal', () => {
+  const members = ['decision:a', 'decision:b', 'decision:c'];
+  const lineReach = new Map([
+    ['decision:a', { state: 'known', managerIds: ['prod'] }],
+    ['decision:b', { state: 'known', managerIds: ['nora'] }],
+    ['decision:c', { state: 'unknown', managerIds: [] }],
+  ]);
+
+  // 1) Overlapping 4-pair loop: a->b (with a parallel link!), b->a, b->c, c->a
+  const overlapArcs = [
+    { from: 'decision:a', to: 'decision:b', relation: 'informs', linkId: 'l1' },
+    { from: 'decision:a', to: 'decision:b', relation: 'pre-registers', linkId: 'l1b' },
+    { from: 'decision:b', to: 'decision:a', relation: 'informs', linkId: 'l2' },
+    { from: 'decision:b', to: 'decision:c', relation: 'informs', linkId: 'l3' },
+    { from: 'decision:c', to: 'decision:a', relation: 'informs', linkId: 'l4' },
+  ];
+  const overlap = dependencyCycleTearSensitivity(members, overlapArcs, { lineReach });
+  assert.equal(overlap.evaluated, true);
+  assert.equal(overlap.tearState, 'single-arc-tearable');
+  assert.equal(overlap.internalPairsN, 4, '5 links on 4 distinct directed pairs');
+  assert.equal(overlap.singleArcBreakN, 1, 'only removing a->b breaks BOTH loops');
+  assert.equal(overlap.partialTearN, 2, 'removing b->c or c->a frees c and leaves a<->b');
+  assert.equal(overlap.persistentArcN, 1, 'removing b->a leaves a->b->c->a intact');
+  assert.equal(overlap.reconciles, true);
+
+  const ab = overlap.candidates.find((c) => c.pairKey === 'decision:a>decision:b');
+  assert.equal(ab.outcome, 'acyclic');
+  assert.equal(ab.arcsN, 2);
+  assert.deepEqual(ab.relations, ['informs', 'pre-registers']);
+  assert.equal(ab.arcSpanState, 'cross-holder');
+
+  const bc = overlap.candidates.find((c) => c.pairKey === 'decision:b>decision:c');
+  assert.equal(bc.outcome, 'reduces-core');
+  assert.equal(bc.freedNodesN, 1);
+  assert.equal(bc.largestRemainingBlockSize, 2);
+  assert.equal(bc.arcSpanState, 'unattributed-endpoint');
+
+  // 2) Bidirected 3-clique (6 arcs): no single pair breaks or shrinks the 3-cycle!
+  const cliqueArcs = [
+    ['decision:a', 'decision:b'], ['decision:b', 'decision:a'],
+    ['decision:b', 'decision:c'], ['decision:c', 'decision:b'],
+    ['decision:a', 'decision:c'], ['decision:c', 'decision:a'],
+  ].map(([from, to], idx) => ({ from, to, relation: 'informs', linkId: `k${idx}` }));
+  const clique = dependencyCycleTearSensitivity(members, cliqueArcs, { lineReach });
+  assert.equal(clique.tearState, 'multi-arc-only');
+  assert.equal(clique.singleArcBreakN, 0);
+  assert.equal(clique.partialTearN, 0);
+  assert.equal(clique.persistentArcN, 6);
+  assert.equal(clique.reconciles, true);
+
+  // 3) Bound refusal (`maxTearArcsPerBlock = 3` on a 4-pair block):
+  const refused = dependencyCycleTearSensitivity(members, overlapArcs, { maxTearArcsPerBlock: 3 });
+  assert.equal(refused.evaluated, false);
+  assert.equal(refused.tearState, 'tear-bound-exceeded');
+  assert.equal(refused.singleArcBreakN, null, 'withheld figure is null, never 0');
+  assert.equal(refused.partialTearN, null);
+  assert.equal(refused.persistentArcN, null);
+  assert.equal(refused.candidates.length, 0);
+  assert.match(refused.reason, /exceeding the 3-pair counterfactual bound/);
+});
+
+/* ---------------- 10. RULE-CYC-01 on the real post-commit spine & seal */
+
+const cycleAsksOf = (state) => (state.delegations || [])
+  .filter((d) => String(d.support || '').includes(DEPENDENCY_CYCLE_RULE_ID));
+const cycleLinksOf = (state, relation) => (state.links || [])
+  .filter((l) => l.ruleId === DEPENDENCY_CYCLE_RULE_ID && (!relation || l.relation === relation));
+const cycleMarkersOf = (state) => (state.matrixMarkers || [])
+  .filter((m) => m.ruleId === DEPENDENCY_CYCLE_RULE_ID && m.kind === 'dependency-cycle');
+
+test('RULE-CYC-01 on the REAL spine issues one ask to the unique joint apex, observes the ambiguous cycle, seals atomically, and is idempotent on repeat & reload', () => {
+  const init = fixture();
+  init.settings = { ...init.settings, activeSeatId: 'ceo', sealEnabled: true };
+  const { store, values, api } = seed(init);
+
+  const scanned = api.matrixDependencyCycleScan();
+  assert.equal(scanned.ok, true, scanned?.error || 'VP scan succeeds');
+  assert.deepEqual(
+    scanned.effects.map((e) => e.action),
+    ['delegated', 'observed'],
+    'one ask for blk-001 (ceo) and one identity-free observation for blk-005 (ambiguous)',
+  );
+
+  const asks = cycleAsksOf(store.state);
+  assert.equal(asks.length, 1, 'derived cascade did not duplicate the ask');
+  assert.equal(asks[0].personId, 'ceo', 'blk-001 addresses its unique matrixJointApex');
+  assert.equal(asks[0].status, 'active');
+  assert.equal(asks[0].dueOn, '2026-11-19', '7-day default window from 2026-11-12');
+  assert.match(asks[0].expectedOutcome, /3 of 3 distinct internal precedence pair\(s\) would uncouple all 3 record\(s\)/);
+  assert.match(asks[0].expectedOutcome, /No edge was torn and no commitment was deprioritised automatically/);
+
+  const obLinks = cycleLinksOf(store.state, 'issues-obligation');
+  assert.equal(obLinks.length, 1);
+  assert.equal(obLinks[0].sourceType, 'person');
+  assert.equal(obLinks[0].sourceId, 'ceo');
+  assert.equal(obLinks[0].targetType, 'delegation');
+  assert.equal(obLinks[0].targetId, asks[0].id);
+
+  // Markers are strictly identity-free:
+  const markers = cycleMarkersOf(store.state);
+  assert.equal(markers.length, 1);
+  assert.match(markers[0].detail, /ambiguous/);
+  for (const pat of [/Ada/, /Milo/, /Nora/, /Kim/, /Sam/, /Lee/, /D1/, /G2/, /Legal review/]) {
+    assert.doesNotMatch(markers[0].detail, pat, `marker leaked identity: ${pat}`);
+  }
+
+  // Covered by audit.seal in the same commit:
+  const seals = store.state.events.filter((ev) => ev.type === 'audit.seal');
+  assert.equal(seals.length, 1);
+
+  // Repeat scan is 100% idempotent:
+  const rescan = api.matrixDependencyCycleScan();
+  assert.equal(rescan.ok, true);
+  assert.deepEqual(rescan.effects, [], 'second scan emits zero effects');
+  assert.equal(cycleAsksOf(store.state).length, 1);
+  assert.equal(cycleMarkersOf(store.state).length, 1);
+
+  // Reload from persisted bytes (`display == stored`):
+  const persisted = JSON.parse(values.get(STORAGE_KEY));
+  assert.equal(cycleAsksOf(persisted).length, 1);
+  const { store: rebooted } = seed(persisted);
+  const report = read(rebooted.state);
+  assert.equal(report.asks.openN, 1);
+  assert.equal(report.asks.answeredN, 0);
+  assert.equal(report.asks.notIssuedN, 0);
+  assert.equal(report.asks.notApplicableN, 1);
+  assert.equal(report.asks.observationsN, 1);
+  assert.equal(report.asks.reconciles, true);
+});
+
+test('RULE-CYC-01 serves single-chain workspaces too (sole line holder + rolls-up-to ancestor), respects human closure, self-closes on break, and never fabricates a leader ask', () => {
+  // Single-chain (`withLines: false`): both Sam and Kim sit solely under `prod` (Milo Product), who reports to `ceo`!
+  const init = fixture({ withLines: false });
+  init.settings = { ...init.settings, activeSeatId: 'ceo', sealEnabled: true };
+  const { store, api } = seed(init);
+
+  const first = api.matrixDependencyCycleScan();
+  assert.equal(first.ok, true);
+  const asks = cycleAsksOf(store.state);
+  assert.equal(asks.length, 2, 'both single-line cycles inside Milo’s branch receive one ask');
+  assert.ok(asks.every((d) => d.personId === 'prod'));
+
+  // Milo (`prod`) sits under Ada (`ceo`), so RULE-CYC-01 attaches `rolls-up-to` from each ask -> `ceo`!
+  const rollups = cycleLinksOf(store.state, 'rolls-up-to');
+  assert.equal(rollups.length, 2);
+  assert.ok(rollups.every((l) => l.targetId === 'ceo'));
+
+  const ask3 = asks.find((d) => d.title.includes('3-record'));
+  const ask2 = asks.find((d) => d.title.includes('2-record'));
+  assert.ok(ask3 && ask2);
+
+  // 1) Human closes `ask3` (d1->d2->d3->d1) while its cycle still stands -> never re-asked!
+  store.update((draft) => {
+    const target = draft.delegations.find((d) => d.id === ask3.id);
+    target.status = 'done';
+    target.completedOn = '2026-11-12';
+    target.completionNote = 'Sequenced D1 ahead of D2 via pre-registered premise.';
+  }, { type: 'delegation.completed', entity: 'delegation', entityId: ask3.id, summary: 'Completed ask' });
+
+  assert.equal(cycleAsksOf(store.state).length, 2, 'human closure was NOT re-opened');
+  const midReport = read(store.state);
+  assert.equal(midReport.asks.openN, 1);
+  assert.equal(midReport.asks.answeredN, 1);
+
+  // 2) Break the remaining 2-record cycle by deleting `a7` (g3 -> g2) -> RULE-CYC-01 self-closes `ask2`!
+  store.update((draft) => {
+    draft.links = draft.links.filter((l) => l.id !== 'a7');
+  }, { type: 'link.deleted', entity: 'link', entityId: 'a7', summary: 'Removed reverse goal dependency' });
+
+  const closed2 = store.state.delegations.find((d) => d.id === ask2.id);
+  assert.equal(closed2.status, 'done', 'open ask self-closed when its cycle cleared');
+  assert.equal(closed2.completedOn, '2026-11-12');
+  assert.ok(closed2.completionNote.startsWith(DEPENDENCY_CYCLE_CLOSED_PREFIX));
+  const afterClear = read(store.state);
+  assert.equal(afterClear.asks.openN, 0);
+  assert.equal(afterClear.asks.answeredN, 1);
+
+  // 3) Leader-held single-line cycle (`ceo` has `managerId === null` -> home line under synthetic `leader`):
+  const leaderRaw = createEmptyState(NOW.toISOString());
+  leaderRaw.people = [person('ceo', 'Ada Chief', 'vp', null)];
+  leaderRaw.decisions = [
+    { id: 'ld1', title: 'LD1', driver: '', approver: '', contributors: '', informed: '', chosen: '', date: '2026-10-01' },
+    { id: 'ld2', title: 'LD2', driver: '', approver: '', contributors: '', informed: '', chosen: '', date: '2026-10-01' },
+  ];
+  leaderRaw.links = [
+    link('ll1', 'decision', 'ld1', 'decision', 'ld2', 'informs'),
+    link('ll2', 'decision', 'ld2', 'decision', 'ld1', 'informs'),
+    link('lp1', 'person', 'ceo', 'decision', 'ld1', 'involves'),
+    link('lp2', 'person', 'ceo', 'decision', 'ld2', 'involves'),
+  ];
+  leaderRaw.settings = { ...leaderRaw.settings, activeSeatId: null };
+  const { store: lStore, api: lApi } = seed(normalizeState(leaderRaw, { now: NOW }).state);
+  const lScan = lApi.matrixDependencyCycleScan();
+  assert.equal(lScan.ok, true);
+  assert.equal(cycleAsksOf(lStore.state).length, 0, 'never fabricates a delegation for synthetic leader');
+  assert.equal(cycleMarkersOf(lStore.state).length, 1, 'records leader-held observation instead');
+  assert.match(cycleMarkersOf(lStore.state)[0].detail, /leader-held/);
+});
+
+test('RULE-CYC-01 enforces the per-commit ask cap (6) and issues the remainder on the next scan', () => {
+  const raw = createEmptyState(NOW.toISOString());
+  raw.people = [
+    person('ceo', 'Ada Chief', 'vp'),
+    person('prod', 'Milo Product', 'director', 'ceo'),
+    person('sam', 'Sam Builder', 'ic', 'prod'),
+  ];
+  raw.decisions = [];
+  raw.links = [];
+  for (let i = 1; i <= 8; i += 1) {
+    const a = `da-${i}`;
+    const b = `db-${i}`;
+    raw.decisions.push(
+      { id: a, title: `DA${i}`, driver: '', approver: '', contributors: '', informed: '', chosen: '', date: '2026-10-01' },
+      { id: b, title: `DB${i}`, driver: '', approver: '', contributors: '', informed: '', chosen: '', date: '2026-10-01' },
+    );
+    raw.links.push(
+      link(`la-${i}`, 'decision', a, 'decision', b, 'informs'),
+      link(`lb-${i}`, 'decision', b, 'decision', a, 'informs'),
+      link(`pa-${i}`, 'person', 'sam', 'decision', a, 'involves'),
+      link(`pb-${i}`, 'person', 'sam', 'decision', b, 'involves'),
+    );
+  }
+  raw.settings = { ...raw.settings, activeSeatId: 'ceo' };
+  const { store, api } = seed(normalizeState(raw, { now: NOW }).state);
+
+  const first = api.matrixDependencyCycleScan();
+  assert.equal(first.ok, true);
+  assert.equal(cycleAsksOf(store.state).length, DEPENDENCY_CYCLE_LIMITS.asksPerCommit);
+  const deferred = first.effects.find((e) => e.action === 'deferred');
+  assert.ok(deferred);
+  assert.match(deferred.summary, /^2 dependency-cycle ask\(s\) were deferred/);
+
+  const second = api.matrixDependencyCycleScan();
+  assert.equal(second.ok, true);
+  assert.equal(cycleAsksOf(store.state).length, 8);
+  assert.equal(second.effects.some((e) => e.action === 'deferred'), false);
+});
+
+/* -------- 11. pause switch, convention bounds, seat rights & redaction */
+
+test('pause switch, pause-permit register, fail-closed convention bounds, rank-3+ gate and seat-scoped redaction hold', () => {
+  const init = fixture();
+  init.settings = { ...init.settings, activeSeatId: 'ceo', dependencyCycleAutoPropagate: false };
+  const { store, api } = seed(init);
+
+  // Pause-permit register recognizes `dependencyCycleAutoPropagate` as an unpermitted matrix-reaching pause:
+  const permitRead = buildPausePermits(store.state, { now: NOW, settings: { ...store.state.settings, activeSeatId: null } });
+  const cycRow = permitRead.offSwitches.find((s) => s.key === 'dependencyCycleAutoPropagate');
+  assert.ok(cycRow, 'pause-permit census includes dependencyCycleAutoPropagate');
+  assert.equal(cycRow.reachesMatrix, true);
+  assert.equal(cycRow.reachRule, 'dependencyCycleRules.js');
+  assert.equal(cycRow.stateKey, 'unpermitted');
+
+  // With auto-propagation paused, an ordinary operational write issues zero cycle asks:
+  store.update((draft) => {
+    draft.decisions.push({ id: 'd-extra', title: 'Extra', driver: '', approver: '', contributors: '', informed: '', chosen: '', date: '2026-10-02' });
+  }, { type: 'decision.created', entity: 'decision', entityId: 'd-extra', summary: 'Extra decision' });
+  assert.equal(cycleAsksOf(store.state).length, 0);
+
+  // Explicit scan STILL runs while paused:
+  assert.equal(api.matrixDependencyCycleScan().ok, true);
+  assert.equal(cycleAsksOf(store.state).length, 1);
+
+  // Fail-closed convention validation (never clamped):
+  const K = DEPENDENCY_CYCLE_SETTING_KEYS;
+  assert.equal(api.matrixDependencyCycleSetConventions({ [K.askDueDays]: 0 }).ok, false);
+  assert.equal(api.matrixDependencyCycleSetConventions({ [K.askDueDays]: 31 }).ok, false);
+  assert.equal(api.matrixDependencyCycleSetConventions({ [K.askDueDays]: 2.5 }).ok, false);
+  assert.equal(api.matrixDependencyCycleSetConventions({ unknownKey: 5 }).ok, false);
+  assert.equal(api.matrixDependencyCycleSetConventions({ [K.autoPropagate]: 'yes' }).ok, false);
+  assert.equal(store.state.settings.dependencyCycleAskDueDays, 7, 'refused writes mutated nothing');
+
+  const updated = api.matrixDependencyCycleSetConventions({ [K.askDueDays]: 14, [K.autoPropagate]: true });
+  assert.equal(updated.ok, true);
+  assert.equal(store.state.settings.dependencyCycleAskDueDays, 14);
+  assert.equal(store.state.settings.dependencyCycleAutoPropagate, true);
+
+  // Scoped seat redaction: add an out-of-span cycle on `lee` (under `nora`), then read from `prod` (Milo Product, reaches Sam + Kim only!):
+  store.update((draft) => {
+    draft.decisions.push(
+      { id: 'lee-a', title: 'Secret Nora Plan A', driver: '', approver: '', contributors: '', informed: '', chosen: '', date: '2026-10-03' },
+      { id: 'lee-b', title: 'Secret Nora Plan B', driver: '', approver: '', contributors: '', informed: '', chosen: '', date: '2026-10-03' },
+    );
+    draft.links.push(
+      link('ll-a', 'decision', 'lee-a', 'decision', 'lee-b', 'informs'),
+      link('ll-b', 'decision', 'lee-b', 'decision', 'lee-a', 'informs'),
+      link('lp-a', 'person', 'lee', 'decision', 'lee-a', 'involves'),
+      link('lp-b', 'person', 'lee', 'decision', 'lee-b', 'involves'),
+    );
+    draft.settings.activeSeatId = 'prod';
+  }, { type: 'seat.switched', entity: 'settings', entityId: 'seat', summary: 'Switch to Milo Product' });
+
+  const prodRead = api.matrixDependencyCycleReport();
+  assert.equal(prodRead.ok, true);
+  const prodBlocksJson = JSON.stringify(prodRead.report.blocks);
+  assert.doesNotMatch(prodBlocksJson, /Secret Nora Plan|Lee Ops|Ada Chief/, 'out-of-span record titles, people and upward apexes are withheld');
+  assert.match(prodBlocksJson, /withheld outside seat span/);
+
+  // IC seat (`sam`, rank 1) cannot run workspace-wide scan or change cycle conventions:
+  store.update((draft) => { draft.settings.activeSeatId = 'sam'; }, { type: 'seat.switched', entity: 'settings', entityId: 'seat', summary: 'Switch to Sam' });
+  assert.equal(api.matrixDependencyCycleScan().ok, false, 'IC seat refused on scan');
+  assert.equal(api.matrixDependencyCycleSetConventions({ [K.askDueDays]: 10 }).ok, false, 'IC seat refused on conventions');
+});
+
+/* ------------------------------------ 12. interactive JSDOM panel flow */
+
+test('interactive JSDOM panel renders tear census & escalation status and persists scan + conventions through the API', () => {
+  const init = fixture();
+  init.settings = { ...init.settings, activeSeatId: 'ceo' };
+  const { store, values, api } = seed(init);
+
+  withDom((dom) => {
+    const host = dom.window.document.body;
+    let refreshes = 0;
+    const mount = () => {
+      host.innerHTML = '';
+      host.appendChild(renderMatrixDependencyCyclePanel({
+        state: store.state,
+        api,
+        refresh: () => { refreshes += 1; mount(); },
+      }, { now: NOW }));
+    };
+    mount();
+
+    assert.match(host.innerHTML, /Counterfactual single-arc tear sensitivity/);
+    assert.match(host.innerHTML, /Governed escalation on the shared spine \(RULE-CYC-01\)/);
+
+    const scanBtn = host.querySelector('[data-testid="dependency-cycle-scan-btn"]');
+    assert.ok(scanBtn, 'director+ seat sees Scan button');
+    scanBtn.click();
+    assert.equal(refreshes, 1);
+    assert.equal(cycleAsksOf(store.state).length, 1);
+    assert.match(host.innerHTML, /open · due 2026-11-19/);
+
+    const input = host.querySelector('[data-testid="dependency-cycle-due-days-input"]');
+    const form = host.querySelector('[data-testid="dependency-cycle-conventions-form"]');
+    assert.ok(input && form);
+    input.value = '12';
+    form.dispatchEvent(new dom.window.Event('submit', { bubbles: true, cancelable: true }));
+    assert.equal(store.state.settings.dependencyCycleAskDueDays, 12);
+    const onDisk = JSON.parse(values.get(STORAGE_KEY));
+    assert.equal(onDisk.settings.dependencyCycleAskDueDays, 12, 'convention persisted to STORAGE_KEY');
+  });
 });
