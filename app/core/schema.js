@@ -99,6 +99,10 @@ import {
   normalizeAarAdoptions,
   normalizeAarCorroborationSettings,
 } from './domain/aarCorroborationSchema.js';
+// ADR-0189 (Schema v149 unchanged): the interface-alignment conventions — the
+// dependency window, the ask window and the automation pause. No channel
+// default: a channel is a human agreement, so an absent one stays absent.
+import { normalizeInterfaceAlignmentSettings } from './domain/interfaceAlignmentSchema.js';
 // ADR-0185 (Schema v147): dated Matrix change-impact requests and first-person
 // line responses. Request snapshots normalize before their responses resolve.
 import {
@@ -2242,6 +2246,9 @@ export const DEFAULT_SETTINGS = Object.freeze({
   // adoption-parity window and the automation pause. No corroboration default:
   // nothing here implies that a line agreed to anything.
   ...normalizeAarCorroborationSettings({}),
+  // ADR-0189: the alignment dependency window, the ask window and the
+  // automation pause. No channel default: a channel is a human agreement.
+  ...normalizeInterfaceAlignmentSettings({}),
 });
 
 export const COLLECTIONS = [
@@ -3748,6 +3755,10 @@ export function normalizeSettings(raw) {
     // coverage floor are printed by the panel, so a reload must carry them.
     ...normalizeAarCorroborationSettings(s),
     ...normalizeDependencyCycleSettings(s),
+    // ADR-0189: named here because this object is rebuilt field by field — a
+    // key not listed would be dropped on every load, and the window the panel
+    // prints would be a number the record does not hold.
+    ...normalizeInterfaceAlignmentSettings(s),
     ...normalizeStructureHistorySettings(s),
     ...normalizeDifferencesSettings(s),
     ...normalizeFitSettings(s),

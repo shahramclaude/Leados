@@ -73,6 +73,18 @@ import {
 import { normalizeDependencyCycleSettings } from './dependencyCycleSchema.js';
 import { buildLineHorizon } from './lineHorizon.js';
 import { LINE_HORIZON_RULE_ID, LINE_HORIZON_SCAN_EVENT } from './lineHorizonRegistry.js';
+// ADR-0189: the product–organisation interface alignment matrix (Sosa,
+// Eppinger & Rowles) and RULE-OIA-01 escalation surface.
+import { buildInterfaceAlignment } from './interfaceAlignment.js';
+import {
+  INTERFACE_ALIGNMENT_BOUNDS,
+  INTERFACE_ALIGNMENT_EVENTS,
+  INTERFACE_ALIGNMENT_RIGHT,
+  INTERFACE_ALIGNMENT_RULE_ID,
+  INTERFACE_ALIGNMENT_SETTING_KEYS,
+  INTERFACE_ALIGNMENT_SETTING_LABELS,
+} from './interfaceAlignmentRegistry.js';
+import { normalizeInterfaceAlignmentSettings } from './interfaceAlignmentSchema.js';
 
 export const MATRIX_EVENTS = Object.freeze({
   DECLARE: 'matrix.line.declared',
@@ -85,6 +97,8 @@ export const MATRIX_EVENTS = Object.freeze({
   HORIZON_SCAN: LINE_HORIZON_SCAN_EVENT,
   CYCLES_SCAN: DEPENDENCY_CYCLE_EVENTS.SCAN,
   CYCLES_CONVENTIONS: DEPENDENCY_CYCLE_EVENTS.CONVENTIONS,
+  ALIGNMENT_SCAN: INTERFACE_ALIGNMENT_EVENTS.SCAN,
+  ALIGNMENT_CONVENTIONS: INTERFACE_ALIGNMENT_EVENTS.CONVENTIONS,
 });
 
 export function createMatrixActions(store, { now, idFactory }) {
@@ -828,6 +842,105 @@ export function createMatrixActions(store, { now, idFactory }) {
         entity: 'settings',
         entityId: 'matrix-cycles',
         summary: `Dependency-cycle conventions set: ask due window ${next.dependencyCycleAskDueDays} day(s), auto-propagation ${next.dependencyCycleAutoPropagate ? 'on' : 'off'}.`.slice(0, 300),
+      });
+      return saved({ conventions: next });
+    },
+
+    /* ------------------------- the interface alignment matrix (ADR-0189) */
+
+    /**
+     * ADR-0189: the Sosa/Eppinger/Rowles product–organisation interface
+     * alignment matrix. A pure read over the typed-link spine, the canonical
+     * matrix DAG, the bilateral interface acts and live cadence forums.
+     */
+    matrixInterfaceAlignmentReport() {
+      const check = seatFor('declare-matrix-line');
+      if (!check.ok) return check;
+      const { seat } = check;
+      const at = clock();
+      const visiblePersonIds = seat.fullAccess
+        ? null
+        : new Set([...(seat.scope || []), ...(seat.lineScope || [])]);
+      return {
+        ok: true,
+        report: buildInterfaceAlignment(store.state, { now: at, settings: settings(), visiblePersonIds }),
+        seat: { id: seat.id, fullAccess: seat.fullAccess, rank: seat.rank },
+      };
+    },
+
+    /**
+     * ADR-0189: a deliberate alignment scan on the shared post-commit spine so
+     * RULE-OIA-01 reconciles findings, issues bounded asks to unique roster
+     * seats and records identity-free observations — while the pause switch is
+     * ON. A pause is a pause: with auto-propagation off the scan records no
+     * ask, exactly as every other path does.
+     */
+    matrixInterfaceAlignmentScan() {
+      const check = seatFor(INTERFACE_ALIGNMENT_RIGHT);
+      if (!check.ok) return check;
+      const { seat } = check;
+      const at = clock();
+      store.update(() => {}, {
+        type: MATRIX_EVENTS.ALIGNMENT_SCAN,
+        entity: 'workspace',
+        entityId: 'matrix-alignment',
+        summary: `Interface-alignment scan requested (${INTERFACE_ALIGNMENT_RULE_ID}).`.slice(0, 300),
+      });
+      const visiblePersonIds = seat.fullAccess
+        ? null
+        : new Set([...(seat.scope || []), ...(seat.lineScope || [])]);
+      return saved({
+        report: buildInterfaceAlignment(store.state, { now: at, settings: settings(), visiblePersonIds }),
+        effects: (store.lastPropagations || []).filter((x) => x && x.ruleId === INTERFACE_ALIGNMENT_RULE_ID),
+      });
+    },
+
+    /**
+     * ADR-0189: set the alignment conventions. Values outside declared bounds
+     * are REFUSED — never silently clamped — so a caller never believes a
+     * window was saved when another number was substituted.
+     */
+    matrixInterfaceAlignmentSetConventions(patch = {}) {
+      const check = seatFor(INTERFACE_ALIGNMENT_RIGHT);
+      if (!check.ok) return check;
+      if (!patch || typeof patch !== 'object' || Array.isArray(patch)) {
+        return fail('Alignment conventions must be supplied as a plain object. Nothing was saved.', 'settings');
+      }
+      const K = INTERFACE_ALIGNMENT_SETTING_KEYS;
+      const allowed = new Map([
+        [K.windowDays, 'windowDays'],
+        [K.askDueDays, 'askDueDays'],
+        [K.autoPropagate, 'autoPropagate'],
+      ]);
+      const keys = Object.keys(patch);
+      if (!keys.length) {
+        return fail('State at least one interface-alignment convention to update. Nothing was saved.', 'settings');
+      }
+      for (const key of keys) {
+        const name = allowed.get(key);
+        if (!name) {
+          return fail(`“${key}” is not a declared interface-alignment convention. Nothing was saved.`, key);
+        }
+        const value = patch[key];
+        if (name === 'autoPropagate') {
+          if (typeof value !== 'boolean') {
+            return fail(`${INTERFACE_ALIGNMENT_SETTING_LABELS.autoPropagate} must be true or false. Nothing was saved.`, key);
+          }
+        } else {
+          const [min, max] = INTERFACE_ALIGNMENT_BOUNDS[name];
+          if (!Number.isInteger(value) || value < min || value > max) {
+            return fail(`${INTERFACE_ALIGNMENT_SETTING_LABELS[name]} must be a whole number from ${min} to ${max}. Nothing was clamped and nothing was saved.`, key);
+          }
+        }
+      }
+      const next = normalizeInterfaceAlignmentSettings({ ...settings(), ...patch });
+      store.update((draft) => {
+        draft.settings = { ...(draft.settings || {}), ...next };
+      }, {
+        type: MATRIX_EVENTS.ALIGNMENT_CONVENTIONS,
+        entity: 'settings',
+        entityId: 'matrix-alignment',
+        summary: `Interface-alignment conventions set: dependency window ${next.interfaceAlignmentWindowDays} day(s), ask due window ${next.interfaceAlignmentAskDueDays} day(s), auto-propagation ${next.interfaceAlignmentAutoPropagate ? 'on' : 'off'}.`.slice(0, 300),
       });
       return saved({ conventions: next });
     },

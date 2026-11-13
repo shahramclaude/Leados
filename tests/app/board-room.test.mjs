@@ -210,10 +210,10 @@ test('the rule is on the shared spine, has an auditable contract, and cannot out
   // (RULE-PIC-01..04) to 77 and ADR-0095 (RULE-RAL-01..04, one rule on the shared
   // spine) brings it to 78. It drifted again: it read 94 while the spine was
   // already at 115, so it was red on `main` before that session. ADR-0186
-  // (RULE-CSA-01) brought it to 116 and ADR-0187 (RULE-CYC-01) states the true
-  // total deliberately at 118, with the `PROPAGATION_CONTRACTS` parity assertion
+  // (RULE-CSA-01) brought it to 116 and ADR-0187 (RULE-CYC-01) to 117, ADR-0188 (RULE-AAC-01) to 118,
+  // and ADR-0189 (RULE-OIA-01) states the true total deliberately at 119, with the `PROPAGATION_CONTRACTS` parity assertion
   // above proving the contract exists.
-  assert.equal(DEFAULT_POST_COMMIT_RULES.length, 118, 'the shared spine includes cadence, Strategy Cycle (RULE-SCR), Envoy (RULE-ENV), Federation (RULE-FED), Differencing (RULE-DFR), the Prospective Contract (RULE-PIC), the Robust Allocation Terminal (RULE-RAL), the Internal Clearinghouse (RULE-CLR), the Discretion Calibrator (RULE-SPC) and the Reputational Capital Ledger (RULE-RCL) and, from ADR-0108, the Decision-Fit Ledger (RULE-FIT), from ADR-0140 the Matrix Accountability Ledger (RULE-MTX-01) and from ADR-0143 the Cross-Line Priority Arbitration (RULE-ARB-01) and from ADR-0144 the Cross-Line Contradiction Audit (RULE-CNT-01) and from ADR-0147 Matrix Multi-Line Review Stewardship (RULE-SRV-01) and from ADR-0187 Dependency Feedback-Cycle Escalation (RULE-CYC-01) and from ADR-0188 Cross-Line After-Action Corroboration & Lesson-Adoption Parity (RULE-AAC-01)');
+  assert.equal(DEFAULT_POST_COMMIT_RULES.length, 119, 'the shared spine includes cadence, Strategy Cycle (RULE-SCR), Envoy (RULE-ENV), Federation (RULE-FED), Differencing (RULE-DFR), the Prospective Contract (RULE-PIC), the Robust Allocation Terminal (RULE-RAL), the Internal Clearinghouse (RULE-CLR), the Discretion Calibrator (RULE-SPC) and the Reputational Capital Ledger (RULE-RCL) and, from ADR-0108, the Decision-Fit Ledger (RULE-FIT), from ADR-0140 the Matrix Accountability Ledger (RULE-MTX-01) and from ADR-0143 the Cross-Line Priority Arbitration (RULE-ARB-01) and from ADR-0144 the Cross-Line Contradiction Audit (RULE-CNT-01) and from ADR-0147 Matrix Multi-Line Review Stewardship (RULE-SRV-01) and from ADR-0187 Dependency Feedback-Cycle Escalation (RULE-CYC-01) and from ADR-0188 Cross-Line After-Action Corroboration & Lesson-Adoption Parity (RULE-AAC-01) and from ADR-0189 Product–Organisation Interface Alignment (RULE-OIA-01)');
   assert.ok(DEFAULT_POST_COMMIT_RULES.includes(boardRule));
   const contract = contractFor(boardRule);
   assert.ok(contract, 'boardRule has a declared contract');
@@ -253,7 +253,7 @@ test('the route exists, is enterprise material, and is reachable from the nav', 
 test('CSV scope #80 exists and refuses to guess', () => {
   // ADR-0144 adds scope #107; ADR-0145 adds scope #108; the total is pinned
   // deliberately so the next session cannot drift the count silently.
-  assert.equal(CSV_EXPORTS.length, 141);
+  assert.equal(CSV_EXPORTS.length, 142);
   const scope = CSV_EXPORTS.find((s) => s.key === 'board-claims');
   assert.ok(scope);
   assert.equal(scope.sensitive, false);

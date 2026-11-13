@@ -130,6 +130,7 @@ import { workforceFlowRule } from './workforceFlowRules.js';
 import { changeSaturationRule } from './changeSaturationRules.js';
 import { aarCorroborationRule } from './aarCorroborationRules.js';
 import { dependencyCycleRule } from './dependencyCycleRules.js';
+import { interfaceAlignmentRule } from './interfaceAlignmentRules.js';
 import { sealRule } from './sealRules.js';
 // ADR-0092: the Differencing Defender declares its contract like every other rule.
 import { differencingRule } from './differencingRules.js';
@@ -1023,6 +1024,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     rule: aarCorroborationRule,
     module: 'aarCorroborationRules.js',
     purpose: 'RULE-AAC-01: reads the Cross-Line After-Action Corroboration & Lesson-Adoption Parity register (`buildAarCorroborationReport`, ADR-0188) with the whole-workspace operator view on corroboration requests, first-person answers, per-line adoption acts, convention changes, explicit `learning.aar.corroboration.scan` scans, and every review, roster or reporting-line act that can move a held review\'s participant line set. It raises at most ONE open dated ask per condition, bounded at 8 per commit with the remainder printed in a marker: (a) `corroboration-overdue` — a dated request to a line holder passed its due date with no first-person answer, because silence is never corroboration; (b) `lesson-parity` — a lesson\'s adoption parity is `parity-broken` (a touched line recorded a reasoned refusal) or `parity-open` past the declared `aarCorroborationAdoptWarnDays` window. Asks name the joint apex (`matrixJointApex`) of the line holders who owe the answer or the adoption — never the affected person, who cannot rule on their own review, and never one holder alone, who cannot rule on a peer — carry typed `tracks-followup` to the lesson and `escalates-from` to the apex, are idempotent per deterministic condition signature, and close themselves when the condition clears. An ambiguous, disconnected, unattributed or self-addressed apex records ONE identity-free `matrixMarkers` observation (`kind: \'aar-corroboration\'`) and nobody is substituted. It never edits a review, an answer, an adoption or a lesson state, never reads silence as agreement, and is inert with nobody on the roster; pausable via `aarCorroborationAutoPropagate` (an explicit scan always runs).',
+    writes: ['delegations', 'links', 'matrixMarkers'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: interfaceAlignmentRule,
+    module: 'interfaceAlignmentRules.js',
+    purpose: 'RULE-OIA-01: reads the Product–Organisation Interface Alignment Matrix (`buildInterfaceAlignment`, ADR-0189) with the whole-workspace operator view on declared-link writes, operational work-record writes, reporting-line and roster changes, interface-agreement and cadence-forum acts, convention changes and explicit `matrix.alignment.scan` / `matrix.scan` scans. For every pair finding whose `matrixJointApex` resolves to ONE active roster seat it keeps at most ONE open dated ask (bounded at 6 per commit, remainder counted): (a) `interface-unattended` — declared work depends across two spans whose holders hold no live coordination channel (printed as `unattended-interface` or `channel-not-live`, never collapsed) — asking the apex to open or renew an interface agreement or shared cadence forum, or record why the dependency stands without one; (b) `agreement-idle` — an ACTIVE interface agreement whose two spans carry zero live shared people and zero in-window cross-span dependency — asking the apex to retire it or record what it stands ready for. Asks carry typed `issues-obligation` and matrix-DAG `rolls-up-to` provenance, are idempotent per deterministic finding signature (`ifa1:…`), and close themselves when the finding clears or its owning seat moves. A leader-held, ambiguous-apex, unattributed or off-roster finding records ONE identity-free `matrixMarkers` observation (`kind: \'interface-alignment\'`) and substitutes nobody. It never opens a channel, never signs or retires an agreement, never edits a dependency, never rates a manager, and is inert with nobody on the roster; pausable via `interfaceAlignmentAutoPropagate` (the pause governs EVERY path, including explicit scans).',
     writes: ['delegations', 'links', 'matrixMarkers'],
     emits: [],
     scansWorkspace: true,

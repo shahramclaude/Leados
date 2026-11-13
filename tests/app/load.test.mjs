@@ -501,7 +501,7 @@ test('catalog: the four rules are registered in the automation catalog and the p
 });
 
 test('CSV scope #34: opaque per-person telemetry with no names, roles or free text', () => {
-  assert.equal(CSV_EXPORTS.length, 141);
+  assert.equal(CSV_EXPORTS.length, 142);
   const spec = CSV_EXPORTS.find((s) => s.key === 'load');
   assert.ok(spec);
   const demo = buildDemoState(NOW);

@@ -698,7 +698,7 @@ test('the conventions are director+ AND full access; the reads are seat-scoped',
 });
 
 test('the brief is identity-free, the CSV carries no identifier, and a refused rate exports BLANK', () => {
-  assert.equal(CSV_EXPORTS.length, 141);
+  assert.equal(CSV_EXPORTS.length, 142);
   const scope = CSV_EXPORTS.find((row) => row.key === 'epistemic');
   assert.ok(scope, 'CSV scope #99 is registered');
   assert.match(scope.description, /NO unknown id/);

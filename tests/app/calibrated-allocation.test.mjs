@@ -380,7 +380,7 @@ test('the brief carries the calibration section with no ids, and the CSV surface
   assert.ok(!brief.includes(CONTRACT_SENTINEL), 'no contract id');
   assert.ok(!brief.includes('ral-'), 'no ledger id');
   assert.ok(!NAMES.some((n) => brief.includes(n)), 'no person named');
-  assert.equal(CSV_EXPORTS.length, 141, 'ADR-0102 added scope #98; the register still governs releases');
+  assert.equal(CSV_EXPORTS.length, 142, 'ADR-0102 added scope #98; the register still governs releases');
   assert.ok(ROBUST_ALLOCATION_MARKER_KINDS.includes('premise-tension'), 'the tension marker kind is declared');
 });
 

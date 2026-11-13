@@ -487,7 +487,7 @@ test('the brief and CSV carry states and counts only, and refuse rather than zer
   assert.equal(dutyStandbyAttentionCount(dirState, { now: NOW, settings: dirState.settings }), 1, 'one overdue ask, one cover still inside its deadline');
 
   // The export scope exists and is registered.
-  assert.equal(CSV_EXPORTS.length, 141);
+  assert.equal(CSV_EXPORTS.length, 142);
   const exported = exportWorkspaceCsv(dirState, 'cover-standby', { now: NOW });
   assert.equal(exported.ok, true, exported.error);
   assert.ok(exported.rowCount >= 1);

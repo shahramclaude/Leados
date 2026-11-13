@@ -106,7 +106,7 @@ test('ADR-0164 registration: Schema v140, spine 1:1 parity, gateway, seat policy
   assert.equal(ACTION_RIGHTS['govern-oneonone-lines'].minRank, 3);
   assert.ok(SAFE_READS.has('oneOnOneLineReport'));
   assert.ok(MATRIX_PANELS.some((p) => p.key === 'one-on-ones'));
-  assert.equal(CSV_EXPORTS.length, 141);
+  assert.equal(CSV_EXPORTS.length, 142);
   assert.ok(CSV_EXPORTS.some((c) => c.key === 'one-on-one-lines' && c.sensitive === false));
 });
 

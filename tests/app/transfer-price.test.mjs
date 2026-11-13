@@ -163,7 +163,7 @@ test('ADR-0177 registration: Schema v142, empty migration, spine parity, gateway
   assert.equal(RECORD_POLICIES.transferPriceActs.detailCeiling, 0);
   assert.equal(RECORD_POLICIES.transferPriceMarkers.detailCeiling, 0);
   assert.ok(MATRIX_PANELS.some((p) => p.key === 'chargeback'));
-  assert.equal(CSV_EXPORTS.length, 141);
+  assert.equal(CSV_EXPORTS.length, 142);
   assert.equal(CSV_EXPORTS[131].key, 'line-chargeback');
 
   // Exact integers only: nothing rounds, and a refused figure never prints as 0.00.

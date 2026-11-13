@@ -422,7 +422,7 @@ test('the reading stores nothing: a reload prints the identical figures and read
 /* ------------------------------------------------------------------ CSV */
 
 test('CSV #116 is registered, exact-column, aggregate-only and reconciles with the panel', () => {
-  assert.equal(CSV_EXPORTS.length, 141, 'the register now holds 139 scopes through ADR-0185 #139 (#75 stays reserved)');
+  assert.equal(CSV_EXPORTS.length, 142, 'the register now holds 139 scopes through ADR-0185 #139 (#75 stays reserved)');
   const descriptor = CSV_EXPORTS.find((item) => item.key === 'merit-matrix-parity');
   assert.ok(descriptor, 'the scope is registered');
   assert.equal(descriptor.group, 'analytics');

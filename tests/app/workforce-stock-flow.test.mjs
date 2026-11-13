@@ -170,7 +170,7 @@ test('registration: schema v147, the 32nd matrix panel, CSV scope #138, RULE-WFS
   const scope = CSV_EXPORTS.find((entry) => entry.key === WORKFORCE_FLOW_CSV_SCOPE);
   assert.ok(scope, 'CSV #138 is registered');
   assert.equal(scope.sensitive, false);
-  assert.equal(CSV_EXPORTS.length, 141);
+  assert.equal(CSV_EXPORTS.length, 142);
   assert.ok(SAFE_READS.has('workforceFlowReport'));
   const contract = PROPAGATION_CONTRACTS.find((c) => c.rule?.id === 'workforceFlowRule');
   assert.ok(contract, 'RULE-WFS-01 declares its propagation contract');

@@ -592,6 +592,9 @@ export const ACTION_RIGHTS = Object.freeze({
   // ADR-0187: re-running RULE-CYC-01 on the shared spine and governing the
   // dependency-cycle remediation ask window / automation pause are director+.
   'govern-dependency-cycles': { minRank: 3, maxRank: 5, label: 'Scan dependency feedback cycles on the shared spine and set cycle conventions' },
+  // ADR-0189: re-running RULE-OIA-01 on the shared spine and governing the
+  // interface-alignment windows / automation pause are director+.
+  'govern-interface-alignment': { minRank: 3, maxRank: 5, label: 'Scan product–organisation interface alignment on the shared spine and set alignment conventions' },
   // ADR-0177: signing one's OWN side of a transfer price is open at every
   // leadership rank; the action refuses any seat that is not that side's manager.
   'agree-transfer-price': { minRank: 1, maxRank: 5, label: 'Sign your own side of a transfer price between two lines' },

@@ -207,7 +207,7 @@ test('the Diligence Ledger is registered on the shared spine, the manifest, righ
     assert.ok(SYSTEM_GENERATED_LINK_RELATIONS.includes(relation));
     assert.ok(LINK_RELATION_LABELS[relation]);
   }
-  assert.equal(CSV_EXPORTS.length, 141);
+  assert.equal(CSV_EXPORTS.length, 142);
   assert.ok(CSV_EXPORTS.some((scope) => scope.key === 'diligence' && /aggregate/i.test(scope.label)));
 });
 

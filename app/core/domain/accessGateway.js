@@ -86,8 +86,13 @@ const groups = [
   // managers involved or the span above both — a peer cannot restructure another
   // span.
   ['record-structure-change', 'structureRecordMove structureImportDesign structureSeedCurrent structureScan structureHistoryCandidates'],
-  ['declare-matrix-line', 'matrixDeclareLine matrixRetuneLine matrixEndLine matrixSetConventions matrixReport matrixBriefText matrixCsvRows matrixCoordinationReport matrixCoordinationScan matrixSodReview matrixSettings matrixCandidates lineConsentRead lineConsentCandidates lineConsentScan matrixRecordIntake matrixRerouteIntake matrixIntakeReport matrixIntakeCandidates matrixHorizonReport matrixHorizonScan matrixDependencyCycleReport'],
+  ['declare-matrix-line', 'matrixDeclareLine matrixRetuneLine matrixEndLine matrixSetConventions matrixReport matrixBriefText matrixCsvRows matrixCoordinationReport matrixCoordinationScan matrixSodReview matrixSettings matrixCandidates lineConsentRead lineConsentCandidates lineConsentScan matrixRecordIntake matrixRerouteIntake matrixIntakeReport matrixIntakeCandidates matrixHorizonReport matrixHorizonScan matrixDependencyCycleReport matrixInterfaceAlignmentReport'],
   ['govern-dependency-cycles', 'matrixDependencyCycleScan matrixDependencyCycleSetConventions'],
+  // ADR-0189: scanning the product–organisation interface alignment matrix and
+  // setting its conventions. The pure read sits on `declare-matrix-line` and in
+  // SAFE_READS; the scan (which runs the shared spine) and the conventions stay
+  // on this declared right.
+  ['govern-interface-alignment', 'matrixInterfaceAlignmentScan matrixInterfaceAlignmentSetConventions'],
   // ADR-0148: answering a declared share is TWO first-person acts, split on the
   // spine rather than in prose. `accept-matrix-line` is the manager's own
   // answer (accept or decline the line they were given); it is open at every
@@ -436,6 +441,11 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // matrix writes stay gated — hiding the coupled blocks from exactly the
 // director/VP seat that has to convene the joint forum.
 'matrixDependencyCycleReport',
+// ADR-0189: the product–organisation interface alignment matrix's read
+// surface. A pure read absent from SAFE_READS would be unreadable under
+// enforcement while the matrix writes stay gated — hiding the misalignment
+// from exactly the seat that has to convene the two holders.
+'matrixInterfaceAlignmentReport',
 // ADR-0143: the arbitration register's read surface. Registered for the same
 // reason as every module above — a read absent from SAFE_READS is unreadable
 // under enforcement while its writes are still gated, which would hide the case

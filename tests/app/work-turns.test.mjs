@@ -364,7 +364,7 @@ test('the ledger is wired end to end: schema, panel, both gateway lists, spine o
   assert.equal(PROPAGATION_CONTRACTS.length, DEFAULT_POST_COMMIT_RULES.length, 'contracts == rules');
 
   // CSV scope #135 remains in place; Session 248 added scope #136 after it.
-  assert.equal(CSV_EXPORTS.length, 141);
+  assert.equal(CSV_EXPORTS.length, 142);
   assert.equal(CSV_EXPORTS[134], WORK_TURN_CSV_DESCRIPTOR);
   assert.equal(WORK_TURN_CSV_DESCRIPTOR.key, 'work-turns');
   assert.equal(new Set(WORK_TURN_CSV_COLUMNS).size, WORK_TURN_CSV_COLUMNS.length, 'no duplicate column');

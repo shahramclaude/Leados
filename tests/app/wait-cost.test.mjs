@@ -620,7 +620,7 @@ describe('RULE-WAIT-01..05 on the post-commit spine', () => {
 
 describe('CSV scope #54 (waitcost)', () => {
   test('the scope is registered and exportable', () => {
-    assert.equal(CSV_EXPORTS.length, 141);
+    assert.equal(CSV_EXPORTS.length, 142);
     assert.ok(CSV_EXPORTS.some((s) => s.key === 'waitcost' && s.filenameSlug === 'cost-of-waiting'));
     const result = exportWorkspaceCsv(fixtureState(), 'waitcost', { now: NOW });
     assert.equal(result.ok, true);

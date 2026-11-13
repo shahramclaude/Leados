@@ -174,6 +174,7 @@ import { changeSaturationRule } from './changeSaturationRules.js';
 // ADR-0187 (Schema v148 unchanged): Dependency Feedback-Cycle Escalation (RULE-CYC-01).
 import { dependencyCycleRule } from './dependencyCycleRules.js';
 import { aarCorroborationRule } from './aarCorroborationRules.js';
+import { interfaceAlignmentRule } from './interfaceAlignmentRules.js';
 
 
 // ADR-0087: the Operating Cadence Clock. Reads the finished queue after the
@@ -1036,6 +1037,18 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // and it is inert with nobody on the roster. Registered immediately before
   // `seatRule` and `sealRule`.
   aarCorroborationRule,
+  // ADR-0189: RULE-OIA-01. Reads the Product–Organisation Interface Alignment
+  // Matrix (`buildInterfaceAlignment`, ADR-0189) on link/record/line/roster
+  // writes and explicit `matrix.alignment.scan` scans. Places ONE dated ask per
+  // finding with a unique active roster seat (the `matrixJointApex` of the two
+  // holders) — “open or renew a coordination channel or record why the
+  // dependency stands without one”, or “retire the idle agreement or record
+  // what it stands ready for” — carries matrix-DAG `rolls-up-to` provenance,
+  // closes its own asks when the finding clears or its seat moves, and records
+  // identity-free `matrixMarkers` observations when no unique apex holds the
+  // finding. It never opens a channel, never signs an agreement and never rates
+  // a manager. Registered immediately before `seatRule` and `sealRule`.
+  interfaceAlignmentRule,
   // ADR-0076: the Operating Seat (vertical roll-up + enforced boundaries).
   // It reads the finished record after every module has propagated, then fans
   // each open item up every leadership ancestor in the reporting tree with one
