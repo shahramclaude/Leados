@@ -489,7 +489,7 @@ test('CSV scope #98 is registered and carries no decision, lock, person or fact 
   api.hindsightScan();
   const spec = CSV_EXPORTS.find((row) => row.key === 'hindsight');
   assert.ok(spec, 'CSV scope #98 is registered');
-  assert.equal(CSV_EXPORTS.length, 141);
+  assert.equal(CSV_EXPORTS.length, 142);
   const res = exportWorkspaceCsv(store.state, 'hindsight', { now: NOW });
   assert.equal(res.ok, true, res.error);
   assert.ok(res.rowCount > 0);

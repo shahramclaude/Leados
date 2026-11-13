@@ -228,6 +228,11 @@ export const MATRIX_PANELS = Object.freeze([
   // ADR-0186 (Session 254): the change-saturation ledger — what each line is putting
   // on one person at once, against a capacity a human declared.
   Object.freeze({ key: 'change-saturation', label: 'Change saturation', hint: 'Every change each person is carrying right now, summed across the lines that put it there, against the absorptive capacity somebody declared — and the clearance question for the next approval (ADR-0186).' }),
+  // ADR-0189 (Session 257): the product–organisation interface alignment matrix
+  // (Sosa, Eppinger & Rowles) — where declared work depends across two spans,
+  // does any coordination channel connect their holders, and does every channel
+  // still have work behind it?
+  Object.freeze({ key: 'alignment', label: 'Interface alignment', hint: 'Which declared work dependencies cross spans with no live coordination channel between their holders — and which agreed channels have no work and no shared person behind them (ADR-0189).' }),
 ]);
 
 export const MATRIX_PANEL_KEYS = Object.freeze(MATRIX_PANELS.map((p) => p.key));

@@ -191,7 +191,7 @@ test('Schema v147 is additive; Matrix surface and scoped API rights are register
   // and pin the total, which is the number a session must state deliberately.
   assert.ok(CSV_EXPORTS.includes(CHANGE_IMPACT_CSV_DESCRIPTOR), 'the descriptor this module exports is the one in the registry');
   assert.equal(CSV_EXPORTS.filter((item) => item.filenameSlug === CHANGE_IMPACT_CSV_DESCRIPTOR.filenameSlug).length, 1, 'registered exactly once, under its own filename');
-  assert.equal(CSV_EXPORTS.length, 141, 'ADR-0186 appended matrix-change-saturation after this scope');
+  assert.equal(CSV_EXPORTS.length, 142, 'ADR-0186 appended matrix-change-saturation after this scope');
 
   const state = fixture();
   const lineScope = matrixLineScopeFor(state, { now: NOW, settings: state.settings });

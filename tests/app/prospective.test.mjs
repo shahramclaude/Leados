@@ -493,7 +493,7 @@ test('the brief, the CSV and all five renderer panels carry no name, title, coho
 });
 
 test('CSV scope #92 is aggregate-only, refusal-honest and refuses an unknown scope', () => {
-  assert.equal(CSV_EXPORTS.length, 141);
+  assert.equal(CSV_EXPORTS.length, 142);
   const descriptor = CSV_EXPORTS.find((item) => item.key === 'prospective-contracts');
   assert.ok(descriptor);
   assert.equal(descriptor.sensitive, false);

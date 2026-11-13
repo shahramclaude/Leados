@@ -536,7 +536,7 @@ test('the brief, the CSV and all six renderer panels carry no name, title, plan 
 });
 
 test('CSV scope #93 (with #94 reserved for Clearinghouse) is aggregate-only, refusal-honest and refuses an unknown scope', () => {
-  assert.equal(CSV_EXPORTS.length, 141);
+  assert.equal(CSV_EXPORTS.length, 142);
   const descriptor = CSV_EXPORTS.find((item) => item.key === 'robust-allocation');
   assert.ok(descriptor);
   assert.equal(descriptor.sensitive, false);

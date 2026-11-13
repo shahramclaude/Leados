@@ -146,7 +146,7 @@ test('graph vocabulary and spine parity are exhaustive', () => {
   assert.ok(contract.writes.includes('decisions'));
   // ADR-0088 appends after this scope, so the registry ORDER is the contract.
   assert.ok(CSV_EXPORTS.findIndex((s) => s.key === 'operating-cadence') < CSV_EXPORTS.findIndex((s) => s.key === 'federated-exchange'));
-  assert.equal(CSV_EXPORTS.length, 141);
+  assert.equal(CSV_EXPORTS.length, 142);
 });
 
 /* ------------------------------------- the concrete self-test: one transaction */

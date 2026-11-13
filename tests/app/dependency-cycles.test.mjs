@@ -199,7 +199,7 @@ test('registration: schema v145 unchanged, panel #30, CSV scope #137, one safe r
   const scope = CSV_EXPORTS.find((entry) => entry.key === DEPENDENCY_CYCLE_CSV_SCOPE);
   assert.ok(scope, 'CSV #137 is registered');
   assert.equal(scope.sensitive, false);
-  assert.equal(CSV_EXPORTS.length, 141);
+  assert.equal(CSV_EXPORTS.length, 142);
   assert.ok(SAFE_READS.has('matrixDependencyCycleReport'));
   assert.equal(DEPENDENCY_CYCLE_RELATIONS.length, 5, 'five declared precedence relations');
   assert.equal(new Set(DEPENDENCY_CYCLE_RELATIONS.map((r) => r.relation)).size, 5);

@@ -704,7 +704,7 @@ test('finalisation freezes the prediction, opens a dated review, and a departure
 /* -------------------------------------------------------------- reporting */
 
 test('CSV scope #46 carries counts and ratios, never a name, identifier, group code or probability', () => {
-  assert.equal(CSV_EXPORTS.length, 141);
+  assert.equal(CSV_EXPORTS.length, 142);
   const scope = CSV_EXPORTS.find((row) => row.key === 'transition');
   assert.ok(scope);
   const state = buildDemoState(NOW);

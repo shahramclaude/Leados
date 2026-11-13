@@ -150,7 +150,7 @@ test('the 87th rule/contract, rights, safe reads, panel and CSV scope are regist
   assert.equal(API_RIGHTS.outcomeSetConventions, 'govern-outcome-learning');
   for (const name of ['outcomeRead', 'outcomeReceipt', 'outcomeBriefText', 'outcomeCsvRows']) assert.ok(SAFE_READS.has(name), name);
   assert.equal(ACTION_RIGHTS['govern-outcome-learning'].minRank, 4);
-  assert.equal(CSV_EXPORTS.length, 141);
+  assert.equal(CSV_EXPORTS.length, 142);
   assert.ok(CSV_EXPORTS.some((s) => s.key === 'outcome-learning'));
 });
 

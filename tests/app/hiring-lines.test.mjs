@@ -127,7 +127,7 @@ test('ADR-0176 registration: Schema v141, empty migration, spine parity, gateway
   assert.equal(RECORD_POLICIES.hiringLinePlans.detailCeiling, 0);
   assert.equal(RECORD_POLICIES.hiringLineMarkers.detailCeiling, 0);
   assert.ok(MATRIX_PANELS.some((p) => p.key === 'hiring'));
-  assert.equal(CSV_EXPORTS.length, 141);
+  assert.equal(CSV_EXPORTS.length, 142);
   assert.equal(CSV_EXPORTS[130].key, 'hiring-lines');
   assert.equal(lowerMedian([5, 1, 4, 2]), 2);
   assert.equal(lowerMedian([]), null);
