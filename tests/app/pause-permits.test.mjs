@@ -137,7 +137,7 @@ const GOOD_PERMIT = (key, over = {}) => ({
  */
 
 test('the register is registered end to end: schema v145, two collections, the spine, the gateway and CSV #136', () => {
-  assert.equal(SCHEMA_VERSION, 150);
+  assert.equal(SCHEMA_VERSION, 151);
   assert.equal(COLLECTIONS.includes('pausePermits'), true);
   assert.equal(COLLECTIONS.includes('pausePermitMarkers'), true);
 
@@ -158,7 +158,7 @@ test('the register is registered end to end: schema v145, two collections, the s
   assert.ok(SAFE_READS.has('pausePermitReport'));
   assert.equal(ACTION_RIGHTS['permit-automation-pause'].minRank, 4, 'director+ may silence a workspace-wide control');
 
-  assert.equal(CSV_EXPORTS.length, 143);
+  assert.equal(CSV_EXPORTS.length, 144);
   const scope = CSV_EXPORTS.find((e) => e.key === 'automation-pause-permits');
   assert.ok(scope, 'CSV #136 is registered');
   assert.equal(scope.sensitive, false);
@@ -526,8 +526,8 @@ test('migration 144 → 145 adds two empty collections and four conventions, and
     delegations: [],
   };
   const { raw: migrated, applied } = migrate(raw);
-  assert.deepEqual(applied, ['144 → 145', '145 → 146', '146 → 147', '147 → 148', '148 → 149', '149 → 150']);
-  assert.equal(migrated.schemaVersion, 150);
+  assert.deepEqual(applied, ['144 → 145', '145 → 146', '146 → 147', '147 → 148', '148 → 149', '149 → 150', '150 → 151']);
+  assert.equal(migrated.schemaVersion, 151);
   assert.deepEqual(migrated.pausePermits, []);
   assert.deepEqual(migrated.pausePermitMarkers, []);
   // A workspace already running with a control off keeps it off: the pause now
@@ -540,7 +540,7 @@ test('migration 144 → 145 adds two empty collections and four conventions, and
   assert.equal(migrated.settings.pausePermitDefaultDays, 365);
 
   const loaded = normalizeState(migrated, { now: NOW });
-  assert.equal(loaded.state.schemaVersion, 150);
+  assert.equal(loaded.state.schemaVersion, 151);
   assert.deepEqual(loaded.state.pausePermits, []);
   assert.equal(loaded.state.settings.loadAutoPropagate, false);
 });

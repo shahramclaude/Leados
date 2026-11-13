@@ -233,6 +233,10 @@ export const MATRIX_PANELS = Object.freeze([
   // does any coordination channel connect their holders, and does every channel
   // still have work behind it?
   Object.freeze({ key: 'alignment', label: 'Interface alignment', hint: 'Which declared work dependencies cross spans with no live coordination channel between their holders — and which agreed channels have no work and no shared person behind them (ADR-0189).' }),
+  // ADR-0191 (Session 259): the cross-line priority ballot — the same person's
+  // frozen work set, ranked by each line that shares them, aggregated by a
+  // declared social-choice rule instead of a score.
+  Object.freeze({ key: 'priority', label: 'Priority ballots', hint: 'What each line that shares one person puts first, the exact Condorcet winner or the majority cycle between them, and the beatpath completion when the lines genuinely disagree (ADR-0191).' }),
 ]);
 
 export const MATRIX_PANEL_KEYS = Object.freeze(MATRIX_PANELS.map((p) => p.key));

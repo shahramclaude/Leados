@@ -453,7 +453,7 @@ test('stewardshipFusion counts primary stewards and missing verified backups', (
 /* ========================================== 5. settings & schema parity */
 
 test('network settings are additive on Schema v30 and validated/normalised', () => {
-  assert.equal(SCHEMA_VERSION, 150, 'v66 adds the evidence-synthesis collections; v76 adds the counterfactual policy collections; v78 adds the coupling ledger; v79 adds the evidence supply chain; v80 adds the promise solvency ledgers; v81 adds the cross-examination ledgers; v82 adds the command-chain readings and markers; v85 adds authority-calibration markers; v86 adds mission briefs; earlier additive migrations are unchanged');
+  assert.equal(SCHEMA_VERSION, 151, 'v66 adds the evidence-synthesis collections; v76 adds the counterfactual policy collections; v78 adds the coupling ledger; v79 adds the evidence supply chain; v80 adds the promise solvency ledgers; v81 adds the cross-examination ledgers; v82 adds the command-chain readings and markers; v85 adds authority-calibration markers; v86 adds mission briefs; earlier additive migrations are unchanged');
   assert.equal(DEFAULT_SETTINGS.networkTiePct, 50);
   assert.equal(DEFAULT_SETTINGS.networkAutoPropagate, true);
 
@@ -493,7 +493,7 @@ test('analyzing a demo state never mutates it (pure read-side engine)', () => {
 /* ============================================== 6. CSV scope #31 */
 
 test('CSV scope #31 is data-minimised: counts/scores only, one row per person', () => {
-  assert.equal(CSV_EXPORTS.length, 143);
+  assert.equal(CSV_EXPORTS.length, 144);
   const descriptor = CSV_EXPORTS.find((s) => s.key === 'networkTopology');
   assert.ok(descriptor);
   assert.equal(descriptor.sensitive, false);

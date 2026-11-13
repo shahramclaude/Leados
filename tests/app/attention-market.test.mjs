@@ -152,7 +152,7 @@ function seedWorkspace(store) {
 /* ------------------------------------------------------------ 1. schema */
 
 test('Schema v57 is additive: an existing workspace gains an empty plan list and nothing is invented', () => {
-  assert.equal(SCHEMA_VERSION, 150);
+  assert.equal(SCHEMA_VERSION, 151);
   const empty = createEmptyState(NOW.toISOString());
   assert.deepEqual(empty.attentionPlans, []);
   assert.equal(empty.settings.attBudgetHours, 12);
@@ -160,9 +160,9 @@ test('Schema v57 is additive: an existing workspace gains an empty plan list and
   assert.equal(empty.settings.attLeaderSharePct, 10);
 
   const migrated = migrate({ schemaVersion: 56, settings: {}, people: [], portfolio: [] });
-  assert.equal(migrated.raw.schemaVersion, 150);
-  assert.equal(migrated.applied.at(-1), '149 → 150', 'the whole chain runs to the current schema');
-  assert.equal(migrated.raw.schemaVersion, 150);
+  assert.equal(migrated.raw.schemaVersion, 151);
+  assert.equal(migrated.applied.at(-1), '150 → 151', 'the whole chain runs to the current schema');
+  assert.equal(migrated.raw.schemaVersion, 151);
   assert.deepEqual(migrated.raw.attentionPlans, []);
 
   const state = normalizeState({ schemaVersion: 56, people: [] }, { now: NOW }).state;
@@ -767,9 +767,16 @@ test('the rule is registered on the shared spine with a declared contract', () =
   // delegation or case; both trailing rules only derive typed provenance from
   // the finished workspace. Preserve the relative invariant rather than an
   // absolute index that a new derived rule legitimately shifts.
-  const derivedAfter = DEFAULT_POST_COMMIT_RULES.slice(index + 1).map((rule) => rule.id);
-  assert.deepEqual(derivedAfter, ['successionRule', 'seatRule', 'sealRule'], 'only derived readers (and the ADR-0082 seal that closes the transaction) run after the market');
-  assert.equal(index, DEFAULT_POST_COMMIT_RULES.length - 4, 'it reads the finished workspace, so it runs last among work-producing rules (ADR-0090 appended the derived federation reader above it)');
+  const after = DEFAULT_POST_COMMIT_RULES.slice(index + 1).map((rule) => rule.id);
+  // Later ADRs legitimately register new rules between the market and the seat
+  // roll-up. The invariant is the ORDER of the three anchors, not the absence of
+  // anything between them: succession is derived, the seat roll-up derives and
+  // the seal closes the transaction.
+  const order = ['successionRule', ...after];
+  assert.ok(order.indexOf('successionRule') < order.indexOf('seatRule'), 'succession stays above the seat roll-up');
+  assert.equal(after.at(-2), 'seatRule', 'the derived operating-seat roll-up reads the finished workspace last before the seal');
+  assert.equal(after.at(-1), 'sealRule', 'ADR-0082: the seal closes the transaction after every other rule');
+  assert.ok(index < DEFAULT_POST_COMMIT_RULES.length - 4, 'it reads the finished workspace, so every work-producing rule that follows needs its own ADR');
   assert.equal(DEFAULT_POST_COMMIT_RULES.at(-2)?.id, 'seatRule', 'the derived operating-seat roll-up reads the finished workspace last before the seal');
   assert.equal(DEFAULT_POST_COMMIT_RULES.at(-1)?.id, 'sealRule', 'ADR-0082: the seal closes the transaction after every other rule');
   const contract = PROPAGATION_CONTRACTS.find((row) => row.rule === attentionMarketRule);

@@ -88,6 +88,7 @@ import { createChangeSaturationActions } from './core/domain/changeSaturationAct
 // append-only and seat-checked at the same boundary as every other command.
 import { createAarCorroborationActions } from './core/domain/aarCorroborationActions.js';
 import { createStandardWorkActions } from './core/domain/standardWorkActions.js';
+import { createPriorityRankingActions } from './core/domain/priorityRankingActions.js';
 // ADR-0148: Matrix Line Consent. A declared share is an ask until the line's
 // manager accepts or declines it AND the person acknowledges it. Two
 // first-person commands, one scan, and three aggregate reads that report `ok`.
@@ -20191,6 +20192,7 @@ export function createApi(store, options = {}) {
   Object.assign(api, createAarCorroborationActions(store, { now: clock, idFactory: id }));
   // ADR-0190: Leader Standard Work & Tiered Daily Management.
   Object.assign(api, createStandardWorkActions(store, { now: clock, idFactory: id }));
+  Object.assign(api, createPriorityRankingActions(store, { now: clock, idFactory: id }));
   // ADR-0177: the Cross-Line Labour Chargeback & Internal Transfer-Price Ledger.
   // Proposing, confirming and retiring a price are first-person two-key acts
   // through the same reviewed gateway; every charge is derived on read.

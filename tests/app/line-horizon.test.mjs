@@ -153,13 +153,13 @@ const ruleMarkers = (draft) => draft.matrixMarkers.filter((m) => m.ruleId === LI
 test('the horizon is wired end to end: panel, actions, gateway, CSV #134, rule and contract', () => {
   // ADR-0179 itself added no schema move (it shipped on v143). The pin tracks
   // the live version: ADR-0181 moved it to v144 for the work-turn ledger.
-  assert.equal(SCHEMA_VERSION, 150, 'the live schema version (ADR-0179 added no move of its own)');
+  assert.equal(SCHEMA_VERSION, 151, 'the live schema version (ADR-0179 added no move of its own)');
   assert.ok(MATRIX_PANELS.some((panel) => panel.key === 'horizon'), 'the #/matrix?panel=horizon tab exists');
   assert.ok(MATRIX_PANELS.some((panel) => panel.key === 'chargeback'), 'the previous panel is untouched');
 
   const scope = CSV_EXPORTS.find((item) => item.key === LINE_HORIZON_CSV_DESCRIPTOR.key);
   assert.equal(scope, LINE_HORIZON_CSV_DESCRIPTOR, 'CSV scope line-horizon is registered');
-  assert.equal(CSV_EXPORTS.length, 143, 'the register holds every scope through #139 (the pin states the total so it cannot drift silently)');
+  assert.equal(CSV_EXPORTS.length, 144, 'the register holds every scope through #139 (the pin states the total so it cannot drift silently)');
   // Scopes are only ever appended: #134 keeps its index when #135 (ADR-0181) lands after it.
   assert.equal(CSV_EXPORTS[133], LINE_HORIZON_CSV_DESCRIPTOR, 'appended at index 133, and a later scope does not move it');
 

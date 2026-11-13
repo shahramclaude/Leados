@@ -159,6 +159,8 @@ import { buildInterfaceAlignment, interfaceAlignmentCsvRows } from './domain/int
 import { INTERFACE_ALIGNMENT_CSV_COLUMNS, INTERFACE_ALIGNMENT_CSV_DESCRIPTOR } from './domain/interfaceAlignmentRegistry.js';
 import { buildStandardWork, standardWorkCsvRows } from './domain/standardWork.js';
 import { STANDARD_WORK_CSV_COLUMNS, STANDARD_WORK_CSV_DESCRIPTOR } from './domain/standardWorkRegistry.js';
+import { buildPriorityRanking, priorityBallotCsvRows } from './domain/priorityRanking.js';
+import { PRIORITY_BALLOT_CSV_COLUMNS, PRIORITY_BALLOT_CSV_DESCRIPTOR } from './domain/priorityRankingRegistry.js';
 // ADR-0161: Matrix Span Fragmentation & Counterpart-Dyad Coordination Ledger
 // (CSV scope #121). Aggregate topology only — never a person, manager, line,
 // seat or free-text agreement. An incomplete matrix span withholds workspace
@@ -1380,6 +1382,9 @@ export const CSV_EXPORTS = [
   INTERFACE_ALIGNMENT_CSV_DESCRIPTOR,
   // #143 (ADR-0190): leader standard work — aggregate, no identities.
   STANDARD_WORK_CSV_DESCRIPTOR,
+  // #144 (ADR-0191): cross-line priority ballots — aggregate, no identities.
+  // A withheld coverage rate exports BLANK with its reason, never zero.
+  PRIORITY_BALLOT_CSV_DESCRIPTOR,
 ];
 
 function personLookup(state) {
@@ -6486,6 +6491,18 @@ export function buildScopeTable(state, scope, now) {
       return {
         columns: AAR_CORROBORATION_CSV_COLUMNS.map((key) => ({ key, header: key })),
         rows: aarCorroborationCsvRows(report),
+      };
+    }
+    case 'matrix-priority-ballots': {
+      // CSV scope #144 (ADR-0191, Schema v151). Built from the SAME reader the
+      // panel renders, so an exported count is provably the count that was
+      // printed. Aggregate only: no person, manager, line, round title, work
+      // item title, note or record id. A withheld coverage rate is BLANK with
+      // its reason — never zero.
+      const report = buildPriorityRanking(state, { now, settings: state.settings || {} });
+      return {
+        columns: PRIORITY_BALLOT_CSV_COLUMNS.map((key) => ({ key, header: key })),
+        rows: priorityBallotCsvRows(report),
       };
     }
     case 'standard-work': {

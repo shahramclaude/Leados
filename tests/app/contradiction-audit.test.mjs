@@ -357,7 +357,7 @@ test('a single-chain workspace is inert: no findings, no decisions, no edges, an
 /* --------------------------------------------------------- 4. schema / migration */
 
 test('schema v121 is additive and clamps the conventions without inventing a charter', () => {
-  assert.equal(SCHEMA_VERSION, 150);
+  assert.equal(SCHEMA_VERSION, 151);
   const { raw, applied } = migrate({
     schemaVersion: 120,
     appId: 'leados',
@@ -366,7 +366,7 @@ test('schema v121 is additive and clamps the conventions without inventing a cha
     people: orgRoster(),
     reportingLines: baseLines(),
   });
-  assert.deepEqual(applied, ['120 → 121', '121 → 122', '122 → 123', '123 → 124', '124 → 125', '125 → 126', '126 → 127', '127 → 128', '128 → 129', '129 → 130', '130 → 131', '131 → 132', '132 → 133', '133 → 134', '134 → 135', '135 → 136', '136 → 137', '137 → 138', '138 → 139', '139 → 140', '140 → 141', '141 → 142', '142 → 143', '143 → 144', '144 → 145', '145 → 146', '146 → 147', '147 → 148', '148 → 149', '149 → 150']);
+  assert.deepEqual(applied, ['120 → 121', '121 → 122', '122 → 123', '123 → 124', '124 → 125', '125 → 126', '126 → 127', '127 → 128', '128 → 129', '129 → 130', '130 → 131', '131 → 132', '132 → 133', '133 → 134', '134 → 135', '135 → 136', '136 → 137', '137 → 138', '138 → 139', '139 → 140', '140 → 141', '141 → 142', '142 → 143', '143 → 144', '144 → 145', '145 → 146', '146 → 147', '147 → 148', '148 → 149', '149 → 150', '150 → 151']);
   assert.deepEqual(raw.lineMandates, []);
   assert.deepEqual(raw.contradictionReviews, []);
   assert.deepEqual(raw.contradictionMarkers, []);

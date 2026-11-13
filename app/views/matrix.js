@@ -103,6 +103,7 @@ import { renderMatrixChangeSaturationPanel } from './matrixChangeSaturationPanel
 // Eppinger & Rowles) — unattended technical interfaces and idle coordination
 // channels, read from the typed-link spine against the recorded channels.
 import { renderMatrixInterfaceAlignmentPanel } from './matrixInterfaceAlignmentPanel.js';
+import { renderMatrixPriorityPanel } from './matrixPriorityPanel.js';
 
 const PANELS = MATRIX_PANELS;
 
@@ -913,6 +914,7 @@ export function renderMatrix(ctx) {
     panel === 'stock-flow' ? renderMatrixWorkforceFlowPanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
     panel === 'change-saturation' ? renderMatrixChangeSaturationPanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
     panel === 'alignment' ? renderMatrixInterfaceAlignmentPanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
+    panel === 'priority' ? renderMatrixPriorityPanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
     panel === 'chargeback' ? renderMatrixChargebackPanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
     panel === 'continuity' ? renderContinuityPanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
     panel === 'seats' ? seatsPanel(ctx, report) : null,

@@ -203,6 +203,9 @@ export const PAUSE_PERMIT_MATRIX_REACH_SWITCHES = Object.freeze([
   'interfaceAlignmentAutoPropagate',
   // ADR-0190: the standard-work automation switch — a printed, authorisable pause.
   'standardWorkAutoPropagate',
+  // ADR-0191: the priority-ballot automation switch. The rule reads the
+  // reporting graph for every joint apex, so silencing it reaches a second line.
+  'priorityBallotAutoPropagate',
 ]);
 
 export function pausePermitReachesMatrix(key) {
@@ -237,6 +240,7 @@ export const PAUSE_PERMIT_REACH_RULES = Object.freeze({
   aarCorroborationAutoPropagate: 'aarCorroborationRules.js',
   interfaceAlignmentAutoPropagate: 'interfaceAlignmentRules.js',
   standardWorkAutoPropagate: 'standardWorkRules.js',
+  priorityBallotAutoPropagate: 'priorityRankingRules.js',
 });
 
 /** How much of the register a seat is shown. Mirrors the altitude disclosure ladder. */

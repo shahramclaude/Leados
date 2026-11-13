@@ -190,7 +190,7 @@ const currencyRow = (report, code) => report.currencies.find((row) => row.curren
 /* ---------------------------------------------------------- vocabulary */
 
 test('the floors, bands and methods are declared once and the reads are safe under a seat', () => {
-  assert.equal(SCHEMA_VERSION, 150, 'no schema bump: the roll-up stores nothing');
+  assert.equal(SCHEMA_VERSION, 151, 'no schema bump: the roll-up stores nothing');
   assert.equal(BUDGET_EXPOSURE_FLOORS.portfolioRank, RECORD_CLASSES.portfolio.minRank, 'the floor is the portfolio floor, not a private one');
   assert.equal(BUDGET_EXPOSURE_FLOORS.detailRank, RECORD_CLASSES.portfolio.detailCeiling, 'the ceiling is the declared detail ceiling');
   assert.deepEqual(Object.values(BUDGET_EXPOSURE_BANDS).sort(), ['over-ceiling', 'pipeline-breach', 'tracking-only', 'watch-zone', 'within-ceiling']);
