@@ -165,12 +165,12 @@ function withDom(run) {
 /* ---------------------------------------------------------------- 1. wiring */
 
 test('registration: schema v147, the 32nd matrix panel, CSV scope #138, RULE-WFS-01, one safe read', () => {
-  assert.equal(SCHEMA_VERSION, 147);
+  assert.equal(SCHEMA_VERSION, 148);
   assert.ok(MATRIX_PANELS.some((panel) => panel.key === 'stock-flow'), 'the stock-flow panel is on the matrix tab bar');
   const scope = CSV_EXPORTS.find((entry) => entry.key === WORKFORCE_FLOW_CSV_SCOPE);
   assert.ok(scope, 'CSV #138 is registered');
   assert.equal(scope.sensitive, false);
-  assert.equal(CSV_EXPORTS.length, 139);
+  assert.equal(CSV_EXPORTS.length, 140);
   assert.ok(SAFE_READS.has('workforceFlowReport'));
   const contract = PROPAGATION_CONTRACTS.find((c) => c.rule?.id === 'workforceFlowRule');
   assert.ok(contract, 'RULE-WFS-01 declares its propagation contract');
@@ -562,7 +562,11 @@ test('a seat that reads counts only is given counts only, with the reason printe
 test('CSV #138 is identity-free, carries every declared column and matches the panel row for row', () => {
   const state = fixture();
   const board = read(state);
-  const csv = exportWorkspaceCsv(state, WORKFORCE_FLOW_CSV_SCOPE, NOW);
+  // The third argument is an options object, not a date: passing `NOW` here
+  // positionally let the export read the real wall clock while `board` was read
+  // at the fixture date, so a trailing-12-month exposure window shifted by a day
+  // and this test compared two different windows (17.41 against 17.38).
+  const csv = exportWorkspaceCsv(state, WORKFORCE_FLOW_CSV_SCOPE, { now: NOW });
   const parsed = parseCsv(csv.csv || csv);
   assert.deepEqual(parsed.headers, [...WORKFORCE_FLOW_CSV_COLUMNS], 'exact column parity with the registry');
   const rows = workforceFlowCsvRows(board);

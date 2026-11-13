@@ -285,8 +285,20 @@ test('standalone artifact exists and is a single inline HTML document', () => {
   // change-impact review modules. Together the current build is 11,682,585 bytes
   // / 778 source modules = 15,016 bytes per module, still far below the unchanged
   // 24,000 density guard. The absolute ceiling moves only for real capability.
-  assert.ok(bytes < 11_750_000, `standalone file is unexpectedly large (${bytes} bytes)`);
-  for (const asset of ['app/assets/work-turn-evidence.jpg', 'app/assets/dependency-cycle-dsm.jpg']) {
+  // ADR-0186 adds five change-saturation modules, their wiring, and one
+  // 68,418-byte generated diagram. It also derives the inlined-diagram list
+  // from `app/assets` instead of a hardcoded pair, so `workforce-stock-flow.jpg`
+  // — referenced by a panel since ADR-0184 but never inlined, a broken image in
+  // every offline file since — is now embedded too. Measured build:
+  // 11,899,034 bytes / 784 source modules = 15,177 bytes per module, still far
+  // below the unchanged 24,000 density guard.
+  assert.ok(bytes < 12_000_000, `standalone file is unexpectedly large (${bytes} bytes)`);
+  // Derived from the folder, not from a list in this file: the day a panel adds
+  // a diagram, an enumerator that names the old two would still pass. Same
+  // lesson the build script learned in ADR-0186.
+  const assets = fs.readdirSync(path.join(ROOT, 'app/assets')).filter((name) => name.endsWith('.jpg')).sort();
+  assert.ok(assets.length >= 4, `expected the generated diagrams to be present, saw ${assets.join(', ')}`);
+  for (const asset of assets.map((name) => `app/assets/${name}`)) {
     const diagram = fs.readFileSync(path.join(ROOT, asset));
     assert.ok(html.includes(`data:image/jpeg;base64,${diagram.toString('base64')}`), `the offline artifact embeds the exact bytes of ${asset}`);
     assert.doesNotMatch(html, new RegExp(`\\./${asset.replaceAll('/', '\\/').replaceAll('.', '\\.')}`), `${asset} must not depend on the app folder offline`);

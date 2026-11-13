@@ -136,7 +136,7 @@ function withDom(fn) {
 }
 
 test('ADR-0177 registration: Schema v142, empty migration, spine parity, gateway, seat policy, panel, CSV #132, exact-integer helpers', () => {
-  assert.equal(SCHEMA_VERSION, 147);
+  assert.equal(SCHEMA_VERSION, 148);
   const empty = createEmptyState(ISO);
   assert.deepEqual(empty.transferPriceActs, []);
   assert.deepEqual(empty.transferPriceMarkers, []);
@@ -144,7 +144,7 @@ test('ADR-0177 registration: Schema v142, empty migration, spine parity, gateway
   assert.equal(empty.settings.transferPriceAutoPropagate, true);
 
   const { raw, applied } = migrate({ schemaVersion: 141, appId: 'leados', meta: {}, settings: {}, reportingLines: [{ id: 'l1', personId: 'a', managerId: 'b' }] });
-  assert.deepEqual(applied, ['141 → 142', '142 → 143', '143 → 144', '144 → 145', '145 → 146', '146 → 147']);
+  assert.deepEqual(applied, ['141 → 142', '142 → 143', '143 → 144', '144 → 145', '145 → 146', '146 → 147', '147 → 148']);
   assert.deepEqual(raw.transferPriceActs, [], 'no price is fabricated on upgrade');
   assert.deepEqual(raw.transferPriceMarkers, []);
 
@@ -163,7 +163,7 @@ test('ADR-0177 registration: Schema v142, empty migration, spine parity, gateway
   assert.equal(RECORD_POLICIES.transferPriceActs.detailCeiling, 0);
   assert.equal(RECORD_POLICIES.transferPriceMarkers.detailCeiling, 0);
   assert.ok(MATRIX_PANELS.some((p) => p.key === 'chargeback'));
-  assert.equal(CSV_EXPORTS.length, 139);
+  assert.equal(CSV_EXPORTS.length, 140);
   assert.equal(CSV_EXPORTS[131].key, 'line-chargeback');
 
   // Exact integers only: nothing rounds, and a refused figure never prints as 0.00.

@@ -579,6 +579,14 @@ export const ACTION_RIGHTS = Object.freeze({
   // ADR-0184: recording a dated workforce move is a manager deed at every
   // leadership rank — the action narrows it to a person the seat reaches. The
   // intended SHAPE of the workforce is a whole-workspace plan and is director+.
+  // ADR-0186: declaring what one's own line is putting on a person, and bounding
+  // the capacity one's own people or pool will absorb, are ordinary manager deeds
+  // at every leadership rank — the action narrows each to the line holder and to
+  // the pool's own manager. The workspace-wide dials (a scan that issues asks, and
+  // the conventions every seat reads against) are additionally gated to rank 3+
+  // inside the action, because they move the ground under other people's readings.
+  'declare-change-demand': { minRank: 1, maxRank: 5, label: 'Declare what one of your line’s changes puts on a person you reach' },
+  'govern-change-saturation': { minRank: 1, maxRank: 5, label: 'Declare or retire the change-capacity ceiling for a person you reach or a pool you run' },
   'record-workforce-move': { minRank: 1, maxRank: 5, label: 'Record a dated workforce move for a person you reach' },
   'govern-workforce-plan': { minRank: 3, maxRank: 5, label: 'Declare the workforce’s intended shape, scan the plan and set its conventions' },
   // ADR-0177: signing one's OWN side of a transfer price is open at every

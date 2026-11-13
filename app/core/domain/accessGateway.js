@@ -7,6 +7,7 @@ import { activeSeat, buildSeats, canAct, canSee, recordPeople } from './seat.js'
 import { responsibleNodeId } from './chain.js';
 import { matrixLineScopeFor } from './matrix.js';
 import { PAUSE_PERMIT_RIGHTS } from './pausePermitRegistry.js';
+import { CHANGE_SATURATION_RIGHTS } from './changeSaturationRegistry.js';
 import { routeVerdict } from './seatRegistry.js';
 import { validateMissionCommands } from './mission.js';
 import { captureBriefCase } from './missionCaptureBrief.js';
@@ -30,6 +31,14 @@ const groups = [
   ['read-change-impact-review', 'changeImpactReviewBoard changeImpactReviewCandidates changeImpactReviewBriefText changeImpactReviewCsvRows changeImpactReviewAttentionCount'],
   ['request-change-impact-review', 'changeImpactReviewRequest'],
   ['respond-change-impact-review', 'changeImpactReviewRespond'],
+  // ADR-0186: the Cross-Line Change Saturation Ledger. Declaring what a change
+  // puts on a person is the act of the manager whose line put it there (the action
+  // additionally enforces that the seat HOLDS the named line), and bounding the
+  // capacity a person or a pool will absorb is a separate right because it is a
+  // separate human's sentence. Neither can perform the other, and the aggregate
+  // read plus the scan are declared so an operator can always retry a deferred ask.
+  [CHANGE_SATURATION_RIGHTS.DECLARE, 'changeSaturationDeclareDemand changeSaturationWithdrawDemand'],
+  [CHANGE_SATURATION_RIGHTS.GOVERN, 'changeSaturationDeclareCeiling changeSaturationRetireCeiling changeSaturationScan changeSaturationSetConventions'],
   // ADR-0150: Matrix Onboarding Completeness. Writing a line's onboarding brief is
   // the act of the manager who holds that line (the action narrows it to them), and
   // acknowledging one is the PERSON's own act (the action narrows that too). They
@@ -509,7 +518,12 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // person population bounds the acts read, and the altitude disclosure ladder
 // decides whether level rows, rates and the projection are returned or counts
 // only. A withheld row is a printed reason, never a zero.
-'workforceFlowReport']);
+'workforceFlowReport',
+// ADR-0186: the saturation board is scoped INSIDE the read model — people outside
+// the seat are counted, never listed, and the altitude disclosure ladder decides
+// whether names, pools and clearances come back or counts only. A withheld figure
+// is a printed reason, never a zero.
+'changeSaturationReport', 'changeSaturationBands']);
 const refusal = (reason) => ({ ok: false, code: 'scope-refusal', error: reason, field: 'scope' });
 
 /** ADR-0087: under enforcement, boundary-management commands stay reachable
@@ -567,6 +581,9 @@ const MATRIX_LINE_SCOPED = new Set([
   // seat only through a declared Matrix line; the action re-checks both tree
   // and line scope before it records anything.
   'changeImpactReviewRequest',
+  // ADR-0186: declaring a demand names a person the declaring seat may reach only
+  // through a declared Matrix line; the action re-checks the line holder itself.
+  'changeSaturationDeclareDemand',
 ]);
 
 /** Exact method allowlist + rank + record/person scope. No arbitrary API names. */

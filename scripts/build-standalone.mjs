@@ -36,17 +36,22 @@ const outIndex = args.indexOf('--out');
 const outArg = outIndex !== -1 ? args[outIndex + 1] : 'LeadOS-standalone.html';
 const OUT = path.isAbsolute(outArg) ? outArg : path.resolve(ROOT, outArg);
 const MINIFY = !args.includes('--no-minify');
-const WORK_TURN_DIAGRAM = 'app/assets/work-turn-evidence.jpg';
-const WORK_TURN_DIAGRAM_URL = `./${WORK_TURN_DIAGRAM}`;
-// ADR-0183 (Session 251): the DSM partitioning diagram is a real generated
-// asset, not a placeholder. Inline the exact bytes into the offline file too,
-// or the portable copy would ship a broken image.
-const DEPENDENCY_CYCLE_DIAGRAM = 'app/assets/dependency-cycle-dsm.jpg';
-const DEPENDENCY_CYCLE_DIAGRAM_URL = `./${DEPENDENCY_CYCLE_DIAGRAM}`;
-const DIAGRAMS = Object.freeze([
-  Object.freeze({ file: WORK_TURN_DIAGRAM, url: WORK_TURN_DIAGRAM_URL }),
-  Object.freeze({ file: DEPENDENCY_CYCLE_DIAGRAM, url: DEPENDENCY_CYCLE_DIAGRAM_URL }),
-]);
+// ADR-0183 (Session 251): the generated diagrams are real assets, not
+// placeholders. Inline the exact bytes into the offline file too, or the
+// portable copy ships a broken image.
+// ADR-0186: the list used to be hardcoded pair by pair, and had quietly fallen
+// behind — a panel added a third diagram, nothing inlined it, and no test could
+// see the gap because the test read the same two names. Derive the list from the
+// folder instead, so every diagram on disk must be referenced and inlined or the
+// build fails. `app/assets` is the contract; a view cannot forget the build.
+const ASSET_DIR = 'app/assets';
+const DIAGRAMS = Object.freeze(
+  fs.readdirSync(path.join(ROOT, ASSET_DIR))
+    .filter((name) => name.endsWith('.jpg'))
+    .sort()
+    .map((name) => Object.freeze({ file: `${ASSET_DIR}/${name}`, url: `./${ASSET_DIR}/${name}` })),
+);
+if (DIAGRAMS.length === 0) throw new Error(`No generated diagrams found in ${ASSET_DIR}.`);
 
 if (!OUT.toLowerCase().endsWith('.html')) {
   throw new Error('The standalone output must be an .html file.');

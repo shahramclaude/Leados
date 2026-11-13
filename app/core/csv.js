@@ -146,6 +146,10 @@ import { WORKFORCE_FLOW_CSV_COLUMNS, WORKFORCE_FLOW_CSV_DESCRIPTOR } from './dom
 // ADR-0185 (Schema v147): identity-free, aggregate-only Matrix line-review coverage.
 import { buildChangeImpactReviewReport, changeImpactCsvRows } from './domain/changeImpact.js';
 import { CHANGE_IMPACT_CSV_COLUMNS, CHANGE_IMPACT_CSV_DESCRIPTOR } from './domain/changeImpactRegistry.js';
+// ADR-0186 (Schema v148): identity-free, aggregate-only cross-line change
+// saturation — one workspace row plus one row per verdict state.
+import { buildChangeSaturation, changeSaturationCsvRows } from './domain/changeSaturation.js';
+import { CHANGE_SATURATION_CSV_COLUMNS, CHANGE_SATURATION_CSV_DESCRIPTOR } from './domain/changeSaturationRegistry.js';
 // ADR-0161: Matrix Span Fragmentation & Counterpart-Dyad Coordination Ledger
 // (CSV scope #121). Aggregate topology only — never a person, manager, line,
 // seat or free-text agreement. An incomplete matrix span withholds workspace
@@ -1354,6 +1358,11 @@ export const CSV_EXPORTS = [
   // one identity-free workspace row; coverage is withheld when incomplete or
   // below the declared reporting floor.
   CHANGE_IMPACT_CSV_DESCRIPTOR,
+  // #140 (Schema v148, ADR-0186): cross-line change saturation, one identity-free
+  // workspace row plus one row per verdict state. No person, manager, change
+  // title, line, record id or prose; a withheld verdict prints its own count and
+  // the percentage is withheld below the declared floor or on an unreconciled read.
+  CHANGE_SATURATION_CSV_DESCRIPTOR,
 ];
 
 function personLookup(state) {
@@ -6445,6 +6454,17 @@ export function buildScopeTable(state, scope, now) {
       return {
         columns: CHANGE_IMPACT_CSV_COLUMNS.map((key) => ({ key, header: key })),
         rows: changeImpactCsvRows(report),
+      };
+    }
+    case 'matrix-change-saturation': {
+      // CSV scope #140 (ADR-0186, Schema v148). Built from the SAME reader the
+      // panel renders, so an exported count is provably the count that was
+      // printed. Aggregate only: no person, manager, change, line, record id or
+      // free text. A withheld percentage says which floor it failed.
+      const report = buildChangeSaturation(state, { now, settings: state.settings || {} });
+      return {
+        columns: CHANGE_SATURATION_CSV_COLUMNS.map((key) => ({ key, header: key })),
+        rows: changeSaturationCsvRows(report),
       };
     }
     case 'matrix-workforce-stock-flow': {

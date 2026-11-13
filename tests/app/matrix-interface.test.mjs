@@ -140,7 +140,7 @@ function seedThreePairMatrix(draft) {
 /* ----------------------------------------------------- 1. Schema & Spine */
 
 test('schema v131 registers additive collections, clamped settings, gateway rights, CSV #122 and spine contract', () => {
-  assert.equal(SCHEMA_VERSION, 147);
+  assert.equal(SCHEMA_VERSION, 148);
   assert.ok(MATRIX_PANELS.some((p) => p.key === 'interfaces'));
   assert.ok(ACTION_RIGHTS['affirm-matrix-interface']);
   assert.ok(ACTION_RIGHTS['govern-matrix-interface']);
@@ -164,8 +164,8 @@ test('schema v131 registers additive collections, clamped settings, gateway righ
   // Migration 130 -> 131 stays strictly empty (never fabricates agreements)
   const v130 = { schemaVersion: 130, people: [], settings: { matrixInterfaceDefaultTermDays: 999, matrixInterfaceDueWarnDays: -5 } };
   const { raw, applied } = migrate(v130);
-  assert.deepEqual(applied, ['130 → 131', '131 → 132', '132 → 133', '133 → 134', '134 → 135', '135 → 136', '136 → 137', '137 → 138', '138 → 139', '139 → 140', '140 → 141', '141 → 142', '142 → 143', '143 → 144', '144 → 145', '145 → 146', '146 → 147']);
-  assert.equal(raw.schemaVersion, 147);
+  assert.deepEqual(applied, ['130 → 131', '131 → 132', '132 → 133', '133 → 134', '134 → 135', '135 → 136', '136 → 137', '137 → 138', '138 → 139', '139 → 140', '140 → 141', '141 → 142', '142 → 143', '143 → 144', '144 → 145', '145 → 146', '146 → 147', '147 → 148']);
+  assert.equal(raw.schemaVersion, 148);
   assert.deepEqual(raw.matrixInterfaceAgreements, []);
   assert.deepEqual(raw.matrixInterfaceMarkers, []);
   assert.equal(raw.settings.matrixInterfaceDefaultTermDays, 365);

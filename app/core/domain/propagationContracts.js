@@ -127,6 +127,7 @@ import { lineHorizonRule } from './lineHorizonRules.js';
 import { workTurnRule } from './workTurnRules.js';
 import { pausePermitRule } from './pausePermitRules.js';
 import { workforceFlowRule } from './workforceFlowRules.js';
+import { changeSaturationRule } from './changeSaturationRules.js';
 import { sealRule } from './sealRules.js';
 // ADR-0092: the Differencing Defender declares its contract like every other rule.
 import { differencingRule } from './differencingRules.js';
@@ -989,6 +990,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'workforceFlowRules.js',
     purpose: 'RULE-WFS-01: reads the Workforce Stock-Flow (Markov manpower) Plan (`buildWorkforceFlow`, ADR-0184) with the whole-workspace operator view on recorded moves, withdrawn moves, declared or retired intended shapes, convention changes, explicit `workforce.flow.scan` scans and every roster or departure act. It raises at most ONE open dated ask per finding, bounded at 4 per commit with the remainder counted: (a) `history-missing` — a roster at or above the declared minimum with NO move ever recorded, so every projection is refused for want of a history the record never held; (b) `target-missing` — a projection that is printable while no intended shape has been declared, so the comparison claim is refused rather than made against the projection itself; (c) `exposure-thin` — a level whose moves exist but whose exposure sits below the declared floor, so its headcount is carried forward unchanged and the row says so. Asks name the single seat above every reporting line (the joint apex), carry matrix-DAG `rolls-up-to` provenance and `issues-obligation` to the owner, are idempotent per finding signature, and close themselves when the finding clears. A leader-held, off-roster or tied apex is observed once and nobody is substituted. It never writes a move, a target or a rate, never fills a thin cell with a borrowed rate, asks about the RECORD and the declared SHAPE rather than any person, and is inert with nobody on the roster; pausable via `workforceFlowAutoPropagate`.',
     writes: ['delegations', 'links', 'workforceFlowMarkers'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: changeSaturationRule,
+    module: 'changeSaturationRules.js',
+    purpose: 'RULE-CSA-01: reads the Cross-Line Change Saturation & Absorptive-Capacity Ledger (`buildChangeSaturation`, ADR-0186) with the whole-workspace operator view on declared demands, withdrawals, declared or retired ceilings, convention changes, explicit `change.saturation.scan` scans, change-record writes and every reporting-line or roster act. It raises at most ONE open dated ask per finding, bounded at 4 per commit with the remainder counted: (a) `saturation-over` — people carrying more concurrent change weight on at least one day than their own declared ceiling allows, or lines whose declarations of one impact disagree; (b) `ceilings-missing` — demands are charged against people and no capacity ceiling is in force for anybody, so the register cannot make a saturation claim in principle; (c) `demand-unattributable` — a stored demand whose declaring line is no longer an active line of that person, so the burden is in the ledger and no pool owns it; (d) `ceilings-expired` — a ceiling window has passed while demands are still being charged, and an expired limit is not a limit that was met. Asks name the single seat above every reporting line of the affected people (the joint apex), carry matrix-DAG `rolls-up-to` provenance and `issues-obligation` to the owner, are idempotent per finding, and close themselves when the finding clears. A leader-held, off-roster or tied apex is observed once and nobody is substituted. It never declares a demand or a ceiling, never defers or blocks a change, never infers a capacity from level, pay or meeting load, asks about the RECORD and the declared LIMIT rather than any person’s stamina, and is inert with nobody on the roster; pausable via `changeSaturationAutoPropagate`.',
+    writes: ['delegations', 'links', 'changeSaturationMarkers'],
     emits: [],
     scansWorkspace: true,
   },

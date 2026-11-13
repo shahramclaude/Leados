@@ -82,6 +82,7 @@ import {
 // ADR-0185: the Matrix change-impact line review. Its scoped reads and the two
 // dated human commands share the same seat-checked action boundary.
 import { createChangeImpactActions } from './core/domain/changeImpactActions.js';
+import { createChangeSaturationActions } from './core/domain/changeSaturationActions.js';
 // ADR-0148: Matrix Line Consent. A declared share is an ask until the line's
 // manager accepts or declines it AND the person acknowledges it. Two
 // first-person commands, one scan, and three aggregate reads that report `ok`.
@@ -20178,6 +20179,9 @@ export function createApi(store, options = {}) {
   Object.assign(api, createPausePermitActions(store, { now: clock, idFactory: id }));
   // ADR-0184: the Workforce Stock-Flow Plan (moves, intended shapes, RULE-WFS-01).
   Object.assign(api, createWorkforceFlowActions(store, { now: clock, idFactory: id }));
+  // ADR-0186: the Cross-Line Change Saturation & Absorptive-Capacity Ledger
+  // (demands, ceilings, RULE-CSA-01).
+  Object.assign(api, createChangeSaturationActions(store, { now: clock, idFactory: id }));
   // ADR-0177: the Cross-Line Labour Chargeback & Internal Transfer-Price Ledger.
   // Proposing, confirming and retiring a price are first-person two-key acts
   // through the same reviewed gateway; every charge is derived on read.
