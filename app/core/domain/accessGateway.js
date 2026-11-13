@@ -25,6 +25,11 @@ const groups = [
   // changes no declaration and is declared here so an operator can retry a cap.
   ['ask-review-input', 'reviewStewardshipAsk reviewStewardshipRead reviewStewardshipCandidates'],
   ['answer-review-input', 'reviewStewardshipAnswer reviewStewardshipScan'],
+  // ADR-0185: the Matrix review read remains a separate, seat-scoped adapter;
+  // requesting is span-reach checked and responding is the line holder's own act.
+  ['read-change-impact-review', 'changeImpactReviewBoard changeImpactReviewCandidates changeImpactReviewBriefText changeImpactReviewCsvRows changeImpactReviewAttentionCount'],
+  ['request-change-impact-review', 'changeImpactReviewRequest'],
+  ['respond-change-impact-review', 'changeImpactReviewRespond'],
   // ADR-0150: Matrix Onboarding Completeness. Writing a line's onboarding brief is
   // the act of the manager who holds that line (the action narrows it to them), and
   // acknowledging one is the PERSON's own act (the action narrows that too). They
@@ -474,6 +479,11 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // ADR-0162: Matrix Management-Interface Operating-Agreement read surface.
 // Seat-scoped inside `buildMatrixInterfaceReport` and aggregate-only in brief/CSV.
 'matrixInterfaceReport', 'matrixInterfaceBriefText', 'matrixInterfaceCsvRows', 'matrixInterfaceAttentionCount', 'matrixInterfaceCandidates',
+// ADR-0185: every read is still seat-checked inside the action factory. Raw
+// request and response collections are held out of declared-seat projection;
+// this adapter carries only the caller's own line, their own requests, or their
+// rank-3+ span's current multi-line impact rows.
+'changeImpactReviewBoard', 'changeImpactReviewCandidates', 'changeImpactReviewBriefText', 'changeImpactReviewCsvRows', 'changeImpactReviewAttentionCount',
 // ADR-0174: Standing Delegation-of-Authority Schedule read surface.
 'doaReport', 'doaBriefText', 'doaCsvRows', 'doaAttentionCount', 'doaCandidates',
 // A seat-scoped report; aggregate-only cells are withheld by the adapter.
@@ -553,6 +563,10 @@ const MATRIX_LINE_SCOPED = new Set([
   'priorityOpenCase', 'priorityTreatDemand', 'priorityPropose', 'priorityAgreePrecedence', 'priorityRecordAnswer', 'priorityWithdraw',
   'contradictionDeclareMandate', 'contradictionWithdrawMandate',
   'dutyCoverageDesignate', 'dutyCoverageRevoke',
+  // ADR-0185: request input names an impacted person who may reach the active
+  // seat only through a declared Matrix line; the action re-checks both tree
+  // and line scope before it records anything.
+  'changeImpactReviewRequest',
 ]);
 
 /** Exact method allowlist + rank + record/person scope. No arbitrary API names. */

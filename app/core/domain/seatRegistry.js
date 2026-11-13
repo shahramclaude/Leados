@@ -160,6 +160,11 @@ export const RECORD_POLICIES = Object.freeze({
   // seat-scoped report adapter rather than raw collection rows.
   matrixInterfaceAgreements: { classKey: 'unit', detailCeiling: 0, label: 'Matrix management-interface operating agreements (report only)', route: '#/matrix?panel=interfaces' },
   matrixInterfaceMarkers: { classKey: 'unit', detailCeiling: 0, label: 'Matrix management-interface review markers', route: '#/matrix?panel=interfaces' },
+  // ADR-0185: raw dated requests contain frozen impact/line snapshots and
+  // responses contain first-person prose. Every declared seat receives them
+  // only through the Matrix line-scoped read adapter, never raw projection.
+  changeImpactRequests: { classKey: 'unit', detailCeiling: 0, label: 'Matrix change-impact line-review requests (scoped adapter only)', route: '#/matrix?panel=change-impacts' },
+  changeImpactResponses: { classKey: 'unit', detailCeiling: 0, label: 'Matrix change-impact line responses (scoped adapter only)', route: '#/matrix?panel=change-impacts' },
   // ADR-0174: Standing delegation-of-authority schedule and RULE-DOA-01 markers
   // are surfaced exclusively via the seat-scoped `buildDoaReport` adapter.
   doaSchedule: { classKey: 'unit', detailCeiling: 0, label: 'Standing delegation-of-authority schedule (report only)', route: '#/matrix?panel=authority' },
@@ -594,6 +599,13 @@ export const ACTION_RIGHTS = Object.freeze({
   // manager, so it is open at every rank here rather than narrowed twice.
   'ask-review-input': { minRank: 1, maxRank: 2, label: 'Ask a reporting line for review input' },
   'answer-review-input': { minRank: 1, maxRank: 5, label: 'Answer a review-input ask for your own line' },
+  // ADR-0185: the general Changes route stays portfolio-gated at rank 3. This
+  // separate Matrix adapter is open at frontline and mid-manager altitudes, but
+  // the action/read model narrows every row to a reachable person and own line,
+  // or to the span explicitly governed by a rank-3+ seat.
+  'read-change-impact-review': { minRank: 1, maxRank: 5, label: 'Read the Matrix line-scoped change-impact review register' },
+  'request-change-impact-review': { minRank: 1, maxRank: 5, label: 'Request dated review from a line outside your own' },
+  'respond-change-impact-review': { minRank: 1, maxRank: 5, label: 'Record a first-person response for your own Matrix line' },
   // ADR-0150: onboarding a person into a matrix. Writing a line's brief is the act
   // of the manager who HOLDS that line, at whatever altitude that line's manager
   // sits (a project lead with no home-line reports gets this exactly as a

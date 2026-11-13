@@ -294,10 +294,10 @@ test('a logged 1:1 with the covered topic turns a filed line into a receipt — 
 /* -------------------------------------------------------------- schema v112 */
 
 test('schema v112 is additive: an existing workspace gets empty ledgers and declared conventions', () => {
-  assert.equal(SCHEMA_VERSION, 119);
+  assert.equal(SCHEMA_VERSION, 147);
   const migrated = migrate({ schemaVersion: 111, people: [{ id: 'p1', name: 'A' }], settings: { leaderName: 'Dana' } });
-  assert.deepEqual(migrated.applied, ['111 → 112', '112 → 113', '113 → 114', '114 → 115', '115 → 116', '116 → 117', '117 → 118', '118 → 119', '119 → 120', '120 → 121', '121 → 122', '122 → 123']);
-  assert.equal(migrated.raw.schemaVersion, 119);
+  assert.deepEqual(migrated.applied, ['111 → 112', '112 → 113', '113 → 114', '114 → 115', '115 → 116', '116 → 117', '117 → 118', '118 → 119', '119 → 120', '120 → 121', '121 → 122', '122 → 123', '123 → 124', '124 → 125', '125 → 126', '126 → 127', '127 → 128', '128 → 129', '129 → 130', '130 → 131', '131 → 132', '132 → 133', '133 → 134', '134 → 135', '135 → 136', '136 → 137', '137 → 138', '138 → 139', '139 → 140', '140 → 141', '141 → 142', '142 → 143', '143 → 144', '144 → 145', '145 → 146', '146 → 147']);
+  assert.equal(migrated.raw.schemaVersion, 147);
   assert.deepEqual(migrated.raw.agendaEntries, [], 'no filing is invented at upgrade time');
   assert.deepEqual(migrated.raw.agendaMarkers, []);
   assert.equal(migrated.raw.settings.agendaReceiptFloor, AGENDA_SETTINGS_DEFAULTS.agendaReceiptFloor);

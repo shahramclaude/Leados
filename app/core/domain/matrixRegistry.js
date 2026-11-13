@@ -189,6 +189,7 @@ export function matrixFindingRank(key) {
 export const MATRIX_PANELS = Object.freeze([
   Object.freeze({ key: 'desk', label: 'Desk', hint: 'The reconciliation: does the roll-up add up?' }),
   Object.freeze({ key: 'lines', label: 'Lines', hint: 'Every declared reporting line, dated and dated out.' }),
+  Object.freeze({ key: 'change-impacts', label: 'Change-impact reviews', hint: 'Dated, first-person review from each impacted multi-line person’s active line — on a frozen change and line snapshot, not an approval.' }),
   Object.freeze({ key: 'exit', label: 'Line exit', hint: 'What a line that has ended still owes — and who has settled it.' }),
   Object.freeze({ key: 'consent', label: 'Consent', hint: 'A declared share is an ask until the line accepts it and the person acknowledges it.' }),
   Object.freeze({ key: 'renewal', label: 'Re-affirmation', hint: 'A line has a term. Which commitments does anyone actually agree to today?' }),

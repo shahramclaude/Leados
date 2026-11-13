@@ -79,6 +79,9 @@ import {
   reviewStewardshipBriefText,
   reviewStewardshipCsvRows,
 } from './core/domain/reviewStewardship.js';
+// ADR-0185: the Matrix change-impact line review. Its scoped reads and the two
+// dated human commands share the same seat-checked action boundary.
+import { createChangeImpactActions } from './core/domain/changeImpactActions.js';
 // ADR-0148: Matrix Line Consent. A declared share is an ask until the line's
 // manager accepts or declines it AND the person acknowledges it. Two
 // first-person commands, one scan, and three aggregate reads that report `ok`.
@@ -20195,6 +20198,10 @@ export function createApi(store, options = {}) {
   // attendance badge read the SAME report the panel renders; the packet reads and
   // the two writes are seat-checked inside the factory.
   Object.assign(api, createReviewStewardshipActions(store, { now: clock, idFactory: id }));
+  // ADR-0185: Matrix change-impact requests and responses are separate dated
+  // records. The first-person reply is line-holder-only; a fresh live snapshot
+  // is re-derived before either a request or response can enter the ledger.
+  Object.assign(api, createChangeImpactActions(store, { now: clock, idFactory: id }));
   // The three aggregate reads report `ok` and a printed reason like every other
   // read adapter on this gateway, so a view can never render `undefined` as if it
   // were an empty workspace.

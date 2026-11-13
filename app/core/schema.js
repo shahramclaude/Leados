@@ -82,6 +82,12 @@ import {
   normalizeWorkforceFlowMarkers,
   normalizeWorkforceFlowSettings,
 } from './domain/workforceFlowSchema.js';
+// ADR-0185 (Schema v147): dated Matrix change-impact requests and first-person
+// line responses. Request snapshots normalize before their responses resolve.
+import {
+  normalizeChangeImpactRequests,
+  normalizeChangeImpactResponses,
+} from './domain/changeImpactSchema.js';
 import {
   normalizeOnboardingLineBriefs,
   normalizeOnboardingLineBriefMarkers,
@@ -774,7 +780,12 @@ export {
 // nothing about how they reached it, so an upgraded workspace has no recorded
 // history and the plan reads `no move has ever been recorded here` — refused,
 // never a rate estimated from a snapshot that was never taken.
-export const SCHEMA_VERSION = 146;
+// v147 adds `changeImpactRequests` (dated, per-line requests with a frozen
+// material-impact + active-line snapshot) and `changeImpactResponses` (one
+// first-person reviewed/declined act per request, with an explicit valid-through
+// date for a review). Both ledgers start empty: no response, line coverage or
+// request is inferred from an existing change record.
+export const SCHEMA_VERSION = 147;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -2910,6 +2921,10 @@ export const COLLECTIONS = [
   'workforceFlowActs',
   'workforceFlowTargets',
   'workforceFlowMarkers',
+  // ADR-0185 (Schema v147): dated Matrix change-impact requests and first-person
+  // line responses. No state, currentness, coverage or approval is stored.
+  'changeImpactRequests',
+  'changeImpactResponses',
 ];
 
 /** Stable empty state. `now` is an ISO string so the result is a pure value. */
@@ -7635,6 +7650,16 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.requisitions = normalizeRequisitions(raw.requisitions, state, todayDay, now, warnings);
   state.candidates = normalizeCandidates(raw.candidates, state, todayDay, now, warnings);
   state.changes = normalizeChanges(raw.changes, state, todayDay, now, warnings);
+  // ADR-0185: requests resolve before responses. The snapshot is retained even
+  // after the live impact or reporting line changes; changeImpact.js derives it
+  // stale and stops counting its response as current without deleting history.
+  state.changeImpactRequests = normalizeChangeImpactRequests(raw.changeImpactRequests, warnings, todayDay);
+  state.changeImpactResponses = normalizeChangeImpactResponses(
+    raw.changeImpactResponses,
+    state.changeImpactRequests,
+    warnings,
+    todayDay,
+  );
   state.negotiations = normalizeNegotiations(raw.negotiations, state, todayDay, now, warnings);
   // Portfolio must run AFTER cases, requisitions, and changes so sourceType
   // provenance (`case`, `requisition`, `change`) resolves against populated
@@ -8955,6 +8980,15 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  // 146 → 147: ADR-0185 adds two EMPTY append-only ledgers. Existing changes
+  // carry no line review requests or first-person answers; no historical
+  // coverage is back-filled from the roster or the general change record.
+  146: (v146) => ({
+    ...v146,
+    schemaVersion: 147,
+    changeImpactRequests: Array.isArray(v146.changeImpactRequests) ? v146.changeImpactRequests : [],
+    changeImpactResponses: Array.isArray(v146.changeImpactResponses) ? v146.changeImpactResponses : [],
+  }),
   // 144 → 145: ADR-0182 adds two EMPTY collections and four declared
   // conventions. No switch value changes: a workspace already running with a
   // control off keeps it off, and that pause simply reads `unpermitted` until
