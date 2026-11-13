@@ -122,6 +122,7 @@ import { benchRegressionRule } from './benchRegressionRules.js';
 import { oneOnOneLineRule } from './oneOnOneLineRules.js';
 import { hiringLineRule } from './hiringLineRules.js';
 import { transferPriceRule } from './transferPriceRules.js';
+import { chargebackPostingRule } from './chargebackPostingRules.js';
 import { delegationLineRule } from './delegationLineRules.js';
 import { lineHorizonRule } from './lineHorizonRules.js';
 import { workTurnRule } from './workTurnRules.js';
@@ -972,6 +973,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'transferPriceRules.js',
     purpose: 'RULE-TPL-01: reads the Cross-Line Labour Chargeback & Internal Transfer-Price Ledger (`buildTransferPriceLedger`, ADR-0177) with the whole-workspace operator view over the LAST COMPLETED CALENDAR QUARTER on transfer-price acts (propose / confirm / retire) and explicit `transfer.price.scan` scans. For every price proposal still holding ONE key it issues at most one dated delegation to the NAMED manager who holds the missing key; for every directed pair of lines that consumed share-days in the closed quarter with no agreed price and no proposal covering them it keeps at most one open dated delegation per (pair, quarter) with the BORROWING manager, and issues one more only after a price between that pair has died (declined, withdrawn or voided). Asks carry typed `issues-obligation` (counterpart manager) and matrix-DAG `rolls-up-to` provenance, are idempotent through `transferPriceMarkers`, bounded at 8 per commit with the remainder counted, and close themselves — with the actual reason written on the task — once the key is turned, the proposal is declined or withdrawn, or every share-day of that pair’s quarter is under a proposed or agreed price; an ask about an older quarter is re-read against its own quarter, so the calendar rolling over closes nothing. A key held by the workspace leader or by a manager who left the roster is recorded as an observation, never reassigned. Inert until the first price act exists; pausable via `transferPriceAutoPropagate`. Never signs a key, posts a charge, edits a budget, a reporting line or an agreement.',
     writes: ['delegations', 'links', 'transferPriceMarkers'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: chargebackPostingRule,
+    module: 'chargebackPostingRules.js',
+    purpose: 'RULE-CBP-01: reads the whole-workspace chargeback statement (`buildTransferPriceLedger`, ADR-0177) and the posting ledger (ADR-0194) over the LAST COMPLETED CALENDAR QUARTER, on transfer-price keys turning or dying (confirm / retire), posting acts (post / reverse) and explicit `chargeback.posting.scan` scans. For each currency whose quarter statement holds EVERY claim (complete, zero-sum, reconciled partition, period-ledger identity, exact arithmetic), carries a charged cent and has no live posting, it keeps at most one open dated delegation per (quarter, currency) per posting generation with the LOWEST JOINT APEX of every line account the statement names — the one seat both sides of every internal charge roll up to; a reversal opens a new generation. An ambiguous apex, the workspace leader, or an apex off the roster records an identity-free observation through `chargebackPostingMarkers`; nobody is substituted. Asks carry matrix-DAG `rolls-up-to` provenance, are idempotent per subject, bounded at 4 per commit with the remainder counted, and close themselves with the actual reason written on the task — the quarter was posted; its statement regressed (the missing prices are RULE-TPL-01’s asks, not this rule’s); the currency no longer carries a charge; or the apex seat moved. An ask about an older quarter is re-read against its own quarter, bounded per commit, so the calendar rolling over closes nothing. Inert in O(1) until the first transfer-price act exists; pausable via `chargebackPostingAutoPropagate` (an explicit scan still runs). It never posts, never reverses, never binds an envelope, never signs a key, never writes a budget line and never blocks a human decision.',
+    writes: ['delegations', 'links', 'chargebackPostingMarkers'],
     emits: [],
     scansWorkspace: true,
   },

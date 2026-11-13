@@ -287,11 +287,11 @@ function withDom(run) {
 /* ---------------------------------------------------------- 1. registration */
 
 test('registration: schema v149, CSV #141, RULE-AAC-01, declared rights and closed vocabularies', () => {
-  assert.equal(SCHEMA_VERSION, 153);
+  assert.equal(SCHEMA_VERSION, 154);
   const scope = CSV_EXPORTS.find((entry) => entry.key === AAR_CORROBORATION_CSV_SCOPE);
   assert.ok(scope, 'CSV #141 is registered');
   assert.equal(scope.sensitive, false, 'the export is aggregate-only');
-  assert.equal(CSV_EXPORTS.length, 145, 'the export count moved from 140 to 141 and nothing else did');
+  assert.equal(CSV_EXPORTS.length, 146, 'the export count moved from 140 to 141 and nothing else did');
   assert.ok(SAFE_READS.has('aarCorroborationReport'), 'the scoped board is a declared safe read');
   assert.ok(!SAFE_READS.has('aarCorroborationRequest'), 'requesting is NOT a safe read: it writes');
   const contract = PROPAGATION_CONTRACTS.find((c) => c.rule?.id === 'aarCorroborationRule');

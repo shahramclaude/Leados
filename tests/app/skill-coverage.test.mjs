@@ -50,8 +50,8 @@ test('v152 migration is additive, empty and never infers skills from roles', () 
   delete old.skillTasks; delete old.skillActs;
   old.people = [person('kim', null)];
   const next = migrate(old);
-  assert.equal(SCHEMA_VERSION, 153);
-  assert.deepEqual(next.applied, ['151 → 152', '152 → 153']);
+  assert.equal(SCHEMA_VERSION, 154);
+  assert.deepEqual(next.applied, ['151 → 152', '152 → 153', '153 → 154']);
   assert.deepEqual(next.raw.skillTasks, []);
   assert.deepEqual(next.raw.skillActs, []);
   assert.ok(COLLECTIONS.includes('skillTasks') && COLLECTIONS.includes('skillActs'));

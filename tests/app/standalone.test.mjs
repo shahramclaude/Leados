@@ -308,9 +308,16 @@ test('standalone artifact exists and is a single inline HTML document', () => {
   // goalCommitment, goalCommitmentActions, goalCommitmentRules), one matrix
   // panel and a tenth diagram (47,013 bytes). Measured build: 12,745,610 bytes
   // / 819 source modules = 15,562 bytes per module, still far below the
-  // unchanged 24,000 density guard. The ceiling moves to 12,900,000 for that
-  // capability and nothing else.
-  assert.ok(bytes < 12_900_000, `standalone file is unexpectedly large (${bytes} bytes)`);
+  // unchanged 24,000 density guard. The ceiling moved to 12,900,000 for that
+  // capability. Session 262 (ADR-0194, Schema v154) added the chargeback
+  // period posting ledger: five domain modules (chargebackPostingRegistry,
+  // chargebackPostingSchema, chargebackPosting, chargebackPostingActions,
+  // chargebackPostingRules), one matrix panel and an eleventh diagram
+  // (137,720 bytes). Measured build: 12,991,290 bytes / 825 source modules =
+  // 15,747 bytes per module, still far below the unchanged 24,000 density
+  // guard. The ceiling moves to 13,100,000 for that capability and nothing
+  // else.
+  assert.ok(bytes < 13_100_000, `standalone file is unexpectedly large (${bytes} bytes)`);
   // Derived from the folder, not from a list in this file: the day a panel adds
   // a diagram, an enumerator that names the old two would still pass. Same
   // lesson the build script learned in ADR-0186.

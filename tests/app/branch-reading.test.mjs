@@ -127,7 +127,7 @@ const withheldCells = (report) => report.branchCoverage.branches.filter((b) => b
 /* ------------------------------------------- 1. schema v118 + fail-closed load */
 
 test('schema v118 is additive, convergent, and starts both ledgers EMPTY', () => {
-  assert.equal(SCHEMA_VERSION, 153);
+  assert.equal(SCHEMA_VERSION, 154);
   const v117 = { ...makeState(), schemaVersion: 117 };
   delete v117.branchReadingAsks;
   delete v117.branchReadings;
@@ -137,7 +137,7 @@ test('schema v118 is additive, convergent, and starts both ledgers EMPTY', () =>
   assert.deepEqual(migrated.raw.branchReadings, [], 'no disclosure is invented at upgrade time');
   // Nothing is back-filled, so every pre-existing withheld cell opens "not asked".
   const state = normalizeState(migrated.raw, { now: NOW }).state;
-  assert.equal(state.schemaVersion, 153);
+  assert.equal(state.schemaVersion, 154);
   assert.ok(Array.isArray(state.branchReadingAsks) && Array.isArray(state.branchReadings));
   // The two conventions exist before anyone re-declares them, and survive normalize.
   assert.equal(state.settings.dutyCoverageReadingResponseDays, DUTY_COVERAGE_DEFAULTS.dutyCoverageReadingResponseDays);
@@ -146,7 +146,7 @@ test('schema v118 is additive, convergent, and starts both ledgers EMPTY', () =>
   // Convergent: a second pass changes nothing.
   const again = normalizeState(state, { now: NOW }).state;
   assert.deepEqual(again.branchReadingAsks, []);
-  assert.equal(again.schemaVersion, 153);
+  assert.equal(again.schemaVersion, 154);
 });
 
 test('the schema drops every forged hand-off on reload, with the reason printed', () => {

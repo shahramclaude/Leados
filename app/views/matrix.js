@@ -92,6 +92,7 @@ import { renderMatrixOneOnOnePanel } from './matrixOneOnOnePanel.js';
 import { renderMatrixHiringPanel } from './matrixHiringPanel.js';
 import { renderMatrixChangeImpactPanel } from './matrixChangeImpactPanel.js';
 import { renderMatrixChargebackPanel } from './matrixChargebackPanel.js';
+import { renderMatrixChargebackPostingPanel } from './matrixChargebackPostingPanel.js';
 import { renderMatrixDelegationLinePanel } from './matrixDelegationLinePanel.js';
 import { renderMatrixWorkTurnPanel } from './matrixWorkTurnPanel.js';
 // ADR-0183: the DSM partitioning slice. Exact SCC partitioning of the typed
@@ -921,6 +922,7 @@ export function renderMatrix(ctx) {
     panel === 'priority' ? renderMatrixPriorityPanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
     panel === 'commitments' ? renderMatrixGoalCommitmentPanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
     panel === 'chargeback' ? renderMatrixChargebackPanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
+    panel === 'postings' ? renderMatrixChargebackPostingPanel(ctx) : null,
     panel === 'continuity' ? renderContinuityPanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
     panel === 'seats' ? seatsPanel(ctx, report) : null,
     panel === 'governance' ? governancePanel(ctx, report) : null,

@@ -184,6 +184,8 @@ import { buildHiringLines, hiringLineCsvRows } from './domain/hiringLines.js';
 import { HIRING_LINE_CSV_COLUMNS, HIRING_LINE_CSV_DESCRIPTOR } from './domain/hiringLineRegistry.js';
 import { buildTransferPriceLedger, transferPriceCsvRows } from './domain/transferPrice.js';
 import { TRANSFER_PRICE_CSV_COLUMNS, TRANSFER_PRICE_CSV_DESCRIPTOR } from './domain/transferPriceRegistry.js';
+import { buildChargebackPostingLedger, chargebackPostingCsvRows } from './domain/chargebackPosting.js';
+import { CHARGEBACK_POSTING_CSV_COLUMNS, CHARGEBACK_POSTING_CSV_DESCRIPTOR } from './domain/chargebackPostingRegistry.js';
 import { buildDelegationLines, delegationLineCsvRows } from './domain/delegationLines.js';
 import { DELEGATION_LINE_CSV_COLUMNS, DELEGATION_LINE_CSV_DESCRIPTOR } from './domain/delegationLineRegistry.js';
 // ADR-0179: the Matrix Forward Allocation Horizon's aggregate-only export.
@@ -1391,6 +1393,10 @@ export const CSV_EXPORTS = [
   // identities. A withheld attribution rate exports BLANK with its reason, never
   // zero, and a peak with no live commitment inside the horizon exports BLANK.
   GOAL_COMMITMENT_CSV_DESCRIPTOR,
+  // #146 (ADR-0194): chargeback period postings — aggregate, no identities.
+  // No person, manager, envelope name or id, note or reason text; a withheld
+  // figure exports BLANK, never zero.
+  CHARGEBACK_POSTING_CSV_DESCRIPTOR,
 ];
 
 function personLookup(state) {
@@ -6587,6 +6593,17 @@ export function buildScopeTable(state, scope, now) {
       // manager, ask title or free text crosses the boundary.
       const report = buildWorkTurns(state, { now, settings: state.settings || {} });
       return { columns: WORK_TURN_CSV_COLUMNS.map((key) => ({ key, header: key })), rows: workTurnCsvRows(report) };
+    }
+    case 'chargeback-postings': {
+      // CSV scope #146 (Schema v154, ADR-0194). Built from the SAME seat-scoped
+      // read model the panel renders, so an exported cent is provably the cent
+      // that was printed. One identity-free summary row plus one row per
+      // posting; no account, envelope, note or reason text crosses the boundary.
+      const report = buildChargebackPostingLedger(state, { now, settings: state.settings || {} });
+      return {
+        columns: CHARGEBACK_POSTING_CSV_COLUMNS.map((key) => ({ key, header: key })),
+        rows: chargebackPostingCsvRows(report),
+      };
     }
     case 'line-chargeback': {
       // CSV scope #132 (Schema v142, ADR-0177). Built from the SAME seat-scoped

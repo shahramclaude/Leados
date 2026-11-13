@@ -180,6 +180,8 @@ export const RECORD_POLICIES = Object.freeze({
   // through the seat-scoped `buildTransferPriceLedger` adapter, never as raw rows.
   transferPriceActs: { classKey: 'unit', detailCeiling: 0, label: 'Transfer-price acts (dated two-key acts; charges re-derived on read)', route: '#/matrix?panel=chargeback' },
   transferPriceMarkers: { classKey: 'unit', detailCeiling: 0, label: 'Transfer-price ask & observation markers', route: '#/matrix?panel=chargeback' },
+  chargebackPostings: { classKey: 'unit', detailCeiling: 0, label: 'Chargeback period postings (dated posting/reversal acts; audits re-derived on read)', route: '#/matrix?panel=postings' },
+  chargebackPostingMarkers: { classKey: 'unit', detailCeiling: 0, label: 'Chargeback posting ask & observation markers', route: '#/matrix?panel=postings' },
   delegationLineActs: { classKey: 'unit', detailCeiling: 0, label: 'Cross-line ask attribution acts (report only)', route: '#/matrix?panel=asks' },
   delegationLineMarkers: { classKey: 'unit', detailCeiling: 0, label: 'Cross-line overload reconciliation markers', route: '#/matrix?panel=asks' },
   // ADR-0181: classification acts and RULE-NPW-01 markers are surfaced only
@@ -599,6 +601,7 @@ export const ACTION_RIGHTS = Object.freeze({
   // leadership rank; the action refuses any seat that is not that side's manager.
   'agree-transfer-price': { minRank: 1, maxRank: 5, label: 'Sign your own side of a transfer price between two lines' },
   'govern-transfer-prices': { minRank: 3, maxRank: 5, label: 'Scan transfer prices for missing keys and unpriced pairs, and set the ask window' },
+  'post-chargeback': { minRank: 4, maxRank: 5, label: 'Post a complete period chargeback statement against named budget envelopes, or reverse one with a written reason' },
   'log-feedback': { minRank: 1, maxRank: 2, label: 'Give feedback' },
   'log-conflict': { minRank: 1, maxRank: 2, label: 'Log a conflict' },
   'record-review': { minRank: 1, maxRank: 2, label: 'Record a review' },
