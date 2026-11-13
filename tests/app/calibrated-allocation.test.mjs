@@ -147,12 +147,12 @@ function declaration(overrides = {}) {
 /* ------------------------------------------------------------- schema v99 */
 
 test('schema v99: additive 98 → 99, node-budget default, fail-closed evidence and certificate fields', () => {
-  assert.equal(SCHEMA_VERSION, 154);
+  assert.equal(SCHEMA_VERSION, 155);
   const v98 = normalize(tree());
   v98.schemaVersion = 98;
   delete v98.settings.robustAllocationNodeBudget;
   const migrated = migrate(clone(v98));
-  assert.deepEqual(migrated.applied, ['98 → 99', '99 → 100', '100 → 101', '101 → 102', '102 → 103', '103 → 104', '104 → 105', '105 → 106', '106 → 107', '107 → 108', '108 → 109', '109 → 110', '110 → 111', '111 → 112', '112 → 113', '113 → 114', '114 → 115', '115 → 116', '116 → 117', '117 → 118', '118 → 119', '119 → 120', '120 → 121', '121 → 122', '122 → 123', '123 → 124', '124 → 125', '125 → 126', '126 → 127', '127 → 128', '128 → 129', '129 → 130', '130 → 131', '131 → 132', '132 → 133', '133 → 134', '134 → 135', '135 → 136', '136 → 137', '137 → 138', '138 → 139', '139 → 140', '140 → 141', '141 → 142', '142 → 143', '143 → 144', '144 → 145', '145 → 146', '146 → 147', '147 → 148', '148 → 149', '149 → 150', '150 → 151', '151 → 152', '152 → 153', '153 → 154']);
+  assert.deepEqual(migrated.applied, ['98 → 99', '99 → 100', '100 → 101', '101 → 102', '102 → 103', '103 → 104', '104 → 105', '105 → 106', '106 → 107', '107 → 108', '108 → 109', '109 → 110', '110 → 111', '111 → 112', '112 → 113', '113 → 114', '114 → 115', '115 → 116', '116 → 117', '117 → 118', '118 → 119', '119 → 120', '120 → 121', '121 → 122', '122 → 123', '123 → 124', '124 → 125', '125 → 126', '126 → 127', '127 → 128', '128 → 129', '129 → 130', '130 → 131', '131 → 132', '132 → 133', '133 → 134', '134 → 135', '135 → 136', '136 → 137', '137 → 138', '138 → 139', '139 → 140', '140 → 141', '141 → 142', '142 → 143', '143 → 144', '144 → 145', '145 → 146', '146 → 147', '147 → 148', '148 → 149', '149 → 150', '150 → 151', '151 → 152', '152 → 153', '153 → 154', '154 → 155']);
   assert.equal(migrated.raw.settings.robustAllocationNodeBudget, 250000);
   // Evidence instrument: unknown keys fail closed to null; known keys persist.
   const plan = normalizeRobustPlan({
@@ -380,7 +380,7 @@ test('the brief carries the calibration section with no ids, and the CSV surface
   assert.ok(!brief.includes(CONTRACT_SENTINEL), 'no contract id');
   assert.ok(!brief.includes('ral-'), 'no ledger id');
   assert.ok(!NAMES.some((n) => brief.includes(n)), 'no person named');
-  assert.equal(CSV_EXPORTS.length, 145, 'ADR-0102 added scope #98; the register still governs releases');
+  assert.equal(CSV_EXPORTS.length, 146, 'ADR-0102 added scope #98; the register still governs releases');
   assert.ok(ROBUST_ALLOCATION_MARKER_KINDS.includes('premise-tension'), 'the tension marker kind is declared');
 });
 

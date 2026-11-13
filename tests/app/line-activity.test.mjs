@@ -89,7 +89,7 @@ const lineOf = (report, personId, declarationId) => personOf(report, personId)?.
 
 test('the panel is registered on the matrix surface and the schema is untouched', () => {
   // ADR-0160 (Schema v130), bumped to v131 by ADR-0162.
-  assert.equal(SCHEMA_VERSION, 154);
+  assert.equal(SCHEMA_VERSION, 155);
   assert.ok(MATRIX_PANELS.some((p) => p.key === 'activity'));
 });
 

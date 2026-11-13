@@ -210,6 +210,10 @@ export const PAUSE_PERMIT_MATRIX_REACH_SWITCHES = Object.freeze([
   // graph for every joint apex and every declared line share, so silencing it
   // reaches a second line — and the second line's manager is not told.
   'goalCommitmentAutoPropagate',
+  // ADR-0194: the chargeback-posting switch. The rule reads the reporting graph
+  // for the joint apex of every line the period statement names, so silencing
+  // it reaches every one of those lines — and none of their managers is told.
+  'chargebackPostingAutoPropagate',
 ]);
 
 export function pausePermitReachesMatrix(key) {
@@ -246,6 +250,7 @@ export const PAUSE_PERMIT_REACH_RULES = Object.freeze({
   standardWorkAutoPropagate: 'standardWorkRules.js',
   priorityBallotAutoPropagate: 'priorityRankingRules.js',
   goalCommitmentAutoPropagate: 'goalCommitmentRules.js',
+  chargebackPostingAutoPropagate: 'chargebackPostingRules.js',
 });
 
 /** How much of the register a seat is shown. Mirrors the altitude disclosure ladder. */

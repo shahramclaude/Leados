@@ -2,7 +2,7 @@
 
 Date: 2026-11-13 · Session 261 · Schema v153 · Status: accepted, shipped end to end
 
-**Follow-on:** [ADR-0194](./0194-cross-line-goal-commitment-target-magnitudes.md) extends this register in Schema v154 with optional exact target values and units, same-unit `magnitude-conflict`, and the existing rule's bounded joint-apex reconciliation. It does not alter this ADR's line/authority, capacity, history, or no-line doctrine.
+**Follow-on:** [ADR-0195](./0195-cross-line-goal-commitment-target-magnitudes.md) extends this register in Schema v155 with optional exact target values and units, same-unit `magnitude-conflict`, and the existing rule's bounded joint-apex reconciliation. It does not alter this ADR's line/authority, capacity, history, or no-line doctrine.
 
 ## Duty and scope
 
@@ -28,7 +28,7 @@ stock consumed per day, never a score attached to a person).
 - `goalCommitments`: append-only dated declarations — one goal, one reporting
   line (or the explicit `no-line`), an inclusive window, an exact integer
   `effortShareH` (hundredths of ONE person; 100 = the whole person), an optional
-  measure key + direction (both or neither), and, since ADR-0194, optional exact
+  measure key + direction (both or neither), and, since ADR-0195, optional exact
   non-negative `targetValue` + `targetUnit` declared together or absent together;
   the declaring holder, and closed states (`superseded*`, `released*`) that keep
   every predecessor as history.
@@ -80,7 +80,7 @@ conditions file at most ONE open dated `act-inform` ask each:
 1. `target-conflict` → the LOWEST joint apex (`matrixJointApex`) of the two
    holders, because neither promise can be kept by working harder;
 2. `magnitude-conflict` → that same joint apex, only for two named lines with
-   same-unit declared targets at/above ADR-0194's exact divergence floor;
+   same-unit declared targets at/above ADR-0195's exact divergence floor;
 3. `capacity-overcommit` → with named peak declarations only, the joint apex of
    EVERY holder carrying a live commitment on the peak day; if an explicit
    `no-line` declaration contributes to that peak, its effort stays in the

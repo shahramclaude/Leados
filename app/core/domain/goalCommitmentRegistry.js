@@ -1,7 +1,7 @@
 /**
  * app/core/domain/goalCommitmentRegistry.js — closed vocabularies for the
  * Cross-Line Goal Commitment Conflict register
- * (ADR-0193 + ADR-0194, Schema v154, `RULE-GCC-01`, CSV scope #145,
+ * (ADR-0193 + ADR-0195, Schema v155, `RULE-GCC-01`, CSV scope #145,
  * `#/matrix?panel=commitments`).
  *
  * THE DUTY. `state.goals` carries ONE `ownerId`, a target and a due date, and
@@ -55,8 +55,8 @@
 
 export const GOAL_COMMITMENT_ENGINE_VERSION = 'goal-commitment-2026.11-v2';
 export const GOAL_COMMITMENT_ADR = 'ADR-0193';
-/** ADR-0194 extends the same register; ADR-0193 remains its original ledger decision. */
-export const GOAL_COMMITMENT_MAGNITUDE_ADR = 'ADR-0194';
+/** ADR-0195 extends the same register; ADR-0193 remains its original ledger decision. */
+export const GOAL_COMMITMENT_MAGNITUDE_ADR = 'ADR-0195';
 export const GOAL_COMMITMENT_RULE_ID = 'RULE-GCC-01';
 export const GOAL_COMMITMENT_ROUTE = 'matrix-commitments';
 export const GOAL_COMMITMENT_PANEL = 'commitments';

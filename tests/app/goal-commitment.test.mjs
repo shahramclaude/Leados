@@ -177,7 +177,7 @@ test('the engine registers its rights, its pause, its export and its place on th
   // Export, panel and spine.
   const scope = CSV_EXPORTS.find((row) => row.key === GOAL_COMMITMENT_CSV_SCOPE);
   assert.ok(scope, 'the register has its own CSV scope');
-  assert.equal(CSV_EXPORTS.length, 145, 'the register is scope #145 and nothing else moved');
+  assert.equal(CSV_EXPORTS.length, 146, 'the register is scope #145 and nothing else moved');
   assert.ok(MATRIX_PANELS.some((row) => row.key === GOAL_COMMITMENT_PANEL), 'the matrix view carries the commitments panel');
   assert.equal(DEFAULT_POST_COMMIT_RULES.length, PROPAGATION_CONTRACTS.length, 'spine and audit registry stay in parity');
   const spine = DEFAULT_POST_COMMIT_RULES.map((rule) => rule.id);
@@ -188,11 +188,12 @@ test('the engine registers its rights, its pause, its export and its place on th
   assert.deepEqual(contract.writes, ['delegations', 'links', 'goalCommitmentMarkers'], 'the contract declares exactly what the rule may write');
 });
 
-test('schema v154 carries the ledger, the markers, target magnitude and the conventions', () => {
-  assert.equal(SCHEMA_VERSION, 154);
+test('schema v155 carries the ledger, the markers, target magnitude and the conventions', () => {
+  assert.equal(SCHEMA_VERSION, 155);
   assert.ok(COLLECTIONS.includes('goalCommitments') && COLLECTIONS.includes('goalCommitmentMarkers'));
   assert.ok(MIGRATIONS['152'], 'v152 state migrates forward');
-  assert.ok(MIGRATIONS['153'], 'v153 state migrates forward without inventing target magnitude');
+  assert.ok(MIGRATIONS['153'], 'v153 state migrates forward through chargeback posting');
+  assert.ok(MIGRATIONS['154'], 'v154 state migrates forward without inventing target magnitude');
   const state = fixture();
   const conv = state.settings;
   assert.equal(conv[GOAL_COMMITMENT_SETTING_KEYS.askDueDays], 3);
@@ -218,16 +219,16 @@ test('schema v154 carries the ledger, the markers, target magnitude and the conv
   assert.deepEqual(again.settings, state.settings);
 });
 
-test('v153 migration adds neither a target value nor a target unit, and no agreement is inferred', () => {
+test('v154 migration adds neither a target value nor a target unit, and no agreement is inferred', () => {
   const legacy = rawFixture({ commitments: 'none' });
-  legacy.schemaVersion = 153;
+  legacy.schemaVersion = 154;
   legacy.goalCommitments = [
     commitment('c1', 'g1', 'kim', GOAL_COMMITMENT_HOME_LINE, 'ann', '2026-11-10', '2026-12-10', 40, { measureKey: 'cycle time', direction: 'decrease' }),
   ];
   delete legacy.goalCommitments[0].targetValue;
   delete legacy.goalCommitments[0].targetUnit;
-  const migrated = MIGRATIONS['153'](legacy);
-  assert.equal(migrated.schemaVersion, 154);
+  const migrated = MIGRATIONS['154'](legacy);
+  assert.equal(migrated.schemaVersion, 155);
   assert.equal(migrated.goalCommitments[0].targetValue, '');
   assert.equal(migrated.goalCommitments[0].targetUnit, '');
   const normalized = normalizeState(migrated, { now: NOW }).state;
@@ -942,7 +943,7 @@ test('the panel shows act buttons to a seat that holds a line, and prints a refu
 
 test('the register’s identity is the doctrine it ships under', () => {
   assert.equal(GOAL_COMMITMENT_ADR, 'ADR-0193');
-  assert.equal(GOAL_COMMITMENT_MAGNITUDE_ADR, 'ADR-0194');
+  assert.equal(GOAL_COMMITMENT_MAGNITUDE_ADR, 'ADR-0195');
   assert.equal(GOAL_COMMITMENT_RULE_ID, 'RULE-GCC-01');
   assert.equal(GOAL_COMMITMENT_PANEL, 'commitments');
   assert.ok(Object.values(GOAL_COMMITMENT_EVENTS).every((type) => typeof type === 'string' && type.length > 0));

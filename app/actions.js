@@ -45,6 +45,7 @@ import { createMatrixActions } from './core/domain/matrixActions.js';
 import { createOneOnOneLineActions, oneOnOneHolderForLog } from './core/domain/oneOnOneLineActions.js';
 import { createHiringLineActions } from './core/domain/hiringLineActions.js';
 import { createTransferPriceActions } from './core/domain/transferPriceActions.js';
+import { createChargebackPostingActions } from './core/domain/chargebackPostingActions.js';
 import { createDelegationLineActions } from './core/domain/delegationLineActions.js';
 import { createWorkTurnActions } from './core/domain/workTurnActions.js';
 import { createPausePermitActions } from './core/domain/pausePermitActions.js';
@@ -20203,6 +20204,7 @@ export function createApi(store, options = {}) {
   // Proposing, confirming and retiring a price are first-person two-key acts
   // through the same reviewed gateway; every charge is derived on read.
   Object.assign(api, createTransferPriceActions(store, { now: clock, idFactory: id }));
+  Object.assign(api, createChargebackPostingActions(store, { now: clock, idFactory: id }));
   // ADR-0143: the Cross-Line Priority Arbitration. Opening a case, disposing of a
   // demand, proposing the measured order, answering as a party, agreeing the
   // binding precedence and withdrawing it are all human commands through the same

@@ -160,7 +160,7 @@ const TWO_PACKS = () => [
 /* ---------------------------------------------------------- schema/wiring */
 
 test('the vocabulary and the bounded windows are declared once, and the panel exists', () => {
-  assert.equal(SCHEMA_VERSION, 154, 'no schema bump: the ledger stores nothing');
+  assert.equal(SCHEMA_VERSION, 155, 'no schema bump: the ledger stores nothing');
   assert.ok(BOARD_PANELS.includes('cycle'), 'the Cycle panel is a declared panel');
   assert.equal(BOARD_CONTINUITY.streakFloor, 2);
   assert.deepEqual(Object.values(BOARD_CONTINUITY.transitions).sort(),

@@ -209,16 +209,16 @@ function withDom(run) {
 /* ---------------------------------------------------------- 1. registration */
 
 test('registration: schema v150, three ledgers, CSV #143, RULE-LSW-01 as spine rule 120, rights and pause switch', () => {
-  assert.equal(SCHEMA_VERSION, 154);
+  assert.equal(SCHEMA_VERSION, 155);
   for (const key of ['standardWorkRoutines', 'standardWorkChecks', 'standardWorkTierActs']) assert.ok(COLLECTIONS.includes(key), `${key} is a declared collection`);
   const scope = CSV_EXPORTS.find((entry) => entry.key === STANDARD_WORK_CSV_SCOPE);
   assert.ok(scope, 'CSV #143 is registered');
   assert.equal(scope.sensitive, false, 'the export is aggregate-only');
-  assert.equal(CSV_EXPORTS.length, 145);
+  assert.equal(CSV_EXPORTS.length, 146);
   const contract = PROPAGATION_CONTRACTS.find((c) => c.rule?.id === 'standardWorkRule');
   assert.ok(contract, 'RULE-LSW-01 declares its propagation contract');
   assert.deepEqual(contract.writes, ['delegations', 'links', 'matrixMarkers']);
-  assert.equal(DEFAULT_POST_COMMIT_RULES.length, 122);
+  assert.equal(DEFAULT_POST_COMMIT_RULES.length, 123);
   assert.equal(PROPAGATION_CONTRACTS.length, DEFAULT_POST_COMMIT_RULES.length, 'one contract per spine rule');
   const tail = DEFAULT_POST_COMMIT_RULES.slice(-5).map((rule) => rule.id);
   assert.deepEqual(tail, ['standardWorkRule', 'priorityRule', 'goalCommitmentRule', 'seatRule', 'sealRule'],

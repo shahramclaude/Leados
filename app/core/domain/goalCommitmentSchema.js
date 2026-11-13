@@ -1,7 +1,7 @@
 /**
  * app/core/domain/goalCommitmentSchema.js — fail-closed storage contract and
  * condition signatures for the Cross-Line Goal Commitment Conflict register
- * (ADR-0193 + ADR-0194, Schema v154).
+ * (ADR-0193 + ADR-0195, Schema v155).
  *
  * One append-only ledger of declarations plus the rule's bounded marker ledger.
  * NOTHING derived is stored: no overlap, no verdict, no peak day, no capacity

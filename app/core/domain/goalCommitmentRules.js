@@ -1,6 +1,6 @@
 /**
  * app/core/domain/goalCommitmentRules.js — `RULE-GCC-01` on the shared
- * post-commit spine (ADR-0193 + ADR-0194, Schema v154).
+ * post-commit spine (ADR-0193 + ADR-0195, Schema v155).
  *
  * FOUR CONDITIONS, all read from the one reader (`buildGoalCommitments`) with
  * the whole-workspace view, never re-derived here. They are partitioned so that

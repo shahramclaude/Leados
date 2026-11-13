@@ -164,13 +164,13 @@ const pairOf = (report, key) => report.pairs.find((p) => p.pairKey === key);
 /* ---------------------------------------------------------- 1. registration */
 
 test('registration: schema v149 unchanged, the 34th matrix panel, CSV #142, one safe read, declared right and pause permit', () => {
-  assert.equal(SCHEMA_VERSION, 154, 'no schema bump — the register stores nothing');
+  assert.equal(SCHEMA_VERSION, 155, 'no schema bump — the register stores nothing');
   assert.ok(MATRIX_PANELS.some((panel) => panel.key === 'alignment'), 'the alignment panel is on the matrix tab bar');
   const scope = CSV_EXPORTS.find((entry) => entry.key === INTERFACE_ALIGNMENT_CSV_SCOPE);
   assert.ok(scope, 'CSV #142 is registered');
   assert.equal(scope.sensitive, false, 'the export is aggregate-only');
   assert.equal(scope.filenameSlug, INTERFACE_ALIGNMENT_CSV_DESCRIPTOR.filenameSlug);
-  assert.equal(CSV_EXPORTS.length, 145);
+  assert.equal(CSV_EXPORTS.length, 146);
   assert.ok(SAFE_READS.has('matrixInterfaceAlignmentReport'), 'the pure read is a declared safe read');
   assert.ok(!SAFE_READS.has('matrixInterfaceAlignmentScan'), 'the scan is NOT a safe read: it writes');
   assert.equal(ACTION_RIGHTS['govern-interface-alignment'].minRank, 3);
@@ -198,7 +198,7 @@ test('registration: schema v149 unchanged, the 34th matrix panel, CSV #142, one 
   assert.deepEqual(contract.writes, ['delegations', 'links', 'matrixMarkers']);
   assert.deepEqual(contract.emits, []);
   assert.equal(PROPAGATION_CONTRACTS.length, DEFAULT_POST_COMMIT_RULES.length, '1:1 rule/contract parity');
-  assert.equal(DEFAULT_POST_COMMIT_RULES.length, 122, 'the shared spine total is stated deliberately (ADR-0190 added RULE-LSW-01, ADR-0193 added RULE-GCC-01)');
+  assert.equal(DEFAULT_POST_COMMIT_RULES.length, 123, 'the shared spine total is stated deliberately (ADR-0193 added RULE-GCC-01, ADR-0194 added RULE-CBP-01)');
 });
 
 test('the pause permit table and the rule agree: a pause is a pause', () => {

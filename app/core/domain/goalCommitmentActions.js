@@ -1,6 +1,6 @@
 /**
  * app/core/domain/goalCommitmentActions.js — the seat-checked commands of the
- * Cross-Line Goal Commitment Conflict register (ADR-0193 + ADR-0194, Schema v154).
+ * Cross-Line Goal Commitment Conflict register (ADR-0193 + ADR-0195, Schema v155).
  *
  * THREE human acts and nothing else: DECLARE what one line's goal consumes of
  * one shared person, RE-BASELINE it with a dated successor, and RELEASE it with

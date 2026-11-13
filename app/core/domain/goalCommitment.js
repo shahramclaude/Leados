@@ -1,6 +1,6 @@
 /**
  * app/core/domain/goalCommitment.js — the pure read model for the Cross-Line
- * Goal Commitment Conflict register (ADR-0193 + ADR-0194, Schema v154,
+ * Goal Commitment Conflict register (ADR-0193 + ADR-0195, Schema v155,
  * `#/matrix?panel=commitments`, CSV scope #145).
  *
  * ONE reader. The panel, the CSV, the brief, the nav badge and `RULE-GCC-01`

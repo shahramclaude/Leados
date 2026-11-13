@@ -1,6 +1,6 @@
-# ADR-0194 — Exact target magnitudes on cross-line goal commitments
+# ADR-0195 — Exact target magnitudes on cross-line goal commitments
 
-Date: 2026-11-13 · Session 262 · Schema v154 · Status: accepted, bounded follow-on slice
+Date: 2026-11-13 · Session 263 · Schema v155 · Status: accepted, bounded follow-on slice
 
 ## Duty and scope
 
@@ -41,9 +41,9 @@ create a person-capacity overcommit, the arithmetic remains visible but the rule
 records an identity-free unattributed observation instead of routing a partial
 set of named holders as though they owned the no-line declaration.
 
-Schema v154's `153 → 154` migration adds blank target fields to retained
-commitments. It infers neither a value nor a unit from old goals, notes, or
-other fields.
+Schema v155's `154 → 155` migration adds blank target fields to retained
+commitments after ADR-0194's posting-ledger migration. It infers neither a
+value nor a unit from old goals, notes, or other fields.
 
 ## Exact read model
 

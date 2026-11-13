@@ -2,7 +2,7 @@
  * app/views/matrixGoalCommitmentPanel.js — `#/matrix?panel=commitments`, the
  * Cross-Line Goal Commitment Conflict register (Galbraith 1973; Cyert & March
  * 1963; March & Simon 1958; Kaplan & Norton 1996; Drucker 1954; Senge 1990)
- * (ADR-0193 + ADR-0194, Schema v154, CSV scope #145, `RULE-GCC-01`).
+ * (ADR-0193 + ADR-0195, Schema v155, CSV scope #145, `RULE-GCC-01`).
  *
  * One reader (`buildGoalCommitments`) is behind the board, every person row, the
  * roll-ups, the brief and the CSV. Nothing is recomputed here, so what the
@@ -652,7 +652,7 @@ export function renderMatrixGoalCommitmentPanel(ctx, opts = {}) {
   const panel = panelFor(query);
   return h('div', { class: 'stack', 'data-testid': 'goal-commitment-panel' },
     pageHeader({
-      eyebrow: 'Matrix management · ADR-0193 / ADR-0194',
+      eyebrow: 'Matrix management · ADR-0193 / ADR-0195',
       title: 'Cross-line goal commitments',
       subtitle: `Two lines can each commit the same person, reasonably, and neither can see the other’s promise. This register reads what each line declared — the window, effort, measure, direction and optional exact target magnitude — and reports exact collisions, opposed directions, incompatible same-unit targets and concurrent capacity. It never infers a target or converts units. ${GOAL_COMMITMENT_ADR} · CSV #145.`,
       actions: [

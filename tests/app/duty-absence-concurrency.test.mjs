@@ -156,7 +156,7 @@ function read(state) {
 /* ------------------------------------------------------- 1. honest refusals */
 
 test('the sweep refuses honestly: no absence, one absence, and windows that never share a date', () => {
-  assert.equal(SCHEMA_VERSION, 154, 'ADR-0123 adds no schema bump');
+  assert.equal(SCHEMA_VERSION, 155, 'ADR-0123 adds no schema bump');
   assert.equal(DUTY_CONCURRENCY_ENGINE_VERSION, 'duty-concurrency-2026.11-v1');
   assert.ok(DUTY_CONCURRENCY_PREMISE.length > 0, 'the premise is printed in the product');
 
