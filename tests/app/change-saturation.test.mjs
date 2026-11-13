@@ -221,14 +221,14 @@ function withDom(run) {
 /* ------------------------------------------------------------- 1. registration */
 
 test('registration: schema v148, the 33rd matrix panel, CSV scope #140, RULE-CSA-01, one safe read', () => {
-  assert.equal(SCHEMA_VERSION, 148);
+  assert.equal(SCHEMA_VERSION, 149);
   assert.ok(MATRIX_PANELS.some((panel) => panel.key === 'change-saturation'), 'the panel is on the matrix tab bar');
   assert.equal(MATRIX_PANELS.filter((panel) => panel.key === 'change-saturation').length, 1, 'exactly one panel entry');
   assert.equal(MATRIX_PANELS.length, 33, 'the 33rd matrix panel');
   const scope = CSV_EXPORTS.find((entry) => entry.key === CHANGE_SATURATION_CSV_SCOPE);
   assert.ok(scope, 'CSV #140 is registered');
   assert.equal(scope.sensitive, false, 'the export is aggregate-only, so it is not a sensitive scope');
-  assert.equal(CSV_EXPORTS.length, 140, 'the export count moved from 139 to 140 and nothing else did');
+  assert.equal(CSV_EXPORTS.length, 141, 'the export count moved from 139 to 140 and nothing else did');
   assert.ok(SAFE_READS.has('changeSaturationReport'), 'the seat-scoped board is a declared safe read');
   assert.ok(!SAFE_READS.has('changeSaturationDeclareDemand'), 'declaring a demand is NOT a safe read: it writes');
   const contract = PROPAGATION_CONTRACTS.find((c) => c.rule?.id === 'changeSaturationRule');
@@ -941,7 +941,7 @@ test('147 → 148 is additive: three EMPTY collections, four conventions, nothin
     settings: { leaderName: 'Old', activeSeatId: null },
   };
   const next = MIGRATIONS[147](v147);
-  assert.equal(next.schemaVersion, 148);
+  assert.equal(next.schemaVersion, 149);
   assert.deepEqual(next.changeSaturationActs, []);
   assert.deepEqual(next.changeSaturationCeilings, []);
   assert.deepEqual(next.changeSaturationMarkers, []);

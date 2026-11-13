@@ -89,6 +89,16 @@ import {
   normalizeChangeSaturationSettings,
 } from './domain/changeSaturationSchema.js';
 import { normalizeDependencyCycleSettings } from './domain/dependencyCycleSchema.js';
+// ADR-0188 (Schema v149): cross-line after-action corroboration & lesson-adoption
+// parity. The AAR ledger itself (`retros`) is READ, never rewritten; requests and
+// their frozen snapshots normalize before answers resolve, and adoptions are
+// independent line acts.
+import {
+  normalizeAarCorroborationRequests,
+  normalizeAarCorroborationResponses,
+  normalizeAarAdoptions,
+  normalizeAarCorroborationSettings,
+} from './domain/aarCorroborationSchema.js';
 // ADR-0185 (Schema v147): dated Matrix change-impact requests and first-person
 // line responses. Request snapshots normalize before their responses resolve.
 import {
@@ -803,7 +813,7 @@ export {
 // about what the change puts on a person, and a capacity inferred from level, pay
 // or meeting load would be a limit its author never agreed to. An upgraded
 // workspace therefore opens printing `no capacity declared` — refused, never zero.
-export const SCHEMA_VERSION = 148;
+export const SCHEMA_VERSION = 149;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -2228,6 +2238,10 @@ export const DEFAULT_SETTINGS = Object.freeze({
   ...normalizeChangeSaturationSettings({}),
   // ADR-0187: dependency-cycle ask window and automation pause (Schema v148 unchanged).
   ...normalizeDependencyCycleSettings({}),
+  // ADR-0188: corroboration escalation window, the coverage disclosure floor, the
+  // adoption-parity window and the automation pause. No corroboration default:
+  // nothing here implies that a line agreed to anything.
+  ...normalizeAarCorroborationSettings({}),
 });
 
 export const COLLECTIONS = [
@@ -2956,6 +2970,13 @@ export const COLLECTIONS = [
   'changeSaturationActs',
   'changeSaturationCeilings',
   'changeSaturationMarkers',
+  // ADR-0188 (Schema v149): dated corroboration requests per review and line
+  // holder, first-person answers, and dated per-line adoption acts. No state,
+  // currentness, coverage or parity verdict is stored — every one is re-derived
+  // on read. The AAR ledger (`retros`) is read here and never written.
+  'aarCorroborationRequests',
+  'aarCorroborationResponses',
+  'aarAdoptions',
 ];
 
 /** Stable empty state. `now` is an ISO string so the result is a pure value. */
@@ -3723,6 +3744,9 @@ export function normalizeSettings(raw) {
     // ADR-0186: named here for the same reason — the read window and the pool
     // disclosure floor are printed by the panel, so they must be carried.
     ...normalizeChangeSaturationSettings(s),
+    // ADR-0188: named here for the same reason — the escalation window and the
+    // coverage floor are printed by the panel, so a reload must carry them.
+    ...normalizeAarCorroborationSettings(s),
     ...normalizeDependencyCycleSettings(s),
     ...normalizeStructureHistorySettings(s),
     ...normalizeDifferencesSettings(s),
@@ -7688,6 +7712,15 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // ADR-0185: requests resolve before responses. The snapshot is retained even
   // after the live impact or reporting line changes; changeImpact.js derives it
   // stale and stops counting its response as current without deleting history.
+  // ADR-0188 (Schema v149): requests freeze their snapshot first, so an answer
+  // that points at a request the loader refused is dropped rather than orphaned.
+  state.aarCorroborationRequests = normalizeAarCorroborationRequests(
+    raw.aarCorroborationRequests, warnings, todayDay,
+  );
+  state.aarCorroborationResponses = normalizeAarCorroborationResponses(
+    raw.aarCorroborationResponses, state.aarCorroborationRequests, warnings, todayDay,
+  );
+  state.aarAdoptions = normalizeAarAdoptions(raw.aarAdoptions, warnings, todayDay);
   state.changeImpactRequests = normalizeChangeImpactRequests(raw.changeImpactRequests, warnings, todayDay);
   state.changeImpactResponses = normalizeChangeImpactResponses(
     raw.changeImpactResponses,
@@ -9032,6 +9065,19 @@ export const MIGRATIONS = {
   // already exist: the impacts a change carries say WHO moved, never what the
   // move cost them, and inventing a capacity at upgrade time would fabricate the
   // one declaration this register exists to hold a human to.
+  // 148 → 149: ADR-0188 adds three EMPTY collections and four declared
+  // conventions. A workspace already holds after-action reviews, and every one of
+  // them was authored inside a single line. No corroboration, no adoption and no
+  // parity verdict is back-filled: inventing agreement at upgrade time is the
+  // exact fabrication this register exists to make impossible.
+  148: (v148) => ({
+    ...v148,
+    schemaVersion: 149,
+    aarCorroborationRequests: Array.isArray(v148.aarCorroborationRequests) ? v148.aarCorroborationRequests : [],
+    aarCorroborationResponses: Array.isArray(v148.aarCorroborationResponses) ? v148.aarCorroborationResponses : [],
+    aarAdoptions: Array.isArray(v148.aarAdoptions) ? v148.aarAdoptions : [],
+    settings: { ...(v148.settings || {}), ...normalizeAarCorroborationSettings(v148.settings || {}) },
+  }),
   147: (v147) => ({
     ...v147,
     schemaVersion: 148,

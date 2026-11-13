@@ -80,7 +80,7 @@ function withDom(fn) {
 }
 
 test('ADR-0164 registration: Schema v140, spine 1:1 parity, gateway, seat policy, panel and CSV #130', () => {
-  assert.equal(SCHEMA_VERSION, 148);
+  assert.equal(SCHEMA_VERSION, 149);
   const empty = createEmptyState(ISO);
   assert.deepEqual(empty.oneOnOneLineMarkers, []);
   assert.equal(empty.settings.oneOnOneLineCadenceDays, 28);
@@ -89,8 +89,8 @@ test('ADR-0164 registration: Schema v140, spine 1:1 parity, gateway, seat policy
   assert.equal(empty.settings.oneOnOneLineAutoPropagate, true);
 
   const { raw, applied } = migrate({ schemaVersion: 139, appId: 'leados', meta: {}, settings: {} });
-  assert.deepEqual(applied, ['139 → 140', '140 → 141', '141 → 142', '142 → 143', '143 → 144', '144 → 145', '145 → 146', '146 → 147', '147 → 148']);
-  assert.equal(raw.schemaVersion, 148);
+  assert.deepEqual(applied, ['139 → 140', '140 → 141', '141 → 142', '142 → 143', '143 → 144', '144 → 145', '145 → 146', '146 → 147', '147 → 148', '148 → 149']);
+  assert.equal(raw.schemaVersion, 149);
   assert.deepEqual(raw.oneOnOneLineMarkers, []);
 
   assert.equal(PROPAGATION_CONTRACTS.length, DEFAULT_POST_COMMIT_RULES.length);
@@ -106,7 +106,7 @@ test('ADR-0164 registration: Schema v140, spine 1:1 parity, gateway, seat policy
   assert.equal(ACTION_RIGHTS['govern-oneonone-lines'].minRank, 3);
   assert.ok(SAFE_READS.has('oneOnOneLineReport'));
   assert.ok(MATRIX_PANELS.some((p) => p.key === 'one-on-ones'));
-  assert.equal(CSV_EXPORTS.length, 140);
+  assert.equal(CSV_EXPORTS.length, 141);
   assert.ok(CSV_EXPORTS.some((c) => c.key === 'one-on-one-lines' && c.sensitive === false));
 });
 

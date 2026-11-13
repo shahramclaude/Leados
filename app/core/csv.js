@@ -150,6 +150,9 @@ import { CHANGE_IMPACT_CSV_COLUMNS, CHANGE_IMPACT_CSV_DESCRIPTOR } from './domai
 // saturation — one workspace row plus one row per verdict state.
 import { buildChangeSaturation, changeSaturationCsvRows } from './domain/changeSaturation.js';
 import { CHANGE_SATURATION_CSV_COLUMNS, CHANGE_SATURATION_CSV_DESCRIPTOR } from './domain/changeSaturationRegistry.js';
+// ADR-0188: the corroboration register exports the SAME rows the panel printed.
+import { buildAarCorroborationReport, aarCorroborationCsvRows } from './domain/aarCorroboration.js';
+import { AAR_CORROBORATION_CSV_COLUMNS, AAR_CORROBORATION_CSV_DESCRIPTOR } from './domain/aarCorroborationRegistry.js';
 // ADR-0161: Matrix Span Fragmentation & Counterpart-Dyad Coordination Ledger
 // (CSV scope #121). Aggregate topology only — never a person, manager, line,
 // seat or free-text agreement. An incomplete matrix span withholds workspace
@@ -1363,6 +1366,7 @@ export const CSV_EXPORTS = [
   // title, line, record id or prose; a withheld verdict prints its own count and
   // the percentage is withheld below the declared floor or on an unreconciled read.
   CHANGE_SATURATION_CSV_DESCRIPTOR,
+  AAR_CORROBORATION_CSV_DESCRIPTOR,
 ];
 
 function personLookup(state) {
@@ -6454,6 +6458,21 @@ export function buildScopeTable(state, scope, now) {
       return {
         columns: CHANGE_IMPACT_CSV_COLUMNS.map((key) => ({ key, header: key })),
         rows: changeImpactCsvRows(report),
+      };
+    }
+    case 'matrix-aar-corroboration': {
+      // CSV scope #141 (ADR-0188, Schema v149). Built from the SAME reader the
+      // panel renders, so an exported count is provably the count that was
+      // printed. Aggregate only: no person, manager, line, review id, lesson text
+      // or answer prose. A withheld rate is BLANK with its reason — never zero.
+      const report = buildAarCorroborationReport(state, {
+        now,
+        settings: state.settings || {},
+        detailLevel: 'full',
+      });
+      return {
+        columns: AAR_CORROBORATION_CSV_COLUMNS.map((key) => ({ key, header: key })),
+        rows: aarCorroborationCsvRows(report),
       };
     }
     case 'matrix-change-saturation': {

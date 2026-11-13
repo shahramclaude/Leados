@@ -52,12 +52,17 @@ import {
   openStartRetroDialog,
 } from '../ui/learning-modals.js';
 import { humanDays } from '../core/time.js';
+// ADR-0188: the cross-line corroboration & lesson-parity register. It READS the
+// AAR ledger above and never writes it; the panel is a sibling tab, not a
+// replacement for the review of record.
+import { renderLearningCrossLinePanel } from './learningCrossLinePanel.js';
 
 const TABS = [
   { key: 'queue', label: 'Queue' },
   { key: 'ledger', label: 'Ledger' },
   { key: 'recurrence', label: 'Recurrence' },
   { key: 'coverage', label: 'Coverage' },
+  { key: 'cross-line', label: 'Cross-line corroboration' },
 ];
 const TAB_KEYS = new Set(TABS.map((tab) => tab.key));
 
@@ -507,6 +512,10 @@ function coverageTab(ctx, report) {
 /* ------------------------------------------------------------------ view */
 
 export function renderLearning(ctx) {
+  // ADR-0188: `?panel=cross-line` is a deep link from the matrix and learning
+  // registers; `?tab=` remains the tab selector so older links keep working.
+  const panel = ctx.query?.get?.('panel') || null;
+  if (panel === 'cross-line') return renderLearningCrossLinePanel(ctx);
   const tab = TAB_KEYS.has(ctx.query.get('tab')) ? ctx.query.get('tab') : 'queue';
   const report = buildLearningReport(ctx.state, ctx.now, ctx.state.settings);
   const selectedLessonId = ctx.query?.get?.('lesson') || null;

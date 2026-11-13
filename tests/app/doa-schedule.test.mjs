@@ -111,7 +111,7 @@ function seedMatrixOrg(draft) {
  * ===================================================================== */
 
 test('registration, Schema v138 additive migration, exact integer-cents conversion and fail-closed load', () => {
-  assert.equal(SCHEMA_VERSION, 148);
+  assert.equal(SCHEMA_VERSION, 149);
   assert.ok(MATRIX_PANELS.some((p) => p.key === 'authority'), 'authority panel registered in MATRIX_PANELS');
   assert.ok(CSV_EXPORTS.some((s) => s.key === 'matrix-doa' && s.sensitive === false));
   assert.ok(DEFAULT_POST_COMMIT_RULES.includes(doaScheduleRule));
@@ -132,8 +132,8 @@ test('registration, Schema v138 additive migration, exact integer-cents conversi
   // Additive migration 137 -> 138 invents zero limits
   const legacy = { schemaVersion: 137, people: [person('ceo', 'Celia', 'vp', null)], settings: { doaAskDueDays: 999 } };
   const { raw, applied } = migrate(legacy);
-  assert.deepEqual(applied, ['137 → 138', '138 → 139', '139 → 140', '140 → 141', '141 → 142', '142 → 143', '143 → 144', '144 → 145', '145 → 146', '146 → 147', '147 → 148']);
-  assert.equal(raw.schemaVersion, 148);
+  assert.deepEqual(applied, ['137 → 138', '138 → 139', '139 → 140', '140 → 141', '141 → 142', '142 → 143', '143 → 144', '144 → 145', '145 → 146', '146 → 147', '147 → 148', '148 → 149']);
+  assert.equal(raw.schemaVersion, 149);
   assert.deepEqual(raw.doaSchedule, []);
   assert.deepEqual(raw.doaMarkers, []);
   assert.equal(raw.settings.doaAskDueDays, 60, 'clamped to upper bound 60');

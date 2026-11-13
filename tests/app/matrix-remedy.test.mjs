@@ -406,9 +406,9 @@ test('the panel renders the report’s own figures in JSDOM, and an unreadable v
 /* ----------------------------------------------- 5. schema: additive, fail-closed, no stored verdict */
 
 test('schema v139: the collection is empty on upgrade, malformed rows are dropped with a warning, and nothing is repaired', () => {
-  assert.equal(SCHEMA_VERSION, 148);
+  assert.equal(SCHEMA_VERSION, 149);
   const migrated = migrate({ schemaVersion: 138, appId: 'leados', meta: {}, settings: {} });
-  assert.equal(migrated.raw.schemaVersion, 148);
+  assert.equal(migrated.raw.schemaVersion, 149);
   assert.deepEqual(migrated.raw.matrixRemedies, []);
 
   const valid = remedyRow({ signatureKey: canonicalSignatureKey('bypass', ['functional', 'project'], ['priority']) });

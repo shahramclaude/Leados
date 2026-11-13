@@ -8,6 +8,7 @@ import { responsibleNodeId } from './chain.js';
 import { matrixLineScopeFor } from './matrix.js';
 import { PAUSE_PERMIT_RIGHTS } from './pausePermitRegistry.js';
 import { CHANGE_SATURATION_RIGHTS } from './changeSaturationRegistry.js';
+import { AAR_CORROBORATION_RIGHTS } from './aarCorroborationRegistry.js';
 import { routeVerdict } from './seatRegistry.js';
 import { validateMissionCommands } from './mission.js';
 import { captureBriefCase } from './missionCaptureBrief.js';
@@ -39,6 +40,18 @@ const groups = [
   // read plus the scan are declared so an operator can always retry a deferred ask.
   [CHANGE_SATURATION_RIGHTS.DECLARE, 'changeSaturationDeclareDemand changeSaturationWithdrawDemand'],
   [CHANGE_SATURATION_RIGHTS.GOVERN, 'changeSaturationDeclareCeiling changeSaturationRetireCeiling changeSaturationScan changeSaturationSetConventions'],
+  // ADR-0188: cross-line after-action corroboration. Reading the register is its
+  // own right; asking a line to answer is the act of a manager who reaches the
+  // participants; ANSWERING is the requested holder's own act and the action
+  // re-checks that the seat IS that holder; adopting a lesson is a separate
+  // first-person statement a holder makes about their own line. Governing the
+  // conventions is separate again. The scan is declared so an operator can retry
+  // a capped commit rather than waiting for the next write.
+  [AAR_CORROBORATION_RIGHTS.READ, 'aarCorroborationReport aarCorroborationBriefText aarCorroborationCsvRows aarCorroborationAttentionCount'],
+  [AAR_CORROBORATION_RIGHTS.REQUEST, 'aarCorroborationRequest aarCorroborationCandidates'],
+  [AAR_CORROBORATION_RIGHTS.RESPOND, 'aarCorroborationRespond'],
+  [AAR_CORROBORATION_RIGHTS.ADOPT, 'aarLessonAdopt'],
+  [AAR_CORROBORATION_RIGHTS.GOVERN, 'aarCorroborationScan aarCorroborationSetConventions'],
   // ADR-0150: Matrix Onboarding Completeness. Writing a line's onboarding brief is
   // the act of the manager who holds that line (the action narrows it to them), and
   // acknowledging one is the PERSON's own act (the action narrows that too). They
@@ -524,7 +537,11 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // the seat are counted, never listed, and the altitude disclosure ladder decides
 // whether names, pools and clearances come back or counts only. A withheld figure
 // is a printed reason, never a zero.
-'changeSaturationReport', 'changeSaturationBands']);
+'changeSaturationReport', 'changeSaturationBands',
+// ADR-0188: the corroboration board is scoped INSIDE the read model — a manager
+// seat receives only the reviews and answers it reaches, and a seat with no span
+// gets totals and no rows. A withheld figure is a printed reason, never a zero.
+'aarCorroborationReport', 'aarCorroborationBriefText', 'aarCorroborationAttentionCount']);
 const refusal = (reason) => ({ ok: false, code: 'scope-refusal', error: reason, field: 'scope' });
 
 /** ADR-0087: under enforcement, boundary-management commands stay reachable
@@ -585,6 +602,9 @@ const MATRIX_LINE_SCOPED = new Set([
   // ADR-0186: declaring a demand names a person the declaring seat may reach only
   // through a declared Matrix line; the action re-checks the line holder itself.
   'changeSaturationDeclareDemand',
+  // ADR-0188: a corroboration request names participants reachable only through a
+  // declared Matrix line; the action re-checks the holder against the frozen set.
+  'aarCorroborationRequest',
 ]);
 
 /** Exact method allowlist + rank + record/person scope. No arbitrary API names. */

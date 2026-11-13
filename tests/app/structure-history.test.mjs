@@ -518,10 +518,10 @@ test('a single-chain workspace with no second line is fully supported and unchan
 /* ------------------------------------------------ 7. schema, CSV, display */
 
 test('schema v124 is additive and the migration writes an EMPTY ledger, never a back-fill', () => {
-  assert.equal(SCHEMA_VERSION, 148);
+  assert.equal(SCHEMA_VERSION, 149);
   const legacy = { schemaVersion: 123, people: roster(), settings: {} };
   const { raw, applied } = migrate(legacy);
-  assert.deepEqual(applied, ['123 → 124', '124 → 125', '125 → 126', '126 → 127', '127 → 128', '128 → 129', '129 → 130', '130 → 131', '131 → 132', '132 → 133', '133 → 134', '134 → 135', '135 → 136', '136 → 137', '137 → 138', '138 → 139', '139 → 140', '140 → 141', '141 → 142', '142 → 143', '143 → 144', '144 → 145', '145 → 146', '146 → 147', '147 → 148']);
+  assert.deepEqual(applied, ['123 → 124', '124 → 125', '125 → 126', '126 → 127', '127 → 128', '128 → 129', '129 → 130', '130 → 131', '131 → 132', '132 → 133', '133 → 134', '134 → 135', '135 → 136', '136 → 137', '137 → 138', '138 → 139', '139 → 140', '140 → 141', '141 → 142', '142 → 143', '143 → 144', '144 → 145', '145 → 146', '146 → 147', '147 → 148', '148 → 149']);
   assert.deepEqual(raw.structureHistory, [], 'no past is invented at upgrade time');
   assert.deepEqual(raw.structureHistoryMarkers, []);
   assert.equal(raw.settings.structureHistoryReviewDays, 90, 'the convention is clamped in');

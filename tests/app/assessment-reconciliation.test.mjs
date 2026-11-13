@@ -461,13 +461,13 @@ test('board roll-up counts every packet once', async () => {
 });
 
 test('schema v125→v126 migrates to an EMPTY ledger with clamped conventions', async () => {
-  assert.equal(SCHEMA_VERSION, 148);
+  assert.equal(SCHEMA_VERSION, 149);
   const old = createEmptyState(ISO);
   // Pin to v125 manually by removing anything v126 added and setting version
   old.schemaVersion = 125;
   delete old.assessmentReconciliationMarkers; // never existed
   const { raw: migrated } = migrate(old);
-  assert.equal(migrated.schemaVersion, 148);
+  assert.equal(migrated.schemaVersion, 149);
   // v126 adds no collection — its data lives on review.stewardship.answers[].signal
   // Existing reviews gain no signal; the read model handles missing signals as unrated
   const checkState = makeState();
