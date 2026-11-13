@@ -201,6 +201,8 @@ export const PAUSE_PERMIT_MATRIX_REACH_SWITCHES = Object.freeze([
   // ADR-0189: the interface-alignment register's automation switch. A pause on
   // it is a printed, authorisable act — the same as every other matrix-reach rule.
   'interfaceAlignmentAutoPropagate',
+  // ADR-0190: the standard-work automation switch — a printed, authorisable pause.
+  'standardWorkAutoPropagate',
 ]);
 
 export function pausePermitReachesMatrix(key) {
@@ -234,6 +236,7 @@ export const PAUSE_PERMIT_REACH_RULES = Object.freeze({
   dependencyCycleAutoPropagate: 'dependencyCycleRules.js',
   aarCorroborationAutoPropagate: 'aarCorroborationRules.js',
   interfaceAlignmentAutoPropagate: 'interfaceAlignmentRules.js',
+  standardWorkAutoPropagate: 'standardWorkRules.js',
 });
 
 /** How much of the register a seat is shown. Mirrors the altitude disclosure ladder. */

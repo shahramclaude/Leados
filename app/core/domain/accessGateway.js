@@ -9,6 +9,7 @@ import { matrixLineScopeFor } from './matrix.js';
 import { PAUSE_PERMIT_RIGHTS } from './pausePermitRegistry.js';
 import { CHANGE_SATURATION_RIGHTS } from './changeSaturationRegistry.js';
 import { AAR_CORROBORATION_RIGHTS } from './aarCorroborationRegistry.js';
+import { STANDARD_WORK_RIGHTS } from './standardWorkRegistry.js';
 import { routeVerdict } from './seatRegistry.js';
 import { validateMissionCommands } from './mission.js';
 import { captureBriefCase } from './missionCaptureBrief.js';
@@ -52,6 +53,14 @@ const groups = [
   [AAR_CORROBORATION_RIGHTS.RESPOND, 'aarCorroborationRespond'],
   [AAR_CORROBORATION_RIGHTS.ADOPT, 'aarLessonAdopt'],
   [AAR_CORROBORATION_RIGHTS.GOVERN, 'aarCorroborationScan aarCorroborationSetConventions'],
+  // ADR-0190: Leader Standard Work & Tiered Daily Management. Reading, declaring
+  // and recording are open to every altitude — the ACTION narrows each act to
+  // the person it belongs to (a check is the owner's alone; a tier act is the
+  // addressed leader's alone). Governing the conventions is rank 3–5.
+  [STANDARD_WORK_RIGHTS.READ, 'standardWorkReport standardWorkBriefText standardWorkCsvRows standardWorkAttentionCount'],
+  [STANDARD_WORK_RIGHTS.DECLARE, 'standardWorkDeclareRoutine standardWorkRetireRoutine standardWorkCandidates'],
+  [STANDARD_WORK_RIGHTS.RECORD, 'standardWorkRecordCheck standardWorkTierAct'],
+  [STANDARD_WORK_RIGHTS.GOVERN, 'standardWorkScan standardWorkSetConventions'],
   // ADR-0150: Matrix Onboarding Completeness. Writing a line's onboarding brief is
   // the act of the manager who holds that line (the action narrows it to them), and
   // acknowledging one is the PERSON's own act (the action narrows that too). They
@@ -551,7 +560,11 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // ADR-0188: the corroboration board is scoped INSIDE the read model — a manager
 // seat receives only the reviews and answers it reaches, and a seat with no span
 // gets totals and no rows. A withheld figure is a printed reason, never a zero.
-'aarCorroborationReport', 'aarCorroborationBriefText', 'aarCorroborationAttentionCount']);
+'aarCorroborationReport', 'aarCorroborationBriefText', 'aarCorroborationAttentionCount',
+// ADR-0190: the standard-work board is scoped INSIDE the read model — a seat
+// receives its own routines, those owed to it and those it holds a line over;
+// everything else is counts with a printed reason.
+'standardWorkReport', 'standardWorkBriefText', 'standardWorkAttentionCount', 'standardWorkCandidates']);
 const refusal = (reason) => ({ ok: false, code: 'scope-refusal', error: reason, field: 'scope' });
 
 /** ADR-0087: under enforcement, boundary-management commands stay reachable
@@ -615,6 +628,9 @@ const MATRIX_LINE_SCOPED = new Set([
   // ADR-0188: a corroboration request names participants reachable only through a
   // declared Matrix line; the action re-checks the holder against the frozen set.
   'aarCorroborationRequest',
+  // ADR-0190: declaring a routine may name a person the declaring seat reaches
+  // only through a dotted line; the action re-checks the line holder itself.
+  'standardWorkDeclareRoutine',
 ]);
 
 /** Exact method allowlist + rank + record/person scope. No arbitrary API names. */

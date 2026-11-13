@@ -103,6 +103,12 @@ import {
 // dependency window, the ask window and the automation pause. No channel
 // default: a channel is a human agreement, so an absent one stays absent.
 import { normalizeInterfaceAlignmentSettings } from './domain/interfaceAlignmentSchema.js';
+import {
+  normalizeStandardWorkChecks,
+  normalizeStandardWorkRoutines,
+  normalizeStandardWorkSettings,
+  normalizeStandardWorkTierActs,
+} from './domain/standardWorkSchema.js';
 // ADR-0185 (Schema v147): dated Matrix change-impact requests and first-person
 // line responses. Request snapshots normalize before their responses resolve.
 import {
@@ -817,7 +823,7 @@ export {
 // about what the change puts on a person, and a capacity inferred from level, pay
 // or meeting load would be a limit its author never agreed to. An upgraded
 // workspace therefore opens printing `no capacity declared` — refused, never zero.
-export const SCHEMA_VERSION = 149;
+export const SCHEMA_VERSION = 150;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -2249,6 +2255,9 @@ export const DEFAULT_SETTINGS = Object.freeze({
   // ADR-0189: the alignment dependency window, the ask window and the
   // automation pause. No channel default: a channel is a human agreement.
   ...normalizeInterfaceAlignmentSettings({}),
+  // ADR-0190: leader standard work conventions (window, slot floor, lapse run,
+  // tier window, working week, automation switch).
+  ...normalizeStandardWorkSettings({}),
 });
 
 export const COLLECTIONS = [
@@ -2984,6 +2993,13 @@ export const COLLECTIONS = [
   'aarCorroborationRequests',
   'aarCorroborationResponses',
   'aarAdoptions',
+  // ADR-0190 (Schema v150): Leader Standard Work & Tiered Daily Management.
+  // Three append-only ledgers — declared routines, first-person checks against
+  // one calendar slot each, and first-person tier acts on an escalated
+  // abnormality. No adherence, verdict, load or yield figure is stored.
+  'standardWorkRoutines',
+  'standardWorkChecks',
+  'standardWorkTierActs',
 ];
 
 /** Stable empty state. `now` is an ISO string so the result is a pure value. */
@@ -3759,6 +3775,7 @@ export function normalizeSettings(raw) {
     // key not listed would be dropped on every load, and the window the panel
     // prints would be a number the record does not hold.
     ...normalizeInterfaceAlignmentSettings(s),
+    ...normalizeStandardWorkSettings(s),
     ...normalizeStructureHistorySettings(s),
     ...normalizeDifferencesSettings(s),
     ...normalizeFitSettings(s),
@@ -7732,6 +7749,9 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
     raw.aarCorroborationResponses, state.aarCorroborationRequests, warnings, todayDay,
   );
   state.aarAdoptions = normalizeAarAdoptions(raw.aarAdoptions, warnings, todayDay);
+  state.standardWorkRoutines = normalizeStandardWorkRoutines(raw.standardWorkRoutines, warnings);
+  state.standardWorkChecks = normalizeStandardWorkChecks(raw.standardWorkChecks, state.standardWorkRoutines, warnings);
+  state.standardWorkTierActs = normalizeStandardWorkTierActs(raw.standardWorkTierActs, state.standardWorkChecks, warnings);
   state.changeImpactRequests = normalizeChangeImpactRequests(raw.changeImpactRequests, warnings, todayDay);
   state.changeImpactResponses = normalizeChangeImpactResponses(
     raw.changeImpactResponses,
@@ -9076,6 +9096,18 @@ export const MIGRATIONS = {
   // already exist: the impacts a change carries say WHO moved, never what the
   // move cost them, and inventing a capacity at upgrade time would fabricate the
   // one declaration this register exists to hold a human to.
+  // 149 → 150: ADR-0190 adds three EMPTY ledgers and six declared conventions.
+  // No routine is inferred from one-on-ones, meetings, walks or audits already on
+  // record: a routine is a standard a leader DECLARED, and inventing one at
+  // upgrade time would make people owe slots nobody agreed to.
+  149: (v149) => ({
+    ...v149,
+    schemaVersion: 150,
+    standardWorkRoutines: Array.isArray(v149.standardWorkRoutines) ? v149.standardWorkRoutines : [],
+    standardWorkChecks: Array.isArray(v149.standardWorkChecks) ? v149.standardWorkChecks : [],
+    standardWorkTierActs: Array.isArray(v149.standardWorkTierActs) ? v149.standardWorkTierActs : [],
+    settings: { ...(v149.settings || {}), ...normalizeStandardWorkSettings(v149.settings || {}) },
+  }),
   // 148 → 149: ADR-0188 adds three EMPTY collections and four declared
   // conventions. A workspace already holds after-action reviews, and every one of
   // them was authored inside a single line. No corroboration, no adoption and no

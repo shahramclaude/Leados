@@ -157,6 +157,8 @@ import { AAR_CORROBORATION_CSV_COLUMNS, AAR_CORROBORATION_CSV_DESCRIPTOR } from 
 // Eppinger & Rowles) — one pure reader behind the panel and the export.
 import { buildInterfaceAlignment, interfaceAlignmentCsvRows } from './domain/interfaceAlignment.js';
 import { INTERFACE_ALIGNMENT_CSV_COLUMNS, INTERFACE_ALIGNMENT_CSV_DESCRIPTOR } from './domain/interfaceAlignmentRegistry.js';
+import { buildStandardWork, standardWorkCsvRows } from './domain/standardWork.js';
+import { STANDARD_WORK_CSV_COLUMNS, STANDARD_WORK_CSV_DESCRIPTOR } from './domain/standardWorkRegistry.js';
 // ADR-0161: Matrix Span Fragmentation & Counterpart-Dyad Coordination Ledger
 // (CSV scope #121). Aggregate topology only — never a person, manager, line,
 // seat or free-text agreement. An incomplete matrix span withholds workspace
@@ -1376,6 +1378,8 @@ export const CSV_EXPORTS = [
   // verdict, one per channel state and one per refusal. No person, manager, pair
   // key, line, record id or prose; a refused claim prints its reason.
   INTERFACE_ALIGNMENT_CSV_DESCRIPTOR,
+  // #143 (ADR-0190): leader standard work — aggregate, no identities.
+  STANDARD_WORK_CSV_DESCRIPTOR,
 ];
 
 function personLookup(state) {
@@ -6482,6 +6486,17 @@ export function buildScopeTable(state, scope, now) {
       return {
         columns: AAR_CORROBORATION_CSV_COLUMNS.map((key) => ({ key, header: key })),
         rows: aarCorroborationCsvRows(report),
+      };
+    }
+    case 'standard-work': {
+      // CSV scope #143 (ADR-0190, Schema v150). Built from the SAME reader the
+      // board renders. Aggregate only: no person, manager, routine title,
+      // standard, note, line id or record id. A refused figure prints its
+      // reason; it is never a zero.
+      const report = buildStandardWork(state, { now, settings: state.settings || {} });
+      return {
+        columns: STANDARD_WORK_CSV_COLUMNS.map((key) => ({ key, header: key })),
+        rows: standardWorkCsvRows(report),
       };
     }
     case 'matrix-interface-alignment': {

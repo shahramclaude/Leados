@@ -266,7 +266,7 @@ test('v112 → v113 is additive: an empty comparison ledger, nothing invented, a
   old.schemaVersion = 112;
   delete old.portfolioComparisons;
   const migrated = migrate(old);
-  assert.equal(migrated.raw.schemaVersion, 149);
+  assert.equal(migrated.raw.schemaVersion, 150);
   assert.deepEqual(migrated.raw.portfolioComparisons, []);
   assert.deepEqual(migrate(migrated.raw).applied, []);
 

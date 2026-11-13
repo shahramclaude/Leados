@@ -267,6 +267,7 @@ import { renderIdentity } from './views/identity.js';
 // ADR-0121: who answers for each duty line when the seat holder is absent.
 import { renderDutyCover } from './views/dutyCover.js';
 import { renderStandby } from './views/standby.js';
+import { renderStandardWork } from './views/standardWork.js';
 import { dutyCoverageAttentionCount } from './core/domain/dutyCoverage.js';
 // ADR-0140: the Matrix Accountability Ledger.
 import { renderMatrix } from './views/matrix.js';
@@ -289,6 +290,7 @@ import { contradictionAttentionCount } from './core/domain/contradictionAudit.js
 // ADR-0147: the reviews nav badge — matrix packets with an outstanding step.
 import { reviewStewardshipAttentionCount } from './core/domain/reviewStewardship.js';
 import { dutyStandbyAttentionCount } from './core/domain/dutyStandby.js';
+import { standardWorkAttentionCount } from './core/domain/standardWork.js';
 import { identityAttentionCount } from './core/domain/identity.js';
 
 function safeDecode(segment) {
@@ -533,6 +535,10 @@ export const NAV = [
     // this audits the design that produces them.
     { route: 'contradiction', label: 'Contradiction audit', icon: '≠', badge: 'contradiction' },
     { route: 'standby', label: 'Cover acknowledgement', icon: '✋', badge: 'standby' },
+    // ADR-0190: leader standard work & tiered daily management — the daily
+    // routine layer every altitude owes, and the tier-by-tier escalation of
+    // what those routines find.
+    { route: 'standard-work', label: 'Leader standard work', icon: '☑', badge: 'standardWork' },
   ] },
 ];
 
@@ -594,6 +600,7 @@ const RENDERERS = {
   arbitration: (ctx) => renderArbitration(ctx),
   contradiction: (ctx) => renderContradiction(ctx),
   standby: (ctx) => renderStandby(ctx),
+  'standard-work': (ctx) => renderStandardWork(ctx),
   people: (ctx) => renderPeople(ctx),
   person: (ctx, segments) => renderPerson(ctx, safeDecode(segments[1])),
   onboarding: (ctx) => {
@@ -775,6 +782,9 @@ export function parseRoute(hash) {
     // looking for "who is covering for me" / "did my cover agree".
     standby: 'standby', 'cover-acknowledgement': 'standby', 'standby-asks': 'standby',
     'cover-standby': 'standby', 'standby-answer': 'standby',
+    // ADR-0190: the names a person would type looking for the daily routine board.
+    'standard-work': 'standard-work', lsw: 'standard-work', 'leader-standard-work': 'standard-work',
+    'tier-board': 'standard-work', 'daily-management': 'standard-work', gemba: 'standard-work',
     'cover-register': 'duty-cover', 'stand-in': 'duty-cover', 'deputy-register': 'duty-cover',
     // ADR-0140: the names a person types looking for "who else does my report
     // answer to" / "why is my engineer on four projects".
@@ -1301,6 +1311,9 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       // still inside its deadline is a normal Monday and is NOT counted here — a
       // badge that fires on every fresh declaration is a badge people stop reading.
       standby: dutyStandbyAttentionCount(state, { now: at, settings: state.settings }),
+      // ADR-0190: escalated abnormalities addressed to the acting seat, plus lapsed
+      // routines it owns or is the next tier for. A held routine is not counted.
+      standardWork: standardWorkAttentionCount(state, { now: at, settings: state.settings, seat: seatCtx?.seat || null }),
       // Schema v32: drafts written from case facts that still await a human.
       comms: (state.commsDrafts || []).filter((d) => d && d.status === 'draft').length,
       due: dueMeetings(state, at, state.settings).length,
@@ -1849,6 +1862,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       prep: '1:1 prep sheet',
       'agenda-ledger': '1:1 agenda ledger',
       matrix: 'Matrix accountability — for every person with more than one manager: which lines they are accountable through, what share of them each line owns, whether those shares add back to one person, who holds each of the six decision rights, and whether every manager’s span adds up to the headcount without counting anybody twice',
+      'standard-work': 'Leader standard work — the repeatable part of every leader’s job declared as routines with an observable standard, checked first-person slot by calendar slot, with adherence and its Wilson interval, lapsed routines sent to the next tier on the line the routine names, and abnormalities carried one dated tier at a time until a tier contains them',
       'duty-cover': 'Duty coverage — for every duty line this altitude (and the spans below it) is supposed to perform: who is declared answerable when the holder is absent, whether that person’s altitude can reach the duty at all, whether their access has ever been exercised on a dated record, which duty carries open work with nobody behind it, where one hand is carrying a duty alone, and — under the Absence plan panel — which dated absence windows leave a duty line with no available cover at all',
     };
     return labels[route] || 'LeadOS';

@@ -3269,3 +3269,12 @@ details[open] > .nav-summary::after { content: '▾'; }
 .flow-bulk-list { display: flex; flex-direction: column; gap: 8px; max-height: 46vh; overflow-y: auto; padding: 4px; }
 .flow-bulk-row { display: flex; flex-direction: column; gap: 6px; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel-2); }
 .flow-bulk-preview { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel-2); }
+
+/* ADR-0190: leader standard work — the slot strip. Glyph AND colour carry the
+ * state, so the strip reads without colour vision. */
+.lsw-strip { display: inline-flex; flex-wrap: wrap; gap: 2px; font-size: 13px; line-height: 1; letter-spacing: 0; }
+.lsw-slot { display: inline-block; width: 14px; text-align: center; color: var(--muted, #6b7280); }
+.lsw-slot-done { color: var(--good); }
+.lsw-slot-abnormal { color: var(--warn); }
+.lsw-slot-missed, .lsw-slot-unrecorded { color: var(--bad); }
+.standard-work-view .brief-text, .brief-text { white-space: pre-wrap; font-size: 13px; }

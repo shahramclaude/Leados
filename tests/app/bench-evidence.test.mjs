@@ -447,7 +447,7 @@ test('the rule is inert on a single-chain workspace and on every other event', (
 /* ------------------------------ 7. the export carries no identity -------- */
 
 test('CSV scope #123 is aggregate-only, reconciles to the panel and names nobody', () => {
-  assert.equal(CSV_EXPORTS.length, 142, 'ADR-0169 #124, ADR-0170 #125, ADR-0171 #126, ADR-0172/0173 #127, ADR-0174 #128, ADR-0175 #129, ADR-0164 #130, ADR-0183..0185 #137..139 (139 registered)');
+  assert.equal(CSV_EXPORTS.length, 143, 'ADR-0169 #124, ADR-0170 #125, ADR-0171 #126, ADR-0172/0173 #127, ADR-0174 #128, ADR-0175 #129, ADR-0164 #130, ADR-0183..0185 #137..139 (139 registered)');
   const state = makeState({
     readinessRows: [readiness('sam'), readiness('zoe'), readiness('ana')],
     lines: projectLines(['sam', 'zoe', 'ana']),
@@ -484,8 +484,8 @@ test('CSV scope #123 is aggregate-only, reconciles to the panel and names nobody
 test('schema v137 adds the regression watch ledgers on top of v136 and changes no record', () => {
   const v134 = { schemaVersion: 134, people: [{ id: 'p', name: 'P' }], readiness: [readiness('sam')] };
   const migrated = migrate(v134).raw;
-  assert.equal(SCHEMA_VERSION, 149);
-  assert.equal(migrated.schemaVersion, 149);
+  assert.equal(SCHEMA_VERSION, 150);
+  assert.equal(migrated.schemaVersion, 150);
   assert.deepEqual(migrated.benchEvidenceMarkers, []);
   assert.deepEqual(migrated.lineIntakes, []);
   assert.deepEqual(migrated.benchRegressionReadings, [], 'no window has been frozen in an upgraded workspace');

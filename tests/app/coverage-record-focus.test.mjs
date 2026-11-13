@@ -141,7 +141,7 @@ function routeQuery(route) {
 /* ------------------------------------------------------- 1. resolver routes */
 
 test('every coverage-family route carries its encoded focus id and no protected content', () => {
-  assert.equal(SCHEMA_VERSION, 149, 'no schema bump: this is a view/route contract');
+  assert.equal(SCHEMA_VERSION, 150, 'no schema bump: this is a view/route contract');
   const state = fixture();
   const cases = [
     ['dutycover', 'cover-a', 'cover', '/duty-cover', 'register'],

@@ -115,7 +115,7 @@ test('app boots on Today with an empty workspace and no errors', async () => {
 test('every route renders without throwing', async () => {
   const env = boot();
   const app = await createAppInstance(env);
-  const routes = ['today', 'insights', 'people', 'oneonones', 'feedback', 'reviews', 'goals', 'delegations', 'growth', 'readiness', 'health', 'cases', 'decisions', 'recognition', 'conflicts', 'settings'];
+  const routes = ['today', 'insights', 'people', 'oneonones', 'feedback', 'reviews', 'goals', 'delegations', 'growth', 'readiness', 'health', 'cases', 'decisions', 'recognition', 'conflicts', 'settings', 'standard-work'];
   for (const route of routes) {
     app.navigate(`#/${route}`);
     const view = env.document.getElementById('view');

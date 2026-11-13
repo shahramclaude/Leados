@@ -167,7 +167,7 @@ function request(api, lineKey = 'line-sam-pm', dueOn = '2026-11-20') {
 /* ------------------------------------------------------------- registration */
 
 test('Schema v147 is additive; Matrix surface and scoped API rights are registered without lowering Changes', () => {
-  assert.equal(SCHEMA_VERSION, 149);
+  assert.equal(SCHEMA_VERSION, 150);
   assert.deepEqual(createEmptyState(ISO).changeImpactRequests, []);
   assert.deepEqual(createEmptyState(ISO).changeImpactResponses, []);
   assert.ok(MATRIX_PANELS.some((panel) => panel.key === 'change-impacts'));
@@ -191,7 +191,7 @@ test('Schema v147 is additive; Matrix surface and scoped API rights are register
   // and pin the total, which is the number a session must state deliberately.
   assert.ok(CSV_EXPORTS.includes(CHANGE_IMPACT_CSV_DESCRIPTOR), 'the descriptor this module exports is the one in the registry');
   assert.equal(CSV_EXPORTS.filter((item) => item.filenameSlug === CHANGE_IMPACT_CSV_DESCRIPTOR.filenameSlug).length, 1, 'registered exactly once, under its own filename');
-  assert.equal(CSV_EXPORTS.length, 142, 'ADR-0186 appended matrix-change-saturation after this scope');
+  assert.equal(CSV_EXPORTS.length, 143, 'ADR-0186 appended matrix-change-saturation after this scope');
 
   const state = fixture();
   const lineScope = matrixLineScopeFor(state, { now: NOW, settings: state.settings });
@@ -202,8 +202,8 @@ test('Schema v147 is additive; Matrix surface and scoped API rights are register
   assert.equal(routeVerdict('matrix', frontline).allow, true, 'the dedicated Matrix surface remains available');
 
   const migrated = migrate({ schemaVersion: 146, settings: {}, changes: [] });
-  assert.deepEqual(migrated.applied, ['146 → 147', '147 → 148', '148 → 149']);
-  assert.equal(migrated.raw.schemaVersion, 149);
+  assert.deepEqual(migrated.applied, ['146 → 147', '147 → 148', '148 → 149', '149 → 150']);
+  assert.equal(migrated.raw.schemaVersion, 150);
   assert.deepEqual(migrated.raw.changeImpactRequests, []);
   assert.deepEqual(migrated.raw.changeImpactResponses, []);
 });
