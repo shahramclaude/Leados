@@ -128,6 +128,7 @@ import { workTurnRule } from './workTurnRules.js';
 import { pausePermitRule } from './pausePermitRules.js';
 import { workforceFlowRule } from './workforceFlowRules.js';
 import { changeSaturationRule } from './changeSaturationRules.js';
+import { aarCorroborationRule } from './aarCorroborationRules.js';
 import { dependencyCycleRule } from './dependencyCycleRules.js';
 import { sealRule } from './sealRules.js';
 // ADR-0092: the Differencing Defender declares its contract like every other rule.
@@ -1014,6 +1015,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     rule: dependencyCycleRule,
     module: 'dependencyCycleRules.js',
     purpose: 'RULE-CYC-01: reads the Cross-Boundary & Single-Line Dependency Feedback-Cycle Register (`buildDependencyCycles`, ADR-0183 / ADR-0187) with the whole-workspace operator view on declared-link writes, operational work-record writes, reporting-line and roster changes, convention changes and explicit `matrix.cycles.scan` / `matrix.scan` scans. For every coupled feedback block (`feedback-cycle`) whose line reach resolves to ONE active roster seat — the sole line manager for a `single-line` loop (serving both single-chain and matrix workspaces) or the unique `matrixJointApex` for a `cross-line` loop — it keeps at most ONE open dated sequencing ask (bounded at 6 per commit, remainder counted) carrying the exact counterfactual single-arc tear census without ever tearing an edge or choosing which commitment yields, linked by `issues-obligation` and fanned up the matrix DAG via `rolls-up-to`. Leader-held, ambiguous-apex, unattributed or off-roster blocks record one identity-free `matrixMarkers` observation (`kind: \'dependency-cycle\'`) and substitute nobody. It closes its own asks when the cycle clears or its owning seat moves, never re-asks a cycle a human closed while it stands, is fast-exit O(|links|) when no precedence arc or cycle obligation exists, and is pausable via `dependencyCycleAutoPropagate` (an explicit scan always runs).',
+    writes: ['delegations', 'links', 'matrixMarkers'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: aarCorroborationRule,
+    module: 'aarCorroborationRules.js',
+    purpose: 'RULE-AAC-01: reads the Cross-Line After-Action Corroboration & Lesson-Adoption Parity register (`buildAarCorroborationReport`, ADR-0188) with the whole-workspace operator view on corroboration requests, first-person answers, per-line adoption acts, convention changes, explicit `learning.aar.corroboration.scan` scans, and every review, roster or reporting-line act that can move a held review\'s participant line set. It raises at most ONE open dated ask per condition, bounded at 8 per commit with the remainder printed in a marker: (a) `corroboration-overdue` — a dated request to a line holder passed its due date with no first-person answer, because silence is never corroboration; (b) `lesson-parity` — a lesson\'s adoption parity is `parity-broken` (a touched line recorded a reasoned refusal) or `parity-open` past the declared `aarCorroborationAdoptWarnDays` window. Asks name the joint apex (`matrixJointApex`) of the line holders who owe the answer or the adoption — never the affected person, who cannot rule on their own review, and never one holder alone, who cannot rule on a peer — carry typed `tracks-followup` to the lesson and `escalates-from` to the apex, are idempotent per deterministic condition signature, and close themselves when the condition clears. An ambiguous, disconnected, unattributed or self-addressed apex records ONE identity-free `matrixMarkers` observation (`kind: \'aar-corroboration\'`) and nobody is substituted. It never edits a review, an answer, an adoption or a lesson state, never reads silence as agreement, and is inert with nobody on the roster; pausable via `aarCorroborationAutoPropagate` (an explicit scan always runs).',
     writes: ['delegations', 'links', 'matrixMarkers'],
     emits: [],
     scansWorkspace: true,

@@ -617,6 +617,15 @@ export const ACTION_RIGHTS = Object.freeze({
   'read-change-impact-review': { minRank: 1, maxRank: 5, label: 'Read the Matrix line-scoped change-impact review register' },
   'request-change-impact-review': { minRank: 1, maxRank: 5, label: 'Request dated review from a line outside your own' },
   'respond-change-impact-review': { minRank: 1, maxRank: 5, label: 'Record a first-person response for your own Matrix line' },
+  // ADR-0188: a review is a frontline-to-director artifact, and every altitude
+  // that can author or hold one may ask a line and answer for its own. Adoption
+  // is the same first-person act on a lesson. Governing the register's
+  // conventions is the rank 3–5 window the agreement registers use.
+  'read-aar-corroboration': { minRank: 1, maxRank: 5, label: 'Read the cross-line after-action corroboration register' },
+  'request-aar-corroboration': { minRank: 1, maxRank: 5, label: 'Ask a line holder to corroborate a held after-action review' },
+  'respond-aar-corroboration': { minRank: 1, maxRank: 5, label: 'Record your own line’s first-person answer to a corroboration request' },
+  'adopt-aar-lesson': { minRank: 1, maxRank: 5, label: 'Record your line’s dated adoption of, or refusal to adopt, a lesson it touches' },
+  'govern-aar-corroboration': { minRank: 3, maxRank: 5, label: 'Set the corroboration escalation window, coverage floor and adoption window' },
   // ADR-0150: onboarding a person into a matrix. Writing a line's brief is the act
   // of the manager who HOLDS that line, at whatever altitude that line's manager
   // sits (a project lead with no home-line reports gets this exactly as a

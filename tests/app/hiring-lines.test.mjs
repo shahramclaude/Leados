@@ -101,7 +101,7 @@ function withDom(fn) {
 }
 
 test('ADR-0176 registration: Schema v141, empty migration, spine parity, gateway, seat policy, panel, CSV #131', () => {
-  assert.equal(SCHEMA_VERSION, 148);
+  assert.equal(SCHEMA_VERSION, 149);
   const empty = createEmptyState(ISO);
   assert.deepEqual(empty.hiringLinePlans, []);
   assert.deepEqual(empty.hiringLineMarkers, []);
@@ -109,7 +109,7 @@ test('ADR-0176 registration: Schema v141, empty migration, spine parity, gateway
   assert.equal(empty.settings.hiringLineAutoPropagate, true);
 
   const { raw, applied } = migrate({ schemaVersion: 140, appId: 'leados', meta: {}, settings: {}, requisitions: [{ id: 'r1', title: 'Role' }] });
-  assert.deepEqual(applied, ['140 → 141', '141 → 142', '142 → 143', '143 → 144', '144 → 145', '145 → 146', '146 → 147', '147 → 148']);
+  assert.deepEqual(applied, ['140 → 141', '141 → 142', '142 → 143', '143 → 144', '144 → 145', '145 → 146', '146 → 147', '147 → 148', '148 → 149']);
   assert.deepEqual(raw.hiringLinePlans, [], 'no line plan is fabricated on upgrade');
   assert.deepEqual(raw.hiringLineMarkers, []);
 
@@ -127,7 +127,7 @@ test('ADR-0176 registration: Schema v141, empty migration, spine parity, gateway
   assert.equal(RECORD_POLICIES.hiringLinePlans.detailCeiling, 0);
   assert.equal(RECORD_POLICIES.hiringLineMarkers.detailCeiling, 0);
   assert.ok(MATRIX_PANELS.some((p) => p.key === 'hiring'));
-  assert.equal(CSV_EXPORTS.length, 140);
+  assert.equal(CSV_EXPORTS.length, 141);
   assert.equal(CSV_EXPORTS[130].key, 'hiring-lines');
   assert.equal(lowerMedian([5, 1, 4, 2]), 2);
   assert.equal(lowerMedian([]), null);

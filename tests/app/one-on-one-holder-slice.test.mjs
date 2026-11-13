@@ -44,8 +44,8 @@ function harness() {
 
 test('matrix managers log their own holder, preserve it on disk, and the history displays the stored holder', () => {
   const { store, api, disk } = harness();
-  assert.equal(SCHEMA_VERSION, 148);
-  assert.deepEqual(migrate({ schemaVersion: 131, oneOnOnes: [{ personId: 'sam' }], settings: {} }).applied, ['131 → 132', '132 → 133', '133 → 134', '134 → 135', '135 → 136', '136 → 137', '137 → 138', '138 → 139', '139 → 140', '140 → 141', '141 → 142', '142 → 143', '143 → 144', '144 → 145', '145 → 146', '146 → 147', '147 → 148']);
+  assert.equal(SCHEMA_VERSION, 149);
+  assert.deepEqual(migrate({ schemaVersion: 131, oneOnOnes: [{ personId: 'sam' }], settings: {} }).applied, ['131 → 132', '132 → 133', '133 → 134', '134 → 135', '135 → 136', '136 → 137', '137 → 138', '138 → 139', '139 → 140', '140 → 141', '141 → 142', '142 → 143', '143 → 144', '144 → 145', '145 → 146', '146 → 147', '147 → 148', '148 → 149']);
   assert.equal(store.state.oneOnOnes[0].heldById, null, 'migration does not invent historical holders');
   const home = api.logOneOnOne({ personId: 'sam', date: '2026-11-09', status: 'held', actions: [{ text: 'Home-only commitment', owner: 'leader' }] });
   assert.equal(home.ok, true);

@@ -194,12 +194,12 @@ function bruteComponents(ids, arcs) {
 /* ------------------------------------------------------------- 1. wiring */
 
 test('registration: schema v145 unchanged, panel #30, CSV scope #137, one safe read', () => {
-  assert.equal(SCHEMA_VERSION, 148, 'no schema bump — the reader stores nothing');
+  assert.equal(SCHEMA_VERSION, 149, 'no schema bump — the reader stores nothing');
   assert.ok(MATRIX_PANELS.some((panel) => panel.key === 'cycles'), 'the cycles panel is on the matrix tab bar');
   const scope = CSV_EXPORTS.find((entry) => entry.key === DEPENDENCY_CYCLE_CSV_SCOPE);
   assert.ok(scope, 'CSV #137 is registered');
   assert.equal(scope.sensitive, false);
-  assert.equal(CSV_EXPORTS.length, 140);
+  assert.equal(CSV_EXPORTS.length, 141);
   assert.ok(SAFE_READS.has('matrixDependencyCycleReport'));
   assert.equal(DEPENDENCY_CYCLE_RELATIONS.length, 5, 'five declared precedence relations');
   assert.equal(new Set(DEPENDENCY_CYCLE_RELATIONS.map((r) => r.relation)).size, 5);
@@ -431,7 +431,14 @@ test('ADR-0187 registration: RULE-CYC-01 on spine before seatRule, contract pari
   assert.ok(DEFAULT_POST_COMMIT_RULES.includes(dependencyCycleRule));
   assert.equal(DEFAULT_POST_COMMIT_RULES.at(-1).name, 'sealRule');
   assert.equal(DEFAULT_POST_COMMIT_RULES.at(-2).name, 'seatRule');
-  assert.equal(DEFAULT_POST_COMMIT_RULES.at(-3), dependencyCycleRule);
+  // ADR-0188 appended RULE-AAC-01 between this rule and `seatRule`, so the
+  // absolute tail position shifts legitimately. The invariant that matters is
+  // that this rule runs BEFORE the seat rule and that every work-producing rule
+  // runs above the derived pair — assert that, not an index.
+  assert.ok(
+    DEFAULT_POST_COMMIT_RULES.indexOf(dependencyCycleRule) < DEFAULT_POST_COMMIT_RULES.findIndex((rule) => rule.name === 'seatRule'),
+    'the cycle rule runs before the seat rule so its asks are already in the record when the seat fans them up',
+  );
 
   const contract = contractFor(dependencyCycleRule);
   assert.ok(contract);

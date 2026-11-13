@@ -173,6 +173,7 @@ import { workforceFlowRule } from './workforceFlowRules.js';
 import { changeSaturationRule } from './changeSaturationRules.js';
 // ADR-0187 (Schema v148 unchanged): Dependency Feedback-Cycle Escalation (RULE-CYC-01).
 import { dependencyCycleRule } from './dependencyCycleRules.js';
+import { aarCorroborationRule } from './aarCorroborationRules.js';
 
 
 // ADR-0087: the Operating Cadence Clock. Reads the finished queue after the
@@ -1025,6 +1026,16 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // `matrixMarkers` observations when no single roster seat holds the block.
   // Registered immediately before `seatRule` and `sealRule`.
   dependencyCycleRule,
+  // ADR-0188: RULE-AAC-01. Reads the Cross-Line After-Action Corroboration &
+  // Lesson-Adoption Parity register (`buildAarCorroborationReport`, ADR-0188) on
+  // review/answer/adoption/line/roster writes and explicit scans. Places ONE dated
+  // ask in front of the joint apex of the line holders who owe a corroboration or
+  // an adoption, closes its own asks when the condition clears, and records an
+  // identity-free `matrixMarkers` observation when no unique apex holds the
+  // condition. It never edits a review, an answer, an adoption or a lesson state,
+  // and it is inert with nobody on the roster. Registered immediately before
+  // `seatRule` and `sealRule`.
+  aarCorroborationRule,
   // ADR-0076: the Operating Seat (vertical roll-up + enforced boundaries).
   // It reads the finished record after every module has propagated, then fans
   // each open item up every leadership ancestor in the reporting tree with one
