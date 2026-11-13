@@ -488,7 +488,7 @@ test('CSV #116 appends the evidence columns, keeps the existing ones, and carrie
 });
 
 test('the schema migration adds one empty marker ledger and changes no record', () => {
-  assert.equal(SCHEMA_VERSION, 151);
+  assert.equal(SCHEMA_VERSION, 152);
   const v132 = { ...createEmptyState(ISO), schemaVersion: 132 };
   delete v132.meritEvidenceMarkers;
   const out = migrate(v132);

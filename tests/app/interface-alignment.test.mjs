@@ -164,7 +164,7 @@ const pairOf = (report, key) => report.pairs.find((p) => p.pairKey === key);
 /* ---------------------------------------------------------- 1. registration */
 
 test('registration: schema v149 unchanged, the 34th matrix panel, CSV #142, one safe read, declared right and pause permit', () => {
-  assert.equal(SCHEMA_VERSION, 151, 'no schema bump — the register stores nothing');
+  assert.equal(SCHEMA_VERSION, 152, 'no schema bump — the register stores nothing');
   assert.ok(MATRIX_PANELS.some((panel) => panel.key === 'alignment'), 'the alignment panel is on the matrix tab bar');
   const scope = CSV_EXPORTS.find((entry) => entry.key === INTERFACE_ALIGNMENT_CSV_SCOPE);
   assert.ok(scope, 'CSV #142 is registered');

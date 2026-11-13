@@ -630,6 +630,8 @@ export const ACTION_RIGHTS = Object.freeze({
   'adopt-aar-lesson': { minRank: 1, maxRank: 5, label: 'Record your line’s dated adoption of, or refusal to adopt, a lesson it touches' },
   'govern-aar-corroboration': { minRank: 3, maxRank: 5, label: 'Set the corroboration escalation window, coverage floor and adoption window' },
   // ADR-0190: Leader Standard Work & Tiered Daily Management.
+  'read-skill-coverage': { minRank: 1, maxRank: 5, label: 'Read task qualification coverage within your span' },
+  'declare-skill-coverage': { minRank: 1, maxRank: 5, label: 'Declare your own task standards and attest qualifications only for your own reporting-line pool' },
   'read-standard-work': { minRank: 1, maxRank: 5, label: 'Read the leader standard work board' },
   'declare-standard-work': { minRank: 1, maxRank: 5, label: 'Declare or retire a standard-work routine for yourself or a leader you hold a line over' },
   'record-standard-work': { minRank: 1, maxRank: 5, label: 'Record your own standard-work check, or your own tier act on an abnormality addressed to you' },

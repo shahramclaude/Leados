@@ -87,6 +87,7 @@ import { createChangeSaturationActions } from './core/domain/changeSaturationAct
 // module READS the AAR ledger and never writes it; its own three ledgers are
 // append-only and seat-checked at the same boundary as every other command.
 import { createAarCorroborationActions } from './core/domain/aarCorroborationActions.js';
+import { createSkillCoverageActions } from './core/domain/skillCoverageActions.js';
 import { createStandardWorkActions } from './core/domain/standardWorkActions.js';
 import { createPriorityRankingActions } from './core/domain/priorityRankingActions.js';
 // ADR-0148: Matrix Line Consent. A declared share is an ask until the line's
@@ -20191,6 +20192,7 @@ export function createApi(store, options = {}) {
   // ADR-0188: requests, first-person answers and per-line adoption acts.
   Object.assign(api, createAarCorroborationActions(store, { now: clock, idFactory: id }));
   // ADR-0190: Leader Standard Work & Tiered Daily Management.
+  Object.assign(api, createSkillCoverageActions(store, { now: clock, idFactory: id }));
   Object.assign(api, createStandardWorkActions(store, { now: clock, idFactory: id }));
   Object.assign(api, createPriorityRankingActions(store, { now: clock, idFactory: id }));
   // ADR-0177: the Cross-Line Labour Chargeback & Internal Transfer-Price Ledger.

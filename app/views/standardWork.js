@@ -20,6 +20,7 @@
  * `standardWorkReport`; a withheld figure prints a dash and its reason, never a
  * zero. Nothing here rates a person: adherence describes a ROUTINE'S record.
  */
+import { renderSkillCoveragePanel } from './skillCoveragePanel.js';
 import { h, toast, openModal, closeAllModals, buildForm } from '../ui/dom.js';
 import { downloadText } from '../ui/download.js';
 import { pageHeader, card, stat, badge, banner, tabs, emptyState, table } from '../ui/components.js';
@@ -45,6 +46,7 @@ const PANELS = Object.freeze([
   Object.freeze({ key: 'board', label: 'Board' }),
   Object.freeze({ key: 'spans', label: 'Spans & structured time' }),
   Object.freeze({ key: 'method', label: 'Method' }),
+  Object.freeze({ key: 'skills', label: 'Skills & versatility' }),
 ]);
 const WEEKDAYS = Object.freeze([['1', 'Mon'], ['2', 'Tue'], ['3', 'Wed'], ['4', 'Thu'], ['5', 'Fri'], ['6', 'Sat'], ['0', 'Sun']]);
 
@@ -456,6 +458,6 @@ export function renderStandardWork(ctx) {
     ]),
     tabs({ items: PANELS.map((p) => ({ key: p.key, label: p.label })), active: panel, ariaLabel: 'Standard work panels',
       onSelect: (key) => ctx.navigate(`#/standard-work?panel=${encodeURIComponent(key)}`) }),
-    panel === 'spans' ? spansPanel(report) : panel === 'method' ? methodPanel(ctx, report) : boardPanel(ctx, report),
+    panel === 'skills' ? renderSkillCoveragePanel(ctx) : panel === 'spans' ? spansPanel(report) : panel === 'method' ? methodPanel(ctx, report) : boardPanel(ctx, report),
   );
 }

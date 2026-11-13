@@ -318,7 +318,7 @@ test('missing shares, refused lines, duplicate asks and a zero-share pool refuse
 /* ------------------------------------------------------------ 1. the wiring */
 
 test('the ledger is wired end to end: schema, panel, both gateway lists, spine order, contract and CSV scope', () => {
-  assert.equal(SCHEMA_VERSION, 151);
+  assert.equal(SCHEMA_VERSION, 152);
   assert.ok(COLLECTIONS.includes('workTurnActs') && COLLECTIONS.includes('workTurnMarkers'));
   const empty = createEmptyState(ISO);
   assert.deepEqual(empty.workTurnActs, []);
@@ -1016,7 +1016,7 @@ test('under the REAL spine a classification, the rotation ask, the seat roll-up 
 
   // The bytes on disk carry the acts, the ask and the marker.
   const stored = JSON.parse(map.get(STORAGE_KEY));
-  assert.equal(stored.schemaVersion, 151);
+  assert.equal(stored.schemaVersion, 152);
   assert.equal(stored.workTurnActs.length, 4);
   assert.equal(stored.workTurnMarkers.length, 1);
   assert.equal(stored.delegations.filter((d) => String(d.support || '').includes(WORK_TURN_RULE_ID)).length, 1);
@@ -1160,8 +1160,8 @@ test('schema v144: the migration adds two empty collections and fabricates no ki
   delete v143.workTurnActs;
   delete v143.workTurnMarkers;
   const migrated = migrate(v143);
-  assert.deepEqual(migrated.applied, ['143 → 144', '144 → 145', '145 → 146', '146 → 147', '147 → 148', '148 → 149', '149 → 150', '150 → 151']);
-  assert.equal(migrated.raw.schemaVersion, 151);
+  assert.deepEqual(migrated.applied, ['143 → 144', '144 → 145', '145 → 146', '146 → 147', '147 → 148', '148 → 149', '149 → 150', '150 → 151', '151 → 152']);
+  assert.equal(migrated.raw.schemaVersion, 152);
   assert.deepEqual(migrated.raw.workTurnActs, []);
   assert.deepEqual(migrated.raw.workTurnMarkers, []);
   assert.equal(migrated.raw.delegations.length, v143.delegations.length, 'no ask changed');

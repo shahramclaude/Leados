@@ -141,7 +141,7 @@ const pd = (h) => (h === null || h === undefined ? '—' : (h / 100).toFixed(2))
  * =================================================================== */
 
 test('the reader is wired into the matrix, the export catalogue and Schema v137', () => {
-  assert.equal(SCHEMA_VERSION, 151);
+  assert.equal(SCHEMA_VERSION, 152);
   assert.ok(MATRIX_PANELS.some((panel) => panel.key === 'demand-variance'), 'the demand-variance panel is a matrix panel');
   const scope = CSV_EXPORTS.find((entry) => entry.key === 'matrix-demand-variance');
   assert.ok(scope, 'the aggregate scope is in the catalogue');
