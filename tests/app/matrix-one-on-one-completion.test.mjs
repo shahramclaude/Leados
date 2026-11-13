@@ -80,7 +80,7 @@ function withDom(fn) {
 }
 
 test('ADR-0164 registration: Schema v140, spine 1:1 parity, gateway, seat policy, panel and CSV #130', () => {
-  assert.equal(SCHEMA_VERSION, 153);
+  assert.equal(SCHEMA_VERSION, 154);
   const empty = createEmptyState(ISO);
   assert.deepEqual(empty.oneOnOneLineMarkers, []);
   assert.equal(empty.settings.oneOnOneLineCadenceDays, 28);
@@ -89,8 +89,8 @@ test('ADR-0164 registration: Schema v140, spine 1:1 parity, gateway, seat policy
   assert.equal(empty.settings.oneOnOneLineAutoPropagate, true);
 
   const { raw, applied } = migrate({ schemaVersion: 139, appId: 'leados', meta: {}, settings: {} });
-  assert.deepEqual(applied, ['139 → 140', '140 → 141', '141 → 142', '142 → 143', '143 → 144', '144 → 145', '145 → 146', '146 → 147', '147 → 148', '148 → 149', '149 → 150', '150 → 151', '151 → 152', '152 → 153']);
-  assert.equal(raw.schemaVersion, 153);
+  assert.deepEqual(applied, ['139 → 140', '140 → 141', '141 → 142', '142 → 143', '143 → 144', '144 → 145', '145 → 146', '146 → 147', '147 → 148', '148 → 149', '149 → 150', '150 → 151', '151 → 152', '152 → 153', '153 → 154']);
+  assert.equal(raw.schemaVersion, 154);
   assert.deepEqual(raw.oneOnOneLineMarkers, []);
 
   assert.equal(PROPAGATION_CONTRACTS.length, DEFAULT_POST_COMMIT_RULES.length);

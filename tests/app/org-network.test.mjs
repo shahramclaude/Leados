@@ -453,7 +453,7 @@ test('stewardshipFusion counts primary stewards and missing verified backups', (
 /* ========================================== 5. settings & schema parity */
 
 test('network settings are additive on Schema v30 and validated/normalised', () => {
-  assert.equal(SCHEMA_VERSION, 153, 'v66 adds the evidence-synthesis collections; v76 adds the counterfactual policy collections; v78 adds the coupling ledger; v79 adds the evidence supply chain; v80 adds the promise solvency ledgers; v81 adds the cross-examination ledgers; v82 adds the command-chain readings and markers; v85 adds authority-calibration markers; v86 adds mission briefs; earlier additive migrations are unchanged');
+  assert.equal(SCHEMA_VERSION, 154, 'v66 adds the evidence-synthesis collections; v76 adds the counterfactual policy collections; v78 adds the coupling ledger; v79 adds the evidence supply chain; v80 adds the promise solvency ledgers; v81 adds the cross-examination ledgers; v82 adds the command-chain readings and markers; v85 adds authority-calibration markers; v86 adds mission briefs; earlier additive migrations are unchanged');
   assert.equal(DEFAULT_SETTINGS.networkTiePct, 50);
   assert.equal(DEFAULT_SETTINGS.networkAutoPropagate, true);
 

@@ -1,7 +1,7 @@
 /**
  * app/core/domain/goalCommitmentRegistry.js — closed vocabularies for the
  * Cross-Line Goal Commitment Conflict register
- * (ADR-0193, Schema v153, `RULE-GCC-01`, CSV scope #145,
+ * (ADR-0193 + ADR-0194, Schema v154, `RULE-GCC-01`, CSV scope #145,
  * `#/matrix?panel=commitments`).
  *
  * THE DUTY. `state.goals` carries ONE `ownerId`, a target and a due date, and
@@ -53,8 +53,10 @@
  * separately and escalated separately — and never collapsed into one word.
  */
 
-export const GOAL_COMMITMENT_ENGINE_VERSION = 'goal-commitment-2026.11-v1';
+export const GOAL_COMMITMENT_ENGINE_VERSION = 'goal-commitment-2026.11-v2';
 export const GOAL_COMMITMENT_ADR = 'ADR-0193';
+/** ADR-0194 extends the same register; ADR-0193 remains its original ledger decision. */
+export const GOAL_COMMITMENT_MAGNITUDE_ADR = 'ADR-0194';
 export const GOAL_COMMITMENT_RULE_ID = 'RULE-GCC-01';
 export const GOAL_COMMITMENT_ROUTE = 'matrix-commitments';
 export const GOAL_COMMITMENT_PANEL = 'commitments';
@@ -126,8 +128,9 @@ export const GOAL_COMMITMENT_PAIR_VERDICTS = Object.freeze([
   Object.freeze({ key: 'single-principal', label: 'No second principal', rank: 0, tone: 'neutral', says: 'At least one of the two is owed under no reporting line, so there is no second principal to disagree with. Both still draw on the person and both are counted in the capacity sweep.' }),
   Object.freeze({ key: 'same-line', label: 'One line’s own sequencing', rank: 1, tone: 'neutral', says: 'Both commitments are owed under the SAME line. That is one manager’s own ordering problem, not a cross-line conflict, and it is never routed to a joint apex.' }),
   Object.freeze({ key: 'compatible', label: 'Windows do not collide', rank: 2, tone: 'good', says: 'Two different lines, and the declared windows do not overlap on a single day.' }),
-  Object.freeze({ key: 'date-overlap', label: 'Windows collide', rank: 3, tone: 'warn', says: 'Two different lines have each committed the same person over the same days. The exact overlap is printed; the two measures declared are not opposed, or one of them declared none.' }),
-  Object.freeze({ key: 'target-conflict', label: 'Opposed targets', rank: 4, tone: 'bad', says: 'Two different lines have each committed the same person over the same days AND named the same measure in opposite directions. Neither promise can be kept by working harder: one of them has to be withdrawn or re-dated, and that decision belongs to the lines’ lowest joint apex.' }),
+  Object.freeze({ key: 'date-overlap', label: 'Windows collide', rank: 3, tone: 'warn', says: 'Two different lines have each committed the same person over the same days. The exact overlap is printed; they do not declare opposed directions or incompatible same-unit target magnitudes.' }),
+  Object.freeze({ key: 'magnitude-conflict', label: 'Incompatible target magnitudes', rank: 4, tone: 'bad', says: 'Two different lines named the same measure in the same direction over the same days, with the same declared unit, but their declared target magnitudes diverge by at least the declared floor. The figure is a conflict in the promises, not a rating of the shared person.' }),
+  Object.freeze({ key: 'target-conflict', label: 'Opposed targets', rank: 5, tone: 'bad', says: 'Two different lines have each committed the same person over the same days AND named the same measure in opposite directions. Neither promise can be kept by working harder: one of them has to be withdrawn or re-dated, and that decision belongs to the lines’ lowest joint apex.' }),
 ]);
 export const GOAL_COMMITMENT_PAIR_VERDICT_KEYS = Object.freeze(GOAL_COMMITMENT_PAIR_VERDICTS.map((row) => row.key));
 export const GOAL_COMMITMENT_PAIR_VERDICT_BY_KEY = Object.freeze(Object.fromEntries(GOAL_COMMITMENT_PAIR_VERDICTS.map((row) => [row.key, row])));
@@ -142,10 +145,11 @@ export const GOAL_COMMITMENT_PAIR_VERDICT_BY_KEY = Object.freeze(Object.fromEntr
 export const GOAL_COMMITMENT_OWNER_VERDICTS = Object.freeze([
   Object.freeze({ key: 'inert', label: 'One line only', rank: 0, tone: 'neutral', says: 'This person holds fewer than two active reporting lines, so there is no cross-line commitment to compare. A single line’s goals are that line’s own ordering.' }),
   Object.freeze({ key: 'undeclared', label: 'Nothing declared', rank: 1, tone: 'warn', says: 'This person holds two or more active lines and not one of their live goals carries a commitment declaration. The register prints the counts and claims nothing: silence here is not compatibility.' }),
-  Object.freeze({ key: 'compatible', label: 'Commitments fit', rank: 2, tone: 'good', says: 'Every cross-line pair is compatible or collides only inside the declared capacity, and no two lines named the same measure in opposite directions.' }),
+  Object.freeze({ key: 'compatible', label: 'Commitments fit', rank: 2, tone: 'good', says: 'Every cross-line pair is compatible or collides only inside the declared capacity, and no two lines named the same measure in opposite directions or incompatible same-unit target magnitudes.' }),
   Object.freeze({ key: 'date-overlap', label: 'Windows collide', rank: 3, tone: 'warn', says: 'At least two lines have committed this person over the same days, inside the capacity the declarations add up to. The exact overlap is printed per pair.' }),
   Object.freeze({ key: 'capacity-overcommit', label: 'Capacity overcommitted', rank: 4, tone: 'bad', says: 'On the exact day of maximum concurrent declared effort, the commitments this person carries add up to more than one whole person — or to more than a line’s own declared share. The peak day, the sum and the basis are printed.' }),
-  Object.freeze({ key: 'target-conflict', label: 'Opposed targets', rank: 5, tone: 'bad', says: 'Two lines have committed this person over the same days to opposite movement on the same declared measure. This outranks an overcommit because it cannot be resolved by de-scoping: one of the two promises has to be withdrawn.' }),
+  Object.freeze({ key: 'magnitude-conflict', label: 'Incompatible target magnitudes', rank: 5, tone: 'bad', says: 'Two lines declared the same measure and direction for the same person over the same days, but target magnitudes in the same unit diverge by at least the declared floor. One target must be reconciled; more effort cannot make two different targets the same promise.' }),
+  Object.freeze({ key: 'target-conflict', label: 'Opposed targets', rank: 6, tone: 'bad', says: 'Two lines have committed this person over the same days to opposite movement on the same declared measure. This outranks an overcommit because it cannot be resolved by de-scoping: one of the two promises has to be withdrawn.' }),
 ]);
 export const GOAL_COMMITMENT_OWNER_VERDICT_KEYS = Object.freeze(GOAL_COMMITMENT_OWNER_VERDICTS.map((row) => row.key));
 export const GOAL_COMMITMENT_OWNER_VERDICT_BY_KEY = Object.freeze(Object.fromEntries(GOAL_COMMITMENT_OWNER_VERDICTS.map((row) => [row.key, row])));
@@ -178,6 +182,22 @@ export const GOAL_COMMITMENT_MEASURE_CLAIMS = Object.freeze([
 ]);
 export const GOAL_COMMITMENT_MEASURE_KEYS = Object.freeze(GOAL_COMMITMENT_MEASURE_CLAIMS.map((row) => row.key));
 export const GOAL_COMMITMENT_MEASURE_BY_KEY = Object.freeze(Object.fromEntries(GOAL_COMMITMENT_MEASURE_CLAIMS.map((row) => [row.key, row])));
+
+/**
+ * The target-magnitude claim on an overlapping pair whose measures are aligned.
+ * A different unit is not converted: "hours" and "minutes" may be convertible
+ * in a textbook, but no line declared that its targets use the same basis here.
+ * An absent magnitude is a refusal, never evidence that the targets agree.
+ */
+export const GOAL_COMMITMENT_MAGNITUDE_CLAIMS = Object.freeze([
+  Object.freeze({ key: 'not-applicable', label: 'No aligned simultaneous target claim', tone: 'neutral', says: 'The pair does not have two different lines, overlapping dates, and the same declared measure in the same direction, so target magnitude is not compared.' }),
+  Object.freeze({ key: 'undeclared', label: 'Target magnitude not declared', tone: 'warn', says: 'The lines named the same measure and direction over the same days, but at least one did not declare both a target value and a unit. This is an absence of evidence, never agreement.' }),
+  Object.freeze({ key: 'unit-mismatch', label: 'Target units do not match', tone: 'warn', says: 'Both lines declared a target value but used different unit strings. The register does not invent a conversion, so it refuses a magnitude comparison.' }),
+  Object.freeze({ key: 'within-floor', label: 'Target magnitudes within declared floor', tone: 'good', says: 'Both target values use the same declared unit and differ by less than the declared relative-divergence floor.' }),
+  Object.freeze({ key: 'divergent', label: 'Target magnitudes diverge', tone: 'bad', says: 'Both target values use the same declared unit and their relative difference meets or exceeds the declared divergence floor.' }),
+]);
+export const GOAL_COMMITMENT_MAGNITUDE_KEYS = Object.freeze(GOAL_COMMITMENT_MAGNITUDE_CLAIMS.map((row) => row.key));
+export const GOAL_COMMITMENT_MAGNITUDE_BY_KEY = Object.freeze(Object.fromEntries(GOAL_COMMITMENT_MAGNITUDE_CLAIMS.map((row) => [row.key, row])));
 
 /** The declared direction a commitment moves its measure in. Closed set. */
 export const GOAL_COMMITMENT_DIRECTIONS = Object.freeze([
@@ -216,6 +236,8 @@ export const GOAL_COMMITMENT_REFUSALS = Object.freeze([
   Object.freeze({ key: 'window-before-goal', says: 'The declared window starts before the goal was created. Printed against the commitment, never clamped.' }),
   Object.freeze({ key: 'goal-undated', says: 'The goal carries no due date, so the declared window cannot be checked against it. The comparison against the goal’s own date is refused; the pair and capacity readings still stand.' }),
   Object.freeze({ key: 'share-undeclared', says: 'A line carrying commitments has no declared share of the person, so what it promised cannot be measured against what it was given. The per-line reading is refused.' }),
+  Object.freeze({ key: 'magnitude-undeclared', says: 'Two lines named the same measure in the same direction over overlapping days, but at least one omitted a target magnitude or unit. The register does not call the targets aligned.' }),
+  Object.freeze({ key: 'magnitude-unit-mismatch', says: 'Two lines named the same measure and direction over overlapping days but declared different target-unit strings. The register does not invent a conversion.' }),
   Object.freeze({ key: 'matrix-defect', says: 'The reporting graph carries a refused line. Owner rows touching it are printed as incomplete.' }),
   Object.freeze({ key: 'below-disclosure', says: 'This seat’s disclosure level withholds the named rows. Totals are printed; the rows are counted, not shown.' }),
   Object.freeze({ key: 'truncated', says: 'More owner rows exist than this screen lists. The totals count all of them; the remainder is counted, not shown.' }),
@@ -231,6 +253,12 @@ export const GOAL_COMMITMENT_LIMITS = Object.freeze({
   windowMaxDays: 730,
   measureKeyMin: 2,
   measureKeyMax: 40,
+  // Target values are stored as canonical non-negative decimal strings. The
+  // reader uses exact integer scaling, never floating-point comparison.
+  targetValueIntegerDigits: 18,
+  targetValueFractionDigits: 12,
+  targetUnitMin: 1,
+  targetUnitMax: 24,
   noteMax: 400,
   reasonMin: 8,
   reasonMax: 400,
@@ -246,6 +274,9 @@ export const GOAL_COMMITMENT_SETTING_KEYS = Object.freeze({
   horizonDays: 'goalCommitmentHorizonDays',
   minOverlapDays: 'goalCommitmentMinOverlapDays',
   minGoals: 'goalCommitmentMinGoals',
+  // Relative difference, measured against the larger declared magnitude. It
+  // is a convention, not a statistical confidence interval.
+  magnitudeDivergencePct: 'goalCommitmentMagnitudeDivergencePct',
   autoPropagate: 'goalCommitmentAutoPropagate',
 });
 
@@ -254,6 +285,7 @@ export const GOAL_COMMITMENT_DEFAULTS = Object.freeze({
   horizonDays: 90,
   minOverlapDays: 5,
   minGoals: 3,
+  magnitudeDivergencePct: 10,
   autoPropagate: true,
 });
 
@@ -262,6 +294,7 @@ export const GOAL_COMMITMENT_BOUNDS = Object.freeze({
   horizonDays: Object.freeze([7, 365]),
   minOverlapDays: Object.freeze([1, 60]),
   minGoals: Object.freeze([2, 20]),
+  magnitudeDivergencePct: Object.freeze([1, 100]),
 });
 
 export const GOAL_COMMITMENT_SETTING_LABELS = Object.freeze({
@@ -269,6 +302,7 @@ export const GOAL_COMMITMENT_SETTING_LABELS = Object.freeze({
   horizonDays: 'Days ahead the capacity sweep reads',
   minOverlapDays: 'Overlapping days before a collision becomes an ask',
   minGoals: 'Comparable goals required before an attribution rate is claimed',
+  magnitudeDivergencePct: 'Relative target-magnitude divergence that becomes a conflict (%)',
   autoPropagate: 'Goal-commitment conflict automation (RULE-GCC-01)',
 });
 
@@ -308,12 +342,12 @@ export const GOAL_COMMITMENT_CSV_COLUMNS = Object.freeze([
   'row_type', 'key', 'label', 'generated_on',
   'commitments_n', 'live_n', 'closed_n', 'unreachable_n', 'no_line_n',
   'owners_n', 'owners_compared_n', 'owners_inert_n', 'owners_undeclared_n',
-  'pairs_n', 'pairs_cross_line_n', 'target_conflict_n', 'date_overlap_n', 'compatible_n', 'same_line_n', 'single_principal_n',
+  'pairs_n', 'pairs_cross_line_n', 'target_conflict_n', 'magnitude_conflict_n', 'magnitude_undeclared_n', 'magnitude_unit_mismatch_n', 'date_overlap_n', 'compatible_n', 'same_line_n', 'single_principal_n',
   'capacity_overcommit_n', 'capacity_fits_n', 'capacity_unmeasurable_n', 'line_share_undeclared_n',
   'peak_sum_h', 'peak_day', 'capacity_basis_h',
   'goals_comparable_n', 'goals_declared_n', 'goals_unattributed_n',
   'attribution_pct', 'attribution_low_pct', 'attribution_high_pct', 'attribution_withheld_reason',
-  'horizon_days', 'min_overlap_days', 'min_goals', 'ask_due_days',
+  'horizon_days', 'min_overlap_days', 'min_goals', 'magnitude_divergence_pct', 'ask_due_days',
   'counts_reconcile', 'figures_complete', 'claim_reason', 'engine_version',
 ]);
 
@@ -323,7 +357,7 @@ export const GOAL_COMMITMENT_CSV_DESCRIPTOR = Object.freeze({
   group: 'analytics',
   sensitive: false,
   filenameSlug: 'matrix-goal-commitments',
-  description: 'One identity-free workspace row plus one row per owner verdict, per pair verdict, per commitment state, per capacity verdict, per goal-attribution state and per refusal: commitments declared and closed, cross-line pairs, exact window collisions, opposed-target conflicts, the peak concurrent declared effort in integer hundredths against the whole-person basis, and the goal-attribution rate with its Wilson interval (BLANK with its reason below the declared floor — never zero). Contains NO person, manager, line, goal title, measure key, note or record id.',
+  description: 'One identity-free workspace row plus one row per owner verdict, per pair verdict, per commitment state, per capacity verdict, per goal-attribution state and per refusal: commitments declared and closed, cross-line pairs, exact window collisions, opposed-direction and same-direction magnitude conflicts, explicit target-magnitude refusals, the peak concurrent declared effort in integer hundredths against the whole-person basis, and the goal-attribution rate with its Wilson interval (BLANK with its reason below the declared floor — never zero). Contains NO person, manager, line, goal title, measure key, target value, target unit, note or record id.',
 });
 
 /* ------------------------------------------------------------------ method */
@@ -338,13 +372,14 @@ export const GOAL_COMMITMENT_FRAMEWORKS = Object.freeze([
 ]);
 
 export const GOAL_COMMITMENT_METHOD = Object.freeze({
-  unit: 'one dated commitment = one goal × one named reporting line (or an explicit `no-line`) × one inclusive window × one declared effort in integer hundredths of one person × an optional declared measure and direction',
+  unit: 'one dated commitment = one goal × one named reporting line (or an explicit `no-line`) × one inclusive window × one declared effort in integer hundredths of one person × an optional declared measure and direction × an optional target magnitude (canonical value and unit, both or neither)',
   firstPerson: 'A commitment under a named line is declared by the holder of THAT line and by nobody else: not by a peer, not by the workspace leader on a line holder’s behalf, and not by a later holder of the same line. A commitment under `no-line` is declared by the person it is about or by the operator view — a manager cannot declare that somebody else’s goal is owed under no line, because that is how a commitment disappears.',
   pair: 'Every pair of live commitments on ONE owner is compared. Different lines and an inclusive window overlap of at least one day is a collision, and the exact number of overlapping days is printed. Same line is one principal’s own sequencing and is never routed upward. A `no-line` commitment has no second principal and is never called a conflict.',
   measure: 'A target conflict needs a DECLARED measure key and a DECLARED direction on both sides. Same key, different direction — including one line holding a measure steady while the other moves it — is opposed. A commitment that declares no measure is printed as declaring none, and nothing is read out of the goal’s title, description or key results.',
+  magnitude: 'A magnitude conflict is narrower: two different lines must name the SAME measure in the SAME direction over the SAME dates, each with a declared target value AND the SAME canonical unit. Values are compared in exact integer-scaled decimal arithmetic; the absolute difference divided by the larger magnitude must meet the declared percentage floor. Missing values and mismatched units are printed as refusals, never as alignment, and the register never invents a conversion.',
   capacity: 'Capacity is a stock, not a relation. A sweep line over every live window inside the declared horizon finds the exact day of maximum concurrent declared effort for that person, sums it in integer hundredths and compares it against one whole person, then separately against each line’s own declared share. Charging an overcommitted week to one pair of commitments would name a culprit the arithmetic does not support, so the two claims are printed and escalated apart.',
   attribution: 'Every live goal of a person on two or more lines is asked whether a line was ever named for it. One that was not is `unattributed`, counted, and NEVER charged to the home line — the home-line guess is precisely the failure this register exists to refuse.',
-  escalation: 'An opposed-target collision is routed to the lowest joint apex of the two line holders; a capacity overcommit is routed to the lowest joint apex of every holder carrying a live commitment on that person at the peak day. Where the lines share no single apex, or the apex is the workspace leader, the register records one identity-free observation and asks nobody rather than inventing an owner.',
+  escalation: 'An opposed-target or incompatible-magnitude collision is routed to the lowest joint apex of the two line holders; a capacity overcommit is routed to the lowest joint apex of every holder carrying a live commitment on that person at the peak day. Where the lines share no single apex, or the apex is the workspace leader, the register records one identity-free observation and asks nobody rather than inventing an owner.',
   notSaid: 'Nothing here scores a person, ranks a manager, rates a goal’s ambition or says one line’s need matters more. A commitment is a line’s stated promise, and an absence of declarations is printed as an absence — never as compatibility.',
 });
 
@@ -352,8 +387,10 @@ export const GOAL_COMMITMENT_ASK_PREFIX = 'Goal commitment condition: ';
 export const GOAL_COMMITMENT_CLOSED_PREFIX = `Closed by ${GOAL_COMMITMENT_RULE_ID}:`;
 export const GOAL_COMMITMENT_MARKER_KIND = 'goal-commitment';
 
-/** The two conditions `RULE-GCC-01` acts on. A bare window collision is printed, not escalated. */
+/** The conditions `RULE-GCC-01` acts on. A bare window collision is printed, not escalated. */
 export const GOAL_COMMITMENT_RULE_CONDITIONS = Object.freeze([
   Object.freeze({ key: 'target-conflict', label: 'Opposed targets on one person', says: 'Two lines committed the same person over at least the declared minimum of overlapping days and named the same measure in opposite directions.' }),
+  Object.freeze({ key: 'magnitude-conflict', label: 'Incompatible target magnitudes on one person', says: 'Two lines committed the same person over at least the declared minimum of overlapping days, named the same measure in the same direction and the same unit, and declared target magnitudes whose exact relative difference meets the declared floor.' }),
   Object.freeze({ key: 'capacity-overcommit', label: 'Concurrent effort over one person', says: 'On the exact peak day inside the declared horizon, the commitments this person carries add up to more than one whole person.' }),
+  Object.freeze({ key: 'line-share-exceeded', label: 'One line exceeded its own declared share', says: 'A named line’s commitments peak above that line’s declared share while the person’s overall capacity still fits. The named holder, not the joint apex, owns this arithmetic correction.' }),
 ]);

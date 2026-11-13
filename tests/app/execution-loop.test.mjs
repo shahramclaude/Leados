@@ -61,9 +61,9 @@ function settleActions(env, b) {
 }
 
 test('v108 is additive and fail-closed: historical meetings have no invented coaching proof', () => {
-  assert.equal(SCHEMA_VERSION, 153);
+  assert.equal(SCHEMA_VERSION, 154);
   const old = { schemaVersion: 107, settings: { leaderName: 'Keep', executionAutoReconcile: false }, oneOnOnes: [{ id: 'oo-old', personId: 'p', date: '2026-11-01', status: 'held' }], actionBundles: [{ id: 'b-old' }] };
-  const m = migrate(old); assert.equal(m.raw.schemaVersion, 153); assert.deepEqual(m.raw.oneOnOnes[0].resolvedTopics, []); assert.equal(m.raw.actionBundles[0].execution, null); assert.deepEqual(migrate(m.raw).applied, []);
+  const m = migrate(old); assert.equal(m.raw.schemaVersion, 154); assert.deepEqual(m.raw.oneOnOnes[0].resolvedTopics, []); assert.equal(m.raw.actionBundles[0].execution, null); assert.deepEqual(migrate(m.raw).applied, []);
   const env = setup(); assert.equal(env.store.state.settings.executionAutoReconcile, true);
   const b = adopt(env); const raw = clone(env.store.state); raw.actionBundles[0].execution = { state: 'closed', fingerprint: 'forged' };
   const warnings = []; const normalized = normalizeState(raw, { now: NOW, warnings });

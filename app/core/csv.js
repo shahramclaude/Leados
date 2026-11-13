@@ -6512,11 +6512,11 @@ export function buildScopeTable(state, scope, now) {
       };
     }
     case 'matrix-goal-commitments': {
-      // CSV scope #145 (ADR-0193, Schema v153). Built from the SAME reader the
-      // panel renders, so an exported count is provably the count that was
+      // CSV scope #145 (ADR-0193 + ADR-0194, Schema v154). Built from the SAME
+      // reader the panel renders, so an exported count is provably the count
       // printed. Aggregate only: no person, manager, line, goal title, measure
-      // key, note or record id. A withheld attribution rate or an absent peak
-      // prints its reason; neither is ever a zero.
+      // key, target value, target unit, note or record id. A withheld attribution
+      // rate, magnitude comparison or absent peak prints its reason; never zero.
       const report = buildGoalCommitments(state, { now, settings: state.settings || {} });
       return {
         columns: GOAL_COMMITMENT_CSV_COLUMNS.map((key) => ({ key, header: key })),

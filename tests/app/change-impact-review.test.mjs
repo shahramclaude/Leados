@@ -167,7 +167,7 @@ function request(api, lineKey = 'line-sam-pm', dueOn = '2026-11-20') {
 /* ------------------------------------------------------------- registration */
 
 test('Schema v147 is additive; Matrix surface and scoped API rights are registered without lowering Changes', () => {
-  assert.equal(SCHEMA_VERSION, 153);
+  assert.equal(SCHEMA_VERSION, 154);
   assert.deepEqual(createEmptyState(ISO).changeImpactRequests, []);
   assert.deepEqual(createEmptyState(ISO).changeImpactResponses, []);
   assert.ok(MATRIX_PANELS.some((panel) => panel.key === 'change-impacts'));
@@ -202,8 +202,8 @@ test('Schema v147 is additive; Matrix surface and scoped API rights are register
   assert.equal(routeVerdict('matrix', frontline).allow, true, 'the dedicated Matrix surface remains available');
 
   const migrated = migrate({ schemaVersion: 146, settings: {}, changes: [] });
-  assert.deepEqual(migrated.applied, ['146 → 147', '147 → 148', '148 → 149', '149 → 150', '150 → 151', '151 → 152', '152 → 153']);
-  assert.equal(migrated.raw.schemaVersion, 153);
+  assert.deepEqual(migrated.applied, ['146 → 147', '147 → 148', '148 → 149', '149 → 150', '150 → 151', '151 → 152', '152 → 153', '153 → 154']);
+  assert.equal(migrated.raw.schemaVersion, 154);
   assert.deepEqual(migrated.raw.changeImpactRequests, []);
   assert.deepEqual(migrated.raw.changeImpactResponses, []);
 });
