@@ -166,6 +166,10 @@ import { chargebackPostingRule } from './chargebackPostingRules.js';
 import { delegationLineRule } from './delegationLineRules.js';
 import { lineHorizonRule } from './lineHorizonRules.js';
 import { workTurnRule } from './workTurnRules.js';
+// ADR-0196: a deliberately no-write post-commit contract proves that accepting
+// a receiving-line transfer reserves capacity only; it never auto-reassigns or
+// auto-completes a RULE-NPW-01 ask.
+import { workReassignmentRule } from './workReassignmentRules.js';
 // ADR-0182 (Schema v145): the Automation Pause Permit Register (RULE-PMP-01).
 import { pausePermitRule } from './pausePermitRules.js';
 // ADR-0184 (Schema v146): the Workforce Stock-Flow Plan (RULE-WFS-01).
@@ -992,6 +996,9 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // the same transaction up every leadership span, and `sealRule` attests all
   // of it in one seal. Inert until the first classification act exists.
   workTurnRule,
+  // ADR-0196: a human source/receiving-line act has an explicit NO-AUTO-MOVE
+  // post-commit contract. Completion stays at the reviewed delegation door.
+  workReassignmentRule,
   // ADR-0182: RULE-PMP-01. Notices an automatic control silenced with no permit
   // and puts one dated authority ask in front of the single seat that can
   // authorise a workspace-wide pause. Runs BEFORE the seat rule so the ask is in

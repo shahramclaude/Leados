@@ -25,7 +25,7 @@ import { addDays, dayKey } from '../time.js';
 import { ensureEntityLink } from './automation.js';
 import { buildMatrix } from './matrix.js';
 import { buildWorkTurns } from './workTurns.js';
-import { normalizeWorkTurnSettings } from './workTurnSchema.js';
+import { normalizeWorkTurnSettings, workTurnAskProvenance } from './workTurnSchema.js';
 import {
   WORK_TURN_EVENTS,
   WORK_TURN_LIMITS,
@@ -55,7 +55,11 @@ export const WORK_TURN_CLOSED_PREFIX = `Closed by ${WORK_TURN_RULE_ID}:`;
 export const WORK_TURN_OLD_GUIDANCE = 'The ledger names who is next in turn (#/matrix?panel=turns).';
 // No longer than the replaced sentence: a correction cannot truncate a human's
 // existing text when the bounded delegation is loaded again.
-export const WORK_TURN_GUIDANCE = 'Check evidence, capacity and consent: #/matrix?panel=turns.';
+// ADR-0196 makes the former generic "capacity and consent" instruction an
+// enforceable receiving-line gate. It still does NOT pick a recipient or move
+// a delegation: a source manager records a concrete proposal and the receiving
+// line must answer for its own declared share-day capacity.
+export const WORK_TURN_GUIDANCE = 'Use #/matrix?panel=reassignments for consent/capacity.';
 
 const clip = (value, n = 280) => String(value || '').trim().slice(0, n);
 
@@ -91,7 +95,8 @@ export function workTurnRule(draft, ctx = {}) {
   // Inert until somebody classifies an ask: no act and no open ask of its own
   // means there is nothing to read and nothing to close.
   const hasActs = Array.isArray(draft.workTurnActs) && draft.workTurnActs.length > 0;
-  const hasOwnAsk = Array.isArray(draft.workTurnMarkers) && draft.workTurnMarkers.some((m) => m?.kind === 'ask' && m.taskId);
+  const hasOwnAsk = Array.isArray(draft.workTurnMarkers) && draft.workTurnMarkers
+    .some((marker) => marker?.kind === 'ask' && workTurnAskProvenance(draft, marker.taskId).ok);
   if (!hasActs && !hasOwnAsk) return [];
 
   const at = ctx.now instanceof Date ? ctx.now : new Date(ctx.now || Date.now());
@@ -125,6 +130,10 @@ export function workTurnRule(draft, ctx = {}) {
   const open = new Set();
   for (const marker of draft.workTurnMarkers) {
     if (marker?.kind !== 'ask' || !marker.taskId) continue;
+    // A loose marker is not a rule-owned ask. Ignore it here rather than
+    // allowing it to suppress, close or mutate an ordinary delegation.
+    const provenance = workTurnAskProvenance(draft, marker.taskId);
+    if (!provenance.ok) continue;
     const task = draft.delegations.find((d) => d && d.id === marker.taskId && d.status === 'active');
     if (!task) continue;
     const finding = owed.get(marker.subject);
@@ -153,7 +162,9 @@ export function workTurnRule(draft, ctx = {}) {
     if (open.has(subject)) continue;
     const finding = owed.get(subject);
     const key = clip(`ask|${subject}|${finding.signature}`, 320);
-    if (draft.workTurnMarkers.some((m) => m?.key === key)) continue;
+    if (draft.workTurnMarkers.some((marker) => marker?.key === key
+      && marker.kind === 'ask'
+      && workTurnAskProvenance(draft, marker.taskId).ok)) continue;
     if (issued >= WORK_TURN_LIMITS.asksPerCommit) { deferred += 1; continue; }
     const text = askText(finding, { dueOn, windowDays: report.window.days, factorPct: report.factorPct });
     const taskId = idFactory('dlg');
@@ -188,7 +199,11 @@ export function workTurnRule(draft, ctx = {}) {
         relation: 'rolls-up-to', ruleId: WORK_TURN_RULE_ID, summary: 'A non-promotable work rotation ask rolls up to this span.',
       }, linkCtx);
     }
-    draft.workTurnMarkers.push({ key, kind: 'ask', subject, taskId, state: finding.kind, summary: `Issued rotation ask ${taskId}.`, at: nowIso });
+    // ADR-0196 consumes a rotation ask only when it can prove this marker was
+    // authored by RULE-NPW-01. The marker, rule-written support sentence and
+    // typed `issues-obligation` link form independent structured provenance;
+    // no later reader infers the rule from an ask title or owner.
+    draft.workTurnMarkers.push({ key, kind: 'ask', subject, taskId, state: finding.kind, ruleId: WORK_TURN_RULE_ID, summary: `Issued rotation ask ${taskId}.`, at: nowIso });
     issued += 1;
   }
 
@@ -198,6 +213,7 @@ export function workTurnRule(draft, ctx = {}) {
     if (draft.workTurnMarkers.some((m) => m?.key === key)) continue;
     draft.workTurnMarkers.push({
       key, kind: 'observation', subject: finding.subject, taskId: null, state: finding.ownerState,
+      ruleId: WORK_TURN_RULE_ID,
       summary: `No ask issued: the owning seat is ${finding.ownerState}. Nobody was substituted.`, at: nowIso,
     });
     observed += 1;

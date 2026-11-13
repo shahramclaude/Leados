@@ -52,7 +52,7 @@ import { buildMatrixCoordination } from './matrixCoordination.js';
 import { MATRIX_COORDINATION_SCAN_EVENT } from './matrixCoordinationRegistry.js';
 import { buildSodRegister } from './sodRegister.js';
 import { SOD_REVIEW_EVENT, SOD_RULE_ID } from './sodRegisterRegistry.js';
-import { buildLineIntakeGate, lineCeiling, quarterWindow } from './lineIntake.js';
+import { buildLineIntakeGate, lineCapacityUsage, lineCeiling, quarterWindow } from './lineIntake.js';
 import {
   LINE_INTAKE_BOUNDS,
   LINE_INTAKE_RECORDED_EVENT,
@@ -576,16 +576,17 @@ export function createMatrixActions(store, { now, idFactory }) {
       if (ceiling.state !== 'computed') {
         return fail(`The gate admits nothing against an unprovable ceiling: ${ceiling.reason}`, 'managerId');
       }
-      const consumedH = (Array.isArray(store.state.lineIntakes) ? store.state.lineIntakes : [])
-        .filter((r) => r && r.personId === personId && r.managerId === managerId
-          && r.periodKey === window.periodKey && r.status !== 're-routed')
-        .reduce((acc, r) => acc + (Number.isInteger(r.shareDaysH) ? r.shareDaysH : 0), 0);
+      // ADR-0196: an accepted rotation transfer is a receiving-line capacity
+      // reservation. The regular intake gate and its write door must use the
+      // same arithmetic or an intake could silently consume committed headroom.
+      const usage = lineCapacityUsage(store.state, personId, managerId, window.periodKey);
+      const consumedH = usage.consumedH;
       const wouldBeH = consumedH + shareDaysH;
       const override = input.override === true;
       const overrideReason = String(input.overrideReason || '').trim().slice(0, LINE_INTAKE_BOUNDS.reasonChars);
       if (wouldBeH > ceiling.ceilingH) {
         if (!override) {
-          return fail(`Refused: this intake would take the line to ${(wouldBeH / 100).toFixed(2)} person-days against a declared ceiling of ${(ceiling.ceilingH / 100).toFixed(2)} for ${window.periodKey}. Accept the over-share with a reason, re-route to another line, or retune the declaration.`, 'shareDays');
+          return fail(`Refused: this intake would take the line to ${(wouldBeH / 100).toFixed(2)} person-days against a declared ceiling of ${(ceiling.ceilingH / 100).toFixed(2)} for ${window.periodKey}, including accepted work-turn transfer reservations. Accept the over-share with a reason, re-route to another line, withdraw a transfer that is no longer going ahead, or retune the declaration.`, 'shareDays');
         }
         if (!overrideReason) {
           return fail('An over-share override needs a printed reason: why is this line going past its declared share-days?', 'overrideReason');
@@ -654,12 +655,10 @@ export function createMatrixActions(store, { now, idFactory }) {
       if (ceiling.state !== 'computed') {
         return fail(`The target line's ceiling cannot be priced: ${ceiling.reason}`, 'toManagerId');
       }
-      const consumedH = (Array.isArray(store.state.lineIntakes) ? store.state.lineIntakes : [])
-        .filter((r) => r && r.personId === personId && r.managerId === toManagerId
-          && r.periodKey === window.periodKey && r.status !== 're-routed')
-        .reduce((acc, r) => acc + (Number.isInteger(r.shareDaysH) ? r.shareDaysH : 0), 0);
+      const usage = lineCapacityUsage(store.state, personId, toManagerId, window.periodKey);
+      const consumedH = usage.consumedH;
       if (consumedH + existing.shareDaysH > ceiling.ceilingH) {
-        return fail(`Refused: re-routing would take the target line to ${((consumedH + existing.shareDaysH) / 100).toFixed(2)} person-days against a declared ceiling of ${(ceiling.ceilingH / 100).toFixed(2)} for ${window.periodKey}. Accept the over-share on the target line instead, or retune its declaration.`, 'toManagerId');
+        return fail(`Refused: re-routing would take the target line to ${((consumedH + existing.shareDaysH) / 100).toFixed(2)} person-days against a declared ceiling of ${(ceiling.ceilingH / 100).toFixed(2)} for ${window.periodKey}, including accepted work-turn transfer reservations. Accept the over-share on the target line instead, withdraw a transfer that is no longer going ahead, or retune its declaration.`, 'toManagerId');
       }
 
       const newId = idFactory('intake');

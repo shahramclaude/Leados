@@ -126,6 +126,7 @@ import { chargebackPostingRule } from './chargebackPostingRules.js';
 import { delegationLineRule } from './delegationLineRules.js';
 import { lineHorizonRule } from './lineHorizonRules.js';
 import { workTurnRule } from './workTurnRules.js';
+import { workReassignmentRule } from './workReassignmentRules.js';
 import { pausePermitRule } from './pausePermitRules.js';
 import { workforceFlowRule } from './workforceFlowRules.js';
 import { changeSaturationRule } from './changeSaturationRules.js';
@@ -991,6 +992,18 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     writes: ['delegations', 'links', 'workTurnMarkers'],
     emits: [],
     scansWorkspace: true,
+  },
+  {
+    // ADR-0196's deliberately negative propagation contract. The shared spine
+    // receives every proposal, answer and withdrawal, but an accepted transfer
+    // reserves capacity only: it cannot change delegation ownership, create
+    // replacement work or close the source manager's RULE-NPW-01 ask.
+    rule: workReassignmentRule,
+    module: 'workReassignmentRules.js',
+    purpose: 'ADR-0196: records the no-auto-move boundary for cross-line work-turn transfers. On a source-line proposal, receiving-line acceptance or decline, or withdrawal, the rule deliberately writes and emits nothing. The dated human acts remain in workReassignmentActs; receiving capacity is re-derived by the Line Intake Gate; and only the reviewed completeDelegation door may mark the linked RULE-NPW-01 ask served after workReassignmentCompletionCheck passes.',
+    writes: [],
+    emits: [],
+    scansWorkspace: false,
   },
   {
     rule: pausePermitRule,

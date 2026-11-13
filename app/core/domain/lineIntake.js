@@ -3,10 +3,11 @@
  * WIP Ceiling reader (ADR-0171, Schema v136, `#/matrix?panel=intake`, CSV
  * scope #126).
  *
- * A pure read model over the declared reporting lines and the recorded intake
- * acts. It answers, for one period and every line in scope: what is this
- * line's declared share-day ceiling, how much have recorded intakes consumed,
- * how much headroom remains, and what is the gate verdict.
+ * A pure read model over declared reporting lines, recorded intake acts and
+ * accepted ADR-0196 work-turn transfer reservations. It answers, for one period
+ * and every line in scope: what is this line's declared share-day ceiling, how
+ * much recorded intake and accepted transfer work consumes, how much headroom
+ * remains, and what is the gate verdict.
  *
  * The ceiling is the line's declared share-days for the period, swept day by
  * day from the declaration's own share timeline — the same `shareTimelineFor`
@@ -14,17 +15,21 @@
  * instruments cannot disagree about what a line was charged. Where the
  * timeline cannot prove a day (a refused line, a history gap at the cap, or
  * days with no declared share), the ceiling is REFUSED, never projected from
- * today's share. Consumed is the sum of intakes recorded through the gate;
- * work taken on before the gate existed is not counted and not assumed zero —
+ * today's share. Consumed is recorded intake plus accepted transfer reservations;
+ * work taken on before either gate existed is not counted and not assumed zero —
  * the report prints that the ledger starts empty.
  *
  * No stored verdict: every figure is re-derived on read from the persisted
- * declarations and intake acts. A stored verdict here would be the drift the
+ * declarations and acts. A stored verdict here would be the drift the
  * Bulletproof Reliability Mandate forbids.
  */
 
 import { buildMatrix } from './matrix.js';
 import { shareTimelineFor, shareOnDay } from './linePeriodAllocation.js';
+// ADR-0196: an accepted work-turn transfer is a receiving-line capacity
+// reservation. This schema helper is leaf-only, so the intake gate can include
+// it without importing the reassignment reader that itself consults this gate.
+import { activeWorkReassignmentReservations } from './workReassignmentSchema.js';
 import {
   LINE_INTAKE_BOUNDS,
   LINE_INTAKE_CSV_COLUMNS,
@@ -189,6 +194,34 @@ export function lineCeiling(state = {}, personId, managerId, periodKey, { now = 
   };
 }
 
+/**
+ * The one capacity arithmetic used by BOTH the intake write door and the read
+ * model. An accepted ADR-0196 transfer is not an automatic reassignment, but
+ * it is a dated receiving-line reservation: omitting it would let a later
+ * intake consume the same declared headroom and make the gate contradict the
+ * consent record. Re-routed intakes reserve nothing; withdrawn/declined
+ * transfers reserve nothing. Every component is returned separately so a
+ * reader never mistakes a reservation for a manually recorded intake.
+ */
+export function lineCapacityUsage(state = {}, personId, managerId, periodKey) {
+  const intakes = (Array.isArray(state.lineIntakes) ? state.lineIntakes : [])
+    .filter((row) => row && row.personId === personId && row.managerId === managerId
+      && row.periodKey === periodKey && row.status !== 're-routed');
+  const intakeH = intakes.reduce((sum, row) => sum + (Number.isInteger(row.shareDaysH) ? row.shareDaysH : 0), 0);
+  const reservations = activeWorkReassignmentReservations(state.workReassignmentActs, { personId, managerId, periodKey });
+  const transferReservationH = reservations
+    .reduce((sum, row) => sum + (Number.isInteger(row.effortShareDaysH) ? row.effortShareDaysH : 0), 0);
+  return {
+    intakes,
+    intakeH,
+    intakeN: intakes.length,
+    reservations,
+    transferReservationH,
+    transferReservationN: reservations.length,
+    consumedH: intakeH + transferReservationH,
+  };
+}
+
 /* ------------------------------------------------------------ the reader */
 
 /**
@@ -207,6 +240,9 @@ export function buildLineIntakeGate(state = {}, { periodKey = null, now = new Da
   const intakes = (Array.isArray(state.lineIntakes) ? state.lineIntakes : [])
     .filter((r) => r && r.periodKey === (window ? window.periodKey : null));
   const liveIntakes = intakes.filter((r) => r.status !== 're-routed');
+  const transferReservations = activeWorkReassignmentReservations(state.workReassignmentActs, {
+    periodKey: window ? window.periodKey : null,
+  });
 
   // Every declared line in scope for the period: one row per (person, manager)
   // pair that has a declaration row overlapping the window.
@@ -227,8 +263,11 @@ export function buildLineIntakeGate(state = {}, { periodKey = null, now = new Da
     const ceiling = window
       ? lineCeiling(state, personId, managerId, window.periodKey, { now: at, matrix })
       : { state: 'ceiling-unprovable', reason: 'The period is unreadable, so no ceiling can be priced.' };
-    const lineIntakes = liveIntakes.filter((r) => r.personId === personId && r.managerId === managerId);
-    const consumedH = lineIntakes.reduce((acc, r) => acc + (Number.isInteger(r.shareDaysH) ? r.shareDaysH : 0), 0);
+    const usage = window
+      ? lineCapacityUsage(state, personId, managerId, window.periodKey)
+      : { intakes: [], intakeH: 0, intakeN: 0, reservations: [], transferReservationH: 0, transferReservationN: 0, consumedH: 0 };
+    const lineIntakes = usage.intakes;
+    const consumedH = usage.consumedH;
     const ceilingH = ceiling.state === 'computed' ? ceiling.ceilingH : null;
     const headroomH = ceilingH === null ? null : ceilingH - consumedH;
     let verdict;
@@ -248,7 +287,10 @@ export function buildLineIntakeGate(state = {}, { periodKey = null, now = new Da
       headroomH,
       verdict,
       verdictLabel: lineIntakeVerdict(verdict)?.label || verdict,
-      intakesN: lineIntakes.length,
+      intakesN: usage.intakeN,
+      intakeH: usage.intakeH,
+      transferReservationN: usage.transferReservationN,
+      transferReservationH: usage.transferReservationH,
       intakes: lineIntakes.map((r) => ({
         id: r.id,
         title: r.title,
@@ -256,6 +298,12 @@ export function buildLineIntakeGate(state = {}, { periodKey = null, now = new Da
         shareDaysH: r.shareDaysH,
         status: r.status,
         overrideReason: r.overrideReason || '',
+      })),
+      transferReservations: usage.reservations.map((r) => ({
+        transferId: r.transferId,
+        rotationAskId: r.rotationAskId,
+        effortShareDaysH: r.effortShareDaysH,
+        acceptedOn: r.acceptedOn,
       })),
     });
   }
@@ -273,6 +321,7 @@ export function buildLineIntakeGate(state = {}, { periodKey = null, now = new Da
     periodTo: window ? window.to : null,
     linesN: lines.length,
     intakesN: liveIntakes.length,
+    transferReservationsN: transferReservations.length,
     recordedN: liveIntakes.filter((r) => r.status === 'recorded').length,
     overShareN: liveIntakes.filter((r) => r.status === 'over-share').length,
     reRoutedN: intakes.filter((r) => r.status === 're-routed').length,
@@ -281,6 +330,8 @@ export function buildLineIntakeGate(state = {}, { periodKey = null, now = new Da
     overShareLinesN: countVerdict('over-share'),
     ceilingUnprovableN: countVerdict('ceiling-unprovable'),
     ceilingH: lines.reduce((acc, l) => acc + (l.ceilingH || 0), 0),
+    intakeH: lines.reduce((acc, l) => acc + (l.intakeH || 0), 0),
+    transferReservationH: lines.reduce((acc, l) => acc + (l.transferReservationH || 0), 0),
     consumedH: lines.reduce((acc, l) => acc + (l.consumedH || 0), 0),
     figuresComplete: lines.every((l) => l.ceilingH !== null),
     countsReconcile: false,
@@ -289,7 +340,13 @@ export function buildLineIntakeGate(state = {}, { periodKey = null, now = new Da
   // row, and the board's consumed total is the sum of the rows' consumed.
   const rowConsumed = lines.reduce((acc, l) => acc + l.consumedH, 0);
   const rowIntakes = lines.reduce((acc, l) => acc + l.intakesN, 0);
-  board.countsReconcile = rowConsumed === board.consumedH && rowIntakes === board.intakesN;
+  const rowReservations = lines.reduce((acc, l) => acc + l.transferReservationN, 0);
+  const rowReservationH = lines.reduce((acc, l) => acc + l.transferReservationH, 0);
+  board.countsReconcile = rowConsumed === board.consumedH
+    && rowIntakes === board.intakesN
+    && rowReservations === board.transferReservationsN
+    && rowReservationH === board.transferReservationH
+    && board.intakeH + board.transferReservationH === board.consumedH;
 
   return {
     engine: LINE_INTAKE_ENGINE_VERSION,
@@ -306,6 +363,14 @@ export function buildLineIntakeGate(state = {}, { periodKey = null, now = new Da
       status: r.status,
       overrideReason: r.overrideReason || '',
     })),
+    transferReservations: transferReservations.map((r) => ({
+      transferId: r.transferId,
+      rotationAskId: r.rotationAskId,
+      personId: r.personId,
+      managerId: r.managerId,
+      effortShareDaysH: r.effortShareDaysH,
+      acceptedOn: r.acceptedOn,
+    })),
     board,
     verdictKeys: LINE_INTAKE_VERDICT_KEYS,
   };
@@ -318,7 +383,7 @@ export function lineIntakeBriefText(report) {
   const b = report?.board;
   if (!b) return 'The intake gate could not be read.';
   const parts = [
-    `Intake gate for ${b.periodKey || 'an unreadable period'}: ${b.linesN} line(s) in scope, ${b.intakesN} live intake(s) (${b.recordedN} recorded, ${b.overShareN} over share, ${b.reRoutedN} re-routed).`,
+    `Intake gate for ${b.periodKey || 'an unreadable period'}: ${b.linesN} line(s) in scope, ${b.intakesN} live intake(s) (${b.recordedN} recorded, ${b.overShareN} over share, ${b.reRoutedN} re-routed) and ${b.transferReservationsN} accepted work-turn transfer reservation(s).`,
     `${b.withinCeilingN} within ceiling, ${b.exhaustedN} exhausted, ${b.overShareLinesN} over share, ${b.ceilingUnprovableN} with an unprovable ceiling.`,
     b.figuresComplete ? 'Every ceiling was priced.' : 'Not every ceiling was priced; the unprovable lines are printed with their reasons.',
     b.countsReconcile ? 'The counts reconcile.' : 'The counts do NOT reconcile; the discrepancy is printed, not smoothed.',
@@ -347,6 +412,7 @@ export function lineIntakeCsvRows(report) {
     period_to: b.periodTo || '',
     lines_n: String(b.linesN),
     intakes_n: String(b.intakesN),
+    transfer_reservations_n: String(b.transferReservationsN),
     recorded_n: String(b.recordedN),
     over_share_n: String(b.overShareN),
     re_routed_n: String(b.reRoutedN),
@@ -355,6 +421,8 @@ export function lineIntakeCsvRows(report) {
     over_share_lines_n: String(b.overShareLinesN),
     ceiling_unprovable_n: String(b.ceilingUnprovableN),
     ceiling_h: b.figuresComplete ? String(b.ceilingH) : '',
+    intake_h: String(b.intakeH),
+    transfer_reservation_h: String(b.transferReservationH),
     consumed_h: String(b.consumedH),
     headroom_h: b.figuresComplete ? String(b.ceilingH - b.consumedH) : '',
     figures_complete: b.figuresComplete ? 'true' : 'false',

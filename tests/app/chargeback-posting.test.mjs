@@ -142,7 +142,7 @@ function withDom(fn) {
 }
 
 test('ADR-0194 registration: introduced at Schema v154, current Schema v155, empty migration, spine order and parity, gateway, seat policy, panel #37, CSV #146, pause-permit reach', () => {
-  assert.equal(SCHEMA_VERSION, 155);
+  assert.equal(SCHEMA_VERSION, 156);
   const empty = createEmptyState(ISO);
   assert.deepEqual(empty.chargebackPostings, []);
   assert.deepEqual(empty.chargebackPostingMarkers, []);
@@ -150,7 +150,7 @@ test('ADR-0194 registration: introduced at Schema v154, current Schema v155, emp
   assert.equal(empty.settings.chargebackPostingAutoPropagate, true);
 
   const { raw, applied } = migrate({ schemaVersion: 153, appId: 'leados', meta: {}, settings: {} });
-  assert.deepEqual(applied, ['153 → 154', '154 → 155']);
+  assert.deepEqual(applied, ['153 → 154', '154 → 155', '155 → 156']);
   assert.deepEqual(raw.chargebackPostings, [], 'no period fact is fabricated on upgrade');
   assert.deepEqual(raw.chargebackPostingMarkers, []);
 
@@ -172,7 +172,7 @@ test('ADR-0194 registration: introduced at Schema v154, current Schema v155, emp
   assert.equal(RECORD_POLICIES.chargebackPostings.detailCeiling, 0);
   assert.equal(RECORD_POLICIES.chargebackPostingMarkers.detailCeiling, 0);
   assert.ok(MATRIX_PANELS.some((p) => p.key === 'postings'));
-  assert.equal(CSV_EXPORTS.length, 146);
+  assert.equal(CSV_EXPORTS.length, 147);
   assert.ok(CSV_EXPORTS.some((d) => d.key === 'chargeback-postings'));
 
   assert.ok(PAUSE_PERMIT_MATRIX_REACH_SWITCHES.includes('chargebackPostingAutoPropagate'), 'the switch reaches a second line, so it is on the permit list');

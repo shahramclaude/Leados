@@ -188,6 +188,9 @@ export const RECORD_POLICIES = Object.freeze({
   // through the seat-scoped `buildWorkTurns` adapter, never as raw rows.
   workTurnActs: { classKey: 'unit', detailCeiling: 0, label: 'Non-promotable work classification acts (report only)', route: '#/matrix?panel=turns' },
   workTurnMarkers: { classKey: 'unit', detailCeiling: 0, label: 'Non-promotable work rotation markers', route: '#/matrix?panel=turns' },
+  // ADR-0196: source-line proposals and receiving-line answers are surfaced
+  // only through the seat-scoped reassignment adapter, never as raw acts.
+  workReassignmentActs: { classKey: 'unit', detailCeiling: 0, label: 'Cross-line work-reassignment consent and capacity acts (scoped adapter only)', route: '#/matrix?panel=reassignments' },
   // ADR-0182: permits and RULE-PMP-01 markers are surfaced only through the
   // seat-scoped `buildPausePermits` adapter, never as raw rows.
   pausePermits: { classKey: 'unit', detailCeiling: 0, label: 'Automation pause permits (dated authority over a silenced control; states re-derived on read)', route: '#/settings?panel=pause-permits' },
@@ -577,6 +580,12 @@ export const ACTION_RIGHTS = Object.freeze({
   // any seat that does not reach the person, and the person's own seat.
   'classify-work-turn': { minRank: 1, maxRank: 5, label: 'Classify an ask you can reach as non-promotable or promotable' },
   'govern-work-turns': { minRank: 3, maxRank: 5, label: 'Scan non-promotable work turns and set the turn conventions' },
+  // ADR-0196: each command is an ordinary manager act, then narrowed in the
+  // action to the current source or receiving line holder. No peer can speak
+  // for a line they do not hold.
+  'propose-work-reassignment': { minRank: 1, maxRank: 5, label: 'Propose a consented cross-line work-turn transfer from a source line you hold' },
+  'answer-work-reassignment': { minRank: 1, maxRank: 5, label: 'Accept or decline a work-turn transfer for a receiving line you hold' },
+  'withdraw-work-reassignment': { minRank: 1, maxRank: 5, label: 'Withdraw a work-turn transfer from a source or receiving line you hold' },
   'govern-hiring-lines': { minRank: 3, maxRank: 5, label: 'Scan co-hiring lines for declared managers who have not assessed a candidate' },
   // ADR-0184: recording a dated workforce move is a manager deed at every
   // leadership rank — the action narrows it to a person the seat reaches. The

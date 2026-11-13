@@ -52,6 +52,7 @@ function boardPanel(report) {
   const stats = [
     stat({ label: 'Lines in scope', value: num(b.linesN) }),
     stat({ label: 'Live intakes', value: num(b.intakesN), hint: `${b.recordedN} recorded · ${b.overShareN} over share · ${b.reRoutedN} re-routed` }),
+    stat({ label: 'Transfer reservations', value: num(b.transferReservationsN), hint: 'Accepted ADR-0196 work-turn transfers reserve receiving-line capacity' }),
     stat({ label: 'Within ceiling', value: num(b.withinCeilingN), tone: b.withinCeilingN ? 'good' : '' }),
     stat({ label: 'Exhausted', value: num(b.exhaustedN), tone: b.exhaustedN ? 'warn' : '' }),
     stat({ label: 'Over share', value: num(b.overShareLinesN), tone: b.overShareLinesN ? 'bad' : '' }),

@@ -165,12 +165,12 @@ function withDom(run) {
 /* ---------------------------------------------------------------- 1. wiring */
 
 test('registration: schema v147, the 32nd matrix panel, CSV scope #138, RULE-WFS-01, one safe read', () => {
-  assert.equal(SCHEMA_VERSION, 155);
+  assert.equal(SCHEMA_VERSION, 156);
   assert.ok(MATRIX_PANELS.some((panel) => panel.key === 'stock-flow'), 'the stock-flow panel is on the matrix tab bar');
   const scope = CSV_EXPORTS.find((entry) => entry.key === WORKFORCE_FLOW_CSV_SCOPE);
   assert.ok(scope, 'CSV #138 is registered');
   assert.equal(scope.sensitive, false);
-  assert.equal(CSV_EXPORTS.length, 146);
+  assert.equal(CSV_EXPORTS.length, 147);
   assert.ok(SAFE_READS.has('workforceFlowReport'));
   const contract = PROPAGATION_CONTRACTS.find((c) => c.rule?.id === 'workforceFlowRule');
   assert.ok(contract, 'RULE-WFS-01 declares its propagation contract');

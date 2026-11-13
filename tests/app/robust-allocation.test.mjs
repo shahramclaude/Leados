@@ -140,10 +140,10 @@ function declaration(overrides = {}) {
 /* ------------------------------------------------------------------ schema */
 
 test('Schema v98 migrates additively: empty ledgers, declared conventions, nothing inferred', () => {
-  assert.equal(SCHEMA_VERSION, 155);
+  assert.equal(SCHEMA_VERSION, 156);
   const migrated = migrate({ schemaVersion: 96, settings: { leaderName: 'Keep this' }, cases: [{ id: 'x' }] });
-  assert.deepEqual(migrated.applied, ['96 → 97', '97 → 98', '98 → 99', '99 → 100', '100 → 101', '101 → 102', '102 → 103', '103 → 104', '104 → 105', '105 → 106', '106 → 107', '107 → 108', '108 → 109', '109 → 110', '110 → 111', '111 → 112', '112 → 113', '113 → 114', '114 → 115', '115 → 116', '116 → 117', '117 → 118', '118 → 119', '119 → 120', '120 → 121', '121 → 122', '122 → 123', '123 → 124', '124 → 125', '125 → 126', '126 → 127', '127 → 128', '128 → 129', '129 → 130', '130 → 131', '131 → 132', '132 → 133', '133 → 134', '134 → 135', '135 → 136', '136 → 137', '137 → 138', '138 → 139', '139 → 140', '140 → 141', '141 → 142', '142 → 143', '143 → 144', '144 → 145', '145 → 146', '146 → 147', '147 → 148', '148 → 149', '149 → 150', '150 → 151', '151 → 152', '152 → 153', '153 → 154', '154 → 155']);
-  assert.equal(migrated.raw.schemaVersion, 155);
+  assert.deepEqual(migrated.applied, ['96 → 97', '97 → 98', '98 → 99', '99 → 100', '100 → 101', '101 → 102', '102 → 103', '103 → 104', '104 → 105', '105 → 106', '106 → 107', '107 → 108', '108 → 109', '109 → 110', '110 → 111', '111 → 112', '112 → 113', '113 → 114', '114 → 115', '115 → 116', '116 → 117', '117 → 118', '118 → 119', '119 → 120', '120 → 121', '121 → 122', '122 → 123', '123 → 124', '124 → 125', '125 → 126', '126 → 127', '127 → 128', '128 → 129', '129 → 130', '130 → 131', '131 → 132', '132 → 133', '133 → 134', '134 → 135', '135 → 136', '136 → 137', '137 → 138', '138 → 139', '139 → 140', '140 → 141', '141 → 142', '142 → 143', '143 → 144', '144 → 145', '145 → 146', '146 → 147', '147 → 148', '148 → 149', '149 → 150', '150 → 151', '151 → 152', '152 → 153', '153 → 154', '154 → 155', '155 → 156']);
+  assert.equal(migrated.raw.schemaVersion, 156);
   assert.deepEqual(migrated.raw.robustPlans, []);
   assert.deepEqual(migrated.raw.robustMarkers, []);
   assert.equal(migrated.raw.settings.leaderName, 'Keep this');
@@ -536,7 +536,7 @@ test('the brief, the CSV and all six renderer panels carry no name, title, plan 
 });
 
 test('CSV scope #93 (with #94 reserved for Clearinghouse) is aggregate-only, refusal-honest and refuses an unknown scope', () => {
-  assert.equal(CSV_EXPORTS.length, 146);
+  assert.equal(CSV_EXPORTS.length, 147);
   const descriptor = CSV_EXPORTS.find((item) => item.key === 'robust-allocation');
   assert.ok(descriptor);
   assert.equal(descriptor.sensitive, false);

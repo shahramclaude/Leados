@@ -152,21 +152,22 @@ function harness(state) {
 /* ------------------------------------------------------------------ schema */
 
 test('Schema v106 migrates additively: empty ledgers, declared conventions, nothing back-filled', () => {
-  assert.equal(SCHEMA_VERSION, 155);
+  assert.equal(SCHEMA_VERSION, 156);
   const base = createEmptyState(NOW_ISO);
   const legacy = { ...base, schemaVersion: 105 };
   for (const key of ['diligenceChecklists', 'diligenceConsults', 'diligenceGrades', 'diligenceMarkers']) delete legacy[key];
   legacy.settings = { ...base.settings };
   delete legacy.settings.diligenceKnowableFloor;
   const migrated = migrate(legacy);
-  assert.equal(migrated.raw.schemaVersion, 155);
+  assert.equal(migrated.raw.schemaVersion, 156);
   assert.deepEqual(migrated.raw.diligenceChecklists, []);
   assert.deepEqual(migrated.raw.diligenceConsults, []);
   assert.deepEqual(migrated.raw.diligenceGrades, []);
   assert.deepEqual(migrated.raw.diligenceMarkers, []);
   assert.equal(migrated.raw.settings.diligenceKnowableFloor, 8, 'the declared default, not a fitted value');
   assert.equal(migrated.raw.settings.diligenceGradeClaimFloor, 3);
-  assert.ok(migrated.applied.includes('105 → 106')); assert.equal(migrated.applied.at(-1), '151 → 152');
+  assert.ok(migrated.applied.includes('105 → 106'));
+  assert.equal(migrated.applied.at(-1), '155 → 156', 'a legacy load reaches the current Schema v156 head');
   assert.deepEqual(migrate(migrated.raw).applied, [], 'idempotent');
   const normalized = normalizeState(migrated.raw, { now: NOW }).state;
   assert.deepEqual(normalized.diligenceChecklists, []);
@@ -176,7 +177,7 @@ test('Schema v106 migrates additively: empty ledgers, declared conventions, noth
 /* --------------------------------------------------------------- wiring */
 
 test('the Diligence Ledger is registered on the shared spine, the manifest, rights, graph and CSV', () => {
-  assert.equal(DEFAULT_POST_COMMIT_RULES.length, 90);
+  assert.equal(DEFAULT_POST_COMMIT_RULES.length, 124, 'the current shared spine includes each later registered governed rule');
   assert.equal(PROPAGATION_CONTRACTS.length, DEFAULT_POST_COMMIT_RULES.length);
   assert.ok(DEFAULT_POST_COMMIT_RULES.includes(diligenceRule));
   const contract = contractFor(diligenceRule);
@@ -207,7 +208,7 @@ test('the Diligence Ledger is registered on the shared spine, the manifest, righ
     assert.ok(SYSTEM_GENERATED_LINK_RELATIONS.includes(relation));
     assert.ok(LINK_RELATION_LABELS[relation]);
   }
-  assert.equal(CSV_EXPORTS.length, 146);
+  assert.equal(CSV_EXPORTS.length, 147);
   assert.ok(CSV_EXPORTS.some((scope) => scope.key === 'diligence' && /aggregate/i.test(scope.label)));
 });
 
