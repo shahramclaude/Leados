@@ -90,6 +90,7 @@ import { renderMatrixDoaPanel } from './matrixDoaPanel.js';
 // ADR-0164: Matrix 1:1 Line Coverage completion panel (Schema v140).
 import { renderMatrixOneOnOnePanel } from './matrixOneOnOnePanel.js';
 import { renderMatrixHiringPanel } from './matrixHiringPanel.js';
+import { renderMatrixChangeImpactPanel } from './matrixChangeImpactPanel.js';
 import { renderMatrixChargebackPanel } from './matrixChargebackPanel.js';
 import { renderMatrixDelegationLinePanel } from './matrixDelegationLinePanel.js';
 import { renderMatrixWorkTurnPanel } from './matrixWorkTurnPanel.js';
@@ -881,6 +882,7 @@ export function renderMatrix(ctx) {
 
     panel === 'desk' ? deskPanel(ctx, report) : null,
     panel === 'lines' ? linesPanel(ctx, report) : null,
+    panel === 'change-impacts' ? renderMatrixChangeImpactPanel(ctx) : null,
     panel === 'exit' ? renderLineExitPanel(ctx) : null,
     panel === 'consent' ? renderConsentPanel(ctx) : null,
     panel === 'renewal' ? renderReaffirmationPanel(ctx) : null,

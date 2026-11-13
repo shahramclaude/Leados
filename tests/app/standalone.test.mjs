@@ -280,10 +280,12 @@ test('standalone artifact exists and is a single inline HTML document', () => {
   // instructional diagram (base64 in the offline file). The density guard is unchanged.
   // ADR-0183 (Session 251) adds the DSM partitioning registry, reader, panel,
   // their wiring and one 27,562-byte generated instructional diagram. Measured
-  // build: 11,559,951 bytes / 767 source modules = 15,072 bytes per module,
-  // still far below the unchanged 24,000 density guard. The absolute ceiling
-  // moves only because real capability and a real asset were added.
-  assert.ok(bytes < 11_650_000, `standalone file is unexpectedly large (${bytes} bytes)`);
+  // build: 11,559,951 bytes / 767 source modules = 15,072 bytes per module.
+  // ADR-0184 adds six workforce stock-flow modules; ADR-0185 adds five Matrix
+  // change-impact review modules. Together the current build is 11,682,585 bytes
+  // / 778 source modules = 15,016 bytes per module, still far below the unchanged
+  // 24,000 density guard. The absolute ceiling moves only for real capability.
+  assert.ok(bytes < 11_750_000, `standalone file is unexpectedly large (${bytes} bytes)`);
   for (const asset of ['app/assets/work-turn-evidence.jpg', 'app/assets/dependency-cycle-dsm.jpg']) {
     const diagram = fs.readFileSync(path.join(ROOT, asset));
     assert.ok(html.includes(`data:image/jpeg;base64,${diagram.toString('base64')}`), `the offline artifact embeds the exact bytes of ${asset}`);

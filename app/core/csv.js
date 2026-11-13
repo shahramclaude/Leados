@@ -143,6 +143,9 @@ import { DEPENDENCY_CYCLE_CSV_COLUMNS, DEPENDENCY_CYCLE_CSV_DESCRIPTOR } from '.
 // person, id, name, manager, line or free text.
 import { buildWorkforceFlow, workforceFlowCsvRows } from './domain/workforceFlow.js';
 import { WORKFORCE_FLOW_CSV_COLUMNS, WORKFORCE_FLOW_CSV_DESCRIPTOR } from './domain/workforceFlowRegistry.js';
+// ADR-0185 (Schema v147): identity-free, aggregate-only Matrix line-review coverage.
+import { buildChangeImpactReviewReport, changeImpactCsvRows } from './domain/changeImpact.js';
+import { CHANGE_IMPACT_CSV_COLUMNS, CHANGE_IMPACT_CSV_DESCRIPTOR } from './domain/changeImpactRegistry.js';
 // ADR-0161: Matrix Span Fragmentation & Counterpart-Dyad Coordination Ledger
 // (CSV scope #121). Aggregate topology only — never a person, manager, line,
 // seat or free-text agreement. An incomplete matrix span withholds workspace
@@ -1347,6 +1350,10 @@ export const CSV_EXPORTS = [
   // row + one row per level. Rates and projections are BLANK with a reason where
   // refused; no person, id, name, manager, line or free text.
   WORKFORCE_FLOW_CSV_DESCRIPTOR,
+  // #139 (Schema v147, ADR-0185): Matrix change-impact line-review coverage,
+  // one identity-free workspace row; coverage is withheld when incomplete or
+  // below the declared reporting floor.
+  CHANGE_IMPACT_CSV_DESCRIPTOR,
 ];
 
 function personLookup(state) {
@@ -6429,6 +6436,16 @@ export function buildScopeTable(state, scope, now) {
       // — the reason text of a pause never leaves the browser inside an export.
       const report = buildPausePermits(state, { now, settings: state.settings || {} });
       return { columns: PAUSE_PERMIT_CSV_COLUMNS.map((key) => ({ key, header: key })), rows: pausePermitCsvRows(report) };
+    }
+    case 'matrix-change-impact': {
+      // CSV scope #139 (ADR-0185, Schema v147). Workspace aggregate only: the
+      // row contains no change title, person, manager, line, record id or prose.
+      // Coverage is withheld below the declared floor or on an incomplete read.
+      const report = buildChangeImpactReviewReport(state, { now, settings: state.settings || {}, seat: null });
+      return {
+        columns: CHANGE_IMPACT_CSV_COLUMNS.map((key) => ({ key, header: key })),
+        rows: changeImpactCsvRows(report),
+      };
     }
     case 'matrix-workforce-stock-flow': {
       // CSV scope #138 (ADR-0184, Schema v146). Built from the SAME reader the

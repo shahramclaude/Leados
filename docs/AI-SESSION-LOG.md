@@ -107,3 +107,62 @@ Build: ✅ green. Typecheck: ✅ green. Ledger structural check: ✅ green.
 Red team: 56/50 findings. Evidence ledger: zero claims marked verified without
 a named, re-run proof. Program completion report published with an honest
 per-part table. This entry closes the session.
+
+---
+
+## Entry 2 — Matrix Change-Impact Line Review (Session 253)
+
+**Date:** 2026-11-12. **Repository:** `shahramclaude/Leados`, branch
+`arena/3015da83-leados`, based on `780959358407f06d6f665e98e0cec498a4523d92`.
+
+### Decision and implementation
+
+Implemented ADR-0185, Schema v147, CSV #139, and the dedicated
+`#/matrix?panel=change-impacts` panel. Requests and responses are explicit
+append-only per-line records; requests freeze the current change, impact and
+complete active Matrix-line snapshot. Only the named active line holder can
+record a dated first-person `reviewed` response or reasoned `declined` response.
+No consent, approval, implementation permission, historical request or answer
+is inferred. `#/changes` retains its rank-3 floor; the Matrix read and request
+are separately seat-scoped. CSV #139 is aggregate-only and withholds a rate
+when scope or evidence is incomplete. ADR-0185 and `ROADMAP.md` record the
+scope and limitations.
+
+**RULE-CIL-01 audit:** the identifier is declared in
+`app/core/domain/changeImpactRegistry.js`, surfaced as `report.ruleId`, and
+exercised by the request/response guards and derived coverage reader. It is a
+coverage invariant, not a work-producing or post-commit shared-spine rule;
+therefore it is intentionally not registered in `DEFAULT_POST_COMMIT_RULES`.
+The reader never treats `reviewed` as approval. A regression test confirms the
+workspace operator cannot reload or record a response as the leader's
+first-person line act.
+
+### Verification and limits
+
+Passing: `npm run lint`; change-impact focused tests (11/11); action-bundles
+(19/19); related migration/CSV/read suites (63/63); boundary check (780 app
+modules, 237 suites, 23 documentation checks); internal link check (1,114 links
+/ 302 Markdown files); standalone
+build and tests (7/7, 11,682,585 bytes, 778 modules, Schema v147); and
+`git diff --check`. UI accessibility is covered only through the existing DOM
+and Axe-based tests; real-browser and assistive-technology behaviour remains
+**[UNVERIFIED]**.
+
+The broad app suite is **not green or complete**. The command
+`node --test --test-concurrency=4 tests/app/*.test.mjs` hit its 1,740-second
+guard at test #1487 with 14 root-level failures in the partial run. The
+standalone inline-worker failure was due to the artifact predating the latest
+source; after `npm run verify:standalone`, `tests/app/action-bundles.test.mjs`
+passed 19/19. Two targeted reruns of the other failure-containing files
+reported 195 tests (188 pass, 7 fail) and 67 tests (61 pass, 6 fail). The
+remaining failures include stale shared-spine / route-count and post-commit
+ordering assertions, a claim-sceptic alias collision, a conflict active-nav
+null dereference, four unexpected warnings in the coupling fixture, a dynamics
+demo wording expectation, three execution-loop action-settlement failures, an
+export-disclosure fallback-modal failure, and a delegation event-tail
+expectation. These are recorded as unresolved; no clean full-suite result is
+claimed. Several are in untouched subsystems, but the changed central schema
+and action wiring mean they are not represented as proven pre-existing
+failures.
+
+**Delivery:** feature commit `64fb069` was pushed on `arena/3015da83-leados`; [PR #286](https://github.com/shahramclaude/Leados/pull/286) is open against `main`. The full suite remains unresolved as stated above.

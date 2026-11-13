@@ -137,10 +137,11 @@ test('every CSV scope round-trips cleanly and preserves unknown values as blank 
 // ADR-0182 adds #136 (automation pause permits, one identity-free summary row
 // with no switch key, no authoriser and no reason text).
 // ADR-0184 adds #138 (workforce stock-flow: one workspace summary row plus one
-// row per roster level, identity-free) — 138 registered.
+// row per roster level, identity-free); ADR-0185 adds #139 (Matrix change-impact
+// review coverage, one identity-free workspace summary row) — 139 registered.
 // The pin states the total deliberately so the next session cannot drift the
 // catalog count silently.
-assert.equal(CSV_EXPORTS.length, 138);
+assert.equal(CSV_EXPORTS.length, 139);
   for (const spec of CSV_EXPORTS) {
     const res = exportWorkspaceCsv(state, spec.key, { now: NOW });
     assert.equal(res.ok, true, `${spec.key} export succeeds`);
