@@ -6,7 +6,7 @@
 
 **No-line integrity correction.** An explicit `no-line` declaration remains live in the person's exact capacity sweep and retains `single-principal` pair semantics. It is never given a guessed holder or a target-magnitude finding. If it contributes to an overcommitted peak, the owner row, roll-up and rule now withhold a partial named-holder apex: capacity arithmetic remains visible, while `RULE-GCC-01` records one identity-free `unattributed` observation and files no partial delegation.
 
-**Verification.** Integration run: `core` + `csv` + `goal-commitment` + `chargeback-posting` **62/62 PASS**. The focused goal register is **36/36 PASS** and the Chargeback Period Posting suite **6/6 PASS** under Schema v155. `npm run lint` PASS; canonical boundary PASS (827 app ES modules / 245 test suites / 23 documentation checks); docs links PASS (1,152 links / 312 Markdown files); standalone build and standalone suite **7/7 PASS**. Full repository suite and real-browser/AT walkthrough remain **[UNVERIFIED]**.
+**Verification.** Integration run: `core` + `csv` + `goal-commitment` + `chargeback-posting` **62/62 PASS**. The focused goal register is **36/36 PASS** and the Chargeback Period Posting suite **6/6 PASS** under Schema v155. `npm run lint` PASS; canonical boundary PASS (827 app ES modules / 245 test suites / 23 documentation checks); docs links PASS (1,155 links / 312 Markdown files); standalone build **13,008,910 bytes / 825 source modules / Schema v155** and standalone suite **7/7 PASS**. Full repository suite and real-browser/AT walkthrough remain **[UNVERIFIED]**.
 
 ## 2026-11-13 — Session 262: the quarter finally read COMPLETE — and then sat there as a reading nobody had signed
 

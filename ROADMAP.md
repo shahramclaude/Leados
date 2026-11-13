@@ -6,7 +6,7 @@
 
 **Sequencing correction.** Main had already assigned Schema v154 / ADR-0194 to Chargeback Period Posting. This follow-on was rebased as Schema v155 / ADR-0195 with a `154 → 155` migration, preserving ADR-0194's `153 → 154` posting migration and both capabilities in one coherent state chain.
 
-**Verification.** Direct integration suite `core` + `csv` + `goal-commitment` + `chargeback-posting` **62/62 PASS**; goal-commitment coverage includes the no-line capacity-peak guard and exact target threshold cases. `npm run lint`, `npm run check:boundary` (827 app modules / 245 test suites / 23 documentation checks), `npm run check:links` (1,152 internal links / 312 Markdown files), standalone build, and standalone suite **7/7 PASS**. Full repository suite and real-browser/AT walkthrough remain **[UNVERIFIED]**.
+**Verification.** Direct integration suite `core` + `csv` + `goal-commitment` + `chargeback-posting` **62/62 PASS**; goal-commitment coverage includes the no-line capacity-peak guard and exact target threshold cases. `npm run lint`, `npm run check:boundary` (827 app modules / 245 test suites / 23 documentation checks), `npm run check:links` (1,155 internal links / 312 Markdown files), standalone build (**13,008,910 bytes / 825 source modules / Schema v155**), and standalone suite **7/7 PASS**. Full repository suite and real-browser/AT walkthrough remain **[UNVERIFIED]**.
 
 ## 2026-11-13 — Session 262: Chargeback Period Posting & Budget-Envelope Binding (Schema v154, [ADR-0194](./docs/adr/0194-chargeback-period-posting.md), `RULE-CBP-01`, CSV #146, `#/matrix?panel=postings`)
 
