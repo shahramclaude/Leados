@@ -175,6 +175,7 @@ import { changeSaturationRule } from './changeSaturationRules.js';
 import { dependencyCycleRule } from './dependencyCycleRules.js';
 import { aarCorroborationRule } from './aarCorroborationRules.js';
 import { interfaceAlignmentRule } from './interfaceAlignmentRules.js';
+import { standardWorkRule } from './standardWorkRules.js';
 
 
 // ADR-0087: the Operating Cadence Clock. Reads the finished queue after the
@@ -1049,6 +1050,15 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // finding. It never opens a channel, never signs an agreement and never rates
   // a manager. Registered immediately before `seatRule` and `sealRule`.
   interfaceAlignmentRule,
+  // ADR-0190: Leader Standard Work & Tiered Daily Management (RULE-LSW-01).
+  // Reads the ONE standard-work reader with the whole-workspace view. A lapsed
+  // routine becomes ONE dated go-and-see ask to the manager of the line it is
+  // owed under; an escalated abnormality becomes ONE dated ask in the receiving
+  // tier's queue. With several lines and none named, an ended line or an
+  // off-roster holder it records an identity-free `matrixMarkers` observation
+  // and asks nobody. It never records a check or a tier act and never rates a
+  // leader. Registered immediately before `seatRule` and `sealRule`.
+  standardWorkRule,
   // ADR-0076: the Operating Seat (vertical roll-up + enforced boundaries).
   // It reads the finished record after every module has propagated, then fans
   // each open item up every leadership ancestor in the reporting tree with one

@@ -135,14 +135,14 @@ test('v77 -> v78 migrates additively and invents nothing', () => {
   delete v77.couplingMarkers;
   const { raw: v78, applied } = migrate(clone(v77));
   assert.ok(applied.includes('77 → 78'));
-  assert.equal(v78.schemaVersion, 149);
+  assert.equal(v78.schemaVersion, 150);
   assert.deepEqual(v78.couplingReviews, []);
   assert.deepEqual(v78.couplingMarkers, []);
-  assert.equal(SCHEMA_VERSION, 149);
-  assert.equal(v78.schemaVersion, 149);
+  assert.equal(SCHEMA_VERSION, 150);
+  assert.equal(v78.schemaVersion, 150);
   assert.deepEqual(v78.couplingReviews, []);
   assert.deepEqual(v78.couplingMarkers, []);
-  assert.equal(SCHEMA_VERSION, 149);
+  assert.equal(SCHEMA_VERSION, 150);
   assert.equal(typeof MIGRATIONS[77], 'function');
   // The conventions exist and are clamped into declared bands.
   assert.equal(v78.settings.couplingBlockDays, 30);

@@ -131,6 +131,7 @@ import { changeSaturationRule } from './changeSaturationRules.js';
 import { aarCorroborationRule } from './aarCorroborationRules.js';
 import { dependencyCycleRule } from './dependencyCycleRules.js';
 import { interfaceAlignmentRule } from './interfaceAlignmentRules.js';
+import { standardWorkRule } from './standardWorkRules.js';
 import { sealRule } from './sealRules.js';
 // ADR-0092: the Differencing Defender declares its contract like every other rule.
 import { differencingRule } from './differencingRules.js';
@@ -1032,6 +1033,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     rule: interfaceAlignmentRule,
     module: 'interfaceAlignmentRules.js',
     purpose: 'RULE-OIA-01: reads the Product–Organisation Interface Alignment Matrix (`buildInterfaceAlignment`, ADR-0189) with the whole-workspace operator view on declared-link writes, operational work-record writes, reporting-line and roster changes, interface-agreement and cadence-forum acts, convention changes and explicit `matrix.alignment.scan` / `matrix.scan` scans. For every pair finding whose `matrixJointApex` resolves to ONE active roster seat it keeps at most ONE open dated ask (bounded at 6 per commit, remainder counted): (a) `interface-unattended` — declared work depends across two spans whose holders hold no live coordination channel (printed as `unattended-interface` or `channel-not-live`, never collapsed) — asking the apex to open or renew an interface agreement or shared cadence forum, or record why the dependency stands without one; (b) `agreement-idle` — an ACTIVE interface agreement whose two spans carry zero live shared people and zero in-window cross-span dependency — asking the apex to retire it or record what it stands ready for. Asks carry typed `issues-obligation` and matrix-DAG `rolls-up-to` provenance, are idempotent per deterministic finding signature (`ifa1:…`), and close themselves when the finding clears or its owning seat moves. A leader-held, ambiguous-apex, unattributed or off-roster finding records ONE identity-free `matrixMarkers` observation (`kind: \'interface-alignment\'`) and substitutes nobody. It never opens a channel, never signs or retires an agreement, never edits a dependency, never rates a manager, and is inert with nobody on the roster; pausable via `interfaceAlignmentAutoPropagate` (the pause governs EVERY path, including explicit scans).',
+    writes: ['delegations', 'links', 'matrixMarkers'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: standardWorkRule,
+    module: 'standardWorkRules.js',
+    purpose: 'RULE-LSW-01: reads Leader Standard Work & Tiered Daily Management (`buildStandardWork`, ADR-0190) with the whole-workspace view on every operational write. A routine whose most recent closed slots — at least the declared lapse run — hold no completed check becomes ONE dated go-and-see ask to the manager of the line the routine is owed under; an abnormality escalated to a leader becomes ONE dated ask in that leader’s queue, due at the end of the declared tier window. Asks are idempotent per condition signature, carry matrix-DAG `rolls-up-to` provenance, close themselves when the condition clears or its seat moves, and are bounded per commit. Where the owner holds several lines and named none, the named line ended, the holder left the roster or the next tier is the workspace leader, it records an identity-free `matrixMarkers` observation and asks nobody. It never records a check, never acts for a tier and never rates a leader.',
     writes: ['delegations', 'links', 'matrixMarkers'],
     emits: [],
     scansWorkspace: true,

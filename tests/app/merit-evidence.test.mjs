@@ -461,7 +461,7 @@ test('CSV #116 appends the evidence columns, keeps the existing ones, and carrie
     stewardship: { requests: [ask(id, '2026-11-01', '2026-11-08')], answers: [answer(id, 'input', '2026-11-05')] },
   }));
   const state = makeState({ reviews });
-  assert.equal(CSV_EXPORTS.length, 142, 'ADR-0166 extends #116; ADR-0168..0175 register through #129, ADR-0164 #130, ADR-0183..0185 #137..139 (139 registered; #75 stays reserved)');
+  assert.equal(CSV_EXPORTS.length, 143, 'ADR-0166 extends #116; ADR-0168..0175 register through #129, ADR-0164 #130, ADR-0183..0185 #137..139 (139 registered; #75 stays reserved)');
 
   // The old header is a PREFIX of the new one, in order.
   assert.deepEqual(
@@ -488,7 +488,7 @@ test('CSV #116 appends the evidence columns, keeps the existing ones, and carrie
 });
 
 test('the schema migration adds one empty marker ledger and changes no record', () => {
-  assert.equal(SCHEMA_VERSION, 149);
+  assert.equal(SCHEMA_VERSION, 150);
   const v132 = { ...createEmptyState(ISO), schemaVersion: 132 };
   delete v132.meritEvidenceMarkers;
   const out = migrate(v132);

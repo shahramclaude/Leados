@@ -337,7 +337,7 @@ test('a single-chain workspace gains no row, no warning and no verdict change', 
 /* ------------------------------------------------- 7. schema / spine */
 
 test('schema v122 is additive: existing reviews gain an EMPTY stewardship and nothing is invented', () => {
-  assert.equal(SCHEMA_VERSION, 149);
+  assert.equal(SCHEMA_VERSION, 150);
   const { raw, applied } = migrate({
     schemaVersion: 121,
     appId: 'leados',
@@ -347,7 +347,7 @@ test('schema v122 is additive: existing reviews gain an EMPTY stewardship and no
     reviews: [{ id: 'rev-old', personId: 'sam', periodStart: '2026-01-01', periodEnd: '2026-03-31', status: 'complete', manager: { rating: 'meets-expectations' } }],
     settings: { reviewStewardshipAnswerDays: 999 },
   });
-  assert.deepEqual(applied, ['121 → 122', '122 → 123', '123 → 124', '124 → 125', '125 → 126', '126 → 127', '127 → 128', '128 → 129', '129 → 130', '130 → 131', '131 → 132', '132 → 133', '133 → 134', '134 → 135', '135 → 136', '136 → 137', '137 → 138', '138 → 139', '139 → 140', '140 → 141', '141 → 142', '142 → 143', '143 → 144', '144 → 145', '145 → 146', '146 → 147', '147 → 148', '148 → 149']);
+  assert.deepEqual(applied, ['121 → 122', '122 → 123', '123 → 124', '124 → 125', '125 → 126', '126 → 127', '127 → 128', '128 → 129', '129 → 130', '130 → 131', '131 → 132', '132 → 133', '133 → 134', '134 → 135', '135 → 136', '136 → 137', '137 → 138', '138 → 139', '139 → 140', '140 → 141', '141 → 142', '142 → 143', '143 → 144', '144 → 145', '145 → 146', '146 → 147', '147 → 148', '148 → 149', '149 → 150']);
   assert.deepEqual(raw.reviews[0].stewardship, { requests: [], answers: [] });
   assert.equal(raw.settings.reviewStewardshipAnswerDays, 60, 'clamped to the declared bound, not fitted');
 });

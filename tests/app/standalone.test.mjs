@@ -296,7 +296,13 @@ test('standalone artifact exists and is a single inline HTML document', () => {
   // ADR-0188 adds a sixth diagram (80,893 bytes), a fifth learning panel and a
   // whole engine, so the ceiling moves to 12,250,000 — the density guard below
   // is the real check and this bound only catches accidental double-inlining.
-  assert.ok(bytes < 12_250_000, `standalone file is unexpectedly large (${bytes} bytes)`);
+  //
+  // ADR-0190 (2026-11-13) adds Leader Standard Work & Tiered Daily Management:
+  // five domain modules, one top-level view and a seventh diagram (22,377
+  // bytes). Measured build: 12,330,337 bytes / 803 source modules = 15,355 bytes
+  // per module, still far below the unchanged 24,000 density guard. The ceiling
+  // moves to 12,450,000 for that capability and nothing else.
+  assert.ok(bytes < 12_450_000, `standalone file is unexpectedly large (${bytes} bytes)`);
   // Derived from the folder, not from a list in this file: the day a panel adds
   // a diagram, an enumerator that names the old two would still pass. Same
   // lesson the build script learned in ADR-0186.

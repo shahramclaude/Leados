@@ -94,7 +94,7 @@ const reportFor = (state, seatId = state.settings.activeSeatId, now = NOW) =>
 const digestOf = (state, seatId, now) => reportFor(state, seatId, now).absences.handoverDigest;
 
 test('the digest lists only inference-only covers, scopes by seat, sorts by open work then cutoff, and rolls up counts without changing the badge', () => {
-  assert.equal(SCHEMA_VERSION, 149);
+  assert.equal(SCHEMA_VERSION, 150);
   const state = makeState();
   const manager = digestOf(state, 'mgr1');
   assert.equal(manager.summary.checksN, 2);

@@ -629,6 +629,11 @@ export const ACTION_RIGHTS = Object.freeze({
   'respond-aar-corroboration': { minRank: 1, maxRank: 5, label: 'Record your own line’s first-person answer to a corroboration request' },
   'adopt-aar-lesson': { minRank: 1, maxRank: 5, label: 'Record your line’s dated adoption of, or refusal to adopt, a lesson it touches' },
   'govern-aar-corroboration': { minRank: 3, maxRank: 5, label: 'Set the corroboration escalation window, coverage floor and adoption window' },
+  // ADR-0190: Leader Standard Work & Tiered Daily Management.
+  'read-standard-work': { minRank: 1, maxRank: 5, label: 'Read the leader standard work board' },
+  'declare-standard-work': { minRank: 1, maxRank: 5, label: 'Declare or retire a standard-work routine for yourself or a leader you hold a line over' },
+  'record-standard-work': { minRank: 1, maxRank: 5, label: 'Record your own standard-work check, or your own tier act on an abnormality addressed to you' },
+  'govern-standard-work': { minRank: 3, maxRank: 5, label: 'Set the standard-work read window, lapse run and tier window' },
   // ADR-0150: onboarding a person into a matrix. Writing a line's brief is the act
   // of the manager who HOLDS that line, at whatever altitude that line's manager
   // sits (a project lead with no home-line reports gets this exactly as a
