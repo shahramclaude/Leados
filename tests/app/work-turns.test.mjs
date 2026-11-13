@@ -318,7 +318,7 @@ test('missing shares, refused lines, duplicate asks and a zero-share pool refuse
 /* ------------------------------------------------------------ 1. the wiring */
 
 test('the ledger is wired end to end: schema, panel, both gateway lists, spine order, contract and CSV scope', () => {
-  assert.equal(SCHEMA_VERSION, 152);
+  assert.equal(SCHEMA_VERSION, 153);
   assert.ok(COLLECTIONS.includes('workTurnActs') && COLLECTIONS.includes('workTurnMarkers'));
   const empty = createEmptyState(ISO);
   assert.deepEqual(empty.workTurnActs, []);
@@ -364,7 +364,7 @@ test('the ledger is wired end to end: schema, panel, both gateway lists, spine o
   assert.equal(PROPAGATION_CONTRACTS.length, DEFAULT_POST_COMMIT_RULES.length, 'contracts == rules');
 
   // CSV scope #135 remains in place; Session 248 added scope #136 after it.
-  assert.equal(CSV_EXPORTS.length, 144);
+  assert.equal(CSV_EXPORTS.length, 145);
   assert.equal(CSV_EXPORTS[134], WORK_TURN_CSV_DESCRIPTOR);
   assert.equal(WORK_TURN_CSV_DESCRIPTOR.key, 'work-turns');
   assert.equal(new Set(WORK_TURN_CSV_COLUMNS).size, WORK_TURN_CSV_COLUMNS.length, 'no duplicate column');
@@ -1016,7 +1016,7 @@ test('under the REAL spine a classification, the rotation ask, the seat roll-up 
 
   // The bytes on disk carry the acts, the ask and the marker.
   const stored = JSON.parse(map.get(STORAGE_KEY));
-  assert.equal(stored.schemaVersion, 152);
+  assert.equal(stored.schemaVersion, 153);
   assert.equal(stored.workTurnActs.length, 4);
   assert.equal(stored.workTurnMarkers.length, 1);
   assert.equal(stored.delegations.filter((d) => String(d.support || '').includes(WORK_TURN_RULE_ID)).length, 1);
@@ -1160,8 +1160,8 @@ test('schema v144: the migration adds two empty collections and fabricates no ki
   delete v143.workTurnActs;
   delete v143.workTurnMarkers;
   const migrated = migrate(v143);
-  assert.deepEqual(migrated.applied, ['143 → 144', '144 → 145', '145 → 146', '146 → 147', '147 → 148', '148 → 149', '149 → 150', '150 → 151', '151 → 152']);
-  assert.equal(migrated.raw.schemaVersion, 152);
+  assert.deepEqual(migrated.applied, ['143 → 144', '144 → 145', '145 → 146', '146 → 147', '147 → 148', '148 → 149', '149 → 150', '150 → 151', '151 → 152', '152 → 153']);
+  assert.equal(migrated.raw.schemaVersion, 153);
   assert.deepEqual(migrated.raw.workTurnActs, []);
   assert.deepEqual(migrated.raw.workTurnMarkers, []);
   assert.equal(migrated.raw.delegations.length, v143.delegations.length, 'no ask changed');

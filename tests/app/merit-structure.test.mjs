@@ -465,7 +465,7 @@ test('CSV #116 carries the structure counts and no manager or person identity', 
   // ADR-0156 added scope #117 (the authority continuity register), so the
   // registered total moved from 115 to 116. The pin states the total
   // deliberately so the next session cannot drift the count silently.
-  assert.equal(CSV_EXPORTS.length, 144, 'ADR-0185 brings the register to 139 scopes (#75 stays reserved)');
+  assert.equal(CSV_EXPORTS.length, 145, 'ADR-0185 brings the register to 139 scopes (#75 stays reserved)');
   const people = roster({ sam: { managerId: 'priya' } });
   const history = fullHistory({
     sam: period('sam', 'dana', '2026-09-01', '2026-11-30'),
@@ -498,7 +498,7 @@ test('the declared vocabulary is closed and the states reconcile by construction
   assert.equal(MERIT_STRUCTURE_STATES[0].rank < MERIT_STRUCTURE_STATES[3].rank, true, 'unrecorded is worse than observed');
   assert.equal(MERIT_STRUCTURE_STATES.find((s) => s.key === 'unrecorded').blocks, true);
   assert.equal(MERIT_STRUCTURE_STATES.find((s) => s.key === 'presumed-current').blocks, false);
-  assert.equal(SCHEMA_VERSION, 152);
+  assert.equal(SCHEMA_VERSION, 153);
 
   const st = structureFor(makeState({ history: fullHistory() }));
   const detail = st.reconcilesDetail;

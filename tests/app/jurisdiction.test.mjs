@@ -79,7 +79,7 @@ const edges = (state, relation) => (Array.isArray(state.links) ? state.links : [
 /* --------------------------------------------------------- 1. storage */
 
 test('v111 is additive, declared, fail-closed and invents no jurisdiction fact', () => {
-  assert.equal(SCHEMA_VERSION, 152);
+  assert.equal(SCHEMA_VERSION, 153);
   for (const key of ['jurFindings', 'jurReadings', 'jurMarkers']) assert.ok(COLLECTIONS.includes(key), key);
   const empty = createEmptyState(NOW.toISOString());
   assert.deepEqual(empty.jurFindings, []);
@@ -127,7 +127,7 @@ test('the engine shares the one spine, the graph, the rights and the CSV registe
   for (const name of ['jurRead', 'jurHygiene', 'jurBriefText', 'jurCsvRows', 'jurConventions', 'jurAttentionCount', 'jurSpanRollUp', 'jurBook']) {
     assert.ok(SAFE_READS.has(name), name);
   }
-  assert.equal(CSV_EXPORTS.length, 144);
+  assert.equal(CSV_EXPORTS.length, 145);
   assert.ok(CSV_EXPORTS.some((s) => s.key === 'jurisdiction' && s.sensitive === false));
   assert.ok(NAV.some((g) => g.items?.some((i) => i.route === 'jurisdiction')), '#/jurisdiction is in the nav');
   assert.equal(JUR_SOURCES.length, 3, 'one row per work source, no per-module glue');

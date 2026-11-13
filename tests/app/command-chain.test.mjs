@@ -141,7 +141,7 @@ function ruleContext(event, settings = {}, now = NOW) {
 /* ------------------------------------------------------------------ */
 
 test('schema v82 is additive: two collections, no rewrite, and a probability-free reading is refused', () => {
-  assert.equal(SCHEMA_VERSION, 152);
+  assert.equal(SCHEMA_VERSION, 153);
   assert.equal(typeof MIGRATIONS[81], 'function');
 
   const v81 = { ...createEmptyState(NOW.toISOString()), schemaVersion: 81 };

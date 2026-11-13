@@ -161,6 +161,8 @@ import { buildStandardWork, standardWorkCsvRows } from './domain/standardWork.js
 import { STANDARD_WORK_CSV_COLUMNS, STANDARD_WORK_CSV_DESCRIPTOR } from './domain/standardWorkRegistry.js';
 import { buildPriorityRanking, priorityBallotCsvRows } from './domain/priorityRanking.js';
 import { PRIORITY_BALLOT_CSV_COLUMNS, PRIORITY_BALLOT_CSV_DESCRIPTOR } from './domain/priorityRankingRegistry.js';
+import { buildGoalCommitments, goalCommitmentCsvRows } from './domain/goalCommitment.js';
+import { GOAL_COMMITMENT_CSV_COLUMNS, GOAL_COMMITMENT_CSV_DESCRIPTOR } from './domain/goalCommitmentRegistry.js';
 // ADR-0161: Matrix Span Fragmentation & Counterpart-Dyad Coordination Ledger
 // (CSV scope #121). Aggregate topology only — never a person, manager, line,
 // seat or free-text agreement. An incomplete matrix span withholds workspace
@@ -1385,6 +1387,10 @@ export const CSV_EXPORTS = [
   // #144 (ADR-0191): cross-line priority ballots — aggregate, no identities.
   // A withheld coverage rate exports BLANK with its reason, never zero.
   PRIORITY_BALLOT_CSV_DESCRIPTOR,
+  // #145 (ADR-0193): cross-line goal commitment conflicts — aggregate, no
+  // identities. A withheld attribution rate exports BLANK with its reason, never
+  // zero, and a peak with no live commitment inside the horizon exports BLANK.
+  GOAL_COMMITMENT_CSV_DESCRIPTOR,
 ];
 
 function personLookup(state) {
@@ -6503,6 +6509,18 @@ export function buildScopeTable(state, scope, now) {
       return {
         columns: PRIORITY_BALLOT_CSV_COLUMNS.map((key) => ({ key, header: key })),
         rows: priorityBallotCsvRows(report),
+      };
+    }
+    case 'matrix-goal-commitments': {
+      // CSV scope #145 (ADR-0193, Schema v153). Built from the SAME reader the
+      // panel renders, so an exported count is provably the count that was
+      // printed. Aggregate only: no person, manager, line, goal title, measure
+      // key, note or record id. A withheld attribution rate or an absent peak
+      // prints its reason; neither is ever a zero.
+      const report = buildGoalCommitments(state, { now, settings: state.settings || {} });
+      return {
+        columns: GOAL_COMMITMENT_CSV_COLUMNS.map((key) => ({ key, header: key })),
+        rows: goalCommitmentCsvRows(report),
       };
     }
     case 'standard-work': {

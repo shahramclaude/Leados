@@ -174,9 +174,9 @@ function thinScenario() {
 /* ------------------------------------------------------------------ schema */
 
 test('Schema v104 migrates additively: empty lock ledgers, declared conventions, nothing back-filled', () => {
-  assert.equal(SCHEMA_VERSION, 152);
+  assert.equal(SCHEMA_VERSION, 153);
   const migrated = migrate({ schemaVersion: 103, settings: { leaderName: 'Keep this' } });
-  assert.deepEqual(migrated.applied, ['103 → 104', '104 → 105', '105 → 106', '106 → 107', '107 → 108', '108 → 109', '109 → 110', '110 → 111', '111 → 112', '112 → 113', '113 → 114', '114 → 115', '115 → 116', '116 → 117', '117 → 118', '118 → 119', '119 → 120', '120 → 121', '121 → 122', '122 → 123', '123 → 124', '124 → 125', '125 → 126', '126 → 127', '127 → 128', '128 → 129', '129 → 130', '130 → 131', '131 → 132', '132 → 133', '133 → 134', '134 → 135', '135 → 136', '136 → 137', '137 → 138', '138 → 139', '139 → 140', '140 → 141', '141 → 142', '142 → 143', '143 → 144', '144 → 145', '145 → 146', '146 → 147', '147 → 148', '148 → 149', '149 → 150', '150 → 151', '151 → 152']);
+  assert.deepEqual(migrated.applied, ['103 → 104', '104 → 105', '105 → 106', '106 → 107', '107 → 108', '108 → 109', '109 → 110', '110 → 111', '111 → 112', '112 → 113', '113 → 114', '114 → 115', '115 → 116', '116 → 117', '117 → 118', '118 → 119', '119 → 120', '120 → 121', '121 → 122', '122 → 123', '123 → 124', '124 → 125', '125 → 126', '126 → 127', '127 → 128', '128 → 129', '129 → 130', '130 → 131', '131 → 132', '132 → 133', '133 → 134', '134 → 135', '135 → 136', '136 → 137', '137 → 138', '138 → 139', '139 → 140', '140 → 141', '141 → 142', '142 → 143', '143 → 144', '144 → 145', '145 → 146', '146 → 147', '147 → 148', '148 → 149', '149 → 150', '150 → 151', '151 → 152', '152 → 153']);
   assert.deepEqual(migrated.raw.decisionLocks, []);
   assert.deepEqual(migrated.raw.decisionLockMarkers, []);
   assert.equal(migrated.raw.settings.leaderName, 'Keep this');
@@ -489,7 +489,7 @@ test('CSV scope #98 is registered and carries no decision, lock, person or fact 
   api.hindsightScan();
   const spec = CSV_EXPORTS.find((row) => row.key === 'hindsight');
   assert.ok(spec, 'CSV scope #98 is registered');
-  assert.equal(CSV_EXPORTS.length, 144);
+  assert.equal(CSV_EXPORTS.length, 145);
   const res = exportWorkspaceCsv(store.state, 'hindsight', { now: NOW });
   assert.equal(res.ok, true, res.error);
   assert.ok(res.rowCount > 0);

@@ -303,12 +303,14 @@ test('standalone artifact exists and is a single inline HTML document', () => {
   // per module, still far below the unchanged 24,000 density guard. The ceiling
   // moves to 12,450,000 for that capability and nothing else.
   //
-  // ADR-0191 (2026-11-13) adds the Cross-Line Priority Ballot & Social-Choice
-  // Aggregation: five domain modules, one matrix panel and an eighth diagram
-  // (87,288 bytes). Measured build: 12,512,536 bytes / 809 source modules =
-  // 15,466 bytes per module, still far below the unchanged 24,000 density
-  // guard. The ceiling moves to 12,650,000 for that capability and nothing else.
-  assert.ok(bytes < 12_650_000, `standalone file is unexpectedly large (${bytes} bytes)`);
+  // ADR-0193 (2026-11-13) adds the Cross-Line Goal Commitment Conflict
+  // register: five domain modules (goalCommitmentRegistry, goalCommitmentSchema,
+  // goalCommitment, goalCommitmentActions, goalCommitmentRules), one matrix
+  // panel and a tenth diagram (47,013 bytes). Measured build: 12,745,610 bytes
+  // / 819 source modules = 15,562 bytes per module, still far below the
+  // unchanged 24,000 density guard. The ceiling moves to 12,900,000 for that
+  // capability and nothing else.
+  assert.ok(bytes < 12_900_000, `standalone file is unexpectedly large (${bytes} bytes)`);
   // Derived from the folder, not from a list in this file: the day a panel adds
   // a diagram, an enumerator that names the old two would still pass. Same
   // lesson the build script learned in ADR-0186.

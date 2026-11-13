@@ -118,6 +118,15 @@ import {
   normalizePriorityRoundLedger,
   normalizePriorityVotes,
 } from './domain/priorityRankingSchema.js';
+// ADR-0193 (Schema v153): dated cross-line goal commitment declarations — the
+// window, the effort and the measure a reporting line's goal consumes of one
+// shared person — plus the conflict rule's bounded marker ledger. Declarations
+// normalize on their own; nothing they derive is stored.
+import {
+  normalizeGoalCommitmentMarkers,
+  normalizeGoalCommitmentSettings,
+  normalizeGoalCommitments,
+} from './domain/goalCommitmentSchema.js';
 // ADR-0185 (Schema v147): dated Matrix change-impact requests and first-person
 // line responses. Request snapshots normalize before their responses resolve.
 import {
@@ -832,7 +841,17 @@ export {
 // about what the change puts on a person, and a capacity inferred from level, pay
 // or meeting load would be a limit its author never agreed to. An upgraded
 // workspace therefore opens printing `no capacity declared` — refused, never zero.
-export const SCHEMA_VERSION = 152;
+// v153 adds the Cross-Line Goal Commitment Conflict register (ADR-0193):
+// `goalCommitments` (append-only dated declarations — one goal, the ONE named
+// reporting line that owes it or an explicit `no-line`, an inclusive window, the
+// effort it draws in integer hundredths of one person, and an optional declared
+// measure key and direction) and `goalCommitmentMarkers` (`RULE-GCC-01`'s
+// bounded idempotency ledger). Both start EMPTY, and nothing is inferred at
+// upgrade: no window is read off a goal's `dueDate`, no effort off its key
+// results, no measure off its title, and no line is guessed from
+// `person.managerId`. An upgraded workspace therefore opens printing
+// `nothing declared` for every goal — an absence, never a compatibility claim.
+export const SCHEMA_VERSION = 153;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -2272,6 +2291,12 @@ export const DEFAULT_SETTINGS = Object.freeze({
   // claimed. Clamped on load, refused (never clamped) by the setter, and printed
   // on the Method card. None is fitted from the record.
   ...normalizePriorityBallotSettings({}),
+  // ADR-0193: the goal-commitment conventions — the capacity horizon, the
+  // overlap that turns a printed collision into an ask, the attribution floor
+  // below which no rate is claimed, and the follow-up ask window. Clamped on
+  // load, refused (never clamped) by the setter, and printed on the Method
+  // card. None is fitted from the record.
+  ...normalizeGoalCommitmentSettings({}),
 });
 
 export const COLLECTIONS = [
@@ -3023,6 +3048,13 @@ export const COLLECTIONS = [
   // ADR-0192: human-declared tasks and append-only ILUO attestations.
   'skillTasks',
   'skillActs',
+  // ADR-0193 (Schema v153): the Cross-Line Goal Commitment Conflict register.
+  // One append-only ledger of dated declarations plus the rule's marker ledger.
+  // No overlap, verdict, peak day, capacity sum, attribution state or rate is
+  // stored — every one is re-derived on read from the declarations, the goals
+  // and the reporting graph.
+  'goalCommitments',
+  'goalCommitmentMarkers',
 ];
 
 /** Stable empty state. `now` is an ISO string so the result is a pure value. */
@@ -3803,6 +3835,10 @@ export function normalizeSettings(raw) {
     // field, so a ballot convention not spread here would vanish on every load
     // and the pause census would never see the ballot switch.
     ...normalizePriorityBallotSettings(s),
+    // ADR-0193: named here for the same reason — this object is rebuilt field by
+    // field, so a goal-commitment convention not spread here would vanish on
+    // every load and the pause census would never see the conflict switch.
+    ...normalizeGoalCommitmentSettings(s),
     ...normalizeStructureHistorySettings(s),
     ...normalizeDifferencesSettings(s),
     ...normalizeFitSettings(s),
@@ -7783,6 +7819,11 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.standardWorkTierActs = normalizeStandardWorkTierActs(raw.standardWorkTierActs, state.standardWorkChecks, warnings);
   state.priorityRounds = normalizePriorityRoundLedger(raw.priorityRounds, warnings);
   state.priorityBallots = normalizePriorityVotes(raw.priorityBallots, state.priorityRounds, warnings);
+  // ADR-0193: declarations stand on their own; the goal and the reporting line
+  // each name is resolved on READ, so a line that ended after a commitment was
+  // declared is a fact the register prints rather than a reason to erase it.
+  state.goalCommitments = normalizeGoalCommitments(raw.goalCommitments, warnings);
+  state.goalCommitmentMarkers = normalizeGoalCommitmentMarkers(raw.goalCommitmentMarkers, warnings);
   state.changeImpactRequests = normalizeChangeImpactRequests(raw.changeImpactRequests, warnings, todayDay);
   state.changeImpactResponses = normalizeChangeImpactResponses(
     raw.changeImpactResponses,
@@ -9122,6 +9163,21 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  // 152 → 153: ADR-0193 adds two EMPTY ledgers and five declared conventions.
+  // No commitment is inferred from the goals that already exist: a goal's
+  // `dueDate` is not a window, its key results are not an effort, its title is
+  // not a measure, and `person.managerId` is not the line that owes it. Inventing
+  // any of them at upgrade time would fabricate a promise no line holder made —
+  // and would then print a conflict, or a clean bill of health, that nobody can
+  // trace to a declaration. An upgraded workspace opens with every goal reading
+  // `no line declared`, which is the truth about it.
+  152: (v152) => ({
+    ...v152,
+    schemaVersion: 153,
+    goalCommitments: Array.isArray(v152.goalCommitments) ? v152.goalCommitments : [],
+    goalCommitmentMarkers: Array.isArray(v152.goalCommitmentMarkers) ? v152.goalCommitmentMarkers : [],
+    settings: { ...(v152.settings || {}), ...normalizeGoalCommitmentSettings(v152.settings || {}) },
+  }),
   // ADR-0192: additive 151 → 152. No skills inferred from roles or ratings.
   151: (v151) => ({ ...v151, schemaVersion: 152,
     skillTasks: v151.skillTasks === undefined ? [] : v151.skillTasks,

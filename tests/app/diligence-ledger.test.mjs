@@ -152,14 +152,14 @@ function harness(state) {
 /* ------------------------------------------------------------------ schema */
 
 test('Schema v106 migrates additively: empty ledgers, declared conventions, nothing back-filled', () => {
-  assert.equal(SCHEMA_VERSION, 152);
+  assert.equal(SCHEMA_VERSION, 153);
   const base = createEmptyState(NOW_ISO);
   const legacy = { ...base, schemaVersion: 105 };
   for (const key of ['diligenceChecklists', 'diligenceConsults', 'diligenceGrades', 'diligenceMarkers']) delete legacy[key];
   legacy.settings = { ...base.settings };
   delete legacy.settings.diligenceKnowableFloor;
   const migrated = migrate(legacy);
-  assert.equal(migrated.raw.schemaVersion, 152);
+  assert.equal(migrated.raw.schemaVersion, 153);
   assert.deepEqual(migrated.raw.diligenceChecklists, []);
   assert.deepEqual(migrated.raw.diligenceConsults, []);
   assert.deepEqual(migrated.raw.diligenceGrades, []);
@@ -207,7 +207,7 @@ test('the Diligence Ledger is registered on the shared spine, the manifest, righ
     assert.ok(SYSTEM_GENERATED_LINK_RELATIONS.includes(relation));
     assert.ok(LINK_RELATION_LABELS[relation]);
   }
-  assert.equal(CSV_EXPORTS.length, 144);
+  assert.equal(CSV_EXPORTS.length, 145);
   assert.ok(CSV_EXPORTS.some((scope) => scope.key === 'diligence' && /aggregate/i.test(scope.label)));
 });
 
