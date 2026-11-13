@@ -165,4 +165,4 @@ claimed. Several are in untouched subsystems, but the changed central schema
 and action wiring mean they are not represented as proven pre-existing
 failures.
 
-**Status at this log entry:** no commit, push or pull request had been created.
+**Delivery:** feature commit `64fb069` was pushed on `arena/3015da83-leados`; [PR #286](https://github.com/shahramclaude/Leados/pull/286) is open against `main`. The full suite remains unresolved as stated above.

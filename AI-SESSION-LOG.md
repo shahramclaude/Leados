@@ -10,6 +10,8 @@
 
 **Full-suite limit.** `node --test --test-concurrency=4 tests/app/*.test.mjs` reached the 29-minute guard at test #1487; 14 failures were visible in that partial run, including an outdated standalone artifact issue that was fixed by the subsequent build and whose suite then passed. Other visible failures concerned unrelated rule-count/route-count and legacy UI/normalizer cases; they were not changed in this feature PR. Remaining suites and a clean full-suite result are **[UNVERIFIED]**. No image or diagram asset was generated.
 
+**Delivery.** Committed as `64fb069` on `arena/3015da83-leados`, pushed to that branch, and opened [PR #286](https://github.com/shahramclaude/Leados/pull/286) against `main`.
+
 ## 2026-11-12 — Session 252: demand-variance CSV prints the computed row (Schema v145 unchanged)
 
 **Built:** repaired the `#/matrix?panel=demand-variance` export, which passed row objects and column definitions to `serializeCsv` in reverse order and therefore emitted blank cells. The active panel download action now uses `matrixDemandVarianceCsvText(report)`, which serializes the exact identity-free rows returned by the report reader, with the canonical column-first contract, and passes the filename/content/MIME using `downloadText`'s actual options-object API. No schema, data or automation writes.
