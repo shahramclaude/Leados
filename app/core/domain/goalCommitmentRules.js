@@ -1,8 +1,8 @@
 /**
  * app/core/domain/goalCommitmentRules.js — `RULE-GCC-01` on the shared
- * post-commit spine (ADR-0193, Schema v153).
+ * post-commit spine (ADR-0193 + ADR-0195, Schema v155).
  *
- * THREE CONDITIONS, all read from the one reader (`buildGoalCommitments`) with
+ * FOUR CONDITIONS, all read from the one reader (`buildGoalCommitments`) with
  * the whole-workspace view, never re-derived here. They are partitioned so that
  * one fact files exactly one ask, and so that a MULTI-principal impossibility is
  * never dumped on a single line and a SINGLE-line arithmetic error is never
@@ -14,16 +14,22 @@
  *      two holders. Neither promise can be kept by working harder, so the
  *      decision is the apex's: withdraw or re-date one of them. It is never
  *      routed to the person being committed.
- *   2. `capacity-overcommit` — on the exact peak day inside the declared
+ *   2. `magnitude-conflict` — two lines committed the same person over at
+ *      least the declared overlap, named the SAME measure in the SAME direction
+ *      and SAME unit, but their exact target-magnitude divergence meets the
+ *      declared floor. ONE dated ask goes to the LOWEST JOINT APEX; missing
+ *      magnitudes and mismatched units are printed as refusals, never routed.
+ *   3. `capacity-overcommit` — on the exact peak day inside the declared
  *      horizon, every live commitment this person carries adds up to more than
- *      one whole person. ONE dated ask goes to the lowest joint apex of EVERY
- *      holder carrying a commitment on that peak day, because the week is full
- *      and no one of them can fix it alone.
- *   3. `line-share-exceeded` — a named line's own commitments peak above that
+ *      one whole person. With named holders only, ONE dated ask goes to the
+ *      lowest joint apex of EVERY holder carrying a commitment on that peak
+ *      day. If any peak declaration is explicit `no-line`, its capacity still
+ *      counts but the incomplete named-holder set is observed without an ask.
+ *   4. `line-share-exceeded` — a named line's own commitments peak above that
  *      line's OWN declared share of the person, while the person's whole week
  *      still fits. ONE dated ask goes to THAT LINE'S HOLDER and to nobody above
  *      them: this is one principal's arithmetic, not a conflict between two.
- *      It is filed only where condition 2 did not fire, so the two never
+ *      It is filed only where condition 3 did not fire, so the two never
  *      double-ask the same week.
  *
  * A BARE WINDOW COLLISION IS PRINTED, NOT ESCALATED. Two lines' commitments
@@ -33,9 +39,11 @@
  *
  * WHAT IT NEVER DOES. It never edits a commitment, never narrows a window, never
  * re-points a goal, never releases a promise, never substitutes a holder, never
- * infers a measure from a goal's text and never rates anyone. Where no roster
- * seat can be asked — the joint apex is ambiguous or is the workspace leader, or
- * the holder left the roster — it records ONE identity-free `matrixMarkers`
+ * infers a measure, target magnitude, target unit or unit conversion from a
+ * goal's text and never rates anyone. Where no roster
+ * seat can be asked — the joint apex is ambiguous or is the workspace leader,
+ * a holder left the roster, or a peak declaration is explicit `no-line` with no
+ * complete named-holder set — it records ONE identity-free `goalCommitmentMarkers`
  * observation and files nothing.
  *
  * Asks are `act-inform` delegations with typed `issues-obligation` and
@@ -64,6 +72,7 @@ import {
   GOAL_COMMITMENT_EVENT_PREFIX,
   GOAL_COMMITMENT_LIMITS,
   GOAL_COMMITMENT_MARKER_KIND,
+  GOAL_COMMITMENT_NO_LINE,
   GOAL_COMMITMENT_PERSON_BASIS_H,
   GOAL_COMMITMENT_ROUTE,
   GOAL_COMMITMENT_RULE_ID,
@@ -104,8 +113,9 @@ export function indexGoalCommitmentAsks(state) {
 
 /**
  * The conditions the current record creates. `seatState` says whether a roster
- * seat can be asked: `seat` (ask `seatId`), `leader-held`, `ambiguous` or
- * `off-roster`.
+ * seat can be asked: `seat` (ask `seatId`), `leader-held`, `ambiguous`,
+ * `off-roster`, or `unattributed` (an explicit no-line contribution makes the
+ * complete accountable holder set unknown).
  */
 export function goalCommitmentConditions(report) {
   const { matrix } = report.internal;
@@ -139,27 +149,64 @@ export function goalCommitmentConditions(report) {
       });
     }
 
-    /* 2. The whole week is fuller than one person. */
+    /* 2. Aligned measures that declare incompatible target magnitudes. */
+    for (const pair of row.pairs) {
+      if (pair.verdict !== 'magnitude-conflict') continue;
+      if (pair.overlapDays < K.minOverlapDays) continue;
+      const holderIds = [pair.aHolderId, pair.bHolderId].filter(Boolean).sort();
+      if (!holderIds.length) continue;
+      const routed = routeTo(holderIds);
+      const signatureKey = [pair.aId, pair.bId].sort().join('|');
+      out.push({
+        kind: 'magnitude-conflict',
+        signature: goalCommitmentSignature('magnitude-conflict', signatureKey),
+        seatState: routed.seatState,
+        seatId: routed.seatId,
+        dueOn: addDays(report.today, K.askDueDays),
+        title: `Two lines promised ${row.personName} incompatible targets for “${clip(pair.measureKey, 60)}”`,
+        expectedOutcome: `${row.personName} works across ${row.linesN} reporting line(s). ${pair.aHolderName} and ${pair.bHolderName} each committed the same direction on “${clip(pair.measureKey, 60)}” over ${pair.overlapDays} shared day(s), ${pair.overlapFrom} to ${pair.overlapTo}, using the same declared unit. Their exact relative target-magnitude difference is ${pair.magnitudeDivergencePct}% against the declared floor of ${K.magnitudeDivergencePct}%. This is a contradiction between line promises, not a judgement about ${row.personName}: reconcile, withdraw or re-baseline one target on #/${GOAL_COMMITMENT_ROUTE}?panel=commitments. The register never converts units or invents omitted values. This ask closes itself when either commitment is released, re-baselined, no longer aligns on measure and direction, uses a different unit, or falls below the declared divergence floor.`,
+        observation: `Two reporting lines declared incompatible same-unit target magnitudes for one aligned measure over ${pair.overlapDays} overlapping day(s).`,
+      });
+    }
+
+    /* 3. The whole week is fuller than one person. */
     if (row.capacity.verdict === 'overcommit') {
-      const holderIds = [...new Set(row.capacity.peakCommitments
-        .map((entry) => row.commitments.find((c) => c.commitmentId === entry.id)?.holderId)
-        .filter(Boolean))].sort();
-      if (holderIds.length) {
+      const peakSources = row.capacity.peakCommitments
+        .map((entry) => row.commitments.find((commitment) => commitment.commitmentId === entry.id) || null);
+      const hasNoLine = peakSources.some((commitment) => commitment?.lineKey === GOAL_COMMITMENT_NO_LINE);
+      const holderIds = [...new Set(peakSources.map((commitment) => commitment?.holderId).filter(Boolean))].sort();
+      const signature = goalCommitmentSignature('capacity-overcommit', row.personId);
+      const base = {
+        kind: 'capacity-overcommit',
+        signature,
+        dueOn: addDays(report.today, K.askDueDays),
+        title: `${row.personName} is committed to ${share(row.capacity.peakSumH)} of one person on ${row.capacity.peakDay}`,
+      };
+      // The no-line declaration counts in the person's capacity arithmetic, but
+      // it deliberately has no holder. A partial set of named holders is not a
+      // joint owner of the whole condition, so observe it rather than guessing
+      // an apex or assigning the owner declaration to a named line.
+      if (hasNoLine || !holderIds.length) {
+        out.push({
+          ...base,
+          seatState: 'unattributed',
+          seatId: null,
+          expectedOutcome: `On ${row.capacity.peakDay} the live commitments ${row.personName} carries add up to ${share(row.capacity.peakSumH)} of one person against a basis of ${share(GOAL_COMMITMENT_PERSON_BASIS_H)}. At least one declaration is explicitly owed under no reporting line, so no complete named-holder set exists for a joint-apex ask. The reading is printed and observed; nobody is substituted.`,
+          observation: `Concurrent declared effort for one person peaks above one whole person, but at least one peak declaration is explicitly owed under no reporting line.`,
+        });
+      } else {
         const routed = routeTo(holderIds);
         out.push({
-          kind: 'capacity-overcommit',
-          signature: goalCommitmentSignature('capacity-overcommit', row.personId),
+          ...base,
           seatState: routed.seatState,
           seatId: routed.seatId,
-          dueOn: addDays(report.today, K.askDueDays),
-          title: `${row.personName} is committed to ${share(row.capacity.peakSumH)} of one person on ${row.capacity.peakDay}`,
           expectedOutcome: `On ${row.capacity.peakDay} the live commitments ${row.personName} carries add up to ${share(row.capacity.peakSumH)} of one person against a basis of ${share(GOAL_COMMITMENT_PERSON_BASIS_H)} — ${share(row.capacity.overByH)} more than one person has. ${row.capacity.peakCommitments.length} commitment(s) from ${holderIds.length} line(s) cover that day, and the total is exact integer hundredths, not an estimate. No one line can fix this alone: the lines have to decide between them what comes out of the week. Re-baseline or release a commitment, or declare why the total stands, on #/${GOAL_COMMITMENT_ROUTE}?panel=commitments. This ask closes itself when the peak day no longer exceeds one person. It is not a judgement about ${row.personName}.`,
           observation: `Concurrent declared effort for one person peaks above one whole person.`,
         });
       }
     }
 
-    /* 3. One line broke its OWN declared share while the whole week still fits. */
+    /* 4. One line broke its OWN declared share while the whole week still fits. */
     if (row.capacity.verdict !== 'overcommit') {
       for (const line of row.capacity.lines) {
         if (line.verdict !== 'overcommit' || !line.holderId) continue;
@@ -245,7 +292,9 @@ export function goalCommitmentRule(draft, ctx = {}) {
           ? 'It is owed to the workspace leader and is printed on the leader’s own board; no delegation was filed.'
           : condition.seatState === 'off-roster'
             ? 'The leader it is owed to is no longer on the active roster; nobody was substituted.'
-            : 'The lines share no single joint apex, so the conflict is printed and no owner is invented.';
+            : condition.seatState === 'unattributed'
+              ? 'At least one declaration is explicitly owed under no reporting line, so no complete named-holder set exists; nobody was substituted.'
+              : 'The lines share no single joint apex, so the conflict is printed and no owner is invented.';
         const detail = `${condition.observation} ${why}`;
         draft.goalCommitmentMarkers.push({ key, at: nowIso, ruleId: GOAL_COMMITMENT_RULE_ID, kind: GOAL_COMMITMENT_MARKER_KIND, detail: clip(detail, 300) });
         if (draft.goalCommitmentMarkers.length > MATRIX_LIMITS.markers) draft.goalCommitmentMarkers.splice(0, draft.goalCommitmentMarkers.length - MATRIX_LIMITS.markers);
@@ -298,9 +347,11 @@ export function goalCommitmentRule(draft, ctx = {}) {
     noteEffect(ctx, out, 'delegated', 'delegation', taskId,
       condition.kind === 'target-conflict'
         ? `Routed an opposed-target conflict to the lines’ joint apex, due ${condition.dueOn}.`
-        : condition.kind === 'capacity-overcommit'
-          ? `Routed a capacity overcommit to the joint apex of every line carrying it, due ${condition.dueOn}.`
-          : `Asked one line holder about commitments above their own declared share, due ${condition.dueOn}.`);
+        : condition.kind === 'magnitude-conflict'
+          ? `Routed an incompatible target-magnitude conflict to the lines’ joint apex, due ${condition.dueOn}.`
+          : condition.kind === 'capacity-overcommit'
+            ? `Routed a capacity overcommit to the joint apex of every line carrying it, due ${condition.dueOn}.`
+            : `Asked one line holder about commitments above their own declared share, due ${condition.dueOn}.`);
   }
   if (deferred) {
     noteEffect(ctx, out, 'deferred', 'workspace', GOAL_COMMITMENT_ROUTE,

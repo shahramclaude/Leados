@@ -152,14 +152,14 @@ function harness(state) {
 /* ------------------------------------------------------------------ schema */
 
 test('Schema v106 migrates additively: empty ledgers, declared conventions, nothing back-filled', () => {
-  assert.equal(SCHEMA_VERSION, 154);
+  assert.equal(SCHEMA_VERSION, 155);
   const base = createEmptyState(NOW_ISO);
   const legacy = { ...base, schemaVersion: 105 };
   for (const key of ['diligenceChecklists', 'diligenceConsults', 'diligenceGrades', 'diligenceMarkers']) delete legacy[key];
   legacy.settings = { ...base.settings };
   delete legacy.settings.diligenceKnowableFloor;
   const migrated = migrate(legacy);
-  assert.equal(migrated.raw.schemaVersion, 154);
+  assert.equal(migrated.raw.schemaVersion, 155);
   assert.deepEqual(migrated.raw.diligenceChecklists, []);
   assert.deepEqual(migrated.raw.diligenceConsults, []);
   assert.deepEqual(migrated.raw.diligenceGrades, []);

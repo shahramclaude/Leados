@@ -408,7 +408,7 @@ test('the reading stores nothing: a reload prints the identical figures and read
   assert.equal(JSON.stringify(ctx.store.state), before, 'reading mutates nothing');
   assert.equal(ctx.store.state.meta.revision, revision, 'and bumps no revision');
   assert.equal(ctx.store.state.schemaVersion, SCHEMA_VERSION);
-  assert.equal(SCHEMA_VERSION, 154);
+  assert.equal(SCHEMA_VERSION, 155);
 
   // Recompute every printed figure from the stored blob and compare.
   const recomputed = buildMeritParity(ctx.store.state, { now: NOW, settings: ctx.store.state.settings });

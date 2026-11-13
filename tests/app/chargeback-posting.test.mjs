@@ -1,6 +1,7 @@
 /**
  * ADR-0194 — Chargeback Period Posting & Budget-Envelope Binding
- * (Schema v154, RULE-CBP-01, CSV #146, `#/matrix?panel=postings`).
+ * (introduced at Schema v154; current Schema v155, RULE-CBP-01, CSV #146,
+ * `#/matrix?panel=postings`).
  *
  * One focused suite: registration, the fail-closed normalizer (integer
  * identities re-proved on LOAD), single-chain inertness, refusal of every
@@ -140,8 +141,8 @@ function withDom(fn) {
   }
 }
 
-test('ADR-0194 registration: Schema v154, empty migration, spine order and parity, gateway, seat policy, panel #37, CSV #146, pause-permit reach', () => {
-  assert.equal(SCHEMA_VERSION, 154);
+test('ADR-0194 registration: introduced at Schema v154, current Schema v155, empty migration, spine order and parity, gateway, seat policy, panel #37, CSV #146, pause-permit reach', () => {
+  assert.equal(SCHEMA_VERSION, 155);
   const empty = createEmptyState(ISO);
   assert.deepEqual(empty.chargebackPostings, []);
   assert.deepEqual(empty.chargebackPostingMarkers, []);
@@ -149,7 +150,7 @@ test('ADR-0194 registration: Schema v154, empty migration, spine order and parit
   assert.equal(empty.settings.chargebackPostingAutoPropagate, true);
 
   const { raw, applied } = migrate({ schemaVersion: 153, appId: 'leados', meta: {}, settings: {} });
-  assert.deepEqual(applied, ['153 → 154']);
+  assert.deepEqual(applied, ['153 → 154', '154 → 155']);
   assert.deepEqual(raw.chargebackPostings, [], 'no period fact is fabricated on upgrade');
   assert.deepEqual(raw.chargebackPostingMarkers, []);
 

@@ -1,7 +1,7 @@
 /**
  * app/core/domain/goalCommitmentSchema.js — fail-closed storage contract and
  * condition signatures for the Cross-Line Goal Commitment Conflict register
- * (ADR-0193, Schema v153).
+ * (ADR-0193 + ADR-0195, Schema v155).
  *
  * One append-only ledger of declarations plus the rule's bounded marker ledger.
  * NOTHING derived is stored: no overlap, no verdict, no peak day, no capacity
@@ -11,7 +11,9 @@
  *
  * THE DOOR IS THE PRODUCT. A commitment must name a real calendar window, an
  * exact effort in integer hundredths, and — if it names a measure at all — a
- * direction from the closed set. Effort is REQUIRED, not optional: a commitment
+ * direction from the closed set. A target magnitude is optional, but when present
+ * it is an exact canonical decimal value AND a canonical unit — never one without
+ * the other. Effort is REQUIRED, not optional: a commitment
  * that does not say what it consumes cannot be added to any other commitment,
  * and a register that accepts one would print a capacity figure it cannot
  * support. That is the same refusal ADR-0186 makes about capacity, turned round
@@ -33,6 +35,9 @@ import {
 const ID_RE = /^[A-Za-z0-9:_-]{1,120}$/;
 /** A declared measure key is a short identifier, not a sentence. */
 const MEASURE_RE = /^[a-z0-9][a-z0-9 ._:-]{0,39}$/;
+/** A unit is a declared canonical key, not a conversion expression or prose. */
+const TARGET_UNIT_RE = /^[a-z0-9][a-z0-9 ._:-]{0,23}$/;
+const DECIMAL_RE = /^(0|[1-9]\d*)(?:\.(\d+))?$/;
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 const isPlainObject = (value) => Boolean(value && typeof value === 'object' && !Array.isArray(value));
 const text = (value, max = 400) => (typeof value === 'string' ? value.trim().slice(0, max) : '');
@@ -86,6 +91,45 @@ export function goalCommitmentMeasureKey(value) {
   return MEASURE_RE.test(candidate) ? candidate.slice(0, GOAL_COMMITMENT_LIMITS.measureKeyMax) : null;
 }
 
+/**
+ * Canonical non-negative decimal target value, stored as text rather than a
+ * JavaScript Number. That preserves what the declaring line said and permits
+ * exact scaled-integer comparison in the reader. Scientific notation, signs,
+ * whitespace, alternate spellings such as `01`, and a trailing decimal point
+ * are deliberately refused; the dialogue tells the line holder the grammar.
+ */
+export function goalCommitmentTargetValue(value) {
+  if (typeof value !== 'string' && typeof value !== 'number') return null;
+  const candidate = String(value);
+  const match = DECIMAL_RE.exec(candidate);
+  if (!match) return null;
+  const [, whole, fraction = ''] = match;
+  if (whole.length > GOAL_COMMITMENT_LIMITS.targetValueIntegerDigits
+    || fraction.length > GOAL_COMMITMENT_LIMITS.targetValueFractionDigits) return null;
+  return fraction ? `${whole}.${fraction}` : whole;
+}
+
+/** Canonical target-unit key: case-folded, collapsed whitespace, no conversion. */
+export function goalCommitmentTargetUnit(value) {
+  const candidate = text(value, GOAL_COMMITMENT_LIMITS.targetUnitMax + 8)
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (candidate.length < GOAL_COMMITMENT_LIMITS.targetUnitMin) return null;
+  return TARGET_UNIT_RE.test(candidate) ? candidate.slice(0, GOAL_COMMITMENT_LIMITS.targetUnitMax) : null;
+}
+
+/**
+ * Parses a canonical target value into exact scaled integer components. The
+ * result has no floating-point member and therefore cannot quietly round.
+ */
+export function goalCommitmentTargetParts(value) {
+  const canonical = goalCommitmentTargetValue(value);
+  if (!canonical) return null;
+  const [whole, fraction = ''] = canonical.split('.');
+  return { canonical, whole: BigInt(whole), fraction: BigInt(fraction || '0'), scale: fraction.length };
+}
+
 /* ----------------------------------------------------------------- settings */
 
 /** The loader clamps into the declared bounds; the setter (in the actions) refuses. */
@@ -99,6 +143,7 @@ export function normalizeGoalCommitmentSettings(raw = {}) {
     [K.horizonDays]: boundedInt(src[K.horizonDays], B.horizonDays, D.horizonDays),
     [K.minOverlapDays]: boundedInt(src[K.minOverlapDays], B.minOverlapDays, D.minOverlapDays),
     [K.minGoals]: boundedInt(src[K.minGoals], B.minGoals, D.minGoals),
+    [K.magnitudeDivergencePct]: boundedInt(src[K.magnitudeDivergencePct], B.magnitudeDivergencePct, D.magnitudeDivergencePct),
     // Only an explicit `false` pauses the rule: an unreadable value must never
     // read as "somebody switched governance off".
     [K.autoPropagate]: src[K.autoPropagate] !== false,
@@ -133,11 +178,18 @@ export function normalizeGoalCommitments(value, warnings = []) {
     const windowTo = row && goalCommitmentDay(row.windowTo);
     const declaredOn = row && goalCommitmentDay(row.declaredOn);
     const effortRaw = row ? row.effortShareH : null;
-    const effortShareH = Number.isInteger(effortRaw) ? effortRaw : Math.round(Number(effortRaw));
+    // Decimal effort is a different promise, not a near-enough integer. It is
+    // rejected on reload rather than rounded into a stored declaration.
+    const effortShareH = Number.isInteger(effortRaw) ? effortRaw : null;
     const measureKey = row && row.measureKey ? goalCommitmentMeasureKey(row.measureKey) : null;
     const direction = row && row.direction !== null && row.direction !== undefined && row.direction !== ''
       ? (GOAL_COMMITMENT_DIRECTION_KEYS.includes(row.direction) ? row.direction : null)
       : null;
+    const targetValueRaw = row && row.targetValue !== null && row.targetValue !== undefined && row.targetValue !== '' ? row.targetValue : null;
+    const targetUnitRaw = row && row.targetUnit !== null && row.targetUnit !== undefined && row.targetUnit !== '' ? row.targetUnit : null;
+    const targetValue = targetValueRaw === null ? null : goalCommitmentTargetValue(targetValueRaw);
+    const targetUnit = targetUnitRaw === null ? null : goalCommitmentTargetUnit(targetUnitRaw);
+    const hasTargetMagnitude = targetValueRaw !== null || targetUnitRaw !== null;
     const supersededOn = row && row.supersededOn ? goalCommitmentDay(row.supersededOn) : null;
     const releasedOn = row && row.releasedOn ? goalCommitmentDay(row.releasedOn) : null;
 
@@ -155,6 +207,9 @@ export function normalizeGoalCommitments(value, warnings = []) {
       // A measure with no direction, or a direction with no measure, is half a
       // declaration. Both halves are dropped rather than completed by inference.
       || (measureKey && !direction) || (!measureKey && direction)
+      // Target magnitude is an optional COMPLETE declaration. A line may omit
+      // it, but cannot leave a half-value, half-unit or attach it to no measure.
+      || (hasTargetMagnitude && (!measureKey || !direction || !targetValue || !targetUnit))
       || (row.supersededOn && !supersededOn) || (row.releasedOn && !releasedOn)
       || (supersededOn && supersededOn < declaredOn) || (releasedOn && releasedOn < declaredOn)
       || (supersededOn && text(row.supersededReason, GOAL_COMMITMENT_LIMITS.reasonMax).length < GOAL_COMMITMENT_LIMITS.reasonMin)
@@ -174,6 +229,8 @@ export function normalizeGoalCommitments(value, warnings = []) {
       effortShareH,
       measureKey: measureKey || '',
       direction: direction || null,
+      targetValue: targetValue || '',
+      targetUnit: targetUnit || '',
       note: text(row.note, GOAL_COMMITMENT_LIMITS.noteMax),
       supersededById: supersededOn ? (id(row.supersededById) || null) : null,
       supersededOn,

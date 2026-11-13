@@ -153,7 +153,7 @@ const ruleMarkers = (draft) => draft.matrixMarkers.filter((m) => m.ruleId === LI
 test('the horizon is wired end to end: panel, actions, gateway, CSV #134, rule and contract', () => {
   // ADR-0179 itself added no schema move (it shipped on v143). The pin tracks
   // the live version: ADR-0181 moved it to v144 for the work-turn ledger.
-  assert.equal(SCHEMA_VERSION, 154, 'the live schema version (ADR-0179 added no move of its own)');
+  assert.equal(SCHEMA_VERSION, 155, 'the live schema version (ADR-0179 added no move of its own)');
   assert.ok(MATRIX_PANELS.some((panel) => panel.key === 'horizon'), 'the #/matrix?panel=horizon tab exists');
   assert.ok(MATRIX_PANELS.some((panel) => panel.key === 'chargeback'), 'the previous panel is untouched');
 

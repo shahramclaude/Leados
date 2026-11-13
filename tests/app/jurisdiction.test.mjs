@@ -79,7 +79,7 @@ const edges = (state, relation) => (Array.isArray(state.links) ? state.links : [
 /* --------------------------------------------------------- 1. storage */
 
 test('v111 is additive, declared, fail-closed and invents no jurisdiction fact', () => {
-  assert.equal(SCHEMA_VERSION, 154);
+  assert.equal(SCHEMA_VERSION, 155);
   for (const key of ['jurFindings', 'jurReadings', 'jurMarkers']) assert.ok(COLLECTIONS.includes(key), key);
   const empty = createEmptyState(NOW.toISOString());
   assert.deepEqual(empty.jurFindings, []);

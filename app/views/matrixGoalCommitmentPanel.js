@@ -2,7 +2,7 @@
  * app/views/matrixGoalCommitmentPanel.js — `#/matrix?panel=commitments`, the
  * Cross-Line Goal Commitment Conflict register (Galbraith 1973; Cyert & March
  * 1963; March & Simon 1958; Kaplan & Norton 1996; Drucker 1954; Senge 1990)
- * (ADR-0193, Schema v153, CSV scope #145, `RULE-GCC-01`).
+ * (ADR-0193 + ADR-0195, Schema v155, CSV scope #145, `RULE-GCC-01`).
  *
  * One reader (`buildGoalCommitments`) is behind the board, every person row, the
  * roll-ups, the brief and the CSV. Nothing is recomputed here, so what the
@@ -15,6 +15,9 @@
  *      with its exact overlapping days;
  *   2. a WEEK that is fuller than one person — a stock, printed per person at
  *      its exact peak day against an exact integer basis.
+ * A same-direction target-magnitude divergence is another explicit collision:
+ * it compares only two declared values in the same declared unit and never
+ * invents a conversion or calls an omitted magnitude agreement.
  * A pair table that carried a capacity verdict would name a culprit the
  * arithmetic does not support, so neither is printed inside the other.
  */
@@ -86,7 +89,8 @@ function submit(ctx, form, result, message) {
 /**
  * The declaration form. Effort is REQUIRED and in the same integer hundredths of
  * one person a declared line share uses; the measure is optional but never half
- * declared, and the form says plainly that nothing is read off the goal's text.
+ * declared. A target magnitude is optional too, but it is exact value + unit or
+ * neither; the form says plainly that nothing is read off the goal's text.
  */
 function commitmentFields(candidate, lineOptions, previous = null) {
   return [
@@ -122,6 +126,9 @@ function commitmentFields(candidate, lineOptions, previous = null) {
       options: [{ value: '', label: '— no measure declared —' }, ...GOAL_COMMITMENT_DIRECTIONS.map((row) => ({ value: row.key, label: row.label }))],
       help: '“Hold steady” is opposed to either of the other two: one line holding a measure still while another pushes it is a contradiction, not a difference of degree.',
     },
+    { type: 'divider', label: 'Target magnitude — optional, declared exactly or not at all' },
+    { name: 'targetValue', label: 'Target value (optional)', type: 'text', value: previous?.targetValue || '', placeholder: '25', help: `If declared, it must be an exact non-negative decimal with no exponent, sign, whitespace or rounding (at most ${GOAL_COMMITMENT_LIMITS.targetValueIntegerDigits} digits before and ${GOAL_COMMITMENT_LIMITS.targetValueFractionDigits} after the decimal). It is never inferred from the goal.` },
+    { name: 'targetUnit', label: 'Target unit (required with a target value)', type: 'text', value: previous?.targetUnit || '', placeholder: 'percent', help: `Declare both value and unit or neither. The unit is a ${GOAL_COMMITMENT_LIMITS.targetUnitMin}–${GOAL_COMMITMENT_LIMITS.targetUnitMax}-character key; the register never converts units or assumes they match.` },
     { name: 'note', label: 'Note (optional)', type: 'textarea', rows: 2, value: previous?.note || '', help: `At most ${GOAL_COMMITMENT_LIMITS.noteMax} characters. Printed on the commitment row; never exported.` },
   ];
 }
@@ -164,6 +171,8 @@ function declareDialogFor(ctx, candidate) {
             effortShareH: values.effortShareH === '' ? null : Number(values.effortShareH),
             measureKey: values.measureKey || null,
             direction: values.direction || null,
+            targetValue: values.targetValue || null,
+            targetUnit: values.targetUnit || null,
             note: values.note || '',
           }), 'Commitment declared. Every comparison re-derived from the record.');
         },
@@ -220,7 +229,9 @@ function rebaselineDialog(ctx, row) {
   };
   const lineOptions = [{
     value: row.lineKey,
-    label: `${row.lineLabel} — held by ${row.holderName} (the line this commitment occupies)`,
+    label: row.lineKey === GOAL_COMMITMENT_NO_LINE
+      ? 'No reporting line — explicit owner declaration (no holder is inferred)'
+      : `${row.lineLabel} — held by ${row.holderName} (the line this commitment occupies)`,
   }];
   const form = buildForm([
     ...commitmentFields(candidate, lineOptions, row),
@@ -245,6 +256,8 @@ function rebaselineDialog(ctx, row) {
             effortShareH: values.effortShareH === '' ? null : Number(values.effortShareH),
             measureKey: values.measureKey || null,
             direction: values.direction || null,
+            targetValue: values.targetValue || null,
+            targetUnit: values.targetUnit || null,
             note: values.note || '',
             reason: values.reason,
           }), 'Commitment re-baselined; the predecessor is closed and kept as history.');
@@ -268,7 +281,7 @@ function releaseDialog(ctx, row) {
 }
 
 function conventionsDialog(ctx, report) {
-  const numeric = ['horizonDays', 'minOverlapDays', 'minGoals', 'askDueDays'];
+  const numeric = ['horizonDays', 'minOverlapDays', 'minGoals', 'magnitudeDivergencePct', 'askDueDays'];
   const form = buildForm([
     ...numeric.map((name) => ({
       name: GOAL_COMMITMENT_SETTING_KEYS[name],
@@ -317,6 +330,7 @@ function statGrid(report) {
     stat({ label: 'Declarations', value: num(b.commitmentsN), hint: `${b.liveN} live · ${b.noLineN} owed under no line · ${b.closedN} closed · ${b.unreachableN} unreachable` }),
     stat({ label: 'People compared', value: num(b.ownersComparedN), hint: `${b.ownersN} on the board · ${b.ownersInertN} on one line only · ${b.ownersUndeclaredN} with nothing declared under a line` }),
     stat({ label: 'Opposed targets', value: num(b.targetConflictN), hint: 'same declared measure, opposite directions, colliding windows', tone: b.targetConflictN ? 'bad' : '' }),
+    stat({ label: 'Magnitude conflicts', value: num(b.magnitudeConflictN), hint: `${b.magnitudeUndeclaredN} aligned pair(s) lack a magnitude · ${b.magnitudeUnitMismatchN} unit mismatch(es)`, tone: b.magnitudeConflictN ? 'bad' : b.magnitudeUndeclaredN || b.magnitudeUnitMismatchN ? 'warn' : '' }),
     stat({ label: 'Colliding windows', value: num(b.dateOverlapN), hint: `${b.pairsN} pair(s) compared · ${b.sameLineN} one line’s own sequencing · ${b.singlePrincipalN} no second principal`, tone: b.dateOverlapN ? 'warn' : '' }),
     stat({ label: 'Over one person', value: num(b.capacityOvercommitN), hint: b.peakSumH === null ? 'no live commitment inside the horizon' : `peak ${share(b.peakSumH)} of one person on ${b.peakDay}`, tone: b.capacityOvercommitN ? 'bad' : '' }),
     stat({ label: 'Goals naming a line', value: attribution, hint: b.attributionWithheld ? b.attributionWithheldReason : `95% Wilson ${dash(b.attributionLowPct)}–${dash(b.attributionHighPct)}% · ${b.goalsUnattributedN} unattributed`, tone: b.attributionWithheld ? 'warn' : 'good' }),
@@ -334,6 +348,7 @@ function commitmentTable(row) {
       { key: 'days', label: 'Days' },
       { key: 'effort', label: 'Effort' },
       { key: 'measure', label: 'Measure' },
+      { key: 'target', label: 'Target magnitude' },
       { key: 'state', label: 'Standing' },
     ],
     rows: row.commitments.map((commitment) => ({
@@ -344,6 +359,7 @@ function commitmentTable(row) {
       days: num(commitment.windowDays),
       effort: share(commitment.effortShareH),
       measure: commitment.measureKey ? `${commitment.direction} “${commitment.measureKey}”` : 'not declared',
+      target: commitment.targetValue ? `${commitment.targetValue} ${commitment.targetUnit}` : 'not declared',
       state: commitment.stateLabel,
     })),
     emptyMessage: 'No commitment has been declared for this person. Silence here is not compatibility — it is an absence, and it is printed as one.',
@@ -362,6 +378,7 @@ function pairTable(row) {
         { key: 'b', label: 'The other line promised' },
         { key: 'overlap', label: 'Exact overlap' },
         { key: 'measure', label: 'Measure claim' },
+        { key: 'magnitude', label: 'Target magnitude claim' },
       ],
       rows: shown.map((pair) => ({
         verdict: pair.verdictLabel,
@@ -369,6 +386,9 @@ function pairTable(row) {
         b: `${pair.bHolderName}: “${pair.bGoalTitle}”${pair.bDirection ? `, ${pair.bDirection}` : ''}`,
         overlap: pair.overlapDays > 0 ? `${pair.overlapDays} day(s), ${pair.overlapFrom} → ${pair.overlapTo}` : 'no day in common',
         measure: pair.measureClaimLabel,
+        magnitude: pair.magnitudeClaimLabel + (pair.verdict === 'magnitude-conflict'
+          ? ` — ${pair.aTargetValue} ${pair.aTargetUnit} vs ${pair.bTargetValue} ${pair.bTargetUnit}; ${pair.magnitudeDivergencePct}% apart${pair.targetUnit ? ` · ${pair.targetUnit}` : ''}`
+          : (pair.magnitudeDivergencePct === null ? '' : ` (${pair.magnitudeDivergencePct}% apart${pair.targetUnit ? ` · ${pair.targetUnit}` : ''})`)),
       })),
     }),
     row.pairsOmittedN ? h('p', { class: 'muted small' }, `${row.pairsOmittedN} further pair(s) are counted in the totals and not shown on this row.`) : null,
@@ -423,10 +443,13 @@ function goalsBlock(row) {
   );
 }
 
-function ownerCard(ctx, row) {
+function ownerCard(ctx, row, report) {
   const canAct = typeof ctx?.api?.matrixGoalCommitmentRebaseline === 'function';
   const canRelease = typeof ctx?.api?.matrixGoalCommitmentRelease === 'function';
-  const actedOn = row.commitments.filter((commitment) => commitment.comparable);
+  // `no-line` is not comparable as a second principal, but it remains a live,
+  // owner-controlled capacity declaration. Its re-baseline/release controls
+  // must remain available so append-only history does not become a dead end.
+  const actedOn = row.commitments.filter((commitment) => commitment.comparable || commitment.state === 'no-line');
   const flagged = row.commitments.filter((commitment) => commitment.flags.length);
   // Hoisted out of the card body: a spread inside a ternary inside a nested
   // argument list is where this file stopped parsing, and the actions read better
@@ -446,13 +469,23 @@ function ownerCard(ctx, row) {
       body: `${flagged.map((commitment) => `“${commitment.goalTitle}”: ${commitment.flags.join(', ')}`).join(' · ')}. Printed, never repaired — the declaration is the record of what the line said.`,
     })
     : null;
-  const conflictBanner = row.verdict === 'target-conflict' || row.verdict === 'capacity-overcommit'
+  const crossLineConflict = row.verdict === 'target-conflict' || row.verdict === 'magnitude-conflict';
+  const minOverlapDays = report?.settings?.[GOAL_COMMITMENT_SETTING_KEYS.minOverlapDays] ?? null;
+  const routedPair = crossLineConflict
+    ? row.pairs.find((pair) => pair.verdict === row.verdict && pair.overlapDays >= minOverlapDays)
+    : null;
+  const capacityHasNoLine = row.capacity.peakCommitments.some((entry) => entry.lineKey === GOAL_COMMITMENT_NO_LINE);
+  const conflictBanner = crossLineConflict || row.verdict === 'capacity-overcommit'
     ? banner({
       tone: 'bad',
-      title: row.verdict === 'target-conflict' ? 'A contradiction between two lines’ promises' : 'A week fuller than one person',
-      body: row.apex.unique
-        ? `${GOAL_COMMITMENT_RULE_ID} files ONE dated ask to ${row.apex.apexLabel}, the lowest joint apex of the lines involved. It is not filed against ${row.personName}, and it is never settled by scoring them.`
-        : `${GOAL_COMMITMENT_RULE_ID} can find no single seat to ask, because ${row.apex.apexLabel}, so it records one identity-free observation and invents no owner.`,
+      title: row.verdict === 'target-conflict' ? 'A contradiction between two lines’ promises' : row.verdict === 'magnitude-conflict' ? 'Two lines promised incompatible target magnitudes' : 'A week fuller than one person',
+      body: row.verdict === 'capacity-overcommit' && capacityHasNoLine
+        ? `This exact capacity reading includes an explicit no-line declaration. It remains counted in the person’s peak, but ${GOAL_COMMITMENT_RULE_ID} records one identity-free observation rather than assigning that declaration to a named holder or filing a partial joint-apex ask.`
+        : crossLineConflict && !routedPair
+          ? `This pair is printed because its windows overlap, but its ${row.pairs.find((pair) => pair.verdict === row.verdict)?.overlapDays || 0} overlapping day(s) are below the declared ${minOverlapDays}-day automation threshold. ${GOAL_COMMITMENT_RULE_ID} files no ask for this pair yet; no owner is invented.`
+          : row.apex.unique
+            ? `${GOAL_COMMITMENT_RULE_ID} files ONE dated ask to ${row.apex.apexLabel}, the lowest joint apex of the lines involved. It is not filed against ${row.personName}, and it is never settled by scoring them.`
+            : `${GOAL_COMMITMENT_RULE_ID} can find no single seat to ask, because ${row.apex.apexLabel}, so it records one identity-free observation and invents no owner.`,
     })
     : null;
 
@@ -479,22 +512,26 @@ function rollupsCard(report) {
   const holders = report.rollups.holders.map((row) => ({
     who: row.holderName,
     declared: String(row.declaredN),
+    opposed: String(row.targetConflictN),
+    magnitude: String(row.magnitudeConflictN),
     conflicts: String(row.conflictsN),
     overcommits: String(row.overcommitsN),
     people: String(row.peopleN),
   }));
   const apexes = report.rollups.apexes.map((row) => ({
     apex: row.apexName,
+    opposed: String(row.targetConflictN),
+    magnitude: String(row.magnitudeConflictN),
     conflicts: String(row.conflictsN),
     overcommits: String(row.overcommitsN),
     people: String(row.peopleN),
   }));
   return card({
     title: 'Who declared what, and where a conflict belongs',
-    subtitle: 'A conflict is counted ONCE per apex, however many lines lead to it. A single line’s own arithmetic is never escalated above that line.',
+    subtitle: 'Each printed cross-line pair conflict is counted once at its resolved joint apex; opposed directions and incompatible magnitudes stay separate. A single line’s own arithmetic is never escalated above that line.',
     body: h('div', { class: 'stack' },
-      holders.length ? table({ caption: 'Line holders', columns: [{ key: 'who', label: 'Line holder' }, { key: 'declared', label: 'Commitments declared' }, { key: 'conflicts', label: 'Opposed-target pairs' }, { key: 'overcommits', label: 'Lines over their own share' }, { key: 'people', label: 'People touched' }], rows: holders }) : h('p', { class: 'muted small' }, 'No line holder has declared a commitment yet.'),
-      apexes.length ? table({ caption: 'Joint apexes', columns: [{ key: 'apex', label: 'Lowest joint apex of the lines involved' }, { key: 'conflicts', label: 'Opposed-target conflicts' }, { key: 'overcommits', label: 'Capacity overcommits' }, { key: 'people', label: 'People' }], rows: apexes }) : null,
+      holders.length ? table({ caption: 'Line holders', columns: [{ key: 'who', label: 'Line holder' }, { key: 'declared', label: 'Commitments declared' }, { key: 'opposed', label: 'Opposed directions' }, { key: 'magnitude', label: 'Incompatible magnitudes' }, { key: 'conflicts', label: 'Total cross-line conflicts' }, { key: 'overcommits', label: 'Lines over their own share' }, { key: 'people', label: 'People touched' }], rows: holders }) : h('p', { class: 'muted small' }, 'No line holder has declared a commitment yet.'),
+      apexes.length ? table({ caption: 'Joint apexes', columns: [{ key: 'apex', label: 'Lowest joint apex of the lines involved' }, { key: 'opposed', label: 'Opposed directions' }, { key: 'magnitude', label: 'Incompatible magnitudes' }, { key: 'conflicts', label: 'Total cross-line conflicts' }, { key: 'overcommits', label: 'Whole-person overcommits' }, { key: 'people', label: 'People' }], rows: apexes }) : null,
     ),
   });
 }
@@ -522,6 +559,8 @@ function boardPanel(ctx, report) {
         h('p', { class: 'muted small', 'data-testid': 'goal-commitment-claims' }, `Claims, printed separately: counts reconcile — ${claim(b.countsReconcile)}; printed figures are the computed figures — ${claim(b.figuresComplete)}. A collision between two promises and a week fuller than one person are different facts and are never collapsed into one word.`),
         b.figuresComplete ? null : banner({ tone: 'warn', title: 'The figures are not complete', body: b.claimReason || 'A read was refused.' }),
         b.targetConflictN ? banner({ tone: 'bad', title: `${b.targetConflictN} opposed-target conflict(s)`, body: 'Two lines have each committed the same person to opposite movement on the same declared measure. Neither promise can be kept by working harder, so one of them has to be withdrawn or re-dated — by the lines’ lowest joint apex, never by the person caught between them.' }) : null,
+        b.magnitudeConflictN ? banner({ tone: 'bad', title: `${b.magnitudeConflictN} incompatible target-magnitude conflict(s)`, body: `Two lines named the same measure and direction in the same unit, but their declared values diverge at or above the ${report.settings[GOAL_COMMITMENT_SETTING_KEYS.magnitudeDivergencePct]}% floor. The reader uses exact scaled decimals; it never converts units or calls a missing target agreement.` }) : null,
+        b.magnitudeUndeclaredN || b.magnitudeUnitMismatchN ? banner({ tone: 'warn', title: 'Some aligned targets cannot be compared', body: `${b.magnitudeUndeclaredN} aligned pair(s) omit an exact target value or unit, and ${b.magnitudeUnitMismatchN} use different units. Those are printed refusals — never compatible targets.` }) : null,
         b.capacityOvercommitN ? banner({ tone: 'bad', title: `${b.capacityOvercommitN} person(s) committed beyond one whole person`, body: `On the exact peak day the concurrent declared effort exceeds ${share(100)} of one person. The day, the sum, the basis and the excess are printed in exact integer hundredths.` }) : null,
         b.lineOvercommitN ? banner({ tone: 'warn', title: `${b.lineOvercommitN} line reading(s) exceed that line’s own declared share`, body: 'One line promised more of a person than it was given. Where the whole week still fits, that is one line’s own arithmetic and is asked of that holder — not escalated above them.' }) : null,
         b.goalsUnattributedN ? banner({ tone: 'warn', title: `${b.goalsUnattributedN} goal(s) name no line`, body: 'Their owner holds two or more active lines and no commitment names one, so they cannot be compared. They are NOT charged to the home line — that guess is the failure this register exists to refuse.' }) : null,
@@ -531,12 +570,12 @@ function boardPanel(ctx, report) {
     typeof ctx?.api?.matrixGoalCommitmentDeclare === 'function'
       ? card({
         title: 'Declare a commitment',
-        subtitle: 'One line’s promise about one shared person: the window, the effort in hundredths of one person, and optionally the measure it moves.',
+        subtitle: 'One line’s promise about one shared person: the window, the effort in hundredths of one person, an optional measure and direction, and an optional exact target value plus unit.',
         body: h('button', { class: 'btn btn-primary', type: 'button', 'data-testid': 'goal-commitment-open-declare', onClick: () => declareDialog(ctx) }, 'Declare a goal commitment'),
       })
       : null,
     report.owners.length
-      ? h('div', { class: 'stack' }, ...report.owners.map((row) => ownerCard(ctx, row)))
+      ? h('div', { class: 'stack' }, ...report.owners.map((row) => ownerCard(ctx, row, report)))
       : emptyState({ title: 'No commitment has been declared', body: 'A commitment says what one reporting line’s goal consumes of one shared person. Until one is declared this register prints an honest empty board — it never infers a window from a goal’s due date, an effort from its key results, a measure from its title, or a line from the home reporting edge.' }),
     report.owners.length < b.ownersN
       ? h('p', { class: 'muted small' }, `${b.ownersN - report.owners.length} further person row(s) are counted in the totals and not shown here.`)
@@ -581,13 +620,14 @@ function methodPanel(ctx, report) {
     card({
       title: 'What this register never does',
       body: h('ul', { class: 'muted small' },
-        h('li', null, 'It never infers a window, an effort, a measure or a direction from a goal’s title, description or key results.'),
+        h('li', null, 'It never infers a window, effort, measure, direction, target value, target unit or unit conversion from a goal’s title, description or key results.'),
         h('li', null, 'It never charges an undeclared goal to the home line.'),
         h('li', null, 'It never scores a person, ranks a manager, or says one line’s need matters more than another’s.'),
         h('li', null, 'It never routes a conflict to the person being committed.'),
         h('li', null, 'It never repairs a window that contradicts the goal’s own dates — it prints the contradiction.'),
         h('li', null, `It never escalates a bare window collision. Only a contradiction or an arithmetic impossibility becomes an ask, and only at ${report.settings[GOAL_COMMITMENT_SETTING_KEYS.minOverlapDays]} or more overlapping days.`),
         h('li', null, `The direction vocabulary is closed (${GOAL_COMMITMENT_DIRECTION_KEYS.join(', ')}), so “not equal” IS opposed — including one line holding a measure steady while another moves it.`),
+        h('li', null, `A same-direction magnitude comparison exists only for two declared values in the same declared unit. Their exact relative difference is compared with the declared ${report.settings[GOAL_COMMITMENT_SETTING_KEYS.magnitudeDivergencePct]}% floor; missing values and unit mismatches are printed as refusals.`),
       ),
     }),
   );
@@ -612,9 +652,9 @@ export function renderMatrixGoalCommitmentPanel(ctx, opts = {}) {
   const panel = panelFor(query);
   return h('div', { class: 'stack', 'data-testid': 'goal-commitment-panel' },
     pageHeader({
-      eyebrow: 'Matrix management · ADR-0193',
+      eyebrow: 'Matrix management · ADR-0193 / ADR-0195',
       title: 'Cross-line goal commitments',
-      subtitle: `Two lines can each commit the same person, reasonably, and neither can see the other’s promise. This register reads what each line declared — the window, the effort, the measure — and reports the exact days they collide, the measure they move in opposite directions, and the day the concurrent effort passes one whole person. ${GOAL_COMMITMENT_ADR} · CSV #145.`,
+      subtitle: `Two lines can each commit the same person, reasonably, and neither can see the other’s promise. This register reads what each line declared — the window, effort, measure, direction and optional exact target magnitude — and reports exact collisions, opposed directions, incompatible same-unit targets and concurrent capacity. It never infers a target or converts units. ${GOAL_COMMITMENT_ADR} · CSV #145.`,
       actions: [
         typeof ctx?.api?.matrixGoalCommitmentBriefText === 'function'
           ? h('button', {

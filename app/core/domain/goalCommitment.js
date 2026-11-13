@@ -1,6 +1,6 @@
 /**
  * app/core/domain/goalCommitment.js — the pure read model for the Cross-Line
- * Goal Commitment Conflict register (ADR-0193, Schema v153,
+ * Goal Commitment Conflict register (ADR-0193 + ADR-0195, Schema v155,
  * `#/matrix?panel=commitments`, CSV scope #145).
  *
  * ONE reader. The panel, the CSV, the brief, the nav badge and `RULE-GCC-01`
@@ -12,9 +12,11 @@
  *    goal-closed · owner-moved · owner-off-roster · line-ended · holder-moved ·
  *    line-defective (ten states, never collapsed into "inactive");
  *  - per PAIR of live commitments on one owner, the exact inclusive overlap in
- *    whole days and one of five mutually exclusive verdicts;
+ *    whole days and one of six mutually exclusive verdicts;
  *  - the measure claim on a colliding pair: opposed · aligned ·
- *    different-measure · undeclared — from declared keys only;
+ *    different-measure · undeclared — from declared keys only, plus the target
+ *    magnitude claim for aligned targets: divergent · within-floor · unit-mismatch
+ *    · undeclared, in exact scaled integer arithmetic;
  *  - the capacity sweep: the exact day of maximum concurrent declared effort,
  *    the integer sum on it, and the person-level and per-line verdicts, which
  *    are a SEPARATE claim from any pair;
@@ -30,7 +32,8 @@
  *  - a per-line capacity reading where the line declared no share;
  *  - a window repair: a window past the goal's own due date is printed as a
  *    contradiction, never clamped to it;
- *  - a measure read out of a goal's title, description or key results;
+ *  - a measure, target value, target unit, or unit conversion read out of a
+ *    goal's title, description or key results;
  *  - a person name outside the seat's visible population (the id is printed).
  */
 
@@ -45,6 +48,7 @@ import {
   GOAL_COMMITMENT_FRAMEWORKS,
   GOAL_COMMITMENT_HOME_LINE,
   GOAL_COMMITMENT_LIMITS,
+  GOAL_COMMITMENT_MAGNITUDE_BY_KEY,
   GOAL_COMMITMENT_MEASURE_BY_KEY,
   GOAL_COMMITMENT_METHOD,
   GOAL_COMMITMENT_NO_LINE,
@@ -60,6 +64,7 @@ import {
 import {
   goalCommitmentInclusiveDays,
   goalCommitmentOverlapDays,
+  goalCommitmentTargetParts,
   normalizeGoalCommitmentSettings,
 } from './goalCommitmentSchema.js';
 
@@ -67,7 +72,7 @@ const list = (value) => (Array.isArray(value) ? value : []);
 const round1 = (n) => Math.round(n * 10) / 10;
 const PAIR_RANK = new Map(GOAL_COMMITMENT_PAIR_VERDICTS.map((row) => [row.key, row.rank]));
 /** The pair verdicts that involve two DIFFERENT reporting lines. */
-const CROSS_LINE_PAIRS = new Set(['compatible', 'date-overlap', 'target-conflict']);
+const CROSS_LINE_PAIRS = new Set(['compatible', 'date-overlap', 'magnitude-conflict', 'target-conflict']);
 
 /* --------------------------------------------------------------- the graph */
 
@@ -124,15 +129,60 @@ export function goalCommitmentMeasureClaim(a, b) {
 }
 
 /**
+ * Exact relative divergence of two canonical decimal targets. Both are scaled
+ * to one common power of ten, so no JavaScript float can turn a threshold edge
+ * into a false conflict or false agreement. The numerator is absolute distance;
+ * the denominator is the larger declared magnitude. Two zero targets are exact
+ * agreement; zero against a positive target is 100% divergent. Values never
+ * appear in the aggregate export or upward brief.
+ */
+export function goalCommitmentMagnitudeClaim(a, b, { crossLine = true, overlapDays = 1, measureClaim = null, divergencePct = 10 } = {}) {
+  // An explicit no-line declaration has no second reporting-line principal.
+  // It remains in the person's capacity sweep, but it cannot be a magnitude
+  // comparison or a cross-line escalation candidate.
+  const namedLines = a.lineKey !== GOAL_COMMITMENT_NO_LINE && b.lineKey !== GOAL_COMMITMENT_NO_LINE;
+  const applicable = namedLines && crossLine && overlapDays > 0 && (measureClaim || goalCommitmentMeasureClaim(a, b)) === 'aligned';
+  if (!applicable) return { key: 'not-applicable', delta: null, basis: null, divergencePct: null };
+  const aValue = goalCommitmentTargetParts(a.targetValue || '');
+  const bValue = goalCommitmentTargetParts(b.targetValue || '');
+  const aUnit = String(a.targetUnit || '');
+  const bUnit = String(b.targetUnit || '');
+  if (!aValue || !bValue || !aUnit || !bUnit) return { key: 'undeclared', delta: null, basis: null, divergencePct: null };
+  if (aUnit !== bUnit) return { key: 'unit-mismatch', delta: null, basis: null, divergencePct: null };
+  const scale = Math.max(aValue.scale, bValue.scale);
+  const scaleA = 10n ** BigInt(scale - aValue.scale);
+  const scaleB = 10n ** BigInt(scale - bValue.scale);
+  const aScaled = (aValue.whole * (10n ** BigInt(aValue.scale)) + aValue.fraction) * scaleA;
+  const bScaled = (bValue.whole * (10n ** BigInt(bValue.scale)) + bValue.fraction) * scaleB;
+  const delta = aScaled >= bScaled ? aScaled - bScaled : bScaled - aScaled;
+  const basis = aScaled >= bScaled ? aScaled : bScaled;
+  const threshold = BigInt(divergencePct) * basis;
+  // Percentage comparison is `delta / basis >= pct / 100`, cross-multiplied
+  // exactly. `basis === 0` only means both values are zero, hence agreement.
+  const divergent = basis !== 0n && (delta * 100n >= threshold);
+  const pct = basis === 0n ? 0 : Number((delta * 10000n) / basis) / 100;
+  return {
+    key: divergent ? 'divergent' : 'within-floor',
+    delta: delta.toString(),
+    basis: basis.toString(),
+    scale,
+    divergencePct: pct,
+  };
+}
+
+/**
  * One pair verdict. Exhaustive and mutually exclusive, checked in this order:
  * a `no-line` commitment has no second principal at all, so it is settled before
  * the same-line test can misread two `no-line` rows as one line.
  */
-export function goalCommitmentPairVerdict(a, b, overlapDays) {
+export function goalCommitmentPairVerdict(a, b, overlapDays, { divergencePct = 10 } = {}) {
   if (a.lineKey === GOAL_COMMITMENT_NO_LINE || b.lineKey === GOAL_COMMITMENT_NO_LINE) return 'single-principal';
   if (a.lineKey === b.lineKey) return 'same-line';
   if (overlapDays <= 0) return 'compatible';
-  return goalCommitmentMeasureClaim(a, b) === 'opposed' ? 'target-conflict' : 'date-overlap';
+  const measureClaim = goalCommitmentMeasureClaim(a, b);
+  if (measureClaim === 'opposed') return 'target-conflict';
+  const magnitude = goalCommitmentMagnitudeClaim(a, b, { crossLine: true, overlapDays, measureClaim, divergencePct });
+  return magnitude.key === 'divergent' ? 'magnitude-conflict' : 'date-overlap';
 }
 
 /* ---------------------------------------------------------- capacity sweep */
@@ -188,6 +238,7 @@ export function buildGoalCommitments(state, { now = new Date(), settings = null,
     horizonDays: conv[GOAL_COMMITMENT_SETTING_KEYS.horizonDays],
     minOverlapDays: conv[GOAL_COMMITMENT_SETTING_KEYS.minOverlapDays],
     minGoals: conv[GOAL_COMMITMENT_SETTING_KEYS.minGoals],
+    magnitudeDivergencePct: conv[GOAL_COMMITMENT_SETTING_KEYS.magnitudeDivergencePct],
     auto: conv[GOAL_COMMITMENT_SETTING_KEYS.autoPropagate],
   };
   const today = dayKey(now);
@@ -281,6 +332,8 @@ export function buildGoalCommitments(state, { now = new Date(), settings = null,
       effortDisplay: shareHToDisplay(row.effortShareH),
       measureKey: row.measureKey || '',
       direction: row.direction,
+      targetValue: row.targetValue || '',
+      targetUnit: row.targetUnit || '',
       note: row.note || '',
       state: commitmentState,
       stateLabel: GOAL_COMMITMENT_STATE_BY_KEY[commitmentState].label,
@@ -300,9 +353,13 @@ export function buildGoalCommitments(state, { now = new Date(), settings = null,
     };
   });
 
-  const comparableRows = commitmentRows.filter((row) => row.comparable);
+  // A `no-line` declaration is not comparable *as a second principal*, but
+  // it is a live declaration of person capacity and of goal attribution. Keep
+  // that distinction here rather than converting it into a guessed home line.
+  const liveRows = commitmentRows.filter((row) => row.comparable || row.state === 'no-line');
+  const comparableRows = liveRows.filter((row) => row.lineKey !== GOAL_COMMITMENT_NO_LINE);
   const rowsByOwner = new Map();
-  for (const row of comparableRows) {
+  for (const row of liveRows) {
     if (!rowsByOwner.has(row.ownerId)) rowsByOwner.set(row.ownerId, []);
     rowsByOwner.get(row.ownerId).push(row);
   }
@@ -327,6 +384,9 @@ export function buildGoalCommitments(state, { now = new Date(), settings = null,
     else if (!matrix.roster.has(ownerId)) attributionState = 'off-roster';
     else if (activeLinesOf(ownerId).length < 2) attributionState = 'single-line';
     else {
+      // Goal attribution asks whether a NAMED reporting line was declared. An
+      // explicit `no-line` statement still consumes capacity, but it cannot turn
+      // into a named principal or make a goal read attributed by absence.
       const declared = comparableRows.some((row) => row.ownerId === ownerId && row.goalId === goal.id);
       attributionState = declared ? 'declared' : 'unattributed';
       if (!declared) refuse('unattributed-goal');
@@ -365,8 +425,11 @@ export function buildGoalCommitments(state, { now = new Date(), settings = null,
         const overlapDays = goalCommitmentOverlapDays(a.windowFrom, a.windowTo, b.windowFrom, b.windowTo);
         const overlapFrom = a.windowFrom > b.windowFrom ? a.windowFrom : b.windowFrom;
         const overlapTo = a.windowTo < b.windowTo ? a.windowTo : b.windowTo;
-        const verdict = goalCommitmentPairVerdict(a, b, overlapDays);
         const measureClaim = goalCommitmentMeasureClaim(a, b);
+        const magnitude = goalCommitmentMagnitudeClaim(a, b, { crossLine: a.lineKey !== b.lineKey, overlapDays, measureClaim, divergencePct: K.magnitudeDivergencePct });
+        const verdict = goalCommitmentPairVerdict(a, b, overlapDays, { divergencePct: K.magnitudeDivergencePct });
+        if (magnitude.key === 'undeclared') refuse('magnitude-undeclared');
+        if (magnitude.key === 'unit-mismatch') refuse('magnitude-unit-mismatch');
         pairs.push({
           pairKey: `${a.commitmentId}|${b.commitmentId}`,
           aId: a.commitmentId, bId: b.commitmentId,
@@ -375,7 +438,17 @@ export function buildGoalCommitments(state, { now = new Date(), settings = null,
           aHolderId: a.holderId, bHolderId: b.holderId,
           aHolderName: a.holderName, bHolderName: b.holderName,
           aDirection: a.direction, bDirection: b.direction,
+          aTargetValue: a.targetValue || '', bTargetValue: b.targetValue || '',
+          aTargetUnit: a.targetUnit || '', bTargetUnit: b.targetUnit || '',
           measureKey: a.measureKey && a.measureKey === b.measureKey ? a.measureKey : '',
+          targetUnit: magnitude.key === 'unit-mismatch' ? '' : (a.targetUnit && a.targetUnit === b.targetUnit ? a.targetUnit : ''),
+          magnitudeClaim: magnitude.key,
+          magnitudeClaimLabel: GOAL_COMMITMENT_MAGNITUDE_BY_KEY[magnitude.key].label,
+          magnitudeClaimTone: GOAL_COMMITMENT_MAGNITUDE_BY_KEY[magnitude.key].tone,
+          magnitudeDivergencePct: magnitude.divergencePct,
+          magnitudeDelta: magnitude.delta,
+          magnitudeBasis: magnitude.basis,
+          magnitudeScale: magnitude.scale ?? null,
           verdict,
           verdictLabel: GOAL_COMMITMENT_PAIR_VERDICT_BY_KEY[verdict].label,
           verdictTone: GOAL_COMMITMENT_PAIR_VERDICT_BY_KEY[verdict].tone,
@@ -465,18 +538,25 @@ export function buildGoalCommitments(state, { now = new Date(), settings = null,
     if (linesN < 2) verdict = 'inert';
     else if (namedLiveN === 0) verdict = 'undeclared';
     else if (worstPair && worstPair.verdict === 'target-conflict') verdict = 'target-conflict';
+    else if (worstPair && worstPair.verdict === 'magnitude-conflict') verdict = 'magnitude-conflict';
     else if (personVerdict === 'overcommit' || lineRows.some((row) => row.verdict === 'overcommit')) verdict = 'capacity-overcommit';
     else if (worstPair && worstPair.verdict === 'date-overlap') verdict = 'date-overlap';
 
-    /* The holders a conflict belongs to: for a target conflict the two lines'
-       holders; for an overcommit every holder carrying a live commitment on the
-       peak day. Both go to their lowest joint apex, and neither is ever dumped
-       on the person being committed. */
+    /* The holders a conflict belongs to: for a target/magnitude conflict the
+       two named lines' holders; for a whole-person overcommit every named holder
+       carrying the peak. An explicit no-line contribution has no holder, so it
+       deliberately leaves the owner row without a partial apex. */
+    const capacityHasNoLineAtPeak = personVerdict === 'overcommit'
+      && personPeak.peakCommitments.some((row) => row.lineKey === GOAL_COMMITMENT_NO_LINE);
     const conflictHolderIds = (() => {
-      if (verdict === 'target-conflict' && worstPair) {
+      if ((verdict === 'target-conflict' || verdict === 'magnitude-conflict') && worstPair) {
         return [worstPair.aHolderId, worstPair.bHolderId].filter(Boolean);
       }
       if (verdict === 'capacity-overcommit') {
+        // Person capacity is one condition. When any contribution at its peak
+        // is explicit no-line, the remaining named lines are not its complete
+        // accountable set and must not appear as a guessed joint apex.
+        if (capacityHasNoLineAtPeak) return [];
         const ids = new Set();
         if (personVerdict === 'overcommit') {
           for (const row of personPeak.peakCommitments) {
@@ -493,7 +573,15 @@ export function buildGoalCommitments(state, { now = new Date(), settings = null,
     })();
     const apex = conflictHolderIds.length
       ? matrixJointApex(matrix, conflictHolderIds)
-      : { apexIds: [], apexId: null, unique: false, ambiguous: false, disconnected: false, isLeaderOnly: false };
+      : {
+        apexIds: [],
+        apexId: null,
+        unique: false,
+        ambiguous: false,
+        disconnected: false,
+        isLeaderOnly: false,
+        unattributed: capacityHasNoLineAtPeak,
+      };
 
     const pairsReconcile = pairs.length === pairsExpectedN;
     const goalsReconcile = Object.values(attributionCounts).reduce((sum, n) => sum + n, 0) === myGoals.length;
@@ -519,6 +607,9 @@ export function buildGoalCommitments(state, { now = new Date(), settings = null,
       pairsShownN: Math.min(pairs.length, GOAL_COMMITMENT_LIMITS.pairRowsShown),
       pairsOmittedN: Math.max(0, pairs.length - GOAL_COMMITMENT_LIMITS.pairRowsShown),
       targetConflictN: pairs.filter((pair) => pair.verdict === 'target-conflict').length,
+      magnitudeConflictN: pairs.filter((pair) => pair.verdict === 'magnitude-conflict').length,
+      magnitudeUndeclaredN: pairs.filter((pair) => pair.magnitudeClaim === 'undeclared').length,
+      magnitudeUnitMismatchN: pairs.filter((pair) => pair.magnitudeClaim === 'unit-mismatch').length,
       dateOverlapN: pairs.filter((pair) => pair.verdict === 'date-overlap').length,
       capacity,
       goals: {
@@ -533,10 +624,16 @@ export function buildGoalCommitments(state, { now = new Date(), settings = null,
       conflictHolderIds,
       apex: {
         ...apex,
-        apexName: apex.unique ? personName(apex.apexId) : (apex.disconnected ? 'no joint apex (the lines are disconnected)' : 'ambiguous — several joint apexes'),
+        apexName: apex.unique
+          ? personName(apex.apexId)
+          : (apex.unattributed
+            ? 'no complete named-holder set (explicit no-line declaration)'
+            : (apex.disconnected ? 'no joint apex (the lines are disconnected)' : 'ambiguous — several joint apexes')),
         apexLabel: apex.unique
           ? (apex.isLeaderOnly ? 'the workspace leader' : personName(apex.apexId))
-          : (apex.disconnected ? 'no joint apex (disconnected)' : 'ambiguous — several joint apexes'),
+          : (apex.unattributed
+            ? 'no complete named-holder set (explicit no-line declaration)'
+            : (apex.disconnected ? 'no joint apex (disconnected)' : 'ambiguous — several joint apexes')),
       },
       pairsReconcile,
       goalsReconcile,
@@ -551,6 +648,7 @@ export function buildGoalCommitments(state, { now = new Date(), settings = null,
 
   ownerRows.sort((a, b) => b.verdictRank - a.verdictRank
     || b.targetConflictN - a.targetConflictN
+    || b.magnitudeConflictN - a.magnitudeConflictN
     || b.dateOverlapN - a.dateOverlapN
     || a.personName.localeCompare(b.personName)
     || a.personId.localeCompare(b.personId));
@@ -633,56 +731,118 @@ export function buildGoalCommitments(state, { now = new Date(), settings = null,
         ? `${matrix.defects.length} reporting line(s) were refused by the matrix engine; every comparison that crosses one is withheld rather than computed over a partial graph.`
         : `${ownersOmittedN + commitmentsOmittedN} row(s) exceed this screen’s display cap and are counted, not shown.`;
 
-  /* Roll-ups: per line holder, and per joint apex a conflict belongs to. */
+  /* Roll-ups: every printed cross-line conflict belongs to BOTH named-line
+     holders and exactly one resolved joint-apex row. A magnitude conflict is
+     not folded into the old opposed-direction count; the two are separately
+     visible while `conflictsN` remains their checkable sum. A single-line share
+     excess stays on its holder and never becomes an apex overcommit. */
   const holderMap = new Map();
   const apexMap = new Map();
-  for (const row of ownerRows) {
-    for (const commitment of row.commitments) {
-      if (!commitment.holderId) continue;
-      if (!holderMap.has(commitment.holderId)) {
-        holderMap.set(commitment.holderId, { holderId: commitment.holderId, holderName: personName(commitment.holderId), declaredN: 0, conflictsN: 0, overcommitsN: 0, people: new Set() });
-      }
-      const holder = holderMap.get(commitment.holderId);
-      holder.declaredN += 1;
-      holder.people.add(row.personId);
-    }
-    for (const pair of row.pairs) {
-      if (pair.verdict !== 'target-conflict') continue;
-      for (const holderId of [pair.aHolderId, pair.bHolderId].filter(Boolean)) {
-        if (!holderMap.has(holderId)) holderMap.set(holderId, { holderId, holderName: personName(holderId), declaredN: 0, conflictsN: 0, overcommitsN: 0, people: new Set() });
-        const holder = holderMap.get(holderId);
-        holder.conflictsN += 1;
-        holder.people.add(row.personId);
-      }
-    }
-    if (row.capacity.verdict === 'overcommit') {
-      for (const line of row.capacity.lines) {
-        if (line.verdict !== 'overcommit' || !line.holderId) continue;
-        if (!holderMap.has(line.holderId)) holderMap.set(line.holderId, { holderId: line.holderId, holderName: personName(line.holderId), declaredN: 0, conflictsN: 0, overcommitsN: 0, people: new Set() });
-        holderMap.get(line.holderId).overcommitsN += 1;
-        holderMap.get(line.holderId).people.add(row.personId);
-      }
-    }
-    if (!row.conflictHolderIds.length) continue;
-    const apexKey = row.apex.unique ? row.apex.apexId : (row.apex.disconnected ? 'disconnected' : 'ambiguous');
+  const emptyHolder = (holderId) => ({
+    holderId,
+    holderName: personName(holderId),
+    declaredN: 0,
+    targetConflictN: 0,
+    magnitudeConflictN: 0,
+    conflictsN: 0,
+    overcommitsN: 0,
+    people: new Set(),
+  });
+  const holderFor = (holderId) => {
+    if (!holderMap.has(holderId)) holderMap.set(holderId, emptyHolder(holderId));
+    return holderMap.get(holderId);
+  };
+  const apexFor = (holderIds) => {
+    const ids = [...new Set(holderIds.filter(Boolean))].sort();
+    if (!ids.length) return null;
+    const apex = matrixJointApex(matrix, ids);
+    // An unresolved holder set is not secretly the same apex as another one.
+    // Keeping its deterministic source-set key preserves the refusal boundary
+    // while a unique apex aggregates every finding that reaches that one seat.
+    const apexKey = apex.unique
+      ? `seat:${apex.apexId}`
+      : `${apex.disconnected ? 'disconnected' : 'ambiguous'}:${ids.join('|')}`;
     if (!apexMap.has(apexKey)) {
       apexMap.set(apexKey, {
         apexKey,
-        apexId: row.apex.apexId,
-        apexName: row.apex.apexLabel,
-        unique: row.apex.unique,
-        ambiguous: row.apex.ambiguous,
-        disconnected: row.apex.disconnected,
-        isLeaderOnly: row.apex.isLeaderOnly,
+        apexId: apex.unique ? apex.apexId : null,
+        apexName: apex.unique
+          ? (apex.isLeaderOnly ? 'the workspace leader' : personName(apex.apexId))
+          : (apex.disconnected ? 'no joint apex (disconnected)' : 'ambiguous — several joint apexes'),
+        unique: apex.unique,
+        ambiguous: apex.ambiguous,
+        disconnected: apex.disconnected,
+        isLeaderOnly: apex.isLeaderOnly,
+        targetConflictN: 0,
+        magnitudeConflictN: 0,
         conflictsN: 0,
         overcommitsN: 0,
-        peopleN: 0,
+        people: new Set(),
       });
     }
-    const apexRow = apexMap.get(apexKey);
-    if (row.verdict === 'target-conflict') apexRow.conflictsN += 1;
-    if (row.verdict === 'capacity-overcommit') apexRow.overcommitsN += 1;
-    apexRow.peopleN += 1;
+    return apexMap.get(apexKey);
+  };
+
+  for (const row of ownerRows) {
+    for (const commitment of row.commitments) {
+      if (!commitment.holderId) continue;
+      const holder = holderFor(commitment.holderId);
+      holder.declaredN += 1;
+      holder.people.add(row.personId);
+    }
+
+    for (const pair of row.pairs) {
+      const countKey = pair.verdict === 'target-conflict'
+        ? 'targetConflictN'
+        : pair.verdict === 'magnitude-conflict'
+          ? 'magnitudeConflictN'
+          : null;
+      if (!countKey) continue;
+      const holderIds = [...new Set([pair.aHolderId, pair.bHolderId].filter(Boolean))].sort();
+      for (const holderId of holderIds) {
+        const holder = holderFor(holderId);
+        holder[countKey] += 1;
+        holder.conflictsN += 1;
+        holder.people.add(row.personId);
+      }
+      const apex = apexFor(holderIds);
+      if (apex) {
+        apex[countKey] += 1;
+        apex.conflictsN += 1;
+        apex.people.add(row.personId);
+      }
+    }
+
+    // A person's whole-capacity overcommit is a joint-apex condition only when
+    // every peak declaration has a named holder. An explicit no-line declaration
+    // still contributes to the exact arithmetic, but no partial named subset is
+    // converted into a false complete apex or roll-up owner.
+    if (row.capacity.verdict === 'overcommit') {
+      const peakSources = row.capacity.peakCommitments
+        .map((entry) => row.commitments.find((commitment) => commitment.commitmentId === entry.id) || null);
+      const capacityHasNoLine = peakSources.some((commitment) => commitment?.lineKey === GOAL_COMMITMENT_NO_LINE);
+      const holderIds = [...new Set(peakSources.map((commitment) => commitment?.holderId).filter(Boolean))].sort();
+      // A no-line declaration remains fully charged in capacity arithmetic, but
+      // it has no holder. Do not turn the remaining named holder(s) into a false
+      // complete apex for a condition the rule must instead observe by marker.
+      if (!capacityHasNoLine) {
+        const apex = apexFor(holderIds);
+        if (apex) {
+          apex.overcommitsN += 1;
+          apex.people.add(row.personId);
+        }
+      }
+    }
+
+    // This is deliberately separate from the joint-apex capacity condition:
+    // one line above its own share is still visible on the holder's roll-up,
+    // even when a whole-person overcommit suppresses the duplicate automation.
+    for (const line of row.capacity.lines) {
+      if (line.verdict !== 'overcommit' || !line.holderId) continue;
+      const holder = holderFor(line.holderId);
+      holder.overcommitsN += 1;
+      holder.people.add(row.personId);
+    }
   }
 
   const refusals = [...refusalCounts.entries()]
@@ -708,6 +868,9 @@ export function buildGoalCommitments(state, { now = new Date(), settings = null,
     pairsN,
     pairsCrossLineN: ownerRows.reduce((sum, row) => sum + row.pairs.filter((pair) => pair.crossLine).length, 0),
     targetConflictN: pairVerdictCounts['target-conflict'] || 0,
+    magnitudeConflictN: pairVerdictCounts['magnitude-conflict'] || 0,
+    magnitudeUndeclaredN: ownerRows.reduce((sum, row) => sum + row.magnitudeUndeclaredN, 0),
+    magnitudeUnitMismatchN: ownerRows.reduce((sum, row) => sum + row.magnitudeUnitMismatchN, 0),
     dateOverlapN: pairVerdictCounts['date-overlap'] || 0,
     compatibleN: pairVerdictCounts.compatible || 0,
     sameLineN: pairVerdictCounts['same-line'] || 0,
@@ -740,7 +903,7 @@ export function buildGoalCommitments(state, { now = new Date(), settings = null,
     claimReason,
     matrixDefectsN: matrix.defects.length,
     refusalsN: refusals.reduce((sum, row) => sum + row.count, 0),
-    attentionN: totals.targetConflictN + totals.capacityOvercommitN,
+    attentionN: totals.targetConflictN + totals.magnitudeConflictN + totals.capacityOvercommitN,
     ownersShownN: ownersShown.length,
     ownersOmittedN,
     commitmentsShownN: commitmentsShown.length,
@@ -752,6 +915,7 @@ export function buildGoalCommitments(state, { now = new Date(), settings = null,
     { key: 'horizonDays', label: 'Capacity horizon', value: K.horizonDays, detail: `The capacity sweep reads ${K.horizonDays} day(s) ahead of ${today}, to ${horizonEnd}. A live commitment entirely beyond it is counted and printed as beyond the horizon, never swept.` },
     { key: 'minOverlapDays', label: 'Collision ask threshold', value: K.minOverlapDays, detail: `A colliding pair is PRINTED at one overlapping day, and becomes an ask to the lines’ joint apex at ${K.minOverlapDays} or more. The reader reports; the rule acts on the declared threshold.` },
     { key: 'minGoals', label: 'Attribution floor', value: K.minGoals, detail: `Fewer than ${K.minGoals} comparable goals prints the attribution counts only; no rate is claimed.` },
+    { key: 'magnitudeDivergencePct', label: 'Magnitude conflict floor', value: K.magnitudeDivergencePct, detail: `Two aligned target magnitudes with the same declared unit conflict when their exact absolute difference is at least ${K.magnitudeDivergencePct}% of the larger declared value. Missing magnitudes and unit mismatches are refusals, never alignment.` },
     { key: 'askDueDays', label: 'Follow-up ask window', value: K.askDueDays, detail: `A conflict or an overcommit files an ask due within ${K.askDueDays} day(s).` },
   ];
 
@@ -769,6 +933,7 @@ export function buildGoalCommitments(state, { now = new Date(), settings = null,
       GOAL_COMMITMENT_METHOD.firstPerson,
       GOAL_COMMITMENT_METHOD.pair,
       GOAL_COMMITMENT_METHOD.measure,
+      GOAL_COMMITMENT_METHOD.magnitude,
       GOAL_COMMITMENT_METHOD.capacity,
       GOAL_COMMITMENT_METHOD.attribution,
       GOAL_COMMITMENT_METHOD.escalation,
@@ -781,7 +946,9 @@ export function buildGoalCommitments(state, { now = new Date(), settings = null,
       holders: [...holderMap.values()]
         .map((row) => ({ ...row, peopleN: row.people.size, people: undefined }))
         .sort((a, b) => b.conflictsN - a.conflictsN || b.overcommitsN - a.overcommitsN || b.declaredN - a.declaredN || a.holderName.localeCompare(b.holderName)),
-      apexes: [...apexMap.values()].sort((a, b) => b.conflictsN - a.conflictsN || b.overcommitsN - a.overcommitsN || String(a.apexKey).localeCompare(String(b.apexKey))),
+      apexes: [...apexMap.values()]
+        .map((row) => ({ ...row, peopleN: row.people.size, people: undefined }))
+        .sort((a, b) => b.conflictsN - a.conflictsN || b.overcommitsN - a.overcommitsN || String(a.apexKey).localeCompare(String(b.apexKey))),
     },
     refusals,
     internal: { matrix, nameOf: personName, today, horizonEnd, allOwners: ownerRows, allCommitments: commitmentRows, allAttribution: attributionRows, conventions: K },
@@ -801,7 +968,7 @@ export function goalCommitmentBriefText(report) {
   return [
     `Cross-line goal commitments, ${report.generatedOn}: ${b.commitmentsN} declaration(s) on the record — ${b.liveN} live, ${b.noLineN} owed under no line, ${b.closedN} closed, ${b.unreachableN} unreachable because the line ended, its holder changed, the goal was re-assigned or closed, or the owner left the roster.`,
     `${b.ownersN} person(s) carry a comparison: ${b.ownersComparedN} across two or more lines, ${b.ownersInertN} on one line only, ${b.ownersUndeclaredN} with nothing declared under a named line.`,
-    `${b.pairsN} pair(s) of live commitments were compared — ${b.targetConflictN} name the same measure in opposite directions, ${b.dateOverlapN} collide on dates only, ${b.compatibleN} do not collide, ${b.sameLineN} belong to one line’s own sequencing and ${b.singlePrincipalN} involve a commitment owed under no line.`,
+    `${b.pairsN} pair(s) of live commitments were compared — ${b.targetConflictN} name the same measure in opposite directions, ${b.magnitudeConflictN} name incompatible magnitudes in the same unit and direction, ${b.magnitudeUndeclaredN} aligned measure pair(s) omit a target magnitude, ${b.magnitudeUnitMismatchN} use mismatched units, ${b.dateOverlapN} collide on dates only, ${b.compatibleN} do not collide, ${b.sameLineN} belong to one line’s own sequencing and ${b.singlePrincipalN} involve a commitment owed under no line.`,
     `${b.capacityOvercommitN} person(s) are overcommitted at their exact peak day and ${b.lineOvercommitN} line reading(s) exceed that line’s own declared share (${b.lineShareUndeclaredN} refused for want of one). ${peak}`,
     attribution,
     b.figuresComplete
@@ -829,6 +996,9 @@ export function goalCommitmentCsvRows(report) {
     pairs_n: b.pairsN,
     pairs_cross_line_n: b.pairsCrossLineN,
     target_conflict_n: b.targetConflictN,
+    magnitude_conflict_n: b.magnitudeConflictN,
+    magnitude_undeclared_n: b.magnitudeUndeclaredN,
+    magnitude_unit_mismatch_n: b.magnitudeUnitMismatchN,
     date_overlap_n: b.dateOverlapN,
     compatible_n: b.compatibleN,
     same_line_n: b.sameLineN,
@@ -851,6 +1021,7 @@ export function goalCommitmentCsvRows(report) {
     horizon_days: report.settings[GOAL_COMMITMENT_SETTING_KEYS.horizonDays],
     min_overlap_days: report.settings[GOAL_COMMITMENT_SETTING_KEYS.minOverlapDays],
     min_goals: report.settings[GOAL_COMMITMENT_SETTING_KEYS.minGoals],
+    magnitude_divergence_pct: report.settings[GOAL_COMMITMENT_SETTING_KEYS.magnitudeDivergencePct],
     ask_due_days: report.settings[GOAL_COMMITMENT_SETTING_KEYS.askDueDays],
     counts_reconcile: b.countsReconcile,
     figures_complete: b.figuresComplete,

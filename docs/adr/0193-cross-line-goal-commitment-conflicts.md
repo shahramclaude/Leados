@@ -2,6 +2,8 @@
 
 Date: 2026-11-13 · Session 261 · Schema v153 · Status: accepted, shipped end to end
 
+**Follow-on:** [ADR-0195](./0195-cross-line-goal-commitment-target-magnitudes.md) extends this register in Schema v155 with optional exact target values and units, same-unit `magnitude-conflict`, and the existing rule's bounded joint-apex reconciliation. It does not alter this ADR's line/authority, capacity, history, or no-line doctrine.
+
 ## Duty and scope
 
 Director / VP primary (the lowest joint apex of two conflicting lines is usually
@@ -26,8 +28,10 @@ stock consumed per day, never a score attached to a person).
 - `goalCommitments`: append-only dated declarations — one goal, one reporting
   line (or the explicit `no-line`), an inclusive window, an exact integer
   `effortShareH` (hundredths of ONE person; 100 = the whole person), an optional
-  measure key + direction (both or neither), the declaring holder, and closed
-  states (`superseded*`, `released*`) that keep every predecessor as history.
+  measure key + direction (both or neither), and, since ADR-0195, optional exact
+  non-negative `targetValue` + `targetUnit` declared together or absent together;
+  the declaring holder, and closed states (`superseded*`, `released*`) that keep
+  every predecessor as history.
 - `goalCommitmentMarkers`: the rule's bounded identity-free observation ledger
   (kind `goal-commitment`), capped oldest-first like every matrix marker ledger.
 - Settings conventions `goalCommitmentAskDueDays` (3), `goalCommitmentHorizonDays`
@@ -45,8 +49,8 @@ stock consumed per day, never a score attached to a person).
 
 One reader, nothing derived stored. It joins every pair of LIVE commitments on
 one owner through `buildMatrix` — the ONE matrix engine — and prints exactly one
-of five exhaustive pair verdicts (`single-principal | same-line | compatible |
-date-overlap | target-conflict`) beside a separate capacity sweep
+of six exhaustive pair verdicts (`single-principal | same-line | compatible |
+date-overlap | target-conflict | magnitude-conflict`) beside a separate capacity sweep
 (`fits | overcommit | share-undeclared | unmeasurable` per person and per line).
 A target conflict requires the SAME canonicalised measure in OPPOSITE directions
 over at least `minOverlapDays` overlapping days; the exact overlap from/to and
@@ -70,14 +74,19 @@ reason on every surface, never zero.
 
 Registered on the shared post-commit spine immediately before `seatRule`
 (index 119 of 122) with a matching propagation contract
-(`writes: delegations, links, goalCommitmentMarkers`). Three partitioned
+(`writes: delegations, links, goalCommitmentMarkers`). Four partitioned
 conditions file at most ONE open dated `act-inform` ask each:
 
 1. `target-conflict` → the LOWEST joint apex (`matrixJointApex`) of the two
    holders, because neither promise can be kept by working harder;
-2. `capacity-overcommit` → the joint apex of EVERY holder carrying a live
-   commitment on the peak day;
-3. `line-share-exceeded` → THAT line's holder alone, and only where (2) did not
+2. `magnitude-conflict` → that same joint apex, only for two named lines with
+   same-unit declared targets at/above ADR-0195's exact divergence floor;
+3. `capacity-overcommit` → with named peak declarations only, the joint apex of
+   EVERY holder carrying a live commitment on the peak day; if an explicit
+   `no-line` declaration contributes to that peak, its effort stays in the
+   capacity arithmetic but the incomplete named set records one identity-free
+   observation rather than a partial apex ask or roll-up;
+4. `line-share-exceeded` → THAT line's holder alone, and only where (3) did not
    fire, so one week is never double-asked.
 
 A bare window collision escalates nowhere. Asks are idempotent per deterministic

@@ -123,10 +123,11 @@ import {
   normalizePriorityRoundLedger,
   normalizePriorityVotes,
 } from './domain/priorityRankingSchema.js';
-// ADR-0193 (Schema v153): dated cross-line goal commitment declarations — the
-// window, the effort and the measure a reporting line's goal consumes of one
-// shared person — plus the conflict rule's bounded marker ledger. Declarations
-// normalize on their own; nothing they derive is stored.
+// ADR-0193 + ADR-0195 (Schema v155): dated cross-line goal commitment
+// declarations — the window, effort, measure and optional exact target magnitude
+// a reporting line's goal consumes of one shared person — plus the conflict
+// rule's bounded marker ledger. Declarations normalize on their own; nothing
+// they derive is stored.
 import {
   normalizeGoalCommitmentMarkers,
   normalizeGoalCommitmentSettings,
@@ -866,7 +867,12 @@ export {
 // no past quarter is back-posted, no binding is guessed from an envelope's
 // owner, and an upgraded workspace opens with every completed quarter reading
 // `postable` or `not postable` on its own evidence — never already closed.
-export const SCHEMA_VERSION = 154;
+// v155 extends the cross-line goal-commitment declaration (ADR-0195) with an
+// OPTIONAL target magnitude: an exact canonical value plus a unit, both present
+// or neither. Existing rows receive neither value — no target is read from a
+// goal's title, key result, due date or metric prose. The new divergence
+// convention is added explicitly.
+export const SCHEMA_VERSION = 155;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -3067,11 +3073,11 @@ export const COLLECTIONS = [
   // ADR-0192: human-declared tasks and append-only ILUO attestations.
   'skillTasks',
   'skillActs',
-  // ADR-0193 (Schema v153): the Cross-Line Goal Commitment Conflict register.
-  // One append-only ledger of dated declarations plus the rule's marker ledger.
-  // No overlap, verdict, peak day, capacity sum, attribution state or rate is
-  // stored — every one is re-derived on read from the declarations, the goals
-  // and the reporting graph.
+  // ADR-0193 + ADR-0195 (Schema v153 → v155): the Cross-Line Goal Commitment
+  // Conflict register. One append-only ledger of dated declarations plus the
+  // rule's marker ledger. No overlap, verdict, peak day, capacity sum, target
+  // divergence, attribution state or rate is stored — every one is re-derived
+  // on read from the declarations, the goals and the reporting graph.
   'goalCommitments',
   'goalCommitmentMarkers',
   // ADR-0194 (Schema v154): the Chargeback Period Posting ledger. Append-only
@@ -9200,6 +9206,21 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  // 154 → 155: ADR-0195 adds OPTIONAL target magnitude fields to an existing
+  // append-only declaration and one declared divergence convention. No target
+  // value, unit, conversion or agreement is inferred from any existing goal or
+  // commitment. Historical declarations remain exactly as made and therefore
+  // read `target magnitude not declared` where comparison would need one.
+  154: (v154) => ({
+    ...v154,
+    schemaVersion: 155,
+    goalCommitments: Array.isArray(v154.goalCommitments) ? v154.goalCommitments.map((row) => ({
+      ...row,
+      targetValue: row?.targetValue ?? '',
+      targetUnit: row?.targetUnit ?? '',
+    })) : [],
+    settings: { ...(v154.settings || {}), ...normalizeGoalCommitmentSettings(v154.settings || {}) },
+  }),
   // 153 → 154: ADR-0194 adds two EMPTY ledgers and two declared conventions.
   // No posting is inferred from the statements that could have been posted: a
   // complete quarter that nobody turned into a period fact IS unposted, and

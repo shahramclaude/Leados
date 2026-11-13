@@ -30,6 +30,7 @@ import {
   buildGoalCommitments,
   goalCommitmentBriefText,
   goalCommitmentCsvRows,
+  goalCommitmentMagnitudeClaim,
 } from '../../app/core/domain/goalCommitment.js';
 import { goalCommitmentConditions, goalCommitmentRule } from '../../app/core/domain/goalCommitmentRules.js';
 import {
@@ -39,6 +40,7 @@ import {
   GOAL_COMMITMENT_EVENTS,
   GOAL_COMMITMENT_HOME_LINE,
   GOAL_COMMITMENT_LIMITS,
+  GOAL_COMMITMENT_MAGNITUDE_ADR,
   GOAL_COMMITMENT_MARKER_KIND,
   GOAL_COMMITMENT_NO_LINE,
   GOAL_COMMITMENT_PANEL,
@@ -49,6 +51,8 @@ import {
 import {
   goalCommitmentInclusiveDays,
   goalCommitmentOverlapDays,
+  goalCommitmentTargetUnit,
+  goalCommitmentTargetValue,
   normalizeGoalCommitments,
   normalizeGoalCommitmentSettings,
 } from '../../app/core/domain/goalCommitmentSchema.js';
@@ -65,7 +69,7 @@ const line = (id, personId, managerId, kind, shareH = null, extra = {}) => ({ id
 const goal = (id, title, ownerId, extra = {}) => ({ id, title, ownerId, status: 'active', scope: 'person', dueDate: '2026-12-31', createdAt: '2026-10-01T09:00:00.000Z', ...extra });
 const commitment = (id, goalId, ownerId, lineKey, holderId, windowFrom, windowTo, effortShareH, extra = {}) => ({
   id, goalId, ownerId, lineKey, holderId, windowFrom, windowTo, effortShareH,
-  measureKey: '', direction: null, note: '', declaredById: holderId || ownerId, declaredOn: '2026-11-01', declaredAt: '2026-11-01T09:00:00.000Z', ...extra,
+  measureKey: '', direction: null, targetValue: '', targetUnit: '', note: '', declaredById: holderId || ownerId, declaredOn: '2026-11-01', declaredAt: '2026-11-01T09:00:00.000Z', ...extra,
 });
 
 /**
@@ -184,30 +188,62 @@ test('the engine registers its rights, its pause, its export and its place on th
   assert.deepEqual(contract.writes, ['delegations', 'links', 'goalCommitmentMarkers'], 'the contract declares exactly what the rule may write');
 });
 
-test('schema v153 carries the ledger, the markers and the conventions', () => {
-  assert.equal(SCHEMA_VERSION, 154);
+test('schema v155 carries the ledger, the markers, target magnitude and the conventions', () => {
+  assert.equal(SCHEMA_VERSION, 155);
   assert.ok(COLLECTIONS.includes('goalCommitments') && COLLECTIONS.includes('goalCommitmentMarkers'));
   assert.ok(MIGRATIONS['152'], 'v152 state migrates forward');
+  assert.ok(MIGRATIONS['153'], 'v153 state migrates forward through chargeback posting');
+  assert.ok(MIGRATIONS['154'], 'v154 state migrates forward without inventing target magnitude');
   const state = fixture();
   const conv = state.settings;
   assert.equal(conv[GOAL_COMMITMENT_SETTING_KEYS.askDueDays], 3);
   assert.equal(conv[GOAL_COMMITMENT_SETTING_KEYS.horizonDays], 90);
   assert.equal(conv[GOAL_COMMITMENT_SETTING_KEYS.minOverlapDays], 5);
   assert.equal(conv[GOAL_COMMITMENT_SETTING_KEYS.minGoals], 3);
+  assert.equal(conv[GOAL_COMMITMENT_SETTING_KEYS.magnitudeDivergencePct], 10);
   assert.equal(conv[GOAL_COMMITMENT_SETTING_KEYS.autoPropagate], true);
   // A half declaration is dropped, counted and never completed by inference.
   const warnings = [];
   const kept = normalizeGoalCommitments([
     commitment('c1', 'g1', 'kim', 'home', 'ann', '2026-11-10', '2026-12-10', 60, { measureKey: 'cycle time', direction: null }),
     commitment('c2', 'g1', 'kim', 'home', 'ann', '2026-11-10', '2026-12-10', 140),
-    commitment('c3', 'g1', 'kim', 'home', 'ann', '2026-11-10', '2026-12-10', 60),
+    commitment('c3', 'g1', 'kim', 'home', 'ann', '2026-11-10', '2026-12-10', 60.5),
+    commitment('c4', 'g1', 'kim', 'home', 'ann', '2026-11-10', '2026-12-10', 60, { measureKey: 'cycle time', direction: 'decrease', targetValue: '20' }),
+    commitment('c5', 'g1', 'kim', 'home', 'ann', '2026-11-10', '2026-12-10', 60),
   ], warnings);
-  assert.deepEqual(kept.map((row) => row.id), ['c3']);
+  assert.deepEqual(kept.map((row) => row.id), ['c5']);
   assert.equal(warnings.length, 1);
   // Re-normalizing changes nothing: the ledger is a fixed point.
   const again = normalizeState(JSON.parse(JSON.stringify(state)), { now: NOW }).state;
   assert.deepEqual(again.goalCommitments, state.goalCommitments);
   assert.deepEqual(again.settings, state.settings);
+});
+
+test('v154 migration adds neither a target value nor a target unit, and no agreement is inferred', () => {
+  const legacy = rawFixture({ commitments: 'none' });
+  legacy.schemaVersion = 154;
+  legacy.goalCommitments = [
+    commitment('c1', 'g1', 'kim', GOAL_COMMITMENT_HOME_LINE, 'ann', '2026-11-10', '2026-12-10', 40, { measureKey: 'cycle time', direction: 'decrease' }),
+  ];
+  delete legacy.goalCommitments[0].targetValue;
+  delete legacy.goalCommitments[0].targetUnit;
+  const migrated = MIGRATIONS['154'](legacy);
+  assert.equal(migrated.schemaVersion, 155);
+  assert.equal(migrated.goalCommitments[0].targetValue, '');
+  assert.equal(migrated.goalCommitments[0].targetUnit, '');
+  const normalized = normalizeState(migrated, { now: NOW }).state;
+  assert.equal(normalized.goalCommitments[0].targetValue, '');
+  assert.equal(normalized.goalCommitments[0].targetUnit, '');
+});
+
+test('target magnitude grammar is canonical, bounded and exact instead of float-normalized', () => {
+  assert.equal(goalCommitmentTargetValue('25.125'), '25.125');
+  assert.equal(goalCommitmentTargetValue('0'), '0');
+  assert.equal(goalCommitmentTargetValue('01'), null, 'a padded alternate spelling is refused');
+  assert.equal(goalCommitmentTargetValue('1e3'), null, 'scientific notation is refused');
+  assert.equal(goalCommitmentTargetValue(' 25'), null, 'whitespace is refused, never silently trimmed into a promise');
+  assert.equal(goalCommitmentTargetUnit(' Percentage Points '), 'percentage points');
+  assert.equal(goalCommitmentTargetUnit(''), null);
 });
 
 /* --------------------------------------------------------------- 2. reader */
@@ -259,6 +295,97 @@ test('opposed measures over shared days are a target conflict with exact overlap
   assert.equal(report.board.countsReconcile, true);
 });
 
+test('a printed cross-line conflict below the overlap convention does not falsely claim an automated ask', () => {
+  const state = fixture({ commitments: 'none' });
+  state.goalCommitments = [
+    commitment('c1', 'g1', 'kim', GOAL_COMMITMENT_HOME_LINE, 'ann', '2026-11-10', '2026-11-20', 40, { measureKey: 'cycle time', direction: 'decrease' }),
+    commitment('c2', 'g2', 'kim', 'rl-kim-bob', 'bob', '2026-11-20', '2026-12-10', 40, { measureKey: 'cycle time', direction: 'increase' }),
+  ];
+  const report = read(state);
+  assert.equal(ownerOf(report, 'kim').pairs[0].overlapDays, 1);
+  assert.deepEqual(goalCommitmentConditions(report), [], 'the default five-day automation floor is not met');
+  withDom(() => {
+    const panel = renderMatrixGoalCommitmentPanel({ state, query: new URLSearchParams('panel=board'), navigate: () => {}, refresh: () => {}, api: {} }, { now: NOW });
+    assert.match(panel.textContent, /below the declared 5-day automation threshold/i);
+    assert.equal(panel.textContent.includes('files ONE dated ask to Vera'), false, 'the visible reader result never claims an ask the rule will not file');
+  });
+});
+
+test('same direction and same unit with divergent declared target magnitudes route to the joint apex', () => {
+  const state = fixture({ commitments: 'none' });
+  state.goalCommitments = [
+    commitment('c1', 'g1', 'kim', GOAL_COMMITMENT_HOME_LINE, 'ann', '2026-11-10', '2026-12-10', 40, { measureKey: 'cycle time', direction: 'decrease', targetValue: '20.0', targetUnit: 'hours' }),
+    commitment('c2', 'g2', 'kim', 'rl-kim-bob', 'bob', '2026-11-20', '2026-12-20', 40, { measureKey: 'cycle time', direction: 'decrease', targetValue: '30', targetUnit: 'hours' }),
+  ];
+  const report = read(state);
+  const kim = ownerOf(report, 'kim');
+  const pair = kim.pairs[0];
+  assert.equal(pair.measureClaim, 'aligned');
+  assert.equal(pair.magnitudeClaim, 'divergent');
+  assert.equal(pair.magnitudeDivergencePct, 33.33, 'relative difference is against the larger exact declared magnitude');
+  assert.equal(pair.verdict, 'magnitude-conflict');
+  assert.equal(kim.verdict, 'magnitude-conflict');
+  assert.equal(kim.apex.apexId, 'vera');
+  assert.equal(report.board.magnitudeConflictN, 1);
+  assert.equal(report.board.attentionN, 1);
+  // Holder and apex roll-ups use the same pair finding the rule routes: a
+  // magnitude conflict is not silently folded into (or omitted from) the
+  // opposed-direction counts.
+  for (const holderId of ['ann', 'bob']) {
+    const holder = report.rollups.holders.find((row) => row.holderId === holderId);
+    assert.ok(holder, `${holderId} receives a holder roll-up`);
+    assert.equal(holder.targetConflictN, 0);
+    assert.equal(holder.magnitudeConflictN, 1);
+    assert.equal(holder.conflictsN, 1);
+    assert.equal(holder.peopleN, 1);
+  }
+  const apexRollup = report.rollups.apexes.find((row) => row.apexId === 'vera');
+  assert.ok(apexRollup, 'the resolved joint apex receives the same roll-up');
+  assert.equal(apexRollup.targetConflictN, 0);
+  assert.equal(apexRollup.magnitudeConflictN, 1);
+  assert.equal(apexRollup.conflictsN, 1);
+  assert.equal(apexRollup.peopleN, 1, 'several lines over one person do not inflate the apex population');
+  const conditions = goalCommitmentConditions(report);
+  assert.deepEqual(conditions.map((row) => row.kind), ['magnitude-conflict']);
+  assert.equal(conditions[0].seatId, 'vera');
+  const { draft } = runRule(state);
+  const ask = asksOf(draft).find((row) => /incompatible targets/i.test(row.title));
+  assert.ok(ask, 'the apex receives the one bounded reconciliation ask');
+  assert.equal(ask.personId, 'vera');
+  // The authorised panel names both declared promises; the aggregate export
+  // remains a count-only surface and cannot disclose either target or unit.
+  withDom(() => {
+    const panel = renderMatrixGoalCommitmentPanel({ state, query: new URLSearchParams('panel=board'), navigate: () => {}, refresh: () => {}, api: {} }, { now: NOW });
+    assert.match(panel.textContent, /20\.0 hours vs 30 hours/);
+    assert.match(panel.textContent, /incompatible target magnitudes/i);
+  });
+  const csv = exportWorkspaceCsv(state, GOAL_COMMITMENT_CSV_SCOPE, { now: NOW });
+  assert.equal(csv.ok, true, csv.reason);
+  assert.equal(String(csv.text || csv.csv || '').includes('20.0'), false, 'the aggregate CSV never discloses a raw target value');
+  assert.equal(String(csv.text || csv.csv || '').includes('hours'), false, 'the aggregate CSV never discloses a target unit');
+});
+
+test('magnitude comparison has exact threshold behavior and refuses missing or mismatched units', () => {
+  const aligned = { lineKey: 'a', measureKey: 'activation', direction: 'increase', targetValue: '90', targetUnit: 'percent' };
+  const threshold = { ...aligned, lineKey: 'b', targetValue: '100' };
+  const below = { ...aligned, lineKey: 'b', targetValue: '99.99' };
+  assert.equal(goalCommitmentMagnitudeClaim(aligned, threshold, { divergencePct: 10 }).key, 'divergent', '10 / 100 meets the 10% floor exactly');
+  assert.equal(goalCommitmentMagnitudeClaim(aligned, below, { divergencePct: 10 }).key, 'within-floor', '9.99 / 99.99 stays below 10% with no float rounding');
+  assert.equal(goalCommitmentMagnitudeClaim(aligned, { ...threshold, targetUnit: 'percentage points' }, { divergencePct: 10 }).key, 'unit-mismatch');
+  assert.equal(goalCommitmentMagnitudeClaim(aligned, { ...threshold, targetValue: '' }, { divergencePct: 10 }).key, 'undeclared');
+  assert.equal(goalCommitmentMagnitudeClaim(aligned, { ...threshold, lineKey: GOAL_COMMITMENT_NO_LINE }, { divergencePct: 10 }).key, 'not-applicable', 'a no-line declaration has no second named principal for a magnitude finding');
+  const state = fixture({ commitments: 'none' });
+  state.goalCommitments = [
+    commitment('c1', 'g1', 'kim', GOAL_COMMITMENT_HOME_LINE, 'ann', '2026-11-16', '2026-12-16', 40, { measureKey: aligned.measureKey, direction: aligned.direction, targetValue: aligned.targetValue, targetUnit: aligned.targetUnit }),
+    commitment('c2', 'g2', 'kim', 'rl-kim-bob', 'bob', '2026-11-16', '2026-12-16', 40, { measureKey: threshold.measureKey, direction: threshold.direction, targetValue: threshold.targetValue, targetUnit: 'percentage points' }),
+  ];
+  const report = read(state);
+  assert.equal(report.board.magnitudeConflictN, 0);
+  assert.equal(report.board.magnitudeUnitMismatchN, 1);
+  assert.ok(report.refusals.some((row) => row.key === 'magnitude-unit-mismatch'));
+  assert.equal(goalCommitmentConditions(report).length, 0, 'a unit mismatch is observed as missing comparability, not escalated');
+});
+
 test('colliding windows without opposed measures are printed, not escalated', () => {
   const state = fixture();
   state.goalCommitments = state.goalCommitments.map((row) => (row.id === 'c2' ? { ...row, measureKey: '', direction: null } : row));
@@ -280,9 +407,53 @@ test('concurrent effort above one person is a capacity verdict with its peak day
   assert.equal(kim.capacity.peakSumH, 130);
   assert.equal(kim.capacity.basisH, 100, 'the basis is ONE person, in hundredths');
   assert.equal(kim.capacity.overByH, 30);
-  // Pair verdicts and capacity verdicts stay separate vocabularies.
+  // Pair verdicts and capacity verdicts stay separate vocabularies, but the
+  // same resolved apex can roll both conditions up without counting kim twice.
   assert.equal(kim.pairs[0].verdict, 'target-conflict');
+  const apex = report.rollups.apexes.find((row) => row.apexId === 'vera');
+  assert.ok(apex);
+  assert.equal(apex.targetConflictN, 1);
+  assert.equal(apex.overcommitsN, 1);
+  assert.equal(apex.peopleN, 1);
   assert.equal(report.board.capacityFitsN, 0);
+});
+
+test('an explicit no-line declaration counts toward capacity and stays single-principal', () => {
+  const state = fixture({ commitments: 'none' });
+  state.goalCommitments = [
+    commitment('c1', 'g1', 'kim', GOAL_COMMITMENT_HOME_LINE, 'ann', '2026-11-16', '2026-12-16', 60),
+    commitment('c2', 'g2', 'kim', GOAL_COMMITMENT_NO_LINE, null, '2026-11-16', '2026-12-16', 50),
+  ];
+  const report = read(state);
+  const kim = ownerOf(report, 'kim');
+  assert.equal(kim.liveN, 2, 'the no-line declaration is live for the owner capacity sweep');
+  assert.equal(kim.pairsN, 1);
+  assert.equal(kim.pairs[0].verdict, 'single-principal', 'no line holder is guessed or routed as a second principal');
+  assert.equal(kim.capacity.peakSumH, 110, 'both stated commitments consume the same person on the shared day');
+  assert.equal(kim.capacity.verdict, 'overcommit');
+  assert.equal(report.board.capacityOvercommitN, 1);
+  assert.equal(report.board.singlePrincipalN, 1);
+  assert.equal(kim.pairs[0].magnitudeClaim, 'not-applicable', 'a no-line declaration never produces a missing-magnitude or unit-mismatch refusal');
+  assert.equal(report.board.magnitudeUndeclaredN, 0);
+  assert.equal(report.board.magnitudeUnitMismatchN, 0);
+  const capacityCondition = goalCommitmentConditions(report).find((row) => row.kind === 'capacity-overcommit');
+  assert.equal(capacityCondition.seatState, 'unattributed', 'a named holder is never made the owner of the no-line part of an overcommit');
+  assert.equal(capacityCondition.seatId, null);
+  assert.deepEqual(kim.conflictHolderIds, [], 'the owner row itself carries no partial named-holder set');
+  assert.equal(kim.apex.unattributed, true);
+  assert.equal(kim.apex.unique, false);
+  assert.equal(report.rollups.apexes.length, 0, 'the roll-up does not invent a partial joint apex');
+  const observed = runRule(state);
+  assert.equal(asksOf(observed.draft).length, 0, 'the rule files no partial delegation');
+  assert.ok(observed.draft.goalCommitmentMarkers.some((marker) => /no reporting line/i.test(marker.detail)), 'the condition is retained as an identity-free observation');
+  withDom(() => {
+    const panel = renderMatrixGoalCommitmentPanel({ state, query: new URLSearchParams('panel=board'), navigate: () => {}, refresh: () => {}, api: {} }, { now: NOW });
+    assert.match(panel.textContent, /includes an explicit no-line declaration/i);
+    assert.equal(panel.textContent.includes('files ONE dated ask to Ann'), false, 'the panel never claims the named line owns the no-line part of capacity');
+  });
+  assert.equal(kim.goals.declaredN, 1, 'only the named line is attributed');
+  assert.equal(kim.goals.unattributedN, 1, 'an explicit no-line declaration never turns into a guessed named principal');
+  assert.equal(kim.capacity.lines.length, 1, 'no-line carries no invented per-line holder or share reading');
 });
 
 test('one line above its own declared share, while the week still fits, is its own verdict', () => {
@@ -302,6 +473,9 @@ test('one line above its own declared share, while the week still fits, is its o
   assert.equal(over.peakSumH, 50);
   assert.equal(over.overByH, 20);
   assert.equal(inside.verdict, 'fits');
+  const holder = report.rollups.holders.find((row) => row.holderId === 'bob');
+  assert.equal(holder.overcommitsN, 1, 'the holder roll-up keeps their own share arithmetic visible');
+  assert.equal(report.rollups.apexes.length, 0, 'a one-line share excess never masquerades as a joint-apex overcommit');
   // Exactly ONE condition, routed at bob alone — not at the joint apex.
   const conditions = goalCommitmentConditions(report);
   assert.deepEqual(conditions.map((row) => row.kind), ['line-share-exceeded']);
@@ -413,8 +587,51 @@ test('no-line belongs to the person whose goal it is or the operator view; a nam
   assert.equal(mine.ok, true, mine.error);
 });
 
+test('a no-line owner can re-baseline and release their own capacity declaration without inventing a holder', () => {
+  const state = fixture({ commitments: 'none' });
+  // Ann is a valid leadership seat, so this asserts the owner authority without
+  // relaxing the app-wide refusal to invent an operating seat for an IC.
+  state.goals.push(goal('g-ann', 'Keep the service window stable', 'ann'));
+  const { api, sit, store } = seed(state);
+  // The operator may create the no-line declaration, but its owner — not a
+  // named-line manager — retains the append-only maintenance authority.
+  const declared = api.matrixGoalCommitmentDeclare({
+    goalId: 'g-ann', lineKey: GOAL_COMMITMENT_NO_LINE,
+    windowFrom: '2026-11-16', windowTo: '2026-12-16', effortShareH: 35,
+    measureKey: 'cycle time', direction: 'decrease', targetValue: '24', targetUnit: 'hours',
+  });
+  assert.equal(declared.ok, true, declared.error);
+  const predecessorId = declared.commitmentId;
+  sit('bob');
+  const managerRebaseline = api.matrixGoalCommitmentRebaseline({
+    commitmentId: predecessorId, reason: 'A manager must not replace an owner no-line declaration.',
+    windowFrom: '2026-11-20', windowTo: '2026-12-20', effortShareH: 35,
+    measureKey: 'cycle time', direction: 'decrease', targetValue: '24', targetUnit: 'hours',
+  });
+  assert.equal(managerRebaseline.ok, false, 'a named-line holder cannot act for a no-line owner');
+  sit('ann');
+  const moved = api.matrixGoalCommitmentRebaseline({
+    commitmentId: predecessorId, reason: 'The independent work window moved after the customer review.',
+    windowFrom: '2026-11-20', windowTo: '2026-12-20', effortShareH: 35,
+    measureKey: 'cycle time', direction: 'decrease', targetValue: '24', targetUnit: 'hours',
+  });
+  assert.equal(moved.ok, true, moved.error);
+  const predecessor = store.state.goalCommitments.find((row) => row.id === predecessorId);
+  const successor = store.state.goalCommitments.find((row) => row.id === moved.commitmentId);
+  assert.equal(predecessor.supersededById, successor.id);
+  assert.equal(successor.lineKey, GOAL_COMMITMENT_NO_LINE);
+  assert.equal(successor.holderId, null, 're-baselining preserves the no-holder boundary');
+  sit('bob');
+  const managerRelease = api.matrixGoalCommitmentRelease({ commitmentId: successor.id, reason: 'A peer manager cannot release an owner declaration.' });
+  assert.equal(managerRelease.ok, false);
+  sit('ann');
+  const released = api.matrixGoalCommitmentRelease({ commitmentId: successor.id, reason: 'The independent work was completed outside the commitment window.' });
+  assert.equal(released.ok, true, released.error);
+  assert.equal(store.state.goalCommitments.find((row) => row.id === successor.id).releasedOn, '2026-11-13');
+});
+
 test('the door refuses a half declaration, an impossible effort and a window before the goal existed', () => {
-  const { api, sit } = seed(fixture({ commitments: 'none' }));
+  const { api, sit, store } = seed(fixture({ commitments: 'none' }));
   sit('ann');
   const base = { goalId: 'g1', lineKey: GOAL_COMMITMENT_HOME_LINE, windowFrom: '2026-11-16', windowTo: '2026-12-16' };
   const tooMuch = api.matrixGoalCommitmentDeclare({ ...base, effortShareH: 101 });
@@ -422,13 +639,23 @@ test('the door refuses a half declaration, an impossible effort and a window bef
   assert.match(tooMuch.error, /100|one person/i);
   const fractional = api.matrixGoalCommitmentDeclare({ ...base, effortShareH: 40.5 });
   assert.equal(fractional.ok, false, 'effort is a whole hundredth or it is refused');
+  const stringEffort = api.matrixGoalCommitmentDeclare({ ...base, effortShareH: '40' });
+  assert.equal(stringEffort.ok, false, 'a string is not silently coerced into an integer promise');
   const halfMeasure = api.matrixGoalCommitmentDeclare({ ...base, effortShareH: 40, measureKey: 'cycle time' });
   assert.equal(halfMeasure.ok, false, 'a measure with no direction is half a declaration');
   const halfDirection = api.matrixGoalCommitmentDeclare({ ...base, effortShareH: 40, direction: 'increase' });
   assert.equal(halfDirection.ok, false, 'a direction with no measure is half a declaration');
+  const halfMagnitude = api.matrixGoalCommitmentDeclare({ ...base, effortShareH: 40, measureKey: 'cycle time', direction: 'decrease', targetValue: '20' });
+  assert.equal(halfMagnitude.ok, false, 'a target value with no unit is half a declaration');
+  const inferredMagnitude = api.matrixGoalCommitmentDeclare({ ...base, effortShareH: 40, targetValue: '20', targetUnit: 'hours' });
+  assert.equal(inferredMagnitude.ok, false, 'a target cannot attach itself to an undeclared measure');
+  const exactMagnitude = api.matrixGoalCommitmentDeclare({ ...base, effortShareH: 40, measureKey: 'cycle time', direction: 'decrease', targetValue: '20.5', targetUnit: 'Hours' });
+  assert.equal(exactMagnitude.ok, true, exactMagnitude.error);
+  assert.equal(store.state.goalCommitments.at(-1).targetValue, '20.5');
+  assert.equal(store.state.goalCommitments.at(-1).targetUnit, 'hours');
   const before = api.matrixGoalCommitmentDeclare({ ...base, effortShareH: 40, windowFrom: '2026-09-01', windowTo: '2026-09-20' });
   assert.equal(before.ok, false, 'a promise dated before the goal existed is refused at the door');
-  const pastDue = api.matrixGoalCommitmentDeclare({ ...base, effortShareH: 40, windowFrom: '2026-12-20', windowTo: '2027-01-20' });
+  const pastDue = api.matrixGoalCommitmentDeclare({ ...base, goalId: 'g2', effortShareH: 40, windowFrom: '2026-12-20', windowTo: '2027-01-20' });
   assert.equal(pastDue.ok, true, pastDue.error || 'a window past the goal’s due date is allowed and printed');
 });
 
@@ -691,6 +918,17 @@ test('the panel shows act buttons to a seat that holds a line, and prints a refu
     const node = renderMatrixGoalCommitmentPanel(acting, { now: NOW });
     assert.ok(node.querySelector('[data-testid="goal-commitment-open-declare"]'), 'a seat that can act sees the declare door');
     assert.ok(node.querySelector('[data-testid^="goal-commitment-rebaseline-"]'), 'and a re-baseline door per live commitment');
+    const noLineState = fixture({ commitments: 'none' });
+    noLineState.goalCommitments = [
+      commitment('c-no-line', 'g1', 'kim', GOAL_COMMITMENT_NO_LINE, null, '2026-11-16', '2026-12-16', 35),
+    ];
+    const noLine = renderMatrixGoalCommitmentPanel({
+      ...acting,
+      state: noLineState,
+      api: { ...acting.api, matrixGoalCommitmentReport: () => ({ ok: true, report: read(noLineState) }) },
+    }, { now: NOW });
+    assert.ok(noLine.querySelector('[data-testid="goal-commitment-rebaseline-c-no-line"]'), 'a live explicit no-line declaration remains re-baselinable in the panel');
+    assert.ok(noLine.querySelector('[data-testid="goal-commitment-release-c-no-line"]'), 'and releasable, rather than becoming append-only dead-end UI');
     const refused = renderMatrixGoalCommitmentPanel({
       state, query: new URLSearchParams('panel=board'), navigate: () => {}, refresh: () => {},
       api: { matrixGoalCommitmentReport: () => ({ ok: false, error: 'The declared seat is unresolved and read-only.' }) },
@@ -705,6 +943,7 @@ test('the panel shows act buttons to a seat that holds a line, and prints a refu
 
 test('the register’s identity is the doctrine it ships under', () => {
   assert.equal(GOAL_COMMITMENT_ADR, 'ADR-0193');
+  assert.equal(GOAL_COMMITMENT_MAGNITUDE_ADR, 'ADR-0195');
   assert.equal(GOAL_COMMITMENT_RULE_ID, 'RULE-GCC-01');
   assert.equal(GOAL_COMMITMENT_PANEL, 'commitments');
   assert.ok(Object.values(GOAL_COMMITMENT_EVENTS).every((type) => typeof type === 'string' && type.length > 0));

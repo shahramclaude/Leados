@@ -287,7 +287,7 @@ function withDom(run) {
 /* ---------------------------------------------------------- 1. registration */
 
 test('registration: schema v149, CSV #141, RULE-AAC-01, declared rights and closed vocabularies', () => {
-  assert.equal(SCHEMA_VERSION, 154);
+  assert.equal(SCHEMA_VERSION, 155);
   const scope = CSV_EXPORTS.find((entry) => entry.key === AAR_CORROBORATION_CSV_SCOPE);
   assert.ok(scope, 'CSV #141 is registered');
   assert.equal(scope.sensitive, false, 'the export is aggregate-only');

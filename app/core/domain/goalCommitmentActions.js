@@ -1,6 +1,6 @@
 /**
  * app/core/domain/goalCommitmentActions.js — the seat-checked commands of the
- * Cross-Line Goal Commitment Conflict register (ADR-0193, Schema v153).
+ * Cross-Line Goal Commitment Conflict register (ADR-0193 + ADR-0195, Schema v155).
  *
  * THREE human acts and nothing else: DECLARE what one line's goal consumes of
  * one shared person, RE-BASELINE it with a dated successor, and RELEASE it with
@@ -53,6 +53,8 @@ import {
   goalCommitmentDay,
   goalCommitmentInclusiveDays,
   goalCommitmentMeasureKey,
+  goalCommitmentTargetUnit,
+  goalCommitmentTargetValue,
   normalizeGoalCommitmentSettings,
 } from './goalCommitmentSchema.js';
 
@@ -177,13 +179,12 @@ export function createGoalCommitmentActions(store, { now, idFactory }) {
        person that a declared line share uses, so the per-line reading compares
        two figures in one unit with no conversion nobody wrote down. */
     const effortRaw = input.effortShareH;
-    const effortShareH = typeof effortRaw === 'number' ? Math.trunc(effortRaw) : Math.round(Number(effortRaw));
-    if (effortRaw === null || effortRaw === undefined || effortRaw === '' || !Number.isFinite(effortShareH)) {
-      return fail('Declare what this commitment consumes, in hundredths of one person (100 = the whole person, 40 = 0.40). A commitment that does not say what it draws cannot be added to any other, and the register will not print a capacity figure it cannot support.', 'effortShareH');
+    // The ledger's unit is exact integer hundredths. String coercion, truncation
+    // and rounding all risk storing a promise different from the one declared.
+    if (!Number.isInteger(effortRaw)) {
+      return fail('The declared effort must be a whole number of hundredths of one person. Decimal values, strings and rounded values are refused; nothing was saved.', 'effortShareH');
     }
-    if (!Number.isInteger(effortRaw) && effortRaw !== String(effortRaw)) {
-      return fail('The declared effort must be a whole number of hundredths of one person. Nothing was rounded and nothing was saved.', 'effortShareH');
-    }
+    const effortShareH = effortRaw;
     if (effortShareH < 0 || effortShareH > 100) return fail(`The declared effort must be a whole number from 0 to 100 hundredths of one person. ${effortShareH} was supplied.`, 'effortShareH');
 
     /* The measure: optional, but never half declared, and never inferred. */
@@ -200,10 +201,24 @@ export function createGoalCommitmentActions(store, { now, idFactory }) {
     if (measureKey && !direction) return fail('A measure with no direction is half a declaration: say whether the commitment moves it up, down, or holds it steady.', 'direction');
     if (!measureKey && direction) return fail('A direction with no measure names nothing to move. Either declare both or neither.', 'measureKey');
 
+    // Target magnitude is an optional COMPLETE claim. The line types its own
+    // canonical value and unit; the register never parses a goal title, converts
+    // units, or calls a missing magnitude an aligned target.
+    const rawTargetValue = input.targetValue === null || input.targetValue === undefined ? '' : String(input.targetValue);
+    const rawTargetUnit = input.targetUnit === null || input.targetUnit === undefined ? '' : text(input.targetUnit, L.targetUnitMax + 8);
+    const hasTargetMagnitude = rawTargetValue !== '' || rawTargetUnit !== '';
+    const targetValue = rawTargetValue ? goalCommitmentTargetValue(rawTargetValue) : null;
+    const targetUnit = rawTargetUnit ? goalCommitmentTargetUnit(rawTargetUnit) : null;
+    if (hasTargetMagnitude && !measureKey) return fail('A target magnitude names no promise without a declared measure and direction. Declare both first, or leave the target fields empty.', 'targetValue');
+    if (hasTargetMagnitude && !targetValue) return fail(`A target value is an exact non-negative decimal: 0 or an unpadded number with at most ${L.targetValueIntegerDigits} digits before and ${L.targetValueFractionDigits} digits after the decimal point. Scientific notation, signs, whitespace and rounding are refused.`, 'targetValue');
+    if (hasTargetMagnitude && !targetUnit) return fail(`A target unit is a ${L.targetUnitMin}–${L.targetUnitMax}-character canonical key (lowercase letters, digits, space, dot, underscore, colon or hyphen). The register never invents a unit or conversion.`, 'targetUnit');
+    if ((targetValue && !targetUnit) || (!targetValue && targetUnit)) return fail('A target magnitude must declare both its exact value and unit, or neither. Nothing was inferred and nothing was saved.', targetValue ? 'targetUnit' : 'targetValue');
+
     return {
       ok: true, report, matrix, operator, goal, goalId, lines, lineKey, holderId,
       windowFrom, windowTo, windowDays, effortShareH,
       measureKey: measureKey || '', direction: direction || null,
+      targetValue: targetValue || '', targetUnit: targetUnit || '',
       existing,
     };
   }
@@ -220,6 +235,8 @@ export function createGoalCommitmentActions(store, { now, idFactory }) {
       effortShareH: door.effortShareH,
       measureKey: door.measureKey,
       direction: door.direction,
+      targetValue: door.targetValue,
+      targetUnit: door.targetUnit,
       note: text(check.note, L.noteMax),
       supersededById: null,
       supersededOn: null,
@@ -326,7 +343,7 @@ export function createGoalCommitmentActions(store, { now, idFactory }) {
         type: GOAL_COMMITMENT_EVENTS.DECLARED,
         entity: 'goalCommitment',
         entityId: record.id,
-        summary: `Commitment declared for “${String(door.goal.title || door.goalId).slice(0, 120)}”: ${linePhrase(door)}, ${record.windowFrom} to ${record.windowTo} (${record.windowDays} day(s)), ${record.effortShareH}/100 of one person${record.measureKey ? `, ${record.direction} ${record.measureKey}` : ''}.`.slice(0, 300),
+        summary: `Commitment declared for “${String(door.goal.title || door.goalId).slice(0, 120)}”: ${linePhrase(door)}, ${record.windowFrom} to ${record.windowTo} (${record.windowDays} day(s)), ${record.effortShareH}/100 of one person${record.measureKey ? `, ${record.direction} ${record.measureKey}` : ''}${record.targetValue ? ` to ${record.targetValue} ${record.targetUnit}` : ''}.`.slice(0, 300),
       });
       return saved({
         commitmentId: record.id,
@@ -457,7 +474,7 @@ export function createGoalCommitmentActions(store, { now, idFactory }) {
         type: GOAL_COMMITMENT_EVENTS.CONVENTIONS,
         entity: 'settings',
         entityId: GOAL_COMMITMENT_ROUTE,
-        summary: `Goal-commitment conventions set: horizon ${next.goalCommitmentHorizonDays} d, ask threshold ${next.goalCommitmentMinOverlapDays} d overlap, attribution floor ${next.goalCommitmentMinGoals} goal(s), ask window ${next.goalCommitmentAskDueDays} d, automation ${next.goalCommitmentAutoPropagate ? 'on' : 'off'}.`.slice(0, 300),
+        summary: `Goal-commitment conventions set: horizon ${next.goalCommitmentHorizonDays} d, ask threshold ${next.goalCommitmentMinOverlapDays} d overlap, attribution floor ${next.goalCommitmentMinGoals} goal(s), magnitude divergence ${next.goalCommitmentMagnitudeDivergencePct}%, ask window ${next.goalCommitmentAskDueDays} d, automation ${next.goalCommitmentAutoPropagate ? 'on' : 'off'}.`.slice(0, 300),
       });
       return saved({ conventions: next });
     },
