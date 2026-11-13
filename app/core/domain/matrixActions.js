@@ -59,9 +59,18 @@ import {
   LINE_INTAKE_REROUTED_EVENT,
 } from './lineIntakeRegistry.js';
 import { buildMatrixDemandVariance } from './matrixDemandVariance.js';
-// ADR-0183: the DSM partitioning slice. A pure read: it stores no block, no
-// verdict and no apex, so an exported figure is the computed figure.
+// ADR-0183 / ADR-0187: the DSM partitioning, counterfactual tear sensitivity
+// and RULE-CYC-01 escalation surface.
 import { buildDependencyCycles } from './dependencyCycle.js';
+import {
+  DEPENDENCY_CYCLE_BOUNDS,
+  DEPENDENCY_CYCLE_EVENTS,
+  DEPENDENCY_CYCLE_RIGHT,
+  DEPENDENCY_CYCLE_RULE_ID,
+  DEPENDENCY_CYCLE_SETTING_KEYS,
+  DEPENDENCY_CYCLE_SETTING_LABELS,
+} from './dependencyCycleRegistry.js';
+import { normalizeDependencyCycleSettings } from './dependencyCycleSchema.js';
 import { buildLineHorizon } from './lineHorizon.js';
 import { LINE_HORIZON_RULE_ID, LINE_HORIZON_SCAN_EVENT } from './lineHorizonRegistry.js';
 
@@ -74,6 +83,8 @@ export const MATRIX_EVENTS = Object.freeze({
   INTAKE_RECORDED: LINE_INTAKE_RECORDED_EVENT,
   INTAKE_REROUTED: LINE_INTAKE_REROUTED_EVENT,
   HORIZON_SCAN: LINE_HORIZON_SCAN_EVENT,
+  CYCLES_SCAN: DEPENDENCY_CYCLE_EVENTS.SCAN,
+  CYCLES_CONVENTIONS: DEPENDENCY_CYCLE_EVENTS.CONVENTIONS,
 });
 
 export function createMatrixActions(store, { now, idFactory }) {
@@ -733,7 +744,7 @@ export function createMatrixActions(store, { now, idFactory }) {
       };
     },
 
-    /** ADR-0183: exact dependency feedback-cycle partition and its line reach. Pure read. */
+    /** ADR-0183 / ADR-0187: exact dependency feedback-cycle partition, tear sensitivity and line reach. Pure read. */
     matrixDependencyCycleReport() {
       const check = seatFor('declare-matrix-line');
       if (!check.ok) return check;
@@ -747,6 +758,78 @@ export function createMatrixActions(store, { now, idFactory }) {
         report: buildDependencyCycles(store.state, { now: at, settings: settings(), visiblePersonIds }),
         seat: { id: seat.id, fullAccess: seat.fullAccess, rank: seat.rank },
       };
+    },
+
+    /**
+     * ADR-0187: deliberate cycle scan on the shared post-commit spine so
+     * RULE-CYC-01 reconciles coupled blocks, issues bounded asks to unique
+     * roster seats and records identity-free observations immediately, even
+     * while automatic propagation is paused.
+     */
+    matrixDependencyCycleScan() {
+      const check = seatFor(DEPENDENCY_CYCLE_RIGHT);
+      if (!check.ok) return check;
+      const { seat } = check;
+      const at = clock();
+      store.update(() => {}, {
+        type: MATRIX_EVENTS.CYCLES_SCAN,
+        entity: 'workspace',
+        entityId: 'matrix-cycles',
+        summary: `Dependency feedback-cycle scan requested (${DEPENDENCY_CYCLE_RULE_ID}).`.slice(0, 300),
+      });
+      const visiblePersonIds = seat.fullAccess
+        ? null
+        : new Set([...(seat.scope || []), ...(seat.lineScope || [])]);
+      return saved({
+        report: buildDependencyCycles(store.state, { now: at, settings: settings(), visiblePersonIds }),
+        effects: (store.lastPropagations || []).filter((x) => x && x.ruleId === DEPENDENCY_CYCLE_RULE_ID),
+      });
+    },
+
+    /**
+     * ADR-0187: set the dependency-cycle remediation conventions. Values outside
+     * declared bounds are REFUSED — never silently clamped — so a caller never
+     * believes a window was saved when another number was substituted.
+     */
+    matrixDependencyCycleSetConventions(patch = {}) {
+      const check = seatFor(DEPENDENCY_CYCLE_RIGHT);
+      if (!check.ok) return check;
+      if (!patch || typeof patch !== 'object' || Array.isArray(patch)) {
+        return fail('Cycle conventions must be supplied as a plain object. Nothing was saved.', 'settings');
+      }
+      const K = DEPENDENCY_CYCLE_SETTING_KEYS;
+      const allowed = new Map([[K.askDueDays, 'askDueDays'], [K.autoPropagate, 'autoPropagate']]);
+      const keys = Object.keys(patch);
+      if (!keys.length) {
+        return fail('State at least one dependency-cycle convention to update. Nothing was saved.', 'settings');
+      }
+      for (const key of keys) {
+        const name = allowed.get(key);
+        if (!name) {
+          return fail(`“${key}” is not a declared dependency-cycle convention. Nothing was saved.`, key);
+        }
+        const value = patch[key];
+        if (name === 'autoPropagate') {
+          if (typeof value !== 'boolean') {
+            return fail(`${DEPENDENCY_CYCLE_SETTING_LABELS.autoPropagate} must be true or false. Nothing was saved.`, key);
+          }
+        } else {
+          const [min, max] = DEPENDENCY_CYCLE_BOUNDS[name];
+          if (!Number.isInteger(value) || value < min || value > max) {
+            return fail(`${DEPENDENCY_CYCLE_SETTING_LABELS[name]} must be a whole number from ${min} to ${max}. Nothing was clamped and nothing was saved.`, key);
+          }
+        }
+      }
+      const next = normalizeDependencyCycleSettings({ ...settings(), ...patch });
+      store.update((draft) => {
+        draft.settings = { ...(draft.settings || {}), ...next };
+      }, {
+        type: MATRIX_EVENTS.CYCLES_CONVENTIONS,
+        entity: 'settings',
+        entityId: 'matrix-cycles',
+        summary: `Dependency-cycle conventions set: ask due window ${next.dependencyCycleAskDueDays} day(s), auto-propagation ${next.dependencyCycleAutoPropagate ? 'on' : 'off'}.`.slice(0, 300),
+      });
+      return saved({ conventions: next });
     },
 
     /* ------------------------------------- the forward horizon (ADR-0179) */

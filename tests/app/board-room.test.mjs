@@ -209,10 +209,11 @@ test('the rule is on the shared spine, has an auditable contract, and cannot out
   // was failing before that session; ADR-0092 brought it to 76, ADR-0094
   // (RULE-PIC-01..04) to 77 and ADR-0095 (RULE-RAL-01..04, one rule on the shared
   // spine) brings it to 78. It drifted again: it read 94 while the spine was
-  // already at 115, so it was red on `main` before this session. ADR-0186
-  // (RULE-CSA-01) states the true total deliberately at 116, with the
-  // `PROPAGATION_CONTRACTS` parity assertion above proving the contract exists.
-  assert.equal(DEFAULT_POST_COMMIT_RULES.length, 116, 'the shared spine includes cadence, Strategy Cycle (RULE-SCR), Envoy (RULE-ENV), Federation (RULE-FED), Differencing (RULE-DFR), the Prospective Contract (RULE-PIC), the Robust Allocation Terminal (RULE-RAL), the Internal Clearinghouse (RULE-CLR), the Discretion Calibrator (RULE-SPC) and the Reputational Capital Ledger (RULE-RCL) and, from ADR-0108, the Decision-Fit Ledger (RULE-FIT), from ADR-0140 the Matrix Accountability Ledger (RULE-MTX-01) and from ADR-0143 the Cross-Line Priority Arbitration (RULE-ARB-01) and from ADR-0144 the Cross-Line Contradiction Audit (RULE-CNT-01) and from ADR-0147 Matrix Multi-Line Review Stewardship (RULE-SRV-01)');
+  // already at 115, so it was red on `main` before that session. ADR-0186
+  // (RULE-CSA-01) brought it to 116 and ADR-0187 (RULE-CYC-01) states the true
+  // total deliberately at 117, with the `PROPAGATION_CONTRACTS` parity assertion
+  // above proving the contract exists.
+  assert.equal(DEFAULT_POST_COMMIT_RULES.length, 117, 'the shared spine includes cadence, Strategy Cycle (RULE-SCR), Envoy (RULE-ENV), Federation (RULE-FED), Differencing (RULE-DFR), the Prospective Contract (RULE-PIC), the Robust Allocation Terminal (RULE-RAL), the Internal Clearinghouse (RULE-CLR), the Discretion Calibrator (RULE-SPC) and the Reputational Capital Ledger (RULE-RCL) and, from ADR-0108, the Decision-Fit Ledger (RULE-FIT), from ADR-0140 the Matrix Accountability Ledger (RULE-MTX-01) and from ADR-0143 the Cross-Line Priority Arbitration (RULE-ARB-01) and from ADR-0144 the Cross-Line Contradiction Audit (RULE-CNT-01) and from ADR-0147 Matrix Multi-Line Review Stewardship (RULE-SRV-01) and from ADR-0187 Dependency Feedback-Cycle Escalation (RULE-CYC-01)');
   assert.ok(DEFAULT_POST_COMMIT_RULES.includes(boardRule));
   const contract = contractFor(boardRule);
   assert.ok(contract, 'boardRule has a declared contract');

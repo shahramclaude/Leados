@@ -17,10 +17,37 @@
 
 import { LINK_ENTITY_TYPES, FORBIDDEN_LINK_TYPES } from './cases.js';
 
-export const DEPENDENCY_CYCLE_ENGINE_VERSION = 'dependency-cycle-2026.11-v1';
+export const DEPENDENCY_CYCLE_ENGINE_VERSION = 'dependency-cycle-2026.11-v2';
 export const DEPENDENCY_CYCLE_ADR = 'ADR-0183';
+export const DEPENDENCY_CYCLE_ESCALATION_ADR = 'ADR-0187';
+export const DEPENDENCY_CYCLE_RULE_ID = 'RULE-CYC-01';
+export const DEPENDENCY_CYCLE_RIGHT = 'govern-dependency-cycles';
 export const DEPENDENCY_CYCLE_PANEL = 'cycles';
 export const DEPENDENCY_CYCLE_CSV_SCOPE = 'matrix-dependency-cycles';
+
+export const DEPENDENCY_CYCLE_EVENTS = Object.freeze({
+  SCAN: 'matrix.cycles.scan',
+  CONVENTIONS: 'matrix.cycles.conventions.set',
+});
+
+export const DEPENDENCY_CYCLE_DEFAULTS = Object.freeze({
+  askDueDays: 7,
+  autoPropagate: true,
+});
+
+export const DEPENDENCY_CYCLE_BOUNDS = Object.freeze({
+  askDueDays: Object.freeze([1, 30]),
+});
+
+export const DEPENDENCY_CYCLE_SETTING_KEYS = Object.freeze({
+  askDueDays: 'dependencyCycleAskDueDays',
+  autoPropagate: 'dependencyCycleAutoPropagate',
+});
+
+export const DEPENDENCY_CYCLE_SETTING_LABELS = Object.freeze({
+  askDueDays: 'Cycle remediation ask due window (days)',
+  autoPropagate: 'Automatic cycle escalation (RULE-CYC-01)',
+});
 
 /**
  * The work-node vocabulary. A node is a canonical, non-confidential entity in
@@ -151,7 +178,74 @@ export const DEPENDENCY_CYCLE_LIMITS = Object.freeze({
   maxNodes: 4000,
   maxArcs: 12000,
   maxPrintedBlocks: 80,
+  maxTearArcsPerBlock: 64,
+  asksPerCommit: 6,
+  markers: 400,
 });
+
+export const DEPENDENCY_CYCLE_TEAR_STATES = Object.freeze([
+  Object.freeze({
+    key: 'single-arc-tearable',
+    label: 'Uncouples under 1-arc tear',
+    tone: 'good',
+    detail: 'At least one declared precedence pair inside the block, if re-sequenced or split into an explicit premise, breaks the entire block into sequential records.',
+  }),
+  Object.freeze({
+    key: 'partial-single-tear',
+    label: 'Shrinks core under 1-arc tear',
+    tone: 'warn',
+    detail: 'No single arc breaks the whole block, but removing one arc frees at least one record into sequential order and leaves a smaller coupled core.',
+  }),
+  Object.freeze({
+    key: 'multi-arc-only',
+    label: 'Requires multi-arc tear (≥2)',
+    tone: 'bad',
+    detail: 'Alternate directed paths inside the block keep every record mutually reachable after any single-arc removal; settling it requires re-sequencing at least two pairs together.',
+  }),
+  Object.freeze({
+    key: 'tear-bound-exceeded',
+    label: 'Tear census refused (bound)',
+    tone: 'warn',
+    detail: 'The block holds more distinct internal directed pairs than maxTearArcsPerBlock, so counterfactual tear evaluation is refused rather than heuristically sampled.',
+  }),
+]);
+
+export const DEPENDENCY_CYCLE_TEAR_OUTCOMES = Object.freeze([
+  Object.freeze({ key: 'acyclic', label: 'Breaks loop completely', tone: 'good' }),
+  Object.freeze({ key: 'reduces-core', label: 'Shrinks coupled core', tone: 'warn' }),
+  Object.freeze({ key: 'core-persists', label: 'Full loop persists', tone: 'neutral' }),
+]);
+
+export const DEPENDENCY_CYCLE_ARC_SPAN_STATES = Object.freeze([
+  'same-holder',
+  'cross-holder',
+  'unattributed-endpoint',
+]);
+
+export const DEPENDENCY_CYCLE_ESCALATION_STATES = Object.freeze([
+  Object.freeze({ key: 'unique', label: 'One accountable roster seat', tone: 'good' }),
+  Object.freeze({ key: 'leader-held', label: 'Held by workspace leader', tone: 'warn' }),
+  Object.freeze({ key: 'ambiguous', label: 'Incomparable minimal ancestors', tone: 'bad' }),
+  Object.freeze({ key: 'unattributed', label: 'Line reach incomplete', tone: 'bad' }),
+  Object.freeze({ key: 'off-roster', label: 'Holder off active roster', tone: 'bad' }),
+]);
+
+export const DEPENDENCY_CYCLE_ASK_STATES = Object.freeze([
+  'open',
+  'answered',
+  'not-issued',
+  'not-applicable',
+]);
+
+export const DEPENDENCY_CYCLE_METHOD = Object.freeze([
+  'Read every stored link in deterministic order up to maxLinks; classify people-attribution edges separately from the five declared precedence relations.',
+  'Resolve both endpoints of every precedence edge against canonical non-confidential collections; count unresolved, forbidden, person-endpoint and self-arc edges as named refusals.',
+  'Partition the directed precedence graph into exact strongly connected components via iterative two-pass Kosaraju and order the condensation DAG via Kahn topological sort.',
+  'Join each node’s named people to buildMatrix active reporting lines; refuse the workspace cross-line claim whenever any node lacks provable line reach or the matrix carries a defect.',
+  'Resolve block ownership: single-line loops resolve to their sole accountable line holder; cross-line loops resolve to matrixJointApex (naming all incomparable minimal ancestors on a diamond tie without picking one).',
+  'For each coupled feedback block within maxTearArcsPerBlock, run an exact counterfactual SCC pass removing one distinct internal directed pair at a time — reporting whether that removal breaks the block completely, shrinks its core or leaves it intact, without recommending which business commitment to drop.',
+  'On the shared post-commit spine (RULE-CYC-01), issue at most one dated sequencing ask per coupled block with a unique active roster seat (single-line manager or joint apex), attach matrix-DAG rolls-up-to provenance, self-close asks when the loop clears or its seat moves, and record identity-free observations for leader-held, ambiguous, unattributed or off-roster blocks.',
+]);
 
 export const DEPENDENCY_CYCLE_CONVENTIONS = Object.freeze([
   Object.freeze({
@@ -163,16 +257,16 @@ export const DEPENDENCY_CYCLE_CONVENTIONS = Object.freeze([
     detail: 'Strongly connected components are computed by an iterative two-pass graph algorithm over the exact adjacency derived from stored links. The result does not depend on node order, and no random restarts or heuristic clustering are used.',
   }),
   Object.freeze({
-    label: 'A coupled block is not sequenced inside itself',
-    detail: 'Records inside a feedback block are printed as one irreducible set. The condensation graph is acyclic and is ordered topologically, but the reader never invents an order inside a cycle or tears an edge to make one.',
+    label: 'Counterfactual tear sensitivity never auto-tears or picks a winner',
+    detail: 'Records inside a feedback block remain unordered until a human changes the stored graph. The tear census tests every distinct internal directed pair by exact SCC recomputation and prints the structural consequence of each, never a heuristic tear order.',
   }),
   Object.freeze({
     label: 'One person, one line set, once',
     detail: 'A work node’s line reach is the union of the active reporting lines of the people its typed people-edges name. Each distinct line id is counted once per block; a person on three lines contributes three lines, not three people.',
   }),
   Object.freeze({
-    label: 'No invented owner in a matrix',
-    detail: 'A cross-line block is escalated to the canonical `matrixJointApex` of its line managers. Two incomparable minimal ancestors are printed as both; a disconnected graph is named disconnected. Nobody is chosen silently.',
+    label: 'Both single-chain and matrix loops reach their true accountable seat',
+    detail: 'A single-line feedback block addresses its sole line manager; a cross-line block addresses the unique matrixJointApex of its people or line holders. Two incomparable minimal ancestors, a leader-held root, an off-roster holder or an unattributed node are observed and never substituted.',
   }),
   Object.freeze({
     label: 'Refusal instead of imputation',
@@ -186,8 +280,8 @@ export const DEPENDENCY_CYCLE_CONVENTIONS = Object.freeze([
 
 export const DEPENDENCY_CYCLE_FRAMEWORKS = Object.freeze([
   Object.freeze({
-    label: 'Design Structure Matrix partitioning (Steward, 1981; Eppinger & Browning, 2012)',
-    detail: 'A square dependency matrix is reordered into block-triangular form by identifying strongly connected components; coupled blocks form the irreducible squares on the diagonal. This register ships the partitioning and the condensation order.',
+    label: 'Design Structure Matrix partitioning & tearing (Steward, 1981; Eppinger & Browning, 2012)',
+    detail: 'A square dependency matrix is reordered into block-triangular form by identifying strongly connected components; coupled blocks form irreducible squares on the diagonal, and exact single-arc tear sensitivity identifies cardinality-1 feedback arcs without heuristic tie-breaking.',
   }),
   Object.freeze({
     label: 'Strongly connected components (Tarjan, 1972; Kosaraju)',
@@ -198,8 +292,8 @@ export const DEPENDENCY_CYCLE_FRAMEWORKS = Object.freeze([
     detail: 'A feedback cycle that crosses reporting lines is a coordination cost no single manager can schedule away; near-decomposability is why the coupled block, not the individual record, is the unit of escalation.',
   }),
   Object.freeze({
-    label: 'Common agency and minimal common ancestors in a matrix DAG (Bernheim & Whinston, 1986; ADR-0140)',
-    detail: 'Several principals holding one coupled block escalate to their lowest joint apex. A diamond tie is reported as ambiguous; the system does not pick one of two incomparable managers.',
+    label: 'Common agency and minimal common ancestors in a matrix DAG (Bernheim & Whinston, 1986; ADR-0140 / ADR-0187)',
+    detail: 'Several principals holding one coupled block escalate to their lowest joint apex, while single-line loops stay at the line manager who holds the whole loop. A diamond tie is reported as ambiguous; the system does not pick one of two incomparable managers.',
   }),
 ]);
 
@@ -209,9 +303,13 @@ export const DEPENDENCY_CYCLE_CSV_COLUMNS = Object.freeze([
   'internal_arcs_n', 'external_arcs_n', 'blocks_n', 'sequential_n', 'feedback_n',
   'cross_line_feedback_n', 'single_line_feedback_n', 'unattributed_feedback_n',
   'joint_apex_n', 'ambiguous_apex_n', 'distinct_lines_n',
+  'single_arc_tearable_blocks_n', 'partial_single_tear_blocks_n',
+  'multi_arc_only_blocks_n', 'tear_refused_blocks_n',
+  'escalation_unique_n', 'asks_open_n', 'asks_answered_n', 'asks_not_issued_n',
   'line_reach_complete', 'counts_reconcile', 'figures_complete', 'cross_line_claim',
   'owner_state', 'block_state', 'block_size', 'block_internal_arcs_n',
   'block_external_in_n', 'block_external_out_n', 'block_distinct_lines_n',
+  'tear_state', 'single_arc_breaks_n',
   'upstream_n', 'downstream_n', 'verdict', 'refusal_reason',
 ]);
 
@@ -221,7 +319,7 @@ export const DEPENDENCY_CYCLE_CSV_DESCRIPTOR = Object.freeze({
   group: 'analytics',
   sensitive: false,
   filenameSlug: 'matrix-dependency-cycles',
-  description: 'CSV scope #137 (ADR-0183, Schema v145 unchanged). One workspace row plus one row per ownership state and one row per coupled feedback block for the DSM partitioning of declared typed dependency arcs: nodes, arcs, distinct pairs, internal/external arcs, sequential and feedback blocks, cross-line, single-line and unattributed feedback blocks, unique and ambiguous joint apexes, distinct active reporting lines, and three separate claims (line_reach_complete, counts_reconcile, figures_complete) beside the cross_line_claim. NO person, NO manager, NO line id, NO record id, NO title, NO note, NO relation text and NO record date. A refused claim prints its reason; a refused figure is never a zero.',
+  description: 'CSV scope #137 (ADR-0183 / ADR-0187, Schema v148 unchanged). One workspace row plus one row per ownership state and one row per coupled feedback block for the DSM partitioning, exact counterfactual single-arc tear sensitivity and RULE-CYC-01 ask status of declared typed dependency arcs: nodes, arcs, distinct pairs, internal/external arcs, sequential and feedback blocks, cross-line, single-line and unattributed feedback blocks, unique and ambiguous joint apexes, tearable/partial/multi-arc/refused block counts, open/answered/unissued ask counts, distinct active reporting lines, and three separate claims (line_reach_complete, counts_reconcile, figures_complete) beside the cross_line_claim. NO person, NO manager, NO line id, NO record id, NO title, NO note, NO relation text and NO record date. A refused claim prints its reason; a refused figure is never a zero.',
 });
 
 export function dependencyCycleRelation(relation) {
@@ -248,13 +346,17 @@ export function dependencyCycleLineState(key) {
     || DEPENDENCY_CYCLE_LINE_STATES[2];
 }
 
-/** The method lines the panel prints, in order. */
-export const DEPENDENCY_CYCLE_METHOD = Object.freeze([
-  'Read the shared typed-link spine written by the post-commit automation engine. Keep only the five declared precedence relations and orient each arc by its declared direction.',
-  'Resolve both endpoints against the records the workspace actually holds. Drop nothing in silence: every failure is counted under a named refusal.',
-  'Partition the exact directed graph into strongly connected components by an iterative two-pass algorithm. A component of more than one node — or one node with a self-arc — is a coupled feedback block.',
-  'Build the condensation graph and order its blocks topologically. Blocks are ordered; records INSIDE a coupled block are never ordered, and no edge is torn.',
-  'Attribute each block through the canonical matrix engine: the union of active reporting lines of the people its typed people-edges name. An unrecorded, untraceable, out-of-seat or defective attribution refuses the cross-line claim.',
-  'Escalate a cross-line block to the canonical matrixJointApex of its managers. Name every incomparable apex; never pick one.',
-  'Print four separate claims: line reach complete, counts reconcile, figures are the computed figures, and the cross-line claim. Reconciled counts do not license an unprovable structure claim.',
-]);
+export function dependencyCycleTearState(key) {
+  return DEPENDENCY_CYCLE_TEAR_STATES.find((row) => row.key === key)
+    || DEPENDENCY_CYCLE_TEAR_STATES[DEPENDENCY_CYCLE_TEAR_STATES.length - 1];
+}
+
+export function dependencyCycleTearOutcome(key) {
+  return DEPENDENCY_CYCLE_TEAR_OUTCOMES.find((row) => row.key === key)
+    || DEPENDENCY_CYCLE_TEAR_OUTCOMES[DEPENDENCY_CYCLE_TEAR_OUTCOMES.length - 1];
+}
+
+export function dependencyCycleEscalationState(key) {
+  return DEPENDENCY_CYCLE_ESCALATION_STATES.find((row) => row.key === key)
+    || DEPENDENCY_CYCLE_ESCALATION_STATES[3];
+}

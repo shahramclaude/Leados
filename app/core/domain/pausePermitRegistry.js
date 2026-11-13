@@ -194,6 +194,7 @@ export const PAUSE_PERMIT_MATRIX_REACH_SWITCHES = Object.freeze([
   'transferPriceAutoPropagate',
   'delegationLineAutoPropagate',
   'workTurnAutoPropagate',
+  'dependencyCycleAutoPropagate',
 ]);
 
 export function pausePermitReachesMatrix(key) {
@@ -224,6 +225,7 @@ export const PAUSE_PERMIT_REACH_RULES = Object.freeze({
   transferPriceAutoPropagate: 'transferPriceRules.js',
   delegationLineAutoPropagate: 'delegationLineRules.js',
   workTurnAutoPropagate: 'workTurnRules.js',
+  dependencyCycleAutoPropagate: 'dependencyCycleRules.js',
 });
 
 /** How much of the register a seat is shown. Mirrors the altitude disclosure ladder. */

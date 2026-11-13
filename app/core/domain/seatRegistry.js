@@ -589,6 +589,9 @@ export const ACTION_RIGHTS = Object.freeze({
   'govern-change-saturation': { minRank: 1, maxRank: 5, label: 'Declare or retire the change-capacity ceiling for a person you reach or a pool you run' },
   'record-workforce-move': { minRank: 1, maxRank: 5, label: 'Record a dated workforce move for a person you reach' },
   'govern-workforce-plan': { minRank: 3, maxRank: 5, label: 'Declare the workforce’s intended shape, scan the plan and set its conventions' },
+  // ADR-0187: re-running RULE-CYC-01 on the shared spine and governing the
+  // dependency-cycle remediation ask window / automation pause are director+.
+  'govern-dependency-cycles': { minRank: 3, maxRank: 5, label: 'Scan dependency feedback cycles on the shared spine and set cycle conventions' },
   // ADR-0177: signing one's OWN side of a transfer price is open at every
   // leadership rank; the action refuses any seat that is not that side's manager.
   'agree-transfer-price': { minRank: 1, maxRank: 5, label: 'Sign your own side of a transfer price between two lines' },

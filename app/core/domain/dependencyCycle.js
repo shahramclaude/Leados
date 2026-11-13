@@ -1,22 +1,23 @@
 /**
  * app/core/domain/dependencyCycle.js — Cross-Boundary Dependency Feedback-Cycle
- * Register (ADR-0183, Session 251, Schema v145 unchanged,
- * `#/matrix?panel=cycles`, CSV scope #137).
+ * Register & Counterfactual Tear-Sensitivity Reader (ADR-0183 / ADR-0187,
+ * Schema v148 unchanged, `#/matrix?panel=cycles`, CSV scope #137).
  *
- * Pure read model. It answers ONE question a linear plan cannot:
+ * Pure read model. It answers TWO structural questions a linear plan cannot:
  *
- *   which work records are mutually dependent in a closed loop, and does that
- *   loop cross reporting lines that no single manager can settle?
+ *   1. Which work records are mutually dependent in a closed loop, and does that
+ *      loop cross reporting lines that no single manager can settle?
+ *   2. Which single declared precedence pairs inside each coupled block, if
+ *      re-sequenced or split into an explicit premise, would uncouple the block
+ *      into sequential steps or shrink its coupled core — without ever picking
+ *      which business commitment ought to give way?
  *
  * The input is the shared typed-link spine written by the post-commit
  * cross-module automation engine; the reporting-line reach is read from the ONE
- * canonical matrix engine (`buildMatrix`, `matrixJointApex`). Nothing derived is
+ * canonical matrix engine (`buildMatrix`, `matrixJointApex`); rule-issued asks
+ * are read back from `delegations` + `links` (`RULE-CYC-01`). Nothing derived is
  * stored, no clock is read except the injected `now`, and no input object is
  * mutated — so a printed figure is the computed figure by construction.
- *
- * The exact partition and the condensation order are the DSM partitioning slice
- * of the Session-203 Planned capability. Tearing, numerical DSMs, clustering
- * and simulation are deliberately NOT implemented (ROADMAP: In Progress).
  */
 
 import { dayKey } from '../time.js';
@@ -25,13 +26,17 @@ import {
   LINK_ENTITY_COLLECTIONS,
   LINK_RELATIONS,
 } from './cases.js';
+import { LEADER_ID } from './chain.js';
 import { buildMatrix, matrixJointApex } from './matrix.js';
 import {
   DEPENDENCY_CYCLE_ADR,
+  DEPENDENCY_CYCLE_ASK_STATES,
   DEPENDENCY_CYCLE_BLOCK_STATES,
   DEPENDENCY_CYCLE_CONVENTIONS,
   DEPENDENCY_CYCLE_CSV_COLUMNS,
   DEPENDENCY_CYCLE_ENGINE_VERSION,
+  DEPENDENCY_CYCLE_ESCALATION_ADR,
+  DEPENDENCY_CYCLE_ESCALATION_STATES,
   DEPENDENCY_CYCLE_EXCLUDED_RELATIONS,
   DEPENDENCY_CYCLE_FRAMEWORKS,
   DEPENDENCY_CYCLE_LIMITS,
@@ -41,9 +46,17 @@ import {
   DEPENDENCY_CYCLE_PEOPLE_RELATIONS,
   DEPENDENCY_CYCLE_REFUSALS,
   DEPENDENCY_CYCLE_RELATIONS,
-  dependencyCycleRelation,
+  DEPENDENCY_CYCLE_RULE_ID,
+  DEPENDENCY_CYCLE_TEAR_OUTCOMES,
+  DEPENDENCY_CYCLE_TEAR_STATES,
   dependencyCycleVerdict,
 } from './dependencyCycleRegistry.js';
+import {
+  DEPENDENCY_CYCLE_CLOSED_PREFIX,
+  dependencyCycleSignature,
+  normalizeDependencyCycleSettings,
+  parseDependencyCycleAskSummary,
+} from './dependencyCycleSchema.js';
 
 const NODE_TYPES = new Set(DEPENDENCY_CYCLE_NODE_TYPES);
 const RELATIONS = new Map(DEPENDENCY_CYCLE_RELATIONS.map((row) => [row.relation, row]));
@@ -128,6 +141,138 @@ export function dependencyCycleComponents(nodeIds, arcs) {
   return components;
 }
 
+/**
+ * Exact counterfactual single-arc tear sensitivity for one coupled feedback
+ * block (ADR-0187).
+ *
+ * Multiple typed links asserting the SAME directed pair `from → to` are grouped
+ * into one precedence pair, because removing only one link while another still
+ * asserts `from → to` leaves the precedence intact. Each distinct internal pair
+ * is removed in turn and exact `dependencyCycleComponents` is run on the
+ * remaining subgraph. No edge is recommended and no tie is broken.
+ */
+export function dependencyCycleTearSensitivity(
+  memberKeys,
+  internalArcs,
+  {
+    maxTearArcsPerBlock = DEPENDENCY_CYCLE_LIMITS.maxTearArcsPerBlock,
+    lineReach = null,
+    nodeLabels = null,
+  } = {},
+) {
+  const members = sorted(new Set(memberKeys));
+  const memberSet = new Set(members);
+  const grouped = new Map();
+  for (const arc of Array.isArray(internalArcs) ? internalArcs : []) {
+    const from = str(arc?.from);
+    const to = str(arc?.to);
+    if (!memberSet.has(from) || !memberSet.has(to)) continue;
+    const pairKey = `${from}>${to}`;
+    if (!grouped.has(pairKey)) {
+      grouped.set(pairKey, {
+        pairKey,
+        from,
+        to,
+        self: from === to,
+        relations: new Set(),
+        linkIds: new Set(),
+        arcsN: 0,
+      });
+    }
+    const entry = grouped.get(pairKey);
+    entry.arcsN += 1;
+    if (arc.relation) entry.relations.add(str(arc.relation));
+    if (arc.linkId) entry.linkIds.add(str(arc.linkId));
+  }
+  const pairs = [...grouped.values()].sort((a, b) => a.pairKey.localeCompare(b.pairKey));
+
+  if (pairs.length > maxTearArcsPerBlock) {
+    return {
+      tearState: 'tear-bound-exceeded',
+      evaluated: false,
+      internalPairsN: pairs.length,
+      singleArcBreakN: null,
+      partialTearN: null,
+      persistentArcN: null,
+      candidates: [],
+      reconciles: true,
+      reason: `Block holds ${pairs.length} distinct internal directed pairs, exceeding the ${maxTearArcsPerBlock}-pair counterfactual bound; tear sensitivity is refused rather than heuristically sampled.`,
+    };
+  }
+
+  const candidates = pairs.map((pair) => {
+    const remainingPairs = pairs.filter((other) => other.pairKey !== pair.pairKey);
+    const remainingSelfNodes = new Set(remainingPairs.filter((p) => p.self).map((p) => p.from));
+    const subComps = dependencyCycleComponents(members, remainingPairs);
+    const feedbackSub = subComps.filter((comp) => comp.length > 1 || remainingSelfNodes.has(comp[0]));
+    const remainingFeedbackBlocksN = feedbackSub.length;
+    const coupledLeftN = feedbackSub.reduce((sum, comp) => sum + comp.length, 0);
+    const freedNodesN = members.length - coupledLeftN;
+    const breaksCycleCompletely = remainingFeedbackBlocksN === 0;
+    const largestRemainingBlockSize = feedbackSub.reduce((max, comp) => Math.max(max, comp.length), 0);
+    const outcome = breaksCycleCompletely
+      ? 'acyclic'
+      : (freedNodesN > 0 ? 'reduces-core' : 'core-persists');
+
+    let arcSpanState = 'unattributed-endpoint';
+    if (lineReach instanceof Map) {
+      const fromReach = lineReach.get(pair.from);
+      const toReach = lineReach.get(pair.to);
+      if (fromReach?.state === 'known' && toReach?.state === 'known') {
+        arcSpanState = (
+          fromReach.managerIds.length === 1
+          && toReach.managerIds.length === 1
+          && fromReach.managerIds[0] === toReach.managerIds[0]
+        ) ? 'same-holder' : 'cross-holder';
+      }
+    }
+
+    const fromMeta = nodeLabels instanceof Map ? nodeLabels.get(pair.from) : null;
+    const toMeta = nodeLabels instanceof Map ? nodeLabels.get(pair.to) : null;
+
+    return {
+      pairKey: fromMeta?.withheld || toMeta?.withheld ? 'withheld' : pair.pairKey,
+      from: fromMeta?.withheld ? 'withheld' : pair.from,
+      to: toMeta?.withheld ? 'withheld' : pair.to,
+      fromLabel: fromMeta ? fromMeta.label : pair.from,
+      toLabel: toMeta ? toMeta.label : pair.to,
+      self: pair.self,
+      relations: sorted(pair.relations),
+      arcsN: pair.arcsN,
+      linkIds: fromMeta?.withheld || toMeta?.withheld ? [] : sorted(pair.linkIds),
+      outcome,
+      breaksCycleCompletely,
+      remainingFeedbackBlocksN,
+      largestRemainingBlockSize,
+      coupledLeftN,
+      freedNodesN,
+      arcSpanState,
+    };
+  });
+
+  const singleArcBreakN = candidates.filter((c) => c.outcome === 'acyclic').length;
+  const partialTearN = candidates.filter((c) => c.outcome === 'reduces-core').length;
+  const persistentArcN = candidates.filter((c) => c.outcome === 'core-persists').length;
+  const reconciles = (singleArcBreakN + partialTearN + persistentArcN === pairs.length)
+    && candidates.every((c) => c.freedNodesN + c.coupledLeftN === members.length);
+
+  let tearState = 'multi-arc-only';
+  if (singleArcBreakN > 0) tearState = 'single-arc-tearable';
+  else if (partialTearN > 0) tearState = 'partial-single-tear';
+
+  return {
+    tearState,
+    evaluated: true,
+    internalPairsN: pairs.length,
+    singleArcBreakN,
+    partialTearN,
+    persistentArcN,
+    candidates,
+    reconciles,
+    reason: null,
+  };
+}
+
 /** Resolve a work node against the record the workspace actually holds. */
 function resolveNode(state, type, id) {
   if (!NODE_TYPES.has(type) || FORBIDDEN_LINK_TYPES.includes(type)) return null;
@@ -163,6 +308,61 @@ function emptyBoard(reason) {
   };
 }
 
+function emptyTearing() {
+  return {
+    feedbackBlocksN: 0,
+    evaluatedBlocksN: 0,
+    singleArcTearableN: 0,
+    partialSingleTearN: 0,
+    multiArcOnlyN: 0,
+    tearRefusedN: 0,
+    internalPairsEvaluatedN: 0,
+    singleArcBreakPairsN: 0,
+    reconciles: true,
+  };
+}
+
+function emptyAsks(conventions) {
+  return {
+    ruleId: DEPENDENCY_CYCLE_RULE_ID,
+    autoPropagate: conventions.dependencyCycleAutoPropagate,
+    askDueDays: conventions.dependencyCycleAskDueDays,
+    feedbackBlocksN: 0,
+    escalationStates: Object.fromEntries(DEPENDENCY_CYCLE_ESCALATION_STATES.map((s) => [s.key, 0])),
+    askStates: Object.fromEntries(DEPENDENCY_CYCLE_ASK_STATES.map((k) => [k, 0])),
+    openN: 0,
+    answeredN: 0,
+    notIssuedN: 0,
+    notApplicableN: 0,
+    observationsN: 0,
+    reconciles: true,
+  };
+}
+
+/** Index rule-issued asks from `links` + `delegations` so reader and rule agree. */
+export function indexDependencyCycleAsks(state) {
+  const rawLinks = Array.isArray(state?.links) ? state.links : [];
+  const delegations = Array.isArray(state?.delegations) ? state.delegations : [];
+  const taskById = new Map();
+  for (const task of delegations) {
+    if (task && typeof task.id === 'string') taskById.set(task.id, task);
+  }
+  const asks = [];
+  for (const link of rawLinks) {
+    if (!link || link.ruleId !== DEPENDENCY_CYCLE_RULE_ID || link.relation !== 'issues-obligation') continue;
+    if (link.sourceType !== 'person' || link.targetType !== 'delegation') continue;
+    const parsed = parseDependencyCycleAskSummary(link.summary);
+    if (!parsed) continue;
+    asks.push({
+      signature: parsed.signature,
+      seatId: str(link.sourceId),
+      taskId: str(link.targetId),
+      task: taskById.get(str(link.targetId)) || null,
+    });
+  }
+  return asks;
+}
+
 /**
  * Build the register. Options:
  *   `now`               injected clock (only for the read date and matrix windows)
@@ -172,6 +372,7 @@ function emptyBoard(reason) {
 export function buildDependencyCycles(state, { now = new Date(), settings = null, visiblePersonIds = null } = {}) {
   const source = state && typeof state === 'object' ? state : {};
   const generatedOn = dayKey(now);
+  const resolvedSettings = normalizeDependencyCycleSettings(settings || source.settings || {});
   const rawLinks = Array.isArray(source.links) ? source.links : [];
 
   let matrix;
@@ -181,12 +382,17 @@ export function buildDependencyCycles(state, { now = new Date(), settings = null
     const refused = emptyBoard(`The canonical matrix engine could not be built: ${String(error?.message || error)}`);
     refused.condensationAcyclic = false;
     return {
-      engineVersion: DEPENDENCY_CYCLE_ENGINE_VERSION, adr: DEPENDENCY_CYCLE_ADR, generatedOn,
-      board: refused, blocks: [], rollUps: [], interfaces: [], refusals: [], excluded: [],
+      engineVersion: DEPENDENCY_CYCLE_ENGINE_VERSION, adr: DEPENDENCY_CYCLE_ADR,
+      escalationAdr: DEPENDENCY_CYCLE_ESCALATION_ADR, generatedOn,
+      settings: resolvedSettings,
+      board: refused, tearing: emptyTearing(), asks: emptyAsks(resolvedSettings),
+      blocks: [], rollUps: [], interfaces: [], refusals: [], excluded: [],
       matrix: { hasMatrix: false, declaredLinesN: 0, activeLinesN: 0, defectsN: 0 },
       method: [...DEPENDENCY_CYCLE_METHOD], conventions: DEPENDENCY_CYCLE_CONVENTIONS,
       frameworks: DEPENDENCY_CYCLE_FRAMEWORKS, relations: DEPENDENCY_CYCLE_RELATIONS,
       ownerStates: DEPENDENCY_CYCLE_OWNER_STATES, blockStates: DEPENDENCY_CYCLE_BLOCK_STATES,
+      tearStates: DEPENDENCY_CYCLE_TEAR_STATES, tearOutcomes: DEPENDENCY_CYCLE_TEAR_OUTCOMES,
+      escalationStates: DEPENDENCY_CYCLE_ESCALATION_STATES,
     };
   }
 
@@ -227,7 +433,6 @@ export function buildDependencyCycles(state, { now = new Date(), settings = null
     } else {
       continue;
     }
-    if (!NODE_TYPES.has(workType) || !personId) continue;
     const key = nodeKey(workType, workId);
     if (!peopleByNode.has(key)) peopleByNode.set(key, new Set());
     peopleByNode.get(key).add(personId);
@@ -293,7 +498,7 @@ export function buildDependencyCycles(state, { now = new Date(), settings = null
       selfArcKeys.add(from);
       noteRefusal('self-arc', `${from} (${relation})`);
     }
-    arcs.push({ from, to, relation, self });
+    arcs.push({ from, to, relation, self, linkId: str(link.id) });
     pairs.add(`${from}>${to}`);
   }
 
@@ -307,11 +512,14 @@ export function buildDependencyCycles(state, { now = new Date(), settings = null
   if (defectN) noteRefusal('matrix-defect', `${defectN} defect(s) in the declared reporting graph`);
   const lineReach = new Map();
   const allLineIds = new Set();
+  const nodeLabels = new Map();
   for (const key of sorted(nodes.keys())) {
+    const node = nodes.get(key);
     const personIds = sorted(peopleByNode.get(key) || []);
     const lineIds = new Set();
     const managerIds = new Set();
     let unknown = defectN > 0;
+    let outsideSeat = false;
     const reasons = [];
     if (!personIds.length) {
       unknown = true;
@@ -320,20 +528,21 @@ export function buildDependencyCycles(state, { now = new Date(), settings = null
     for (const personId of personIds) {
       if (visiblePersonIds && !visiblePersonIds.has(personId)) {
         unknown = true;
-        noteRefusal('outside-seat', personId);
+        outsideSeat = true;
+        noteRefusal('outside-seat', 'Named person outside this seat’s visible population.');
         reasons.push('A named person is outside this seat’s visible population.');
         continue;
       }
       if (!matrix.roster.has(personId)) {
         unknown = true;
-        noteRefusal('untraced-person', personId);
+        noteRefusal('untraced-person', visiblePersonIds ? 'off-roster person' : personId);
         reasons.push('A named person is not on the active roster.');
         continue;
       }
       const active = (matrix.linesByPerson.get(personId) || []).filter((line) => line && line.active !== false);
       if (!active.length) {
         unknown = true;
-        noteRefusal('no-active-line', personId);
+        noteRefusal('no-active-line', visiblePersonIds ? 'person with no active line' : personId);
         reasons.push('A named person has no active reporting line.');
         continue;
       }
@@ -343,12 +552,18 @@ export function buildDependencyCycles(state, { now = new Date(), settings = null
         allLineIds.add(line.id);
       }
     }
+    const withheld = Boolean(visiblePersonIds && (outsideSeat || !personIds.length));
+    nodeLabels.set(key, {
+      withheld,
+      label: withheld ? `${node.type}: withheld outside seat span` : `${node.type}: ${node.title}`,
+    });
     lineReach.set(key, {
       state: unknown ? 'line-reach-unknown' : 'known',
       personN: personIds.length,
-      personIds,
+      personIds: withheld ? [] : personIds,
       lineIds: sorted(lineIds),
       managerIds: sorted(managerIds),
+      withheld,
       reason: reasons.length ? sorted(new Set(reasons)).join(' ') : null,
     });
   }
@@ -360,6 +575,7 @@ export function buildDependencyCycles(state, { now = new Date(), settings = null
   const incoming = new Map(components.map((_, index) => [index, new Set()]));
   const outgoing = new Map(components.map((_, index) => [index, new Set()]));
   const internalArcs = new Array(components.length).fill(0);
+  const internalArcList = components.map(() => []);
   let externalArcsN = 0;
   for (const arc of arcs) {
     const a = blockOf.get(arc.from);
@@ -367,6 +583,7 @@ export function buildDependencyCycles(state, { now = new Date(), settings = null
     if (a === undefined || b === undefined) continue;
     if (a === b) {
       internalArcs[a] += 1;
+      internalArcList[a].push(arc);
     } else {
       externalArcsN += 1;
       outgoing.get(a).add(b);
@@ -393,6 +610,10 @@ export function buildDependencyCycles(state, { now = new Date(), settings = null
   }
   const condensationAcyclic = orderedN === components.length;
 
+  const indexedAsks = indexDependencyCycleAsks(source);
+  const markers = Array.isArray(source.matrixMarkers) ? source.matrixMarkers : [];
+  const observationsN = markers.filter((m) => m && m.ruleId === DEPENDENCY_CYCLE_RULE_ID && m.kind === 'dependency-cycle').length;
+
   const blocks = components.map((members, index) => {
     const reach = members.map((key) => lineReach.get(key));
     const unknown = reach.some((row) => !row || row.state !== 'known');
@@ -410,11 +631,6 @@ export function buildDependencyCycles(state, { now = new Date(), settings = null
     let apex = null;
     let apexBasis = null;
     if (isFeedback && !unknown && lineState === 'cross-line') {
-      // The joint apex is the lowest seat(s) covering the PEOPLE the block
-      // touches when there are two or more of them: those are the ids whose
-      // ancestor sets can hold a matrix diamond tie. With one person, the
-      // equivalent question is the joint apex of that person's LINE HOLDERS.
-      // The basis is printed, never switched in silence.
       apexBasis = personIds.length >= 2 ? 'people' : 'line-managers';
       apex = matrixJointApex(matrix, apexBasis === 'people' ? personIds : managerIds);
       apexIds = sorted(apex.apexIds || []);
@@ -429,21 +645,105 @@ export function buildDependencyCycles(state, { now = new Date(), settings = null
       : (ownerState === 'ambiguous-apex'
         ? `The matrix DAG returns ${apexIds.length || 'no'} incomparable minimal ancestor(s); both are named and none is picked.`
         : null);
+
+    const signature = isFeedback ? dependencyCycleSignature(members) : null;
+    const tearing = isFeedback
+      ? dependencyCycleTearSensitivity(members, internalArcList[index], {
+        maxTearArcsPerBlock: DEPENDENCY_CYCLE_LIMITS.maxTearArcsPerBlock,
+        lineReach,
+        nodeLabels,
+      })
+      : null;
+
+    let escalation = null;
+    if (isFeedback) {
+      let escState = 'unattributed';
+      let rawSeatId = null;
+      let escBasis = null;
+      if (ownerState === 'single-line') {
+        const holderId = managerIds[0] || null;
+        escBasis = 'single-line-holder';
+        if (!holderId) escState = 'unattributed';
+        else if (holderId === LEADER_ID) escState = 'leader-held';
+        else if (!matrix.roster.has(holderId)) escState = 'off-roster';
+        else { escState = 'unique'; rawSeatId = holderId; }
+      } else if (ownerState === 'joint-apex') {
+        const apexId = apexIds[0] || null;
+        escBasis = 'joint-apex';
+        if (!apexId) escState = 'ambiguous';
+        else if (apexId === LEADER_ID) escState = 'leader-held';
+        else if (!matrix.roster.has(apexId)) escState = 'off-roster';
+        else { escState = 'unique'; rawSeatId = apexId; }
+      } else if (ownerState === 'ambiguous-apex') {
+        escState = 'ambiguous';
+        escBasis = apexBasis;
+      } else {
+        escState = 'unattributed';
+      }
+
+      let askState = 'not-applicable';
+      let askDueOn = null;
+      let askId = null;
+      if (escState === 'unique' && rawSeatId) {
+        const matching = indexedAsks.filter((a) => a.signature === signature && a.seatId === rawSeatId && a.task && a.task.personId === rawSeatId);
+        const openAsk = matching.find((a) => a.task.status === 'active');
+        const answeredAsk = matching.find((a) => (
+          (a.task.status === 'done' && !str(a.task.completionNote).startsWith(DEPENDENCY_CYCLE_CLOSED_PREFIX))
+          || a.task.status === 'returned'
+        ));
+        if (openAsk) {
+          askState = 'open';
+          askDueOn = str(openAsk.task.dueOn) || null;
+          askId = openAsk.taskId;
+        } else if (answeredAsk) {
+          askState = 'answered';
+          askId = answeredAsk.taskId;
+        } else {
+          askState = 'not-issued';
+        }
+      }
+
+      const seatWithheld = Boolean(rawSeatId && visiblePersonIds && !visiblePersonIds.has(rawSeatId));
+      escalation = {
+        state: escState,
+        basis: escBasis,
+        seatId: seatWithheld ? null : rawSeatId,
+        seatName: rawSeatId && !seatWithheld ? (matrix.nodes.get(rawSeatId)?.name || rawSeatId) : null,
+        seatWithheld,
+        askState,
+        askDueOn,
+        askId: seatWithheld ? null : askId,
+      };
+    }
+
+    const printedApexIds = visiblePersonIds
+      ? apexIds.map((id) => (visiblePersonIds.has(id) ? id : 'withheld'))
+      : apexIds;
+
     return {
       key: `blk-${String(index + 1).padStart(3, '0')}`,
       index,
+      signature,
       members: members.map((key) => {
         const node = nodes.get(key);
-        return { key, type: node.type, title: node.title, personN: lineReach.get(key)?.personN ?? 0 };
+        const reachRow = lineReach.get(key);
+        const withheld = Boolean(reachRow?.withheld);
+        return {
+          key: withheld ? `${node.type}:withheld` : key,
+          type: node.type,
+          title: withheld ? 'withheld outside seat span' : node.title,
+          personN: reachRow?.personN ?? 0,
+          withheld,
+        };
       }),
       size: members.length,
       state: isFeedback ? 'feedback-cycle' : 'sequential',
       lineState,
       ownerState,
-      lineIds,
-      managerIds,
+      lineIds: visiblePersonIds ? lineIds.filter((lid) => !lid.startsWith('home:') || visiblePersonIds.has(lid.slice(5))) : lineIds,
+      managerIds: visiblePersonIds ? managerIds.filter((mid) => visiblePersonIds.has(mid)) : managerIds,
       personIds,
-      apexIds,
+      apexIds: printedApexIds,
       apexBasis,
       apexAmbiguous: ownerState === 'ambiguous-apex',
       internalArcsN: internalArcs[index],
@@ -451,6 +751,8 @@ export function buildDependencyCycles(state, { now = new Date(), settings = null
       externalOutN: outgoing.get(index).size,
       order: rank[index],
       reason,
+      tearing,
+      escalation,
     };
   });
 
@@ -462,6 +764,53 @@ export function buildDependencyCycles(state, { now = new Date(), settings = null
   const unattributedFeedback = feedback.filter((block) => block.ownerState === 'unattributed');
   const jointApex = feedback.filter((block) => block.ownerState === 'joint-apex');
   const ambiguousApex = feedback.filter((block) => block.ownerState === 'ambiguous-apex');
+
+  const singleArcTearableN = feedback.filter((b) => b.tearing?.tearState === 'single-arc-tearable').length;
+  const partialSingleTearN = feedback.filter((b) => b.tearing?.tearState === 'partial-single-tear').length;
+  const multiArcOnlyN = feedback.filter((b) => b.tearing?.tearState === 'multi-arc-only').length;
+  const tearRefusedN = feedback.filter((b) => b.tearing?.tearState === 'tear-bound-exceeded').length;
+  const evaluatedFeedback = feedback.filter((b) => b.tearing?.evaluated);
+  const tearingReconciles = (singleArcTearableN + partialSingleTearN + multiArcOnlyN + tearRefusedN === feedback.length)
+    && feedback.every((b) => Boolean(b.tearing?.reconciles));
+  const tearing = {
+    feedbackBlocksN: feedback.length,
+    evaluatedBlocksN: evaluatedFeedback.length,
+    singleArcTearableN,
+    partialSingleTearN,
+    multiArcOnlyN,
+    tearRefusedN,
+    internalPairsEvaluatedN: evaluatedFeedback.reduce((s, b) => s + b.tearing.internalPairsN, 0),
+    singleArcBreakPairsN: evaluatedFeedback.reduce((s, b) => s + b.tearing.singleArcBreakN, 0),
+    reconciles: tearingReconciles,
+  };
+
+  const escCounts = Object.fromEntries(DEPENDENCY_CYCLE_ESCALATION_STATES.map((s) => [s.key, 0]));
+  const askCounts = Object.fromEntries(DEPENDENCY_CYCLE_ASK_STATES.map((k) => [k, 0]));
+  for (const block of feedback) {
+    if (block.escalation) {
+      escCounts[block.escalation.state] = (escCounts[block.escalation.state] || 0) + 1;
+      askCounts[block.escalation.askState] = (askCounts[block.escalation.askState] || 0) + 1;
+    }
+  }
+  const escSum = Object.values(escCounts).reduce((a, b) => a + b, 0);
+  const askSum = Object.values(askCounts).reduce((a, b) => a + b, 0);
+  const asksReconcile = escSum === feedback.length
+    && askSum === feedback.length
+    && (askCounts.open + askCounts.answered + askCounts['not-issued'] === escCounts.unique);
+  const asks = {
+    ruleId: DEPENDENCY_CYCLE_RULE_ID,
+    autoPropagate: resolvedSettings.dependencyCycleAutoPropagate,
+    askDueDays: resolvedSettings.dependencyCycleAskDueDays,
+    feedbackBlocksN: feedback.length,
+    escalationStates: escCounts,
+    askStates: askCounts,
+    openN: askCounts.open,
+    answeredN: askCounts.answered,
+    notIssuedN: askCounts['not-issued'],
+    notApplicableN: askCounts['not-applicable'],
+    observationsN,
+    reconciles: asksReconcile,
+  };
 
   const rollUpMap = new Map();
   for (const block of feedback) {
@@ -498,7 +847,9 @@ export function buildDependencyCycles(state, { now = new Date(), settings = null
   const countsReconcile = blocks.reduce((sum, block) => sum + block.size, 0) === nodesN
     && internalArcsN + externalArcsN === arcsN
     && sequentialN + feedback.length === blocks.length
-    && blocks.length === components.length;
+    && blocks.length === components.length
+    && tearingReconciles
+    && asksReconcile;
   const lineReachComplete = !boundsExceeded && defectN === 0
     && [...lineReach.values()].every((row) => row.state === 'known');
   const figuresComplete = countsReconcile && condensationAcyclic && !boundsExceeded;
@@ -549,7 +900,7 @@ export function buildDependencyCycles(state, { now = new Date(), settings = null
   const activeAdditional = (matrix.lines || []).filter((line) => line.role !== 'primary' && line.active !== false);
   const board = {
     verdict: verdictKey, verdictLabel: verdict.label, tone: verdict.tone,
-    nodesN, arcsN, pairsN: pairs.size, internalArcsN, externalArcsN: externalArcsN,
+    nodesN, arcsN, pairsN: pairs.size, internalArcsN, externalArcsN,
     blocksN: blocks.length, sequentialN, feedbackN: feedback.length,
     crossLineFeedbackN: crossLineFeedback.length,
     singleLineFeedbackN: singleLineFeedback.length,
@@ -565,8 +916,12 @@ export function buildDependencyCycles(state, { now = new Date(), settings = null
   return {
     engineVersion: DEPENDENCY_CYCLE_ENGINE_VERSION,
     adr: DEPENDENCY_CYCLE_ADR,
+    escalationAdr: DEPENDENCY_CYCLE_ESCALATION_ADR,
     generatedOn,
+    settings: resolvedSettings,
     board,
+    tearing,
+    asks,
     blocks,
     rollUps,
     interfaces,
@@ -584,12 +939,17 @@ export function buildDependencyCycles(state, { now = new Date(), settings = null
     relations: DEPENDENCY_CYCLE_RELATIONS,
     ownerStates: DEPENDENCY_CYCLE_OWNER_STATES,
     blockStates: DEPENDENCY_CYCLE_BLOCK_STATES,
+    tearStates: DEPENDENCY_CYCLE_TEAR_STATES,
+    tearOutcomes: DEPENDENCY_CYCLE_TEAR_OUTCOMES,
+    escalationStates: DEPENDENCY_CYCLE_ESCALATION_STATES,
   };
 }
 
 /** Aggregate CSV rows. Every declared column is present on every row. */
 export function dependencyCycleCsvRows(report) {
   const b = report.board;
+  const t = report.tearing || emptyTearing();
+  const a = report.asks || emptyAsks(normalizeDependencyCycleSettings({}));
   const common = {
     engine: report.engineVersion,
     generated_on: report.generatedOn,
@@ -601,6 +961,14 @@ export function dependencyCycleCsvRows(report) {
     unattributed_feedback_n: b.unattributedFeedbackN,
     joint_apex_n: b.jointApexN, ambiguous_apex_n: b.ambiguousApexN,
     distinct_lines_n: b.distinctLineN,
+    single_arc_tearable_blocks_n: t.singleArcTearableN,
+    partial_single_tear_blocks_n: t.partialSingleTearN,
+    multi_arc_only_blocks_n: t.multiArcOnlyN,
+    tear_refused_blocks_n: t.tearRefusedN,
+    escalation_unique_n: a.escalationStates?.unique ?? 0,
+    asks_open_n: a.openN,
+    asks_answered_n: a.answeredN,
+    asks_not_issued_n: a.notIssuedN,
     line_reach_complete: b.lineReachComplete,
     counts_reconcile: b.countsReconcile,
     figures_complete: b.figuresComplete,
@@ -611,7 +979,8 @@ export function dependencyCycleCsvRows(report) {
   const blankBlock = {
     owner_state: 'workspace', block_state: '', block_size: '',
     block_internal_arcs_n: '', block_external_in_n: '', block_external_out_n: '',
-    block_distinct_lines_n: '', upstream_n: '', downstream_n: '',
+    block_distinct_lines_n: '', tear_state: '', single_arc_breaks_n: '',
+    upstream_n: '', downstream_n: '',
   };
   const rows = [{ row_kind: 'workspace', ...common, ...blankBlock }];
 
@@ -626,6 +995,8 @@ export function dependencyCycleCsvRows(report) {
       block_external_in_n: members.reduce((sum, block) => sum + block.externalInN, 0),
       block_external_out_n: members.reduce((sum, block) => sum + block.externalOutN, 0),
       block_distinct_lines_n: new Set(members.flatMap((block) => block.lineIds)).size,
+      tear_state: '',
+      single_arc_breaks_n: '',
       upstream_n: members.reduce((sum, block) => sum + block.externalInN, 0),
       downstream_n: members.reduce((sum, block) => sum + block.externalOutN, 0),
       refusal_reason: b.crossLineClaim ? '' : (b.reason || ''),
@@ -643,9 +1014,11 @@ export function dependencyCycleCsvRows(report) {
       block_external_in_n: block.externalInN,
       block_external_out_n: block.externalOutN,
       block_distinct_lines_n: block.lineIds.length,
+      tear_state: block.tearing?.tearState || '',
+      single_arc_breaks_n: block.tearing?.evaluated ? block.tearing.singleArcBreakN : '',
       upstream_n: block.externalInN,
       downstream_n: block.externalOutN,
-      refusal_reason: block.reason || '',
+      refusal_reason: block.tearing?.reason || block.reason || '',
     });
   }
   return rows;
@@ -654,11 +1027,19 @@ export function dependencyCycleCsvRows(report) {
 /** The paragraph that goes upward. It names no person, line, record or date. */
 export function dependencyCycleBriefText(report) {
   const b = report.board;
+  const t = report.tearing || emptyTearing();
+  const a = report.asks || emptyAsks(normalizeDependencyCycleSettings({}));
   const claims = [
     `Counts ${b.countsReconcile ? 'reconcile' : 'DO NOT reconcile'}; printed figures ${b.figuresComplete ? 'are the computed figures' : 'are incomplete'}.`,
     `Line reach is ${b.lineReachComplete ? 'complete' : 'incomplete'}; the cross-line claim is ${b.crossLineClaim ? 'made' : 'REFUSED'}.`,
   ].join(' ');
-  return `${b.nodesN} work record(s) carry ${b.arcsN} declared precedence arc(s) over ${b.pairsN} distinct pair(s). Exact partitioning yields ${b.blocksN} block(s): ${b.sequentialN} sequential and ${b.feedbackN} coupled feedback block(s), with ${b.internalArcsN} arc(s) inside blocks and ${b.externalArcsN} between them. ${b.crossLineFeedbackN} coupled block(s) cross reporting lines; ${b.jointApexN} have one joint apex and ${b.ambiguousApexN} have incomparable apexes that are all named. ${claims} ${b.reason || ''}`;
+  const tearSummary = b.feedbackN
+    ? ` Counterfactual single-arc tear census: ${t.singleArcTearableN} block(s) uncouple under 1-arc removal, ${t.partialSingleTearN} shrink their core, ${t.multiArcOnlyN} require multi-arc (≥2) tearing and ${t.tearRefusedN} exceed the tear bound.`
+    : '';
+  const askSummary = b.feedbackN
+    ? ` Escalation (${a.ruleId}): ${a.escalationStates?.unique ?? 0} block(s) resolve to one accountable roster seat (${a.openN} ask(s) open, ${a.answeredN} answered, ${a.notIssuedN} not yet issued); ${a.notApplicableN} block(s) have no single roster seat and are observed without substitution.`
+    : '';
+  return `${b.nodesN} work record(s) carry ${b.arcsN} declared precedence arc(s) over ${b.pairsN} distinct pair(s). Exact partitioning yields ${b.blocksN} block(s): ${b.sequentialN} sequential and ${b.feedbackN} coupled feedback block(s), with ${b.internalArcsN} arc(s) inside blocks and ${b.externalArcsN} between them. ${b.crossLineFeedbackN} coupled block(s) cross reporting lines; ${b.jointApexN} have one joint apex and ${b.ambiguousApexN} have incomparable apexes that are all named.${tearSummary}${askSummary} ${claims} ${b.reason || ''}`;
 }
 
 export default buildDependencyCycles;

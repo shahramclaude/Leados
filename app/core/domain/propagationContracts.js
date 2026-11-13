@@ -128,6 +128,7 @@ import { workTurnRule } from './workTurnRules.js';
 import { pausePermitRule } from './pausePermitRules.js';
 import { workforceFlowRule } from './workforceFlowRules.js';
 import { changeSaturationRule } from './changeSaturationRules.js';
+import { dependencyCycleRule } from './dependencyCycleRules.js';
 import { sealRule } from './sealRules.js';
 // ADR-0092: the Differencing Defender declares its contract like every other rule.
 import { differencingRule } from './differencingRules.js';
@@ -1005,6 +1006,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     rule: lineHorizonRule,
     module: 'lineHorizonRules.js',
     purpose: 'RULE-LHZ-01: reads the Matrix Forward Allocation Horizon (`buildLineHorizon`, ADR-0179) on every reporting-line act, convention change and roster change, on explicit `matrix.horizon.scan` / `matrix.scan` scans, and on any other operational write while a declared line boundary sits inside the lead window (`matrixExpiringDays`) or one of its own asks is open. For each exposure that begins inside that window it issues at most ONE dated ask per commit (capped at 8, remainder counted) to the ONE roster seat that owns the fix — the lowest seat above every line in force for an over-booking, above the lines with no declared share for an unknown split, or the home-line manager for an unallocated remainder — with typed `issues-obligation` (the person) and matrix-DAG `rolls-up-to` (every roster ancestor of the owner) provenance. A leader-held, tied or off-roster owner is observed in one identity-free `matrixMarkers` entry and nobody is substituted. It closes its own ask — with the reason written on the task — when the ledger no longer reads the exposure or the owning seat changed, never because the day arrived, and never re-asks an exposure a person answered while it stands. It never edits a line, a share, a date or a roster record; pausable via `matrixAutoPropagate` (an explicit scan always runs); strictly inert in single-chain workspaces.',
+    writes: ['delegations', 'links', 'matrixMarkers'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: dependencyCycleRule,
+    module: 'dependencyCycleRules.js',
+    purpose: 'RULE-CYC-01: reads the Cross-Boundary & Single-Line Dependency Feedback-Cycle Register (`buildDependencyCycles`, ADR-0183 / ADR-0187) with the whole-workspace operator view on declared-link writes, operational work-record writes, reporting-line and roster changes, convention changes and explicit `matrix.cycles.scan` / `matrix.scan` scans. For every coupled feedback block (`feedback-cycle`) whose line reach resolves to ONE active roster seat — the sole line manager for a `single-line` loop (serving both single-chain and matrix workspaces) or the unique `matrixJointApex` for a `cross-line` loop — it keeps at most ONE open dated sequencing ask (bounded at 6 per commit, remainder counted) carrying the exact counterfactual single-arc tear census without ever tearing an edge or choosing which commitment yields, linked by `issues-obligation` and fanned up the matrix DAG via `rolls-up-to`. Leader-held, ambiguous-apex, unattributed or off-roster blocks record one identity-free `matrixMarkers` observation (`kind: \'dependency-cycle\'`) and substitute nobody. It closes its own asks when the cycle clears or its owning seat moves, never re-asks a cycle a human closed while it stands, is fast-exit O(|links|) when no precedence arc or cycle obligation exists, and is pausable via `dependencyCycleAutoPropagate` (an explicit scan always runs).',
     writes: ['delegations', 'links', 'matrixMarkers'],
     emits: [],
     scansWorkspace: true,

@@ -88,6 +88,7 @@ import {
   normalizeChangeSaturationMarkers,
   normalizeChangeSaturationSettings,
 } from './domain/changeSaturationSchema.js';
+import { normalizeDependencyCycleSettings } from './domain/dependencyCycleSchema.js';
 // ADR-0185 (Schema v147): dated Matrix change-impact requests and first-person
 // line responses. Request snapshots normalize before their responses resolve.
 import {
@@ -2225,6 +2226,8 @@ export const DEFAULT_SETTINGS = Object.freeze({
   // window and the automation pause. NO capacity default: a ceiling is a human
   // declaration, so an unset one stays unset and the register prints the refusal.
   ...normalizeChangeSaturationSettings({}),
+  // ADR-0187: dependency-cycle ask window and automation pause (Schema v148 unchanged).
+  ...normalizeDependencyCycleSettings({}),
 });
 
 export const COLLECTIONS = [
@@ -3720,6 +3723,7 @@ export function normalizeSettings(raw) {
     // ADR-0186: named here for the same reason — the read window and the pool
     // disclosure floor are printed by the panel, so they must be carried.
     ...normalizeChangeSaturationSettings(s),
+    ...normalizeDependencyCycleSettings(s),
     ...normalizeStructureHistorySettings(s),
     ...normalizeDifferencesSettings(s),
     ...normalizeFitSettings(s),

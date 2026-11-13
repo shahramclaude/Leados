@@ -171,6 +171,8 @@ import { pausePermitRule } from './pausePermitRules.js';
 import { workforceFlowRule } from './workforceFlowRules.js';
 // ADR-0186 (Schema v148): the Cross-Line Change Saturation Ledger (RULE-CSA-01).
 import { changeSaturationRule } from './changeSaturationRules.js';
+// ADR-0187 (Schema v148 unchanged): Dependency Feedback-Cycle Escalation (RULE-CYC-01).
+import { dependencyCycleRule } from './dependencyCycleRules.js';
 
 
 // ADR-0087: the Operating Cadence Clock. Reads the finished queue after the
@@ -1012,6 +1014,17 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // a ceiling on anybody's behalf, never blocks a change, and is inert with nobody
   // on the roster.
   changeSaturationRule,
+  // ADR-0187: RULE-CYC-01. Reads the Cross-Boundary & Single-Line Dependency
+  // Feedback-Cycle Register (`buildDependencyCycles`, ADR-0183 / ADR-0187) on
+  // link/record/line/roster writes and explicit `matrix.cycles.scan` scans.
+  // Places ONE dated sequencing ask per coupled block with a unique active roster
+  // seat (sole line holder for single-line loops, `matrixJointApex` for cross-line
+  // loops), carries counterfactual single-arc tear sensitivity without picking or
+  // tearing an edge, attaches matrix-DAG `rolls-up-to` provenance, closes its own
+  // asks when the cycle clears or its seat moves, and records identity-free
+  // `matrixMarkers` observations when no single roster seat holds the block.
+  // Registered immediately before `seatRule` and `sealRule`.
+  dependencyCycleRule,
   // ADR-0076: the Operating Seat (vertical roll-up + enforced boundaries).
   // It reads the finished record after every module has propagated, then fans
   // each open item up every leadership ancestor in the reporting tree with one
