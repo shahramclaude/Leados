@@ -102,7 +102,7 @@ async function axeViolations(env, selector = '#view') {
 
 describe('Schema v61 — coupling additivity', () => {
   it('current schema version is 61', () => {
-    assert.equal(SCHEMA_VERSION, 151);
+    assert.equal(SCHEMA_VERSION, 152);
   });
 
   it('creates empty state with couplingMarkers and the coupling settings', () => {

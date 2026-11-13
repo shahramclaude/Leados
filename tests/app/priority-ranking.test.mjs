@@ -208,7 +208,7 @@ function withDom(run) {
 /* ---------------------------------------------------------- 1. registration */
 
 test('registration: schema v151, two ledgers, CSV #144, RULE-SOC-01 as spine rule 121, rights and pause switch', () => {
-  assert.equal(SCHEMA_VERSION, 151);
+  assert.equal(SCHEMA_VERSION, 152);
   for (const key of ['priorityRounds', 'priorityBallots']) assert.ok(COLLECTIONS.includes(key), `${key} is a declared collection`);
   const scope = CSV_EXPORTS.find((entry) => entry.key === PRIORITY_BALLOT_CSV_SCOPE);
   assert.ok(scope, 'CSV #144 is registered');

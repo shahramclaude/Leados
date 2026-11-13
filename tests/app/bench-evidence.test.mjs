@@ -484,8 +484,8 @@ test('CSV scope #123 is aggregate-only, reconciles to the panel and names nobody
 test('schema v137 adds the regression watch ledgers on top of v136 and changes no record', () => {
   const v134 = { schemaVersion: 134, people: [{ id: 'p', name: 'P' }], readiness: [readiness('sam')] };
   const migrated = migrate(v134).raw;
-  assert.equal(SCHEMA_VERSION, 151);
-  assert.equal(migrated.schemaVersion, 151);
+  assert.equal(SCHEMA_VERSION, 152);
+  assert.equal(migrated.schemaVersion, 152);
   assert.deepEqual(migrated.benchEvidenceMarkers, []);
   assert.deepEqual(migrated.lineIntakes, []);
   assert.deepEqual(migrated.benchRegressionReadings, [], 'no window has been frozen in an upgraded workspace');

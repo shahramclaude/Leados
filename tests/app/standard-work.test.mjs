@@ -209,7 +209,7 @@ function withDom(run) {
 /* ---------------------------------------------------------- 1. registration */
 
 test('registration: schema v150, three ledgers, CSV #143, RULE-LSW-01 as spine rule 120, rights and pause switch', () => {
-  assert.equal(SCHEMA_VERSION, 151);
+  assert.equal(SCHEMA_VERSION, 152);
   for (const key of ['standardWorkRoutines', 'standardWorkChecks', 'standardWorkTierActs']) assert.ok(COLLECTIONS.includes(key), `${key} is a declared collection`);
   const scope = CSV_EXPORTS.find((entry) => entry.key === STANDARD_WORK_CSV_SCOPE);
   assert.ok(scope, 'CSV #143 is registered');
@@ -237,7 +237,7 @@ test('MIGRATIONS[149] adds three EMPTY ledgers and declares the conventions; not
   delete v149.settings.standardWorkLapseRun;
   v149.oneOnOnes = [{ id: 'o1' }];
   const next = MIGRATIONS[149](v149);
-  assert.equal(next.schemaVersion, 151);
+  assert.equal(next.schemaVersion, 150);
   assert.deepEqual(next.standardWorkRoutines, []);
   assert.deepEqual(next.standardWorkChecks, []);
   assert.deepEqual(next.standardWorkTierActs, []);

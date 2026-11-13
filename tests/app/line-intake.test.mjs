@@ -109,7 +109,7 @@ const pd = (h) => (h === null || h === undefined ? '—' : (h / 100).toFixed(2))
  * ===================================================================== */
 
 test('the gate is wired into the matrix, the export catalogue and Schema v136', () => {
-  assert.equal(SCHEMA_VERSION, 151, 'schema moved to v140 for Matrix 1:1 Line Coverage completion');
+  assert.equal(SCHEMA_VERSION, 152, 'schema moved to v140 for Matrix 1:1 Line Coverage completion');
   assert.ok(MATRIX_PANELS.some((panel) => panel.key === 'intake'), 'the intake panel is a matrix panel');
   const scope = CSV_EXPORTS.find((entry) => entry.key === 'matrix-intake');
   assert.ok(scope, 'the aggregate scope is in the catalogue');

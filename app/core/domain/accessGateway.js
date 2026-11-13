@@ -58,6 +58,8 @@ const groups = [
   // and recording are open to every altitude — the ACTION narrows each act to
   // the person it belongs to (a check is the owner's alone; a tier act is the
   // addressed leader's alone). Governing the conventions is rank 3–5.
+  ['read-skill-coverage', 'skillCoverageReport'],
+  ['declare-skill-coverage', 'skillDeclareTask skillRetireTask skillRecordQualification'],
   [STANDARD_WORK_RIGHTS.READ, 'standardWorkReport standardWorkBriefText standardWorkCsvRows standardWorkAttentionCount'],
   [STANDARD_WORK_RIGHTS.DECLARE, 'standardWorkDeclareRoutine standardWorkRetireRoutine standardWorkCandidates'],
   [STANDARD_WORK_RIGHTS.RECORD, 'standardWorkRecordCheck standardWorkTierAct'],
@@ -576,6 +578,7 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // ADR-0190: the standard-work board is scoped INSIDE the read model — a seat
 // receives its own routines, those owed to it and those it holds a line over;
 // everything else is counts with a printed reason.
+'skillCoverageReport',
 'standardWorkReport', 'standardWorkBriefText', 'standardWorkAttentionCount', 'standardWorkCandidates']);
 const refusal = (reason) => ({ ok: false, code: 'scope-refusal', error: reason, field: 'scope' });
 
@@ -643,6 +646,7 @@ const MATRIX_LINE_SCOPED = new Set([
   // ADR-0190: declaring a routine may name a person the declaring seat reaches
   // only through a dotted line; the action re-checks the line holder itself.
   'standardWorkDeclareRoutine',
+  'skillRecordQualification',
 ]);
 
 /** Exact method allowlist + rank + record/person scope. No arbitrary API names. */

@@ -102,6 +102,7 @@ import {
 // ADR-0189 (Schema v149 unchanged): the interface-alignment conventions — the
 // dependency window, the ask window and the automation pause. No channel
 // default: a channel is a human agreement, so an absent one stays absent.
+import { normalizeSkillTasks, normalizeSkillActs } from './domain/skillCoverageSchema.js';
 import { normalizeInterfaceAlignmentSettings } from './domain/interfaceAlignmentSchema.js';
 import {
   normalizeStandardWorkChecks,
@@ -831,7 +832,7 @@ export {
 // about what the change puts on a person, and a capacity inferred from level, pay
 // or meeting load would be a limit its author never agreed to. An upgraded
 // workspace therefore opens printing `no capacity declared` — refused, never zero.
-export const SCHEMA_VERSION = 151;
+export const SCHEMA_VERSION = 152;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -3019,6 +3020,9 @@ export const COLLECTIONS = [
   // one is re-derived on read from the ballots and the reporting graph.
   'priorityRounds',
   'priorityBallots',
+  // ADR-0192: human-declared tasks and append-only ILUO attestations.
+  'skillTasks',
+  'skillActs',
 ];
 
 /** Stable empty state. `now` is an ISO string so the result is a pure value. */
@@ -7772,6 +7776,8 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
     raw.aarCorroborationResponses, state.aarCorroborationRequests, warnings, todayDay,
   );
   state.aarAdoptions = normalizeAarAdoptions(raw.aarAdoptions, warnings, todayDay);
+  state.skillTasks = normalizeSkillTasks(raw.skillTasks, warnings);
+  state.skillActs = normalizeSkillActs(raw.skillActs, state.skillTasks, warnings);
   state.standardWorkRoutines = normalizeStandardWorkRoutines(raw.standardWorkRoutines, warnings);
   state.standardWorkChecks = normalizeStandardWorkChecks(raw.standardWorkChecks, state.standardWorkRoutines, warnings);
   state.standardWorkTierActs = normalizeStandardWorkTierActs(raw.standardWorkTierActs, state.standardWorkChecks, warnings);
@@ -9116,6 +9122,11 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  // ADR-0192: additive 151 → 152. No skills inferred from roles or ratings.
+  151: (v151) => ({ ...v151, schemaVersion: 152,
+    skillTasks: v151.skillTasks === undefined ? [] : v151.skillTasks,
+    skillActs: v151.skillActs === undefined ? [] : v151.skillActs,
+  }),
   // 147 → 148: ADR-0186 adds three EMPTY collections and four declared conventions.
   // No demand, band, window or ceiling is back-filled from the change records that
   // already exist: the impacts a change carries say WHO moved, never what the
