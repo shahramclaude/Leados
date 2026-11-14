@@ -195,6 +195,8 @@ import { buildWorkTurns, workTurnCsvRows } from './domain/workTurns.js';
 import { WORK_TURN_CSV_COLUMNS, WORK_TURN_CSV_DESCRIPTOR } from './domain/workTurnRegistry.js';
 import { buildWorkReassignments, workReassignmentCsvRows } from './domain/workReassignment.js';
 import { WORK_REASSIGNMENT_CSV_COLUMNS, WORK_REASSIGNMENT_CSV_DESCRIPTOR } from './domain/workReassignmentRegistry.js';
+import { buildStationCoverage, stationCoverageCsvRows } from './domain/stationCoverage.js';
+import { STATION_COVERAGE_CSV_COLUMNS, STATION_COVERAGE_CSV_DESCRIPTOR } from './domain/stationCoverageRegistry.js';
 import { buildPausePermits, pausePermitCsvRows } from './domain/pausePermits.js';
 import { PAUSE_PERMIT_CSV_COLUMNS, PAUSE_PERMIT_CSV_DESCRIPTOR } from './domain/pausePermitRegistry.js';
 import { STRUCTURE_HISTORY_CSV_COLUMNS } from './domain/structureHistoryRegistry.js';
@@ -1403,6 +1405,11 @@ export const CSV_EXPORTS = [
   // capacity — aggregate only. No person, manager, line, transfer id, work
   // title, note, reason or row-level capacity figure crosses the boundary.
   WORK_REASSIGNMENT_CSV_DESCRIPTOR,
+  // #148 (ADR-0201): skill-constrained simultaneous station coverage —
+  // aggregate, no identities. No person, manager, line, station title, task
+  // title, note or record id; a withheld or unprovable figure exports BLANK with
+  // its reason, never zero.
+  STATION_COVERAGE_CSV_DESCRIPTOR,
 ];
 
 function personLookup(state) {
@@ -6599,6 +6606,18 @@ export function buildScopeTable(state, scope, now) {
       // manager, ask title or free text crosses the boundary.
       const report = buildWorkTurns(state, { now, settings: state.settings || {} });
       return { columns: WORK_TURN_CSV_COLUMNS.map((key) => ({ key, header: key })), rows: workTurnCsvRows(report) };
+    }
+    case 'skill-station-coverage': {
+      // CSV scope #148 (ADR-0201, Schema v157). Built from the SAME reader the
+      // panel renders, so an exported count is provably the count that was
+      // printed. Aggregate only: no person, manager, line, station title, task
+      // title, note or record id. A withheld or unproven figure prints its
+      // reason; it is never a zero.
+      const report = buildStationCoverage(state, { now, settings: state.settings || {} });
+      return {
+        columns: STATION_COVERAGE_CSV_COLUMNS.map((key) => ({ key, header: key })),
+        rows: stationCoverageCsvRows(report),
+      };
     }
     case 'work-reassignments': {
       // CSV scope #147 (Schema v156, ADR-0196). Built from the SAME reader the

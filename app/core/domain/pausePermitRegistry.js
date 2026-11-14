@@ -203,6 +203,10 @@ export const PAUSE_PERMIT_MATRIX_REACH_SWITCHES = Object.freeze([
   'interfaceAlignmentAutoPropagate',
   // ADR-0190: the standard-work automation switch — a printed, authorisable pause.
   'standardWorkAutoPropagate',
+  // ADR-0201: the station-coverage switch. The rule reads the reporting graph for
+  // the joint apex of every deficient station set, so silencing it reaches a
+  // second line — and that line's manager is not told.
+  'stationCoverageAutoPropagate',
   // ADR-0191: the priority-ballot automation switch. The rule reads the
   // reporting graph for every joint apex, so silencing it reaches a second line.
   'priorityBallotAutoPropagate',
@@ -248,6 +252,7 @@ export const PAUSE_PERMIT_REACH_RULES = Object.freeze({
   aarCorroborationAutoPropagate: 'aarCorroborationRules.js',
   interfaceAlignmentAutoPropagate: 'interfaceAlignmentRules.js',
   standardWorkAutoPropagate: 'standardWorkRules.js',
+  stationCoverageAutoPropagate: 'stationCoverageRules.js',
   priorityBallotAutoPropagate: 'priorityRankingRules.js',
   goalCommitmentAutoPropagate: 'goalCommitmentRules.js',
   chargebackPostingAutoPropagate: 'chargebackPostingRules.js',

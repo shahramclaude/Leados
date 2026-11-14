@@ -185,6 +185,7 @@ import { dependencyCycleRule } from './dependencyCycleRules.js';
 import { aarCorroborationRule } from './aarCorroborationRules.js';
 import { interfaceAlignmentRule } from './interfaceAlignmentRules.js';
 import { standardWorkRule } from './standardWorkRules.js';
+import { stationCoverageRule } from './stationCoverageRules.js';
 import { priorityRule } from './priorityRankingRules.js';
 import { goalCommitmentRule } from './goalCommitmentRules.js';
 
@@ -1080,6 +1081,16 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // and asks nobody. It never records a check or a tier act and never rates a
   // leader. Registered immediately before `seatRule` and `sealRule`.
   standardWorkRule,
+  // ADR-0201: skill-constrained simultaneous station coverage (RULE-SSC-01).
+  // Reads the ONE station-coverage reader with the whole-workspace view. A
+  // window whose simultaneous demand is PROVEN infeasible — exact deficient set,
+  // nobody silent — becomes ONE dated ask to the LOWEST JOINT APEX of the
+  // deficient stations' holders; a window that cannot be proven either way
+  // because qualified people made no availability statement becomes ONE dated
+  // ask to its holder to obtain them. It never assigns, schedules or fills a
+  // station, never infers availability and never rates a person. Registered
+  // immediately before `seatRule` and `sealRule`.
+  stationCoverageRule,
   // ADR-0191: the Cross-Line Priority Ballot register (RULE-SOC-01). Reads the
   // ONE reader with the whole-workspace view. An overdue frozen ballot becomes
   // ONE dated ask to the holder the round froze — never to a later holder of the

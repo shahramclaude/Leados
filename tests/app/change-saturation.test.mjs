@@ -221,14 +221,14 @@ function withDom(run) {
 /* ------------------------------------------------------------- 1. registration */
 
 test('registration: schema v148, the 34th matrix panel, CSV scope #140, RULE-CSA-01, one safe read', () => {
-  assert.equal(SCHEMA_VERSION, 156);
+  assert.equal(SCHEMA_VERSION, 157);
   assert.ok(MATRIX_PANELS.some((panel) => panel.key === 'change-saturation'), 'the panel is on the matrix tab bar');
   assert.equal(MATRIX_PANELS.filter((panel) => panel.key === 'change-saturation').length, 1, 'exactly one panel entry');
   assert.equal(MATRIX_PANELS.length, 38, 'the 38th matrix panel is ADR-0196’s Transfer gate, after ADR-0191 priority, ADR-0193 goal commitments and ADR-0194 postings');
   const scope = CSV_EXPORTS.find((entry) => entry.key === CHANGE_SATURATION_CSV_SCOPE);
   assert.ok(scope, 'CSV #140 is registered');
   assert.equal(scope.sensitive, false, 'the export is aggregate-only, so it is not a sensitive scope');
-  assert.equal(CSV_EXPORTS.length, 147, 'the export count moved from 139 to 140 and nothing else did');
+  assert.equal(CSV_EXPORTS.length, 148, 'the export count moved from 139 to 140 and nothing else did');
   assert.ok(SAFE_READS.has('changeSaturationReport'), 'the seat-scoped board is a declared safe read');
   assert.ok(!SAFE_READS.has('changeSaturationDeclareDemand'), 'declaring a demand is NOT a safe read: it writes');
   const contract = PROPAGATION_CONTRACTS.find((c) => c.rule?.id === 'changeSaturationRule');

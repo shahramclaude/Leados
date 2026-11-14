@@ -134,6 +134,7 @@ import { aarCorroborationRule } from './aarCorroborationRules.js';
 import { dependencyCycleRule } from './dependencyCycleRules.js';
 import { interfaceAlignmentRule } from './interfaceAlignmentRules.js';
 import { standardWorkRule } from './standardWorkRules.js';
+import { stationCoverageRule } from './stationCoverageRules.js';
 import { priorityRule } from './priorityRankingRules.js';
 import { goalCommitmentRule } from './goalCommitmentRules.js';
 import { sealRule } from './sealRules.js';
@@ -1065,6 +1066,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     rule: standardWorkRule,
     module: 'standardWorkRules.js',
     purpose: 'RULE-LSW-01: reads Leader Standard Work & Tiered Daily Management (`buildStandardWork`, ADR-0190) with the whole-workspace view on every operational write. A routine whose most recent closed slots — at least the declared lapse run — hold no completed check becomes ONE dated go-and-see ask to the manager of the line the routine is owed under; an abnormality escalated to a leader becomes ONE dated ask in that leader’s queue, due at the end of the declared tier window. Asks are idempotent per condition signature, carry matrix-DAG `rolls-up-to` provenance, close themselves when the condition clears or its seat moves, and are bounded per commit. Where the owner holds several lines and named none, the named line ended, the holder left the roster or the next tier is the workspace leader, it records an identity-free `matrixMarkers` observation and asks nobody. It never records a check, never acts for a tier and never rates a leader.',
+    writes: ['delegations', 'links', 'matrixMarkers'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: stationCoverageRule,
+    module: 'stationCoverageRules.js',
+    purpose: 'RULE-SSC-01: reads skill-constrained simultaneous station coverage (`buildStationCoverage`, ADR-0201) with the whole-workspace view on window, station and availability writes, ILUO attestation writes, reporting-line and roster changes, convention changes and explicit `stations.scan` / `matrix.scan` scans. Two conditions, each filed at most once per deterministic signature (`ssc1:…`) and bounded at 6 per commit with the remainder counted: (a) `proven-shortage` — a live window whose simultaneous station demand is PROVEN infeasible by exact capacitated bipartite matching, i.e. a minimised deficient set with an exact integer deficit and NO silent qualified person in the pool — addressed to the LOWEST JOINT APEX of the deficient stations’ holders, naming the exact deficit and asking for a human decision (add a qualified available person, move or drop a station, reduce declared demand, or declare the window will run short); (b) `unproven-consent` — a live window that cannot be proven either way because qualified people in its pools made no availability statement — addressed to that window’s own holder to obtain them, because silence is neither unavailability nor consent. Asks carry typed `issues-obligation` and matrix-DAG `rolls-up-to` provenance and close themselves when the condition clears or its seat moves; a past window is never asked about. A leader-held, unresolved-apex or off-roster condition records ONE identity-free `matrixMarkers` observation (kind: `skill-station-coverage`) and substitutes nobody. It never assigns a person to a station, never schedules, never fills a station, never infers availability, consent, demand or qualification, never edits a reporting line and never rates a person; pausable via `stationCoverageAutoPropagate` (the pause governs EVERY path, including explicit scans).',
     writes: ['delegations', 'links', 'matrixMarkers'],
     emits: [],
     scansWorkspace: true,
