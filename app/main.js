@@ -177,6 +177,11 @@ import { renderPremises } from './views/premises.js';
 import { buildPremiseReport } from './core/domain/premises.js';
 import { renderAnomaly } from './views/anomaly.js';
 import { assessAnomaly, generateBoardBrief, extractModuleSeries } from './core/domain/anomaly.js';
+import { renderEfficiencyHub } from './views/efficiencyHub.js';
+import { enablePerf, installPerfDebug } from './core/perf.js';
+import { intelligenceHubRead, registerIntelligenceDomain } from './core/domain/intelligenceHub.js';
+import { autoClassify as autoClassifyCase } from './core/domain/automationOrchestrator.js';
+import { quotaWarningFor as quotaWarningForNav } from './core/storeOptimizations.js';
 import { renderDynamics } from './views/dynamics.js';
 import { dynamicsAttentionCount } from './core/domain/dynamics.js';
 import { renderCapital } from './views/capital.js';
@@ -305,6 +310,7 @@ function safeDecode(segment) {
 
 export const NAV = [
   { section: 'Overview', items: [
+    { route: 'efficiency', label: 'Efficiency Hub', icon: '⚡', badge: 'efficiency' },
     { route: 'mission', label: 'Mission Control', icon: '◉', badge: 'mission' },
     // ADR-0076: the app's second map. The Command Chain says which altitude a
     // piece of work belongs to; the Altitude Lens says which altitude YOU are
@@ -544,6 +550,7 @@ export const NAV = [
 ];
 
 const RENDERERS = {
+  efficiency: (ctx) => renderEfficiencyHub(ctx),
   assurance: (ctx) => renderAssurance(ctx),
   today: (ctx) => ctx.seatContext?.seat && !ctx.seatContext.seat.fullAccess ? renderMission(ctx) : renderToday(ctx),
   mission: (ctx) => renderMission(ctx),
@@ -975,9 +982,24 @@ export function parseRoute(hash) {
   return { route: known ? route : 'notfound', segments, query: new URLSearchParams(queryPart || '') };
 }
 
-export function createApp({ root, storage, now = () => new Date(), idFactory, crypto, kdfIterations, minKdfIterations } = {}) {
-  const store = createStore({ storage, now, idFactory, crypto, kdfIterations, minKdfIterations });
+export function createApp({ root, storage, now = () => new Date(), idFactory, crypto, kdfIterations, minKdfIterations, enableRuleIndex = true } = {}) {
+  const store = createStore({ storage, now, idFactory, crypto, kdfIterations, minKdfIterations, enableRuleIndex });
   const api = createApi(store, { now, idFactory });
+  // Efficiency pillar: enable lightweight perf instrumentation and expose debug.
+  try { enablePerf(); installPerfDebug(typeof window !== 'undefined' ? window : null); } catch {}
+  // Intelligence pillar: register core signal domains into the fusion hub.
+  try {
+    const domains = [
+      ['resilience', () => import('./core/domain/resilience.js').then((m) => m.resilienceSignals || m.buildResilienceReport)],
+      ['retention', () => import('./core/domain/retention.js').then((m) => m.retentionSignals)],
+      ['power', () => import('./core/domain/power.js').then((m) => m.powerSignals)],
+    ];
+    // Lazy registration: if a domain's signal function is synchronously available, register it.
+    // Otherwise domains register themselves at view render time.
+    for (const [name, loader] of domains) {
+      loader().then((fn) => { if (typeof fn === 'function') try { registerIntelligenceDomain(name, fn); } catch {} }).catch(() => {});
+    }
+  } catch {}
   // Signal generation includes several cross-domain projections and seeded
   // simulations. Navigation badges and the active screen often request the
   // exact same daily read during one render, so share it for this immutable
@@ -1482,6 +1504,14 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
         if (cap.forecast.lateTargetCount > 0) count += 1;
         if (cap.model.demand.wanted.length > 0) count += 1;
         return count;
+      })(),
+      // Efficiency hub: quota warning, perf slow samples, or converging clusters.
+      efficiency: (() => {
+        const warn = quotaWarningForNav(state);
+        if (warn) return 1;
+        const hub = (() => { try { return intelligenceHubRead(state, at); } catch { return null; } })();
+        if (hub && hub.convergingClusters > 0) return hub.convergingClusters;
+        return 0;
       })(),
     };
   }

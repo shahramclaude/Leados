@@ -3278,3 +3278,22 @@ details[open] > .nav-summary::after { content: '▾'; }
 .lsw-slot-abnormal { color: var(--warn); }
 .lsw-slot-missed, .lsw-slot-unrecorded { color: var(--bad); }
 .standard-work-view .brief-text, .brief-text { white-space: pre-wrap; font-size: 13px; }
+
+/* ── Efficiency Hub ───────────────────────────────────────────── */
+.view-efficiency-hub .hub-section { margin-bottom: 32px; }
+.view-efficiency-hub .hub-section h2 { font-size: 18px; margin-bottom: 12px; }
+.view-efficiency-hub .grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.view-efficiency-hub .kv-table { width: 100%; font-size: 13px; border-collapse: collapse; }
+.view-efficiency-hub .kv-table th { text-align: left; color: var(--muted); font-weight: 600; padding: 4px 8px 4px 0; white-space: nowrap; }
+.view-efficiency-hub .kv-table td { padding: 4px 0; }
+.view-efficiency-hub .signal-list { list-style: disc; padding-left: 18px; }
+.view-efficiency-hub .signal-list li { margin-bottom: 6px; font-size: 13px; }
+.view-efficiency-hub .next-list { list-style: disc; padding-left: 18px; }
+.view-efficiency-hub .next-list li { margin-bottom: 4px; font-size: 13px; }
+.view-efficiency-hub .card-accent { border-left: 3px solid var(--accent); }
+.view-efficiency-hub .perf-details { margin-top: 12px; }
+.view-efficiency-hub .perf-details summary { cursor: pointer; font-weight: 600; font-size: 13px; }
+.view-efficiency-hub .data-table { width: 100%; font-size: 12px; border-collapse: collapse; margin-top: 8px; }
+.view-efficiency-hub .data-table th, .view-efficiency-hub .data-table td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: left; }
+.view-efficiency-hub .row-warn { background: var(--warn-soft); }
+@media (max-width: 1100px) { .view-efficiency-hub .grid-3 { grid-template-columns: minmax(0, 1fr); } }

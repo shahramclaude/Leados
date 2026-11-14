@@ -142,3 +142,32 @@ export function computeScore(input: ScoringInput): ScoreResult {
 
   return { total, breakdown };
 }
+
+// ── Efficiency: memoized scorer (LRU, keyed by stable JSON of input) ──
+const SCORE_CACHE = new Map<string, ScoreResult>();
+const SCORE_CACHE_MAX = 500;
+
+function cacheKey(input: ScoringInput): string {
+  return `${input.budget}|${input.companySize}|${input.engagementScore}|${input.titleSeniority}|${input.icpFit}|${input.responseHistory}`;
+}
+
+export function computeScoreMemoized(input: ScoringInput): ScoreResult {
+  const key = cacheKey(input);
+  const hit = SCORE_CACHE.get(key);
+  if (hit) return hit;
+  const result = computeScore(input);
+  if (SCORE_CACHE.size >= SCORE_CACHE_MAX) {
+    const first = SCORE_CACHE.keys().next().value;
+    if (first) SCORE_CACHE.delete(first);
+  }
+  SCORE_CACHE.set(key, result);
+  return result;
+}
+
+export function clearScoreCache() {
+  SCORE_CACHE.clear();
+}
+
+export function scoreCacheSize(): number {
+  return SCORE_CACHE.size;
+}
