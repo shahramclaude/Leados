@@ -112,6 +112,15 @@ import {
 // dependency window, the ask window and the automation pause. No channel
 // default: a channel is a human agreement, so an absent one stays absent.
 import { normalizeSkillTasks, normalizeSkillActs } from './domain/skillCoverageSchema.js';
+// ADR-0201 (Schema v157): skill-constrained simultaneous station coverage. Three
+// append-only ledgers and three declared conventions; no verdict, matching,
+// deficient set or station state is ever stored — every one is re-derived on read.
+import {
+  normalizeSkillStationRows,
+  normalizeStationAvailability,
+  normalizeStationCoverageSettings,
+  normalizeStationWindows,
+} from './domain/stationCoverageSchema.js';
 import { normalizeInterfaceAlignmentSettings } from './domain/interfaceAlignmentSchema.js';
 import {
   normalizeStandardWorkChecks,
@@ -882,7 +891,15 @@ export {
 // EMPTY: no receiving-line consent, capacity reservation, effort estimate or
 // transfer is inferred from a task title, a reporting line, an intake or a
 // work-turn finding.
-export const SCHEMA_VERSION = 156;
+// v157 adds Skill-Constrained Simultaneous Station Coverage (ADR-0201): three
+// append-only ledgers — `stationWindows`, `skillStations`, `stationAvailability`
+// — and three declared conventions. All three start EMPTY. An ILUO register says
+// who CAN work a task, never where they must be at 6 a.m. on Monday, so no
+// window, station, headcount demand or availability statement is inferred from
+// the tasks and attestations an upgraded workspace already holds. Nothing
+// derived is stored either: feasibility, the matching and the deficient set are
+// recomputed on every read, so a replayed workspace cannot carry a stale proof.
+export const SCHEMA_VERSION = 157;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -2317,6 +2334,9 @@ export const DEFAULT_SETTINGS = Object.freeze({
   // ADR-0190: leader standard work conventions (window, slot floor, lapse run,
   // tier window, working week, automation switch).
   ...normalizeStandardWorkSettings({}),
+  // ADR-0201: station-coverage conventions (ask window, disclosure floor and the
+  // automation switch). Distributed as one declared capability, not two halves.
+  ...normalizeStationCoverageSettings({}),
   // ADR-0191: the cross-line priority ballot conventions — the ballot deadline,
   // the follow-up ask window and the ballot floor below which no aggregate is
   // claimed. Clamped on load, refused (never clamped) by the setter, and printed
@@ -3087,6 +3107,11 @@ export const COLLECTIONS = [
   // ADR-0192: human-declared tasks and append-only ILUO attestations.
   'skillTasks',
   'skillActs',
+  // ADR-0201 (Schema v157): declared simultaneous windows, the stations inside
+  // them, and dated availability statements. Nothing derived is stored.
+  'stationWindows',
+  'skillStations',
+  'stationAvailability',
   // ADR-0193 + ADR-0195 (Schema v153 → v155): the Cross-Line Goal Commitment
   // Conflict register. One append-only ledger of dated declarations plus the
   // rule's marker ledger. No overlap, verdict, peak day, capacity sum, target
@@ -3877,6 +3902,11 @@ export function normalizeSettings(raw) {
     // prints would be a number the record does not hold.
     ...normalizeInterfaceAlignmentSettings(s),
     ...normalizeStandardWorkSettings(s),
+    // ADR-0201: listed here because `normalizeSettings` rebuilds the settings
+    // object field by field — a key spread into DEFAULT_SETTINGS but not named
+    // here would be silently DROPPED on every load, and the printed ask window
+    // and disclosure floor would be numbers the record does not hold.
+    ...normalizeStationCoverageSettings(s),
     // ADR-0191: named here for the same reason — this object is rebuilt field by
     // field, so a ballot convention not spread here would vanish on every load
     // and the pause census would never see the ballot switch.
@@ -7864,6 +7894,10 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.aarAdoptions = normalizeAarAdoptions(raw.aarAdoptions, warnings, todayDay);
   state.skillTasks = normalizeSkillTasks(raw.skillTasks, warnings);
   state.skillActs = normalizeSkillActs(raw.skillActs, state.skillTasks, warnings);
+  state.stationWindows = normalizeStationWindows(raw.stationWindows, warnings);
+  state.skillStations = normalizeSkillStationRows(raw.skillStations, state.stationWindows, warnings);
+  state.stationAvailability = normalizeStationAvailability(raw.stationAvailability,
+    { windows: state.stationWindows, stations: state.skillStations, people: null }, warnings);
   state.standardWorkRoutines = normalizeStandardWorkRoutines(raw.standardWorkRoutines, warnings);
   state.standardWorkChecks = normalizeStandardWorkChecks(raw.standardWorkChecks, state.standardWorkRoutines, warnings);
   state.standardWorkTierActs = normalizeStandardWorkTierActs(raw.standardWorkTierActs, state.standardWorkChecks, warnings);
@@ -9233,6 +9267,20 @@ export const MIGRATIONS = {
   // reservation inferred from its text, owner or current reporting lines; an
   // upgraded workspace honestly reads every such rotation as not yet served by
   // this gate until a human records both sides of a transfer.
+  // 156 → 157: ADR-0201 adds three EMPTY ledgers and three declared
+  // conventions. No station, window, availability statement, capacity or
+  // concurrent requirement is inferred from the tasks and attestations that
+  // already exist: an ILUO register says who CAN work a task, never where they
+  // must be at 6 a.m. on Monday, and inventing a window at upgrade time would
+  // fabricate a shift nobody declared — then print it as provably staffable.
+  156: (v156) => ({
+    ...v156,
+    schemaVersion: 157,
+    stationWindows: Array.isArray(v156.stationWindows) ? v156.stationWindows : [],
+    skillStations: Array.isArray(v156.skillStations) ? v156.skillStations : [],
+    stationAvailability: Array.isArray(v156.stationAvailability) ? v156.stationAvailability : [],
+    settings: { ...(v156.settings || {}), ...normalizeStationCoverageSettings(v156.settings || {}) },
+  }),
   155: (v155) => ({
     ...v155,
     schemaVersion: 156,

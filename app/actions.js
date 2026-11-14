@@ -92,6 +92,9 @@ import { createChangeSaturationActions } from './core/domain/changeSaturationAct
 // append-only and seat-checked at the same boundary as every other command.
 import { createAarCorroborationActions } from './core/domain/aarCorroborationActions.js';
 import { createSkillCoverageActions } from './core/domain/skillCoverageActions.js';
+// ADR-0201: skill-constrained simultaneous station coverage — windows, stations,
+// dated availability statements and the governed conventions.
+import { createStationCoverageActions } from './core/domain/stationCoverageActions.js';
 import { createStandardWorkActions } from './core/domain/standardWorkActions.js';
 import { createPriorityRankingActions } from './core/domain/priorityRankingActions.js';
 import { createGoalCommitmentActions } from './core/domain/goalCommitmentActions.js';
@@ -20263,6 +20266,7 @@ export function createApi(store, options = {}) {
   Object.assign(api, createAarCorroborationActions(store, { now: clock, idFactory: id }));
   // ADR-0190: Leader Standard Work & Tiered Daily Management.
   Object.assign(api, createSkillCoverageActions(store, { now: clock, idFactory: id }));
+  Object.assign(api, createStationCoverageActions(store, { now: clock, idFactory: id }));
   Object.assign(api, createStandardWorkActions(store, { now: clock, idFactory: id }));
   Object.assign(api, createPriorityRankingActions(store, { now: clock, idFactory: id }));
   // ADR-0193: the Cross-Line Goal Commitment Conflict register — declarations,

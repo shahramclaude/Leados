@@ -644,6 +644,13 @@ export const ACTION_RIGHTS = Object.freeze({
   // ADR-0190: Leader Standard Work & Tiered Daily Management.
   'read-skill-coverage': { minRank: 1, maxRank: 5, label: 'Read task qualification coverage within your span' },
   'declare-skill-coverage': { minRank: 1, maxRank: 5, label: 'Declare your own task standards and attest qualifications only for your own reporting-line pool' },
+  // ADR-0201: station coverage. A shift exists at every altitude; declaring one
+  // is narrowed by the action to the holder's own span, and the availability
+  // statement is the person's own act (or their line holder's, printed as such).
+  'read-station-coverage': { minRank: 1, maxRank: 5, label: 'Read simultaneous station coverage and its provable shortages within your span' },
+  'declare-station-coverage': { minRank: 1, maxRank: 5, label: 'Declare your own windows and stations, never another manager’s' },
+  'declare-station-availability': { minRank: 1, maxRank: 5, label: 'Declare your own availability for a declared window, or state it for a person whose line you hold' },
+  'govern-station-coverage': { minRank: 3, maxRank: 5, label: 'Set the station-coverage ask window and disclosure floor' },
   'read-standard-work': { minRank: 1, maxRank: 5, label: 'Read the leader standard work board' },
   'declare-standard-work': { minRank: 1, maxRank: 5, label: 'Declare or retire a standard-work routine for yourself or a leader you hold a line over' },
   'record-standard-work': { minRank: 1, maxRank: 5, label: 'Record your own standard-work check, or your own tier act on an abnormality addressed to you' },

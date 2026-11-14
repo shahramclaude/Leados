@@ -1,3 +1,42 @@
+## 2026-11-14 — Session 269 architecture delta (Schema v156 → v157)
+
+**One reader decides a subset question.** `app/core/domain/stationCoverage.js`
+(`buildStationCoverage`) is the single read model behind
+`#/standard-work?panel=stations`, the brief, CSV #148 and `RULE-SSC-01`. It holds
+the only feasibility computation in the tree: an exact integer maximum-flow
+(`maxFlowInt`, Dinic) over `source → station (demand) → person (1) → sink
+(capacity)`, returning both the flow value and the residual-reachable set — the
+latter being the min cut that names the deficient stations. Nothing else in the
+product may compute, cache or store a feasibility verdict; the three ledgers
+(`stationWindows`, `skillStations`, `stationAvailability`) hold declarations only.
+
+**Two vocabularies that will bite.** The ledgers' settings keys
+(`stationCoverageAskDays`, …) and the reader's own `report.conventions` object
+(`askDays`, …) are different namespaces; indexing one with the other yields
+`undefined`, which became an `Invalid Date` due date in the first end-to-end run.
+`normalizeSettings` in `app/core/schema.js` rebuilds the settings object field by
+field, so a new convention must be spread into **both** `DEFAULT_SETTINGS` and
+`normalizeSettings` or it is silently dropped on every load. Both are now wired
+and commented at the call site.
+
+**Layer boundaries held.** Pure read model (`stationCoverage.js`) ← fail-closed
+storage contract (`stationCoverageSchema.js`, invalid rows retained, never
+repaired) ← actions (`stationCoverageActions.js`, real store/event pipeline, act
+narrowed by the ACTION to the holder's own span) ← view
+(`app/views/stationCoveragePanel.js`, imports no domain maths). The rule
+(`stationCoverageRules.js`) reads the reader with the whole-workspace view and
+touches only `delegations`, `links` and `matrixMarkers`.
+
+**Spine and export.** `RULE-SSC-01` is rule 125 of 125 `PROPAGATION_CONTRACTS`,
+registered before `seatRule`/`sealRule`; `stationCoverageAutoPropagate` is on
+`PAUSE_PERMIT_MATRIX_REACH_SWITCHES` and `PAUSE_PERMIT_REACH_RULES`. CSV #148
+`skill-station-coverage` is aggregate-only and built from the same reader.
+
+**Checks.** Canonical boundary **850 app modules / 256 suites / 23 doc checks**;
+docs links **1,184 across 320 files**; `check:a11y` **119 routes clean**; the new
+stations panel is axe-clean (0 violations). Standalone: **13,284,068 bytes / 847
+source modules / Schema v157**. ADR-0201.
+
 ## 2026-11-14 — Session 266 architecture delta (Schema v156, no bump)
 
 **The shell memoises, the engine does not move.** `app/core/storeOptimizations.js`

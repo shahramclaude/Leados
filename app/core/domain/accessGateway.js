@@ -61,6 +61,15 @@ const groups = [
   // addressed leader's alone). Governing the conventions is rank 3–5.
   ['read-skill-coverage', 'skillCoverageReport'],
   ['declare-skill-coverage', 'skillDeclareTask skillRetireTask skillRecordQualification'],
+  // ADR-0201: skill-constrained simultaneous station coverage. Reading is open
+  // to every altitude (the reader narrows rows to the seat's reach); declaring a
+  // window or station is narrowed by the ACTION to the holder's own span, and an
+  // availability statement is the person's own act or their line holder's,
+  // printed as such. Governing the ask window and disclosure floor is rank 3–5.
+  ['read-station-coverage', 'stationCoverageReport stationCoverageCsvRows stationCoverageBriefText'],
+  ['declare-station-coverage', 'stationCoverageDeclareWindow stationCoverageRetireWindow stationCoverageDeclareStation stationCoverageRetireStation'],
+  ['declare-station-availability', 'stationCoverageDeclareAvailability stationCoverageWithdrawAvailability'],
+  ['govern-station-coverage', 'stationCoverageSetConventions'],
   [STANDARD_WORK_RIGHTS.READ, 'standardWorkReport standardWorkBriefText standardWorkCsvRows standardWorkAttentionCount'],
   [STANDARD_WORK_RIGHTS.DECLARE, 'standardWorkDeclareRoutine standardWorkRetireRoutine standardWorkCandidates'],
   [STANDARD_WORK_RIGHTS.RECORD, 'standardWorkRecordCheck standardWorkTierAct'],
@@ -615,6 +624,7 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // receives its own routines, those owed to it and those it holds a line over;
 // everything else is counts with a printed reason.
 'skillCoverageReport',
+'stationCoverageReport', 'stationCoverageCsvRows', 'stationCoverageBriefText',
 'standardWorkReport', 'standardWorkBriefText', 'standardWorkAttentionCount', 'standardWorkCandidates']);
 const refusal = (reason) => ({ ok: false, code: 'scope-refusal', error: reason, field: 'scope' });
 
