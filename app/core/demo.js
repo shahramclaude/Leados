@@ -1792,6 +1792,18 @@ function seedSignalPath(state, now) {
   if (!state.signalClasses.length) return;
 
   const declared = support?.frozen?.reach ?? 0;
+  /**
+   * A probe records how the leader ACTUALLY came to know, and `delivered` means
+   * exactly what `settleSignalProbe` means by it: the escalation chain carried
+   * it. A skip-level, a monitor and an accident are *alternative* channels — the
+   * finding they support is that the declared chain did not deliver, which is
+   * the whole reason a probe ledger exists. Latency is recorded for every
+   * channel that produced a date, not only the declared one.
+   *
+   * The demo is therefore built to CONTRADICT its own declaration: one of seven
+   * arrivals came through the chain against a declared 28.9%, so the register
+   * teaches the lesson instead of reproducing the number it is meant to test.
+   */
   const probe = (id, classId, offset, truth, learnedVia, latency) => {
     const exists = addDays(today, -offset);
     const learned = learnedVia === 'never' ? null : addDays(exists, latency ?? 3);
@@ -1804,7 +1816,7 @@ function seedSignalPath(state, now) {
       learnedOn: learned,
       learnedVia,
       delivered: learnedVia === 'escalation',
-      latencyDays: learnedVia === 'escalation' ? latency ?? 3 : null,
+      latencyDays: learned ? (latency ?? 3) : null,
       status: 'settled',
       prediction: { reach: declared, latencyDays: support?.frozen?.latencyDays ?? null, frozenOn: addDays(today, -21) },
       settledOn: learned || addDays(today, -1),
@@ -1818,7 +1830,7 @@ function seedSignalPath(state, now) {
   const supportProbes = support ? [
     probe('sigprobe-demo-1', support.id, 60, 'event', 'escalation', 4),
     probe('sigprobe-demo-2', support.id, 52, 'event', 'accident', null),
-    probe('sigprobe-demo-3', support.id, 45, 'event', 'escalation', 9),
+    probe('sigprobe-demo-3', support.id, 45, 'event', 'monitoring', 9),
     probe('sigprobe-demo-4', support.id, 38, 'event', 'never', null),
     probe('sigprobe-demo-5', support.id, 31, 'event', 'skip-level', null),
     probe('sigprobe-demo-6', support.id, 24, 'event', 'accident', null),
@@ -1849,17 +1861,24 @@ function seedSignalPath(state, now) {
     updatedAt: stampFor(addDays(today, -5)),
   } : null;
 
-  for (const row of supportProbes) {
-    const source = [
-      'A rota gap that nobody escalated',
-      'A backlog spike visible only in the queue',
-      'Two customers pulled out mid-week',
-      'An SLA breach found in the monthly report',
-      "A shift lead\u2019s warning nobody passed on",
-      'A renewal at risk raised after the fact',
-    ];
-    row.label = source[(Number(String(row.id).replace(/\D/g, '')) - 1) % source.length] || 'Rota risk';
-  }
+  // One story per probe, in the order above, so each label is true of its own
+  // row: a probe learned 'accident' is a backlog spike found by chance, a
+  // 'skip-level' probe is the one the lever was then adopted for, and the
+  // 'never' probes are the gaps nobody passed on. A label index would drift
+  // the moment a probe is added, and a demo that teaches the wrong lesson is
+  // worse than no demo.
+  const supportNarratives = [
+    'A rota gap that nobody escalated',
+    'A backlog spike visible only in the queue',
+    'Two customers pulled out mid-week',
+    'An SLA breach found in the monthly report',
+    "A shift lead\u2019s warning nobody passed on",
+    'A renewal at risk raised after the fact',
+    'A weekend outage reported by a customer',
+  ];
+  supportProbes.forEach((row, index) => {
+    row.label = supportNarratives[index] || 'Rota risk';
+  });
   state.signalProbes = [...(openProbe ? [openProbe] : []), ...supportProbes];
 
   if (support && support.frozen) {

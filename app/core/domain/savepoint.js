@@ -43,6 +43,13 @@
  * workspace object identity — which no rule does (verified by audit).
  */
 
+/**
+ * The single shared "nothing changed" answer. Two empty answers are one empty
+ * answer: interrogating an untouched savepoint must not allocate, and callers
+ * may hold the result.
+ */
+const NO_CHANGES = Object.freeze([]);
+
 /** Values that need their own copy; everything else is copied by assignment. */
 function isCopyable(value) {
   return value !== null && typeof value === 'object';
@@ -193,12 +200,35 @@ function createLazySavepoint(base) {
   const touched = () => [...materialised.keys(), ...removed];
 
   /**
+   * The comparison result, computed at most once per savepoint.
+   *
+   * `changed()` used to re-serialise the base value of every touched collection
+   * on each call, and the engine calls it twice for every (rule, event) pair:
+   * once to snapshot collection identity for propagation lineage, and once
+   * inside `commitInto`. The two calls cannot disagree — nothing can mutate
+   * `base` or the private copy between them, because the engine calls
+   * `changed()` and `commitInto()` back to back and a rule has already
+   * returned — so the second serialisation was measuring the same bytes twice.
+   * `commitInto` now reuses the memoised result. `discard()` clears it.
+   *
+   * The answer is therefore a stable array for the life of the savepoint, and an
+   * empty answer is a shared frozen `[]`: callers may hold it, and interrogating
+   * an untouched savepoint allocates nothing.
+   */
+  let changedMemo = null;
+
+  /**
    * Touched top-level keys whose serialised content differs from the base.
    * Untouched keys are byte-identical to the base by construction, so limiting
    * the comparison to touched keys is equivalent to comparing all of them —
    * and avoids materialising the whole workspace just to prove nothing changed.
+   *
+   * The comparison is only *reached* for keys the rule touched. A guard-only
+   * rule touches nothing, so it pays nothing here: that is the whole reason the
+   * lazy strategy exists, and it is preserved.
    */
   const changed = () => {
+    if (changedMemo) return changedMemo;
     const out = [];
     for (const key of touched()) {
       const now = removed.has(key) ? undefined : materialised.get(key);
@@ -208,7 +238,9 @@ function createLazySavepoint(base) {
       if (JSON.stringify(now) === JSON.stringify(was)) continue;
       out.push(key);
     }
-    return out;
+    const answer = out.length ? out : NO_CHANGES;
+    changedMemo = answer;
+    return answer;
   };
 
   /**
@@ -243,6 +275,7 @@ function createLazySavepoint(base) {
   const discard = () => {
     materialised.clear();
     removed.clear();
+    changedMemo = null;
   };
 
   return { draft, touched, changed, peek, commitInto, discard };

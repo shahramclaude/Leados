@@ -315,6 +315,33 @@ test('savepoint: a rule that reads nothing materialises nothing', () => {
   assert.deepEqual(untouched.touched(), [], 'creating a savepoint alone touches nothing');
 });
 
+test('savepoint: asking what changed twice costs one comparison and answers the same', () => {
+  // The engine calls `changed()` twice per applied (rule, event) pair: once to
+  // snapshot collection identity for the lineage step, once inside
+  // `commitInto`. Both calls describe the same instant — a rule has already
+  // returned and nothing can mutate either side — so the second comparison was
+  // re-serialising the same bytes. It must still answer identically, and a
+  // guard-only rule must still pay nothing at all.
+  const base = fixture();
+  const savepoint = createSavepointDraft(base);
+  savepoint.draft.goals.push({ id: 'g-new', title: 'Added by a rule' });
+  savepoint.draft.decisions;
+  const first = savepoint.changed();
+  const second = savepoint.changed();
+  assert.deepEqual(first, ['goals']);
+  assert.deepEqual(second, first, 'the memoised answer is the same answer');
+  assert.equal(first, second, 'and it is the same array, not a second identical comparison');
+
+  const committed = savepoint.commitInto(base);
+  assert.deepEqual(committed.collections, ['goals'], 'commit still reports exactly what it wrote');
+  assert.ok(base.goals.some((g) => g.id === 'g-new'), 'and still writes it');
+
+  const untouched = createSavepointDraft(base);
+  untouched.draft;
+  assert.deepEqual(untouched.changed(), [], 'an untouched savepoint still costs nothing to interrogate');
+  assert.deepEqual(untouched.changed(), [], 'and stays that way');
+});
+
 /* ------------------------------------------------- 2. decline collapse */
 
 test('collapse: an identical declined re-run is skipped, and skipping changes nothing', () => {
@@ -432,6 +459,58 @@ test('ledger: aggregates pairs into per-rule rows with measured shares', () => {
   assert.equal(b.ms, 60);
   assert.equal(a.sharePct + b.sharePct, 100, 'rule shares must account for all measured rule time');
   assert.deepEqual(a.collections, ['cases']);
+});
+
+test('ledger: a declared whole-workspace scanner that found nothing is separated from a guard that declined', () => {
+  // The distinction the ledger now draws: a guard declining is free by design
+  // (it read the event type and returned); a rule that DECLARES it scans the
+  // workspace and then declines has read the record to find nothing, and that
+  // read is charged to every event that woke it. Only the second is actionable.
+  const ledger = buildPropagationLedger({
+    metrics: {
+      pairs: [
+        // A scanner: 4 calls, one produced something → 3 wasted calls.
+        { rule: 'scannerRule', event: 'e', status: 'applied', ms: 100, collections: ['cases'] },
+        { rule: 'scannerRule', event: 'e', status: 'declined', ms: 100, collections: [] },
+        { rule: 'scannerRule', event: 'e', status: 'declined', ms: 100, collections: [] },
+        { rule: 'scannerRule', event: 'e', status: 'declined', ms: 100, collections: [] },
+        // A guard: cheap, and never declared a scan.
+        { rule: 'guardRule', event: 'e', status: 'declined', ms: 2, collections: [] },
+      ],
+      events: 1,
+    },
+    contracts: [
+      { name: 'scannerRule', module: 'scannerRules.js', scansWorkspace: true },
+      { name: 'guardRule', module: 'guardRules.js', scansWorkspace: false },
+    ],
+    now: NOW,
+  });
+  assert.equal(ledger.scanners.length, 1, 'only the declared scanner is reported as scan waste');
+  const row = ledger.scanners[0];
+  assert.equal(row.rule, 'scannerRule');
+  assert.equal(row.calls, 4);
+  assert.equal(row.applied, 1);
+  assert.equal(row.wastedCalls, 3);
+  assert.equal(row.wastedMs, 300, 'three of four calls produced nothing: 300 of 400 ms');
+  assert.equal(row.wastedPctOfRule, 75, 'the share is of the rule OWN time, not the chain');
+  assert.equal(ledger.totals.scanWasteMs, 300);
+  // The two figures answer different questions and must not be collapsed:
+  // `wasteMs` is rules that applied NOTHING (the guard here, 2 ms); a scanner
+  // that applied once and declined three times is neither wholly idle nor
+  // wholly useful, so only the scan-waste figure can price it.
+  assert.equal(ledger.totals.wasteMs, 2, 'a partly-productive scanner is not counted as wholly idle');
+  assert.ok(ledger.totals.scanWastePct > 0 && ledger.totals.scanWastePct <= 100);
+});
+
+test('ledger: scan waste is never invented for a rule with no declared scanner contract', () => {
+  const ledger = buildPropagationLedger({
+    metrics: { pairs: [{ rule: 'unknownRule', event: 'e', status: 'declined', ms: 500, collections: [] }], events: 1 },
+    contracts: [],
+    now: NOW,
+  });
+  assert.deepEqual(ledger.scanners, [], 'an undeclared rule is not assumed to be a scanner');
+  assert.equal(ledger.totals.scanWasteMs, 0);
+  assert.equal(ledger.totals.wasteMs, 500, 'it is still priced as waste, which is a different claim');
 });
 
 test('ledger: an unmeasured chain is reported as unmeasured, never as zero cost', () => {

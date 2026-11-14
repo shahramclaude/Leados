@@ -641,6 +641,24 @@ async function axeViolations(env) {
   return Array.from(result.violations).map((v) => `${v.id}: ${v.help}`);
 }
 
+test('a report handed the scan it was going to perform reads the same report, without scanning twice', () => {
+  // `earlyWarningRule` scans the transaction draft and then asks for the report
+  // on the next line. Without the seam the whole 12-series / 26-bucket
+  // reconstruction ran a second time inside one rule invocation, to produce the
+  // figures it had just produced. The scan is a pure function of (state, now),
+  // so letting the caller pass the one it already holds cannot change the
+  // answer — that equality is the claim, and it is asserted on the full report.
+  const state = buildDemoState(NOW);
+  const scan = scanWatch(state, NOW);
+  const scanned = buildWatchReport(state, NOW, scan);
+  const rescanned = buildWatchReport(state, NOW);
+  assert.equal(JSON.stringify(scanned), JSON.stringify(rescanned),
+    'a precomputed scan must produce exactly the report a fresh scan would');
+  assert.equal(scanned.scan.series.length, scan.series.length);
+  assert.deepEqual(scanned.series, scan.series, 'the report carries the scan it was given');
+  assert.ok(scan.series.length > 3, 'the demo must exercise several monitored series');
+});
+
 test('UI: every watch tab renders axe-clean on the demo workspace', async () => {
   const env = bootDom();
   try {

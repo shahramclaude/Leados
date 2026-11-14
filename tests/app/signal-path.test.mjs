@@ -95,11 +95,16 @@ function memoryStorage() {
 }
 
 function makeStore() {
+  return makeStoreAt(NOW);
+}
+
+/** The same harness with an explicitly injected clock, for clock-fidelity claims. */
+function makeStoreAt(clock) {
   let sequence = 0;
   const idFactory = (prefix) => `${prefix}-s85-${++sequence}`;
-  const store = createStore({ storage: memoryStorage(), now: () => NOW, idFactory });
+  const store = createStore({ storage: memoryStorage(), now: () => clock, idFactory });
   store.load();
-  const api = createApi(store, { now: () => NOW, idFactory });
+  const api = createApi(store, { now: () => clock, idFactory });
   return { store, api };
 }
 
@@ -661,6 +666,47 @@ test('the demo seeds a committed channel its own probe ledger contradicts, throu
   assert.equal(reading.observed.underReach, true, 'the demo teaches the contradiction, not the agreement');
   assert.ok(state.signalProbes.some((p) => p.status === 'open'), 'a probe is left open so the settle dialog is reachable');
   assert.equal(state.signalLevers.length, 1);
+});
+
+test('a rule note is dated by the transaction clock, never by the machine clock', () => {
+  // RULE-SIG-03 appends a dated note to a committed channel class when a case
+  // opens behind its blind floor. The engine hands every rule the transaction's
+  // own `now`; a rule that stamps `new Date()` instead writes a time that is not
+  // inside its own transaction. That is not cosmetic: it makes two runs of the
+  // same transaction produce different bytes, so the savepoint equivalence
+  // proofs cannot hold, and a restored or replayed workspace carries notes
+  // claiming a time the action did not happen at.
+  const runAt = (clock) => {
+    const { store, api } = makeStoreAt(clock);
+    seedChain(store);
+    const created = api.addSignalClass({
+      label: 'A customer-impacting slip on the support rota',
+      pathPersonId: 'p-ana', ownerId: 'p-cam', exposure: 48000, probabilityPct: 45,
+    });
+    assert.ok(created.ok, created.error);
+    assert.ok(api.commitSignalClass(created.id).ok);
+    const before = store.state.signalClasses.find((c) => c.id === created.id).notes.length;
+    const opened = api.addCase({
+      title: 'The overnight queue backed up twice this week', kind: 'risk', status: 'open', ownerId: 'p-ana',
+      financial: { currency: 'USD', optimistic: 8000, mostLikely: 15000, pessimistic: 30000 },
+    });
+    assert.ok(opened.ok, opened.error);
+    const record = store.state.signalClasses.find((c) => c.id === created.id);
+    return { notes: record.notes.slice(before), history: record.history };
+  };
+
+  const injected = new Date('2026-10-27T10:00:00.000Z');
+  const later = new Date('2027-03-01T08:30:00.000Z');
+  const first = runAt(injected);
+  const second = runAt(later);
+  assert.ok(first.notes.length > 0, 'RULE-SIG-03 must write the note this test is about');
+  for (const noteRow of first.notes) {
+    assert.equal(noteRow.at, injected.toISOString(), 'a rule note carries the transaction time the rule was given');
+  }
+  for (const noteRow of second.notes) {
+    assert.equal(noteRow.at, later.toISOString(), 'and it moves with the injected clock, so it is not a constant');
+    assert.notEqual(noteRow.at, new Date().toISOString(), 'nor may it be the wall clock');
+  }
 });
 
 test('the brief is deterministic and states its method and its limits', () => {

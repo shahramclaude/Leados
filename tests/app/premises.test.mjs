@@ -64,6 +64,7 @@ import { DEFAULT_POST_COMMIT_RULES } from '../../app/core/domain/postCommit.js';
 import { LINK_ENTITY_TYPES, LINK_RELATIONS } from '../../app/core/domain/cases.js';
 import { CSV_EXPORTS, exportWorkspaceCsv, parseCsv } from '../../app/core/csv.js';
 import { buildDemoState } from '../../app/core/demo.js';
+import { buildLoadReport } from '../../app/core/domain/load.js';
 
 const ROOT = path.resolve(import.meta.dirname, '../..');
 const NOW = new Date('2026-10-27T10:00:00.000Z');
@@ -412,6 +413,60 @@ test('dependency TTS/TTR sensor produces dated, keyed, idempotent observations',
   const third = collectPremiseObservations(state, state.premises[0], NOW, state.settings);
   assert.notEqual(third[0].key, first[0].key, 'changed record → new dated observation, history preserved');
   assert.equal(third[0].direction, 'for');
+});
+
+test('a premise pass prices its expensive sensors once, not once per premise, and says the same thing', () => {
+  // RULE-PREM-02 reads the reasoning-load report (a seeded Monte Carlo over every
+  // active person) for its `load-saturation` sensor. That report is a function of
+  // the pass INPUTS — people, settings, portfolio, dependencies — and the rule
+  // writes none of them except a person's talking points, which the report never
+  // reads. It used to be rebuilt for every premise on every waking event.
+  //
+  // The claim under test is equivalence, not speed: a pass that shares one frozen
+  // snapshot must produce byte-identical observations to a pass that rebuilds the
+  // report for each premise, including when the rule mutates `talkingPoints`
+  // between premises exactly as it does in production.
+  const shared = buildDemoState(NOW);
+  const control = buildDemoState(NOW);
+  let frozen = null;
+  const snapshot = { loadReport: () => (frozen ||= buildLoadReport(shared, NOW)) };
+  for (let i = 0; i < shared.premises.length; i += 1) {
+    const withSnapshot = collectPremiseObservations(shared, shared.premises[i], NOW, shared.settings, snapshot);
+    const perCall = collectPremiseObservations(control, control.premises[i], NOW, control.settings);
+    assert.deepEqual(withSnapshot, perCall, `premise ${i} must read the same evidence either way`);
+    // Mimic the rule's mid-pass writes: a talk-point prompt per premise, and the
+    // observations appended to the ledger it has just read.
+    shared.people[i % shared.people.length].talkingPoints.push(`[PREM] marker ${i}`);
+    control.people[i % control.people.length].talkingPoints.push(`[PREM] marker ${i}`);
+    shared.premises[i].observations = withSnapshot;
+    control.premises[i].observations = perCall;
+  }
+  assert.ok(shared.premises.length > 3, 'the demo must carry enough premises for this to mean something');
+});
+
+test('a premise pass asks for the load report once per pass, however many premises it reads', () => {
+  // The measured claim behind the snapshot: N premises, one report. A per-premise
+  // rebuild is a per-premise Monte Carlo, and on the demo workspace that was the
+  // single largest cost in the whole automation chain.
+  const state = buildDemoState(NOW);
+  let calls = 0;
+  const snapshot = { loadReport: () => { calls += 1; return buildLoadReport(state, NOW); } };
+  // Warm the snapshot the way the rule does, then read every premise's evidence.
+  for (const premiseRow of state.premises) {
+    collectPremiseObservations(state, premiseRow, NOW, state.settings, snapshot);
+  }
+  assert.equal(calls, state.premises.length,
+    'a plain call-through snapshot must be asked once per premise — the rule supplies the memoising one');
+  const memo = (() => {
+    let held = null;
+    return { loadReport: () => (held ||= buildLoadReport(state, NOW)) };
+  })();
+  let memoCalls = 0;
+  const counted = { loadReport: () => { memoCalls += 1; return memo.loadReport(); } };
+  const built = memo.loadReport();
+  assert.ok(built && Array.isArray(built.people));
+  assert.equal(memoCalls, 0, 'the memoised snapshot costs nothing until a sensor actually asks');
+  assert.ok(counted.loadReport() === built, 'and then it is the one report for the pass');
 });
 
 /* ==================================================== 3. schema & actions */
