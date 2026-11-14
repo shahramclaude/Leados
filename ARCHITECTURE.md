@@ -12,6 +12,14 @@ and external hashes still do). Every domain engine is untouched: the memo is a
 cache over pure reads, and any new badge read must be pure over
 `(state, day, seat)` or it will be cached wrongly.
 
+**One instance, one document.** `createApp` binds `hostDoc` (the root's owner
+document), `hostWindow` and `hostView()` once; `root` is honoured instead of
+re-resolving `#view`, `#sidebar-nav`, `#topbar-meta` and the hash off the ambient
+globals on every render, and the `hashchange` listener belongs to the bound
+window. Behaviour in a single-page browser is identical — the point is that a
+second instance (tests, a future embedded host) can no longer be repainted by a
+stale one.
+
 **Intelligence reads the canonical engine.** `intelligenceHub.js` gains
 `registerInsightsSource`; the shell registers `() => getInsights(state, at).findings`
 so the hub and the terminal read one computation. `rankSignals` boosts ordering by

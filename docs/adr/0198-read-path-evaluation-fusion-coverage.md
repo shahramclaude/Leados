@@ -119,15 +119,19 @@ advertised.**
 
 | measurement | before | after |
 | --- | --- | --- |
-| median cold route change | 493 ms | **21 ms** (23×) |
-| p95 | 691 ms | **136 ms** |
-| one pass of all 118 routes | 60.9 s | **5.2 s** |
+| median cold route change | 493 ms | **19–21 ms** (23–26×) |
+| p95 | 691 ms | **98–136 ms** |
+| one pass of all 118 routes | 60.9 s | **4.5–5.2 s** |
 | state estimate error | +15.1% | **+1.8%** |
 | signal families fused | 3 | **59** (of 63 shipped) |
 | signals fused on the demo | 3 | **213** |
 | converging clusters | 1 | **8** |
 | superseded/dead helpers | 3 | **0** |
 | routes with a broken heading outline | 1 of 118 (unswept) | **0 of 118** (swept) |
+
+After-ranges are the spread over four harness runs on this two-core sandbox
+(`reports/eval-app.json` holds the committed one: schema v156, 118 routes, demo
+at 2026-11-14T10:00Z). The ratios, not the milliseconds, are the claim.
 
 Correctness is asserted, not inferred: the badge the leader sees after a write
 is the recomputed badge (a test commits a person and asserts the visible badge
@@ -139,9 +143,10 @@ finding is accounted for (`dedupedCount === findings.length` on the demo).
 
 A route change is now cheap; a **write** is not, and the harness measures that
 too so the next person does not have to guess. Committing a person
-(`app.api.addPerson`, three times, demo workspace) costs a median **1 962 ms**
-(before this change: 1 998 ms — unchanged, so the memo did not move the cost
-from the read path into the write path, it only stopped paying it twice).
+(`app.api.addPerson`, three times, demo workspace) costs a median of
+**1 447–1 962 ms** across runs (before this change: 1 998 ms), so the memo moved
+nothing from the read path into the write path — it only stopped paying the same
+cost twice.
 
 A V8 CPU profile of those three commits names the bill: the badge strip runs the
 heavy simulation models to produce one integer each.
@@ -156,7 +161,7 @@ heavy simulation models to produce one integer each.
 | `dayKey` / `startOfDay` / `toDate` (`time.js`) | 451 ms | 344 |
 
 (each sample is ~1 ms of wall clock; the profile also contains the first render
-and the jsdom harness, so shares are relative, not additive-to-1 962 ms)
+and the jsdom harness, so shares are relative, not additive)
 
 Two conclusions, both deliberately **not** acted on in this change:
 
@@ -173,9 +178,36 @@ Two conclusions, both deliberately **not** acted on in this change:
    correctness question, not a performance one. That trade needs to be made
    explicitly, in its own ADR.
 
-What the write path *does* already gain: `navAfterWriteMedianMs` is **24.9 ms**,
+What the write path *does* already gain: `navAfterWriteMedianMs` is **23.8 ms**,
 i.e. moving to another screen straight after a save is now instant instead of
 re-running the badge strip.
+
+### The shell paints the document it was created for
+
+Removing the duplicate render exposed a second defect, and it is the same kind:
+the shell never bound the page it owns. `createApp({ root })` accepted a root
+element from every caller and then ignored it — each render resolved `#view`,
+`#sidebar-nav`, `#topbar-meta`, `.topbar-actions` and the current hash off the
+ambient `document`/`window`. In a browser there is exactly one of each, so this
+was invisible; the moment two instances exist (a test booting a fresh page, a
+future embedded view) a *stale* instance repaints somebody else's screen.
+
+Measured, not theorised: `tests/app/prep.test.mjs` began failing with
+`a stale action remains visible after a failed close` because the previous
+test's instance — holding a demo workspace — answered the next test's
+`hashchange` and painted "Person not found" into the live prep sheet. A render
+log caught it in one run: the final paint belonged to the earlier instance.
+
+Fix: the factory binds `hostDoc` (the root's owner document), `hostWindow`
+(its default view) and `hostView()` once. Navigation reads and writes that
+window's hash, the badge strip and topbar mount inside that document, focus
+management reads its `activeElement`, and the `hashchange` listener belongs to
+that window. `root` is now what the signature always promised.
+
+`tests/app/nav-counter-cache.test.mjs` pins it with a two-document test: a stale
+instance's `hashchange` must leave the second document byte-identical. The test
+fails without the fix (`not ok 4 - a stale instance cannot repaint another
+document`) and passes with it.
 
 ## Alternatives considered
 
@@ -195,11 +227,11 @@ re-running the badge strip.
 
 ## Consequences
 
-- The write path is still bounded by the badge strip (1 962 ms per commit in
+- The write path is still bounded by the badge strip (1.4–2.0 s per commit in
   jsdom, unchanged by this change and now measured so it cannot drift silently).
   A leader pays it once per save; the profile above is the map for whoever
   attacks it. Until then, moving to another screen right after a save costs
-  24.9 ms — the strip is not recomputed twice.
+  ~24 ms — the strip is not recomputed twice.
 - The read path is bounded by the view, not by the engine: a route change now
   costs what the screen costs (median 21 ms; the heaviest screens —
   `scenarios` at 1.1 s, `premises` at 0.46 s — are now the only work in the
@@ -213,6 +245,10 @@ re-running the badge strip.
   unwired until it does.
 - `#/efficiency` now has no number it cannot source. Anything still missing is
   listed as not built.
+- An app instance can only paint the document it was created for. That is a
+  test-isolation guarantee today and a hard requirement for any future embedded
+  or multi-page host; a caller that passes no `root` still resolves `#view` from
+  the ambient document.
 - A whole-document property can no longer be hidden by a render race: the
   heading sweep runs the real app over every route, so a new screen that skips a
   level fails a check instead of shipping quietly.

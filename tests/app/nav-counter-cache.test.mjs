@@ -16,6 +16,11 @@
  *      the render that already happened.
  *   5. The fusion hub the shell registers is the canonical engine — the hub
  *      sees every family that produced a finding, not a hand-picked three.
+ *   6. An instance paints its own document. A stale instance's queued
+ *      `hashchange` must not repaint somebody else's screen: that defect was
+ *      measured (a live prep sheet replaced by "Person not found") and it is
+ *      why the shell now binds its document once instead of reading the
+ *      ambient `document` on every render.
  */
 
 import test from 'node:test';
@@ -163,6 +168,39 @@ test('one navigation paints once — the queued hashchange does not repeat it', 
   env.window.location.hash = '#/people';
   env.window.dispatchEvent(new env.window.HashChangeEvent('hashchange'));
   assert.ok(env.document.getElementById('view').querySelector('h1'), 'external hashchange still renders');
+});
+
+test('a stale instance cannot repaint another document', async () => {
+  clearPerf();
+  clearIntelligenceRegistry();
+  const first = boot();
+  const firstApp = await createAppInstance(first);
+  firstApp.navigate('#/cases');
+  const firstView = first.document.getElementById('view');
+  assert.ok(firstView.querySelector('h1'), 'the first instance painted its own screen');
+
+  // A second page boots while the first instance still holds a queued
+  // hashchange. The globals now point at the second document, which is exactly
+  // the situation that used to make the first instance paint into it.
+  const second = boot();
+  const secondApp = await createAppInstance(second);
+  secondApp.navigate('#/today');
+  const secondView = second.document.getElementById('view');
+  const secondMarkup = secondView.innerHTML;
+  const secondHash = second.window.location.hash;
+
+  // The first instance's own hash moves and its listener fires. It may repaint
+  // itself; it must not touch the second document.
+  first.window.location.hash = '#/people';
+  first.window.dispatchEvent(new first.window.HashChangeEvent('hashchange'));
+  assert.equal(secondView.innerHTML, secondMarkup, 'the second document is untouched');
+  assert.equal(second.window.location.hash, secondHash);
+
+  firstApp.navigate('#/cases');
+  assert.ok(firstView.querySelector('h1'), 'the first instance keeps painting its own screen');
+  assert.equal(secondView.innerHTML, secondMarkup, 'and still the second document is untouched');
+  assert.equal(first.consoleErrors.length, 0, first.consoleErrors.join('\n'));
+  assert.equal(second.consoleErrors.length, 0, second.consoleErrors.join('\n'));
 });
 
 test('the shell wires the fusion hub to the canonical engine', async () => {

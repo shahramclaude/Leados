@@ -982,6 +982,20 @@ export function parseRoute(hash) {
 }
 
 export function createApp({ root, storage, now = () => new Date(), idFactory, crypto, kdfIterations, minKdfIterations, enableRuleIndex = true } = {}) {
+  // The shell paints the document it was created for.
+  //
+  // `root` was accepted and then ignored: every render resolved `#view`,
+  // `#sidebar-nav`, `#topbar-meta` and the current hash off the ambient
+  // `document`/`window`. In a browser there is only one of each, so this went
+  // unnoticed — but a second app instance (a test booting a fresh page, a
+  // future embedded view) then paints into the first one's screen: measured, a
+  // stale instance repainted another page with its own workspace, which is why
+  // one stale `hashchange` could replace a live prep sheet with "Person not
+  // found". Binding the document once makes an instance's painting its own.
+  const hostDoc = (root && root.ownerDocument) || (typeof document !== 'undefined' ? document : null);
+  const hostWindow = hostDoc?.defaultView || (typeof window !== 'undefined' ? window : null);
+  const hostView = () => root || (hostDoc ? hostDoc.getElementById('view') : null);
+  const setTitle = (title) => { if (hostDoc) hostDoc.title = title; };
   const store = createStore({ storage, now, idFactory, crypto, kdfIterations, minKdfIterations, enableRuleIndex });
   const api = createApi(store, { now, idFactory });
   // Efficiency pillar: enable lightweight perf instrumentation and expose debug.
@@ -1140,10 +1154,10 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
     // A dialog must never survive a route change: it would hover over a screen
     // it no longer describes, and its buttons would write to the old context.
     closeAllModals();
-    if (window.location.hash === hash) {
+    if (hostWindow?.location?.hash === hash) {
       render();
     } else {
-      window.location.hash = hash;
+      if (hostWindow?.location) hostWindow.location.hash = hash;
       render();
       navigationRenderGuard = { hash, state: store.state, at: Date.now() };
     }
@@ -1573,7 +1587,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
   }
 
   function renderNav(state, at, route, seatCtx = null, compiled = null) {
-    const nav = document.getElementById('sidebar-nav');
+    const nav = hostDoc ? hostDoc.getElementById('sidebar-nav') : null;
     if (!nav) return;
     if (store.isLocked) {
       // No section links while locked: they would open empty screens and imply
@@ -1603,12 +1617,12 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       : 0;
     mount(nav, renderWorkspaceNav({
       groups: NAV, route, seat, allowed, counts, isAggregate, hiddenN,
-      currentHref: typeof window !== 'undefined' ? window.location.hash : '',
+      currentHref: hostWindow?.location?.hash || '',
     }));
   }
 
   function renderTopbar(state, at, seatCtx = null) {
-    const bar = document.getElementById('topbar-meta');
+    const bar = hostDoc ? hostDoc.getElementById('topbar-meta') : null;
     if (!bar) return;
     if (store.isLocked) {
       mount(
@@ -1656,7 +1670,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
   }
 
   function renderError(error, route) {
-    const view = document.getElementById('view');
+    const view = hostView();
     if (!view) return;
     mount(
       view,
@@ -1673,8 +1687,8 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
             'div',
             { class: 'row-gap' },
             h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => render() }, 'Try again'),
-            h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => { window.location.hash = '#/today'; } }, 'Go to Today'),
-            h('button', { class: 'btn btn-primary', type: 'button', onClick: () => { window.location.hash = '#/settings'; } }, 'Open data & export'),
+            h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => { if (hostWindow?.location) hostWindow.location.hash = '#/today'; } }, 'Go to Today'),
+            h('button', { class: 'btn btn-primary', type: 'button', onClick: () => { if (hostWindow?.location) hostWindow.location.hash = '#/settings'; } }, 'Open data & export'),
           ),
         ),
       ),
@@ -1707,9 +1721,9 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
   }
 
   function render() {
-    const view = document.getElementById('view');
+    const view = hostView();
     if (!view) return;
-    const { route, segments, query } = parseRoute(window.location.hash);
+    const { route, segments, query } = parseRoute(hostWindow?.location?.hash || '');
     const at = now();
     const routeChanged = route !== lastRenderedRoute || (currentRoute === null && lastRenderedRoute === null);
     currentRoute = route;
@@ -1731,7 +1745,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
     renderNav(viewState, at, route, seatCtx, compiled);
     renderTopbar(viewState, at, seatCtx);
     ctx = buildContext(route, segments, query, viewState, seatCtx);
-    const topbarActions = document.querySelector('.topbar-actions');
+    const topbarActions = hostDoc ? hostDoc.querySelector('.topbar-actions') : null;
     // ADR-0076: the static quick-action row is not seat-aware. Rather than
     // offer links the render gate would refuse, hide the whole row while a
     // seat is enforced; the Altitude Lens carries the same one-click duties.
@@ -1747,7 +1761,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
           heading.focus({ preventScroll: true });
         }
         lastRenderedRoute = route;
-        document.title = 'Unlock workspace · LeadOS';
+        setTitle('Unlock workspace · LeadOS');
       } catch (error) {
         renderError(error, 'vault');
       }
@@ -1770,7 +1784,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
         const heading = view.querySelector('h1');
         if (heading) heading.setAttribute('tabindex', '-1');
         lastRenderedRoute = route;
-        document.title = 'Withheld at this altitude · LeadOS';
+        setTitle('Withheld at this altitude · LeadOS');
         return;
       }
       // ADR-0086: above the detail ceiling the module still opens — as the read
@@ -1784,9 +1798,9 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
           mount(view, renderClearing(ctx));
           const heading = view.querySelector('h1');
           if (heading) heading.setAttribute('tabindex', '-1');
-          if (heading && routeChanged && !document.activeElement?.closest?.('#modal-root')) heading.focus({ preventScroll: true });
+          if (heading && routeChanged && !hostDoc?.activeElement?.closest?.('#modal-root')) heading.focus({ preventScroll: true });
           lastRenderedRoute = route;
-          document.title = `Internal Clearinghouse — aggregate at ${seatCtx.seat.label} · LeadOS`;
+          setTitle(`Internal Clearinghouse — aggregate at ${seatCtx.seat.label} · LeadOS`);
         } catch (error) {
           renderError(error, route);
         }
@@ -1799,9 +1813,9 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
           mount(view, renderAggregatePosture(ctx, entry, aggregate));
           const heading = view.querySelector('h1');
           if (heading) heading.setAttribute('tabindex', '-1');
-          if (heading && routeChanged && !document.activeElement?.closest?.('#modal-root')) heading.focus({ preventScroll: true });
+          if (heading && routeChanged && !hostDoc?.activeElement?.closest?.('#modal-root')) heading.focus({ preventScroll: true });
           lastRenderedRoute = route;
-          document.title = `${entry?.label || route} — aggregate at ${seatCtx.seat.label} · LeadOS`;
+          setTitle(`${entry?.label || route} — aggregate at ${seatCtx.seat.label} · LeadOS`);
         } catch (error) {
           renderError(error, route);
         }
@@ -1831,18 +1845,18 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       // Move focus to the new heading only when the route actually changed.
       // Doing it on every re-render yanked the caret out of search boxes and
       // form fields whenever the store updated.
-      if (heading && routeChanged && !document.activeElement?.closest?.('#modal-root')) {
+      if (heading && routeChanged && !hostDoc?.activeElement?.closest?.('#modal-root')) {
         heading.focus({ preventScroll: true });
       }
       lastRenderedRoute = route;
-      document.title = `${documentTitle(route, store.state)} · LeadOS`;
+      setTitle(`${documentTitle(route, store.state)} · LeadOS`);
     } catch (error) {
       renderError(error, route);
     }
   }
 
   function documentTitle(route, state) {
-    const seg1 = safeDecode(parseRoute(window.location.hash).segments[1]);
+    const seg1 = safeDecode(parseRoute(hostWindow?.location?.hash || '').segments[1]);
     const labels = {
       today: 'Today',
       mission: 'Mission Control',
@@ -1963,32 +1977,32 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
 
   store.subscribe(() => render());
 
-  window.addEventListener('hashchange', () => {
+  hostWindow?.addEventListener('hashchange', () => {
     closeAllModals();
     const guard = navigationRenderGuard;
     navigationRenderGuard = null;
     // The navigation already painted this exact hash against this exact state.
     // Re-painting would repeat every domain read for an identical screen.
-    if (guard && guard.hash === window.location.hash && guard.state === store.state && Date.now() - guard.at < 2000) return;
+    if (guard && guard.hash === (hostWindow?.location?.hash || '') && guard.state === store.state && Date.now() - guard.at < 2000) return;
     render();
   });
 
   // Mobile navigation
-  const toggle = document.getElementById('nav-toggle');
-  const sidebar = document.getElementById('sidebar');
+  const toggle = hostDoc ? hostDoc.getElementById('nav-toggle') : null;
+  const sidebar = hostDoc ? hostDoc.getElementById('sidebar') : null;
   if (toggle && sidebar) {
     toggle.addEventListener('click', () => {
       const open = sidebar.classList.toggle('is-open');
       toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
     });
-    document.addEventListener('keydown', (event) => {
+    hostDoc.addEventListener('keydown', (event) => {
       if (event.key === 'Escape' && sidebar.classList.contains('is-open')) {
         sidebar.classList.remove('is-open');
         toggle.setAttribute('aria-expanded', 'false');
       }
     });
     // Close the drawer after navigating on small screens.
-    window.addEventListener('hashchange', () => {
+    hostWindow?.addEventListener('hashchange', () => {
       sidebar.classList.remove('is-open');
       toggle.setAttribute('aria-expanded', 'false');
     });
