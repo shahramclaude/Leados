@@ -45,6 +45,9 @@ import {
   CHARGEBACK_BINDING_LABELS,
   CHARGEBACK_BINDING_REASONS,
   CHARGEBACK_BINDING_TONES,
+  CHARGEBACK_DRIFT_ACK_LABELS,
+  CHARGEBACK_DRIFT_ACK_REASONS,
+  CHARGEBACK_DRIFT_ACK_TONES,
   CHARGEBACK_POSTING_ENGINE_VERSION,
   CHARGEBACK_POSTING_LIMITS,
   CHARGEBACK_POSTING_LIMITS_TEXT,
@@ -109,6 +112,73 @@ const binding = (state) => ({
   reason: CHARGEBACK_BINDING_REASONS[state],
 });
 
+/**
+ * Fingerprint of ONE drift (ADR-0202): every moved cent and every account
+ * that now carries money the posting did not name, as sorted lines, hashed
+ * with the repo's dual 32-bit FNV-1a (content addressing, not crypto) into a
+ * fixed `drift1:<n>:<16-hex>` shape. The same restatement always yields the
+ * same signature; a cent moving, an account appearing or a figure changing
+ * yields a different one. Computed over the WHOLE workspace statement, so
+ * every seat, the rule and the action door see byte-identical signatures.
+ */
+export function driftSignatureOf(entries) {
+  const lines = entries
+    .map((e) => (e.field === 'new-account' ? `n|${e.accountId}` : `c|${e.accountId}|${e.field}|${e.postedCents}|${e.currentCents}`))
+    .sort();
+  const joined = lines.join('\n');
+  let h1 = 0x811c9dc5;
+  let h2 = 0x050c5d1f;
+  for (let i = 0; i < joined.length; i += 1) {
+    const code = joined.charCodeAt(i);
+    h1 ^= code;
+    h1 = Math.imul(h1, 0x01000193) >>> 0;
+    h2 ^= (code ^ (i & 0xff));
+    h2 = Math.imul(h2, 0x01000193) >>> 0;
+  }
+  return `drift1:${entries.length}:${h1.toString(16).padStart(8, '0')}${h2.toString(16).padStart(8, '0')}`;
+}
+
+/**
+ * The seat-free comparison of ONE posting against a re-derived statement of
+ * its OWN period. The single implementation the reader, RULE-CBP-01 and the
+ * acknowledgement door all call: a signature computed anywhere is the
+ * signature computed everywhere. Verdicts mirror the printed audit exactly —
+ * integer equality on cents, no tolerance, never a correction.
+ */
+export function auditPostingDrift(post, current) {
+  if (!current || !current.window || !current.window.valid) {
+    return { verdict: 'window-unreadable', detail: (current && current.window && current.window.refuseReason) || null, entries: [], signature: null };
+  }
+  if (current.board.statementComplete !== true) {
+    return { verdict: 'statement-regressed', detail: current.board.incompleteReason || null, entries: [], signature: null };
+  }
+  const currentCents = statementAccountCents(current, post.currency);
+  const frozenIds = new Set(post.rows.map((r) => r.accountId));
+  const entries = [];
+  for (const row of post.rows) {
+    const live = currentCents.get(row.accountId) || { chargedCents: 0, creditedCents: 0 };
+    for (const field of ['chargedCents', 'creditedCents']) {
+      if (live[field] !== row[field]) entries.push({ accountId: row.accountId, field, postedCents: row[field], currentCents: live[field] });
+    }
+  }
+  let newAccountsN = 0;
+  for (const accountId of currentCents.keys()) {
+    if (!frozenIds.has(accountId)) {
+      newAccountsN += 1;
+      entries.push({ accountId, field: 'new-account', postedCents: null, currentCents: null });
+    }
+  }
+  if (!entries.length) return { verdict: 'faithful', detail: null, entries: [], signature: null };
+  return {
+    verdict: 'drifted',
+    detail: newAccountsN
+      ? `${newAccountsN} line account(s) now carry money in this period and currency that the posting did not name.`
+      : null,
+    entries,
+    signature: driftSignatureOf(entries),
+  };
+}
+
 /** Re-check one frozen binding against the live budget record. Reported, never re-pointed. */
 export function bindingStateFor(row, budgetsById, currency) {
   if (!row.envelopeId) return 'no-envelope';
@@ -164,6 +234,7 @@ export function buildChargebackPostingLedger(state = {}, { now = new Date(), set
   };
 
   const auditCounts = { faithful: 0, drifted: 0, 'statement-regressed': 0, 'window-unreadable': 0, 'not-audited': 0 };
+  const driftAckCounts = { acknowledged: 0, unacknowledged: 0, 'no-drift': 0 };
   const bindingCounts = { bound: 0, 'no-envelope': 0, decayed: 0 };
   let rowsTotalN = 0;
   let rowsWithheldN = 0;
@@ -176,55 +247,61 @@ export function buildChargebackPostingLedger(state = {}, { now = new Date(), set
     const stateKey = doc.reverse ? 'reversed' : 'posted';
     const conflicted = !doc.reverse && (liveByKey.get(key) || []).length > 1;
 
-    /* 2a. Audit. */
+    /* 2a. Audit — one shared comparison, seat-scoped for display only. */
     let verdict;
     let auditDetail = null;
     const drifts = [];
     let driftsOmittedN = 0;
+    let driftSignature = null;
     if (doc.reverse) {
       verdict = 'not-audited';
     } else {
-      const current = statementFor(post.periodFrom, post.periodTo);
-      if (!current.window.valid) {
-        verdict = 'window-unreadable';
-        auditDetail = current.window.refuseReason || null;
-      } else if (current.board.statementComplete !== true) {
-        verdict = 'statement-regressed';
-        auditDetail = current.board.incompleteReason || null;
-      } else {
-        const currentCents = statementAccountCents(current, post.currency);
-        const frozenIds = new Set(post.rows.map((r) => r.accountId));
-        let clean = true;
-        for (const row of post.rows) {
-          const liveRow = currentCents.get(row.accountId) || { chargedCents: 0, creditedCents: 0 };
-          for (const field of ['chargedCents', 'creditedCents']) {
-            if (liveRow[field] !== row[field]) {
-              clean = false;
-              if (drifts.length < CHARGEBACK_POSTING_LIMITS.drifts) {
-                const shown = readableAccount(row.accountId);
-                drifts.push({
-                  accountId: shown ? row.accountId : null,
-                  accountName: shown ? rawName(row.accountId) : 'A line outside this seat',
-                  field: field === 'chargedCents' ? 'charged' : 'credited',
-                  postedCents: row[field],
-                  currentCents: liveRow[field],
-                  posted: formatCents(row[field]),
-                  current: formatCents(liveRow[field]),
-                  deltaCents: liveRow[field] - row[field],
-                });
-              } else driftsOmittedN += 1;
-            }
-          }
-        }
-        let accountsNewN = 0;
-        for (const accountId of currentCents.keys()) {
-          if (!frozenIds.has(accountId)) { clean = false; accountsNewN += 1; }
-        }
-        verdict = clean ? 'faithful' : 'drifted';
-        if (accountsNewN) auditDetail = `${accountsNewN} line account(s) now carry money in this period and currency that the posting did not name.`;
+      const audit = auditPostingDrift(post, statementFor(post.periodFrom, post.periodTo));
+      verdict = audit.verdict;
+      auditDetail = audit.detail;
+      driftSignature = audit.signature;
+      // Printed drift lines: the moved cents only (new accounts are counted
+      // in the detail line, never listed), seat-scoped, bounded — the
+      // remainder is counted, never dropped from a total.
+      for (const entry of audit.entries) {
+        if (entry.field === 'new-account') continue;
+        if (drifts.length >= CHARGEBACK_POSTING_LIMITS.drifts) { driftsOmittedN += 1; continue; }
+        const shown = readableAccount(entry.accountId);
+        drifts.push({
+          accountId: shown ? entry.accountId : null,
+          accountName: shown ? rawName(entry.accountId) : 'A line outside this seat',
+          field: entry.field === 'chargedCents' ? 'charged' : 'credited',
+          postedCents: entry.postedCents,
+          currentCents: entry.currentCents,
+          posted: formatCents(entry.postedCents),
+          current: formatCents(entry.currentCents),
+          deltaCents: entry.currentCents - entry.postedCents,
+        });
       }
     }
     auditCounts[verdict] += 1;
+
+    /* 2a-ack. What a HUMAN has decided about this drift (ADR-0202). The
+     * acknowledgement covering the CURRENT signature is the only one that
+     * counts; a prior acknowledgement of a different signature stays on the
+     * record as history and never covers a drift it did not see. */
+    const acksForPosting = acts.filter((a) => a && a.kind === 'acknowledge' && a.postingId === post.id);
+    const latestAck = acksForPosting.length ? acksForPosting[acksForPosting.length - 1] : null;
+    const matchingAck = verdict === 'drifted' && driftSignature
+      ? acksForPosting.filter((a) => a.signature === driftSignature).pop() || null
+      : null;
+    const ackState = verdict === 'drifted' ? (matchingAck ? 'acknowledged' : 'unacknowledged') : 'no-drift';
+    const priorAck = ackState === 'unacknowledged' ? latestAck : null;
+    driftAckCounts[ackState] += 1;
+    const ackView = (a) => (a ? {
+      id: a.id,
+      signature: a.signature,
+      decidedOn: a.decidedOn,
+      at: a.at,
+      via: a.via,
+      decidedBySeatId: a.decidedBySeatId,
+      reason: a.reason,
+    } : null);
 
     /* 2b. Bindings, re-checked against the live envelopes. */
     const rows = [];
@@ -292,6 +369,13 @@ export function buildChargebackPostingLedger(state = {}, { now = new Date(), set
         detail: auditDetail,
         drifts,
         driftsOmittedN,
+        driftSignature,
+        ackState,
+        ackStateLabel: CHARGEBACK_DRIFT_ACK_LABELS[ackState],
+        ackStateTone: CHARGEBACK_DRIFT_ACK_TONES[ackState],
+        ackStateReason: CHARGEBACK_DRIFT_ACK_REASONS[ackState],
+        ack: ackView(matchingAck || (verdict !== 'drifted' ? latestAck : null)),
+        priorAck: ackView(priorAck),
       },
       rowsN: post.rows.length,
       rows,
@@ -358,13 +442,16 @@ export function buildChargebackPostingLedger(state = {}, { now = new Date(), set
     }
   }
 
-  /* 4. Open asks RULE-CBP-01 issued. */
+  /* 4. Open asks RULE-CBP-01 issued — postability asks and drift-decision asks. */
   const delegations = Array.isArray(state.delegations) ? state.delegations : [];
   const activeTasks = new Map(delegations.filter((d) => d && d.status === 'active').map((d) => [d.id, d]));
   let openAsksN = 0;
+  let openDriftAsksN = 0;
   for (const marker of Array.isArray(state.chargebackPostingMarkers) ? state.chargebackPostingMarkers : []) {
     if (!marker || marker.kind !== 'ask' || !marker.taskId) continue;
-    if (activeTasks.has(marker.taskId)) openAsksN += 1;
+    if (!activeTasks.has(marker.taskId)) continue;
+    openAsksN += 1;
+    if (String(marker.subjectKey || '').startsWith('drift|')) openDriftAsksN += 1;
   }
 
   /* 5. The board. */
@@ -384,7 +471,10 @@ export function buildChargebackPostingLedger(state = {}, { now = new Date(), set
     rowsReconcile: bindingCounts.bound + bindingCounts['no-envelope'] + bindingCounts.decayed === rowsTotalN,
     rowsWithheldN,
     standing: { ...standingCounts },
+    driftAcks: { ...driftAckCounts },
+    driftAcksReconcile: driftAckCounts.acknowledged + driftAckCounts.unacknowledged + driftAckCounts['no-drift'] === postingRows.length,
     openAsksN,
+    openDriftAsksN,
   };
 
   const canPost = !seat.readOnly && (full || canAct(CHARGEBACK_POSTING_RIGHTS.POST, seat).allow === true);
@@ -454,8 +544,9 @@ export function chargebackPostingBriefText(report) {
     q.from
       ? `Last completed quarter (${q.from} to ${q.to}): ${q.state === 'ready' ? `statement complete — ${q.currencies.map((c) => `${c.currency}: ${c.stateLabel.toLowerCase()}`).join('; ') || 'nothing to post'}` : `${q.stateLabel}${q.reason ? ` — ${q.reason}` : ''}`}`
       : `Last completed quarter: ${q.stateLabel}${q.reason ? ` — ${q.reason}` : ''}`,
-    `Open posting asks (RULE-CBP-01): ${b.openAsksN}.`,
-    'A posting freezes the complete statement against named envelopes; it writes no budget line and changes no envelope figure. Drift and binding decay are reported, never corrected.',
+    `Open posting asks (RULE-CBP-01): ${b.openAsksN} (${b.openDriftAsksN} about drift).`,
+    `Drift decisions: ${b.driftAcks.acknowledged} acknowledged in writing, ${b.driftAcks.unacknowledged} awaiting a dated decision.`,
+    'A posting freezes the complete statement against named envelopes; it writes no budget line and changes no envelope figure. Drift and binding decay are reported, never corrected; a drift is decided by a dated human act — acknowledge the posted figures as the period fact, or reverse — and no acknowledgement edits a cent.',
   ];
   return lines.join('\n');
 }
@@ -468,6 +559,7 @@ export function chargebackPostingCsvRows(report) {
   const q = report.quarter;
   const empty = {
     period_from: '', period_to: '', period_days: '', currency: '', posting_state: '', audit_verdict: '',
+    drift_signature: '', drift_ack_state: '', drift_ack_on: '',
     posted_on: '', reversed_on: '', via: '', rows_n: '', rows_bound_n: '', rows_no_envelope_n: '', rows_decayed_n: '',
     entries: '', priced_share_days: '', total_charged_cents: '', total_credited_cents: '',
     total_charged: '', total_credited: '', zero_sum: '',
@@ -486,6 +578,9 @@ export function chargebackPostingCsvRows(report) {
     audits_window_unreadable: b.audits['window-unreadable'],
     audits_not_audited: b.audits['not-audited'],
     audits_reconcile: b.auditsReconcile,
+    drift_ack_acknowledged: b.driftAcks.acknowledged,
+    drift_ack_unacknowledged: b.driftAcks.unacknowledged,
+    open_drift_asks: b.openDriftAsksN,
     rows_total: b.rowsTotalN,
     rows_bound: b.rowsBoundN,
     rows_no_envelope: b.rowsNoEnvelopeN,
@@ -510,6 +605,7 @@ export function chargebackPostingCsvRows(report) {
       scope: report.actor.fullAccess ? 'workspace' : 'seat',
       postings: '', postings_live: '', postings_reversed: '', postings_conflicted: '',
       audits_faithful: '', audits_drifted: '', audits_statement_regressed: '', audits_window_unreadable: '', audits_not_audited: '', audits_reconcile: '',
+      drift_ack_acknowledged: '', drift_ack_unacknowledged: '', open_drift_asks: '',
       rows_total: '', rows_bound: '', rows_no_envelope: '', rows_decayed: '', rows_reconcile: '',
       quarter_from: '', quarter_to: '', quarter_state: '', quarter_reason: '',
       currencies_postable: '', currencies_posted: '', currencies_posted_drifted: '', currencies_conflicted: '',
@@ -520,6 +616,9 @@ export function chargebackPostingCsvRows(report) {
       currency: p.currency,
       posting_state: p.conflicted ? 'conflicted' : p.state,
       audit_verdict: p.audit.verdict,
+      drift_signature: p.audit.driftSignature || '',
+      drift_ack_state: p.audit.ackState === 'unacknowledged' || p.audit.ackState === 'acknowledged' ? p.audit.ackState : '',
+      drift_ack_on: p.audit.ackState === 'acknowledged' && p.audit.ack ? p.audit.ack.decidedOn : '',
       posted_on: p.postedOn,
       reversed_on: p.reversedOn || '',
       via: p.via,

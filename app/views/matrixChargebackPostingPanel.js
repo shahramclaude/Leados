@@ -110,6 +110,38 @@ function openPostDialog(ctx, report, currencyRow) {
   });
 }
 
+/**
+ * The decision on ONE drift (ADR-0202): ACKNOWLEDGE that the posted figures
+ * stand as the accepted period fact with the divergence noted — or reverse,
+ * which is the other button on the card. The dialog prints the exact signature
+ * being signed; nothing here can change a cent.
+ */
+function openAckDialog(ctx, posting) {
+  const form = buildForm([{
+    name: 'reason', label: 'Why do the posted figures stand despite the drift?', type: 'textarea', required: true,
+    help: `${CHARGEBACK_POSTING_LIMITS.reasonMin}–${CHARGEBACK_POSTING_LIMITS.reasonMax} characters. This accepts the posted totals as the period fact for this exact drift and notes the divergence; it edits nothing. If they should not stand, reverse the posting instead.`,
+  }]);
+  openModal({
+    title: `Acknowledge the drift — ${posting.periodFrom} – ${posting.periodTo} ${posting.currency}`,
+    description: `Signature ${posting.audit.driftSignature}. The record re-derives this period differently from what was posted; acknowledging records that a human decided the posted figures stand as the accepted period fact, divergence noted. The posting is not edited and the re-derived statement keeps printing beside it.`,
+    body: form.node,
+    footer: [
+      h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => closeAllModals() }, 'Cancel'),
+      h('button', {
+        class: 'btn btn-primary', type: 'button', 'data-testid': 'cbp-ack-save',
+        onClick: () => {
+          const v = form.getValues();
+          const res = ctx.api?.chargebackAcknowledgeDrift?.(posting.id, v.reason);
+          if (!res?.ok) { form.clearErrors(); if (res?.field) form.setFieldError(res.field, res.error); }
+          if (!notify(ctx, res, 'Drift acknowledged in writing. The posted figures stand as the accepted period fact; the divergence stays on the record.')) return;
+          closeAllModals();
+          refreshView(ctx);
+        },
+      }, 'Acknowledge this drift'),
+    ],
+  });
+}
+
 function openReverseDialog(ctx, posting) {
   const form = buildForm([{
     name: 'reason', label: 'Why is this posting reversed?', type: 'textarea', required: true,
@@ -174,6 +206,7 @@ function statsGrid(report) {
     stat({ label: 'Postings', value: String(b.postingsN), hint: `${b.liveN} live · ${b.reversedN} reversed${b.conflictedN ? ` · ${b.conflictedN} CONFLICTED` : ''}` }),
     stat({ label: 'Faithful today', value: String(b.audits.faithful), hint: 'posted figures the record still reproduces exactly', tone: b.audits.faithful === b.liveN && b.liveN > 0 ? 'good' : '' }),
     stat({ label: 'Drifted / regressed', value: String(b.audits.drifted + b.audits['statement-regressed']), hint: `${b.audits.drifted} drifted · ${b.audits['statement-regressed']} regressed · ${b.audits['window-unreadable']} unreadable`, tone: b.audits.drifted + b.audits['statement-regressed'] > 0 ? 'bad' : '' }),
+    stat({ label: 'Drift decided', value: String(b.driftAcks.acknowledged), hint: `${b.driftAcks.acknowledged} acknowledged · ${b.driftAcks.unacknowledged} awaiting a dated decision`, tone: b.driftAcks.unacknowledged > 0 ? 'bad' : b.driftAcks.acknowledged > 0 ? 'good' : '' }),
     stat({ label: 'Posted lines', value: String(b.rowsTotalN), hint: `${b.rowsBoundN} bound · ${b.rowsNoEnvelopeN} no-envelope · ${b.rowsDecayedN} decayed` }),
     stat({ label: 'Open posting asks', value: String(b.openAsksN), hint: `${CHARGEBACK_POSTING_RULE_ID}, to the lines’ joint apex` }),
   );
@@ -204,12 +237,33 @@ function postingCard(ctx, report, p) {
     }));
     if (p.audit.driftsOmittedN) auditBody.push(h('p', { class: 'muted small' }, `${p.audit.driftsOmittedN} further drifted figure(s) counted, not printed.`));
   }
+  /* The dated decision on this drift (ADR-0202): acknowledged, owed, or moot. */
+  if (p.audit.ackState === 'acknowledged' && p.audit.ack) {
+    auditBody.push(h('div', { class: 'stack-xs', 'data-testid': `cbp-ack-${p.id}` },
+      badge(p.audit.ackStateLabel, tone(p.audit.ackStateTone)),
+      h('p', { class: 'small' }, `Decided ${p.audit.ack.decidedOn}${p.audit.ack.via === 'operator' ? ' (scribed)' : ''}: “${p.audit.ack.reason}”`),
+      h('p', { class: 'muted small' }, `Signature ${p.audit.ack.signature}. ${p.audit.ackStateReason}`)));
+  } else if (p.audit.ackState === 'unacknowledged') {
+    auditBody.push(h('div', { class: 'stack-xs', 'data-testid': `cbp-ack-${p.id}` },
+      badge(p.audit.ackStateLabel, tone(p.audit.ackStateTone)),
+      h('p', { class: 'muted small' }, `${p.audit.ackStateReason} Signature ${p.audit.driftSignature}.`),
+      p.audit.priorAck
+        ? h('p', { class: 'muted small' }, `An earlier acknowledgement (${p.audit.priorAck.decidedOn}, signature ${p.audit.priorAck.signature}) covers a different drift and does not cover this one.`)
+        : null));
+  } else if (p.audit.ack) {
+    auditBody.push(h('p', { class: 'muted small' }, `An acknowledgement from ${p.audit.ack.decidedOn} is on the record; today’s re-derivation reads ${p.audit.verdict}, so there is no drift for it to cover.`));
+  }
+  const canAck = p.state === 'posted' && p.audit.ackState === 'unacknowledged'
+    && report.actor.canPost && typeof ctx.api?.chargebackAcknowledgeDrift === 'function';
   return card({
     title: `${p.periodFrom} – ${p.periodTo} · ${p.currency}`,
     subtitle: `Posted ${p.postedOn}${p.via === 'operator' ? ' (scribed in the operator view)' : ''} · ${p.totalCharged} ${p.currency} charged = ${p.totalCredited} credited · ${p.entriesN} entr${p.entriesN === 1 ? 'y' : 'ies'} over ${p.pricedShareDays} priced share-day(s) · statement engine ${p.engineVersion}`,
     attrs: { 'data-testid': `cbp-posting-${p.id}` },
     actions: p.state === 'posted' && report.actor.canReverse && typeof ctx.api?.chargebackReversePosting === 'function'
-      ? [h('button', { class: 'btn btn-small', type: 'button', 'data-testid': `cbp-reverse-btn-${p.id}`, onClick: () => openReverseDialog(ctx, p) }, 'Reverse…')]
+      ? [
+        ...(canAck ? [h('button', { class: 'btn btn-small btn-primary', type: 'button', 'data-testid': `cbp-ack-btn-${p.id}`, onClick: () => openAckDialog(ctx, p) }, 'Acknowledge drift…')] : []),
+        h('button', { class: 'btn btn-small', type: 'button', 'data-testid': `cbp-reverse-btn-${p.id}`, onClick: () => openReverseDialog(ctx, p) }, 'Reverse…'),
+      ]
       : [],
     body: h('div', { class: 'stack-sm' },
       h('div', { class: 'row gap' },
@@ -241,7 +295,7 @@ function methodCard(report) {
     body: h('div', { class: 'stack-sm' },
       h('img', {
         src: DIAGRAM_URL,
-        alt: 'Conceptual method diagram, not workspace data: a completed chargeback statement sheet with a zero-sum check feeds a dated posting document; the posting binds each line’s charge and credit to that line’s own budget envelope or to an explicit written no-envelope declaration; a reversal arrow loops back as a dated act; a comparison lens re-derives the statement and prints faithful or drifted; nothing writes into the envelopes’ own arithmetic.',
+        alt: 'Conceptual method diagram, not workspace data: a completed chargeback statement sheet with a zero-sum check feeds a dated posting document; the posting binds each line’s charge and credit to that line’s own budget envelope or to an explicit written no-envelope declaration; a comparison lens re-derives the statement and finds moved figures; the drift then splits into two dated human decisions — a stamp acknowledging the original posting so the figures stand unchanged, or a reversal arrow looping back to a fresh corrected posting; nothing writes into the envelopes’ own arithmetic and no acknowledgement edits a cent.',
         style: 'max-width:100%;height:auto;border-radius:8px;',
       }),
       h('ol', { class: 'stack-xs' }, ...report.method.map((m) => h('li', { class: 'small' }, m))),
@@ -300,7 +354,7 @@ export function renderMatrixChargebackPostingPanel(ctx) {
   }, 'Export CSV (#146)'));
 
   return h('div', { class: 'stack', 'data-testid': 'matrix-chargeback-posting-panel' },
-    h('p', { class: 'lede' }, 'A complete chargeback statement is still only a reading until somebody turns it into a dated period fact. A posting freezes one period and one currency of the whole-workspace statement — exact integer cents, netting to zero — and binds every line’s figure to that line’s own budget envelope, or to a written declaration that it has none. Posting an incomplete statement is refused with the failing claim named; a posted period is corrected by a dated reversal, never an edit; and every read re-derives the record and prints whether it still says what was signed.'),
+    h('p', { class: 'lede' }, 'A complete chargeback statement is still only a reading until somebody turns it into a dated period fact. A posting freezes one period and one currency of the whole-workspace statement — exact integer cents, netting to zero — and binds every line’s figure to that line’s own budget envelope, or to a written declaration that it has none. Posting an incomplete statement is refused with the failing claim named; a posted period is corrected by a dated reversal, never an edit; and every read re-derives the record and prints whether it still says what was signed. When the record moves after the close, the drift is fingerprinted, RULE-CBP-01 asks the posting’s joint apex for one dated decision — acknowledge the posted figures as the accepted period fact, or reverse — and an acknowledgement covers exactly the signature it names.'),
     report.inertNote ? banner({ tone: 'info', title: 'Nothing to post', body: report.inertNote }) : null,
     standingCard(ctx, report),
     report.board.postingsN > 0 || report.quarter.state !== 'inert' ? statsGrid(report) : null,
@@ -311,7 +365,7 @@ export function renderMatrixChargebackPostingPanel(ctx) {
       body: h('div', { class: 'stack-sm' },
         h('pre', { class: 'small', 'data-testid': 'cbp-brief' }, brief),
         h('p', { class: 'muted small' },
-          `Conventions: ask due in ${report.conventions.askDueDays}d · ${CHARGEBACK_POSTING_RULE_ID} auto-asks ${report.conventions.autoPropagate ? 'on' : 'paused'} · post/reverse requires VP rank or the operator view.`)),
+          `Conventions: ask due in ${report.conventions.askDueDays}d · ${CHARGEBACK_POSTING_RULE_ID} auto-asks ${report.conventions.autoPropagate ? 'on' : 'paused'} · post/reverse/acknowledge requires VP rank or the operator view.`)),
     }),
     ...(report.postings.length
       ? report.postings.map((p) => postingCard(ctx, report, p))

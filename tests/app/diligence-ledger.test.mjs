@@ -152,14 +152,14 @@ function harness(state) {
 /* ------------------------------------------------------------------ schema */
 
 test('Schema v106 migrates additively: empty ledgers, declared conventions, nothing back-filled', () => {
-  assert.equal(SCHEMA_VERSION, 157);
+  assert.equal(SCHEMA_VERSION, 158);
   const base = createEmptyState(NOW_ISO);
   const legacy = { ...base, schemaVersion: 105 };
   for (const key of ['diligenceChecklists', 'diligenceConsults', 'diligenceGrades', 'diligenceMarkers']) delete legacy[key];
   legacy.settings = { ...base.settings };
   delete legacy.settings.diligenceKnowableFloor;
   const migrated = migrate(legacy);
-  assert.equal(migrated.raw.schemaVersion, 157);
+  assert.equal(migrated.raw.schemaVersion, 158);
   assert.deepEqual(migrated.raw.diligenceChecklists, []);
   assert.deepEqual(migrated.raw.diligenceConsults, []);
   assert.deepEqual(migrated.raw.diligenceGrades, []);
@@ -167,7 +167,7 @@ test('Schema v106 migrates additively: empty ledgers, declared conventions, noth
   assert.equal(migrated.raw.settings.diligenceKnowableFloor, 8, 'the declared default, not a fitted value');
   assert.equal(migrated.raw.settings.diligenceGradeClaimFloor, 3);
   assert.ok(migrated.applied.includes('105 → 106'));
-  assert.equal(migrated.applied.at(-1), '156 → 157', 'a legacy load reaches the current Schema v156 head');
+  assert.equal(migrated.applied.at(-1), '157 → 158', 'a legacy load reaches the current Schema v156 head');
   assert.deepEqual(migrate(migrated.raw).applied, [], 'idempotent');
   const normalized = normalizeState(migrated.raw, { now: NOW }).state;
   assert.deepEqual(normalized.diligenceChecklists, []);

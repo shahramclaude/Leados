@@ -90,14 +90,14 @@ const HALL = {
 /* ------------------------------------------------------------------ schema */
 
 test('v157 migration is additive, empty and infers no shift from the ILUO register', () => {
-  const old = { ...createEmptyState(AT), schemaVersion: 157 };
+  const old = { ...createEmptyState(AT), schemaVersion: 156 };
   delete old.stationWindows; delete old.skillStations; delete old.stationAvailability;
   old.people = [person('kim', null)];
   old.skillTasks = [task('T1', 'kim')];
   old.skillActs = [act('q1', 'T1', 'ria', 'kim')];
   const next = migrate(old);
-  assert.equal(SCHEMA_VERSION, 157);
-  assert.deepEqual(next.applied, ['156 → 157']);
+  assert.equal(SCHEMA_VERSION, 158);
+  assert.deepEqual(next.applied, ['156 → 157', '157 → 158']);
   assert.deepEqual(next.raw.stationWindows, []);
   assert.deepEqual(next.raw.skillStations, []);
   assert.deepEqual(next.raw.stationAvailability, []);

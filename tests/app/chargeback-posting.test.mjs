@@ -35,9 +35,12 @@ import { PAUSE_PERMIT_MATRIX_REACH_SWITCHES, PAUSE_PERMIT_REACH_RULES } from '..
 import { transferPriceRule } from '../../app/core/domain/transferPriceRules.js';
 import { chargebackPostingRule, CHARGEBACK_POSTING_TRIGGER_EVENTS } from '../../app/core/domain/chargebackPostingRules.js';
 import {
+  auditPostingDrift,
   buildChargebackPostingLedger, chargebackPostingBriefText, chargebackPostingCsvRows, compileChargebackPostings,
+  driftSignatureOf,
 } from '../../app/core/domain/chargebackPosting.js';
 import {
+  CHARGEBACK_POSTING_ACT_KINDS,
   CHARGEBACK_POSTING_CSV_COLUMNS, CHARGEBACK_POSTING_EVENTS, CHARGEBACK_POSTING_LIMITS, CHARGEBACK_POSTING_RULE_ID,
 } from '../../app/core/domain/chargebackPostingRegistry.js';
 import { renderMatrix } from '../../app/views/matrix.js';
@@ -141,8 +144,8 @@ function withDom(fn) {
   }
 }
 
-test('ADR-0194 registration: introduced at Schema v154, current Schema v155, empty migration, spine order and parity, gateway, seat policy, panel #37, CSV #146, pause-permit reach', () => {
-  assert.equal(SCHEMA_VERSION, 157);
+test('ADR-0194/0202 registration: introduced at Schema v154, current Schema v158, empty migration, spine order and parity, gateway, seat policy, panel #37, CSV #146, pause-permit reach', () => {
+  assert.equal(SCHEMA_VERSION, 158);
   const empty = createEmptyState(ISO);
   assert.deepEqual(empty.chargebackPostings, []);
   assert.deepEqual(empty.chargebackPostingMarkers, []);
@@ -150,7 +153,7 @@ test('ADR-0194 registration: introduced at Schema v154, current Schema v155, emp
   assert.equal(empty.settings.chargebackPostingAutoPropagate, true);
 
   const { raw, applied } = migrate({ schemaVersion: 153, appId: 'leados', meta: {}, settings: {} });
-  assert.deepEqual(applied, ['153 → 154', '154 → 155', '155 → 156', '156 → 157']);
+  assert.deepEqual(applied, ['153 → 154', '154 → 155', '155 → 156', '156 → 157', '157 → 158']);
   assert.deepEqual(raw.chargebackPostings, [], 'no period fact is fabricated on upgrade');
   assert.deepEqual(raw.chargebackPostingMarkers, []);
 
@@ -164,9 +167,12 @@ test('ADR-0194 registration: introduced at Schema v154, current Schema v155, emp
   assert.deepEqual(contract.writes, ['delegations', 'links', 'chargebackPostingMarkers']);
   assert.equal(chargebackPostingRule.id, 'chargebackPostingRule');
   assert.ok(CHARGEBACK_POSTING_TRIGGER_EVENTS.has(CHARGEBACK_POSTING_EVENTS.SCAN));
+  assert.ok(CHARGEBACK_POSTING_TRIGGER_EVENTS.has(CHARGEBACK_POSTING_EVENTS.ACKNOWLEDGED), 'an acknowledgement closes its own ask in the same commit');
+  assert.ok(CHARGEBACK_POSTING_TRIGGER_EVENTS.has('matrix.line.retuned'), 'a retro retune restates a posted period, so the posting is re-audited when it lands');
+  assert.ok(CHARGEBACK_POSTING_ACT_KINDS.includes('acknowledge'), 'ADR-0202 adds the dated drift decision to the act vocabulary');
 
   assert.ok(SAFE_READS.has('chargebackPostingReport'));
-  for (const name of ['chargebackPost', 'chargebackReversePosting']) assert.equal(API_RIGHTS[name], 'post-chargeback');
+  for (const name of ['chargebackPost', 'chargebackReversePosting', 'chargebackAcknowledgeDrift']) assert.equal(API_RIGHTS[name], 'post-chargeback');
   for (const name of ['chargebackPostingScan', 'chargebackPostingSetConventions']) assert.equal(API_RIGHTS[name], 'govern-transfer-prices');
   assert.deepEqual([ACTION_RIGHTS['post-chargeback'].minRank, ACTION_RIGHTS['post-chargeback'].maxRank], [4, 5], 'posting a period fact is director-and-above');
   assert.equal(RECORD_POLICIES.chargebackPostings.detailCeiling, 0);
@@ -463,4 +469,219 @@ test('display == stored: the panel, the brief and CSV #146 print the computed bo
   assert.deepEqual(reloaded.quarter, report.quarter);
   const direct = buildChargebackPostingLedger(again.store.state, { now: NOW });
   assert.deepEqual(direct.board, report.board, 'the panel’s read model and the raw builder agree');
+});
+
+/* ---------------------------------------------------- ADR-0202: drift decisions */
+
+const driftMarkers = (store) => store.state.chargebackPostingMarkers
+  .filter((m) => m && m.kind === 'ask' && String(m.subjectKey || '').startsWith('drift|'));
+const activeDriftAsks = (store) => {
+  const active = new Set(store.state.delegations.filter((d) => d.status === 'active').map((d) => d.id));
+  return driftMarkers(store).filter((m) => active.has(m.taskId));
+};
+
+test('acknowledgements are fail-closed on LOAD: unknown postings, malformed signatures, duplicates, short reasons and post-reversal acks are dropped and counted; a valid ack survives', () => {
+  const state = baseState();
+  const base = {
+    via: 'operator', decidedBySeatId: null, decidedOn: '2026-11-11', at: ISO, note: '',
+    periodFrom: '2026-07-01', periodTo: '2026-09-30', currency: 'EUR',
+    entriesN: 1, pricedShareDays: 10, engineVersion: 'tp-x',
+    claims: { statementComplete: true, zeroSum: true, shareDaysReconcile: true, periodLedgerIdentity: true, arithmeticSafe: true },
+  };
+  const rows = [
+    { accountId: 'fm', chargedCents: 0, creditedCents: 1000, envelopeId: null, noEnvelopeReason: 'the lender side runs without a declared envelope' },
+    { accountId: 'pm', chargedCents: 1000, creditedCents: 0, envelopeId: 'env-pm', noEnvelopeReason: '' },
+  ];
+  const ack = (id, postingId, signature, reason = 'the retuned share was accepted as the period fact by finance') => ({
+    ...base, id, kind: 'acknowledge', postingId, signature, reason,
+  });
+  state.chargebackPostings = [
+    { ...base, id: 'p1', kind: 'post', rows, totalChargedCents: 1000, totalCreditedCents: 1000 },
+    ack('a1', 'p1', 'drift1:1:deadbeefdeadbeef'),                                  // kept: valid, before any reversal
+    ack('a2', 'p1', 'drift1:1:deadbeefdeadbeef'),                                  // duplicate (posting, signature)
+    ack('a3', 'ghost', 'drift1:1:deadbeefdeadbeef'),                               // posting not on the record
+    ack('a4', 'p1', 'not-a-signature'),                                            // malformed fingerprint
+    ack('a5', 'p1', 'drift1:1:cafecafecafecafe', 'short'),                         // reason below the floor
+    { ...base, id: 'r1', kind: 'reverse', postingId: 'p1', reason: 'posted against the wrong quarter statement by mistake' },
+    ack('a6', 'p1', 'drift1:1:aaaaaaaaaaaaaaaa'),                                  // after the reversal: no claim to decide
+  ];
+  const { state: clean, warnings } = normalizeState({ ...state, schemaVersion: SCHEMA_VERSION });
+  assert.deepEqual(clean.chargebackPostings.map((a) => a.id), ['p1', 'a1', 'r1'], 'only the valid ack and the acts it answers survive');
+  assert.equal(clean.chargebackPostings[1].signature, 'drift1:1:deadbeefdeadbeef');
+  assert.ok(warnings.some((w) => /dropped 4 malformed posting act\(s\)/.test(w)), warnings.join(' | '));
+  assert.ok(warnings.some((w) => /dropped 1 acknowledgement\(s\) answering a posting that is not on the record/.test(w)), warnings.join(' | '));
+  // A load never re-derives or repairs a signature: the reader compares the
+  // stored one against the record it derives today, and prints the difference.
+  const doc = compileChargebackPostings(clean.chargebackPostings).posts.get('p1');
+  assert.ok(doc.reverse, 'the reversal still answers its posting');
+});
+
+test('a drifted posting becomes ONE dated decision: exact signature, one ask to the posting’s apex, acknowledge covers only that signature, a grown drift asks again, reversal closes', () => {
+  const { store, api, storage } = harness(baseState());
+  priceInFull(api);
+  const posted = api.chargebackPost({ currency: 'USD', bindings: [{ accountId: 'fm', envelopeId: 'env-fm-usd' }, { accountId: 'pm', envelopeId: 'env-pm-usd' }] });
+  assert.equal(posted.ok, true, posted.error);
+
+  /* ---- a faithful posting owes no decision ---- */
+  let report = reportOf(api);
+  const faithful = report.postings.find((p) => p.id === posted.id);
+  assert.deepEqual([faithful.audit.verdict, faithful.audit.ackState, faithful.audit.driftSignature], ['faithful', 'no-drift', null]);
+  const noDrift = api.chargebackAcknowledgeDrift(posted.id, 'A sufficiently long reason while nothing has moved.');
+  assert.equal(noDrift.ok, false);
+  assert.match(noDrift.error, /reads faithful/);
+  assert.match(noDrift.error, /no drift to acknowledge/i);
+
+  /* ---- a retro retune drifts the posted figures by exact cents ---- */
+  store.state.reportingLines = store.state.reportingLines.map((l) => (l.id === 'ln-pat' ? { ...l, shareH: 20 } : l));
+  report = reportOf(api);
+  const drifted = report.postings.find((p) => p.id === posted.id);
+  assert.equal(drifted.audit.verdict, 'drifted');
+  assert.equal(drifted.audit.ackState, 'unacknowledged');
+  assert.match(drifted.audit.driftSignature, /^drift1:2:[0-9a-f]{16}$/, 'two moved figures: fm charged and pm credited');
+  // The signature is the shared implementation over the hand-built entries —
+  // reader, rule and action door all fingerprint the SAME drift.
+  assert.equal(drifted.audit.driftSignature, driftSignatureOf([
+    { accountId: 'fm', field: 'chargedCents', postedCents: 276000, currentCents: 552000 },
+    { accountId: 'pm', field: 'creditedCents', postedCents: 276000, currentCents: 552000 },
+  ]));
+  assert.equal(report.board.driftAcks.unacknowledged, 1);
+  assert.equal(report.board.driftAcks.acknowledged, 0);
+  assert.equal(report.board.driftAcksReconcile, true);
+  assert.equal(reportOf(api).postings.find((p) => p.id === posted.id).audit.driftSignature, drifted.audit.driftSignature, 'two reads produce the byte-identical signature');
+
+  /* ---- every refusal at the door ---- */
+  let r = api.chargebackAcknowledgeDrift(posted.id, 'too short');
+  assert.equal(r.ok, false);
+  assert.match(r.error, /written reason of at least 10/);
+  r = api.chargebackAcknowledgeDrift('ghost', 'A sufficiently long reason for a posting that does not exist.');
+  assert.equal(r.ok, false);
+  assert.match(r.error, /not on the record/);
+  sit(store, 'pm');
+  assert.equal(api.chargebackAcknowledgeDrift(posted.id, 'A sufficiently long reason attempted from a manager seat.').ok, false, 'rank 3 is below the posting floor');
+  sit(store, null);
+
+  /* ---- one dated ask, to the apex of the lines the POSTING froze ---- */
+  assert.equal(activeDriftAsks(store).length, 0, 'a read never asks; the rule runs on an event');
+  assert.equal(api.chargebackPostingScan().ok, true);
+  let asks = activeDriftAsks(store);
+  assert.equal(asks.length, 1, 'one ask per (posting, signature)');
+  const s1 = drifted.audit.driftSignature;
+  const task = store.state.delegations.find((d) => d.id === asks[0].taskId);
+  assert.equal(task.personId, 'vp', 'the lowest joint apex of the frozen fm and pm rows is the VP');
+  assert.equal(task.authority, 'act-inform');
+  assert.match(task.title, /Decide the drift on the 2026-07-01–2026-09-30 USD posting/);
+  assert.ok(store.state.chargebackPostingMarkers.some((m) => m.key === `ask|drift|${posted.id}|${s1}`), asks.map((m) => m.key).join(' | '));
+  assert.equal(api.chargebackPostingScan().ok, true);
+  assert.equal(activeDriftAsks(store).length, 1, 'a second scan is idempotent — one ask per signature, ever');
+
+  /* ---- the dated decision: acknowledge covers EXACTLY this signature ---- */
+  const acked = api.chargebackAcknowledgeDrift(posted.id, 'Finance accepted the retuned share as the Q3 period fact; the divergence is noted and the posted totals stand.');
+  assert.equal(acked.ok, true, acked.error);
+  assert.equal(acked.signature, s1, 'the door re-derives the same signature the panel printed');
+  report = reportOf(api);
+  const decided = report.postings.find((p) => p.id === posted.id);
+  assert.deepEqual([decided.audit.ackState, decided.audit.ack.decidedOn, decided.audit.ack.signature], ['acknowledged', '2026-11-11', s1]);
+  assert.match(decided.audit.ack.reason, /retuned share/);
+  assert.equal(report.board.driftAcks.acknowledged, 1);
+  assert.equal(report.board.openDriftAsksN, 0);
+  const closed = store.state.delegations.find((d) => String(d.title).includes('Decide the drift'));
+  assert.equal(closed.status, 'done');
+  assert.match(closed.completionNote, /acknowledged in writing on 2026-11-11/);
+  assert.match(closed.completionNote, /Nothing was posted, reversed or bound/, 'the rule decided nothing on anyone’s behalf');
+  r = api.chargebackAcknowledgeDrift(posted.id, 'Attempting to acknowledge the very same signature a second time.');
+  assert.equal(r.ok, false);
+  assert.match(r.error, /already acknowledged on 2026-11-11/);
+
+  /* ---- panel, CSV and reload print the computed decision ---- */
+  const csv = exportWorkspaceCsv(store.state, 'chargeback-postings', { now: NOW });
+  assert.equal(csv.ok, true, csv.error);
+  const lines = csv.csv.trim().split(/\r?\n/);
+  const cell = (rowIndex, key) => lines[rowIndex + 1].split(',')[CHARGEBACK_POSTING_CSV_COLUMNS.indexOf(key)];
+  const postingRow = lines.findIndex((l, i) => i > 0 && l.startsWith('posting,')) - 1; // cell() indexes data rows (header excluded)
+  assert.equal(cell(0, 'drift_ack_acknowledged'), '1');
+  assert.equal(cell(0, 'drift_ack_unacknowledged'), '0');
+  assert.equal(cell(0, 'open_drift_asks'), '0');
+  assert.equal(cell(postingRow, 'drift_signature'), s1, 'the exported signature is the printed signature');
+  assert.equal(cell(postingRow, 'drift_ack_state'), 'acknowledged');
+  assert.equal(cell(postingRow, 'drift_ack_on'), '2026-11-11');
+  assert.doesNotMatch(csv.csv, /Fay|Priya|Paul|Vera|env-fm-usd|retuned share|period fact/, 'the export stays identity- and prose-free: no person, envelope, signature reason or note');
+  withDom(() => {
+    const node = renderMatrix({
+      state: store.state, api, query: new URLSearchParams('panel=postings'),
+      now: NOW, navigate() {}, refresh() {}, toast() {},
+    });
+    const root = node.querySelector('[data-testid="matrix-chargeback-posting-panel"]');
+    const cardEl = root.querySelector(`[data-testid="cbp-ack-${posted.id}"]`);
+    assert.ok(cardEl, 'the decision prints on the posting card');
+    assert.match(cardEl.textContent, /Drift ACKNOWLEDGED/);
+    assert.match(cardEl.textContent, new RegExp(s1.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+    assert.equal(root.querySelector(`[data-testid="cbp-ack-btn-${posted.id}"]`), null, 'an acknowledged drift offers no second acknowledgement');
+    assert.equal(root.querySelector('[data-testid="cbp-brief"]').textContent, chargebackPostingBriefText(report));
+  });
+
+  /* ---- the record moves again: a NEW signature is a NEW decision ---- */
+  store.state.reportingLines = store.state.reportingLines.map((l) => (l.id === 'ln-pat' ? { ...l, shareH: 30 } : l));
+  report = reportOf(api);
+  const grown = report.postings.find((p) => p.id === posted.id);
+  assert.equal(grown.audit.ackState, 'unacknowledged', 'the S1 acknowledgement never covers an S2 drift');
+  const s2 = grown.audit.driftSignature;
+  assert.notEqual(s2, s1);
+  assert.match(s2, /^drift1:2:[0-9a-f]{16}$/);
+  assert.equal(grown.audit.priorAck.signature, s1, 'the prior acknowledgement is printed as history, not as cover');
+  assert.equal(api.chargebackPostingScan().ok, true);
+  asks = activeDriftAsks(store);
+  assert.equal(asks.length, 1, 'exactly one ask for the signature that is actually owed');
+  assert.ok(store.state.chargebackPostingMarkers.some((m) => m.key === `ask|drift|${posted.id}|${s2}`));
+  assert.ok(store.state.chargebackPostingMarkers.some((m) => m.key === `ask|drift|${posted.id}|${s1}`), 'the S1 ask stays as history — it is never issued again');
+
+  /* ---- a reversal closes the drift ask with the actual reason ---- */
+  const reversed = api.chargebackReversePosting(posted.id, 'The retuned share was agreed against the wrong line; reversing to re-post the corrected statement.');
+  assert.equal(reversed.ok, true, reversed.error);
+  report = reportOf(api);
+  const asHistory = report.postings.find((p) => p.id === posted.id);
+  assert.deepEqual([asHistory.state, asHistory.audit.verdict, asHistory.audit.ackState], ['reversed', 'not-audited', 'no-drift']);
+  assert.equal(activeDriftAsks(store).length, 0, 'a reversed posting owes no drift decision');
+  const s2Task = store.state.delegations.find((d) => String(d.title).includes('Decide the drift') && d.expectedOutcome.includes(s2));
+  assert.equal(s2Task.status, 'done');
+  assert.match(s2Task.completionNote, /posting was reversed/);
+
+  /* ---- display == stored across a real reload ---- */
+  const persisted = JSON.parse(storage.getItem(STORAGE_KEY));
+  const again = harness(persisted);
+  const reloaded = reportOf(again.api);
+  assert.deepEqual(reloaded.postings, report.postings, 'the persisted acts reproduce every printed figure');
+  assert.deepEqual(reloaded.board, report.board);
+});
+
+test('one ask per signature, ever: an UNANSWERED drift that clears and returns is not re-asked, and the panel still prints it as undecided', () => {
+  const { store, api } = harness(baseState());
+  priceInFull(api);
+  const posted = api.chargebackPost({ currency: 'USD', bindings: [{ accountId: 'fm', envelopeId: 'env-fm-usd' }, { accountId: 'pm', envelopeId: 'env-pm-usd' }] });
+  assert.equal(posted.ok, true, posted.error);
+
+  store.state.reportingLines = store.state.reportingLines.map((l) => (l.id === 'ln-pat' ? { ...l, shareH: 20 } : l));
+  const s1 = reportOf(api).postings.find((p) => p.id === posted.id).audit.driftSignature;
+  assert.ok(s1);
+  assert.equal(api.chargebackPostingScan().ok, true);
+  assert.equal(activeDriftAsks(store).length, 1);
+
+  // The record returns to the posted figures: the ask closes because the
+  // condition cleared — not because anybody decided anything.
+  store.state.reportingLines = store.state.reportingLines.map((l) => (l.id === 'ln-pat' ? { ...l, shareH: 10 } : l));
+  assert.equal(api.chargebackPostingScan().ok, true);
+  assert.equal(activeDriftAsks(store).length, 0);
+  const cleared = store.state.delegations.find((d) => String(d.title).includes('Decide the drift'));
+  assert.equal(cleared.status, 'done');
+  assert.match(cleared.completionNote, /reproduces the posted figures again/);
+  assert.equal(reportOf(api).postings.find((p) => p.id === posted.id).audit.ackState, 'no-drift');
+
+  // The identical drift returns: the signature already has its one ask, so no
+  // second ask is issued — and the register prints the decision as still owed.
+  store.state.reportingLines = store.state.reportingLines.map((l) => (l.id === 'ln-pat' ? { ...l, shareH: 20 } : l));
+  const back = reportOf(api).postings.find((p) => p.id === posted.id);
+  assert.equal(back.audit.driftSignature, s1, 'the identical restatement yields the identical signature');
+  assert.equal(back.audit.ackState, 'unacknowledged');
+  assert.equal(api.chargebackPostingScan().ok, true);
+  assert.equal(activeDriftAsks(store).length, 0, 'never asks twice for one signature');
+  assert.equal(reportOf(api).board.openDriftAsksN, 0);
 });

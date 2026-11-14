@@ -38,11 +38,12 @@
 
 export const CHARGEBACK_POSTING_RULE_ID = 'RULE-CBP-01';
 export const CHARGEBACK_POSTING_ADR = 'ADR-0194';
-export const CHARGEBACK_POSTING_ENGINE_VERSION = 'chargeback-posting-2026.11-v1';
+export const CHARGEBACK_POSTING_ENGINE_VERSION = 'chargeback-posting-2026.11-v2';
 
 export const CHARGEBACK_POSTING_EVENTS = Object.freeze({
   POSTED: 'chargeback.posting.posted',
   REVERSED: 'chargeback.posting.reversed',
+  ACKNOWLEDGED: 'chargeback.posting.acknowledged',
   SCAN: 'chargeback.posting.scan',
   CONVENTIONS: 'chargeback.posting.conventions',
 });
@@ -54,8 +55,13 @@ export const CHARGEBACK_POSTING_RIGHTS = Object.freeze({
   GOVERN: 'govern-transfer-prices',
 });
 
-/** The two dated acts. Nothing else is ever stored about a posting. */
-export const CHARGEBACK_POSTING_ACT_KINDS = Object.freeze(['post', 'reverse']);
+/**
+ * The three dated acts. Nothing else is ever stored about a posting. An
+ * `acknowledge` (ADR-0202) never edits the posting it answers: it records,
+ * for ONE exact drift signature, that a human decided the posted figures
+ * stand as the accepted period fact with the divergence noted.
+ */
+export const CHARGEBACK_POSTING_ACT_KINDS = Object.freeze(['post', 'reverse', 'acknowledge']);
 /** How an act reached the record. `operator` is a scribed statement, not an authenticated one. */
 export const CHARGEBACK_POSTING_VIAS = Object.freeze(['seat', 'operator']);
 
@@ -146,8 +152,7 @@ export const CHARGEBACK_BINDING_REASONS = Object.freeze({
 /** The default-quarter standing: can this workspace post, per currency? */
 export const CHARGEBACK_STANDING_STATES = Object.freeze([
   'inert', 'not-postable', 'postable', 'posted', 'posted-drifted', 'conflicted',
-]);
-export const CHARGEBACK_STANDING_LABELS = Object.freeze({
+]);export const CHARGEBACK_STANDING_LABELS = Object.freeze({
   inert: 'Nothing to post',
   'not-postable': 'Not postable — the statement is incomplete',
   postable: 'Postable — the statement is complete and unposted',
@@ -159,12 +164,38 @@ export const CHARGEBACK_STANDING_TONES = Object.freeze({
   inert: 'neutral', 'not-postable': 'warn', postable: 'warn', posted: 'good', 'posted-drifted': 'bad', conflicted: 'bad',
 });
 
+/**
+ * What a HUMAN has decided about the drift on ONE posting (ADR-0202). Three
+ * states that never collapse: `acknowledged` means an append-only act covers
+ * the EXACT signature the record derives today; `unacknowledged` means the
+ * record has restated the period and nobody has decided; `no-drift` means the
+ * comparison currently reproduces the posted figures (or the comparison does
+ * not run), so there is nothing to decide. A prior acknowledgement whose
+ * signature no longer matches is printed as history — never as cover for a
+ * drift it did not see.
+ */
+export const CHARGEBACK_DRIFT_ACK_STATES = Object.freeze(['acknowledged', 'unacknowledged', 'no-drift']);
+export const CHARGEBACK_DRIFT_ACK_LABELS = Object.freeze({
+  acknowledged: 'Drift ACKNOWLEDGED — the posted figures stand as the accepted period fact',
+  unacknowledged: 'Drift NOT acknowledged — nobody has decided what the restated figures mean',
+  'no-drift': 'No drift to decide',
+});
+export const CHARGEBACK_DRIFT_ACK_TONES = Object.freeze({
+  acknowledged: 'good', unacknowledged: 'bad', 'no-drift': 'neutral',
+});
+export const CHARGEBACK_DRIFT_ACK_REASONS = Object.freeze({
+  acknowledged: 'A dated act names this exact drift signature and accepts the posted figures as the period fact with the divergence noted. The posting is never edited and the re-derived statement is never bent to match it.',
+  unacknowledged: 'The record restated this period after it was posted and no acknowledgement covers the drift as it reads today. RULE-CBP-01 has one dated ask in front of the posting’s joint apex: acknowledge in writing, or reverse and re-post.',
+  'no-drift': 'Today’s re-derivation either reproduces every posted cent or does not run (the statement regressed or the window is refused), so there is no drift signature to decide.',
+});
+
 export const CHARGEBACK_POSTING_RULE_RELATIONS = Object.freeze(['rolls-up-to']);
 
 export const CHARGEBACK_POSTING_QUESTIONS = Object.freeze([
   'The quarter’s chargeback statement finally reads complete. Who turns it from a reading into a period fact — and against which envelopes?',
   'Which lines’ internal labour charges stand against a named budget envelope, and which stand against a written “no envelope” declaration?',
   'A price was voided after the quarter was posted. Does the posted document still match what the record derives today — and exactly where not?',
+  'The record moved after the close and the posting drifted. Who decides, in writing, that the posted figures still stand — and who reverses instead?',
   'Has anything been posted twice for one period and currency, and has every reversal got a dated reason on it?',
 ]);
 
@@ -175,6 +206,7 @@ export const CHARGEBACK_POSTING_METHOD = Object.freeze([
   'The posting ledger is the chargeback analogue of a CO document: internal charges and credits net to exactly zero inside it, per posting, as integer equality. It never writes a budget line: an internal credit is not negative spend, and the envelope’s own ceiling, actuals and headroom arithmetic (`evaluateBudget`) is left untouched. The join is printed beside the envelope, labelled, exactly as ADR-0142 prints matrix overlap.',
   'One LIVE posting per (period, currency). Posting again requires a dated reversal first — an appended act with a written reason, never an edit. A reversed posting stays on the record as history; an imported workspace carrying two live postings for one period and currency is printed as CONFLICTED, and neither is picked.',
   'Every read re-derives the posting’s own period from the live record and compares it to the frozen figures, account by account, as integer equality: FAITHFUL, DRIFTED (with the exact cents then and now), STATEMENT-REGRESSED or PERIOD-UNREADABLE. Drift is reported, never corrected — the posting proves what was signed; the comparison proves whether the record still says it.',
+  'A drifted posting is a DECISION someone owes, not a footnote. The exact drift is fingerprinted (one signature per distinct set of moved cents), RULE-CBP-01 puts ONE dated ask in front of the posting’s own joint apex, and a human answers with one of two dated acts: ACKNOWLEDGE in writing — the posted figures stand as the accepted period fact, divergence noted — or REVERSE with a written reason and re-post. The acknowledgement is append-only, covers exactly the signature it names, and never edits a figure; a drift that grows or moves is a new signature and a new ask.',
   'RULE-CBP-01 notices a complete, unposted quarter currency and puts ONE dated ask in front of the lowest joint apex of every line the statement names — the one seat the whole internal trade rolls up to. An ambiguous apex, the workspace leader, or an off-roster apex is recorded as an identity-free observation; nobody is substituted. The rule never posts, never reverses and never binds an envelope.',
   'Seats are workflow declarations, not authentication. A posting records the seat or the operator view that signed it; accounts outside the reading seat are counted and withheld, exactly as the statement itself withholds them.',
 ]);
@@ -185,6 +217,7 @@ export const CHARGEBACK_POSTING_LIMITS_TEXT = Object.freeze([
   'The figures are the statement’s figures: declared share-days × two-key prices (ADR-0177). Posting does not re-measure anything and cannot include a share-day the statement refused.',
   'Reversal restores postability; it does not restate the envelope record, because none was written. The reversed document remains on the ledger as dated history.',
   'The audit compares the posting against the record as it reads TODAY. It cannot say which intervening act moved the figures — it prints the delta, not a culprit.',
+  'An acknowledgement settles the DECISION about a drift, not the arithmetic: no cent changes, no account is re-bound, and the re-derived statement keeps printing its own truth beside the accepted one.',
   'Asks are routed to the lowest joint apex of the statement’s lines in the matrix DAG. Where that apex is ambiguous, the workspace leader, or off the roster, an identity-free observation is recorded and nobody is asked on somebody else’s behalf.',
 ]);
 
@@ -192,11 +225,13 @@ export const CHARGEBACK_POSTING_CSV_COLUMNS = Object.freeze([
   'row_type', 'generated_on', 'scope',
   'postings', 'postings_live', 'postings_reversed', 'postings_conflicted',
   'audits_faithful', 'audits_drifted', 'audits_statement_regressed', 'audits_window_unreadable', 'audits_not_audited', 'audits_reconcile',
+  'drift_ack_acknowledged', 'drift_ack_unacknowledged', 'open_drift_asks',
   'rows_total', 'rows_bound', 'rows_no_envelope', 'rows_decayed', 'rows_reconcile',
   'quarter_from', 'quarter_to', 'quarter_state', 'quarter_reason',
   'currencies_postable', 'currencies_posted', 'currencies_posted_drifted', 'currencies_conflicted',
   'open_asks',
   'period_from', 'period_to', 'period_days', 'currency', 'posting_state', 'audit_verdict',
+  'drift_signature', 'drift_ack_state', 'drift_ack_on',
   'posted_on', 'reversed_on', 'via',
   'rows_n', 'rows_bound_n', 'rows_no_envelope_n', 'rows_decayed_n',
   'entries', 'priced_share_days',
@@ -210,5 +245,5 @@ export const CHARGEBACK_POSTING_CSV_DESCRIPTOR = Object.freeze({
   group: 'analytics',
   sensitive: false,
   filenameSlug: 'chargeback-postings',
-  description: 'One summary row for the chargeback posting ledger — how many period postings exist, how many are live, reversed or conflicted, what today’s re-derivation says about each (faithful / drifted / regressed / unreadable), how many posted lines are bound to a budget envelope, declared unbound, or have decayed bindings, and the last completed quarter’s postability per currency — plus one row per posting with its period, currency, frozen integer-cent totals and zero-sum check. Aggregate and identity-free: no person, manager, envelope name or id, note or reason text is exported. A withheld figure is a BLANK cell, never a zero.',
+  description: 'One summary row for the chargeback posting ledger — how many period postings exist, how many are live, reversed or conflicted, what today’s re-derivation says about each (faithful / drifted / regressed / unreadable), how many drifted postings carry a written acknowledgement of their exact drift signature and how many still await that dated decision (with the open drift asks), how many posted lines are bound to a budget envelope, declared unbound, or have decayed bindings, and the last completed quarter’s postability per currency — plus one row per posting with its period, currency, frozen integer-cent totals, zero-sum check, drift signature and acknowledgement state. Aggregate and identity-free: no person, manager, envelope name or id, note or reason text is exported. A withheld figure is a BLANK cell, never a zero.',
 });
