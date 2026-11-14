@@ -162,12 +162,12 @@ test('schema v91 (main) then v92/v93: board collections arrive additively', () =
   delete before.boardMemos;
   delete before.boardMarkers;
   const migrated = migrate(before);
-  assert.deepEqual(migrated.applied, ['90 → 91', '91 → 92', '92 → 93', '93 → 94', '94 → 95', '95 → 96', '96 → 97', '97 → 98', '98 → 99', '99 → 100', '100 → 101', '101 → 102', '102 → 103', '103 → 104', '104 → 105', '105 → 106', '106 → 107', '107 → 108', '108 → 109', '109 → 110', '110 → 111', '111 → 112', '112 → 113', '113 → 114', '114 → 115', '115 → 116', '116 → 117', '117 → 118', '118 → 119', '119 → 120', '120 → 121', '121 → 122', '122 → 123', '123 → 124', '124 → 125', '125 → 126', '126 → 127', '127 → 128', '128 → 129', '129 → 130', '130 → 131', '131 → 132', '132 → 133', '133 → 134', '134 → 135', '135 → 136', '136 → 137', '137 → 138', '138 → 139', '139 → 140', '140 → 141', '141 → 142', '142 → 143', '143 → 144', '144 → 145', '145 → 146', '146 → 147', '147 → 148', '148 → 149', '149 → 150', '150 → 151', '151 → 152', '152 → 153', '153 → 154', '154 → 155'], 'each step additive');
-  assert.equal(migrated.raw.schemaVersion, 155);
+  assert.deepEqual(migrated.applied, ['90 → 91', '91 → 92', '92 → 93', '93 → 94', '94 → 95', '95 → 96', '96 → 97', '97 → 98', '98 → 99', '99 → 100', '100 → 101', '101 → 102', '102 → 103', '103 → 104', '104 → 105', '105 → 106', '106 → 107', '107 → 108', '108 → 109', '109 → 110', '110 → 111', '111 → 112', '112 → 113', '113 → 114', '114 → 115', '115 → 116', '116 → 117', '117 → 118', '118 → 119', '119 → 120', '120 → 121', '121 → 122', '122 → 123', '123 → 124', '124 → 125', '125 → 126', '126 → 127', '127 → 128', '128 → 129', '129 → 130', '130 → 131', '131 → 132', '132 → 133', '133 → 134', '134 → 135', '135 → 136', '136 → 137', '137 → 138', '138 → 139', '139 → 140', '140 → 141', '141 → 142', '142 → 143', '143 → 144', '144 → 145', '145 → 146', '146 → 147', '147 → 148', '148 → 149', '149 → 150', '150 → 151', '151 → 152', '152 → 153', '153 → 154', '154 → 155', '155 → 156'], 'each step additive');
+  assert.equal(migrated.raw.schemaVersion, 156);
   assert.deepEqual(migrated.raw.boardMemos, []);
   assert.deepEqual(migrated.raw.boardMarkers, []);
   const normalized = normalizeState(migrated.raw, { now: NOW }).state;
-  assert.equal(normalized.schemaVersion, 155);
+  assert.equal(normalized.schemaVersion, 156);
   assert.equal(normalized.settings.boardCellFloor, 5);
   assert.equal(normalized.settings.boardEvidenceFloor, 4);
   assert.equal(normalized.settings.boardMaterialityPct, 10);
@@ -213,7 +213,7 @@ test('the rule is on the shared spine, has an auditable contract, and cannot out
   // (RULE-CSA-01) brought it to 116 and ADR-0187 (RULE-CYC-01) to 117, ADR-0188 (RULE-AAC-01) to 118,
   // ADR-0189 (RULE-OIA-01) to 119 and ADR-0190 (RULE-LSW-01) states the true total deliberately at 120, with the `PROPAGATION_CONTRACTS` parity assertion
   // above proving the contract exists.
-  assert.equal(DEFAULT_POST_COMMIT_RULES.length, 123, 'the shared spine includes cadence, Strategy Cycle (RULE-SCR), Envoy (RULE-ENV), Federation (RULE-FED), Differencing (RULE-DFR), the Prospective Contract (RULE-PIC), the Robust Allocation Terminal (RULE-RAL), the Internal Clearinghouse (RULE-CLR), the Discretion Calibrator (RULE-SPC) and the Reputational Capital Ledger (RULE-RCL) and, from ADR-0108, the Decision-Fit Ledger (RULE-FIT), from ADR-0140 the Matrix Accountability Ledger (RULE-MTX-01) and from ADR-0143 the Cross-Line Priority Arbitration (RULE-ARB-01) and from ADR-0144 the Cross-Line Contradiction Audit (RULE-CNT-01) and from ADR-0147 Matrix Multi-Line Review Stewardship (RULE-SRV-01) and from ADR-0187 Dependency Feedback-Cycle Escalation (RULE-CYC-01) and from ADR-0188 Cross-Line After-Action Corroboration & Lesson-Adoption Parity (RULE-AAC-01) and from ADR-0189 Product–Organisation Interface Alignment (RULE-OIA-01) and from ADR-0193 Cross-Line Goal Commitment Conflicts (RULE-GCC-01) and from ADR-0194 Chargeback Period Posting (RULE-CBP-01)');
+  assert.equal(DEFAULT_POST_COMMIT_RULES.length, 124, 'the shared spine includes cadence, Strategy Cycle (RULE-SCR), Envoy (RULE-ENV), Federation (RULE-FED), Differencing (RULE-DFR), the Prospective Contract (RULE-PIC), the Robust Allocation Terminal (RULE-RAL), the Internal Clearinghouse (RULE-CLR), the Discretion Calibrator (RULE-SPC) and the Reputational Capital Ledger (RULE-RCL) and, from ADR-0108, the Decision-Fit Ledger (RULE-FIT), from ADR-0140 the Matrix Accountability Ledger (RULE-MTX-01) and from ADR-0143 the Cross-Line Priority Arbitration (RULE-ARB-01) and from ADR-0144 the Cross-Line Contradiction Audit (RULE-CNT-01) and from ADR-0147 Matrix Multi-Line Review Stewardship (RULE-SRV-01) and from ADR-0187 Dependency Feedback-Cycle Escalation (RULE-CYC-01) and from ADR-0188 Cross-Line After-Action Corroboration & Lesson-Adoption Parity (RULE-AAC-01) and from ADR-0189 Product–Organisation Interface Alignment (RULE-OIA-01) and from ADR-0193 Cross-Line Goal Commitment Conflicts (RULE-GCC-01), ADR-0194 Chargeback Period Posting (RULE-CBP-01), and ADR-0196’s explicit no-auto-move work-reassignment contract');
   assert.ok(DEFAULT_POST_COMMIT_RULES.includes(boardRule));
   const contract = contractFor(boardRule);
   assert.ok(contract, 'boardRule has a declared contract');
@@ -253,7 +253,7 @@ test('the route exists, is enterprise material, and is reachable from the nav', 
 test('CSV scope #80 exists and refuses to guess', () => {
   // ADR-0144 adds scope #107; ADR-0145 adds scope #108; the total is pinned
   // deliberately so the next session cannot drift the count silently.
-  assert.equal(CSV_EXPORTS.length, 146);
+  assert.equal(CSV_EXPORTS.length, 147);
   const scope = CSV_EXPORTS.find((s) => s.key === 'board-claims');
   assert.ok(scope);
   assert.equal(scope.sensitive, false);

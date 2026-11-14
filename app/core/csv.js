@@ -193,6 +193,8 @@ import { buildLineHorizon, lineHorizonCsvRows } from './domain/lineHorizon.js';
 import { LINE_HORIZON_CSV_COLUMNS, LINE_HORIZON_CSV_DESCRIPTOR } from './domain/lineHorizonRegistry.js';
 import { buildWorkTurns, workTurnCsvRows } from './domain/workTurns.js';
 import { WORK_TURN_CSV_COLUMNS, WORK_TURN_CSV_DESCRIPTOR } from './domain/workTurnRegistry.js';
+import { buildWorkReassignments, workReassignmentCsvRows } from './domain/workReassignment.js';
+import { WORK_REASSIGNMENT_CSV_COLUMNS, WORK_REASSIGNMENT_CSV_DESCRIPTOR } from './domain/workReassignmentRegistry.js';
 import { buildPausePermits, pausePermitCsvRows } from './domain/pausePermits.js';
 import { PAUSE_PERMIT_CSV_COLUMNS, PAUSE_PERMIT_CSV_DESCRIPTOR } from './domain/pausePermitRegistry.js';
 import { STRUCTURE_HISTORY_CSV_COLUMNS } from './domain/structureHistoryRegistry.js';
@@ -1397,6 +1399,10 @@ export const CSV_EXPORTS = [
   // No person, manager, envelope name or id, note or reason text; a withheld
   // figure exports BLANK, never zero.
   CHARGEBACK_POSTING_CSV_DESCRIPTOR,
+  // #147 (ADR-0196): cross-line work-turn transfer consent and receiving
+  // capacity — aggregate only. No person, manager, line, transfer id, work
+  // title, note, reason or row-level capacity figure crosses the boundary.
+  WORK_REASSIGNMENT_CSV_DESCRIPTOR,
 ];
 
 function personLookup(state) {
@@ -6593,6 +6599,16 @@ export function buildScopeTable(state, scope, now) {
       // manager, ask title or free text crosses the boundary.
       const report = buildWorkTurns(state, { now, settings: state.settings || {} });
       return { columns: WORK_TURN_CSV_COLUMNS.map((key) => ({ key, header: key })), rows: workTurnCsvRows(report) };
+    }
+    case 'work-reassignments': {
+      // CSV scope #147 (Schema v156, ADR-0196). Built from the SAME reader the
+      // panel renders. Aggregate only: no person, manager, line, work title,
+      // note, reason, transfer id or row-level capacity number is exported.
+      const report = buildWorkReassignments(state, { now, settings: state.settings || {} });
+      return {
+        columns: WORK_REASSIGNMENT_CSV_COLUMNS.map((key) => ({ key, header: key })),
+        rows: workReassignmentCsvRows(report),
+      };
     }
     case 'chargeback-postings': {
       // CSV scope #146 (Schema v154, ADR-0194). Built from the SAME seat-scoped

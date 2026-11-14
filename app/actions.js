@@ -48,6 +48,9 @@ import { createTransferPriceActions } from './core/domain/transferPriceActions.j
 import { createChargebackPostingActions } from './core/domain/chargebackPostingActions.js';
 import { createDelegationLineActions } from './core/domain/delegationLineActions.js';
 import { createWorkTurnActions } from './core/domain/workTurnActions.js';
+import { workTurnAskProvenance } from './core/domain/workTurnSchema.js';
+import { createWorkReassignmentActions } from './core/domain/workReassignmentActions.js';
+import { workReassignmentCompletionCheck } from './core/domain/workReassignment.js';
 import { createPausePermitActions } from './core/domain/pausePermitActions.js';
 // ADR-0184: the Workforce Stock-Flow (Markov manpower) Plan. Recording a move
 // and declaring an intended shape are dated human acts through the same reviewed
@@ -2427,7 +2430,7 @@ export function createApi(store, options = {}) {
       if (!current) return fail('That delegation no longer exists.');
       if (current.status !== 'active') return fail('This delegation is already closed.');
       const completedOn = data.completedOn || today();
-      const completionNote = clean(data.completionNote) || '';
+      let completionNote = clean(data.completionNote) || '';
       if (!isCalendarDay(completedOn) || completedOn > today() || completedOn < current.delegatedOn) {
         return fail('Choose a valid completion date within the delegation period, not in the future.', 'completedOn');
       }
@@ -2435,6 +2438,27 @@ export function createApi(store, options = {}) {
         return fail('Completion cannot predate an existing check-in.', 'completedOn');
       }
       if (!completionNote) return fail('Record the outcome delivered and any follow-up that remains.', 'completionNote');
+      // ADR-0196: RULE-NPW-01 can ask a manager to rotate work, but a generic
+      // completion used to let that ask close with no receiving-line consent or
+      // capacity evidence at all. This is the enforcement boundary, not a UI
+      // hint: a served rotation must carry one linked transfer that is accepted
+      // AND still reads ready. Returning the ask remains a distinct path.
+      const markerClaimsRotation = (store.state.workTurnMarkers || [])
+        .some((marker) => marker?.kind === 'ask' && marker.taskId === delegationId);
+      const rotationProvenance = workTurnAskProvenance(store.state, delegationId);
+      // A loose marker must not let an ordinary delegation impersonate a
+      // rotation, but neither may it reopen the former prose-only completion
+      // bypass. A marker that claims RULE-NPW-01 without its independent task
+      // support/link proof fails closed until the record is repaired outside
+      // this generic completion door.
+      if (markerClaimsRotation && !rotationProvenance.ok) {
+        return fail('This delegation carries a work-turn ask marker whose RULE-NPW-01 provenance cannot be proved from the marker, rule support and typed obligation link. It cannot be completed through the generic door as either served or ordinary work.', 'completionNote');
+      }
+      if (rotationProvenance.ok) {
+        const transfer = workReassignmentCompletionCheck(store.state, delegationId, { now: clock() });
+        if (!transfer.ok) return fail(transfer.error, 'completionNote');
+        completionNote = `Served by ADR-0196 transfer ${transfer.transferId}. ${completionNote}`.slice(0, 2000);
+      }
       const linkedPlanStartsInFuture = (store.state.portfolio || []).some((item) =>
         item?.status === 'open' && item.sourceType === 'delegation' &&
         item.sourceId === delegationId && item.createdOn && item.createdOn > completedOn,
@@ -20181,6 +20205,9 @@ export function createApi(store, options = {}) {
   // manager's own dated act through the same reviewed gateway; pools, fair
   // turns and verdicts are derived on read and RULE-NPW-01 runs in the commit.
   Object.assign(api, createWorkTurnActions(store, { now: clock, idFactory: id }));
+  // ADR-0196: a work-turn transfer records a source-line proposal and a
+  // receiving-line capacity answer. It never changes a delegation owner.
+  Object.assign(api, createWorkReassignmentActions(store, { now: clock, idFactory: id }));
   // ADR-0182: the Automation Pause Permit Register. Granting a permit writes the
   // permit AND flips the switch in one atomic commit; revoking withdraws the
   // authority and brings the switch back up in one commit. Every state, reach

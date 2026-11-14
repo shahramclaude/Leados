@@ -145,7 +145,7 @@ test('every CSV scope round-trips cleanly and preserves unknown values as blank 
 // & tiered daily management, aggregate only).
 // The pin states the total deliberately so the next session cannot drift the
 // catalog count silently.
-assert.equal(CSV_EXPORTS.length, 146);
+assert.equal(CSV_EXPORTS.length, 147);
   for (const spec of CSV_EXPORTS) {
     const res = exportWorkspaceCsv(state, spec.key, { now: NOW });
     assert.equal(res.ok, true, `${spec.key} export succeeds`);

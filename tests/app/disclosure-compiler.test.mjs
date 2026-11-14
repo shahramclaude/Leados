@@ -116,6 +116,10 @@ const RENDERER_ROUTES = [
   // (adapter-scoped, so a seat sees its own span's allocations), so the
   // catalogue and the shell stay one route for one route.
   'matrix',
+  // These existing shell routes each already have an adapter-scoped manifest;
+  // retaining them here makes the catalogue assertion cover the live shell,
+  // rather than an older pre-ADR-0141/0142/0143 route list.
+  'benchEvidence', 'contradiction', 'arbitration',
 ];
 
 /** Sentinel-bearing roster: every person, span and private note is traceable. */
@@ -212,7 +216,7 @@ function seatsOrThrow(state) {
 /* --------------------------------------------------------------- 1. schema */
 
 test('schema v90 migrates additively and refuses malformed or stale grants', () => {
-  assert.equal(SCHEMA_VERSION, 155);
+  assert.equal(SCHEMA_VERSION, 156);
   const old = { schemaVersion: 89, settings: { leaderName: 'Keep' }, cases: [{ id: 'keep' }], disclosureGrants: [{ id: 'existing' }] };
   const migrated = migrate(old);
   assert.equal(migrated.raw.schemaVersion, SCHEMA_VERSION);

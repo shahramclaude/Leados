@@ -168,6 +168,12 @@ const groups = [
   // the conventions is director+.
   ['classify-work-turn', 'workTurnClassify'],
   ['govern-work-turns', 'workTurnScan workTurnSetConventions'],
+  // ADR-0196: each side can speak only for its own line. The action narrows a
+  // source proposal, receiving answer and withdrawal to that current holder;
+  // the operator view is labelled as a scribed statement rather than identity.
+  ['propose-work-reassignment', 'workReassignmentPropose'],
+  ['answer-work-reassignment', 'workReassignmentAccept workReassignmentDecline'],
+  ['withdraw-work-reassignment', 'workReassignmentWithdraw'],
   // ADR-0182: granting or withdrawing a permit for a silenced automatic control
   // is director+ (it governs the whole workspace's automatic behaviour). The
   // ACTION further narrows it: a seat that is not the full-access operator must
@@ -575,6 +581,10 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // seat are counted, never listed, and the altitude disclosure ladder decides
 // whether names, leaders or counts are returned.
 'workTurnReport',
+// ADR-0196: the reassignment reader and privacy-scoped candidate list are
+// seat-checked in their action factory. The aggregate CSV is produced from the
+// same reader and never exposes its raw transfer acts.
+'workReassignmentReport', 'workReassignmentCandidates',
 // ADR-0182: seat-scoped inside `buildPausePermits` — the altitude disclosure
 // ladder decides whether switch keys, authorisers and reason text are returned,
 // or counts only.
@@ -673,6 +683,14 @@ const MATRIX_LINE_SCOPED = new Set([
   // only through a dotted line; the action re-checks the line holder itself.
   'standardWorkDeclareRoutine',
   'skillRecordQualification',
+  // ADR-0171: an additional-line holder records/re-routes intake on that very
+  // line; the matrix action re-proves the party and the capacity ceiling.
+  'matrixRecordIntake', 'matrixRerouteIntake',
+  // ADR-0196: a transfer names a receiving person who may be visible to the
+  // source only through a declared matrix line. Each action independently
+  // proves source/receiving-line holder authority before it writes an act.
+  'workReassignmentPropose', 'workReassignmentAccept',
+  'workReassignmentDecline', 'workReassignmentWithdraw',
 ]);
 
 /** Exact method allowlist + rank + record/person scope. No arbitrary API names. */

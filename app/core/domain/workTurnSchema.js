@@ -29,6 +29,7 @@ import {
   WORK_TURN_DEFAULTS,
   WORK_TURN_KINDS,
   WORK_TURN_LIMITS,
+  WORK_TURN_RULE_ID,
   WORK_TURN_SETTING_KEYS,
 } from './workTurnRegistry.js';
 
@@ -130,6 +131,80 @@ export function normalizeWorkTurnActs(raw, state = {}, warnings = []) {
   return compactWorkTurnActs(out);
 }
 
+/**
+ * Rule-authored work-turn asks carry three independent, structured artefacts:
+ * an ask marker, the rule's immutable support sentence on its delegation, and
+ * an `issues-obligation` link written by that same rule. A marker alone used
+ * to be enough for ADR-0196. That was merely a pointer: a hand-authored marker
+ * could make an ordinary delegation look like a rotation ask.
+ *
+ * `ruleId` was added to markers after ADR-0181 shipped. Old markers have no
+ * such field, so a legacy ask is accepted only where the other two historical
+ * artefacts corroborate it. This preserves a genuine recorded transfer without
+ * treating marker shape alone as rule provenance. There is no attempt to infer
+ * a rule from a title, owner, reporting line, or current work-turn reading.
+ */
+const RULE_SUPPORT_PREFIX = `Issued by ${WORK_TURN_RULE_ID};`;
+const ASK_MARKER_STATES = new Set(['pool', 'stack']);
+
+function markerHasAskShape(marker) {
+  return Boolean(marker
+    && marker.kind === 'ask'
+    && typeof marker.key === 'string' && marker.key.startsWith('ask|')
+    && typeof marker.subject === 'string' && marker.subject.startsWith(`${marker.state}|`)
+    && ASK_MARKER_STATES.has(marker.state)
+    && typeof marker.taskId === 'string' && marker.taskId);
+}
+
+/** Rule-owned task evidence that remains after a bounded old marker is evicted. */
+export function workTurnRuleTaskEvidence(state = {}, taskId) {
+  const task = (state.delegations || []).find((row) => row?.id === taskId) || null;
+  const support = typeof task?.support === 'string' && task.support.startsWith(RULE_SUPPORT_PREFIX);
+  const link = (state.links || []).some((row) => row
+    && row.targetType === 'delegation'
+    && row.targetId === taskId
+    && row.relation === 'issues-obligation'
+    && row.ruleId === WORK_TURN_RULE_ID);
+  return { ok: Boolean(task && support && link), task, support, link };
+}
+
+/**
+ * Strong semantic provenance for one rotation ask. New rule markers must carry
+ * the explicit rule id. Legacy marker records can retain already accepted
+ * transfers only when the task's support and typed rule link independently
+ * attest to the same rule. The returned proof is deliberately descriptive so
+ * callers can keep the compatibility boundary visible rather than silently
+ * treating old marker-only data as trustworthy.
+ */
+export function workTurnAskProvenance(state = {}, taskId) {
+  const taskEvidence = workTurnRuleTaskEvidence(state, taskId);
+  const marker = (state.workTurnMarkers || []).find((row) => row?.taskId === taskId && markerHasAskShape(row)) || null;
+  if (!marker || !taskEvidence.ok) {
+    return {
+      ok: false,
+      provenance: 'unproven',
+      marker,
+      task: taskEvidence.task,
+      reason: !marker
+        ? 'No structured RULE-NPW-01 ask marker remains for this delegation.'
+        : 'The marker is not corroborated by the rule-authored task support and typed obligation link.',
+    };
+  }
+  if (marker.ruleId === WORK_TURN_RULE_ID) {
+    return { ok: true, provenance: 'explicit', marker, task: taskEvidence.task };
+  }
+  if (marker.ruleId === null || marker.ruleId === undefined || marker.ruleId === '') {
+    return { ok: true, provenance: 'legacy-attested', marker, task: taskEvidence.task };
+  }
+  return {
+    ok: false,
+    provenance: 'unproven',
+    marker,
+    task: taskEvidence.task,
+    reason: 'The work-turn marker names a different or unsupported rule identifier.',
+  };
+}
+
 export function normalizeWorkTurnMarkers(raw) {
   const arr = Array.isArray(raw) ? raw : [];
   const out = [];
@@ -140,13 +215,26 @@ export function normalizeWorkTurnMarkers(raw) {
     if (!key || seen.has(key)) continue;
     const kind = item.kind === 'ask' || item.kind === 'observation' ? item.kind : null;
     if (!kind) continue;
+    const subject = str(item.subject).slice(0, 160);
+    const taskId = str(item.taskId).slice(0, 80) || null;
+    const state = str(item.state).slice(0, 24);
+    // A marker must retain the shape the rule writes. This is not proof of
+    // provenance by itself (see `workTurnAskProvenance`), but it prevents a
+    // loose marker from becoming a plausible rule pointer on reload.
+    if (kind === 'ask' && (!key.startsWith('ask|') || !taskId || !ASK_MARKER_STATES.has(state) || !subject.startsWith(`${state}|`))) continue;
+    if (kind === 'observation' && (!key.startsWith('obs|') || taskId !== null || !subject)) continue;
+    const rawRuleId = str(item.ruleId).slice(0, 40);
+    // This collection belongs only to RULE-NPW-01. Preserve pre-field markers
+    // as explicit legacy values, but drop a marker that claims another rule.
+    if (rawRuleId && rawRuleId !== WORK_TURN_RULE_ID) continue;
     seen.add(key);
     out.push({
       key,
       kind,
-      subject: str(item.subject).slice(0, 160),
-      taskId: str(item.taskId).slice(0, 80) || null,
-      state: str(item.state).slice(0, 24),
+      subject,
+      taskId,
+      state,
+      ruleId: rawRuleId || null,
       summary: str(item.summary).slice(0, 280),
       at: isoOrNull(item.at),
     });

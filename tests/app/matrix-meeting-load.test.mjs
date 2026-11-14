@@ -102,7 +102,7 @@ const personOf = (report, id) => report.people.find((p) => p.personId === id);
 /* ------------------------------------------------------------- the surface */
 
 test('the panel and the export are registered, and the schema is untouched', () => {
-  assert.equal(SCHEMA_VERSION, 155, 'meeting-share parity adds no collection');
+  assert.equal(SCHEMA_VERSION, 156, 'meeting-share parity adds no collection');
   assert.ok(MATRIX_PANELS.some((p) => p.key === 'meeting-load'));
   assert.ok(CSV_EXPORTS.some((s) => s.key === 'matrix-meeting-load'));
   assert.equal(MATRIX_MEETING_LOAD_CSV_COLUMNS.length, 41);

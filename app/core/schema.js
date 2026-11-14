@@ -34,6 +34,10 @@ import {
 } from './domain/chargebackPostingSchema.js';
 import { normalizeDelegationLineActs, normalizeDelegationLineMarkers, normalizeDelegationLineSettings } from './domain/delegationLineSchema.js';
 import { normalizeWorkTurnActs, normalizeWorkTurnMarkers, normalizeWorkTurnSettings } from './domain/workTurnSchema.js';
+// ADR-0196 (Schema v156): a dated source-line proposal and receiving-line
+// answer are the only stored facts of a work-turn transfer; readiness and
+// capacity are re-derived on read.
+import { normalizeWorkReassignmentActs } from './domain/workReassignmentSchema.js';
 // ADR-0182 (Schema v145): the Automation Pause Permit Register. Fail-closed
 // normalizers for dated permits and RULE-PMP-01's marker ledger.
 import { normalizePausePermitMarkers, normalizePausePermits, normalizePausePermitSettings } from './domain/pausePermitSchema.js';
@@ -872,7 +876,13 @@ export {
 // or neither. Existing rows receive neither value — no target is read from a
 // goal's title, key result, due date or metric prose. The new divergence
 // convention is added explicitly.
-export const SCHEMA_VERSION = 155;
+// v156 adds the Cross-Line Work-Reassignment Consent & Receiving-Capacity Gate
+// (ADR-0196): `workReassignmentActs` is an append-only proposal / answer /
+// withdrawal ledger tied to an existing RULE-NPW-01 rotation ask. It starts
+// EMPTY: no receiving-line consent, capacity reservation, effort estimate or
+// transfer is inferred from a task title, a reporting line, an intake or a
+// work-turn finding.
+export const SCHEMA_VERSION = 156;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -3028,6 +3038,10 @@ export const COLLECTIONS = [
   // RULE-NPW-01's marker ledger. No pool, turn, share or verdict is stored.
   'workTurnActs',
   'workTurnMarkers',
+  // ADR-0196 (Schema v156): append-only source-line proposal, receiving-line
+  // answer and withdrawal acts. No consent state, capacity figure, served flag
+  // or reassigned owner is stored; all are re-derived on read.
+  'workReassignmentActs',
   // ADR-0182 (Schema v145): dated permits authorising the silence of an
   // automatic control, and RULE-PMP-01's marker ledger. No state, reach flag,
   // expiry mark or count is stored — every one is re-derived on read.
@@ -8509,6 +8523,14 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.exchangeArtefacts = normalizeExchangeArtefacts(raw.exchangeArtefacts, warnings);
   state.exchangeMarkers = normalizeExchangeMarkers(raw.exchangeMarkers);
   state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
+  // ADR-0196 (Schema v156): normalize only after the typed links have been
+  // loaded. A work-reassignment proposal must prove a real RULE-NPW-01 marker
+  // AND the rule-authored obligation link/support pair; marker shape alone
+  // cannot turn an ordinary delegation into receiving-line consent. A bounded
+  // old marker may disappear after service, so an already-attested historical
+  // transfer can survive only on its persisted rule id plus that same task/link
+  // evidence — no new link is invented on load.
+  state.workReassignmentActs = normalizeWorkReassignmentActs(raw.workReassignmentActs, state, warnings);
 
   const events = asArray(raw, 'events', warnings).map((e, i) => ({
     id: str(e.id) || `ev-${i}`,
@@ -9206,6 +9228,16 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  // 155 → 156: ADR-0196 adds one EMPTY append-only ledger. No active
+  // RULE-NPW-01 ask has a receiving-line answer, effort estimate or capacity
+  // reservation inferred from its text, owner or current reporting lines; an
+  // upgraded workspace honestly reads every such rotation as not yet served by
+  // this gate until a human records both sides of a transfer.
+  155: (v155) => ({
+    ...v155,
+    schemaVersion: 156,
+    workReassignmentActs: Array.isArray(v155.workReassignmentActs) ? v155.workReassignmentActs : [],
+  }),
   // 154 → 155: ADR-0195 adds OPTIONAL target magnitude fields to an existing
   // append-only declaration and one declared divergence convention. No target
   // value, unit, conversion or agreement is inferred from any existing goal or

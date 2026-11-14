@@ -436,7 +436,7 @@ test('a single-chain workspace is inert end to end, and every read mutates nothi
   assert.equal(report.board.totalsReconcile, true);
   assert.match(report.singleChainNote, /second share to weigh/);
   assert.equal(JSON.stringify(normalized), before, 'the read mutated nothing');
-  assert.equal(SCHEMA_VERSION, 155);
+  assert.equal(SCHEMA_VERSION, 156);
 
   const rows = linePeriodAllocationCsvRows(report);
   assert.equal(rows.length, 1, 'the summary row says the workspace is empty; no kind rows are invented');
