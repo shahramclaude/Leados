@@ -279,7 +279,7 @@ function inventoryPanel(ctx, report) {
 /* ----------------------------------------------------------------- verdicts */
 
 function verdictsPanel(ctx, report) {
-  const insights = buildInsights(ctx.state, ctx.now);
+  const insights = ctx.getInsights ? ctx.getInsights() : buildInsights(ctx.state, ctx.now);
   const queue = insights.findings
     .filter((f) => f && f.ruleId !== 'SETUP-01' && Number(f.severity) >= 2)
     .slice()
@@ -578,7 +578,7 @@ function methodPanel(ctx, report) {
 
 export function renderIntegrity(ctx) {
   const settings = ctx.state.settings || {};
-  const insights = buildInsights(ctx.state, ctx.now);
+  const insights = ctx.getInsights ? ctx.getInsights() : buildInsights(ctx.state, ctx.now);
   // The read model is asked *with* today's findings so the Board's own signals
   // can tell "nothing to judge" apart from "seven findings nobody has judged".
   const report = ctx.api.integrityRead(insights.findings);

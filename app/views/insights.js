@@ -24,7 +24,7 @@ const PER_BAND = 8;
 
 export function renderInsights(ctx) {
   const { state, now } = ctx;
-  const insights = buildInsights(state, now);
+  const insights = ctx.getInsights ? ctx.getInsights() : buildInsights(state, now);
   const all = rollUpFindings(insights.findings, { threshold: 3 });
 
   const domain = ctx.query.get('domain') || 'all';

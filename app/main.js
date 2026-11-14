@@ -12,6 +12,7 @@ import { createApi } from './actions.js';
 import { createIdleMonitor } from './core/idle.js';
 import { dayKey } from './core/time.js';
 import { buildInsights } from './core/domain/insights.js';
+import { createInsightsMemo } from './core/domain/insightsMemo.js';
 import { teamHealth } from './core/domain/health.js';
 import { dueMeetings } from './core/domain/oneonone.js';
 import { renderToday } from './views/today.js';
@@ -977,6 +978,11 @@ export function parseRoute(hash) {
 export function createApp({ root, storage, now = () => new Date(), idFactory, crypto, kdfIterations, minKdfIterations } = {}) {
   const store = createStore({ storage, now, idFactory, crypto, kdfIterations, minKdfIterations });
   const api = createApi(store, { now, idFactory });
+  // Signal generation includes several cross-domain projections and seeded
+  // simulations. Navigation badges and the active screen often request the
+  // exact same daily read during one render, so share it for this immutable
+  // store snapshot instead of running the full engine twice.
+  const getInsights = createInsightsMemo(buildInsights);
   let ctx = null;
   let currentRoute = null;
   let lastRenderedRoute = null;
@@ -1121,6 +1127,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
     return {
       state, seatContext,
       now: now(),
+      getInsights: () => getInsights(state, now()),
       route,
       segments,
       query,
@@ -1195,7 +1202,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
   }
 
   function counters(state, at, seatCtx = null) {
-    const insights = buildInsights(state, at);
+    const insights = getInsights(state, at);
     return {
       // ADR-0076: the nav badge counts records the boundary withheld, not work
       // that needs doing. A badge that rewards producing denials would be a

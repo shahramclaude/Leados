@@ -59,7 +59,7 @@ function networkFindingLines(report) {
 export function renderToday(ctx) {
   const { state, now } = ctx;
   const health = teamHealth(state, now);
-  const insights = buildInsights(state, now);
+  const insights = ctx.getInsights ? ctx.getInsights() : buildInsights(state, now);
   const pulse = aggregate(state, now);
   const series = trend(state, now, { weeks: 8 });
   const due = dueMeetings(state, now, state.settings).slice(0, 4);
