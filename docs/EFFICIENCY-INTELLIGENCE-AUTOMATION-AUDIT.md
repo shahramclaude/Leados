@@ -224,3 +224,38 @@ surface the product does not have is the exact failure this repository forbids.
 The instrument for all of this is committed: `npm run eval:app` boots the real
 app in jsdom, walks every declared route, and writes `reports/eval-app.json`.
 Use it before claiming a read-path improvement.
+
+---
+
+## 9. Session 267 follow-up — repeatable reads, typed identity, bounded recovery (2026-11-14)
+
+[ADR-0199](./adr/0199-repeatable-reads-typed-signals-bounded-recovery.md)
+continues the same evaluation without a schema change. The instrument was run
+against the pristine base and the current branch in alternating pairs; the
+machine comparison is [`reports/eval-app-comparison.json`](../reports/eval-app-comparison.json).
+
+| Area | What changed | Evidence / limit |
+| --- | --- | --- |
+| Efficiency | `#/scenarios` memoizes the exact seeded comparison + tornado on `(state identity, UTC day, serialized sandbox spec)`; UTC helpers avoid intermediate Date allocations; duplicate counter/title keys removed. | Warm scenario render fell from a paired median of **1530.59 ms to 29.25 ms (−98.1%)** across three paired runs. Paired medians also moved cold route median **41.84 → 27.46 ms (−34.4%)**, cold p95 **244.78 → 173.57 ms (−29.1%)**, one cold pass **10129.91 → 6983.28 ms (−31.1%)**, commit median **3916.16 → 3562.08 ms (−9.0%)**, spine median **238.71 → 164.00 ms (−31.3%)**, and nav-after-write **47.47 → 34.58 ms (−27.2%)**. Cold first paint still pays the simulation. jsdom only, not a browser benchmark. |
+| Intelligence | Focused record routes/query parameters resolve to canonical graph types before `personId`; rolled-up groups and filter-only routes do not invent an entity; ties and recommendation leaders are deterministic. | Demo still fuses **59 observed families / 213 signals / 7 converging clusters**. Counts alone were not the defect; membership was. |
+| Automation | Reporter counts withheld events and budget headroom; exhaustion is unhealthy even with zero rollbacks; `#/propagation` offers a 1–25 receipt batch that stops at the first repeated failure. | New tests cover a 300-event import at the 256 cap, bounded retry, stop-on-failure, and unchanged single-receipt semantics. No background replay, no seat adapter, no rule-order change. |
+| Instrument | Eval detects the router failure screen, reports spine/withheld-event cost, and distinguishes source references from observed hub families. | The previous `registeredDomains()` count was zero because the shell registers one canonical `insights` source; that was a measurement bug, not missing fusion. |
+
+**Correction to §8's family denominator.** The export scan counted three
+`intelligenceHub.js` pipeline helpers (`collectRawSignals`, `deduplicateSignals`,
+`rankSignals`) as signal families. Excluding them leaves **60 domain signal-family
+exports**, of which `insights.js` references **55**; the hub separately observes
+**59 domain buckets** on the demo. These are different denominators and are now
+printed separately.
+
+**Correction to §8's cluster count.** The current demo at the fixed evaluation
+clock reports **7** converging clusters, not 8. The signal and family counts are
+unchanged; the typed-identity change can move a finding between clusters. The
+committed eval report is the source for the current number.
+
+**Verification boundary.** The base commit already fails the full canonical
+suite. Session 267 records the baseline and post-change failure sets in
+`AI-SESSION-LOG.md`; it does not describe `npm run verify:canonical` as green.
+Focused regression tests, lint, boundary/link checks, the standalone build and
+its seven tests are the verified surface. Real-browser and assistive-technology
+walkthroughs remain **[UNVERIFIED]**.

@@ -1,0 +1,156 @@
+{
+  "schemaVersion": 156,
+  "baseCommit": "88eb5b349388e0d836c319c592bcb219492ba78e",
+  "branch": "arena/549fc758-leados",
+  "methodology": "Three pristine-base runs and three current-branch runs, alternating where practical, same sandbox and fixed demo clock 2026-11-14T10:00Z. Values are medians of per-run medians. jsdom wall clock, not a real-browser benchmark; cold first paint and write time remain noisy.",
+  "metrics": {
+    "coldMedianMs": {
+      "before": 41.84,
+      "after": 27.46,
+      "changePct": -34.4,
+      "samplesBefore": [
+        45.34,
+        33.88,
+        41.84
+      ],
+      "samplesAfter": [
+        27.86,
+        25.47,
+        27.46
+      ]
+    },
+    "coldP95Ms": {
+      "before": 244.78,
+      "after": 173.57,
+      "changePct": -29.1,
+      "samplesBefore": [
+        195.09,
+        300.27,
+        244.78
+      ],
+      "samplesAfter": [
+        187.56,
+        173.57,
+        153.47
+      ]
+    },
+    "coldTotalMs": {
+      "before": 10129.91,
+      "after": 6983.28,
+      "changePct": -31.1,
+      "samplesBefore": [
+        10129.91,
+        9446.75,
+        10314.74
+      ],
+      "samplesAfter": [
+        6983.28,
+        7071.81,
+        6578.69
+      ]
+    },
+    "scenariosWarmMs": {
+      "before": 1530.59,
+      "after": 29.25,
+      "changePct": -98.1,
+      "samplesBefore": [
+        1788.86,
+        1522.97,
+        1530.59
+      ],
+      "samplesAfter": [
+        29.25,
+        28.58,
+        39.49
+      ]
+    },
+    "premisesWarmMs": {
+      "before": 1014.22,
+      "after": 673.75,
+      "changePct": -33.6,
+      "samplesBefore": [
+        993.29,
+        1108.89,
+        1014.22
+      ],
+      "samplesAfter": [
+        673.75,
+        766.1,
+        655.54
+      ]
+    },
+    "todayWarmMs": {
+      "before": 589.35,
+      "after": 373.72,
+      "changePct": -36.6,
+      "samplesBefore": [
+        589.35,
+        488,
+        664.22
+      ],
+      "samplesAfter": [
+        373.72,
+        406.27,
+        371.7
+      ]
+    },
+    "commitMedianMs": {
+      "before": 3916.16,
+      "after": 3562.08,
+      "changePct": -9,
+      "samplesBefore": [
+        3644.49,
+        4179.94,
+        3916.16
+      ],
+      "samplesAfter": [
+        3641.15,
+        3562.08,
+        2768.66
+      ]
+    },
+    "spineMedianMs": {
+      "before": 238.71,
+      "after": 164,
+      "changePct": -31.3,
+      "samplesBefore": [
+        193.05,
+        315.21,
+        238.71
+      ],
+      "samplesAfter": [
+        163.65,
+        193.43,
+        164
+      ]
+    },
+    "navAfterWriteMs": {
+      "before": 47.47,
+      "after": 34.58,
+      "changePct": -27.2,
+      "samplesBefore": [
+        35.41,
+        47.47,
+        61.67
+      ],
+      "samplesAfter": [
+        56.81,
+        34.58,
+        34.02
+      ]
+    }
+  },
+  "intelligence": {
+    "observedFamilies": 59,
+    "signals": 213,
+    "convergingClusters": 7,
+    "signalFamilyExportsScanned": 60,
+    "referencedByInsights": 55
+  },
+  "limits": [
+    "Cold scenario first paint still runs the full seeded simulation.",
+    "No durable receipt is created for every budget-omitted source event; counters and warnings name the loss.",
+    "Batch receipt retry is operator-only and stops at the first repeated failure.",
+    "Real-browser and assistive-technology walkthroughs were not run."
+  ]
+}

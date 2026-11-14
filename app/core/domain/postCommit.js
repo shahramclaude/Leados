@@ -1260,6 +1260,11 @@ export function runPostCommitRules(draft, context = {}) {
     reporter.executed = 0;
     reporter.rolledBack = 0;
     reporter.duplicates = 0;
+    reporter.skipped = 0;
+    reporter.indexSkipped = 0;
+    reporter.budget = eventBudget;
+    reporter.omittedEvents = 0;
+    reporter.budgetExhausted = false;
   }
   const results = [];
   /**
@@ -1328,6 +1333,7 @@ export function runPostCommitRules(draft, context = {}) {
       });
     }
     if (omitted) {
+      if (reporter) reporter.omittedEvents += omitted;
       const message = `Automation event limit (${eventBudget}) reached; ${omitted} source-created event(s) were not delivered.`;
       if (typeof context.logEvent === 'function') context.logEvent({ type: 'automation.rule_error', entity: 'workspace', entityId: '', summary: message });
       if (Array.isArray(context.warnings)) context.warnings.push(message);
@@ -1386,6 +1392,7 @@ export function runPostCommitRules(draft, context = {}) {
           const key = eventKey(event);
           if (seen.has(key) || pendingKeys.has(key)) { countDuplicate(); return false; }
           if (seen.size + pendingKeys.size >= eventBudget) {
+            if (reporter) reporter.omittedEvents += 1;
             throw new Error(`Automation event limit (${eventBudget}) reached; this rule was rolled back.`);
           }
           pendingKeys.add(key);
@@ -1537,6 +1544,11 @@ export function runPostCommitRules(draft, context = {}) {
       omittedEvents: lineage.omittedEvents,
     }, { idFactory: context.idFactory, now: context.now });
   }
-  if (reporter) reporter.elapsedMs = nowMs() - startedAt;
+  if (reporter) {
+    reporter.budgetUsed = seen.size;
+    reporter.budgetRemaining = Math.max(0, eventBudget - seen.size);
+    reporter.budgetExhausted = reporter.omittedEvents > 0;
+    reporter.elapsedMs = nowMs() - startedAt;
+  }
   return results;
 }

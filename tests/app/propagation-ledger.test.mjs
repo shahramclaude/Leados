@@ -40,6 +40,7 @@ import {
   summarizeByRule,
 } from '../../app/core/domain/propagationLedger.js';
 import { createApi } from '../../app/actions.js';
+import { API_RIGHTS, guardApiCall } from '../../app/core/domain/accessGateway.js';
 
 const ROOT = path.resolve(import.meta.dirname, '../..');
 const HTML = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
@@ -864,4 +865,52 @@ test('ui: the failures tab offers a retry only while a receipt still needs one',
   assert.match(window.document.getElementById('view').textContent, /No failed propagations recorded/);
   const buttons2 = [...window.document.querySelectorAll('button')].map((b) => b.textContent.trim());
   assert.equal(buttons2.includes('Retry now'), false, 'with nothing to retry there must be no retry button');
+});
+
+test('receipts: a bounded human-requested batch retries recoverable failures and stops at the first repeated failure', () => {
+  const { store, api } = harness();
+  const receipt = (id, rule, entityId, status = 'open') => ({
+    id, at: NOW.toISOString(), rule, eventType: 'test.noop', entity: 'test', entityId,
+    error: 'simulated earlier failure', status, attempts: [], resolvedAt: null,
+  });
+  store.update((draft) => {
+    draft.propagationReceipts.push(
+      receipt('r-good-1', 'forecastIntegrityRule', '1'),
+      receipt('r-good-2', 'forecastIntegrityRule', '2'),
+      receipt('r-bad', 'caseCreatedRule', 'missing'),
+      receipt('r-later', 'forecastIntegrityRule', '3'),
+      receipt('r-done', 'forecastIntegrityRule', '4', 'resolved'),
+    );
+    draft.propagationReceipts.find((r) => r.id === 'r-bad').eventType = 'case.created';
+    draft.propagationReceipts.find((r) => r.id === 'r-bad').entity = 'case';
+  }, { type: 'test.seed', entity: 'workspace', entityId: 'w' }, { rules: [] });
+
+  const result = api.retryPropagationReceipts({ limit: 10 });
+  assert.equal(result.ok, true);
+  assert.equal(result.attempted, 3);
+  assert.equal(result.resolved, 2);
+  assert.equal(result.failed, 1);
+  assert.equal(result.stoppedReason, 'rule-failed');
+  const byId = new Map(store.state.propagationReceipts.map((r) => [r.id, r]));
+  assert.equal(byId.get('r-good-1').status, 'resolved');
+  assert.equal(byId.get('r-good-2').status, 'resolved');
+  assert.equal(byId.get('r-bad').status, 'retried');
+  assert.equal(byId.get('r-later').status, 'open', 'the batch stops rather than hammering a known failure');
+  assert.equal(byId.get('r-done').status, 'resolved');
+
+  const capped = api.retryPropagationReceipts({ limit: 1 });
+  assert.equal(capped.attempted, 1);
+  assert.equal(capped.stoppedReason, 'rule-failed');
+  assert.equal(api.retryPropagationReceipts({ limit: 0 }).ok, false);
+  assert.equal(api.retryPropagationReceipts({ limit: 101 }).ok, false);
+});
+
+
+test('gateway: the batch retry stays operator-only and has no reviewed seat adapter', () => {
+  const state = fixture();
+  state.settings.activeSeatId = 'leader';
+  assert.equal(API_RIGHTS.retryPropagationReceipts, undefined);
+  const verdict = guardApiCall(state, 'retryPropagationReceipts', [{ limit: 1 }], NOW.getTime());
+  assert.equal(verdict.ok, false);
+  assert.match(verdict.error, /reviewed seat-scoped adapter|operator/i);
 });

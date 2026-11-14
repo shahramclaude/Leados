@@ -123,6 +123,8 @@ async function main() {
     }
     const view = document.getElementById('view');
     const h1 = view?.querySelector('h1')?.textContent?.trim() || '';
+    const renderFailed = h1 === 'This screen failed to draw' || Boolean(view?.querySelector('.error-detail'));
+    if (renderFailed) errors.push('the router mounted its failure screen');
     perRoute.push({
       route,
       coldMs: round(samples[0]),
@@ -130,6 +132,7 @@ async function main() {
       nodes: view ? view.querySelectorAll('*').length : 0,
       textLength: view ? (view.textContent || '').trim().length : 0,
       heading: h1.slice(0, 90),
+      renderFailed,
       errors: [...errors].slice(0, 3),
     });
   }
@@ -141,7 +144,12 @@ async function main() {
   for (let i = 0; i < 3; i += 1) {
     const t0 = process.hrtime.bigint();
     const result = app.api.addPerson({ name: `Eval Probe ${i}`, role: 'Engineer', level: 'ic' });
-    writeSamples.push({ ms: Number(process.hrtime.bigint() - t0) / 1e6, ok: result?.ok !== false });
+    writeSamples.push({
+      ms: Number(process.hrtime.bigint() - t0) / 1e6,
+      spineMs: app.store.lastPropagationMetrics?.elapsedMs ?? null,
+      omittedEvents: app.store.lastPropagationMetrics?.omittedEvents ?? 0,
+      ok: result?.ok !== false,
+    });
   }
   const navAfterWrite = [];
   for (let i = 0; i < 3; i += 1) {
@@ -150,11 +158,14 @@ async function main() {
     navAfterWrite.push(Number(process.hrtime.bigint() - t0) / 1e6);
   }
 
-  const { perfRead, perfSummary } = await import(path.join(ROOT, 'app/core/perf.js'));
+  const { perfRead, perfSummary, perfLaneSummary } = await import(path.join(ROOT, 'app/core/perf.js'));
   const { intelligenceHubRead, registeredDomains, registeredSources } = await import(path.join(ROOT, 'app/core/domain/intelligenceHub.js'));
 
   const hub = intelligenceHubRead(state, NOW);
-  const knowledge = await knowledgeCoverage(state, NOW);
+  const knowledge = await knowledgeCoverage(hub);
+  const laneSummary = (label) => typeof perfLaneSummary === 'function'
+    ? perfLaneSummary(label)
+    : { count: 0, totalMs: 0, meanMs: 0, maxMs: 0, slowCount: 0, lastMs: 0 };
 
   const routeTimes = perRoute.map((r) => r.coldMs);
   const report = {
@@ -173,12 +184,15 @@ async function main() {
     write: {
       commitMedianMs: round(median(writeSamples.map((w) => w.ms))),
       commitMaxMs: round(Math.max(...writeSamples.map((w) => w.ms))),
+      spineMedianMs: round(median(writeSamples.map((w) => w.spineMs).filter((value) => value != null))),
+      omittedEvents: writeSamples.reduce((sum, sample) => sum + sample.omittedEvents, 0),
       allCommitted: writeSamples.every((w) => w.ok),
       navAfterWriteMedianMs: round(median(navAfterWrite)),
     },
     efficiency: {
       perfSamples: perfRead().length,
       perf: perfSummary(),
+      lanes: { navigation: laneSummary('nav.counters'), scenarios: laneSummary('scenario.read'), storeUpdate: laneSummary('store:update') },
       repeatedRoutes: perRoute.filter((r) => r.warmMs > r.coldMs * 1.2 && r.coldMs > 30).length,
     },
     intelligence: {
@@ -190,6 +204,7 @@ async function main() {
       knowledgeDomainsAvailable: knowledge.available,
       knowledgeDomainsWired: knowledge.wired,
       knowledgeDomainsMissing: knowledge.missing,
+      knowledgeDomainsUnreferenced: knowledge.unreferenced,
       familiesFused: Object.keys(hub.byDomain || {}).length,
     },
     automation: await automationWiring(),
@@ -217,20 +232,27 @@ async function main() {
 /** How many `*Signals` families the canonical tree exposes, and how many the
  *  fusion hub is actually registered to read. This separates "the product has
  *  the intelligence" from "the product uses it". */
-async function knowledgeCoverage(state, now) {
+async function knowledgeCoverage(hub) {
   const dir = path.join(ROOT, 'app', 'core', 'domain');
   const available = [];
   for (const file of fs.readdirSync(dir)) {
-    if (!file.endsWith('.js')) continue;
+    if (!file.endsWith('.js') || file === 'intelligenceHub.js') continue;
     const source = fs.readFileSync(path.join(dir, file), 'utf8');
     for (const m of source.matchAll(/export function (\w+Signals)\s*\(/g)) available.push(m[1]);
   }
-  const { registeredDomains } = await import(path.join(ROOT, 'app/core/domain/intelligenceHub.js'));
-  const wired = registeredDomains();
+  const names = Array.from(new Set(available));
+  const insightsSource = fs.readFileSync(path.join(dir, 'insights.js'), 'utf8');
+  // The shell registers the canonical insights engine, not one escape-hatch
+  // domain per export. Counting registeredDomains() therefore reported zero
+  // wired families while the hub actually fused 59. Report source references
+  // and observed families separately; neither is inferred from the other.
+  const referenced = names.filter((name) => new RegExp(`\\b${name}\\s*\\(`).test(insightsSource));
   return {
-    available: Array.from(new Set(available)).length,
-    wired: wired.length,
-    missing: Array.from(new Set(available)).length - wired.length,
+    available: names.length,
+    wired: referenced.length,
+    missing: names.length - referenced.length,
+    unreferenced: names.filter((name) => !referenced.includes(name)),
+    observedFamilies: hub.domainCount,
   };
 }
 
@@ -282,12 +304,13 @@ function print(report) {
     console.log(`\nRoutes that threw (${report.failingRoutes.length}):`);
     for (const f of report.failingRoutes) console.log(`  ${f.route}: ${f.errors.join(' | ')}`);
   }
-  console.log(`\nWrite path: median commit ${report.write.commitMedianMs}ms · nav after a write ${report.write.navAfterWriteMedianMs}ms · all committed ${report.write.allCommitted}`);
+  console.log(`\nWrite path: median commit ${report.write.commitMedianMs}ms · spine ${report.write.spineMedianMs}ms · withheld events ${report.write.omittedEvents} · nav after a write ${report.write.navAfterWriteMedianMs}ms · all committed ${report.write.allCommitted}`);
   console.log('\nEfficiency:');
   console.log(`  perf samples ${report.efficiency.perfSamples} · p95 ${report.efficiency.perf.p95Ms}ms · slow ${report.efficiency.perf.slowCount}`);
+  console.log(`  lanes: navigation mean ${report.efficiency.lanes.navigation.meanMs}ms · scenarios mean ${report.efficiency.lanes.scenarios.meanMs}ms · store update mean ${report.efficiency.lanes.storeUpdate.meanMs}ms`);
   console.log(`  routes where a repeat render costs more than the first: ${report.efficiency.repeatedRoutes}`);
   console.log('\nIntelligence:');
-  console.log(`  signal families shipped: ${report.intelligence.knowledgeDomainsAvailable}`);
+  console.log(`  signal-family exports scanned: ${report.intelligence.knowledgeDomainsAvailable} · referenced by insights.js: ${report.intelligence.knowledgeDomainsWired}`);
   console.log(`  fusion sources registered by the shell: ${report.intelligence.registeredSources.join(', ') || 'none'}`);
   console.log(`  signal families fused for the demo workspace: ${report.intelligence.familiesFused ?? 'n/a'}`);
   console.log(`  signals fused for the demo workspace: ${report.intelligence.signalsSeen} · converging clusters: ${report.intelligence.convergingClusters}`);

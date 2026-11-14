@@ -40,15 +40,22 @@ export function eventKey(event) {
  * spine refused to process — real coalescing, measured on the write path.
  */
 export function automationHealth(reporter, { budget = null } = {}) {
-  if (!reporter) return { ok: true, executed: 0, declined: 0, rolledBack: 0, duplicates: 0, budget: null };
+  if (!reporter) return { ok: true, executed: 0, declined: 0, rolledBack: 0, duplicates: 0, omittedEvents: 0, budget: null, budgetRemaining: null };
   return {
-    ok: (reporter.rolledBack || 0) === 0,
+    // An exhausted delivery budget withheld work even when no rule threw.
+    // Calling that cascade healthy would hide the exact loss receipts exist
+    // to prevent, so omission is a first-class unhealthy outcome.
+    ok: (reporter.rolledBack || 0) === 0 && (reporter.omittedEvents || 0) === 0,
     executed: reporter.executed || 0,
     declined: reporter.declined || 0,
     rolledBack: reporter.rolledBack || 0,
     skipped: reporter.skipped || 0,
     indexSkipped: reporter.indexSkipped || 0,
     duplicates: reporter.duplicates || 0,
+    omittedEvents: reporter.omittedEvents || 0,
+    budgetExhausted: reporter.budgetExhausted === true,
+    budgetUsed: reporter.budgetUsed ?? null,
+    budgetRemaining: reporter.budgetRemaining ?? null,
     events: reporter.events || 0,
     rules: reporter.rules || 0,
     elapsedMs: reporter.elapsedMs || 0,

@@ -13268,6 +13268,46 @@ export function createApi(store, options = {}) {
     };
   }
 
+  /**
+   * Recover a bounded batch of failed propagations after one human request.
+   * Each receipt still uses the single-rule retry above: no whole-chain replay,
+   * no duplicate receipt, and no background job. Stop at the first repeated
+   * failure so a deterministic bug is not hammered through the whole ledger.
+   */
+  function retryPropagationReceipts({ limit = 10 } = {}) {
+    if (!Number.isInteger(limit) || limit < 1 || limit > 25) {
+      return fail('Choose a retry batch size from 1 to 25.', 'limit');
+    }
+    const ids = (store.state.propagationReceipts || [])
+      .filter((receipt) => receipt && (receipt.status === 'open' || receipt.status === 'retried'))
+      .map((receipt) => receipt.id);
+    const results = [];
+    let attempted = 0;
+    let resolved = 0;
+    let failed = 0;
+    let skipped = 0;
+    let stoppedReason = ids.length ? 'complete' : 'empty';
+    for (const id of ids) {
+      if (attempted >= limit) { stoppedReason = 'limit'; break; }
+      const result = retryPropagationReceipt(id);
+      if (!result.ok) {
+        skipped += 1;
+        results.push({ id, skipped: true, error: result.error });
+        continue;
+      }
+      attempted += 1;
+      if (result.resolved) resolved += 1;
+      else failed += 1;
+      results.push({ id, resolved: Boolean(result.resolved), error: result.error || null });
+      if (store.persistError) { stoppedReason = 'persist-failed'; break; }
+      if (!result.resolved) { stoppedReason = 'rule-failed'; break; }
+    }
+    const remaining = (store.state.propagationReceipts || [])
+      .filter((receipt) => receipt && (receipt.status === 'open' || receipt.status === 'retried')).length;
+    if (stoppedReason === 'limit' && remaining === 0) stoppedReason = 'complete';
+    return { ok: stoppedReason !== 'persist-failed', attempted, resolved, failed, skipped, remaining, stoppedReason, results };
+  }
+
   /** Close a receipt without running it. The failure stays visible in history. */
   function dismissPropagationReceipt(id) {
     const receipt = propagationReceiptById(store.state, id);
@@ -14401,6 +14441,7 @@ export function createApi(store, options = {}) {
 
   Object.assign(api, {
     retryPropagationReceipt,
+    retryPropagationReceipts,
     dismissPropagationReceipt,
     strategyReport,
     strategyBriefText,

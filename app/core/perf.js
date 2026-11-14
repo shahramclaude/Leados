@@ -13,10 +13,29 @@
 
 const SAMPLE_CAP = 500;
 const SLOW_THRESHOLD_MS = 16; // one frame budget — anything above is worth noticing
+// Only these coarse product lanes need cumulative totals. Aggregating every
+// per-rule sample would add bookkeeping to the hot automation loop we measure.
+const CUMULATIVE_LANES = new Set(['nav.counters', 'scenario.read', 'store:update']);
 
 let enabled = false;
 let samples = [];
 let marks = new Map();
+// The ring is for recent examples; lane totals survive eviction so a busy
+// automation cascade cannot erase the navigation/scenario cost being measured.
+const lanes = new Map();
+
+function recordSample(label, elapsedMs, meta) {
+  if (samples.length >= SAMPLE_CAP) samples.shift();
+  samples.push({ label, elapsedMs, slow: elapsedMs > SLOW_THRESHOLD_MS, at: new Date().toISOString(), meta });
+  if (!CUMULATIVE_LANES.has(label)) return;
+  const lane = lanes.get(label) || { count: 0, totalMs: 0, maxMs: 0, slowCount: 0, lastMs: 0 };
+  lane.count += 1;
+  lane.totalMs += elapsedMs;
+  lane.maxMs = Math.max(lane.maxMs, elapsedMs);
+  lane.slowCount += elapsedMs > SLOW_THRESHOLD_MS ? 1 : 0;
+  lane.lastMs = elapsedMs;
+  lanes.set(label, lane);
+}
 
 export function perfEnabled() {
   return enabled;
@@ -33,6 +52,7 @@ export function disablePerf() {
 export function clearPerf() {
   samples = [];
   marks.clear();
+  lanes.clear();
 }
 
 /**
@@ -57,8 +77,7 @@ export function perfEnd(label, meta = null) {
   const now = typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
   const elapsed = now - start;
   marks.delete(label);
-  if (samples.length >= SAMPLE_CAP) samples.shift();
-  samples.push({ label, elapsedMs: elapsed, slow: elapsed > SLOW_THRESHOLD_MS, at: new Date().toISOString(), meta });
+  recordSample(label, elapsed, meta);
   return elapsed;
 }
 
@@ -74,8 +93,7 @@ export function perfMeasure(label, fn, meta = null) {
     result = fn();
   } finally {
     const elapsed = (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now()) - start;
-    if (samples.length >= SAMPLE_CAP) samples.shift();
-    samples.push({ label, elapsedMs: elapsed, slow: elapsed > SLOW_THRESHOLD_MS, at: new Date().toISOString(), meta });
+    recordSample(label, elapsed, meta);
   }
   return result;
 }
@@ -85,8 +103,7 @@ export function perfMeasure(label, fn, meta = null) {
  */
 export function perfSample(label, elapsedMs, meta = null) {
   if (!enabled) return;
-  if (samples.length >= SAMPLE_CAP) samples.shift();
-  samples.push({ label, elapsedMs, slow: elapsedMs > SLOW_THRESHOLD_MS, at: new Date().toISOString(), meta });
+  recordSample(label, elapsedMs, meta);
 }
 
 /**
@@ -96,6 +113,13 @@ export function perfRead({ slowOnly = false } = {}) {
   const copy = samples.slice();
   if (slowOnly) return copy.filter((s) => s.slow);
   return copy;
+}
+
+/** Cumulative totals for one label, independent of the recent-sample ring. */
+export function perfLaneSummary(label) {
+  const lane = lanes.get(label);
+  if (!lane) return { count: 0, totalMs: 0, meanMs: 0, maxMs: 0, slowCount: 0, lastMs: 0 };
+  return { ...lane, totalMs: Math.round(lane.totalMs * 100) / 100, meanMs: Math.round((lane.totalMs / lane.count) * 100) / 100 };
 }
 
 /**
@@ -129,6 +153,7 @@ export function installPerfDebug(scope = typeof window !== 'undefined' ? window 
     clear: clearPerf,
     read: perfRead,
     summary: perfSummary,
+    lane: perfLaneSummary,
     enabled: perfEnabled,
   };
 }
