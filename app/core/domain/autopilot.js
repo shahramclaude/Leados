@@ -37,7 +37,7 @@ export function compareCondition(facts, condition) {
   const actual = facts?.[condition.field];
   const expected = condition.value;
   let pass = false;
-  if (condition.op === 'eq') pass = typeof expected === 'string' ? norm(actual ?? '') === norm(expected) : actual === expected;
+  if (actual !== null && actual !== undefined && condition.op === 'eq') pass = typeof expected === 'string' ? norm(actual) === norm(expected) : actual === expected;
   else if (actual !== null && actual !== undefined) {
     if (condition.op === 'neq') pass = norm(actual) !== norm(expected);
     if (condition.op === 'contains') pass = norm(actual).includes(norm(expected));
@@ -293,11 +293,12 @@ export function rehearsePolicy(state, policy, now = new Date()) {
   const byTarget = {};
   for (const action of actions) byTarget[action.type] = (byTarget[action.type] || 0) + 1;
   const ownerLoads = {};
+  const recordsById = new Map(records.map((record) => [record.id, record]));
   matched.forEach((row) => {
-    const record = records.find((r) => r.id === row.sourceId);
+    const record = recordsById.get(row.sourceId);
+    const facts = sourceFacts(state, source.id, record, now);
     for (const action of policy.actions) {
       if (!action.ownerMode || action.type === 'coaching') continue;
-      const facts = sourceFacts(state, source.id, record, now);
       const ownerId = action.ownerMode === 'fixed' ? action.ownerId : facts.ownerId;
       if (ownerId) ownerLoads[ownerId] = (ownerLoads[ownerId] || 0) + 1;
     }
@@ -305,10 +306,14 @@ export function rehearsePolicy(state, policy, now = new Date()) {
   const stress = [];
   const numeric = policy.conditions.find((c) => typeof c.value === 'number');
   if (numeric) {
+    // Facts are invariant across threshold variants. Compute them once per
+    // record rather than rerunning every source adapter for each variant.
+    const samples = records.map((record) => ({ facts: sourceFacts(state, source.id, record, now), paused: record.autoPropagate === false }));
     for (const multiplier of [0.8, 1, 1.2]) {
-      const variant = { ...policy, conditions: policy.conditions.map((c) => c === numeric ? { ...c, value: Math.round(c.value * multiplier * 100) / 100 } : c) };
-      stress.push({ multiplier, threshold: variant.conditions.find((c) => c.field === numeric.field).value,
-        matches: records.filter((r) => evaluatePolicy(variant, state, r, now).matched).length });
+      const threshold = Math.round(numeric.value * multiplier * 100) / 100;
+      const conditions = policy.conditions.map((c) => c === numeric ? { ...c, value: threshold } : c);
+      stress.push({ multiplier, threshold,
+        matches: samples.filter(({ facts, paused }) => !paused && conditions.every((c) => compareCondition(facts, c).pass)).length });
     }
   }
   const result = { policyId: policy.id, name: policy.name, version: policy.version, asOf: dayKey(now), workspaceRevision: state.meta?.revision || 0,
