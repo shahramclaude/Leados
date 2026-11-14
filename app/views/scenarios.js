@@ -14,6 +14,8 @@ import { pageHeader, card, stat, badge, emptyState } from '../ui/components.js';
 import { tornadoChart } from '../ui/charts.js';
 import { downloadText } from '../ui/download.js';
 import { addDays, dayKey } from '../core/time.js';
+import { createKeyedMemo } from '../core/storeOptimizations.js';
+import { perfMeasure } from '../core/perf.js';
 import { isCaseOpen } from '../core/domain/cases.js';
 import { isChangeOpen } from '../core/domain/changes.js';
 import { pertTriple } from '../core/domain/capacity.js';
@@ -52,6 +54,20 @@ function getSandboxSession(ctx) {
     session = {
       spec: emptySandboxSpec(),
       appliedQuerySignature: '',
+      readNow: null,
+      // The comparison and tornado are seeded, deterministic reads. Reuse them
+      // only for the same immutable workspace snapshot, UTC day and sandbox
+      // definition. The spec is mutable in this session, so its serialized
+      // value—not its object identity—is the invalidation key.
+      getRead: createKeyedMemo((state, day, specSignature) => {
+        void state; void day; void specSignature;
+        return perfMeasure('scenario.read', () => {
+          const presets = buildSuggestedScenarios(state, { now: session.readNow });
+          const comparison = compareScenarios(state, [session.spec, ...presets], { now: session.readNow });
+          const tornado = computeSensitivityTornado(state, { now: session.readNow });
+          return { presets, comparison, tornado };
+        });
+      }),
     };
     SANDBOX_BY_API.set(ctx.api, session);
   }
@@ -262,18 +278,11 @@ export function renderScenarios(ctx) {
   const session = getSandboxSession(ctx);
   const sandboxSpec = session.spec;
   const sandboxLeverCount = countScenarioLevers(sandboxSpec);
-  const presets = buildSuggestedScenarios(state, { now });
-
-  // Build comparison suite: Custom Sandbox (when configured or always shown as interactive slot) + Presets
-  const specsToCompare = [
-    sandboxSpec,
-    ...presets,
-  ];
-  const comparison = compareScenarios(state, specsToCompare, { now });
+  session.readNow = now;
+  const { presets, comparison, tornado } = session.getRead(state, dayKey(now), JSON.stringify(sandboxSpec));
   const baseline = comparison.baseline;
   const customEval = comparison.scenarios[1];
   const presetEvals = comparison.scenarios.slice(2);
-  const tornado = computeSensitivityTornado(state, { now });
 
   const exportSensitivityCsv = () => {
     const res = ctx.exportCSV('sensitivity');

@@ -9,7 +9,7 @@
  *  Efficiency  — real wall-clock samples from the on-device instrumentation,
  *                workspace size, quota posture and the last cascade's cost.
  *  Intelligence — what the fusion hub is reading, how many families it fused,
- *                 and which entities have independent domains converging.
+ *                 and which typed records have findings from distinct families.
  *  Automation  — the post-commit spine's own ledger: rules evaluated, work
  *                applied, duplicates suppressed, failures retained.
  *
@@ -163,13 +163,15 @@ export function renderEfficiencyHub(ctx) {
             ['Declined (guarded)', health.declined],
             ['Duplicates suppressed', health.duplicates],
             ['Rolled back', health.rolledBack],
+            ['Events withheld by budget', health.omittedEvents],
+            ['Budget headroom', health.budgetRemaining == null ? '—' : `${health.budgetRemaining} of ${health.budget}`],
             ['Wall clock', `${health.elapsedMs}ms`],
           ]),
           h('p', { class: 'hint' }, 'A duplicate is the same (type, entity, id) tuple arriving twice in one transaction. It is delivered once — that is the coalescing the spine really performs.'),
         ] : [h('p', { class: 'hint' }, 'No write has run a cascade in this session yet.')]),
         card('Spine integrity', [
           kvTable([
-            ['Rollbacks (last write)', health.ok ? badge('none', 'good') : badge(String(health.rolledBack), 'warn')],
+            ['Last cascade', health.ok ? badge('complete', 'good') : badge(health.rolledBack ? `${health.rolledBack} rolled back` : `${health.omittedEvents} withheld`, 'warn')],
             ['Open failure receipts', receipts.length],
             ['Event budget', health.budget ?? 'ceiling in postCommit'],
           ]),
@@ -182,6 +184,8 @@ export function renderEfficiencyHub(ctx) {
           h('p', { class: 'hint' }, `Perf instrumentation is ${perfEnabled() ? 'on' : 'off'}; samples are in-memory only and never exported.`),
         ]),
       ),
+      health.omittedEvents ? h('div', { class: 'banner banner-warn', role: 'status' },
+        `${health.omittedEvents} event deliveries were withheld by the ${health.budget}-event safety budget. The source write committed, but downstream work may be absent. Review the affected records before relying on this cascade; an explicit scan or reviewed replay can reconcile them.`) : null,
       h('div', { class: 'card' },
         h('h3', { class: 'card-title' }, 'Not built (stated, not implied)'),
         h('ul', { class: 'next-list' },

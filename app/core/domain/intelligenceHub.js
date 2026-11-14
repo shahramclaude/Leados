@@ -68,6 +68,9 @@ export function clearIntelligenceRegistry() {
 }
 
 const MAX_SIGNALS = 2000;
+const CONFIDENCES = new Set(['high', 'medium', 'low']);
+const severityOf = (value) => Number.isFinite(value) ? Math.min(5, Math.max(1, Math.round(value))) : 2;
+const confidenceOf = (value) => CONFIDENCES.has(value) ? value : 'medium';
 
 function safeSignals(fn, state, now, name, failures) {
   try {
@@ -78,22 +81,82 @@ function safeSignals(fn, state, now, name, failures) {
   return [];
 }
 
+const EMPTY_ENTITY = Object.freeze({ entityId: null, entityType: null });
+// Canonical record routes use a plural screen name but a singular graph type.
+// Keeping the graph type makes a case finding join other case findings instead
+// of forming a second, plural-name cluster for the same record.
+const ROUTE_ENTITY_TYPES = Object.freeze({
+  people: 'person', cases: 'case', decisions: 'decision', delegations: 'delegation',
+  goals: 'goal', growth: 'growth', onboarding: 'onboarding', reviews: 'review',
+  readiness: 'readiness', recognition: 'recognition', feedback: 'feedback',
+  hiring: 'requisition', changes: 'change', negotiations: 'negotiation',
+  finance: 'budget', stakeholders: 'stakeholder', resilience: 'dependency',
+  power: 'power', premises: 'premise', forecasts: 'forecast', tempo: 'tempo',
+  retention: 'retention', responses: 'response', bundles: 'bundle',
+  compare: 'comparison', mission: 'missioncapture', attribution: 'settlement',
+  reliability: 'reliability', counterfactual: 'evaluation', confidence: 'certificate',
+  comms: 'comms', learning: 'lesson',
+});
+const QUERY_ENTITY_KEYS = Object.freeze({
+  goal: 'goal', delegation: 'delegation', decision: 'decision', case: 'case',
+  premise: 'premise', challenge: 'forecast', schedule: 'tempo', bundle: 'bundle',
+  capture: 'missioncapture', settlement: 'settlement', reading: 'reliability',
+  evaluation: 'evaluation', certificate: 'certificate', lesson: 'lesson', candidate: 'candidate',
+});
+const AMBIGUOUS_QUERY_KEYS = Object.freeze({
+  responses: Object.freeze({ plan: 'response', draft: 'intake' }),
+  retention: Object.freeze({ plan: 'retention' }),
+  comms: Object.freeze({ draft: 'comms' }),
+  compare: Object.freeze({ id: 'comparison' }),
+});
+
+function identity(entityType, entityId) {
+  if (typeof entityType !== 'string' || typeof entityId !== 'string') return EMPTY_ENTITY;
+  const type = entityType.trim();
+  const id = entityId.trim();
+  return type && id ? { entityType: type, entityId: id } : EMPTY_ENTITY;
+}
+
+function routeIdentity(route) {
+  if (typeof route !== 'string' || !route.startsWith('#/')) return EMPTY_ENTITY;
+  const hash = route.slice(1).split('#')[0];
+  const queryAt = hash.indexOf('?');
+  const pathname = queryAt === -1 ? hash : hash.slice(0, queryAt);
+  const segments = pathname.split('/').filter(Boolean);
+  const screen = segments[0] || '';
+  const query = new URLSearchParams(queryAt === -1 ? '' : hash.slice(queryAt + 1));
+  try {
+    // A focused record wins over a person filter. `#/goals?goal=g1&person=p1`
+    // is a goal finding, not a second finding about the person who owns it.
+    for (const [key, type] of Object.entries(QUERY_ENTITY_KEYS)) {
+      const id = query.get(key);
+      if (id) return identity(type, id);
+    }
+    for (const [key, type] of Object.entries(AMBIGUOUS_QUERY_KEYS[screen] || {})) {
+      const id = query.get(key);
+      if (id) return identity(type, id);
+    }
+    if (segments[1] && ROUTE_ENTITY_TYPES[screen]) {
+      return identity(ROUTE_ENTITY_TYPES[screen], decodeURIComponent(segments[1]));
+    }
+  } catch { /* A malformed escape sequence is not an entity identity. */ }
+  return EMPTY_ENTITY;
+}
+
 /**
- * Resolve the record a finding is about, so findings from different families
- * can be clustered on the same person/record.
- *
- * The insight engine's own identity field is `personId`. Everything else is
- * carried by the destination route (`#/cases/case-12`), which is a typed
- * resolver route; the segment pair is the entity. A finding with neither is
- * workspace-level and is deliberately NOT clustered with other unrelated
- * workspace-level findings — a false cluster would invent convergence.
+ * Resolve the record a finding is about. Explicit typed identity wins, then a
+ * canonical focused destination, then the insight engine's personId for a
+ * person-centric finding. A rolled-up group is deliberately unclustered: its
+ * destination is only one representative member, not the group's identity.
+ * Filter-only routes never turn a query parameter into a record id.
  */
 export function entityOfFinding(finding) {
-  if (finding?.personId) return { entityId: finding.personId, entityType: 'person' };
-  const route = finding?.action?.route || finding?.destination || '';
-  const match = /^#\/([a-z0-9-]+)\/([A-Za-z0-9._:-]+)/.exec(String(route));
-  if (match) return { entityId: match[2], entityType: match[1] };
-  return { entityId: null, entityType: null };
+  if (!finding || finding.rolledUp === true) return EMPTY_ENTITY;
+  const explicit = identity(finding.entityType, finding.entityId);
+  if (explicit.entityId) return explicit;
+  const focused = routeIdentity(finding.action?.route || finding.destination || finding.href);
+  if (focused.entityId) return focused;
+  return finding.personId ? identity('person', finding.personId) : EMPTY_ENTITY;
 }
 
 /** Map one insight finding onto the hub's signal shape. */
@@ -104,8 +167,8 @@ function signalFromFinding(source, finding, index) {
     domain: finding.domain || source,
     id: `${source}:${rule}:${entity.entityId || ''}:${index}`,
     rule,
-    severity: Number.isFinite(finding.severity) ? finding.severity : 2,
-    confidence: finding.confidence || 'medium',
+    severity: severityOf(finding.severity),
+    confidence: confidenceOf(finding.confidence),
     title: finding.title || 'Signal',
     summary: finding.detail || finding.summary || '',
     entityId: entity.entityId,
@@ -143,8 +206,8 @@ export function collectRawSignals(state, now = new Date(), { limit = MAX_SIGNALS
         domain,
         id: sig.id || `${domain}:${sig.rule || 'unknown'}:${sig.entityId || ''}`,
         rule: sig.rule || sig.id || 'unknown',
-        severity: Number.isFinite(sig.severity) ? sig.severity : 2,
-        confidence: sig.confidence || 'medium',
+        severity: severityOf(sig.severity),
+        confidence: confidenceOf(sig.confidence),
         title: sig.title || sig.summary || sig.label || 'Signal',
         summary: sig.summary || sig.detail || '',
         entityId: sig.entityId || null,
@@ -192,7 +255,7 @@ export function deduplicateSignals(signals) {
 export function clusterByEntity(signals) {
   const clusters = new Map();
   for (const sig of signals) {
-    const key = sig.entityId ? `${sig.entityType || 'entity'}:${sig.entityId}` : '__global';
+    const key = clusterKeyOf(sig);
     if (!clusters.has(key)) clusters.set(key, { entityId: sig.entityId, entityType: sig.entityType, key, signals: [] });
     clusters.get(key).signals.push(sig);
   }
@@ -202,7 +265,7 @@ export function clusterByEntity(signals) {
     c.domains = Array.from(new Set(c.signals.map((s) => s.domain)));
     c.converging = Boolean(c.entityId && c.entityType) && c.signals.length >= 2 && c.domains.length >= 2;
   }
-  out.sort((a, b) => b.maxSeverity - a.maxSeverity || b.signals.length - a.signals.length);
+  out.sort((a, b) => b.maxSeverity - a.maxSeverity || b.signals.length - a.signals.length || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
   return out;
 }
 
@@ -231,7 +294,7 @@ export function clusterBoostFor(domains) {
 }
 
 export function clusterKeyOf(sig) {
-  return sig.entityId ? `${sig.entityType || 'entity'}:${sig.entityId}` : '__global';
+  return sig.entityId && sig.entityType ? JSON.stringify([sig.entityType, sig.entityId]) : '__global';
 }
 
 function urgencyScore(sig, now, boost = 1) {
@@ -267,7 +330,11 @@ export function rankSignals(signals, now = new Date(), clusters = null) {
     const boost = boostByKey.get(clusterKeyOf(s)) || 1;
     return { ...s, _clusterBoost: boost, _urgency: urgencyScore(s, now, boost) };
   });
-  scored.sort((a, b) => b._urgency - a._urgency || b.severity - a.severity);
+  scored.sort((a, b) => b._urgency - a._urgency || b.severity - a.severity
+    || (a.domain < b.domain ? -1 : a.domain > b.domain ? 1 : 0)
+    || (a.rule < b.rule ? -1 : a.rule > b.rule ? 1 : 0)
+    || (a.title < b.title ? -1 : a.title > b.title ? 1 : 0)
+    || (clusterKeyOf(a) < clusterKeyOf(b) ? -1 : clusterKeyOf(a) > clusterKeyOf(b) ? 1 : 0));
   return scored;
 }
 
@@ -275,11 +342,17 @@ export function rankSignals(signals, now = new Date(), clusters = null) {
  * Generate one-line proactive recommendations from clusters.
  * A typed entity cluster with >=2 domains and maxSeverity >=3 is flagged as actionable.
  */
-export function recommendationsFor(clusters) {
+export function recommendationsFor(clusters, ranked = null) {
+  const rank = new Map((Array.isArray(ranked) ? ranked : []).map((signal, index) => [signal, index]));
+  const leaderOf = (cluster) => Array.isArray(ranked)
+    ? cluster.signals.slice().sort((a, b) => (rank.get(a) ?? Infinity) - (rank.get(b) ?? Infinity) || b.severity - a.severity)[0]
+    : cluster.signals.slice().sort((a, b) => b.severity - a.severity)[0];
   const recs = [];
+  const order = new Map();
   for (const c of clusters) {
     if (!c.converging || c.maxSeverity < 3) continue;
-    const top = c.signals.slice().sort((a, b) => b.severity - a.severity)[0];
+    const top = leaderOf(c);
+    order.set(c.key, rank.get(top) ?? Infinity);
     recs.push({
       clusterKey: c.key,
       entityId: c.entityId,
@@ -293,7 +366,11 @@ export function recommendationsFor(clusters) {
       signals: c.signals,
     });
   }
-  return recs.sort((a, b) => b.severity - a.severity);
+  return recs.sort((a, b) => {
+    const aRank = order.get(a.clusterKey) ?? Infinity;
+    const bRank = order.get(b.clusterKey) ?? Infinity;
+    return aRank - bRank || b.severity - a.severity || (a.clusterKey < b.clusterKey ? -1 : a.clusterKey > b.clusterKey ? 1 : 0);
+  });
 }
 
 /**
@@ -305,7 +382,7 @@ export function intelligenceHubRead(state, now = new Date()) {
   const deduped = deduplicateSignals(raw);
   const clusters = clusterByEntity(deduped);
   const ranked = rankSignals(deduped, now, clusters);
-  const recs = recommendationsFor(clusters);
+  const recs = recommendationsFor(clusters, ranked);
 
   const byDomain = {};
   for (const s of deduped) {

@@ -146,7 +146,7 @@ test('intelligence hub reads the canonical insight source, not a hand-picked few
   // destination route. A workspace-level finding is never clustered with
   // unrelated workspace-level findings.
   assert.deepEqual(entityOfFinding(findings[0]), { entityId: 'p1', entityType: 'person' });
-  assert.deepEqual(entityOfFinding(findings[2]), { entityId: 'case-9', entityType: 'cases' });
+  assert.deepEqual(entityOfFinding(findings[2]), { entityId: 'case-9', entityType: 'case' });
   assert.deepEqual(entityOfFinding({ action: { route: '#/today' } }), { entityId: null, entityType: null });
 
   const coverage = intelligenceCoverage(state, new Date('2026-11-14T10:00:00Z'));
@@ -315,4 +315,59 @@ test('intelligence source failures are visible and a shared read avoids recalcul
   assert.equal(calls, 1);
   assert.equal(hubHealth(state, at).ok, false);
   clearIntelligenceRegistry();
+});
+
+test('signal identity follows the focused record, not a representative person or a filter route', () => {
+  assert.deepEqual(entityOfFinding({ personId: 'p1', action: { route: '#/goals?goal=g1' } }), { entityType: 'goal', entityId: 'g1' });
+  assert.deepEqual(entityOfFinding({ personId: 'p1', action: { route: '#/delegations?delegation=d1' } }), { entityType: 'delegation', entityId: 'd1' });
+  assert.deepEqual(entityOfFinding({ personId: 'p1', action: { route: '#/feedback?person=p1&filter=latency' } }), { entityType: 'person', entityId: 'p1' });
+  assert.deepEqual(entityOfFinding({ entityType: 'case', entityId: 'c1', personId: 'p1', action: { route: '#/people/p1' } }), { entityType: 'case', entityId: 'c1' });
+  assert.deepEqual(entityOfFinding({ rolledUp: true, personId: null, action: { route: '#/people/p1' } }), { entityType: null, entityId: null });
+  assert.deepEqual(entityOfFinding({ action: { route: '#/cases/%E0%A4%A' } }), { entityType: null, entityId: null });
+  assert.deepEqual(entityOfFinding({ action: { route: '#/today' } }), { entityType: null, entityId: null });
+});
+
+test('equal urgency ties are deterministic and recommendations follow the ranked leader', () => {
+  const at = new Date('2026-11-14T10:00:00Z');
+  const signals = [
+    { domain: 'Z', rule: 'R2', title: 'Later', severity: 4, confidence: 'high', entityType: 'person', entityId: 'p2' },
+    { domain: 'A', rule: 'R1', title: 'First', severity: 4, confidence: 'high', entityType: 'person', entityId: 'p1' },
+  ];
+  const clusters = clusterByEntity(signals);
+  const ranked = rankSignals(signals, at, clusters);
+  assert.equal(ranked[0].domain, 'A');
+  assert.deepEqual(rankSignals(signals.slice().reverse(), at, clusters).map((s) => s.title), ranked.map((s) => s.title));
+});
+
+test('automation budget exhaustion is measured and unhealthy even without a rule rollback', () => {
+  const draft = createEmptyState();
+  draft.cases = Array.from({ length: 300 }, (_, i) => ({ id: `case-${i}` }));
+  const metrics = {};
+  const warnings = [];
+  runPostCommitRules(draft, {
+    event: { type: 'workspace.imported', entity: 'workspace', entityId: 'w' },
+    previousState: { cases: [] }, rules: [], metrics, warnings,
+    now: new Date('2026-11-14T10:00:00Z'), idFactory: (prefix) => `${prefix}-x`, logEvent: () => {},
+  });
+  assert.equal(metrics.budget, 256);
+  assert.equal(metrics.events, 256);
+  assert.equal(metrics.omittedEvents, 45);
+  assert.equal(metrics.budgetExhausted, true);
+  assert.equal(metrics.rolledBack, 0);
+  assert.equal(automationHealth(metrics).ok, false);
+  assert.equal(automationHealth(metrics).omittedEvents, 45);
+  assert.ok(warnings.some((warning) => /not delivered/i.test(warning)));
+});
+
+test('perf lane totals survive recent-sample eviction', async () => {
+  const { perfLaneSummary } = await import('../../app/core/perf.js');
+  enablePerf(); clearPerf();
+  perfSample('nav.counters', 25);
+  for (let i = 0; i < 600; i += 1) perfSample('store:update', 1);
+  assert.equal(perfRead().length, 500);
+  assert.equal(perfLaneSummary('nav.counters').count, 1);
+  assert.equal(perfLaneSummary('nav.counters').totalMs, 25);
+  assert.equal(perfLaneSummary('store:update').count, 600);
+  disablePerf(); clearPerf();
+  assert.equal(perfLaneSummary('nav.counters').count, 0);
 });

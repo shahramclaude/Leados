@@ -10,36 +10,66 @@
  */
 
 const DAY_MS = 86400000;
+// Date.UTC maps years 0–99 to 1900–1999. The old helpers used Date.UTC, so keep
+// that historical edge-case while taking the allocation-free path for real dates.
+const YEAR_0_MS = Date.parse('0000-01-01T00:00:00.000Z');
+const YEAR_100_MS = Date.parse('0100-01-01T00:00:00.000Z');
 
-/** Parse anything reasonable into a Date, or null. Date-only strings are UTC midnight. */
-export function toDate(value) {
-  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : new Date(value.getTime());
-  if (typeof value === 'number' && Number.isFinite(value)) return new Date(value);
+/** Parse to a timestamp without allocating an intermediate Date for Date/number inputs. */
+function timestamp(value) {
+  if (value instanceof Date) {
+    const ms = value.getTime();
+    return Number.isNaN(ms) ? null : ms;
+  }
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
   if (typeof value !== 'string' || value.trim() === '') return null;
   const raw = value.trim();
   const d = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? new Date(raw + 'T00:00:00.000Z') : new Date(raw);
-  return Number.isNaN(d.getTime()) ? null : d;
+  const ms = d.getTime();
+  return Number.isNaN(ms) ? null : ms;
+}
+
+/** Parse anything reasonable into a Date, or null. Date-only strings are UTC midnight. */
+export function toDate(value) {
+  const ms = timestamp(value);
+  return ms === null ? null : new Date(ms);
+}
+
+// UTC has no DST gaps. Flooring the timestamp is exactly Date.UTC(y,m,d),
+// including before 1970, where truncation toward zero would be the wrong day.
+function utcDayStart(ms) {
+  const whole = Math.floor(ms / DAY_MS) * DAY_MS;
+  if (ms >= YEAR_0_MS && ms < YEAR_100_MS) {
+    const d = new Date(whole);
+    return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+  }
+  return whole;
 }
 
 /** UTC midnight of the day containing `value`. */
 export function startOfDay(value) {
-  const d = toDate(value);
-  if (!d) return null;
-  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  const ms = timestamp(value);
+  return ms === null ? null : new Date(utcDayStart(ms));
 }
 
 /** `YYYY-MM-DD` for the UTC day containing `value`. */
 export function dayKey(value) {
-  const d = startOfDay(value);
-  return d ? d.toISOString().slice(0, 10) : null;
+  const ms = timestamp(value);
+  if (ms === null) return null;
+  const d = new Date(utcDayStart(ms));
+  const year = d.getUTCFullYear();
+  // Preserve the historical ISO-string slice for extended years rather than
+  // silently introducing a different expanded-year format.
+  if (year < 0 || year > 9999) return d.toISOString().slice(0, 10);
+  return `${String(year).padStart(4, '0')}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
 }
 
 /** Whole days from `from` to `to` (positive when `to` is later). */
 export function daysBetween(from, to) {
-  const a = startOfDay(from);
-  const b = startOfDay(to);
-  if (!a || !b) return null;
-  return Math.round((b.getTime() - a.getTime()) / DAY_MS);
+  const a = timestamp(from);
+  const b = timestamp(to);
+  if (a === null || b === null) return null;
+  return Math.round((utcDayStart(b) - utcDayStart(a)) / DAY_MS);
 }
 
 /** Whole days elapsed since `value`. Negative means it is in the future. */

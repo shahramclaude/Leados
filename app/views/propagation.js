@@ -243,6 +243,15 @@ function failuresTab(ctx, ledger) {
         tone: 'warn',
         title: `${actionable.length} propagation${actionable.length === 1 ? '' : 's'} did not complete`,
         body: 'Each one is a rule that threw and was rolled back, so the decisions, delegations or goals it would have created are absent. Retrying re-runs only that rule against the workspace as it stands now.',
+        actions: [h('button', {
+          class: 'btn btn-small btn-primary', type: 'button',
+          onClick: () => {
+            const res = ctx.api.retryPropagationReceipts({ limit: 10 });
+            if (!res?.ok) { toast(res?.error || 'The retry batch stopped because the workspace could not be saved.', 'bad'); ctx.refresh(); return; }
+            toast(`Retry batch: ${res.resolved} resolved, ${res.failed} failed again, ${res.skipped} unavailable here. ${res.remaining} unresolved receipt(s) remain.${res.stoppedReason === 'rule-failed' ? ' Stopped at the first repeated failure.' : ''}`, res.failed ? 'caution' : 'good');
+            ctx.refresh();
+          },
+        }, `Retry up to ${Math.min(10, actionable.length)} failure${Math.min(10, actionable.length) === 1 ? '' : 's'}`)],
       })
       : null,
     card({
