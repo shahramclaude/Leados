@@ -207,6 +207,12 @@ function statsGrid(report) {
     stat({ label: 'Faithful today', value: String(b.audits.faithful), hint: 'posted figures the record still reproduces exactly', tone: b.audits.faithful === b.liveN && b.liveN > 0 ? 'good' : '' }),
     stat({ label: 'Drifted / regressed', value: String(b.audits.drifted + b.audits['statement-regressed']), hint: `${b.audits.drifted} drifted · ${b.audits['statement-regressed']} regressed · ${b.audits['window-unreadable']} unreadable`, tone: b.audits.drifted + b.audits['statement-regressed'] > 0 ? 'bad' : '' }),
     stat({ label: 'Drift decided', value: String(b.driftAcks.acknowledged), hint: `${b.driftAcks.acknowledged} acknowledged · ${b.driftAcks.unacknowledged} awaiting a dated decision`, tone: b.driftAcks.unacknowledged > 0 ? 'bad' : b.driftAcks.acknowledged > 0 ? 'good' : '' }),
+    stat({
+      label: 'Drift attribution',
+      value: String(b.attributionCandidatesN),
+      hint: `${b.attributions.attributed} posting(s) with a candidate act · ${b.attributions['no-candidates']} with none · ${b.attributions.refused} REFUSED (log cannot cover the window)`,
+      tone: b.attributions.refused > 0 ? 'bad' : b.attributionCandidatesN > 0 ? 'warn' : '',
+    }),
     stat({ label: 'Posted lines', value: String(b.rowsTotalN), hint: `${b.rowsBoundN} bound · ${b.rowsNoEnvelopeN} no-envelope · ${b.rowsDecayedN} decayed` }),
     stat({ label: 'Open posting asks', value: String(b.openAsksN), hint: `${CHARGEBACK_POSTING_RULE_ID}, to the lines’ joint apex` }),
   );
@@ -218,6 +224,44 @@ function bindingCell(row) {
     row.envelopeName ? h('span', { class: 'small' }, row.envelopeName) : null,
     row.binding.state === 'no-envelope' && row.noEnvelopeReason ? h('span', { class: 'muted small' }, `“${row.noEnvelopeReason}”`) : null,
     row.binding.state !== 'bound' && row.binding.state !== 'no-envelope' ? h('span', { class: 'muted small' }, row.binding.reason) : null);
+}
+
+/**
+ * What landed on the posted period between the posting and today (ADR-0203).
+ * Candidate acts, each with the exact link the record could prove — never a
+ * culprit, never a person score, and never a list built on a log that cannot
+ * see back to the posting.
+ */
+function attributionBlock(report, p) {
+  const a = p.audit.attribution;
+  if (!a || a.verdict === 'not-run') return null;
+  const body = [
+    badge(a.label, tone(a.tone)),
+    h('p', { class: 'muted small' }, a.reason),
+    a.window
+      ? h('p', { class: 'muted small' }, `Window: ${a.window.from} (the posting instant) → ${a.window.to}, ${a.window.days} day(s). Log coverage: ${a.coverage && a.coverage.state === 'covered' ? `COVERED — ${a.coverage.basisText}` : 'REFUSED'}.`)
+      : null,
+  ];
+  if (a.candidates.length) {
+    body.push(table({
+      caption: 'Candidate acts on the record — CANDIDATES, not causes',
+      columns: [
+        { label: 'Dated act', render: (r) => h('div', { class: 'stack-xs' }, h('span', { class: 'small' }, `${r.on}${r.unordered ? ' (unordered against the posting)' : ''}`), h('span', { class: 'muted small' }, `${r.familyLabel} · ${r.eventId || 'no act id'}`)) },
+        { label: 'What the record ties it to', render: (r) => h('div', { class: 'stack-xs' }, ...r.link.accounts.map((acc) => h('span', { class: 'small' }, `${acc.name}${acc.moved ? ' — moved' : ''}${acc.withheld ? '' : ` (${acc.basis})`}`)), h('span', { class: 'muted small' }, r.link.basis)) },
+        { label: 'Moved cents beside it', render: (r) => r.link.accounts.filter((acc) => acc.moved).map((acc) => acc.fields.map((f) => (f.field === 'new-account'
+          ? `${acc.name}: an account the posting did not name now carries money`
+          : `${acc.name} ${f.field} ${f.posted} → ${f.current} ${p.currency} (${f.deltaCents >= 0 ? '+' : ''}${f.deltaCents})`)).join('; ')).filter(Boolean).join(' · ') || 'touches a frozen account whose cents still reproduce' },
+      ],
+      rows: a.candidates,
+    }));
+  }
+  if (a.candidatesOmittedN) body.push(h('p', { class: 'muted small' }, `${a.candidatesOmittedN} further candidate act(s) counted, not printed.`));
+  if (a.detail) body.push(h('p', { class: 'muted small' }, a.detail));
+  body.push(h('p', { class: 'muted small' }, `In-window acts counted: ${a.counts.windowEventsN} — ${a.counts.candidatesN} candidate(s) of a figure-moving family (${a.counts.linkedN} tied to this posting’s accounts, ${a.counts.unlinkedN} not tied, ${a.counts.unresolvedN} naming a record that is gone), ${a.counts.outOfPeriodN} outside this period, ${a.counts.notFigureMovingN} that cannot move a figure, ${a.counts.unattributableN} with no record id, ${a.counts.outsideFamilyN} of no figure-moving family. Counts reconcile: ${a.countsReconcile ? 'yes' : 'NO'}.`));
+  if (a.verdict === 'attributed' && report.actor.canPost) {
+    body.push(h('p', { class: 'muted small' }, 'Read the candidates, then decide: acknowledge the posted figures in writing, or reverse and re-post. Nothing here decides for you, and no candidate is ranked above another.'));
+  }
+  return h('div', { class: 'stack-xs', 'data-testid': `cbp-attribution-${p.id}` }, ...body);
 }
 
 function postingCard(ctx, report, p) {
@@ -237,6 +281,8 @@ function postingCard(ctx, report, p) {
     }));
     if (p.audit.driftsOmittedN) auditBody.push(h('p', { class: 'muted small' }, `${p.audit.driftsOmittedN} further drifted figure(s) counted, not printed.`));
   }
+  const attribution = attributionBlock(report, p);
+  if (attribution) auditBody.push(attribution);
   /* The dated decision on this drift (ADR-0202): acknowledged, owed, or moot. */
   if (p.audit.ackState === 'acknowledged' && p.audit.ack) {
     auditBody.push(h('div', { class: 'stack-xs', 'data-testid': `cbp-ack-${p.id}` },
@@ -295,7 +341,7 @@ function methodCard(report) {
     body: h('div', { class: 'stack-sm' },
       h('img', {
         src: DIAGRAM_URL,
-        alt: 'Conceptual method diagram, not workspace data: a completed chargeback statement sheet with a zero-sum check feeds a dated posting document; the posting binds each line’s charge and credit to that line’s own budget envelope or to an explicit written no-envelope declaration; a comparison lens re-derives the statement and finds moved figures; the drift then splits into two dated human decisions — a stamp acknowledging the original posting so the figures stand unchanged, or a reversal arrow looping back to a fresh corrected posting; nothing writes into the envelopes’ own arithmetic and no acknowledgement edits a cent.',
+        alt: 'Conceptual method diagram, not workspace data: a completed zero-sum chargeback statement feeds a dated posting document and protected envelopes; a comparison lens finds moved figures, then a lower event-log timeline offers neutral price, reporting-line and person-record act cards as candidates for human review, with a broken log edge showing that an uncovered window is refused; the drift splits into two dated human decisions, either acknowledge the original posting unchanged or reverse to a fresh corrected posting. Nothing writes into envelope arithmetic, no candidate is a cause, and no acknowledgement edits a cent.',
         style: 'max-width:100%;height:auto;border-radius:8px;',
       }),
       h('ol', { class: 'stack-xs' }, ...report.method.map((m) => h('li', { class: 'small' }, m))),
