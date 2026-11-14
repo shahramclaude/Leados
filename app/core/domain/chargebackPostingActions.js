@@ -12,6 +12,11 @@
  *                                  construction.
  *  chargebackReversePosting        a dated reversal with a written reason; the posting
  *                                  stays on the ledger as history.
+ *  chargebackAcknowledgeDrift      the dated decision on ONE drift signature (ADR-0202):
+ *                                  the posted figures stand as the accepted period
+ *                                  fact, divergence noted. Signature re-derived at
+ *                                  the door; never edits a cent, never covers another
+ *                                  drift, never acknowledges twice.
  *  chargebackPostingScan           re-run RULE-CBP-01 explicitly (director+ / operator).
  *  chargebackPostingSetConventions the ask window and the automation pause.
  *
@@ -32,6 +37,7 @@ import { activeSeat, buildSeats, canAct } from './seat.js';
 import { buildTransferPriceLedger } from './transferPrice.js';
 import { formatCents, transferPriceCurrency } from './transferPriceSchema.js';
 import {
+  auditPostingDrift,
   buildChargebackPostingLedger,
   compileChargebackPostings,
   periodCurrencyKey,
@@ -237,32 +243,89 @@ export function createChargebackPostingActions(store, { now = () => new Date(), 
       return saved(store, { id: act.id, periodFrom: window.from, periodTo: window.to, currency, totalChargedCents: sumCharged, rowsN: rows.length });
     },
 
-    chargebackReversePosting(postingId, reason) {
-      const { at, today, seat } = context();
-      const standing = postingStanding(seat);
-      if (standing) return standing;
-      const id = text(postingId);
-      const why = text(reason).slice(0, CHARGEBACK_POSTING_LIMITS.reasonMax);
-      if (!id) return fail('Name the posting to reverse.', 'postingId');
-      if (why.length < CHARGEBACK_POSTING_LIMITS.reasonMin) return fail(`A reversal needs a written reason of at least ${CHARGEBACK_POSTING_LIMITS.reasonMin} characters — a reversed period fact without one is an erasure.`, 'reason');
-      const { posts } = compileChargebackPostings(store.state.chargebackPostings || []);
-      const doc = posts.get(id);
-      if (!doc) return fail('That posting is not on the record.', 'postingId');
-      if (doc.reverse) return fail(`That posting was already reversed on ${doc.reverse.decidedOn}.`, 'postingId');
-      if ((store.state.chargebackPostings || []).length >= CHARGEBACK_POSTING_LIMITS.acts) {
-        return fail('The posting ledger is full. Export it before recording more.', 'posting');
-      }
-      const act = {
-        id: newId('cbr'), kind: 'reverse', via: seat.fullAccess ? 'operator' : 'seat',
-        decidedBySeatId: seat.fullAccess ? null : seat.id, decidedOn: today, at: at.toISOString(),
-        postingId: id, reason: why,
-      };
-      append(act, {
-        type: CHARGEBACK_POSTING_EVENTS.REVERSED, entity: 'chargebackPosting', entityId: id,
-        summary: `Reversed the ${doc.post.periodFrom}–${doc.post.periodTo} ${doc.post.currency} chargeback posting: ${why}`.slice(0, 300),
-      });
-      return saved(store, { id: act.id, postingId: id });
-    },
+  chargebackReversePosting(postingId, reason) {
+    const { at, today, seat } = context();
+    const standing = postingStanding(seat);
+    if (standing) return standing;
+    const id = text(postingId);
+    const why = text(reason).slice(0, CHARGEBACK_POSTING_LIMITS.reasonMax);
+    if (!id) return fail('Name the posting to reverse.', 'postingId');
+    if (why.length < CHARGEBACK_POSTING_LIMITS.reasonMin) return fail(`A reversal needs a written reason of at least ${CHARGEBACK_POSTING_LIMITS.reasonMin} characters — a reversed period fact without one is an erasure.`, 'reason');
+    const { posts } = compileChargebackPostings(store.state.chargebackPostings || []);
+    const doc = posts.get(id);
+    if (!doc) return fail('That posting is not on the record.', 'postingId');
+    if (doc.reverse) return fail(`That posting was already reversed on ${doc.reverse.decidedOn}.`, 'postingId');
+    if ((store.state.chargebackPostings || []).length >= CHARGEBACK_POSTING_LIMITS.acts) {
+      return fail('The posting ledger is full. Export it before recording more.', 'posting');
+    }
+    const act = {
+      id: newId('cbr'), kind: 'reverse', via: seat.fullAccess ? 'operator' : 'seat',
+      decidedBySeatId: seat.fullAccess ? null : seat.id, decidedOn: today, at: at.toISOString(),
+      postingId: id, reason: why,
+    };
+    append(act, {
+      type: CHARGEBACK_POSTING_EVENTS.REVERSED, entity: 'chargebackPosting', entityId: id,
+      summary: `Reversed the ${doc.post.periodFrom}–${doc.post.periodTo} ${doc.post.currency} chargeback posting: ${why}`.slice(0, 300),
+    });
+    return saved(store, { id: act.id, postingId: id });
+  },
+
+  /**
+   * input: (postingId, reason). The dated decision on ONE drift (ADR-0202):
+   * the posted figures stand as the accepted period fact, divergence noted.
+   * The signature is re-derived at the door from the SAME shared comparison
+   * the panel prints — a poster cannot choose which drift they are signing,
+   * cannot acknowledge a posting that is not drifted, and cannot acknowledge
+   * the same signature twice. Nothing is edited: the frozen figures stay,
+   * the re-derived statement keeps printing its own truth beside them, and
+   * the alternative act (reverse with a written reason) is untouched.
+   */
+  chargebackAcknowledgeDrift(postingId, reason) {
+    const { at, today, seat } = context();
+    const standing = postingStanding(seat);
+    if (standing) return standing;
+    const id = text(postingId);
+    const why = text(reason).slice(0, CHARGEBACK_POSTING_LIMITS.reasonMax);
+    if (!id) return fail('Name the posting whose drift you are deciding.', 'postingId');
+    if (why.length < CHARGEBACK_POSTING_LIMITS.reasonMin) {
+      return fail(`An acknowledgement needs a written reason of at least ${CHARGEBACK_POSTING_LIMITS.reasonMin} characters — accepting a restated period fact without saying why is not a decision.`, 'reason');
+    }
+    const { posts } = compileChargebackPostings(store.state.chargebackPostings || []);
+    const doc = posts.get(id);
+    if (!doc) return fail('That posting is not on the record.', 'postingId');
+    if (doc.reverse) return fail(`That posting was reversed on ${doc.reverse.decidedOn}; a reversed posting makes no current claim, so there is no drift to acknowledge.`, 'postingId');
+
+    // Re-derive the posting's OWN period, whole-workspace, and compare through
+    // the one shared implementation: the signature written here is byte-identical
+    // to the signature the panel, the CSV and RULE-CBP-01 print.
+    const operator = { ...(store.state.settings || {}), activeSeatId: null };
+    const report = buildTransferPriceLedger({ ...store.state, settings: operator }, {
+      from: doc.post.periodFrom, to: doc.post.periodTo, now: at, settings: operator,
+    });
+    const audit = auditPostingDrift(doc.post, report);
+    if (audit.verdict !== 'drifted') {
+      return fail(`REFUSED — the posting reads ${audit.verdict}: ${audit.detail || 'the re-derived statement reproduces every posted cent, or the comparison does not run.'} There is no drift to acknowledge; nothing was written.`, 'postingId');
+    }
+    const already = (store.state.chargebackPostings || []).find(
+      (a) => a && a.kind === 'acknowledge' && a.postingId === id && a.signature === audit.signature,
+    );
+    if (already) {
+      return fail(`This drift (signature ${audit.signature}) was already acknowledged on ${already.decidedOn}. A drift that grows or moves is a NEW signature and a new decision — an old acknowledgement never covers it.`, 'postingId');
+    }
+    if ((store.state.chargebackPostings || []).length >= CHARGEBACK_POSTING_LIMITS.acts) {
+      return fail('The posting ledger is full. Export it before recording more.', 'posting');
+    }
+    const act = {
+      id: newId('cba'), kind: 'acknowledge', via: seat.fullAccess ? 'operator' : 'seat',
+      decidedBySeatId: seat.fullAccess ? null : seat.id, decidedOn: today, at: at.toISOString(),
+      postingId: id, signature: audit.signature, reason: why,
+    };
+    append(act, {
+      type: CHARGEBACK_POSTING_EVENTS.ACKNOWLEDGED, entity: 'chargebackPosting', entityId: id,
+      summary: `Acknowledged the drift on the ${doc.post.periodFrom}–${doc.post.periodTo} ${doc.post.currency} posting (signature ${audit.signature}): the posted figures stand as the accepted period fact, divergence noted.`.slice(0, 300),
+    });
+    return saved(store, { id: act.id, postingId: id, signature: audit.signature });
+  },
 
     chargebackPostingScan() {
       const { seat } = context();

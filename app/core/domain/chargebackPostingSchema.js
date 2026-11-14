@@ -4,7 +4,7 @@
  * Schema v154).
  *
  * WHAT IS STORED
- *   `chargebackPostings`        append-only dated ACTS, two kinds:
+ *   `chargebackPostings`        append-only dated ACTS, three kinds:
  *                                 post     a seat (or the operator view) freezes one
  *                                          period × one currency of the complete
  *                                          whole-workspace chargeback statement:
@@ -12,6 +12,13 @@
  *                                          totals and the claims in force
  *                                 reverse  a dated reversal with a written reason;
  *                                          the posting stays as history
+ *                                 acknowledge  a dated human decision (ADR-0202)
+ *                                          that ONE exact drift signature stands:
+ *                                          the posted figures are the accepted
+ *                                          period fact, divergence noted. Names
+ *                                          the signature it covers; never edits
+ *                                          the posting and never settles any
+ *                                          other drift.
  *   `chargebackPostingMarkers`  RULE-CBP-01's bounded idempotency / observation ledger
  *   two settings                `chargebackPostingAskDueDays`, `chargebackPostingAutoPropagate`
  *
@@ -98,9 +105,12 @@ export function normalizeChargebackPostings(raw, warnings = []) {
   const seen = new Set();
   /** postingId → reversed yet? */
   const posts = new Map();
+  /** `postingId|signature` already acknowledged (append order = history order). */
+  const ackedBySignature = new Set();
   let malformed = 0;
   let forged = 0;
   let orphaned = 0;
+  let orphanedAcks = 0;
 
   for (const item of arr) {
     if (!isPlainObject(item)) { malformed += 1; continue; }
@@ -172,6 +182,29 @@ export function normalizeChargebackPostings(raw, warnings = []) {
       continue;
     }
 
+    if (kind === 'acknowledge') {
+      const ackPostingId = cleanId(item.postingId);
+      if (!ackPostingId || !posts.has(ackPostingId)) { orphanedAcks += 1; continue; }
+      // The product cannot acknowledge a reversed posting — by then it makes
+      // no current claim, so there is no drift to decide. A file carrying one
+      // is malformed, not history.
+      if (posts.get(ackPostingId)) { malformed += 1; continue; }
+      // The signature is the exact fingerprint of ONE drift (ADR-0202). A
+      // malformed fingerprint is dropped, never re-derived at load: only the
+      // reader can compare a posting to its own period, and an acknowledgement
+      // of a guess is not an acknowledgement.
+      const signature = str(item.signature);
+      if (!/^drift1:\d+:[0-9a-f]{16}$/.test(signature)) { malformed += 1; continue; }
+      const ackKey = `${ackPostingId}|${signature}`;
+      if (ackedBySignature.has(ackKey)) { malformed += 1; continue; }
+      const ackReason = str(item.reason).slice(0, CHARGEBACK_POSTING_LIMITS.reasonMax);
+      if (ackReason.length < CHARGEBACK_POSTING_LIMITS.reasonMin) { malformed += 1; continue; }
+      ackedBySignature.add(ackKey);
+      seen.add(id);
+      out.push({ id, kind, via, decidedBySeatId, decidedOn, at, postingId: ackPostingId, signature, reason: ackReason });
+      continue;
+    }
+
     // reverse
     const postingId = cleanId(item.postingId);
     if (!postingId || !posts.has(postingId)) { orphaned += 1; continue; }
@@ -181,11 +214,13 @@ export function normalizeChargebackPostings(raw, warnings = []) {
     posts.set(postingId, true);
     seen.add(id);
     out.push({ id, kind, via, decidedBySeatId, decidedOn, at, postingId, reason });
+    continue;
   }
 
   if (malformed) warnings.push(`Chargeback postings: dropped ${malformed} malformed posting act(s); no period fact was repaired or guessed`);
   if (forged) warnings.push(`Chargeback postings: dropped ${forged} posting(s) whose frozen figures or claims failed their own integer identities (rows must sum to the totals, the totals must net to zero and be non-zero, and the frozen statement claims must read complete)`);
   if (orphaned) warnings.push(`Chargeback postings: dropped ${orphaned} reversal(s) answering a posting that is not on the record`);
+  if (orphanedAcks) warnings.push(`Chargeback postings: dropped ${orphanedAcks} acknowledgement(s) answering a posting that is not on the record`);
   return out;
 }
 

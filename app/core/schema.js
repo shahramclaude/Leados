@@ -899,7 +899,14 @@ export {
 // the tasks and attestations an upgraded workspace already holds. Nothing
 // derived is stored either: feasibility, the matching and the deficient set are
 // recomputed on every read, so a replayed workspace cannot carry a stale proof.
-export const SCHEMA_VERSION = 157;
+// v158 extends the Chargeback Period Posting ledger (ADR-0202) with the dated
+// `acknowledge` act: a human decides that ONE exact drift signature stands —
+// the posted figures are the accepted period fact, divergence noted. No
+// collection is added and no decision is fabricated at upgrade: an upgraded
+// workspace opens with every drifted posting reading `unacknowledged`, and
+// the drift signature itself is recomputed on every read from the frozen
+// posting against its re-derived period, so it can never go stale in storage.
+export const SCHEMA_VERSION = 158;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -9262,6 +9269,14 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  // 157 → 158: ADR-0202 extends the `chargebackPostings` vocabulary with a
+  // dated `acknowledge` act — a human decision that ONE exact drift signature
+  // stands: the posted figures are the accepted period fact, divergence
+  // noted. No new collection, and no acknowledgement is fabricated: an
+  // upgraded workspace opens with every drifted posting reading
+  // `unacknowledged` — an absence of decision, never a sign-off — and each
+  // drift signature is recomputed from the record by the shared reader.
+  157: (v157) => ({ ...v157, schemaVersion: 158 }),
   // 155 → 156: ADR-0196 adds one EMPTY append-only ledger. No active
   // RULE-NPW-01 ask has a receiving-line answer, effort estimate or capacity
   // reservation inferred from its text, owner or current reporting lines; an

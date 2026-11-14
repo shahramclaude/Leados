@@ -33,8 +33,20 @@
  *    posting was made; the quarter's statement regressed (RULE-TPL-01 owns the
  *    missing prices); the currency no longer carries a charge; or the apex
  *    seat moved. An ask it cannot re-read is left open.
- *  - Never posts, never reverses, never binds an envelope, never signs a key
- *    and never blocks a human decision.
+ *  - SECOND DUTY (ADR-0202): a posting the record has SINCE restated is a
+ *    decision somebody owes, not a footnote. For every live posting whose
+ *    re-derivation drifts and whose EXACT drift signature carries no written
+ *    acknowledgement, it keeps at most one dated ask in front of the lowest
+ *    joint apex of the lines the POSTING froze — acknowledge the posted
+ *    figures as the accepted period fact, or reverse with a written reason.
+ *    One ask per signature, ever; a drift that grows or moves is a new
+ *    signature and a new ask; a signature already acknowledged is never
+ *    re-asked. It closes its own drift asks with the actual reason: the
+ *    drift was acknowledged in writing; the posting was reversed; the record
+ *    reproduces the posted figures again; the signature moved on; or the
+ *    apex seat moved.
+ *  - Never posts, never reverses, never acknowledges, never binds an envelope,
+ *    never signs a key and never blocks a human decision.
  */
 
 import { addDays, dayKey } from '../time.js';
@@ -43,7 +55,7 @@ import { LEADER_ID } from './chain.js';
 import { buildMatrix, matrixJointApex } from './matrix.js';
 import { buildTransferPriceLedger } from './transferPrice.js';
 import { formatCents } from './transferPriceSchema.js';
-import { compileChargebackPostings, periodCurrencyKey, statementAccountCents } from './chargebackPosting.js';
+import { auditPostingDrift, compileChargebackPostings, periodCurrencyKey, statementAccountCents } from './chargebackPosting.js';
 import { normalizeChargebackPostingSettings } from './chargebackPostingSchema.js';
 import {
   CHARGEBACK_POSTING_EVENTS,
@@ -57,7 +69,18 @@ export const CHARGEBACK_POSTING_TRIGGER_EVENTS = new Set([
   TRANSFER_PRICE_EVENTS.RETIRED,
   CHARGEBACK_POSTING_EVENTS.POSTED,
   CHARGEBACK_POSTING_EVENTS.REVERSED,
+  CHARGEBACK_POSTING_EVENTS.ACKNOWLEDGED,
   CHARGEBACK_POSTING_EVENTS.SCAN,
+  // Drift itself is created OUTSIDE this ledger: a retro retune, a re-declared
+  // share or a roster repair restates a posted period. Those acts move the
+  // statement, so the posting must be re-audited when they land — otherwise a
+  // restated period fact would wait for someone to happen to open the panel.
+  'matrix.line.declared',
+  'matrix.line.retuned',
+  'matrix.line.ended',
+  'person.updated',
+  'person.archived',
+  'person.restored',
 ]);
 
 const clampStr = (value, max = 280) => (typeof value === 'string' ? value.trim().slice(0, max) : '');
@@ -133,7 +156,10 @@ export function chargebackPostingRule(draft, ctx = {}) {
   const matrix = buildMatrix(view, { now: at, settings: operator });
   const report = buildTransferPriceLedger(view, { now: at, settings: operator });
   const window = report.window;
-  const { liveByKey } = compileChargebackPostings(draft.chargebackPostings || []);
+  const { posts, liveByKey } = compileChargebackPostings(draft.chargebackPostings || []);
+  /** Every acknowledgement on record: the drift duty reads them, never writes one. */
+  const ackActs = (draft.chargebackPostings || []).filter((a) => a && a.kind === 'acknowledge');
+  const ackFor = (postingId, signature) => ackActs.find((a) => a.postingId === postingId && a.signature === signature) || null;
   const reversalsFor = (from, to, currency) => (draft.chargebackPostings || [])
     .filter((a) => a && a.kind === 'reverse')
     .filter((a) => {
@@ -197,6 +223,45 @@ export function chargebackPostingRule(draft, ctx = {}) {
     }
   }
 
+  /* Drift nobody has decided (ADR-0202): one dated ask per (posting,
+   * signature), to the apex of the lines the POSTING froze. The comparison
+   * is the same shared `auditPostingDrift` the panel and the action door
+   * call, over a statement re-derived for the posting's OWN period (the
+   * current window short-circuits to `report`; older periods are built at
+   * most once per run). */
+  const driftReports = new Map();
+  const driftStatementFor = (from, to) => {
+    if (window.valid && from === window.from && to === window.to) return report;
+    const key = `${from}..${to}`;
+    if (!driftReports.has(key)) driftReports.set(key, buildTransferPriceLedger(view, { from, to, now: at, settings: operator }));
+    return driftReports.get(key);
+  };
+  for (const doc of posts.values()) {
+    if (doc.reverse) continue;
+    const post = doc.post;
+    const audit = auditPostingDrift(post, driftStatementFor(post.periodFrom, post.periodTo));
+    if (audit.verdict !== 'drifted' || !audit.signature) continue;
+    if (ackFor(post.id, audit.signature)) continue; // decided in writing — never re-asked
+    const subjectKey = `drift|${post.id}|${audit.signature}`;
+    const apex = matrixJointApex(matrix, post.rows.map((r) => r.accountId));
+    if (!apex.unique || apex.isLeaderOnly || !onRoster(apex.apexId)) {
+      observations.push({
+        subjectKey,
+        state: apex.isLeaderOnly || apex.apexId === LEADER_ID ? 'leader-apex' : apex.unique ? 'off-roster-apex' : 'ambiguous-apex',
+        summary: `The ${post.periodFrom}–${post.periodTo} ${post.currency} posting has drifted (${audit.signature}) and the lines it froze have ${apex.unique ? (apex.isLeaderOnly ? 'only the workspace leader' : 'an off-roster seat') : 'no unique joint apex'} above them; no drift-decision task was addressed to anybody else.`,
+      });
+      continue;
+    }
+    owed.set(subjectKey, {
+      askedId: apex.apexId,
+      state: 'drift-unacknowledged',
+      currency: post.currency,
+      title: `Decide the drift on the ${post.periodFrom}–${post.periodTo} ${post.currency} posting`,
+      outcome: (dueOn) => `By ${dueOn}, decide this posting’s drift in writing (#/matrix?panel=postings): either ACKNOWLEDGE that the posted figures for ${post.periodFrom} to ${post.periodTo} in ${post.currency} stand as the accepted period fact with the divergence noted (drift signature ${audit.signature}), or REVERSE the posting with a written reason and let the corrected statement be posted. Nothing is edited either way — the frozen figures stay and the re-derived statement keeps printing beside them. This ask closes when the drift is acknowledged, the posting is reversed, or the record reproduces the posted figures again.`,
+      edgeSummary: 'A drifted chargeback posting rolls up to this seat for a dated decision.',
+    });
+  }
+
   const out = [];
   let closedN = 0;
   const openSubjects = new Set();
@@ -212,8 +277,37 @@ export function chargebackPostingRule(draft, ctx = {}) {
     staleReports.set(key, read);
     return read;
   };
+  /** `drift|<postingId>|<signature>` parsed from the ends, so an id can never confuse it. */
+  const parseDriftSubject = (subjectKey) => {
+    const s = String(subjectKey || '');
+    if (!s.startsWith('drift|')) return null;
+    const cut = s.lastIndexOf('|');
+    if (cut <= 6) return null;
+    const postingId = s.slice('drift|'.length, cut);
+    const signature = s.slice(cut + 1);
+    return /^drift1:\d+:[0-9a-f]{16}$/.test(signature) && postingId ? { postingId, signature } : null;
+  };
+  /** Why an open DRIFT ask is no longer owed; `null` while it still is. */
+  const driftSettledReason = (marker) => {
+    const parsed = parseDriftSubject(marker.subjectKey);
+    if (!parsed) return null;
+    const doc = posts.get(parsed.postingId);
+    if (!doc) return 'the posting this ask was about is no longer on the record';
+    if (doc.reverse) return 'the posting was reversed, so it makes no current claim and owes no drift decision';
+    const ack = ackFor(parsed.postingId, parsed.signature);
+    if (ack) return `the drift was acknowledged in writing on ${ack.decidedOn} — the posted figures stand as the accepted period fact, divergence noted`;
+    const audit = auditPostingDrift(doc.post, driftStatementFor(doc.post.periodFrom, doc.post.periodTo));
+    if (audit.verdict !== 'drifted') {
+      return audit.verdict === 'faithful'
+        ? 'the record reproduces the posted figures again, so this drift no longer exists'
+        : `the posting now reads ${audit.verdict}, so the drift comparison does not run and this signature is no longer on the record`;
+    }
+    if (audit.signature !== parsed.signature) return 'the record moved on: the drift this ask named is no longer the drift the posting carries';
+    return null;
+  };
   /** Why an open ask is no longer owed; `null` while it still is, or when that cannot be judged. */
   const settledReason = (marker, task) => {
+    if (parseDriftSubject(marker.subjectKey)) return driftSettledReason(marker);
     const parsed = parsePostSubject(marker.subjectKey);
     if (!parsed) return null;
     const key = periodCurrencyKey(parsed.from, parsed.to, parsed.currency);
@@ -234,7 +328,11 @@ export function chargebackPostingRule(draft, ctx = {}) {
       openSubjects.add(marker.subjectKey);
       continue;
     }
-    const reason = still ? 'the seat it was addressed to is no longer the joint apex of the statement’s lines' : settledReason(marker, task);
+    const reason = still
+      ? (parseDriftSubject(marker.subjectKey)
+        ? 'the seat it was addressed to is no longer the joint apex of the posting’s lines'
+        : 'the seat it was addressed to is no longer the joint apex of the statement’s lines')
+      : settledReason(marker, task);
     if (!reason) {
       openSubjects.add(marker.subjectKey);
       continue;

@@ -212,8 +212,10 @@ const groups = [
   // VP+ act, deliberately above the director rank that governs the scan: the
   // posting binds the WHOLE workspace statement, not one span, and the figures
   // are the statement engine's own (the action refuses typed amounts; it only
-  // accepts envelope bindings and a note).
-  ['post-chargeback', 'chargebackPost chargebackReversePosting'],
+  // accepts envelope bindings and a note). ADR-0202: acknowledging a drift
+  // rides the SAME right — accepting that a restated period fact still stands
+  // is the same class of judgement as creating it, and is refused below VP.
+  ['post-chargeback', 'chargebackPost chargebackReversePosting chargebackAcknowledgeDrift'],
   // ADR-0152: settling an obligation an ENDED line left behind. Recording the
   // remedy is the manager's own act (the action narrows it to a seat that reaches
   // the person, and a carry must name a live line holder); the scan changes no
