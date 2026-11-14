@@ -20,7 +20,7 @@ import { h } from '../ui/dom.js';
 import { perfRead, perfEnabled } from '../core/perf.js';
 import { intelligenceHubRead, intelligenceCoverage } from '../core/domain/intelligenceHub.js';
 import { automationHealth, openReceipts } from '../core/domain/automationOrchestrator.js';
-import { estimateStateSize, quotaWarningFor } from '../core/storeOptimizations.js';
+import { estimateStateSize, quotaWarningForBytes } from '../core/storeOptimizations.js';
 
 function card(title, body, { accent = false } = {}) {
   return h('div', { class: `card ${accent ? 'card-accent' : ''}` },
@@ -44,8 +44,13 @@ export function renderEfficiencyHub(ctx) {
 
   // ── Efficiency ────────────────────────────────────────────────────────────
   const perfSamples = perfRead();
-  const stateSize = estimateStateSize(state);
-  const quotaWarn = quotaWarningFor(state);
+  // Prefer the exact payload length the store already measured while writing.
+  // The estimator remains the fallback for a workspace that has not been saved
+  // yet in this session, and the screen says which one it printed.
+  const exactBytes = typeof ctx.storageSize === 'function' ? ctx.storageSize() : null;
+  const stateSize = Number.isFinite(exactBytes) && exactBytes > 0 ? exactBytes : estimateStateSize(state);
+  const sizeSource = Number.isFinite(exactBytes) && exactBytes > 0 ? 'exact' : 'estimated';
+  const quotaWarn = quotaWarningForBytes(stateSize);
   const revision = state?.meta?.revision ?? 0;
   const metrics = ctx.propagationMetrics || ctx.store?.lastPropagationMetrics || null;
   const navSamples = perfSamples.filter((s) => s.label === 'nav.counters');
@@ -74,7 +79,7 @@ export function renderEfficiencyHub(ctx) {
         card('Store & persist', [
           kvTable([
             ['Revision', revision],
-            ['Workspace size (est.)', `${Math.round(stateSize / 1024)} KB`],
+            ['Workspace size', `${Math.round(stateSize / 1024)} KB (${sizeSource})`],
             ['Updated', state?.meta?.updatedAt || '—'],
             ['Last cascade', metrics ? `${metrics.executed || 0} applied · ${metrics.declined || 0} declined · ${metrics.skipped || 0} memo-skipped · ${metrics.indexSkipped || 0} index-skipped` : '—'],
             ['Cascade wall clock', metrics?.elapsedMs != null ? `${metrics.elapsedMs}ms over ${metrics.events || 0} events × ${metrics.rules || 0} rules` : '—'],

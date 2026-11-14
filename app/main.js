@@ -180,7 +180,13 @@ import { assessAnomaly, generateBoardBrief, extractModuleSeries } from './core/d
 import { renderEfficiencyHub } from './views/efficiencyHub.js';
 import { enablePerf, installPerfDebug, perfMeasure } from './core/perf.js';
 import { intelligenceHubRead, registerInsightsSource } from './core/domain/intelligenceHub.js';
-import { createKeyedMemo, quotaWarningFor as quotaWarningForNav } from './core/storeOptimizations.js';
+import { createKeyedMemo, quotaWarningFor as quotaWarningForNav, quotaWarningForBytes } from './core/storeOptimizations.js';
+// Search reaches tools, safe destinations and the records the acting altitude
+// may read. The catalog is built once per (snapshot, seat, UTC day); typing
+// only scores an existing array.
+import { buildSearchCatalog, QUICK_ACTIONS } from './core/domain/quickSearch.js';
+import { openCommandPalette, readPaletteRecent, rememberPaletteRecent } from './ui/command-palette.js';
+import { renderCheckup } from './views/checkup.js';
 import { renderDynamics } from './views/dynamics.js';
 import { dynamicsAttentionCount } from './core/domain/dynamics.js';
 import { renderCapital } from './views/capital.js';
@@ -310,6 +316,9 @@ function safeDecode(segment) {
 export const NAV = [
   { section: 'Overview', items: [
     { route: 'efficiency', label: 'Efficiency Hub', icon: '⚡', badge: 'efficiency' },
+    // ADR-0200: one honest read of the workspace's own health — storage,
+    // identity, links, automation and measured cost. It reports; it never fixes.
+    { route: 'checkup', label: 'Workspace checkup', icon: '✓' },
     { route: 'mission', label: 'Mission Control', icon: '◉', badge: 'mission' },
     // ADR-0076: the app's second map. The Command Chain says which altitude a
     // piece of work belongs to; the Altitude Lens says which altitude YOU are
@@ -550,6 +559,7 @@ export const NAV = [
 
 const RENDERERS = {
   efficiency: (ctx) => renderEfficiencyHub(ctx),
+  checkup: (ctx) => renderCheckup(ctx),
   assurance: (ctx) => renderAssurance(ctx),
   today: (ctx) => ctx.seatContext?.seat && !ctx.seatContext.seat.fullAccess ? renderMission(ctx) : renderToday(ctx),
   mission: (ctx) => renderMission(ctx),
@@ -761,7 +771,7 @@ export function parseRoute(hash) {
     // route — `evidence` stays the pooled-evidence terminal, `integrity` stays
     // signal integrity and `confidence` stays calibration.
     'sceptic': 'sceptic', 'cross-examination': 'sceptic', 'cross-examine': 'sceptic',
-    'contradiction': 'sceptic', 'contradictions': 'sceptic', 'red-team': 'sceptic',
+    'contradictions': 'sceptic', 'red-team': 'sceptic',
     'falsify': 'sceptic', 'falsification': 'sceptic', 'claims': 'sceptic',
     'claim-audit': 'sceptic', 'audit': 'sceptic', 'self-deception': 'sceptic',
     'challenge': 'sceptic', 'devils-advocate': 'sceptic', 'discovery-sampling': 'sceptic',
@@ -1178,6 +1188,9 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       warnings: store.warnings,
       persistError: store.persistError,
       storageSize: () => store.sizeBytes(),
+      /** Exact payload length from the last save; null before the first one. */
+      lastPersistBytes: store.lastPersistBytes,
+      lastPersistError: store.persistError,
       exportJSON: () => scoped ? refuseExport() : store.exportJSON(),
       exportRedactedJSON: (options) => scoped ? refuseExport() : store.exportRedactedJSON(options),
       exportCSV: (scope, options) => scoped ? refuseExport() : store.exportCSV(scope, options),
@@ -1292,6 +1305,117 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
     // result (mission), so hand back a shallow copy and keep the cache clean.
     return { ...navCounters(state, dayKey(at), seatKey) };
   }
+
+  /* ------------------------------------------------------ quick search (⌘K) */
+
+  // The palette's catalog is a read model over the same snapshot the shell just
+  // painted. It is memoised on exactly the inputs that can change an answer:
+  // the state object (replaced by every committed write), the acting seat and
+  // the UTC day. Typing never rebuilds it; it only ranks an existing array.
+  let paletteNow = null;
+  let paletteSeatCtx = null;
+  let paletteCompiled = null;
+  let paletteViewState = null;
+  let paletteStorageRef = null;
+  let lastPaletteStats = null;
+
+  function paletteSeatKey(seatCtx) {
+    const seat = seatCtx?.seat || null;
+    return seat
+      ? `${seat.id ?? ''}|${seat.fullAccess ? 'full' : 'scoped'}|${seatCtx?.projection?.counts?.aggregate ?? ''}|${seatCtx?.projection?.counts?.denied ?? ''}`
+      : '';
+  }
+
+  const paletteCatalog = createKeyedMemo((state, seatKey, day) => {
+    void state; void seatKey; void day;
+    const at = paletteNow;
+    const seatCtx = paletteSeatCtx;
+    const compiled = paletteCompiled;
+    const seat = seatCtx?.seat || null;
+    const verdictFor = (route) => workspaceRouteVerdict(route, seat, {
+      state: paletteViewState,
+      built: seatCtx?.built || null,
+      now: at,
+      settings: paletteViewState?.settings,
+      compiled,
+    });
+    const canReadRoute = (route) => verdictFor(route).allow;
+    // A record title is detail. An aggregate posture is a counts-only reading,
+    // so its source is withheld from an index that would otherwise print names.
+    const canReadSource = (route) => {
+      const verdict = verdictFor(route);
+      return verdict.allow && verdict.posture !== 'aggregate' && verdict.posture !== 'withheld';
+    };
+    return buildSearchCatalog({
+      state: paletteViewState || store.state,
+      groups: NAV,
+      actions: QUICK_ACTIONS,
+      canReadRoute,
+      canReadSource,
+      now: at,
+    });
+  });
+
+  function paletteSafeStorage() {
+    if (paletteStorageRef) return paletteStorageRef;
+    try {
+      paletteStorageRef = storage || (typeof window !== 'undefined' ? window.localStorage : null);
+    } catch {
+      paletteStorageRef = null;
+    }
+    return paletteStorageRef;
+  }
+
+  /**
+   * Open the keyboard-first search. It is deliberately still available while a
+   * declared seat is enforced: the catalog is built from that seat's own router
+   * verdicts, so the palette can only offer what the seat may open.
+   */
+  function openPalette() {
+    if (store.isLocked) return;
+    if (hostDoc?.querySelector('.palette-modal')) return;
+    const at = now();
+    const seatCtx = safeSeatContext(store.state, at);
+    if (seatCtx?.error) {
+      toast('Search is unavailable until the acting boundary resolves. Reload to retry.', 'bad');
+      return;
+    }
+    const enforced = Boolean(seatCtx?.seat && !seatCtx.seat.fullAccess);
+    const compiled = enforced
+      ? compileDisclosure(store.state, seatCtx.seat, seatCtx.built, { now: at, settings: store.state.settings })
+      : null;
+    paletteNow = at;
+    paletteSeatCtx = seatCtx;
+    paletteCompiled = compiled;
+    paletteViewState = scopedViewState(store.state, seatCtx, { now: at, settings: store.state.settings });
+    let catalog;
+    try {
+      catalog = paletteCatalog(paletteViewState, paletteSeatKey(seatCtx), dayKey(at));
+      lastPaletteStats = catalog.stats;
+    } catch (error) {
+      // A malformed record must not turn a shortcut into a broken screen.
+      paletteViewState = null;
+      toast(`Search could not be built: ${(error && error.message) || error}. The rest of the workspace is unaffected.`, 'bad');
+      return;
+    }
+    const mac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/i.test(navigator.platform || '');
+    openCommandPalette({
+      catalog,
+      recent: readPaletteRecent(paletteSafeStorage()),
+      shortcutLabel: mac ? '⌘K' : 'Ctrl K',
+      onSelect: (item) => {
+        rememberPaletteRecent(paletteSafeStorage(), item);
+        navigate(item.route);
+      },
+    });
+  }
+  // Expose the catalog's own size and hit rate beside the other perf readings.
+  try {
+    const scope = typeof window !== 'undefined' ? window : null;
+    if (scope && scope.__LEADOS_PERF) {
+      scope.__LEADOS_PERF.palette = () => ({ ...paletteCatalog.stats(), catalog: lastPaletteStats });
+    }
+  } catch { /* instrumentation must never block boot */ }
 
   function counters(state, at, seatCtx = null) {
     const insights = getInsights(state, at);
@@ -1571,7 +1695,11 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       })(),
       // Efficiency hub: quota warning, perf slow samples, or converging clusters.
       efficiency: (() => {
-        const warn = quotaWarningForNav(state);
+        // Price the badge from the exact payload the store just wrote; only a
+        // workspace with no save in this session pays for the estimator.
+        const warn = Number.isFinite(store.lastPersistBytes)
+          ? quotaWarningForBytes(store.lastPersistBytes)
+          : quotaWarningForNav(state);
         if (warn) return 1;
         const hub = (() => { try { return intelligenceHubRead(state, at); } catch { return null; } })();
         if (hub && hub.convergingClusters > 0) return hub.convergingClusters;
@@ -1853,6 +1981,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
     const seg1 = safeDecode(parseRoute(hostWindow?.location?.hash || '').segments[1]);
     const labels = {
       today: 'Today',
+      checkup: 'Workspace checkup — storage, identity, links, automation and measured cost, with every refusal stated',
       mission: 'Mission Control',
       intake: 'Intake triage',
       routing: 'Altitude Router — natural-language intake classified into modules and the correct organizational altitude, with disclosure-safe roll-up to every leadership level',
@@ -1975,6 +2104,34 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
     if (guard && guard.hash === (hostWindow?.location?.hash || '') && guard.state === store.state && Date.now() - guard.at < 2000) return;
     render();
   });
+
+  // Quick search: ⌘K / Ctrl-K from anywhere, or "/" when the person is not
+  // already typing. A dialog that is already open owns the keyboard; opening
+  // search on top of it would stack two focus traps.
+  const isEditableTarget = (target) => {
+    if (!target) return false;
+    const tag = String(target.tagName || '').toLowerCase();
+    if (tag === 'input' || tag === 'textarea' || tag === 'select') return true;
+    return target.isContentEditable === true;
+  };
+  const paletteButton = hostDoc ? hostDoc.getElementById('palette-open') : null;
+  if (paletteButton) paletteButton.addEventListener('click', openPalette);
+  if (hostDoc) {
+    hostDoc.addEventListener('keydown', (event) => {
+      if (event.defaultPrevented) return;
+      if (hostDoc.querySelector('.modal-backdrop')) return;
+      const mod = event.metaKey || event.ctrlKey;
+      if (mod && !event.altKey && String(event.key).toLowerCase() === 'k') {
+        event.preventDefault();
+        openPalette();
+        return;
+      }
+      if (!mod && !event.altKey && event.key === '/' && !isEditableTarget(event.target)) {
+        event.preventDefault();
+        openPalette();
+      }
+    });
+  }
 
   // Mobile navigation
   const toggle = hostDoc ? hostDoc.getElementById('nav-toggle') : null;

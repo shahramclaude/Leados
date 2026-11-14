@@ -47,7 +47,13 @@ export function buildAssuranceReport(state) {
   // imported logs may contain confidential free text.
   const failures = (state.events || []).filter((e) => e.type === 'automation.rule_error')
     .map((e) => ({ id: e.id, ts: e.ts }));
-  return { nodes, edges, adjacency, findings, failures,
+  // A budget gap is not a rule failure, but it is the same kind of retained
+  // evidence: a committed write whose derived work was withheld. Count it here
+  // so the control room does not report "0 failures" on a workspace that lost
+  // downstream events. The summary itself is never copied (it can be free text).
+  const gaps = (state.events || []).filter((e) => e.type === 'automation.gap')
+    .map((e) => ({ id: e.id, ts: e.ts }));
+  return { nodes, edges, adjacency, findings, failures, gaps,
     provenance: [...provenance].map(([ruleId, count]) => ({ ruleId, count })),
     modules: new Set([...nodes.values()].map((n) => n.type)).size };
 }
@@ -136,7 +142,7 @@ export function previewCaseAutomation(state, caseId, { now = new Date(), rules }
 export function assuranceBrief(report) {
   return ['LeadOS — Automation assurance',
     `${report.nodes.size} linked operational records · ${report.edges.length} distinct relationships · ${report.modules} modules`,
-    `${report.findings.length} link diagnostics · ${report.failures.length} retained rule-failure events (historical, not necessarily unresolved)`,
+    `${report.findings.length} link diagnostics · ${report.failures.length} retained rule-failure events (historical, not necessarily unresolved) · ${report.gaps?.length || 0} retained budget gaps`,
     'Scope: valid operational links only. Confidential conflicts and anonymous pulses excluded. No completeness or causal guarantee.',
     '', 'Relationship provenance:', ...report.provenance.map((r) => `${r.ruleId}: ${r.count}`),
     '', 'Diagnostics:', ...report.findings.map((f) => `${f.kind}: ${f.detail}`),

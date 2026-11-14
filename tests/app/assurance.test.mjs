@@ -168,3 +168,16 @@ test('control room DOM renders empty and real graphs; sandbox button changes no 
     assert.equal(result.violations.length, 0, result.violations.map((v) => v.id).join(', '));
   } finally { globalThis.document = oldDocument; globalThis.Node = oldNode; dom.window.close(); }
 });
+
+test('a retained budget gap is counted beside failures without copying its summary', () => {
+  const s = graphFixture();
+  s.events = [
+    { id: 'f', ts: now.toISOString(), type: 'automation.rule_error', summary: 'SECRET-FAILURE' },
+    { id: 'g', ts: now.toISOString(), type: 'automation.gap', entity: 'workspace', summary: 'SECRET-GAP' },
+  ];
+  const report = buildAssuranceReport(s);
+  assert.equal(report.failures.length, 1);
+  assert.equal(report.gaps.length, 1);
+  assert.match(assuranceBrief(report), /1 retained budget gaps/);
+  assert.doesNotMatch(JSON.stringify(report), /SECRET/);
+});

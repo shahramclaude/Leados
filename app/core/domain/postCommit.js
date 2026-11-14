@@ -1335,7 +1335,12 @@ export function runPostCommitRules(draft, context = {}) {
     if (omitted) {
       if (reporter) reporter.omittedEvents += omitted;
       const message = `Automation event limit (${eventBudget}) reached; ${omitted} source-created event(s) were not delivered.`;
-      if (typeof context.logEvent === 'function') context.logEvent({ type: 'automation.rule_error', entity: 'workspace', entityId: '', summary: message });
+      // A budget gap is not a rule failure: no rule threw and the source write
+      // committed. It is its own durable fact so a reload cannot erase the only
+      // evidence that downstream work was never attempted. The Workspace checkup
+      // reads this type; the assurance terminal keeps `automation.rule_error`
+      // for rolled-back rules.
+      if (typeof context.logEvent === 'function') context.logEvent({ type: 'automation.gap', entity: 'workspace', entityId: '', summary: message });
       if (Array.isArray(context.warnings)) context.warnings.push(message);
     }
   }

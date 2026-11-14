@@ -707,9 +707,13 @@ describe('the terminal renders six panels, accessibly', () => {
   }
 
   test('routes and aliases reach the terminal', () => {
-    for (const hash of ['#/sceptic', '#/cross-examination', '#/contradiction', '#/falsify', '#/claims', '#/red-team']) {
+    for (const hash of ['#/sceptic', '#/cross-examination', '#/falsify', '#/claims', '#/red-team']) {
       assert.equal(parseRoute(hash).route, 'sceptic', hash);
     }
+    // `#/contradiction` was a v81 alias for this terminal, but ADR-0144's
+    // Cross-Line Contradiction Audit owns the name now. The later registry
+    // already won; the dead alias is removed rather than left to shadow it.
+    assert.equal(parseRoute('#/contradiction').route, 'contradiction');
     const source = fs.readFileSync(path.join(ROOT, 'app/main.js'), 'utf8');
     assert.match(source, /route: 'sceptic'/);
     assert.match(source, /scepticAttentionCount/);
