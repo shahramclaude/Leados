@@ -1,23 +1,8 @@
 /**
- * app/core/domain/ruleIndex.js — rule trigger index for the post-commit spine.
- *
- * The spine runs every rule against every queued event. With 89 rules and a
- * typical 3-5 event cascade, that is ~300-450 (rule, event) savepoint attempts
- * per store write, of which <5% do anything. Profiling (see perf.js) shows
- * the cost is dominated by savepoint creation for rules that immediately
- * return on an event-type guard.
- *
- * This index is an *advisory* fast-path: for each event type prefix it lists
- * which rules declare interest in that family. A rule not in the list for an
- * event type is still correct to skip — every indexed rule declares its
- * trigger as a prefix check on event.type (e.g. event.type.startsWith('case.')),
- * and the index mirrors exactly those guards. An unindexed event type (e.g.
- * a new module's first event) falls back to "run all" so correctness is never
- * sacrificed for speed.
- *
- * Safety: the index is derived from the same source that the rules test, and
- * tests prove that a skipped rule would have declined. If a rule's guard
- * widens, its index entry must widen too — the test fails otherwise.
+ * Historical trigger catalog, retained for inspection only. It is incomplete:
+ * cross-domain and custom rules cannot safely be excluded from a known prefix.
+ * The post-commit spine does not use this catalog to filter deliveries. A
+ * future index needs an enforceable trigger contract and equivalence tests.
  */
 
 export const RULE_TRIGGER_PREFIXES = Object.freeze({

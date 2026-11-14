@@ -981,7 +981,7 @@ export function parseRoute(hash) {
   return { route: known ? route : 'notfound', segments, query: new URLSearchParams(queryPart || '') };
 }
 
-export function createApp({ root, storage, now = () => new Date(), idFactory, crypto, kdfIterations, minKdfIterations, enableRuleIndex = true } = {}) {
+export function createApp({ root, storage, now = () => new Date(), idFactory, crypto, kdfIterations, minKdfIterations } = {}) {
   // The shell paints the document it was created for.
   //
   // `root` was accepted and then ignored: every render resolved `#view`,
@@ -996,7 +996,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
   const hostWindow = hostDoc?.defaultView || (typeof window !== 'undefined' ? window : null);
   const hostView = () => root || (hostDoc ? hostDoc.getElementById('view') : null);
   const setTitle = (title) => { if (hostDoc) hostDoc.title = title; };
-  const store = createStore({ storage, now, idFactory, crypto, kdfIterations, minKdfIterations, enableRuleIndex });
+  const store = createStore({ storage, now, idFactory, crypto, kdfIterations, minKdfIterations });
   const api = createApi(store, { now, idFactory });
   // Efficiency pillar: enable lightweight perf instrumentation and expose debug.
   try { enablePerf(); installPerfDebug(typeof window !== 'undefined' ? window : null); } catch {}

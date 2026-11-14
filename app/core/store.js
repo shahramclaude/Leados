@@ -383,7 +383,6 @@ export function createStore(options = {}) {
   // it; the equivalence suite uses it to run an identical workflow through the
   // pre-ADR-0026 eager copy and compare the resulting workspaces.
   const savepointStrategy = options.savepointStrategy === 'clone' ? 'clone' : null;
-  const enableRuleIndex = options.enableRuleIndex === true;
   const listeners = new Set();
 
   let state = createEmptyState(now().toISOString());
@@ -788,7 +787,6 @@ export function createStore(options = {}) {
       warnings,
       metrics,
       suppressReceipt: options.suppressReceipt === true,
-      ...(enableRuleIndex ? { useRuleIndex: true } : {}),
       ...(options.savepoint || savepointStrategy ? { savepoint: options.savepoint || savepointStrategy } : {}),
       ...(options.declineMemo === false ? { declineMemo: false } : {}),
       ...(postCommitRules === undefined ? {} : { rules: postCommitRules }),

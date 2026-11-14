@@ -9,8 +9,8 @@
  *
  * This hub fuses those silos:
  *  1. Collects every domain's signals through a single pure function.
- *  2. Deduplicates by (entity, findingKind) so the same fact from two
- *     domains does not double-count.
+ *  2. Deduplicates matching domain, rule, typed entity and title; it does
+ *     not claim that different domains represent independent evidence.
  *  3. Ranks by a composite urgency score (severity × confidence × recency).
  *  4. Clusters by entity to surface "this person/team has 3 converging risks".
  *  5. Generates one-line proactive recommendations with a destination.
@@ -69,13 +69,13 @@ export function clearIntelligenceRegistry() {
 
 const MAX_SIGNALS = 2000;
 
-function safeSignals(fn, state, now) {
+function safeSignals(fn, state, now, name, failures) {
   try {
     const out = fn(state, now);
-    return Array.isArray(out) ? out : [];
-  } catch {
-    return [];
-  }
+    if (Array.isArray(out)) return out;
+  } catch { /* Report the failed source without exposing exception details. */ }
+  failures.push(name);
+  return [];
 }
 
 /**
@@ -127,15 +127,16 @@ function signalFromFinding(source, finding, index) {
 export function collectRawSignals(state, now = new Date(), { limit = MAX_SIGNALS } = {}) {
   const all = [];
   let truncated = 0;
+  const failures = [];
   for (const [source, fn] of sources.entries()) {
-    const findings = safeSignals(fn, state, now);
+    const findings = safeSignals(fn, state, now, source, failures);
     for (let i = 0; i < findings.length; i += 1) {
       if (all.length >= limit) { truncated += 1; continue; }
       all.push(signalFromFinding(source, findings[i], i));
     }
   }
   for (const [domain, fn] of registry.entries()) {
-    const signals = safeSignals(fn, state, now);
+    const signals = safeSignals(fn, state, now, domain, failures);
     for (const sig of signals) {
       if (all.length >= limit) { truncated += 1; continue; }
       all.push({
@@ -159,6 +160,7 @@ export function collectRawSignals(state, now = new Date(), { limit = MAX_SIGNALS
     }
   }
   if (truncated) Object.defineProperty(all, 'truncated', { value: truncated, enumerable: false });
+  Object.defineProperty(all, 'failedSources', { value: failures, enumerable: false });
   return all;
 }
 
@@ -177,7 +179,7 @@ export function collectRawSignals(state, now = new Date(), { limit = MAX_SIGNALS
 export function deduplicateSignals(signals) {
   const byKey = new Map();
   for (const sig of signals) {
-    const key = `${sig.domain}|${sig.rule}|${sig.entityId || ''}|${sig.title || ''}`;
+    const key = JSON.stringify([sig.domain, sig.rule, sig.entityType || null, sig.entityId || null, sig.title || '']);
     const existing = byKey.get(key);
     if (!existing || sig.severity > existing.severity) byKey.set(key, sig);
   }
@@ -198,7 +200,7 @@ export function clusterByEntity(signals) {
   for (const c of out) {
     c.maxSeverity = Math.max(...c.signals.map((s) => s.severity));
     c.domains = Array.from(new Set(c.signals.map((s) => s.domain)));
-    c.converging = c.signals.length >= 2 && c.domains.length >= 2;
+    c.converging = Boolean(c.entityId && c.entityType) && c.signals.length >= 2 && c.domains.length >= 2;
   }
   out.sort((a, b) => b.maxSeverity - a.maxSeverity || b.signals.length - a.signals.length);
   return out;
@@ -239,7 +241,7 @@ function urgencyScore(sig, now, boost = 1) {
   if (sig.createdAt) {
     try {
       const days = daysBetween(new Date(sig.createdAt), now instanceof Date ? now : new Date(now));
-      recency = days <= 7 ? 1.3 : days <= 30 ? 1.1 : 1;
+      recency = days !== null && days >= 0 ? (days <= 7 ? 1.3 : days <= 30 ? 1.1 : 1) : 1;
     } catch { recency = 1; }
   }
   return sev * conf * recency * boost;
@@ -271,7 +273,7 @@ export function rankSignals(signals, now = new Date(), clusters = null) {
 
 /**
  * Generate one-line proactive recommendations from clusters.
- * A cluster with >=2 domains and maxSeverity >=3 is flagged as actionable.
+ * A typed entity cluster with >=2 domains and maxSeverity >=3 is flagged as actionable.
  */
 export function recommendationsFor(clusters) {
   const recs = [];
@@ -318,6 +320,7 @@ export function intelligenceHubRead(state, now = new Date()) {
     totalSignals: raw.length,
     dedupedCount: deduped.length,
     truncated: raw.truncated || 0,
+    failedSources: raw.failedSources,
     clusterCount: clusters.length,
     convergingClusters: clusters.filter((c) => c.converging).length,
     topSignals: ranked.slice(0, 10),
@@ -339,14 +342,14 @@ export function intelligenceHubRead(state, now = new Date()) {
  * the fused signals is what stops the surface from looking busy while reading
  * three domains.
  */
-export function intelligenceCoverage(state, now = new Date()) {
-  const read = intelligenceHubRead(state, now);
+export function intelligenceCoverage(state, now = new Date(), read = intelligenceHubRead(state, now)) {
   return {
     sources: read.sources,
     explicitlyRegistered: read.domains,
     domainsSeen: read.domainCount,
     signals: read.dedupedCount,
     truncated: read.truncated,
+    failedSources: read.failedSources,
     wired: read.sources.length > 0 || read.domains.length > 0,
   };
 }
@@ -357,7 +360,7 @@ export function intelligenceCoverage(state, now = new Date()) {
 export function hubHealth(state, now = new Date()) {
   const read = intelligenceHubRead(state, now);
   return {
-    ok: read.sources.length > 0 || read.domains.length > 0,
+    ok: (read.sources.length > 0 || read.domains.length > 0) && read.failedSources.length === 0 && !read.truncated,
     sources: read.sources.length,
     domains: read.domains.length,
     families: read.domainCount,

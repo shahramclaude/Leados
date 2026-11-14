@@ -8,6 +8,9 @@ import { eventKey, automationHealth, openReceipts } from '../../app/core/domain/
 import { estimateStateSize, quotaWarningFor, createKeyedMemo } from '../../app/core/storeOptimizations.js';
 import { buildDemoState } from '../../app/core/demo.js';
 import { createStore } from '../../app/core/store.js';
+import { runPostCommitRules } from '../../app/core/domain/postCommit.js';
+import { responseRule } from '../../app/core/domain/responseRules.js';
+import { createEmptyState } from '../../app/core/schema.js';
 
 test('perf instrumentation records samples and summary', () => {
   enablePerf();
@@ -236,21 +239,80 @@ test('storeOptimizations: the size estimate is close enough to warn honestly', (
   assert.ok(estimateStateSize(large) > 1_000_000);
 });
 
-test('store with ruleIndex enabled produces same workspace as without for simple writes', () => {
+test('the legacy ruleIndex option cannot enable unsafe filtering', () => {
   const mkStore = (enable) => createStore({ storage: null, enableRuleIndex: enable });
   const s1 = mkStore(false);
   const s2 = mkStore(true);
   s1.load();
   s2.load();
   // Import helper: use the same API to mutate both
-  const now = () => new Date('2026-11-14T10:00:00Z');
-  const withApi = (store) => store;
   // Both should handle a no-op update identically
   s1.update((d) => { d.people.push({ id: 'p-test', name: 'Test', role: 'IC', level: 'ic', managerId: null, status: 'active' }); }, { type: 'person.created', entity: 'person', entityId: 'p-test' });
   s2.update((d) => { d.people.push({ id: 'p-test', name: 'Test', role: 'IC', level: 'ic', managerId: null, status: 'active' }); }, { type: 'person.created', entity: 'person', entityId: 'p-test' });
   // The key correctness check: both stores have the person, and neither threw
   assert.ok(s1.lastPropagationMetrics);
   assert.ok(s2.lastPropagationMetrics);
-  // ruleIndex store should have indexSkipped >0
-  assert.ok((s2.lastPropagationMetrics.indexSkipped || 0) > 0);
+  // The unverified index must not suppress production automation.
+  assert.equal(s2.lastPropagationMetrics.indexSkipped || 0, 0);
+});
+
+
+test('automation delivers indexed events to unlisted and real cross-domain rules', () => {
+  const now = new Date('2026-11-14T10:00:00Z');
+  let id = 0;
+  const draft = createEmptyState();
+  draft.responsePlans.push({ id: 'plan-1', caseId: 'case-1', status: 'draft' });
+  draft.cases.push({ id: 'case-1' });
+  let called = false;
+  function customRule() { called = true; return []; }
+  const metrics = {};
+  runPostCommitRules(draft, {
+    event: { type: 'case.created', entity: 'case', entityId: 'case-1', responsePlanId: 'plan-1' },
+    now, idFactory: (prefix) => `${prefix}-${++id}`, rules: [customRule, responseRule],
+    useRuleIndex: true, metrics,
+  });
+  assert.equal(called, true, 'unknown custom rules must receive known event types');
+  assert.ok(draft.links.some((link) => link.sourceId === 'plan-1' && link.targetId === 'case-1'), 'responseRule must link the created case');
+  assert.equal(metrics.rolledBack, 0);
+});
+
+test('unrelated workspace findings do not invent convergence or boost', () => {
+  const signals = [
+    { domain: 'A', rule: 'A', severity: 4, confidence: 'high', title: 'One' },
+    { domain: 'B', rule: 'B', severity: 4, confidence: 'high', title: 'Two' },
+  ];
+  const clusters = clusterByEntity(signals);
+  assert.equal(clusters[0].converging, false);
+  assert.equal(clusterByEntity(signals.map((s) => ({ ...s, entityId: '1' })))[0].converging, false, 'an untyped id is not sufficient evidence of a shared entity');
+  assert.ok(rankSignals(signals, new Date('2026-11-14'), clusters).every((s) => s._clusterBoost === 1));
+  assert.equal(deduplicateSignals([
+    { domain: 'A', rule: 'R', entityType: 'person', entityId: '1', title: 'Risk', severity: 2 },
+    { domain: 'A', rule: 'R', entityType: 'case', entityId: '1', title: 'Risk', severity: 2 },
+  ]).length, 2);
+});
+
+test('invalid and future timestamps do not gain a recency boost', () => {
+  const at = new Date('2026-11-14T10:00:00Z');
+  const signals = ['bad date', '2026-12-01', '2026-11-13'].map((createdAt) => ({
+    severity: 4, confidence: 'high', createdAt,
+  }));
+  const ranked = rankSignals(signals, at);
+  assert.equal(ranked[0].createdAt, '2026-11-13');
+  assert.equal(ranked.find((s) => s.createdAt === 'bad date')._urgency, 12);
+  assert.equal(ranked.find((s) => s.createdAt === '2026-12-01')._urgency, 12);
+});
+
+test('intelligence source failures are visible and a shared read avoids recalculation', () => {
+  clearIntelligenceRegistry();
+  let calls = 0;
+  registerInsightsSource('working', () => { calls++; return []; });
+  registerIntelligenceDomain('broken', () => { throw new Error('private'); });
+  const state = {};
+  const at = new Date('2026-11-14');
+  const hub = intelligenceHubRead(state, at);
+  assert.deepEqual(hub.failedSources, ['broken']);
+  assert.deepEqual(intelligenceCoverage(state, at, hub).failedSources, ['broken']);
+  assert.equal(calls, 1);
+  assert.equal(hubHealth(state, at).ok, false);
+  clearIntelligenceRegistry();
 });
