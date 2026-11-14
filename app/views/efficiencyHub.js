@@ -17,7 +17,7 @@
  */
 
 import { h } from '../ui/dom.js';
-import { perfRead, perfSummary, perfEnabled } from '../core/perf.js';
+import { perfRead, perfEnabled } from '../core/perf.js';
 import { intelligenceHubRead, intelligenceCoverage } from '../core/domain/intelligenceHub.js';
 import { automationHealth, openReceipts } from '../core/domain/automationOrchestrator.js';
 import { estimateStateSize, quotaWarningFor } from '../core/storeOptimizations.js';
@@ -44,7 +44,6 @@ export function renderEfficiencyHub(ctx) {
 
   // ── Efficiency ────────────────────────────────────────────────────────────
   const perfSamples = perfRead();
-  const perfSum = perfSummary();
   const stateSize = estimateStateSize(state);
   const quotaWarn = quotaWarningFor(state);
   const revision = state?.meta?.revision ?? 0;
@@ -54,7 +53,7 @@ export function renderEfficiencyHub(ctx) {
 
   // ── Intelligence ──────────────────────────────────────────────────────────
   const hub = intelligenceHubRead(state, at);
-  const coverage = intelligenceCoverage(state, at);
+  const coverage = intelligenceCoverage(state, at, hub);
 
   // ── Automation ────────────────────────────────────────────────────────────
   const health = automationHealth(metrics);
@@ -90,14 +89,13 @@ export function renderEfficiencyHub(ctx) {
             'The sidebar badge strip runs ~110 domain reads (retention hazard curves, capacity PERT, the deferral option lattice). They are pure over the workspace snapshot and the calendar day, so they are memoised on exactly those keys: a route change reuses the previous read, and a write, midnight or seat change recomputes it.'),
           h('p', { class: 'hint' }, 'Instrumentation: window.__LEADOS_PERF.read() / .summary().'),
         ]),
-        card('Rule-index fast path', [
-          h('p', {}, 'Rules that declare no interest in an event type are skipped without building a savepoint.'),
+        card('Automation guard efficiency', [
+          h('p', {}, 'Every rule receives each event; lazy savepoints and the proven decline memo reduce guard costs.'),
           kvTable([
-            ['Advisory index', ctx.store?.enableRuleIndex === false ? 'off' : 'enabled'],
-            ['Rules skipped (last write)', metrics?.indexSkipped ?? '—'],
+            ['Trigger index', 'disabled — incomplete trigger coverage'],
             ['Decline memo hits (last write)', metrics?.skipped ?? '—'],
           ]),
-          h('p', { class: 'hint' }, 'An unrecognised event type falls back to running every rule — correctness before speed.'),
+          h('p', { class: 'hint' }, 'Correct automation takes priority over skipping unverified rules.'),
         ]),
       ),
       perfSamples.length ? h('details', { class: 'perf-details' },
@@ -122,6 +120,7 @@ export function renderEfficiencyHub(ctx) {
             ['Clusters', hub.clusterCount],
             ['Converging', hub.convergingClusters],
           ]),
+          coverage.failedSources.length ? h('p', { class: 'banner banner-warn', role: 'status' }, `Incomplete intelligence: ${coverage.failedSources.join(', ')} could not be read.`) : null,
           h('p', { class: 'hint' },
             'The hub reads the canonical insight engine\'s merged findings — one computation, two readings — plus any explicitly registered domain. It used to be handed three modules and reported almost nothing.'),
         ]),
@@ -132,7 +131,7 @@ export function renderEfficiencyHub(ctx) {
         card('Converging risks', hub.recommendations.length ? [
           h('ul', {}, ...hub.recommendations.map((r) =>
             h('li', {}, h('strong', {}, r.title), h('p', { class: 'hint' }, r.summary), r.destination ? h('a', { href: r.destination }, 'Go →') : null))),
-        ] : [h('p', { class: 'hint' }, 'A converging cluster is ≥2 signals across ≥2 domains on the same entity with maximum severity ≥3.')]),
+        ] : [h('p', { class: 'hint' }, 'A converging cluster is ≥2 signals across ≥2 domains on the same typed entity with maximum severity ≥3.')]),
       ),
       h('div', { class: 'grid-2' },
         card('Ranking model', [
@@ -140,7 +139,7 @@ export function renderEfficiencyHub(ctx) {
           kvTable([
             ['Confidence weights', 'high 3 · medium 2 · low 1'],
             ['Recency', '≤7 days ×1.3 · ≤30 days ×1.1 · older ×1.0'],
-            ['Convergence boost', '1 + 0.15 × (independent domains − 1), capped at 1.6'],
+            ['Convergence boost', '1 + 0.15 × (distinct domains − 1), capped at 1.6'],
           ]),
           h('p', { class: 'hint' },
             'Severity is never rewritten by convergence — it stays the domain\'s own claim and is printed as such. Only the ordering carries the fusion.'),
