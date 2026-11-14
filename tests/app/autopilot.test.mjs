@@ -58,6 +58,7 @@ import {
 import {
   activationGate,
   agreementTemplate,
+  compareCondition,
   autopilotAttentionCount,
   autopilotBrief,
   autopilotRule,
@@ -243,6 +244,43 @@ test('validation refuses unknown facts, operators, tokens, audiences and owners 
 
   const budget = normalizePolicyPayload({ ...base, maxRuns: 0 }, store.state, null);
   assert.equal(budget.ok, false);
+});
+
+test('numeric conditions reject blank thresholds but accept an explicit zero', () => {
+  const { store } = makeStore();
+  const base = agreementTemplate('delay');
+  for (const value of ['', '   ']) {
+    const result = normalizePolicyPayload({ ...base, conditions: [{ field: 'exposure', op: 'lte', value }] }, store.state, null);
+    assert.equal(result.ok, false);
+    assert.match(result.error, /numeric threshold/);
+  }
+  const zero = normalizePolicyPayload({ ...base, conditions: [{ field: 'exposure', op: 'lte', value: '0' }] }, store.state, null);
+  assert.equal(zero.ok, true);
+  assert.equal(zero.value.conditions[0].value, 0);
+});
+
+test('missing facts never match equality, even against an empty string', () => {
+  for (const actual of [null, undefined]) {
+    const result = compareCondition({ title: actual }, { field: 'title', op: 'eq', value: '' });
+    assert.equal(result.pass, false);
+    assert.match(result.reason, /Not recorded/);
+  }
+});
+
+test('rehearsal stress counts agree with direct evaluation, including paused and unknown records', () => {
+  const { store, api } = makeStore();
+  const ownerId = seedOwner(api);
+  api.addCase(pricedCaseInput(ownerId));
+  api.addCase({ ...pricedCaseInput(ownerId), title: 'Unpriced', financial: {} });
+  api.addCase({ ...pricedCaseInput(ownerId), title: 'Paused', autoPropagate: false });
+  const policy = agreementTemplate('delay');
+  const rehearsal = rehearsePolicy(store.state, policy, NOW);
+  const numeric = policy.conditions.find((c) => typeof c.value === 'number');
+  for (const row of rehearsal.stress) {
+    const variant = { ...policy, conditions: policy.conditions.map((c) => c === numeric ? { ...c, value: row.threshold } : c) };
+    const expected = store.state.cases.filter((record) => evaluatePolicy(variant, store.state, record, NOW).matched).length;
+    assert.equal(row.matches, expected);
+  }
 });
 
 test('declaring stores a draft with version 1 and a history entry, never an active agreement', () => {

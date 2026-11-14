@@ -30,7 +30,7 @@ export function validateConditions(raw, sourceType) {
     if (!AUTOPILOT_OPERATORS[field.type].some((op) => op.id === row.op)) return { ok: false, error: `That operator cannot be used with ${field.label}.` };
     let value = row.value;
     if (field.type === 'number') {
-      if (typeof value !== 'number' && typeof value !== 'string') return { ok: false, error: `${field.label} needs a numeric threshold.` };
+      if ((typeof value !== 'number' && typeof value !== 'string') || (typeof value === 'string' && !value.trim())) return { ok: false, error: `${field.label} needs a numeric threshold.` };
       value = Number(value);
       if (!Number.isFinite(value) || value < field.min || value > field.max) return { ok: false, error: `${field.label} must be between ${field.min} and ${field.max}.` };
     } else if (field.type === 'boolean') {
