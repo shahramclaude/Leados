@@ -29,6 +29,8 @@ import { omitPropagationLineageReferences, scrubPropagationLineageReferences } f
 import { EW_SERIES_BY_ID } from './domain/watchRegistry.js';
 import { isCandidateAuditEvent } from './domain/export-governance.js';
 import { runPostCommitRules } from './domain/postCommit.js';
+import { perfSample, perfMark, perfEnd } from './perf.js';
+import { estimateStateSize, quotaWarningFor } from './storeOptimizations.js';
 // ADR-0082: the Sealed Spine. Seal events are exempt from the event-log
 // retention cap (the chain head must survive), and the session seal key is
 // derived from the vault passphrase at unlock/enable/change time — memory only.
@@ -381,6 +383,7 @@ export function createStore(options = {}) {
   // it; the equivalence suite uses it to run an identical workflow through the
   // pre-ADR-0026 eager copy and compare the resulting workspaces.
   const savepointStrategy = options.savepointStrategy === 'clone' ? 'clone' : null;
+  const enableRuleIndex = options.enableRuleIndex === true;
   const listeners = new Set();
 
   let state = createEmptyState(now().toISOString());
@@ -775,6 +778,7 @@ export function createStore(options = {}) {
     // ADR-0008: pure event-driven rules run inside the same transaction, after
     // the source mutation and its audit entry, before the state is persisted.
     const metrics = {};
+    const updateStart = typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
     lastPropagations = runPostCommitRules(draft, {
       event: options.ruleEvent || event || null,
       previousState: state,
@@ -784,6 +788,7 @@ export function createStore(options = {}) {
       warnings,
       metrics,
       suppressReceipt: options.suppressReceipt === true,
+      ...(enableRuleIndex ? { useRuleIndex: true } : {}),
       ...(options.savepoint || savepointStrategy ? { savepoint: options.savepoint || savepointStrategy } : {}),
       ...(options.declineMemo === false ? { declineMemo: false } : {}),
       ...(postCommitRules === undefined ? {} : { rules: postCommitRules }),
@@ -793,6 +798,14 @@ export function createStore(options = {}) {
       // writes never pass this and retain the production safety cap.
       ...(Number.isInteger(options.eventBudget) ? { eventBudget: options.eventBudget } : {}),
     });
+    const updateElapsed = (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now()) - updateStart;
+    if (metrics) {
+      metrics.storeUpdateMs = Math.round(updateElapsed * 100) / 100;
+      // Quota advisory (no throw — just a warning for the UI).
+      const quotaWarn = quotaWarningFor(draft);
+      if (quotaWarn && !warnings.includes(quotaWarn)) warnings.push(quotaWarn);
+      perfSample('store:update', updateElapsed, { event: event?.type || null, executed: metrics.executed || 0 });
+    }
     lastPropagationMetrics = {
       ...metrics,
       at: now().toISOString(),

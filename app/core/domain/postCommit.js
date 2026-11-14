@@ -23,6 +23,8 @@ import {
   PROPAGATION_LINEAGE_TARGET_CAP,
 } from './automationLineage.js';
 import { isDeclineMemoizable, ruleLabel } from './propagationContracts.js';
+import { filterRulesForEvent, hasRelevantRules } from './ruleIndex.js';
+import { perfMark, perfEnd, perfSample } from '../perf.js';
 import { caseCreatedRule } from './caseLifecycle.js';
 import { forecastIntegrityRule } from './forecastIntegrity.js';
 import { resilienceRule } from './resilience.js';
@@ -1329,12 +1331,45 @@ export function runPostCommitRules(draft, context = {}) {
   const ruleContext = { ...context };
   delete ruleContext.previousState;
 
+  // Efficiency optimization: build advisory allowlist per event type when enabled.
+  // When useRuleIndex is true, rules not in the allowlist for this event type
+  // are skipped without savepoint creation — preserving correctness because the
+  // index is a superset allowlist (extra inclusion is safe; omission would be
+  // a bug, so unknown prefixes fall back to "run all").
+  const useRuleIndex = context.useRuleIndex === true;
+  // Always-run rules that must see every event (seat, seal, and market).
+  const ALWAYS_RUN = useRuleIndex ? new Set(['seatRule', 'sealRule', 'attentionMarketRule', 'identityRule']) : null;
+
   for (let next = 0; next < queue.length; next += 1) {
     const current = queue[next];
     if (reporter && next > 0) reporter.events += 1;
     else if (reporter) reporter.events += 1;
+    // Telemetry + fast-path allowlist for this event.
+    let allowedForEvent = null;
+    if (useRuleIndex && current.event?.type) {
+      const candidates = filterRulesForEvent(rules, current.event.type);
+      // Merge always-run rules into the allowlist.
+      if (ALWAYS_RUN && candidates !== rules) {
+        const extra = rules.filter((r) => ALWAYS_RUN.has(r.name));
+        const set = new Set(candidates.map((r) => r.name));
+        for (const r of extra) if (!set.has(r.name)) candidates.push(r);
+      }
+      allowedForEvent = new Set(candidates.map((r) => r.name));
+      if (reporter && candidates !== rules) {
+        reporter.indexSkipped = (reporter.indexSkipped || 0) + (rules.length - candidates.length);
+      }
+    }
     for (const rule of rules) {
       if (typeof rule !== 'function') continue;
+      // Advisory index fast-path: skip rules with no declared interest in this event type.
+      if (allowedForEvent && !allowedForEvent.has(rule.name)) {
+        if (reporter) reporter.indexSkipped = (reporter.indexSkipped || 0) + 0; // already counted
+        if (Array.isArray(context.trace)) {
+          context.trace.push({ rule: rule.name || 'anonymous', event: current.event?.type || null,
+            derived: current.derived, status: 'skipped-index', collections: [], effects: 0, emitted: 0 });
+        }
+        continue;
+      }
       // `declineMemo: false` is a test seam, like `savepoint: 'clone'`: it lets
       // the equivalence suite prove that collapsing a declined re-run produces
       // the same workspace as never collapsing one. Nothing in the app sets it.
@@ -1349,6 +1384,7 @@ export function runPostCommitRules(draft, context = {}) {
         continue;
       }
       const pairStartedAt = reporter ? nowMs() : 0;
+      if (reporter && useRuleIndex) perfMark(`rule:${rule.name}:${current.event?.type || 'no-event'}`);
       const bufferedEvents = [];
       const bufferedWarnings = [];
       const bufferedEmissions = [];
@@ -1476,6 +1512,10 @@ export function runPostCommitRules(draft, context = {}) {
             context.logEvent({ type: event.type, entity: event.entity, entityId: event.entityId,
               summary: `Derived ${event.type} from ${current.event?.type || 'an action'} via ${rule.name || 'a rule'}`.slice(0, 300) });
           }
+        }
+        if (reporter && useRuleIndex) {
+          const elapsed = nowMs() - pairStartedAt;
+          perfSample(`rule:${rule.name}`, elapsed, { event: current.event?.type || null });
         }
       } catch (error) {
         // Rollback: dropping the savepoint is the rollback. Nothing was ever

@@ -317,7 +317,14 @@ test('standalone artifact exists and is a single inline HTML document', () => {
   // 15,747 bytes per module, still far below the unchanged 24,000 density
   // guard. The ceiling moves to 13,100,000 for that capability and nothing
   // else.
-  assert.ok(bytes < 13_100_000, `standalone file is unexpectedly large (${bytes} bytes)`);
+  // ADR-0196 (Session 264) added one work-reassignment module and wiring.
+  // Efficiency/Intelligence/Automation improvement (2026-11-14): seven new
+  // modules (perf, ruleIndex, intelligenceHub, automationOrchestrator,
+  // storeOptimizations, efficiencyHub view, store wiring) + 1.2 KB CSS.
+  // Measured build: 13,120,112 bytes / 838 source modules = 15,656 bytes per
+  // module, still far below the unchanged 24,000 density guard. Ceiling moves
+  // to 13,300,000 for this efficiency/intelligence/automation slice.
+  assert.ok(bytes < 13_300_000, `standalone file is unexpectedly large (${bytes} bytes)`);
   // Derived from the folder, not from a list in this file: the day a panel adds
   // a diagram, an enumerator that names the old two would still pass. Same
   // lesson the build script learned in ADR-0186.
