@@ -1,3 +1,41 @@
+## 2026-11-14 — Session 266 architecture delta (Schema v156, no bump)
+
+**The shell memoises, the engine does not move.** `app/core/storeOptimizations.js`
+gains `createKeyedMemo(build)` (variadic identity key, `.clear()`, `.stats()`) and
+keeps `estimateStateSize` (now five evenly spaced samples per collection) and
+`quotaWarningFor`; `createCoalescedPersist`, `createRevisionMemo` and
+`isStateDirty` are gone — nothing imported them. `app/main.js` keys one memo on
+*(state object identity, calendar day, seat signature)* around the ~110 domain
+attention reads in `navBadgeCounts`, and `navigationRenderGuard` makes a
+navigation paint once (the queued `hashchange` no longer re-renders; `refresh()`
+and external hashes still do). Every domain engine is untouched: the memo is a
+cache over pure reads, and any new badge read must be pure over
+`(state, day, seat)` or it will be cached wrongly.
+
+**One instance, one document.** `createApp` binds `hostDoc` (the root's owner
+document), `hostWindow` and `hostView()` once; `root` is honoured instead of
+re-resolving `#view`, `#sidebar-nav`, `#topbar-meta` and the hash off the ambient
+globals on every render, and the `hashchange` listener belongs to the bound
+window. Behaviour in a single-page browser is identical — the point is that a
+second instance (tests, a future embedded host) can no longer be repainted by a
+stale one.
+
+**Intelligence reads the canonical engine.** `intelligenceHub.js` gains
+`registerInsightsSource`; the shell registers `() => getInsights(state, at).findings`
+so the hub and the terminal read one computation. `rankSignals` boosts ordering by
+convergence (`1 + 0.15 × (domains − 1)`, cap 1.6) and never edits severity;
+`intelligenceCoverage` reports unwired families instead of assuming them.
+
+**Automation states only what it runs.** `automationOrchestrator.js` loses the
+unwired priority queue, coalescer and repetition miner; `postCommit.js` counts the
+duplicate deliveries it suppresses (`reporter.duplicates`) on the `eventKey` the
+diagnostics share. `app/views/efficiencyHub.js` prints that ledger.
+
+**Checks.** `scripts/eval-app.mjs` (`npm run eval:app`) and
+`scripts/check-headings.mjs` (`npm run check:a11y`, axe-core over all 118 declared
+routes). Standalone: **13,093,303 bytes / 838 source modules / Schema v156**,
+`standalone.test.mjs` **7/7**. ADR-0198.
+
 ## 2026-11-06 — Session 150 architecture delta (Schema v111, no bump)
 
 **Spine budget, not engine semantics.** `MAX_AUTOMATION_EVENTS` 64 → 256 and

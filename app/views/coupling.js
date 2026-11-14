@@ -90,6 +90,10 @@ export function renderCoupling(ctx) {
 
   return h('div', { className: 'space-y-6' }, [
     header,
+    // The terminal's cards and findings lead with h3s under the page h1. One
+    // second-level heading restores the outline (h1 → h2 → h3) and names the
+    // group for a screen-reader user. Read aloud, not drawn.
+    h('h2', { className: 'sr-only' }, 'Signals and readings on this screen'),
     signals.length
       ? h('div', { className: 'space-y-3' }, signals.slice(0, 4).map((s) => findingCard(s, { onAction: () => navigate(s.action.route) })))
       : null,
