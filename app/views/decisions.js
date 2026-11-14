@@ -244,6 +244,11 @@ export function renderDecisions(ctx) {
         tone: tempo.totals.decisionDebt ? 'bad' : 'good',
       }),
     ),
+    // The page title is the only h1 and every decision card leads with an h3,
+    // so the list needs a second-level heading between them. Without it the
+    // document skips h1 → h3, which axe reports as heading-order and a screen
+    // reader announces as a broken outline. It is read aloud, not drawn.
+    h('h2', { class: 'sr-only' }, focusId ? 'The selected decision' : 'Decision log'),
     h('div', { class: 'filter-bar' }, tabs({
       items: [
         { key: 'all', label: 'All', count: summary.total },

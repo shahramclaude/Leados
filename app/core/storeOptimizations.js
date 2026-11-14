@@ -1,146 +1,124 @@
 /**
- * app/core/storeOptimizations.js — store write coalescing & memoization helpers.
+ * app/core/storeOptimizations.js — measured helpers for the persistence layer.
  *
- * Two efficiency wins for the persistence layer:
+ * Two jobs, both in service of the same promise: a workspace that is honest
+ * about its own cost.
  *
- *  1. Write coalescing: rapid successive store updates (e.g. a user bulk-editing
- *     5 people) currently JSON.stringify the entire workspace 5 times and hit
- *     localStorage 5 times synchronously. Coalescing batches them into one
- *     persist within a microtask, preserving atomicity (all 5 mutations are
- *     visible) while cutting I/O by N×.
+ *  1. A keyed memo for pure derived reads. The store replaces the state object
+ *     on every committed write, so identity is an exact "did anything change?"
+ *     test; combined with the calendar day and the acting seat it is a sound
+ *     cache key for the expensive read models the shell runs per render.
  *
- *  2. Memoized derived reads: the disclosure compiler and insights builders
- *     re-derive on every render even when the underlying state slice is
- *     unchanged. These helpers memoize by revision + dayKey.
+ *  2. A size estimator, used for the storage-quota warning and the workspace
+ *     size reading. It is an estimate and is labelled as one — the exact
+ *     number is one JSON.stringify away and far too expensive to run on every
+ *     render.
  *
- * Both are opt-in via the store; existing code paths are untouched.
+ * Everything else that used to live here (a coalescing persist wrapper, a
+ * revision-keyed memo, a dirty check) was exported, tested and called by
+ * nothing. It was removed rather than left as an invitation to assume a
+ * batching layer that does not exist: the plaintext save is synchronous and
+ * ordered on purpose, and the encrypted path already serialises and collapses
+ * concurrent writes in `store.js`.
  */
 
 import { dayKey } from './time.js';
 
 /**
- * Create a coalescing wrapper around a persist function.
+ * Memoize a pure derived read by an explicit key, compared part by part with
+ * `===`.
  *
- * Usage:
- *   const coalesced = createCoalescedPersist((state) => persist(state));
- *   coalesced.schedule(nextState); // may batch
- *   coalesced.flush(); // force immediate write
- */
-export function createCoalescedPersist(persistFn, { delayMs = 0 } = {}) {
-  let pending = null;
-  let timer = null;
-  let flushCallbacks = [];
-
-  function doFlush() {
-    if (pending === null) return false;
-    const state = pending;
-    pending = null;
-    if (timer) { clearTimeout(timer); timer = null; }
-    const ok = persistFn(state);
-    const cbs = flushCallbacks;
-    flushCallbacks = [];
-    for (const cb of cbs) try { cb(ok); } catch {}
-    return ok;
-  }
-
-  return {
-    schedule(state) {
-      pending = state;
-      if (delayMs === 0) {
-        // Microtask coalescing: multiple schedules within one tick → one flush.
-        if (!timer) {
-          timer = true; // sentinel for "microtask scheduled"
-          queueMicrotask(() => {
-            timer = null;
-            doFlush();
-          });
-        }
-        return true;
-      }
-      if (timer) clearTimeout(timer);
-      timer = setTimeout(doFlush, delayMs);
-      return true;
-    },
-    flush() {
-      return doFlush();
-    },
-    get pending() { return pending; },
-    cancel() {
-      pending = null;
-      if (timer && timer !== true) clearTimeout(timer);
-      timer = null;
-      flushCallbacks = [];
-    },
-    onFlush(cb) { flushCallbacks.push(cb); },
-  };
-}
-
-/**
- * Generic revision-aware memoizer for any pure derived read.
+ * A revision counter is the right key only for reads that depend on the stored
+ * records and nothing else. It is the wrong key for a read that also depends on
+ * the calendar day, the acting seat or a settings object, and it cannot tell
+ * two different snapshots apart when they happen to share a revision number (an
+ * import, a reset, a demo reload).
  *
- * The cache key is (state.meta.revision, dayKey(now)). A new revision or a
- * new calendar day invalidates; otherwise the previous result is returned
- * by reference (safe because callers treat it as read-only).
+ * This helper takes the key parts directly, so a caller can pass the state
+ * object itself — the store replaces it on every committed write, which makes
+ * identity an exact, cheap "did anything change?" test — plus whatever else the
+ * read depends on. A hit returns the previous result by reference; callers that
+ * mutate the result must copy it first.
  */
-export function createRevisionMemo(build) {
+export function createKeyedMemo(build) {
   if (typeof build !== 'function') throw new TypeError('build function required');
-  let lastRevision = null;
-  let lastDay = null;
+  let lastKey = null;
   let lastResult = null;
+  let hits = 0;
+  let misses = 0;
 
-  function get(state, now = new Date()) {
-    const rev = state?.meta?.revision ?? null;
-    const day = dayKey(now);
-    if (rev === lastRevision && day === lastDay && lastResult !== null) {
+  function get(...key) {
+    if (lastKey !== null && key.length === lastKey.length && key.every((part, i) => part === lastKey[i])) {
+      hits += 1;
       return lastResult;
     }
-    lastRevision = rev;
-    lastDay = day;
-    lastResult = build(state, now);
+    lastKey = key;
+    lastResult = build(...key);
+    misses += 1;
     return lastResult;
   }
 
-  get.clear = () => { lastRevision = null; lastDay = null; lastResult = null; };
-  get.stats = () => ({ cached: lastResult !== null, revision: lastRevision, day: lastDay });
+  get.clear = () => { lastKey = null; lastResult = null; };
+  get.stats = () => ({
+    hits,
+    misses,
+    hitRate: hits + misses === 0 ? 0 : hits / (hits + misses),
+    cached: lastResult !== null,
+  });
+  get.resetStats = () => { hits = 0; misses = 0; };
   return get;
 }
 
 /**
- * Shallow dirty check for collections: returns true when any collection
- * reference changed (which the store guarantees on mutation). This lets
- * derived readers skip deep comparison.
+ * Estimate the serialized size of a workspace without serializing all of it.
+ *
+ * Collections are not homogeneous in this product — a demo workspace holds a
+ * handful of tiny links and a handful of large case records — so sampling only
+ * the first three rows systematically under- or over-estimates by a wide
+ * margin, and the quota warning built on it would be wrong in the direction
+ * that loses a leader's data.
+ *
+ * The sample is therefore deterministic and stratified: every array is probed
+ * at five evenly spaced positions (first, quarter, middle, three-quarters,
+ * last), up to five rows, and the mean is extrapolated. Small arrays are
+ * measured exactly. The result is still an estimate — the exact figure costs a
+ * full `JSON.stringify` of the workspace — and every caller labels it as one.
  */
-export function isStateDirty(prev, next) {
-  if (prev === next) return false;
-  if (!prev || !next) return true;
-  if (prev.meta?.revision !== next.meta?.revision) return true;
-  return false;
-}
+export const SIZE_SAMPLE_POINTS = 5;
 
-/**
- * Estimate serialized size without actually serializing.
- * Useful for deciding whether to warn about quota.
- */
 export function estimateStateSize(state) {
-  // Heuristic: sum of JSON lengths of top-level collections, sampled.
+  if (!state || typeof state !== 'object') return 0;
   let size = 0;
   for (const key of Object.keys(state)) {
     const val = state[key];
     if (Array.isArray(val)) {
-      // Sample first 3 items to estimate per-item cost, then extrapolate.
       if (val.length === 0) continue;
-      const sample = val.slice(0, 3);
+      const positions = samplePositions(val.length, SIZE_SAMPLE_POINTS);
       let sampleSize = 0;
-      for (const item of sample) {
+      for (const i of positions) {
+        const item = val[i];
         try { sampleSize += JSON.stringify(item).length; } catch { sampleSize += 500; }
       }
-      const avg = sampleSize / sample.length;
-      size += avg * val.length + 100; // + overhead for array wrapper
+      const avg = sampleSize / positions.length;
+      // + the array wrapper, the key and its punctuation.
+      size += avg * val.length + key.length + 12;
     } else if (val && typeof val === 'object') {
-      try { size += JSON.stringify(val).length; } catch { size += 1000; }
+      try { size += JSON.stringify(val).length + key.length + 8; } catch { size += 1000; }
+    } else if (typeof val === 'string') {
+      size += val.length + key.length + 8;
     }
   }
   return Math.round(size);
+}
+
+/** Evenly spaced, de-duplicated indices across an array of `length`. */
+function samplePositions(length, points) {
+  if (length <= points) return Array.from({ length }, (_, i) => i);
+  const out = [];
+  for (let p = 0; p < points; p += 1) {
+    out.push(Math.round((p * (length - 1)) / (points - 1)));
+  }
+  return Array.from(new Set(out));
 }
 
 /**

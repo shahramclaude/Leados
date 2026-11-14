@@ -199,3 +199,28 @@ const suggestion = autoClassify('P1 outage — checkout down, urgent escalation'
 3. Wire `createCoalescedPersist` into `store.update` behind a `coalesceWrites` flag and measure batch coalesce rate.
 4. Add cross-domain semantic dedup (shared entity-fact key) to the hub.
 5. LLM-backed auto-classification with the same explanation contract (keywords + rationale, never silent re-tag).
+
+---
+
+## 8. Corrections — Session 266 (2026-11-14), superseding §0, §2.3, §3.3 and §4
+
+This document is the audit that produced the pillars. Re-evaluating the running
+application ([ADR-0198](./adr/0198-read-path-evaluation-fusion-coverage.md))
+found that three of its claims were about code, not about behaviour. They are
+corrected here rather than quietly edited, because a document that vouches for a
+surface the product does not have is the exact failure this repository forbids.
+
+| § | Claim as written | What was actually true | What it is now |
+| --- | --- | --- | --- |
+| §2.3 | "`main.js` eagerly tries to register `resilience`, `retention`, `power` as starter domains; additional domains register at view render time." | Those three were registered, and nothing else ever registered, so the hub fused **3 of ~63** signal families — 3 signals on a demo workspace that had 213 findings. | The shell registers the canonical `insights.js` source (`registerInsightsSource`). **59 of 63** families, **213 signals**, **8 converging clusters**; `intelligenceCoverage` and `hubHealth.ok` say so. |
+| §2.3 | "deduplicate by `(domain\|rule\|entityId)`" | True, and it **deleted 18 real findings** on the demo: one rule with no entity id collapses every workspace-level finding it raises into one row. | The key includes the title. A genuine duplicate still keeps its highest severity. |
+| §2.3 | "rank by `severity × confidence × recency`" | True, but the ranking never expressed the convergence the hub exists to find — clustered findings ranked exactly like lone ones. | A bounded convergence boost (`1 + 0.15 × (domains − 1)`, cap 1.6) is applied to ordering only. Severity is never rewritten. |
+| §3.3 | "Priority queue / coalescing / auto-classification / repetition mining — fix shipped" | All four were exported and tested, and **no production module imported any of them**. The spine stayed FIFO and budgeted; `#/efficiency` printed their behaviour as live. | Priority queue, coalescer and miner are deleted; `eventKey` is shared with the spine and the spine counts the duplicates it suppresses (`reporter.duplicates`). The screen prints the real ledger plus a **"Not built"** list. |
+| §4 | "Automation order: FIFO → priority-ordered + coalesced" | The order did not change. | Ordering is stated as deliberately not built; coalescing is measured, not asserted. |
+| §4 | "`counters()` still recomputes all 40+ attention counts per nav render" (§1.4, next bet #1) | Correct, and it was **80–95% of a route change**: 437–528 ms isolated by removing `#sidebar-nav`. | Memoised on `(state identity, day, seat)`. Median route change **493 → 21 ms**, p95 **691 → 136 ms**. |
+| §1.3C | "`estimateStateSize`: heuristic sampling (first 3 items per collection)" | Over-estimated the demo workspace by **15.1%**, firing a quota warning long before the limit. | Five evenly spaced samples per collection; **1.8%** error, still labelled an estimate. |
+| §1.3C | "`createCoalescedPersist` … `createRevisionMemo`" | Neither was ever called. | Removed, with `isStateDirty`. The plaintext save is synchronous and ordered on purpose. |
+
+The instrument for all of this is committed: `npm run eval:app` boots the real
+app in jsdom, walks every declared route, and writes `reports/eval-app.json`.
+Use it before claiming a read-path improvement.

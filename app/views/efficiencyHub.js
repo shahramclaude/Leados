@@ -1,24 +1,26 @@
 /**
- * app/views/efficiencyHub.js — Efficiency, Intelligence & Automation Hub.
+ * app/views/efficiencyHub.js — Efficiency, Intelligence & Automation.
  *
- * A single operational view that makes the three pillars visible and actionable:
+ * A single operational view over the three pillars, with one rule: every
+ * number printed here must be one the system actually produced. Where a claim
+ * cannot be measured, the screen says so instead of printing a plausible
+ * figure (the repository's bulletproof-reliability mandate).
  *
- *  Efficiency  — where time goes (post-commit cascade, persist, memo hits),
- *                quota health, and the rule-index skip rate.
- *  Intelligence — fused signals across all domains, converging clusters,
- *                 and ranked recommendations.
- *  Automation  — priority queue depth, coalescing rate, auto-classification
- *                 suggestions, and repetition-mined template candidates.
+ *  Efficiency  — real wall-clock samples from the on-device instrumentation,
+ *                workspace size, quota posture and the last cascade's cost.
+ *  Intelligence — what the fusion hub is reading, how many families it fused,
+ *                 and which entities have independent domains converging.
+ *  Automation  — the post-commit spine's own ledger: rules evaluated, work
+ *                applied, duplicates suppressed, failures retained.
  *
  * All reads are pure; no writes. The view is accessible at #/efficiency.
  */
 
 import { h } from '../ui/dom.js';
 import { perfRead, perfSummary, perfEnabled } from '../core/perf.js';
-import { intelligenceHubRead, registeredDomains } from '../core/domain/intelligenceHub.js';
-import { scheduleDerivedEvents, autoClassify, mineRepetitions, orchestratorRead } from '../core/domain/automationOrchestrator.js';
+import { intelligenceHubRead, intelligenceCoverage } from '../core/domain/intelligenceHub.js';
+import { automationHealth, openReceipts } from '../core/domain/automationOrchestrator.js';
 import { estimateStateSize, quotaWarningFor } from '../core/storeOptimizations.js';
-import { createRevisionMemo } from '../core/storeOptimizations.js';
 
 function card(title, body, { accent = false } = {}) {
   return h('div', { class: `card ${accent ? 'card-accent' : ''}` },
@@ -40,29 +42,29 @@ export function renderEfficiencyHub(ctx) {
   const { state, now } = ctx;
   const at = now instanceof Date ? now : new Date(now || Date.now());
 
-  // Efficiency pillar
+  // ── Efficiency ────────────────────────────────────────────────────────────
   const perfSamples = perfRead();
   const perfSum = perfSummary();
   const stateSize = estimateStateSize(state);
   const quotaWarn = quotaWarningFor(state);
   const revision = state?.meta?.revision ?? 0;
-  const metrics = ctx.store ? (ctx.store.lastPropagationMetrics || ctx.store.getLastPropagationMetrics?.() || null) : null;
+  const metrics = ctx.propagationMetrics || ctx.store?.lastPropagationMetrics || null;
+  const navSamples = perfSamples.filter((s) => s.label === 'nav.counters');
+  const navSum = summarize(navSamples);
 
-  // Intelligence pillar
+  // ── Intelligence ──────────────────────────────────────────────────────────
   const hub = intelligenceHubRead(state, at);
+  const coverage = intelligenceCoverage(state, at);
 
-  // Automation pillar
-  const recentEvents = (state?.events || []).slice(-20);
-  const rep = mineRepetitions(recentEvents.map((e) => ({ type: e.type, entity: e.entity })), 3);
-  // Demo auto-classification on a sample pending case (if any)
-  const sampleCase = (state?.cases || []).find((c) => c && c.title) || null;
-  const classified = sampleCase ? autoClassify(`${sampleCase.title} ${sampleCase.summary || ''}`) : null;
+  // ── Automation ────────────────────────────────────────────────────────────
+  const health = automationHealth(metrics);
+  const receipts = openReceipts(state);
 
   return h('div', { class: 'view view-efficiency-hub', 'data-view': 'efficiency' },
     h('div', { class: 'page-header' },
       h('h1', {}, 'Efficiency · Intelligence · Automation'),
       h('p', { class: 'page-subtitle' },
-        'One hub for the three pillars: how fast the system runs, how smart its signals are, and how much it does for you. All reads are live, derived, and never stored.'),
+        'How fast the system runs, how widely its signals are fused, and what the automation spine actually did on the last write. Live readings only — nothing on this screen is stored or simulated.'),
       quotaWarn ? h('div', { class: 'banner banner-warn', role: 'status' }, quotaWarn) : null,
     ),
 
@@ -73,33 +75,29 @@ export function renderEfficiencyHub(ctx) {
         card('Store & persist', [
           kvTable([
             ['Revision', revision],
-            ['State size (est.)', `${Math.round(stateSize / 1024)} KB`],
+            ['Workspace size (est.)', `${Math.round(stateSize / 1024)} KB`],
             ['Updated', state?.meta?.updatedAt || '—'],
-            ['Last cascade', metrics ? `${metrics.executed || 0} applied, ${metrics.declined || 0} declined, ${metrics.skipped || 0} memo, ${metrics.indexSkipped || 0} index-skipped in ${metrics.elapsedMs || 0}ms` : '—'],
-            ['Persist', metrics?.storeUpdateMs ? `${metrics.storeUpdateMs}ms` : '—'],
+            ['Last cascade', metrics ? `${metrics.executed || 0} applied · ${metrics.declined || 0} declined · ${metrics.skipped || 0} memo-skipped · ${metrics.indexSkipped || 0} index-skipped` : '—'],
+            ['Cascade wall clock', metrics?.elapsedMs != null ? `${metrics.elapsedMs}ms over ${metrics.events || 0} events × ${metrics.rules || 0} rules` : '—'],
           ]),
-          metrics?.elapsedMs ? h('p', { class: 'hint' }, `Last write: ${metrics.elapsedMs}ms for ${metrics.events || 0} events × ${metrics.rules || 0} rules`) : null,
+          h('p', { class: 'hint' }, 'The cascade runs inside the write, so this is the honest cost of a save.'),
         ]),
-        card('Perf instrumentation', [
-          h('p', {}, `Status: ${perfEnabled() ? badge('enabled', 'good') : badge('disabled', 'neutral')} — ${perfSamples.length} samples`),
-          kvTable([
-            ['Total', `${perfSum.totalMs}ms`],
-            ['Mean', `${perfSum.meanMs}ms`],
-            ['p50', `${perfSum.p50Ms}ms`],
-            ['p95', `${perfSum.p95Ms}ms`],
-            ['Slow (>16ms)', `${perfSum.slowCount}`],
-          ]),
-          h('p', { class: 'hint' }, 'Tip: window.__LEADOS_PERF.enable() in console, then interact.'),
+        card('Navigation badge cache', [
+          h('p', {}, navSamples.length
+            ? `${navSum.count} computation${navSum.count === 1 ? '' : 's'} · p50 ${navSum.p50Ms}ms · max ${navSum.maxMs}ms`
+            : 'No badge-chain computation recorded in this session yet.'),
+          h('p', { class: 'hint' },
+            'The sidebar badge strip runs ~110 domain reads (retention hazard curves, capacity PERT, the deferral option lattice). They are pure over the workspace snapshot and the calendar day, so they are memoised on exactly those keys: a route change reuses the previous read, and a write, midnight or seat change recomputes it.'),
+          h('p', { class: 'hint' }, 'Instrumentation: window.__LEADOS_PERF.read() / .summary().'),
         ]),
-        card('Rule-index optimization', [
-          h('p', {}, 'Advisory fast-path: rules not declaring interest in an event type are skipped without savepoint creation.'),
+        card('Rule-index fast path', [
+          h('p', {}, 'Rules that declare no interest in an event type are skipped without building a savepoint.'),
           kvTable([
-            ['Mode', ctx.store?.enableRuleIndex ? 'enabled' : 'off (use enableRuleIndex)'],
-            ['Last index-skipped', metrics?.indexSkipped ?? '—'],
-            ['Last memo-skipped', metrics?.skipped ?? '—'],
-            ['Domains indexed', '30+ prefixes'],
+            ['Advisory index', ctx.store?.enableRuleIndex === false ? 'off' : 'enabled'],
+            ['Rules skipped (last write)', metrics?.indexSkipped ?? '—'],
+            ['Decline memo hits (last write)', metrics?.skipped ?? '—'],
           ]),
-          h('p', { class: 'hint' }, 'Unknown event types fall back to “run all” — correctness over speed.'),
+          h('p', { class: 'hint' }, 'An unrecognised event type falls back to running every rule — correctness before speed.'),
         ]),
       ),
       perfSamples.length ? h('details', { class: 'perf-details' },
@@ -107,8 +105,8 @@ export function renderEfficiencyHub(ctx) {
         h('table', { class: 'data-table' },
           h('thead', {}, h('tr', {}, h('th', {}, 'Label'), h('th', {}, 'ms'), h('th', {}, 'slow'), h('th', {}, 'when'))),
           h('tbody', {}, ...perfSamples.slice(-20).reverse().map((s) =>
-            h('tr', { class: s.slow ? 'row-warn' : '' }, h('td', {}, s.label), h('td', {}, String(s.elapsedMs)), h('td', {}, s.slow ? 'yes' : ''), h('td', {}, s.at.slice(11, 19))))),
-        )) : null,
+            h('tr', { class: s.slow ? 'row-warn' : '' }, h('td', {}, s.label), h('td', {}, String(s.elapsedMs)), h('td', {}, s.slow ? 'yes' : ''), h('td', {}, s.at.slice(11, 19)))))),
+      ) : null,
     ),
 
     // ── Intelligence ──
@@ -117,69 +115,98 @@ export function renderEfficiencyHub(ctx) {
       h('div', { class: 'grid-3' },
         card('Fusion hub', [
           kvTable([
-            ['Domains registered', hub.domains.length || '0 (register via registerIntelligenceDomain)'],
+            ['Sources', coverage.sources.length ? coverage.sources.join(', ') : badge('none registered', 'warn')],
+            ['Signal families fused', hub.domainCount],
             ['Raw signals', hub.totalSignals],
             ['Deduped', hub.dedupedCount],
             ['Clusters', hub.clusterCount],
             ['Converging', hub.convergingClusters],
           ]),
-          h('p', { class: 'hint' }, 'Deduped by (domain|rule|entity). Ranked by severity × confidence × recency.'),
+          h('p', { class: 'hint' },
+            'The hub reads the canonical insight engine\'s merged findings — one computation, two readings — plus any explicitly registered domain. It used to be handed three modules and reported almost nothing.'),
         ]),
         card('Top signals', hub.topSignals.length ? [
           h('ul', { class: 'signal-list' }, ...hub.topSignals.slice(0, 5).map((s) =>
-            h('li', {}, h('strong', {}, `${s.domain}/${s.rule}`), ` s${s.severity} ${s.confidence} — `, h('span', {}, s.title)))),
-        ] : [h('p', { class: 'hint' }, 'No active signals — the workspace is quiet or domains not yet registered.')]),
+            h('li', {}, h('strong', {}, `${s.domain}/${s.rule}`), ` s${s.severity} ${s.confidence}`, s._clusterBoost > 1 ? ` ×${s._clusterBoost.toFixed(2)} convergence` : '', ' — ', h('span', {}, s.title)))),
+        ] : [h('p', { class: 'hint' }, 'No active signals: the workspace is quiet, or no source is registered.')]),
         card('Converging risks', hub.recommendations.length ? [
           h('ul', {}, ...hub.recommendations.map((r) =>
             h('li', {}, h('strong', {}, r.title), h('p', { class: 'hint' }, r.summary), r.destination ? h('a', { href: r.destination }, 'Go →') : null))),
-        ] : [h('p', { class: 'hint' }, 'A converging cluster is ≥2 signals across ≥2 domains on the same entity with maxSeverity ≥3.')]),
+        ] : [h('p', { class: 'hint' }, 'A converging cluster is ≥2 signals across ≥2 domains on the same entity with maximum severity ≥3.')]),
       ),
       h('div', { class: 'grid-2' },
-        card('By domain', [
-          hub.byDomain && Object.keys(hub.byDomain).length
-            ? kvTable(Object.entries(hub.byDomain).map(([k, v]) => [k, v]))
-            : h('p', { class: 'hint' }, 'No domain breakdown yet.'),
+        card('Ranking model', [
+          h('p', {}, 'urgency = severity × confidence weight × recency × convergence boost'),
+          kvTable([
+            ['Confidence weights', 'high 3 · medium 2 · low 1'],
+            ['Recency', '≤7 days ×1.3 · ≤30 days ×1.1 · older ×1.0'],
+            ['Convergence boost', '1 + 0.15 × (independent domains − 1), capped at 1.6'],
+          ]),
+          h('p', { class: 'hint' },
+            'Severity is never rewritten by convergence — it stays the domain\'s own claim and is printed as such. Only the ordering carries the fusion.'),
         ]),
         card('By severity', [
           kvTable([[5, hub.bySeverity[5]], [4, hub.bySeverity[4]], [3, hub.bySeverity[3]], [2, hub.bySeverity[2]], [1, hub.bySeverity[1]]].map(([sev, cnt]) => [`s${sev}`, cnt])),
+          hub.truncated ? h('p', { class: 'banner banner-warn' }, `${hub.truncated} signals were withheld by the 2,000-signal fusion cap.`) : null,
         ]),
       ),
     ),
 
     // ── Automation ──
     h('section', { class: 'hub-section' },
-      h('h2', {}, '🤖 Automation — less manual, more governed'),
+      h('h2', {}, '🤖 Automation — what the spine actually did'),
       h('div', { class: 'grid-3' },
-        card('Priority scheduling', [
-          h('p', {}, 'Derived events are ordered by urgency: retention > resilience > matrix > capacity > calibration > hygiene.'),
-          h('p', { class: 'hint' }, 'Same budget, better order: the most consequential propagation lands first.'),
-          kvTable([['Pending (last write)', recentEvents.length ? `${recentEvents.length} recent audit events` : '—']]),
+        card('Last cascade', metrics ? [
+          kvTable([
+            ['Rules evaluated', health.rules],
+            ['Events delivered', health.events],
+            ['Effects applied', health.executed],
+            ['Declined (guarded)', health.declined],
+            ['Duplicates suppressed', health.duplicates],
+            ['Rolled back', health.rolledBack],
+            ['Wall clock', `${health.elapsedMs}ms`],
+          ]),
+          h('p', { class: 'hint' }, 'A duplicate is the same (type, entity, id) tuple arriving twice in one transaction. It is delivered once — that is the coalescing the spine really performs.'),
+        ] : [h('p', { class: 'hint' }, 'No write has run a cascade in this session yet.')]),
+        card('Spine integrity', [
+          kvTable([
+            ['Rollbacks (last write)', health.ok ? badge('none', 'good') : badge(String(health.rolledBack), 'warn')],
+            ['Open failure receipts', receipts.length],
+            ['Event budget', health.budget ?? 'ceiling in postCommit'],
+          ]),
+          receipts.length
+            ? h('a', { href: '#/assurance' }, 'Open the automation control room →')
+            : h('p', { class: 'hint' }, 'A failed rule leaves a retained receipt; none are open.'),
         ]),
-        card('Auto-classification', classified ? [
-          kvTable([['Kind', classified.kind], ['Priority', classified.priority], ['Confidence', classified.confidence], ['Hits', classified.hits]]),
-          h('p', { class: 'hint' }, classified.explanation),
-          h('p', { class: 'muted' }, `Sample: "${sampleCase.title}"`),
-        ] : [h('p', { class: 'hint' }, sampleCase ? 'No keywords matched — add a title/summary with terms like “outage”, “risk”, “improve”.' : 'No cases to classify yet.')]),
-        card('Repetition mining', [
-          rep.candidates.length ? h('ul', {}, ...rep.candidates.map((c) => h('li', {}, `${c.kind}: ${c.count}× — template candidate`))) : h('p', { class: 'hint' }, 'No repetition above threshold in last 20 events.'),
-          h('p', { class: 'hint' }, 'When the same (type|entity) fires ≥3×, the hub suggests a template.'),
-          rep.counts && Object.keys(rep.counts).length ? h('details', {}, h('summary', {}, 'Counts'), kvTable(Object.entries(rep.counts).slice(0, 10))) : null,
+        card('Evidence', [
+          h('p', {}, 'Every figure on this screen comes from the propagation reporter, the perf ring buffer or the workspace record itself.'),
+          h('p', { class: 'hint' }, `Perf instrumentation is ${perfEnabled() ? 'on' : 'off'}; samples are in-memory only and never exported.`),
         ]),
       ),
       h('div', { class: 'card' },
-        h('h3', { class: 'card-title' }, 'What this hub automates next'),
+        h('h3', { class: 'card-title' }, 'Not built (stated, not implied)'),
         h('ul', { class: 'next-list' },
-          h('li', {}, 'Smart routing: new case → auto-suggest owner, kind, priority, and linked stakeholders from declaration history.'),
-          h('li', {}, 'Batch coalescing: 5 rapid edits → one coalesced persist, one cascade (not 5).'),
-          h('li', {}, 'Template suggestion: repeated manual fix → one-click template (never auto-applied).'),
-          h('li', {}, 'Quota guard: state approaching 75% of 5MB localStorage warns before a write is lost.'),
+          h('li', {}, 'Priority ordering of derived events. The spine is breadth-first and budgeted; ordering by urgency would change audit order, so it is a deliberate opening, not a shipped behaviour.'),
+          h('li', {}, 'Automatic template suggestion from repeated manual work. Repetition is not distinguishable from the spine\'s own emissions in the retained event log, so no suggestion is printed from it.'),
+          h('li', {}, 'Write coalescing for rapid successive edits. The plaintext save is already synchronous and ordered; batching it would change what a reload mid-edit sees, which needs its own contract.'),
         ),
       ),
     ),
 
     h('section', { class: 'hub-section' },
       h('p', { class: 'muted' },
-        'All three pillars are additive: existing modules, rules, and permissions are unchanged. The hub only reads.'),
+        'All three pillars are additive: existing modules, rules and permissions are unchanged. The hub only reads.'),
     ),
   );
+}
+
+/** p50/max over a sample list, in ms, rounded for print. */
+function summarize(samples) {
+  if (!samples.length) return { count: 0, p50Ms: 0, maxMs: 0 };
+  const values = samples.map((s) => s.elapsedMs).sort((a, b) => a - b);
+  return {
+    count: values.length,
+    p50Ms: Math.round(values[Math.floor(values.length / 2)]),
+    maxMs: Math.round(values[values.length - 1]),
+  };
 }

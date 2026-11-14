@@ -24,6 +24,9 @@ import {
 } from './automationLineage.js';
 import { isDeclineMemoizable, ruleLabel } from './propagationContracts.js';
 import { filterRulesForEvent, hasRelevantRules } from './ruleIndex.js';
+// One definition of "the same event": the spine and the read-side diagnostics
+// must never disagree about what a duplicate is.
+import { eventKey } from './automationOrchestrator.js';
 import { perfMark, perfEnd, perfSample } from '../perf.js';
 import { caseCreatedRule } from './caseLifecycle.js';
 import { forecastIntegrityRule } from './forecastIntegrity.js';
@@ -1257,6 +1260,7 @@ export function runPostCommitRules(draft, context = {}) {
     reporter.declined = 0;
     reporter.executed = 0;
     reporter.rolledBack = 0;
+    reporter.duplicates = 0;
   }
   const results = [];
   /**
@@ -1289,8 +1293,10 @@ export function runPostCommitRules(draft, context = {}) {
     eventCount: 0,
   } : null;
   const queue = [{ event: context.event || null, derived: false, parentStepId: null, depth: 0 }];
-  const eventKey = (event) => JSON.stringify([event.type, event.entity, event.entityId]);
   const seen = new Set();
+  /** Count duplicate deliveries the spine suppresses, so the coalescing is
+   *  measured rather than asserted. Telemetry only — never persisted. */
+  const countDuplicate = () => { if (reporter) reporter.duplicates = (reporter.duplicates || 0) + 1; };
   if (context.event && typeof context.event.type === 'string') seen.add(eventKey(context.event));
   // A reviewed command bundle stages validated commands in ONE store write.
   // Deliver every source event, in command order, to the same rule registry.
@@ -1302,7 +1308,7 @@ export function runPostCommitRules(draft, context = {}) {
       if (!event || typeof event.type !== 'string' || !/^[a-z][a-zA-Z0-9.-]{0,79}$/.test(event.type)
         || typeof event.entity !== 'string' || !event.entity || typeof event.entityId !== 'string') throw new Error('A staged command produced an invalid source event.');
       const key = eventKey(event);
-      if (seen.has(key)) continue;
+      if (seen.has(key)) { countDuplicate(); continue; }
       seen.add(key);
       queue.push({ event, derived: false, parentStepId: null, depth: 0 });
     }
@@ -1314,7 +1320,7 @@ export function runPostCommitRules(draft, context = {}) {
     let omitted = 0;
     for (const event of createdRecordEvents(context.previousState, (key) => draft[key])) {
       const key = eventKey(event);
-      if (seen.has(key)) continue;
+      if (seen.has(key)) { countDuplicate(); continue; }
       if (seen.size >= eventBudget) { omitted += 1; continue; }
       seen.add(key);
       queue.push({ event, derived: true, parentStepId: null, depth: 1 });
@@ -1410,7 +1416,7 @@ export function runPostCommitRules(draft, context = {}) {
           // Copy immediately so a producer cannot modify a queued event later.
           const event = JSON.parse(JSON.stringify(emission));
           const key = eventKey(event);
-          if (seen.has(key) || pendingKeys.has(key)) return false;
+          if (seen.has(key) || pendingKeys.has(key)) { countDuplicate(); return false; }
           if (seen.size + pendingKeys.size >= eventBudget) {
             throw new Error(`Automation event limit (${eventBudget}) reached; this rule was rolled back.`);
           }

@@ -178,10 +178,9 @@ import { buildPremiseReport } from './core/domain/premises.js';
 import { renderAnomaly } from './views/anomaly.js';
 import { assessAnomaly, generateBoardBrief, extractModuleSeries } from './core/domain/anomaly.js';
 import { renderEfficiencyHub } from './views/efficiencyHub.js';
-import { enablePerf, installPerfDebug } from './core/perf.js';
-import { intelligenceHubRead, registerIntelligenceDomain } from './core/domain/intelligenceHub.js';
-import { autoClassify as autoClassifyCase } from './core/domain/automationOrchestrator.js';
-import { quotaWarningFor as quotaWarningForNav } from './core/storeOptimizations.js';
+import { enablePerf, installPerfDebug, perfMeasure } from './core/perf.js';
+import { intelligenceHubRead, registerInsightsSource } from './core/domain/intelligenceHub.js';
+import { createKeyedMemo, quotaWarningFor as quotaWarningForNav } from './core/storeOptimizations.js';
 import { renderDynamics } from './views/dynamics.js';
 import { dynamicsAttentionCount } from './core/domain/dynamics.js';
 import { renderCapital } from './views/capital.js';
@@ -987,24 +986,18 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
   const api = createApi(store, { now, idFactory });
   // Efficiency pillar: enable lightweight perf instrumentation and expose debug.
   try { enablePerf(); installPerfDebug(typeof window !== 'undefined' ? window : null); } catch {}
-  // Intelligence pillar: register core signal domains into the fusion hub.
-  try {
-    const domains = [
-      ['resilience', () => import('./core/domain/resilience.js').then((m) => m.resilienceSignals || m.buildResilienceReport)],
-      ['retention', () => import('./core/domain/retention.js').then((m) => m.retentionSignals)],
-      ['power', () => import('./core/domain/power.js').then((m) => m.powerSignals)],
-    ];
-    // Lazy registration: if a domain's signal function is synchronously available, register it.
-    // Otherwise domains register themselves at view render time.
-    for (const [name, loader] of domains) {
-      loader().then((fn) => { if (typeof fn === 'function') try { registerIntelligenceDomain(name, fn); } catch {} }).catch(() => {});
-    }
-  } catch {}
   // Signal generation includes several cross-domain projections and seeded
   // simulations. Navigation badges and the active screen often request the
   // exact same daily read during one render, so share it for this immutable
   // store snapshot instead of running the full engine twice.
   const getInsights = createInsightsMemo(buildInsights);
+  // Intelligence pillar: the fusion hub reads the canonical engine's merged
+  // finding list. It used to be handed three hand-picked modules whose exports
+  // no longer matched, so a real workspace fused 3 of the ~63 signal families
+  // the product ships. Reading `buildInsights` is one computation and two
+  // readings: no extra engines run, and coverage is now every family that
+  // contributes a finding. Registration is idempotent per app instance.
+  try { registerInsightsSource('insights', (state, at) => getInsights(state, at).findings); } catch {}
   let ctx = null;
   let currentRoute = null;
   let lastRenderedRoute = null;
@@ -1129,6 +1122,18 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
     idleInterval = interval;
   }
 
+  /**
+   * One navigation paints once.
+   *
+   * Setting `location.hash` queues a `hashchange` event, and `navigate` also
+   * renders synchronously so the click feels instant. Both used to paint the
+   * same route against the same state — two full renders for one action. The
+   * guard records the paint that already happened; the queued event consumes it
+   * and only paints if something actually changed in between (a committed
+   * write, a different hash, or a stale event).
+   */
+  let navigationRenderGuard = null;
+
   function navigate(target) {
     if (!target) return;
     const hash = target.startsWith('#') ? target : `#/${target.replace(/^\//, '')}`;
@@ -1140,6 +1145,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
     } else {
       window.location.hash = hash;
       render();
+      navigationRenderGuard = { hash, state: store.state, at: Date.now() };
     }
   }
 
@@ -1221,6 +1227,56 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
         render();
       },
     };
+  }
+
+  /**
+   * The navigation badge strip.
+   *
+   * Every one of these numbers is a domain read — several of them are full
+   * models (retention hazard curves, capacity PERT, the deferral option
+   * lattice, resilience Bus-Factor) and the strip is rebuilt on every render,
+   * including the render that navigates. Measured on the demo workspace that
+   * was ~450-530ms per route change: 80-95% of the whole interaction, spent
+   * recomputing numbers that had not changed.
+   *
+   * Each read is pure over (state snapshot, calendar day, declared seat), and
+   * the store replaces the state object on every committed write, so those
+   * three values are an exact cache key. Anything that can move a number —
+   * a write, midnight, a seat change — misses the cache and recomputes.
+   */
+  // `at` is a fresh Date on every render and the seat context a fresh object,
+  // so neither can be the key itself. The key is what the reads actually
+  // depend on: the workspace snapshot, the calendar day, and the seat's
+  // identity plus the two counts the badge strip prints from it. A miss
+  // computes against the render's real clock and seat through these slots; a
+  // hit returns the day's already-computed reading, which is the same reading.
+  let navCounterNow = null;
+  let navCounterSeat = null;
+  const navCounters = createKeyedMemo((state, day, seatKey) => {
+    void state; void day; void seatKey;
+    return perfMeasure('nav.counters', () => counters(state, navCounterNow, navCounterSeat));
+  });
+  // Expose the cache's own hit/miss record beside the other perf readings, so
+  // "is the badge strip still costing half a second?" is answerable in the
+  // browser instead of guessed at.
+  try {
+    const scope = typeof window !== 'undefined' ? window : null;
+    if (scope && scope.__LEADOS_PERF) scope.__LEADOS_PERF.navCounters = () => navCounters.stats();
+  } catch {}
+
+  function navBadgeCounts(state, at, seatCtx, enforced) {
+    // `counters` is only computed for the undeclared operator view; an enforced
+    // seat uses the scoped command center instead (below).
+    if (enforced) return {};
+    navCounterNow = at;
+    navCounterSeat = seatCtx;
+    const seat = seatCtx?.seat || null;
+    const seatKey = seat
+      ? `${seat.id ?? ''}|${seat.fullAccess ? 'full' : 'scoped'}|${seatCtx?.projection?.counts?.aggregate ?? ''}|${seatCtx?.projection?.counts?.denied ?? ''}`
+      : '';
+    // A hit returns the memoized object by reference. Callers annotate the
+    // result (mission), so hand back a shallow copy and keep the cache clean.
+    return { ...navCounters(state, dayKey(at), seatKey) };
   }
 
   function counters(state, at, seatCtx = null) {
@@ -1529,7 +1585,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
     const enforced = Boolean(seat && !seat.fullAccess);
     // Declared seats use the scoped command center; do not run every legacy
     // counter over a deliberately redacted projection.
-    const counts = enforced ? {} : counters(state, at, seatCtx);
+    const counts = navBadgeCounts(state, at, seatCtx, enforced);
     counts.mission = bundleAttentionCount(state, at);
     // ADR-0076: role-tiered navigation. A frontline lead is not shown CEO-level
     // portfolio analytics; a CEO is not shown individual 1:1 content. The same
@@ -1909,6 +1965,11 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
 
   window.addEventListener('hashchange', () => {
     closeAllModals();
+    const guard = navigationRenderGuard;
+    navigationRenderGuard = null;
+    // The navigation already painted this exact hash against this exact state.
+    // Re-painting would repeat every domain read for an identical screen.
+    if (guard && guard.hash === window.location.hash && guard.state === store.state && Date.now() - guard.at < 2000) return;
     render();
   });
 

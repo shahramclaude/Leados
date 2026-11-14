@@ -1,0 +1,1174 @@
+{
+  "at": "2026-11-14T11:56:09.329Z",
+  "schemaVersion": 156,
+  "routesMeasured": 118,
+  "render": {
+    "coldMedianMs": 20.9,
+    "coldP95Ms": 120.96,
+    "coldMaxMs": 906.01,
+    "coldTotalMs": 5060.61,
+    "slowRoutes": [
+      {
+        "route": "scenarios",
+        "coldMs": 906.01,
+        "warmMs": 736.88,
+        "nodes": 627,
+        "textLength": 9664,
+        "heading": "What-if scenarios & sensitivity",
+        "errors": []
+      },
+      {
+        "route": "premises",
+        "coldMs": 574.22,
+        "warmMs": 542.26,
+        "nodes": 787,
+        "textLength": 7914,
+        "heading": "Is the reason you decided still true?",
+        "errors": []
+      }
+    ]
+  },
+  "emptyScreens": [],
+  "failingRoutes": [],
+  "write": {
+    "commitMedianMs": 1860.69,
+    "commitMaxMs": 1995.66,
+    "allCommitted": true,
+    "navAfterWriteMedianMs": 24.87
+  },
+  "efficiency": {
+    "perfSamples": 31,
+    "perf": {
+      "count": 31,
+      "totalMs": 7511.79,
+      "meanMs": 242.32,
+      "p50Ms": 0.63,
+      "p95Ms": 1949.08,
+      "slowCount": 5
+    },
+    "repeatedRoutes": 3
+  },
+  "intelligence": {
+    "registeredDomains": [],
+    "registeredSources": [
+      "insights"
+    ],
+    "domainCount": 0,
+    "signalsSeen": 213,
+    "convergingClusters": 8,
+    "knowledgeDomainsAvailable": 63,
+    "knowledgeDomainsWired": 0,
+    "knowledgeDomainsMissing": 63,
+    "familiesFused": 59
+  },
+  "automation": {
+    "spineLines": 1575,
+    "helpers": {
+      "eventKey": {
+        "wired": true,
+        "callers": [
+          "app/core/domain/postCommit.js"
+        ]
+      },
+      "automationHealth": {
+        "wired": true,
+        "callers": [
+          "app/views/efficiencyHub.js"
+        ]
+      },
+      "openReceipts": {
+        "wired": true,
+        "callers": [
+          "app/views/efficiencyHub.js",
+          "app/views/propagation.js"
+        ]
+      },
+      "createKeyedMemo": {
+        "wired": true,
+        "callers": [
+          "app/main.js"
+        ]
+      },
+      "estimateStateSize": {
+        "wired": true,
+        "callers": [
+          "app/core/store.js",
+          "app/views/efficiencyHub.js"
+        ]
+      },
+      "quotaWarningFor": {
+        "wired": true,
+        "callers": [
+          "app/core/store.js",
+          "app/main.js",
+          "app/views/efficiencyHub.js"
+        ]
+      }
+    },
+    "deadHelpers": []
+  },
+  "perRoute": [
+    {
+      "route": "efficiency",
+      "coldMs": 38.51,
+      "warmMs": 47.05,
+      "nodes": 207,
+      "textLength": 5484,
+      "heading": "Efficiency · Intelligence · Automation",
+      "errors": []
+    },
+    {
+      "route": "mission",
+      "coldMs": 27.89,
+      "warmMs": 24.62,
+      "nodes": 200,
+      "textLength": 3060,
+      "heading": "Steward the enterprise",
+      "errors": []
+    },
+    {
+      "route": "seat",
+      "coldMs": 25.46,
+      "warmMs": 21.03,
+      "nodes": 130,
+      "textLength": 3035,
+      "heading": "Who is operating this workspace — and what are they allowed to see?",
+      "errors": []
+    },
+    {
+      "route": "mandates",
+      "coldMs": 32.88,
+      "warmMs": 15.59,
+      "nodes": 43,
+      "textLength": 835,
+      "heading": "Move the decision. Keep the proof.",
+      "errors": []
+    },
+    {
+      "route": "authority-calibration",
+      "coldMs": 27.87,
+      "warmMs": 19.49,
+      "nodes": 52,
+      "textLength": 724,
+      "heading": "Authority calibration",
+      "errors": []
+    },
+    {
+      "route": "board",
+      "coldMs": 19.69,
+      "warmMs": 11.18,
+      "nodes": 91,
+      "textLength": 2195,
+      "heading": "Board Room",
+      "errors": []
+    },
+    {
+      "route": "seal",
+      "coldMs": 20.03,
+      "warmMs": 15.82,
+      "nodes": 55,
+      "textLength": 1336,
+      "heading": "Integrity & seals",
+      "errors": []
+    },
+    {
+      "route": "envoy",
+      "coldMs": 31.41,
+      "warmMs": 22.79,
+      "nodes": 57,
+      "textLength": 1478,
+      "heading": "Sealed exchange",
+      "errors": []
+    },
+    {
+      "route": "federation",
+      "coldMs": 26.48,
+      "warmMs": 13.09,
+      "nodes": 77,
+      "textLength": 2487,
+      "heading": "Programme federation",
+      "errors": []
+    },
+    {
+      "route": "freeze-line",
+      "coldMs": 10.07,
+      "warmMs": 15.66,
+      "nodes": 71,
+      "textLength": 2597,
+      "heading": "Freeze-line continuity",
+      "errors": []
+    },
+    {
+      "route": "span-calibration",
+      "coldMs": 20.99,
+      "warmMs": 48.24,
+      "nodes": 84,
+      "textLength": 3534,
+      "heading": "Discretion calibration",
+      "errors": []
+    },
+    {
+      "route": "reputation",
+      "coldMs": 69.85,
+      "warmMs": 11.06,
+      "nodes": 61,
+      "textLength": 1191,
+      "heading": "Reputational capital",
+      "errors": []
+    },
+    {
+      "route": "hindsight",
+      "coldMs": 14.52,
+      "warmMs": 17.12,
+      "nodes": 66,
+      "textLength": 2414,
+      "heading": "The Hindsight Lock",
+      "errors": []
+    },
+    {
+      "route": "epistemic",
+      "coldMs": 12.29,
+      "warmMs": 13.66,
+      "nodes": 91,
+      "textLength": 3849,
+      "heading": "The Epistemic Ledger",
+      "errors": []
+    },
+    {
+      "route": "diligence",
+      "coldMs": 14.5,
+      "warmMs": 11.72,
+      "nodes": 80,
+      "textLength": 3209,
+      "heading": "The Diligence Ledger",
+      "errors": []
+    },
+    {
+      "route": "fit",
+      "coldMs": 55.73,
+      "warmMs": 46.97,
+      "nodes": 189,
+      "textLength": 3311,
+      "heading": "What is your authority costing you?",
+      "errors": []
+    },
+    {
+      "route": "jurisdiction",
+      "coldMs": 13.23,
+      "warmMs": 12.06,
+      "nodes": 83,
+      "textLength": 1469,
+      "heading": "When work crosses spans, who can actually resolve it?",
+      "errors": []
+    },
+    {
+      "route": "differencing",
+      "coldMs": 15.77,
+      "warmMs": 13.09,
+      "nodes": 88,
+      "textLength": 2942,
+      "heading": "Differencing defender",
+      "errors": []
+    },
+    {
+      "route": "prospective",
+      "coldMs": 11.71,
+      "warmMs": 12.31,
+      "nodes": 77,
+      "textLength": 2707,
+      "heading": "Prospective contracts",
+      "errors": []
+    },
+    {
+      "route": "robust-allocation",
+      "coldMs": 16,
+      "warmMs": 13.22,
+      "nodes": 77,
+      "textLength": 1450,
+      "heading": "Robust allocation",
+      "errors": []
+    },
+    {
+      "route": "clearing",
+      "coldMs": 10.68,
+      "warmMs": 12.8,
+      "nodes": 66,
+      "textLength": 2235,
+      "heading": "Internal Clearinghouse",
+      "errors": []
+    },
+    {
+      "route": "identity",
+      "coldMs": 16.47,
+      "warmMs": 18.1,
+      "nodes": 76,
+      "textLength": 1966,
+      "heading": "Attested commits",
+      "errors": []
+    },
+    {
+      "route": "today",
+      "coldMs": 237.71,
+      "warmMs": 247.24,
+      "nodes": 652,
+      "textLength": 10137,
+      "heading": "Good morning, Alex",
+      "errors": []
+    },
+    {
+      "route": "responses",
+      "coldMs": 13.17,
+      "warmMs": 15.51,
+      "nodes": 49,
+      "textLength": 738,
+      "heading": "One situation. A coordinated response.",
+      "errors": []
+    },
+    {
+      "route": "bundles",
+      "coldMs": 16.73,
+      "warmMs": 15.54,
+      "nodes": 45,
+      "textLength": 1367,
+      "heading": "One review. Many modules. One transaction.",
+      "errors": []
+    },
+    {
+      "route": "compare",
+      "coldMs": 10.1,
+      "warmMs": 16.04,
+      "nodes": 30,
+      "textLength": 1698,
+      "heading": "Two reviewed responses. One arbitration.",
+      "errors": []
+    },
+    {
+      "route": "attribution",
+      "coldMs": 13.68,
+      "warmMs": 17.87,
+      "nodes": 156,
+      "textLength": 2733,
+      "heading": "Separate false bets from stalled delivery.",
+      "errors": []
+    },
+    {
+      "route": "counterfactual",
+      "coldMs": 18.16,
+      "warmMs": 14.86,
+      "nodes": 192,
+      "textLength": 4366,
+      "heading": "Would another policy have scored better than the way you decided?",
+      "errors": []
+    },
+    {
+      "route": "intake",
+      "coldMs": 10.39,
+      "warmMs": 15.19,
+      "nodes": 39,
+      "textLength": 1036,
+      "heading": "Intake triage terminal",
+      "errors": []
+    },
+    {
+      "route": "routing",
+      "coldMs": 28.72,
+      "warmMs": 17.12,
+      "nodes": 110,
+      "textLength": 1366,
+      "heading": "The Altitude Router",
+      "errors": []
+    },
+    {
+      "route": "cadence",
+      "coldMs": 13.38,
+      "warmMs": 15.78,
+      "nodes": 127,
+      "textLength": 2423,
+      "heading": "Operating Cadence Clock",
+      "errors": []
+    },
+    {
+      "route": "catchball",
+      "coldMs": 34.1,
+      "warmMs": 22.38,
+      "nodes": 158,
+      "textLength": 3082,
+      "heading": "Hoshin Kanri & Catchball Cascade",
+      "errors": []
+    },
+    {
+      "route": "strategy-cycle",
+      "coldMs": 12.08,
+      "warmMs": 12.24,
+      "nodes": 71,
+      "textLength": 2049,
+      "heading": "Enterprise strategy renewal",
+      "errors": []
+    },
+    {
+      "route": "valuestream",
+      "coldMs": 10.9,
+      "warmMs": 18.05,
+      "nodes": 115,
+      "textLength": 1502,
+      "heading": "Value Stream Exchange",
+      "errors": []
+    },
+    {
+      "route": "escalation",
+      "coldMs": 21.87,
+      "warmMs": 16.68,
+      "nodes": 224,
+      "textLength": 3202,
+      "heading": "The Escalation Economy",
+      "errors": []
+    },
+    {
+      "route": "carryover",
+      "coldMs": 10.43,
+      "warmMs": 14.76,
+      "nodes": 58,
+      "textLength": 980,
+      "heading": "Hoshin Carryover",
+      "errors": []
+    },
+    {
+      "route": "comms",
+      "coldMs": 21.21,
+      "warmMs": 19.51,
+      "nodes": 139,
+      "textLength": 4102,
+      "heading": "Drafted from facts, sent by you",
+      "errors": []
+    },
+    {
+      "route": "decision-robustness",
+      "coldMs": 14.15,
+      "warmMs": 18.72,
+      "nodes": 102,
+      "textLength": 2328,
+      "heading": "Decision robustness lab",
+      "errors": []
+    },
+    {
+      "route": "insights",
+      "coldMs": 32.23,
+      "warmMs": 25.94,
+      "nodes": 574,
+      "textLength": 12562,
+      "heading": "What needs you",
+      "errors": []
+    },
+    {
+      "route": "chain",
+      "coldMs": 18.93,
+      "warmMs": 21.71,
+      "nodes": 281,
+      "textLength": 5023,
+      "heading": "Is this work at the altitude that owns it — and does the level above see it without asking",
+      "errors": []
+    },
+    {
+      "route": "operating-model",
+      "coldMs": 14.66,
+      "warmMs": 17.46,
+      "nodes": 242,
+      "textLength": 4090,
+      "heading": "The shape of the seat, not the person in it",
+      "errors": []
+    },
+    {
+      "route": "succession",
+      "coldMs": 27.45,
+      "warmMs": 53.1,
+      "nodes": 508,
+      "textLength": 6705,
+      "heading": "Succession",
+      "errors": []
+    },
+    {
+      "route": "people",
+      "coldMs": 41.81,
+      "warmMs": 43.67,
+      "nodes": 286,
+      "textLength": 1445,
+      "heading": "People",
+      "errors": []
+    },
+    {
+      "route": "onboarding",
+      "coldMs": 60.79,
+      "warmMs": 52.71,
+      "nodes": 357,
+      "textLength": 5753,
+      "heading": "Onboarding & transitions (30-60-90)",
+      "errors": []
+    },
+    {
+      "route": "oneonones",
+      "coldMs": 20.9,
+      "warmMs": 19.85,
+      "nodes": 291,
+      "textLength": 3641,
+      "heading": "1:1s",
+      "errors": []
+    },
+    {
+      "route": "agenda-ledger",
+      "coldMs": 17.95,
+      "warmMs": 14.58,
+      "nodes": 112,
+      "textLength": 1761,
+      "heading": "Agenda provenance ledger",
+      "errors": []
+    },
+    {
+      "route": "feedback",
+      "coldMs": 29.04,
+      "warmMs": 24.14,
+      "nodes": 1036,
+      "textLength": 12493,
+      "heading": "Feedback",
+      "errors": []
+    },
+    {
+      "route": "reviews",
+      "coldMs": 21.61,
+      "warmMs": 19.35,
+      "nodes": 445,
+      "textLength": 3438,
+      "heading": "Reviews built from the whole period",
+      "errors": []
+    },
+    {
+      "route": "concordance",
+      "coldMs": 14.1,
+      "warmMs": 11.62,
+      "nodes": 52,
+      "textLength": 803,
+      "heading": "Two gauges, one word",
+      "errors": []
+    },
+    {
+      "route": "reliability",
+      "coldMs": 10.63,
+      "warmMs": 13.09,
+      "nodes": 124,
+      "textLength": 2841,
+      "heading": "How much of what you believe about your team survives its own measurement error?",
+      "errors": []
+    },
+    {
+      "route": "supply",
+      "coldMs": 19.33,
+      "warmMs": 16.93,
+      "nodes": 174,
+      "textLength": 2298,
+      "heading": "What the workspace cannot yet judge — and what it would cost to change that",
+      "errors": []
+    },
+    {
+      "route": "solvency",
+      "coldMs": 27.06,
+      "warmMs": 22.21,
+      "nodes": 546,
+      "textLength": 4812,
+      "heading": "Promise solvency",
+      "errors": []
+    },
+    {
+      "route": "sceptic",
+      "coldMs": 29.37,
+      "warmMs": 23.9,
+      "nodes": 761,
+      "textLength": 8072,
+      "heading": "The record, arguing against itself",
+      "errors": []
+    },
+    {
+      "route": "hiring",
+      "coldMs": 13.89,
+      "warmMs": 15.65,
+      "nodes": 143,
+      "textLength": 3062,
+      "heading": "Hiring",
+      "errors": []
+    },
+    {
+      "route": "recognition",
+      "coldMs": 18.21,
+      "warmMs": 17.2,
+      "nodes": 247,
+      "textLength": 2329,
+      "heading": "What you have noticed out loud",
+      "errors": []
+    },
+    {
+      "route": "goals",
+      "coldMs": 24.61,
+      "warmMs": 18.69,
+      "nodes": 453,
+      "textLength": 4200,
+      "heading": "What the work is supposed to change",
+      "errors": []
+    },
+    {
+      "route": "measurement",
+      "coldMs": 28.96,
+      "warmMs": 25.71,
+      "nodes": 428,
+      "textLength": 6853,
+      "heading": "Scorecard integrity",
+      "errors": []
+    },
+    {
+      "route": "delegations",
+      "coldMs": 19.1,
+      "warmMs": 16.96,
+      "nodes": 262,
+      "textLength": 5655,
+      "heading": "Transfer outcomes, not just tasks",
+      "errors": []
+    },
+    {
+      "route": "growth",
+      "coldMs": 20.46,
+      "warmMs": 18.3,
+      "nodes": 294,
+      "textLength": 3998,
+      "heading": "Development that ends in a dated action",
+      "errors": []
+    },
+    {
+      "route": "readiness",
+      "coldMs": 11.38,
+      "warmMs": 16.41,
+      "nodes": 148,
+      "textLength": 1755,
+      "heading": "Succession & readiness",
+      "errors": []
+    },
+    {
+      "route": "capacity",
+      "coldMs": 70.08,
+      "warmMs": 65.17,
+      "nodes": 1129,
+      "textLength": 15290,
+      "heading": "Capacity & flow",
+      "errors": []
+    },
+    {
+      "route": "allocation",
+      "coldMs": 17.38,
+      "warmMs": 16.34,
+      "nodes": 110,
+      "textLength": 2994,
+      "heading": "Where should the next person-day go?",
+      "errors": []
+    },
+    {
+      "route": "load",
+      "coldMs": 59.02,
+      "warmMs": 32.4,
+      "nodes": 312,
+      "textLength": 3683,
+      "heading": "Can one mind hold all of this?",
+      "errors": []
+    },
+    {
+      "route": "handover",
+      "coldMs": 120.96,
+      "warmMs": 125.39,
+      "nodes": 1121,
+      "textLength": 15318,
+      "heading": "Leader continuity",
+      "errors": []
+    },
+    {
+      "route": "dynamics",
+      "coldMs": 18.06,
+      "warmMs": 14.63,
+      "nodes": 199,
+      "textLength": 3185,
+      "heading": "Operating system dynamics",
+      "errors": []
+    },
+    {
+      "route": "capital",
+      "coldMs": 20.35,
+      "warmMs": 17.19,
+      "nodes": 279,
+      "textLength": 3676,
+      "heading": "Structural capital allocation",
+      "errors": []
+    },
+    {
+      "route": "strategy",
+      "coldMs": 21.08,
+      "warmMs": 18.08,
+      "nodes": 219,
+      "textLength": 3655,
+      "heading": "Is the work funding the strategy you wrote?",
+      "errors": []
+    },
+    {
+      "route": "learning",
+      "coldMs": 23.11,
+      "warmMs": 21.48,
+      "nodes": 598,
+      "textLength": 5937,
+      "heading": "Did we find out why — and did anything change?",
+      "errors": []
+    },
+    {
+      "route": "scenarios",
+      "coldMs": 906.01,
+      "warmMs": 736.88,
+      "nodes": 627,
+      "textLength": 9664,
+      "heading": "What-if scenarios & sensitivity",
+      "errors": []
+    },
+    {
+      "route": "health",
+      "coldMs": 143.84,
+      "warmMs": 83.27,
+      "nodes": 587,
+      "textLength": 5302,
+      "heading": "Team health & pulse",
+      "errors": []
+    },
+    {
+      "route": "cases",
+      "coldMs": 29.9,
+      "warmMs": 36.71,
+      "nodes": 1147,
+      "textLength": 69189,
+      "heading": "Operational cases",
+      "errors": []
+    },
+    {
+      "route": "resilience",
+      "coldMs": 59.78,
+      "warmMs": 45.55,
+      "nodes": 260,
+      "textLength": 3379,
+      "heading": "Operational Resilience & Continuity",
+      "errors": []
+    },
+    {
+      "route": "power",
+      "coldMs": 12.74,
+      "warmMs": 14.57,
+      "nodes": 158,
+      "textLength": 4860,
+      "heading": "War Room",
+      "errors": []
+    },
+    {
+      "route": "network",
+      "coldMs": 51.64,
+      "warmMs": 36.58,
+      "nodes": 123,
+      "textLength": 2310,
+      "heading": "Influence Network",
+      "errors": []
+    },
+    {
+      "route": "impact",
+      "coldMs": 84.15,
+      "warmMs": 71.98,
+      "nodes": 137,
+      "textLength": 2045,
+      "heading": "Did that actually work?",
+      "errors": []
+    },
+    {
+      "route": "fidelity",
+      "coldMs": 17.11,
+      "warmMs": 19.71,
+      "nodes": 372,
+      "textLength": 7262,
+      "heading": "Implementation fidelity",
+      "errors": []
+    },
+    {
+      "route": "merit",
+      "coldMs": 31.79,
+      "warmMs": 72.01,
+      "nodes": 382,
+      "textLength": 5116,
+      "heading": "Merit cycle",
+      "errors": []
+    },
+    {
+      "route": "transition",
+      "coldMs": 85.77,
+      "warmMs": 71.16,
+      "nodes": 425,
+      "textLength": 5453,
+      "heading": "Workforce transition",
+      "errors": []
+    },
+    {
+      "route": "changes",
+      "coldMs": 37.13,
+      "warmMs": 51.53,
+      "nodes": 110,
+      "textLength": 3001,
+      "heading": "Org design, topologies & change",
+      "errors": []
+    },
+    {
+      "route": "orgdesign",
+      "coldMs": 48.55,
+      "warmMs": 36.57,
+      "nodes": 150,
+      "textLength": 1217,
+      "heading": "Structural design",
+      "errors": []
+    },
+    {
+      "route": "voi",
+      "coldMs": 25.08,
+      "warmMs": 19.67,
+      "nodes": 171,
+      "textLength": 2465,
+      "heading": "Information value",
+      "errors": []
+    },
+    {
+      "route": "portfolio",
+      "coldMs": 18.78,
+      "warmMs": 16.84,
+      "nodes": 198,
+      "textLength": 1689,
+      "heading": "Decision Portfolio",
+      "errors": []
+    },
+    {
+      "route": "attention",
+      "coldMs": 14.6,
+      "warmMs": 17.37,
+      "nodes": 280,
+      "textLength": 3288,
+      "heading": "Attention market",
+      "errors": []
+    },
+    {
+      "route": "signal",
+      "coldMs": 13.12,
+      "warmMs": 15.98,
+      "nodes": 136,
+      "textLength": 1849,
+      "heading": "Signal path",
+      "errors": []
+    },
+    {
+      "route": "autopilot",
+      "coldMs": 16.89,
+      "warmMs": 14.38,
+      "nodes": 106,
+      "textLength": 1996,
+      "heading": "Autopilot Studio",
+      "errors": []
+    },
+    {
+      "route": "wargame",
+      "coldMs": 9.17,
+      "warmMs": 13.29,
+      "nodes": 36,
+      "textLength": 671,
+      "heading": "War Games",
+      "errors": []
+    },
+    {
+      "route": "coupling",
+      "coldMs": 35.9,
+      "warmMs": 34.73,
+      "nodes": 103,
+      "textLength": 1989,
+      "heading": "Coupled Load",
+      "errors": []
+    },
+    {
+      "route": "performance",
+      "coldMs": 12.62,
+      "warmMs": 13.34,
+      "nodes": 162,
+      "textLength": 2774,
+      "heading": "Performance Recovery",
+      "errors": []
+    },
+    {
+      "route": "survival",
+      "coldMs": 25.13,
+      "warmMs": 21.84,
+      "nodes": 505,
+      "textLength": 5481,
+      "heading": "Delivery Survival",
+      "errors": []
+    },
+    {
+      "route": "wait",
+      "coldMs": 22.07,
+      "warmMs": 16.45,
+      "nodes": 82,
+      "textLength": 1388,
+      "heading": "Cost of Waiting",
+      "errors": []
+    },
+    {
+      "route": "parity",
+      "coldMs": 13.95,
+      "warmMs": 16.23,
+      "nodes": 174,
+      "textLength": 2325,
+      "heading": "Leadership parity & standard consistency",
+      "errors": []
+    },
+    {
+      "route": "evidence",
+      "coldMs": 17.87,
+      "warmMs": 15.72,
+      "nodes": 81,
+      "textLength": 2286,
+      "heading": "The Evidence Terminal",
+      "errors": []
+    },
+    {
+      "route": "consequences",
+      "coldMs": 22.68,
+      "warmMs": 18.21,
+      "nodes": 134,
+      "textLength": 2867,
+      "heading": "The Consequence Lab",
+      "errors": []
+    },
+    {
+      "route": "deferral",
+      "coldMs": 163.22,
+      "warmMs": 159.31,
+      "nodes": 148,
+      "textLength": 2701,
+      "heading": "The Deferral Option Terminal",
+      "errors": []
+    },
+    {
+      "route": "integrity",
+      "coldMs": 12.88,
+      "warmMs": 15.5,
+      "nodes": 89,
+      "textLength": 1990,
+      "heading": "Signal integrity",
+      "errors": []
+    },
+    {
+      "route": "credibility",
+      "coldMs": 42.39,
+      "warmMs": 35.87,
+      "nodes": 212,
+      "textLength": 5302,
+      "heading": "Borrowed evidence",
+      "errors": []
+    },
+    {
+      "route": "confidence",
+      "coldMs": 43.45,
+      "warmMs": 44.06,
+      "nodes": 174,
+      "textLength": 2029,
+      "heading": "Confidence transport",
+      "errors": []
+    },
+    {
+      "route": "negotiations",
+      "coldMs": 15,
+      "warmMs": 14.74,
+      "nodes": 76,
+      "textLength": 1546,
+      "heading": "Negotiation workbench",
+      "errors": []
+    },
+    {
+      "route": "finance",
+      "coldMs": 11.99,
+      "warmMs": 17.44,
+      "nodes": 77,
+      "textLength": 1791,
+      "heading": "Budget & finance",
+      "errors": []
+    },
+    {
+      "route": "stakeholders",
+      "coldMs": 19.9,
+      "warmMs": 19.54,
+      "nodes": 267,
+      "textLength": 3902,
+      "heading": "Stakeholder influence register",
+      "errors": []
+    },
+    {
+      "route": "forecasts",
+      "coldMs": 13.73,
+      "warmMs": 17.18,
+      "nodes": 120,
+      "textLength": 2650,
+      "heading": "Forecast integrity",
+      "errors": []
+    },
+    {
+      "route": "premises",
+      "coldMs": 574.22,
+      "warmMs": 542.26,
+      "nodes": 787,
+      "textLength": 7914,
+      "heading": "Is the reason you decided still true?",
+      "errors": []
+    },
+    {
+      "route": "anomaly",
+      "coldMs": 19.31,
+      "warmMs": 13.85,
+      "nodes": 23,
+      "textLength": 135,
+      "heading": "Anomaly intelligence",
+      "errors": []
+    },
+    {
+      "route": "watch",
+      "coldMs": 68.95,
+      "warmMs": 68.4,
+      "nodes": 67,
+      "textLength": 1875,
+      "heading": "What changed, before it costs you?",
+      "errors": []
+    },
+    {
+      "route": "tempo",
+      "coldMs": 19.56,
+      "warmMs": 21.95,
+      "nodes": 221,
+      "textLength": 3354,
+      "heading": "Decision tempo",
+      "errors": []
+    },
+    {
+      "route": "retention",
+      "coldMs": 28.14,
+      "warmMs": 22.2,
+      "nodes": 248,
+      "textLength": 3147,
+      "heading": "Retention & talent economics",
+      "errors": []
+    },
+    {
+      "route": "decisions",
+      "coldMs": 113.28,
+      "warmMs": 124.57,
+      "nodes": 7235,
+      "textLength": 118825,
+      "heading": "Decisions",
+      "errors": []
+    },
+    {
+      "route": "conflicts",
+      "coldMs": 22.93,
+      "warmMs": 8.54,
+      "nodes": 51,
+      "textLength": 1540,
+      "heading": "Work through disagreement",
+      "errors": []
+    },
+    {
+      "route": "assurance",
+      "coldMs": 23.28,
+      "warmMs": 20.72,
+      "nodes": 389,
+      "textLength": 10380,
+      "heading": "Automation control room",
+      "errors": []
+    },
+    {
+      "route": "propagation",
+      "coldMs": 20.09,
+      "warmMs": 15.1,
+      "nodes": 24,
+      "textLength": 529,
+      "heading": "Propagation ledger",
+      "errors": []
+    },
+    {
+      "route": "settings",
+      "coldMs": 61.72,
+      "warmMs": 60.45,
+      "nodes": 654,
+      "textLength": 20121,
+      "heading": "Settings & data",
+      "errors": []
+    },
+    {
+      "route": "disclosure",
+      "coldMs": 21.08,
+      "warmMs": 19.69,
+      "nodes": 91,
+      "textLength": 2195,
+      "heading": "Board Room",
+      "errors": []
+    },
+    {
+      "route": "duty-cover",
+      "coldMs": 30.78,
+      "warmMs": 19.8,
+      "nodes": 155,
+      "textLength": 5989,
+      "heading": "The Duty Coverage Register",
+      "errors": []
+    },
+    {
+      "route": "matrix",
+      "coldMs": 20.11,
+      "warmMs": 17.38,
+      "nodes": 232,
+      "textLength": 2299,
+      "heading": "Matrix accountability",
+      "errors": []
+    },
+    {
+      "route": "arbitration",
+      "coldMs": 10.06,
+      "warmMs": 16.15,
+      "nodes": 53,
+      "textLength": 1096,
+      "heading": "Priority arbitration",
+      "errors": []
+    },
+    {
+      "route": "contradiction",
+      "coldMs": 16.84,
+      "warmMs": 17.15,
+      "nodes": 63,
+      "textLength": 1749,
+      "heading": "Contradiction audit",
+      "errors": []
+    },
+    {
+      "route": "standby",
+      "coldMs": 23.85,
+      "warmMs": 17.2,
+      "nodes": 27,
+      "textLength": 1184,
+      "heading": "Cover acknowledgement",
+      "errors": []
+    },
+    {
+      "route": "standard-work",
+      "coldMs": 16.26,
+      "warmMs": 8.58,
+      "nodes": 78,
+      "textLength": 1639,
+      "heading": "Leader standard work",
+      "errors": []
+    }
+  ]
+}
