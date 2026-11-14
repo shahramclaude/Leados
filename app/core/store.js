@@ -30,7 +30,7 @@ import { EW_SERIES_BY_ID } from './domain/watchRegistry.js';
 import { isCandidateAuditEvent } from './domain/export-governance.js';
 import { runPostCommitRules } from './domain/postCommit.js';
 import { perfSample, perfMark, perfEnd } from './perf.js';
-import { estimateStateSize, quotaWarningFor } from './storeOptimizations.js';
+import { estimateStateSize, quotaWarningForBytes } from './storeOptimizations.js';
 // ADR-0082: the Sealed Spine. Seal events are exempt from the event-log
 // retention cap (the chain head must survive), and the session seal key is
 // derived from the vault passphrase at unlock/enable/change time — memory only.
@@ -404,6 +404,15 @@ export function createStore(options = {}) {
    * instead of asserting that automation is "fast".
    */
   let lastPropagationMetrics = null;
+  /**
+   * The exact character length of the last payload this store wrote (or read)
+   * for this workspace. Storage quota is measured in bytes of exactly this
+   * value, so the store can price a write without re-sampling the object:
+   * five stratified JSON.stringify probes per collection per keystroke was
+   * measurable work that produced a *less* accurate number than this one.
+   * `null` means "no write or read yet in this session", never "zero bytes".
+   */
+  let lastPersistBytes = null;
   let protectedRaw = null;
   let writeBlockReason = null;
   /** Non-secret envelope metadata, kept while locked so the UI can explain itself. */
@@ -450,6 +459,7 @@ export function createStore(options = {}) {
 
   function load() {
     const { raw, error } = readRaw();
+    lastPersistBytes = raw ? raw.length : 0;
     warnings = [];
     persistError = null;
     protectedRaw = null;
@@ -571,7 +581,9 @@ export function createStore(options = {}) {
       return true;
     }
     try {
-      storage.setItem(key, JSON.stringify(next));
+      const text = JSON.stringify(next);
+      storage.setItem(key, text);
+      lastPersistBytes = text.length;
       protectedRaw = null;
       writeBlockReason = null;
       persistError = null;
@@ -604,7 +616,9 @@ export function createStore(options = {}) {
             purpose: PURPOSE_WORKSPACE,
             createdAt: headerAtCall.createdAt || now().toISOString(),
           });
-          storage.setItem(key, JSON.stringify(envelope));
+          const written = JSON.stringify(envelope);
+          storage.setItem(key, written);
+          lastPersistBytes = written.length;
           persistError = null;
           notify('persisted');
         } catch (err) {
@@ -667,6 +681,7 @@ export function createStore(options = {}) {
     }
     try {
       storage.setItem(key, payload);
+      lastPersistBytes = payload.length;
       protectedRaw = null;
       writeBlockReason = null;
       persistError = null;
@@ -799,8 +814,12 @@ export function createStore(options = {}) {
     const updateElapsed = (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now()) - updateStart;
     if (metrics) {
       metrics.storeUpdateMs = Math.round(updateElapsed * 100) / 100;
-      // Quota advisory (no throw — just a warning for the UI).
-      const quotaWarn = quotaWarningFor(draft);
+      // Quota advisory (no throw — just a warning for the UI). The exact
+      // length of the previous payload is what storage actually charged; the
+      // estimator is used only before this session has written or loaded.
+      const quotaWarn = quotaWarningForBytes(
+        Number.isFinite(lastPersistBytes) ? lastPersistBytes : estimateStateSize(draft),
+      );
       if (quotaWarn && !warnings.includes(quotaWarn)) warnings.push(quotaWarn);
       perfSample('store:update', updateElapsed, { event: event?.type || null, executed: metrics.executed || 0 });
     }
@@ -1991,6 +2010,14 @@ export function createStore(options = {}) {
     /** Test seam: replay a stale metrics snapshot without a real write. */
     set lastPropagationMetrics(value) {
       lastPropagationMetrics = value;
+    },
+    /**
+     * Exact length of the last payload written to (or read from) storage.
+     * Null until this session has read or written; never a substitute for the
+     * storage provider's own quota report.
+     */
+    get lastPersistBytes() {
+      return lastPersistBytes;
     },
     get writeBlockReason() {
       return writeBlockReason;

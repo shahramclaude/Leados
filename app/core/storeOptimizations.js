@@ -52,8 +52,13 @@ export function createKeyedMemo(build) {
       hits += 1;
       return lastResult;
     }
+    // Build first, then adopt the key. The previous order stored the new key
+    // before the build ran, so a throw left the cache claiming a result for a
+    // key it had never produced; the next identical call returned the STALE
+    // previous value. A cache must never turn an error into old data.
+    const result = build(...key);
     lastKey = key;
-    lastResult = build(...key);
+    lastResult = result;
     misses += 1;
     return lastResult;
   }
@@ -122,12 +127,28 @@ function samplePositions(length, points) {
 }
 
 /**
- * Storage quota guard: checks whether persisting would likely exceed
- * localStorage quota (typically 5-10 MB). Returns a warning string or null.
+ * Storage quota guard over a known byte count.
+ *
+ * The store already serialises the workspace to write it, so the exact number
+ * of characters is a free by-product of every successful save. Re-sampling
+ * the whole object on every keystroke to produce a *less* accurate number is
+ * work the leader pays for and cannot see. The write path therefore uses the
+ * last persisted length here, and falls back to the estimator only when no
+ * save has happened yet in this session.
+ */
+export function quotaWarningForBytes(bytes, quotaBytes = 5 * 1024 * 1024) {
+  const size = Number(bytes);
+  if (!Number.isFinite(size) || size <= 0) return null;
+  if (size > quotaBytes * 0.9) return `Workspace is ${Math.round(size / 1024)} KB — approaching browser storage limits. Export a backup.`;
+  if (size > quotaBytes * 0.75) return `Workspace is ${Math.round(size / 1024)} KB. Consider archiving old records.`;
+  return null;
+}
+
+/**
+ * Storage quota guard from a workspace object. Kept for read-side callers
+ * (the nav badge and the Efficiency Hub) that do not have a persisted byte
+ * count; their result is an estimate and is labelled as one where printed.
  */
 export function quotaWarningFor(state, quotaBytes = 5 * 1024 * 1024) {
-  const est = estimateStateSize(state);
-  if (est > quotaBytes * 0.9) return `Workspace is ${Math.round(est / 1024)} KB — approaching browser storage limits. Export a backup.`;
-  if (est > quotaBytes * 0.75) return `Workspace is ${Math.round(est / 1024)} KB. Consider archiving old records.`;
-  return null;
+  return quotaWarningForBytes(estimateStateSize(state), quotaBytes);
 }
