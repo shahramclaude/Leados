@@ -36,6 +36,57 @@ export function rankCost(rules) {
 }
 
 /**
+ * Which whole-workspace scanners ran and produced nothing, and what that cost.
+ *
+ * This is the ledger's one forward-looking figure. `rankWaste` already prices a
+ * rule that did nothing; this answers the only question a leader can act on:
+ * *is this a scanner, or a guard?* A guard that declines is free by design — it
+ * read the event type and returned. A `scansWorkspace` rule that declines has,
+ * by its own declaration, read the workspace to discover there was nothing to
+ * do, and the engine pays that on every event that wakes it.
+ *
+ * The distinction is declared, not inferred: the rule's `scansWorkspace`
+ * contract is the claim being reported, so this can only ever be as wrong as
+ * the contract itself. `calls === applied` means it produced something every
+ * time it ran and is listed with nothing to act on; a scanner with no declared
+ * contract is reported as unknown rather than assumed either way.
+ */
+export function scannerWaste(rules, contracts = []) {
+  // `summarizeByRule` keys on the engine's `rule.name`; the contracts surface
+  // exposes the same function name as `rule`, while `describeContracts` renames
+  // it to `name`. Accept both so the join cannot silently find nothing.
+  const byName = new Map();
+  for (const c of Array.isArray(contracts) ? contracts : []) {
+    if (!c) continue;
+    const key = c.name || c.rule || null;
+    if (key) byName.set(key, c);
+    if (c.rule && typeof c.rule === 'function' && c.rule.name) byName.set(c.rule.name, c);
+  }
+  const out = [];
+  for (const row of Array.isArray(rules) ? rules : []) {
+    const contract = byName.get(row.rule) || null;
+    if (!contract || contract.scansWorkspace !== true) continue;
+    const wastedCalls = Math.max(0, (row.calls || 0) - (row.applied || 0));
+    if (wastedCalls === 0 || row.ms <= 0) continue;
+    out.push({
+      rule: row.rule,
+      module: contract.module || null,
+      calls: row.calls,
+      applied: row.applied,
+      wastedCalls,
+      // The share of this rule's measured time that produced nothing. Reported
+      // as a share of the rule's OWN time, never of the chain, so two scanners
+      // cannot be compared by inflating the other.
+      wastedMs: round1(row.ms * (wastedCalls / row.calls)),
+      ms: row.ms,
+      wastedPctOfRule: round1((wastedCalls / row.calls) * 100),
+      avgMsPerCall: row.calls > 0 ? round1(row.ms / row.calls) : 0,
+    });
+  }
+  return out.sort((a, b) => b.wastedMs - a.wastedMs);
+}
+
+/**
  * Fold the engine's flat pair list into one row per rule.
  * `share` is measured against the sum of pair durations, never the transaction
  * total, so an unattributed millisecond is never silently assigned to a rule.
@@ -109,7 +160,7 @@ export function buildPropagationLedger({ metrics, receipts = [], contracts = [],
     return {
       measured: false,
       reason: 'No transaction has been measured in this session yet.',
-      rules: [], events: [], waste: [], costRanked: [],
+      rules: [], events: [], waste: [], scanners: [], costRanked: [],
       totals: null, receipts: summarizeReceipts(receipts), contracts: describeContracts(contracts),
     };
   }
@@ -117,8 +168,10 @@ export function buildPropagationLedger({ metrics, receipts = [], contracts = [],
   const events = summarizeByEvent(metrics.pairs);
   const costRanked = rankCost(rules);
   const waste = rankWaste(rules);
+  const scanners = scannerWaste(rules, contracts);
   const pairMs = rules.reduce((sum, row) => sum + row.ms, 0);
   const wasteMs = waste.reduce((sum, row) => sum + row.ms, 0);
+  const scanWasteMs = scanners.reduce((sum, row) => sum + row.wastedMs, 0);
   return {
     measured: true,
     at: metrics.at || now || null,
@@ -138,10 +191,16 @@ export function buildPropagationLedger({ metrics, receipts = [], contracts = [],
       pairMs: round1(pairMs),
       wasteMs: round1(wasteMs),
       wastePct: pairMs > 0 ? round1((wasteMs / pairMs) * 100) : 0,
+      // Whole-workspace scanners that found nothing: the actionable subset of
+      // the waste above, separated because a guard declining is free by design
+      // and a scanner declining is work the leader actually paid for.
+      scanWasteMs: round1(scanWasteMs),
+      scanWastePct: pairMs > 0 ? round1((scanWasteMs / pairMs) * 100) : 0,
     },
     rules,
     events,
     waste,
+    scanners,
     costRanked,
     receipts: summarizeReceipts(receipts),
     contracts: describeContracts(contracts),

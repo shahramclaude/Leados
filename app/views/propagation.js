@@ -86,6 +86,25 @@ function priceTab(ledger) {
       ))))
     : h('p', { class: 'muted' }, 'Every rule that ran either applied or was collapsed as a proven repeat. Nothing was spent on a no-op this write.');
 
+  // The actionable subset. A guard that declines is free by design: it read the
+  // event type and returned. A rule that DECLARES `scansWorkspace` and then
+  // declines has read the workspace to find nothing, and the leader paid for
+  // that read on every event that woke it. Separating the two is the difference
+  // between a cost they can act on and a cost they can only admire.
+  const scannerBody = ledger.scanners.length
+    ? h('div', { class: 'view-stack' },
+      h('p', { class: 'muted small' },
+        `${ledger.scanners.length} whole-workspace scanner(s) ran and produced nothing, costing ${ms(t.scanWasteMs)} — ${pct(t.scanWastePct)} of measured rule time. `
+        + 'These are not guards: by their own declared contract they read the record to decide, so this is work rather than a cheap early return. '
+        + 'The fix is in the rule (skip the read when the event cannot change its inputs), not in the declaration.'),
+      ...ledger.scanners.slice(0, 6).map((row) => h('div', null, kv(
+        `${row.rule}${row.module ? ` · ${row.module}` : ''}`,
+        `${ms(row.wastedMs)} wasted of ${ms(row.ms)} · ${row.wastedCalls} of ${row.calls} call(s) produced nothing (${pct(row.wastedPctOfRule)} of its own time)`,
+        'warn',
+      ))))
+    : h('p', { class: 'muted' },
+      'No declared whole-workspace scanner ran and produced nothing this write. Guards that declined are counted above and are free by design.');
+
   return h('div', { class: 'view-stack' },
     h('div', { class: 'stat-grid' },
       stat({ label: 'Rule invocations', value: t.pairs, hint: `${t.events} event(s) × the rule chain` }),
@@ -96,6 +115,12 @@ function priceTab(ledger) {
         value: t.collapsed,
         hint: 'Proven-identical re-runs skipped',
         tone: t.collapsed > 0 ? 'good' : '',
+      }),
+      stat({
+        label: 'Scan waste',
+        value: ms(t.scanWasteMs),
+        hint: 'Whole-workspace reads that found nothing',
+        tone: t.scanWastePct > 25 ? 'warn' : '',
       })),
     card({
       title: 'Where the write time went',
@@ -115,6 +140,11 @@ function priceTab(ledger) {
       title: 'Spent on nothing',
       subtitle: 'Ranked by measured cost, not by opinion',
       body: wasteBody,
+    }),
+    card({
+      title: 'Scanners that found nothing',
+      subtitle: 'The part of that cost a change can actually remove',
+      body: scannerBody,
     }));
 }
 

@@ -607,10 +607,10 @@ export function buildPremiseScope(state = {}, premise = {}) {
   return refs;
 }
 
-function buildSensorContext(state, premise, scope, now, settings) {
+function buildSensorContext(state, premise, scope, now, settings, loadReportOf) {
   const keys = new Set(scope.map((ref) => ref.key));
   const today = dayKey(now) || new Date().toISOString().slice(0, 10);
-  let loadReport = null;
+  const readLoadReport = loadReportOf || ((at = now) => buildLoadReport(state, at));
   return {
     state,
     premise,
@@ -619,9 +619,47 @@ function buildSensorContext(state, premise, scope, now, settings) {
     settings: settings || {},
     today,
     has: (type, id) => keys.has(scopeKey(type, id)),
-    getLoadReport: () => {
-      if (!loadReport) loadReport = buildLoadReport(state, now);
-      return loadReport;
+    getLoadReport: () => readLoadReport(now),
+  };
+}
+
+/**
+ * A read-only snapshot of the one workspace input a premise sensor derives that
+ * is expensive: the cognitive-load report, a seeded Monte Carlo over every
+ * active person.
+ *
+ * WHY THIS IS SAFE (the claim, not a convenience)
+ * -----------------------------------------------
+ * A `premiseRule` pass derives every premise's evidence from `people`,
+ * `settings`, `portfolio`, `dependencies` and `links` as they stood when the
+ * pass began. It then writes only `premises`, `premiseOutcomes`, `people`
+ * `talkingPoints` and `links` — and of those writes, only `links` is an input
+ * to a sensor (`buildPremiseScope`), never the load report. The load report is
+ * fixed for the pass because the sensors never read the premise ledger, never
+ * read evidence appended earlier in the same pass, and never see a derived
+ * event from this rule: it emits none and calls no other rule. Before this
+ * change each of the ~25 premises rebuilt the identical report, and each
+ * rebuild is a full seeded simulation. The report is therefore computed once
+ * per pass and every premise in it reads the SAME figures rather than 25
+ * separately-recomputed copies of the same figures.
+ *
+ * This is an internal optimisation of one rule pass, not a cache across
+ * transactions: a new `premiseRule` invocation builds a new snapshot, so a
+ * decision or capacity write that moves saturation is read on the very next
+ * write exactly as before.
+ */
+function createEvidenceSnapshot(state, now) {
+  let loadReport = null;
+  return {
+    /**
+     * Identical for the pass when asked about the pass's own instant — which is
+     * every production call — and honestly recomputed for any other instant, so
+     * a point-in-time reader that asks for a different `at` is never handed the
+     * wrong day's figures.
+     */
+    loadReport: (at = now) => {
+      if (at !== now) return buildLoadReport(state, at);
+      return loadReport || (loadReport = buildLoadReport(state, now));
     },
   };
 }
@@ -630,10 +668,15 @@ function buildSensorContext(state, premise, scope, now, settings) {
  * Collect all currently-observable evidence for a premise. Pure: this does NOT
  * mutate state and does NOT decide whether evidence is new; the rule compares
  * keys against the append-only ledger.
+ *
+ * `snapshot` is optional and exists so a whole-premise pass can price the
+ * expensive sensors once instead of once per premise; callers that omit it get
+ * exactly the per-call behaviour they always had.
  */
-export function collectPremiseObservations(state = {}, premise = {}, now = new Date(), settings = {}) {
+export function collectPremiseObservations(state = {}, premise = {}, now = new Date(), settings = {}, snapshot = null) {
   const scope = buildPremiseScope(state, premise);
-  const sensorCtx = buildSensorContext(state, premise, scope, now, settings);
+  const sensorCtx = buildSensorContext(state, premise, scope, now, settings,
+    snapshot ? snapshot.loadReport : null);
   const rows = [];
   for (const sensor of PREMISE_SENSORS) {
     let produced = [];
@@ -1335,6 +1378,12 @@ export function premiseRule(draft, ctx = {}) {
   };
   const out = [];
   const premises = Array.isArray(draft.premises) ? draft.premises : [];
+  // One read-only evidence snapshot for the whole pass (see
+  // `createEvidenceSnapshot`): the sensors' expensive figures are derived once
+  // from the pass's inputs instead of once per premise. The reasoning load
+  // report alone is a seeded Monte Carlo across every active person, and it was
+  // being rebuilt for each of the premises on every write that wakes this rule.
+  const snapshot = createEvidenceSnapshot(draft, now);
 
   // RULE-PREM-05: outcomes are their own append-only graph nodes. The
   // calibration report is a pure read model; the rule only establishes typed
@@ -1391,7 +1440,7 @@ export function premiseRule(draft, ctx = {}) {
 
     // RULE-PREM-02: append-only evidence sensing.
     const existingKeys = new Set((premise.observations || []).map((o) => o && o.key).filter(Boolean));
-    const candidates = collectPremiseObservations(draft, premise, now, draft.settings || {});
+    const candidates = collectPremiseObservations(draft, premise, now, draft.settings || {}, snapshot);
     const fresh = candidates.filter((o) => !existingKeys.has(o.key));
     if (fresh.length) {
       premise.observations = [...(premise.observations || []), ...fresh].slice(-120);

@@ -587,8 +587,15 @@ function enrichForecast(row, series, today) {
 }
 
 /** A pure, derived read model of the whole watch. No writes. */
-export function buildWatchReport(state, now = new Date()) {
-  const scan = scanWatch(state, now);
+export function buildWatchReport(state, now = new Date(), precomputedScan = null) {
+  // `precomputedScan` exists so a caller that ALREADY holds this scan for this
+  // state and this instant does not pay for it twice. `earlyWarningRule` is
+  // exactly such a caller: it scans the transaction's draft, then asks for the
+  // report one line later, and without this the whole 12-series / 26-bucket
+  // reconstruction ran a second time inside the same rule invocation to produce
+  // figures it had just produced. The scan is a pure function of (state, now),
+  // so passing it in cannot change the report; omitting it changes nothing.
+  const scan = precomputedScan || scanWatch(state, now);
   const today = scan.today;
   const seriesById = new Map(scan.series.map((s) => [s.id, s]));
 
@@ -1183,7 +1190,7 @@ export function earlyWarningRule(draft, ctx = {}) {
   }
 
   /* ----- RULE-EW-04 — the detector grades itself ------------------------- */
-  const report = buildWatchReport(draft, now);
+  const report = buildWatchReport(draft, now, scan);
   if (report.precision.badlyTuned) {
     const marker = `[${EW_RULE_IDS.PRECISION}:${report.today.slice(0, 7)}]`;
     if (!hasMarker(draft.decisions, 'question', marker)) {

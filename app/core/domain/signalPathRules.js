@@ -53,6 +53,12 @@ import {
 } from './signalPath.js';
 import { freezeSignalPrediction } from './signalPathSchema.js';
 
+/** The injected transaction time as an ISO stamp; a missing clock fails closed. */
+function isoNow(at) {
+  const when = at instanceof Date ? at : new Date(at);
+  return Number.isFinite(when.getTime()) ? when.toISOString() : new Date(0).toISOString();
+}
+
 const NOTE_MAX = 900;
 const NOTE_CAP = 24;
 const CASE_EVENTS = new Set(['case.created', 'case.updated', 'case.reopened', 'case.resolved']);
@@ -62,22 +68,26 @@ function hasMarker(rows, field, tag) {
   return (rows || []).some((row) => row && typeof row[field] === 'string' && row[field].includes(token));
 }
 
-function note(record, { source, text }) {
+function note(record, { source, text, at }) {
   if (!record) return;
   record.notes = Array.isArray(record.notes) ? record.notes : [];
   record.notes.push({
-    at: new Date().toISOString(),
+    // The transaction clock, never the wall clock: a rule's writes are dated by
+    // the same `now` that dated the action which caused them, so two runs of the
+    // same transaction over the same workspace are byte-identical and a note can
+    // never claim a time outside the transaction it was written in.
+    at: isoNow(at),
     source,
     text: String(text).slice(0, NOTE_MAX),
   });
   if (record.notes.length > NOTE_CAP) record.notes.splice(0, record.notes.length - NOTE_CAP);
 }
 
-function history(record, { type, summary }) {
+function history(record, { type, summary, at }) {
   if (!record) return;
   record.history = Array.isArray(record.history) ? record.history : [];
   record.history.push({
-    at: new Date().toISOString(),
+    at: isoNow(at),
     type: String(type || 'updated').slice(0, 40),
     summary: String(summary || '').slice(0, 400),
   });
@@ -163,6 +173,7 @@ function attachChain(draft, ctx, klass) {
     note(klass, {
       source: SIGNAL_RULE_IDS.DECLARE,
       text: `No path could be built, so no chain was attached: ${built.reason || 'the origin person is missing'}.`,
+      at: ctx.now,
     });
     return [];
   }
@@ -275,11 +286,13 @@ function repairContradicted(draft, ctx, klass) {
     note(klass, {
       source: SIGNAL_RULE_IDS.PROBE,
       text: 'The declaration is contradicted but no owner is named, so no task was opened. Name an owner — a channel nobody owns is the reason it has no owner.',
+      at: ctx.now,
     });
   }
   history(klass, {
     type: 'contradicted',
     summary: `Observed ${observedPct}% against a declared ${declaredPct}% over ${observed.eventCount} probe(s).`,
+    at: ctx.now,
   });
   return effects;
 }
@@ -330,6 +343,7 @@ function linkBlindCase(draft, ctx, event) {
       note(klass, {
         source: SIGNAL_RULE_IDS.CASE,
         text: `Case “${String(record.title || '').slice(0, 80)}” was opened by ${nameOf(draft, ownerId)} at ${reach.hopCount} hop(s), where the declared channel delivers ${Math.round(reach.reach * 100)}%. If that case had needed to travel the chain to reach you, this is the route it would have taken. [${tag}]`,
+        at: ctx.now,
       });
     }
     effects.push(effect(SIGNAL_RULE_IDS.CASE, 'linked', 'case', record.id,
@@ -362,6 +376,7 @@ function openLeverWork(draft, ctx, lever) {
     note(klass, {
       source: SIGNAL_RULE_IDS.LEVER,
       text: `“${String(lever.label || 'A lever').slice(0, 80)}” was adopted with no owner, so no task was opened. The hours are the cost; whoever spends them should be named.`,
+      at: ctx.now,
     });
     return [];
   }
@@ -387,6 +402,7 @@ function openLeverWork(draft, ctx, lever) {
   history(klass, {
     type: 'lever-adopted',
     summary: `Adopted “${String(lever.label || '').slice(0, 80)}” for ${lever.hours ?? '—'} h.`,
+    at: ctx.now,
   });
   return [effect(SIGNAL_RULE_IDS.LEVER, 'created', 'delegation', delegation.id,
     `Opened owned work for an adopted lever (${lever.hours ?? '—'} h).`)];
