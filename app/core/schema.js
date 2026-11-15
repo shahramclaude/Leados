@@ -250,6 +250,15 @@ import {
   normalizeValueBridgeReadings,
   normalizeValueBridgeSettings,
 } from './domain/valueBridgeSchema.js';
+// ADR-0215 (Schema v169): the speak-up register. Concerns and their dated acts
+// normalize together — an act naming a concern the loader refused is dropped and
+// counted rather than left to resolve against nothing.
+import {
+  normalizeConcernActs,
+  normalizeConcernMarkers,
+  normalizeConcernReports,
+  normalizeSpeakUpSettings,
+} from './domain/speakUpSchema.js';
 // ADR-0185 (Schema v147): dated Matrix change-impact requests and first-person
 // line responses. Request snapshots normalize before their responses resolve.
 import {
@@ -1060,7 +1069,7 @@ export {
 // ledger and no actual from a posted period: each is a different instrument
 // with a different signatory, and a standard invented at upgrade time would
 // print a variance against a fiction and name somebody as its owner.
-export const SCHEMA_VERSION = 168;
+export const SCHEMA_VERSION = 169;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -2549,6 +2558,11 @@ export const DEFAULT_SETTINGS = Object.freeze({
   // after a period ends its final actuals are due. Clamped on load, REFUSED
   // (never clamped) by the setter.
   ...normalizeFlexBudgetSettings({}),
+  // ADR-0215: the speak-up windows — acknowledgement, outcome, retaliation check
+  // — and the automation pause. Clamped on load, REFUSED (never clamped) by the
+  // setter, and COPIED onto each concern when it is raised: a convention changed
+  // later cannot rewrite the promise already made to a reporter.
+  ...normalizeSpeakUpSettings({}),
 });
 
 export const COLLECTIONS = [
@@ -3393,6 +3407,14 @@ export const COLLECTIONS = [
   // file cannot carry a bridge its own two readings do not imply.
   'valueBridgeReadings',
   'valueBridgeLeverClaims',
+  // ADR-0215 (Schema v169): the Speak-Up Concern Routing & Impartiality Register.
+  // Concerns, the dated acts that answer them, and identity-free observations for
+  // the conditions nobody can be asked about. No state, due date, impartiality
+  // verdict or latency is stored: each is re-derived on read, so a hand-edited
+  // file cannot carry a route its own reporting graph contradicts.
+  'concernReports',
+  'concernActs',
+  'concernMarkers',
 ];
 
 /** Stable empty state. `now` is an ISO string so the result is a pure value. */
@@ -4215,6 +4237,10 @@ export function normalizeSettings(raw) {
     // ADR-0214: the staleness window of a printed bridge. A typo falls back to the
     // documented default rather than switching the freshness claim off.
     ...normalizeValueBridgeSettings(s),
+    // ADR-0215: named here for the same reason — a speak-up window not spread
+    // here would vanish on every load and the pause census would never see the
+    // switch that silences the only rule chasing an overdue acknowledgement.
+    ...normalizeSpeakUpSettings(s),
     ...normalizeStructureHistorySettings(s),
     ...normalizeDifferencesSettings(s),
     ...normalizeFitSettings(s),
@@ -8838,6 +8864,12 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // an absent adjustment must never become a zero adjustment.
   state.valueBridgeReadings = normalizeValueBridgeReadings(raw.valueBridgeReadings, warnings);
   state.valueBridgeLeverClaims = normalizeValueBridgeLeverClaims(raw.valueBridgeLeverClaims, warnings);
+  // ADR-0215: a concern or an act that cannot be read exactly is DROPPED with a
+  // counted warning — never repaired, never re-dated and never given a receiver
+  // it did not record. Acts resolve only through concerns that survived.
+  state.concernReports = normalizeConcernReports(raw.concernReports, warnings);
+  state.concernActs = normalizeConcernActs(raw.concernActs, state.concernReports, warnings);
+  state.concernMarkers = normalizeConcernMarkers(raw.concernMarkers);
   state.conflictInterests = normalizeConflictInterests(raw.conflictInterests, warnings);
   state.conflictNoneDeclarations = normalizeConflictNoneDeclarations(raw.conflictNoneDeclarations, warnings);
   state.conflictStandings = normalizeConflictStandings(raw.conflictStandings, state.conflictInterests, warnings);
@@ -9746,6 +9778,21 @@ export const MIGRATIONS = {
   // statements an upgraded workspace already holds: none of them is a reading of
   // what the market paid for the company, and a valuation invented at upgrade
   // time would be a claim about the owners' money that nobody signed.
+  // 168 → 169: ADR-0215 adds THREE EMPTY ledgers and four declared conventions.
+  // No concern is inferred from the conflicts, cases, feedback or 1:1s an
+  // upgraded workspace already holds: a dispute between two people is not a
+  // report about conduct raised through a channel, and a concern invented at
+  // upgrade time would attribute an allegation to somebody who never raised it.
+  // No receiver is inferred either — impartiality is computed against the live
+  // graph, and a receiver written here would be a route nobody chose.
+  168: (v168) => ({
+    ...v168,
+    schemaVersion: 169,
+    concernReports: Array.isArray(v168.concernReports) ? v168.concernReports : [],
+    concernActs: Array.isArray(v168.concernActs) ? v168.concernActs : [],
+    concernMarkers: Array.isArray(v168.concernMarkers) ? v168.concernMarkers : [],
+    settings: { ...(v168.settings || {}), ...normalizeSpeakUpSettings(v168.settings || {}) },
+  }),
   167: (v167) => ({
     ...v167,
     schemaVersion: 168,

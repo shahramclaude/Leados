@@ -195,6 +195,9 @@ import { workRestRule } from './workRestRules.js';
 import { conflictRecusalRule } from './conflictRecusalRules.js';
 // ADR-0212 (Schema v166): the Temporary Standard Waiver Register (RULE-TSW-01).
 import { standardWaiverRule } from './standardWaiverRules.js';
+// ADR-0215 (Schema v169): the Speak-Up Concern Routing & Impartiality Register
+// (RULE-SUP-01).
+import { speakUpRule } from './speakUpRules.js';
 
 
 // ADR-0087: the Operating Cadence Clock. Reads the finished queue after the
@@ -1193,6 +1196,22 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // routine's standard and never rates a person. Registered immediately before
   // `seatRule` and `sealRule`.
   standardWaiverRule,
+  // ADR-0215: the Speak-Up Concern Routing & Impartiality Register (RULE-SUP-01).
+  // Reads the ONE speak-up reader with the whole-workspace view. TWO conditions:
+  // an acknowledgement window that closed with nothing on the record, and a
+  // retaliation window that closed with no dated check. Both asks go to the
+  // RECEIVER the concern was routed to — never the reporter, who would be asked to
+  // chase their own protection; never the receiver's manager, who was not given
+  // the concern; and never the subject. A concern with NO impartial route, and a
+  // receiver whose impartiality drifted as the graph changed, record one
+  // identity-free `concernMarkers` observation and ask nobody, because every
+  // candidate the test could name is disqualified by the very test that found the
+  // problem. The asks carry no party, no category, no date and no detail: a
+  // delegation is readable above the receiver, so an informative ask would leak it
+  // to exactly the people the route was chosen to avoid. It never acknowledges,
+  // resolves, checks, closes or withdraws anything and never rates a person.
+  // Registered immediately before `seatRule` and `sealRule`.
+  speakUpRule,
   // ADR-0076: the Operating Seat (vertical roll-up + enforced boundaries).
   // It reads the finished record after every module has propagated, then fans
   // each open item up every leadership ancestor in the reporting tree with one

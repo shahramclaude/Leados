@@ -106,6 +106,7 @@ import { createFlexBudgetActions } from './core/domain/flexBudgetActions.js';
 // ADR-0214: the enterprise value bridge — two dated readings, four attributed
 // legs, and a leg owner declared rather than guessed.
 import { createValueBridgeActions } from './core/domain/valueBridgeActions.js';
+import { createSpeakUpActions } from './core/domain/speakUpActions.js';
 import { createWorkRestActions } from './core/domain/workRestActions.js';
 import { createConflictRecusalActions } from './core/domain/conflictRecusalActions.js';
 // ADR-0148: Matrix Line Consent. A declared share is an ask until the line's
@@ -20306,6 +20307,9 @@ export function createApi(store, options = {}) {
   // dated actuals, and an exact split of the gap. Nothing derived is stored.
   Object.assign(api, createFlexBudgetActions(store, { now: clock, idFactory: id }));
   Object.assign(api, createValueBridgeActions(store, { now: clock, idFactory: id }));
+  // ADR-0215: the speak-up register. Every read is seat-projected inside the
+  // action; every write re-proves the right, the reporter and the receiver.
+  Object.assign(api, createSpeakUpActions(store, { now: clock, idFactory: id }));
   // ADR-0209: the Cross-Line Work/Rest Recovery Ledger — recording a shift for a
   // line the acting seat HOLDS, its actual times or cancellation, a line's
   // coverage attestation, and the declared policy. No act moves or cancels a

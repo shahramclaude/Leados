@@ -148,20 +148,21 @@ function read(store, now = T0) {
  */
 
 test('registration: schema v166, four ledgers, CSV #154, RULE-TSW-01 as spine rule 131, rights, pause and contract', () => {
-  assert.equal(SCHEMA_VERSION, 168);
+  assert.equal(SCHEMA_VERSION, 169);
   for (const key of ['standardWaiverRequests', 'standardWaiverGrants', 'standardWaiverDecisions', 'standardWaiverMarkers']) {
     assert.ok(COLLECTIONS.includes(key), `${key} is a declared collection`);
   }
   const scope = CSV_EXPORTS.find((entry) => entry.key === STANDARD_WAIVER_CSV_SCOPE);
   assert.ok(scope, 'CSV #154 is registered');
   assert.equal(scope.sensitive, false, 'the export is aggregate-only');
-  assert.equal(CSV_EXPORTS.length, 156);
-  assert.equal(DEFAULT_POST_COMMIT_RULES.length, 131);
+  assert.equal(CSV_EXPORTS.length, 157);
+  assert.equal(DEFAULT_POST_COMMIT_RULES.length, 132);
   assert.equal(PROPAGATION_CONTRACTS.length, DEFAULT_POST_COMMIT_RULES.length, 'one contract per spine rule');
   const ids = DEFAULT_POST_COMMIT_RULES.map((rule) => rule.id);
   assert.equal(ids.at(-1), 'sealRule', 'the seal is absolutely last');
   assert.equal(ids.at(-2), 'seatRule', 'the seat roll-up runs after every other rule');
-  assert.equal(ids.at(-3), 'standardWaiverRule', 'RULE-TSW-01 is registered immediately before the seat roll-up');
+  assert.equal(ids.at(-4), 'standardWaiverRule', 'RULE-TSW-01 sits just above the newest rule, before the seat roll-up');
+  assert.equal(ids.at(-3), 'speakUpRule', 'ADR-0215 registers after it and still ahead of the seat roll-up');
   const contract = PROPAGATION_CONTRACTS.find((c) => c.rule?.id === 'standardWaiverRule');
   assert.ok(contract, 'RULE-TSW-01 declares its propagation contract');
   assert.deepEqual(contract.writes, ['delegations', 'links', 'standardWaiverMarkers']);
@@ -196,7 +197,7 @@ test('migration 165 → 166 adds four EMPTY ledgers and the conventions; no waiv
   v165.settings = { ...v165.settings };
   for (const key of Object.values(STANDARD_WAIVER_SETTING_KEYS)) delete v165.settings[key];
   const next = MIGRATIONS[165](v165);
-  assert.equal(next.schemaVersion, 168);
+  assert.equal(next.schemaVersion, 166, 'this STEP returns 166; the head is pinned on the chain, not here');
   assert.deepEqual(next.standardWaiverRequests, []);
   assert.deepEqual(next.standardWaiverGrants, []);
   assert.deepEqual(next.standardWaiverDecisions, []);
