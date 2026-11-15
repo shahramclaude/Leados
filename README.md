@@ -1,3 +1,7 @@
+## 2026-11-15 — Capital recommendations are not commitments
+
+**Finance → Capital rationing** (`#/finance?panel=rationing`) evaluates investment cases against declared ceilings and constraints. A dated recommendation baseline and a human commitment, supersession and release workflow remain **In Progress**; they were not shipped in Session 285. Do not treat a calculated set as a funding decision or a transfer of money. See the [roadmap](ROADMAP.md) for the open work and verification limits.
+
 ## 2026-11-15 — Monday's feeder and Tuesday's consumer: the order a shift calendar can prove
 
 Open **Governance → Leader standard work → Simultaneous stations** (`#/standard-work?panel=stations`, [ADR-0207](./docs/adr/0207-cross-window-enabling-declarations.md), Schema v161, CSV #148). A window's holder can already order two stations **inside** one shift. Work crosses shifts: the feed line runs on Monday and the pack station on Tuesday. Select **Declare cross-shift prerequisite** on the window that waits, name the station in another window that must come up first, and write the reason. Only a seat that holds **both** windows is offered the control, and an operator view that scribes it says so.
