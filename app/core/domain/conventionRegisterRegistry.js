@@ -71,7 +71,7 @@ export const RETIRED_SETTINGS_KEYS = Object.freeze({
  *    paused, whatever its own comment says.
  */
 export const CONVENTION_SWITCH_DEFECTS = Object.freeze({
-  declaredButUnread: Object.freeze(['portfolioAutoPropagate']),
+  declaredButUnread: Object.freeze([]),
   readButNotCarried: Object.freeze(['fidelityAutoPropagate', 'priorityAutoPropagate']),
 });
 

@@ -205,6 +205,7 @@ import { earnedValueRule } from './earnedValueRules.js';
 import { riskAppetiteRule } from './riskAppetiteRules.js';
 import { incentiveRule } from './incentiveRules.js';
 import { dutyMeansRule } from './dutyMeansRules.js';
+import { portfolioReviewRule } from './portfolioReviewRules.js';
 
 
 // ADR-0087: the Operating Cadence Clock. Reads the finished queue after the
@@ -1277,6 +1278,7 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // joint apex exists, writes ONE identity-free `dutyMeansMarkers` observation.
   // Registered immediately before `speakUpRule`, `seatRule` and `sealRule`.
   dutyMeansRule,
+  portfolioReviewRule,
   // Registered immediately before `seatRule` and `sealRule`.
   speakUpRule,
   // ADR-0076: the Operating Seat (vertical roll-up + enforced boundaries).

@@ -263,6 +263,7 @@ export const PAUSE_PERMIT_MATRIX_REACH_SWITCHES = Object.freeze([
   // are declined, withdrawn, partial, or drifted, so silencing it reaches across
   // reporting lines.
   'dutyMeansAutoPropagate',
+  'portfolioAutoPropagate',
 ]);
 
 export function pausePermitReachesMatrix(key) {
@@ -329,6 +330,7 @@ export const PAUSE_PERMIT_SWITCH_RULES = Object.freeze({
   // answering an overdue means request, or resolving a cross-line means gap at
   // the joint apex.
   dutyMeansAutoPropagate: 'dutyMeansRules.js',
+  portfolioAutoPropagate: 'portfolioReviewRules.js',
 });
 
 /** Only graph-reading rules belong to the matrix census. Owner-directed rules

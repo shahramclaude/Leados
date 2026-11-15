@@ -26,6 +26,7 @@ import { EV_RIGHTS } from './earnedValueRegistry.js';
 import { RA_RIGHTS } from './riskAppetiteRegistry.js';
 import { INC_RIGHTS } from './incentiveRegistry.js';
 import { DWM_RIGHTS } from './dutyMeansRegistry.js';
+import { PRV_RIGHTS } from './portfolioReviewRegistry.js';
 import { JUST_CULTURE_RIGHTS } from './justCultureRegistry.js';
 import { routeVerdict } from './seatRegistry.js';
 import { validateMissionCommands } from './mission.js';
@@ -294,6 +295,11 @@ const groups = [
   // upward and re-proved inside the action; writes prove carrier/demanding/
   // controlling/joint-apex standing against the live matrix graph.
   [DWM_RIGHTS.READ, 'dutyMeansReport dutyMeansAttentionCount dutyMeansCandidates'],
+  [PRV_RIGHTS.READ, 'portfolioReport portfolioAttentionCount portfolioCandidates'],
+  [PRV_RIGHTS.DECLARE, 'portfolioDeclareUnit portfolioScan'],
+  [PRV_RIGHTS.REVIEW, 'portfolioRecordReview'],
+  [PRV_RIGHTS.VERDICT, 'portfolioRecordVerdict portfolioRetireUnit'],
+  [PRV_RIGHTS.TRACK, 'portfolioRecordMilestone'],
   [DWM_RIGHTS.DECLARE, 'dutyMeansDeclareDuty dutyMeansRetireDuty dutyMeansAddRequirement dutyMeansScan'],
   [DWM_RIGHTS.SUPPLY, 'dutyMeansRecordAct'],
   [DWM_RIGHTS.GOVERN, 'dutyMeansGovernGap'],
@@ -632,6 +638,7 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // organisation turned enforcement on.
 'incentiveReport', 'incentiveAttentionCount', 'incentiveCandidates',
 'dutyMeansReport', 'dutyMeansAttentionCount', 'dutyMeansCandidates',
+'portfolioReport', 'portfolioAttentionCount', 'portfolioCandidates',
 'standardWaiverAttentionCount', 'standardWaiverBriefText', 'standardWaiverCandidates', 'standardWaiverCsvRows', 'standardWaiverReport', 'concordanceAttentionCount', 'concordanceBriefText', 'concordanceCsvRows', 'concordanceRead', 'concordanceStats', 'disclosureAttentionCount', 'disclosureBriefText', 'disclosureCsvRows', 'disclosureGrantRead', 'disclosureGrants', 'disclosureRead', 'envoyAttentionCount', 'envoyBriefText', 'envoyCsvRows', 'envoyIdentity', 'envoyPacketText', 'envoyPreview', 'envoyRead', 'escalationBriefText', 'escalationCsvRows', 'escalationRead', 'escalationStats', 'differencesAttentionCount', 'differencesBriefText', 'differencesCsvRows', 'differencesRead', 'federationAttentionCount', 'federationBriefText', 'federationCsvRows', 'federationRead',
 'freezeLineAttentionCount', 'freezeLineBriefText', 'freezeLineConventions', 'freezeLineCsvRows', 'freezeLineReport',
 'spanCalibrationAttentionCount', 'spanCalibrationBriefText', 'spanCalibrationConventions', 'spanCalibrationCsvRows', 'spanCalibrationReport', 'spanCalibrationSettings', 'spanCalibrationSignals',
@@ -950,6 +957,8 @@ const MATRIX_LINE_SCOPED = new Set([
   // controlling-line, or strict joint-apex standing against the live matrix.
   'dutyMeansDeclareDuty', 'dutyMeansRetireDuty', 'dutyMeansAddRequirement',
   'dutyMeansRecordAct', 'dutyMeansGovernGap',
+  'portfolioDeclareUnit', 'portfolioRetireUnit', 'portfolioRecordReview',
+  'portfolioRecordVerdict', 'portfolioRecordMilestone',
   // ADR-0208: a declared (or previewed) case names a benefit owner the declaring
   // seat may reach only through a declared Matrix line; the action re-checks the
   // tree and the line itself before it reads or records anything.

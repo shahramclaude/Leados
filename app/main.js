@@ -167,6 +167,8 @@ import { renderIncentive } from './views/incentive.js';
 import { incentiveAttentionCount } from './core/domain/incentiveIntegrity.js';
 // ADR-0221: the Duty-Without-Means Register.
 import { renderDutyMeans } from './views/dutyMeans.js';
+import { renderPortfolioReview } from './views/portfolioReview.js';
+import { portfolioReviewAttentionCount } from './core/domain/portfolioReview.js';
 import { dutyMeansAttentionCount } from './core/domain/dutyMeans.js';
 import { conflictRecusalAttentionCount } from './core/domain/conflictRecusal.js';
 import { speakUpAttentionCount } from './core/domain/speakUp.js';
@@ -590,6 +592,7 @@ export const NAV = [
     // budget, and protected hours required to deliver it, and where a competing
     // matrix line holds those means locked.
     { route: 'means', label: 'Duty without means', icon: '⚷', badge: 'means' },
+    { route: 'portfolio', label: 'Portfolio review', icon: '◈', badge: 'portfolio' },
     // ADR-0121: who answers for each declared duty line when the holder is out.
     { route: 'duty-cover', label: 'Duty coverage', icon: '⛨', badge: 'dutyCoverage' },
     // ADR-0140: who is accountable to whom when one person has several managers.
@@ -758,6 +761,7 @@ const RENDERERS = {
   incentive: (ctx) => renderIncentive(ctx),
   // ADR-0221: the Duty-Without-Means Register.
   means: (ctx) => renderDutyMeans(ctx),
+  portfolio: (ctx) => renderPortfolioReview(ctx),
   conflicts: (ctx) => renderConflicts(ctx),
   conflict: (ctx, segments) => renderConflictDetail(ctx, safeDecode(segments[1])),
   recognition: (ctx) => renderRecognition(ctx),
@@ -1633,6 +1637,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       // ADR-0221: unscoped duties, overdue means requests controlled by this
       // seat, and unbacked means gaps escalated to this seat as joint apex.
       means: dutyMeansAttentionCount(state, { now: at, settings: state.settings, seat: seatCtx?.seat || null }),
+      portfolio: portfolioReviewAttentionCount(state, { now: at, settings: state.settings, seat: seatCtx?.seat || null }),
       // Schema v32: drafts written from case facts that still await a human.
       comms: (state.commsDrafts || []).filter((d) => d && d.status === 'draft').length,
       due: dueMeetings(state, at, state.settings).length,
