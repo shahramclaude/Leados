@@ -156,6 +156,9 @@ import { renderNegotiations, renderNegotiationDetail } from './views/negotiation
 import { renderFinance, renderBudgetDetail } from './views/finance.js';
 import { renderConflictRecusal } from './views/conflictRecusalPanel.js';
 import { renderSpeakUp } from './views/speakUp.js';
+// ADR-0218: the Just Culture decision record.
+import { renderJustCulture } from './views/justCulture.js';
+import { justCultureAttentionCount } from './core/domain/justCulture.js';
 import { conflictRecusalAttentionCount } from './core/domain/conflictRecusal.js';
 import { speakUpAttentionCount } from './core/domain/speakUp.js';
 import { investmentCaseAttentionCount } from './core/domain/investmentCase.js';
@@ -559,6 +562,10 @@ export const NAV = [
     // beside the conflict-of-interest register on purpose: one asks whether a hand
     // was independent, the other whether a voice could be heard at all.
     { route: 'speak-up', label: 'Speak-up & impartiality', icon: '✦', badge: 'speakUp' },
+    // ADR-0218: a conduct review is owned by the line that decides it and settles
+    // only when every other line the person holds has answered. Beside speak-up on
+    // purpose: one asks whether a voice was heard, the other whether a finding was fair.
+    { route: 'just-culture', label: 'Just Culture review', icon: '⚑', badge: 'justCulture' },
     // ADR-0121: who answers for each declared duty line when the holder is out.
     { route: 'duty-cover', label: 'Duty coverage', icon: '⛨', badge: 'dutyCoverage' },
     // ADR-0140: who is accountable to whom when one person has several managers.
@@ -719,6 +726,8 @@ const RENDERERS = {
   recusal: (ctx) => renderConflictRecusal(ctx),
   // ADR-0215: the speak-up concern routing & impartiality register.
   'speak-up': (ctx) => renderSpeakUp(ctx),
+  // ADR-0218: the Just Culture decision record.
+  'just-culture': (ctx) => renderJustCulture(ctx),
   conflicts: (ctx) => renderConflicts(ctx),
   conflict: (ctx, segments) => renderConflictDetail(ctx, safeDecode(segments[1])),
   recognition: (ctx) => renderRecognition(ctx),
@@ -1580,6 +1589,9 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       // a name: this sits on every route, so it reads rows and builds no sentence.
       // Opening the register is what reads the record.
       speakUp: speakUpAttentionCount(state, { now: at, settings: state.settings, seat: seatCtx?.seat || null }),
+      // ADR-0218: reviews this seat owes an answer, a concurrence or a new owner —
+      // the same figure the Just Culture panel prints for the seat.
+      justCulture: justCultureAttentionCount(state, { now: at, settings: state.settings, seat: seatCtx?.seat || null }),
       // Schema v32: drafts written from case facts that still await a human.
       comms: (state.commsDrafts || []).filter((d) => d && d.status === 'draft').length,
       due: dueMeetings(state, at, state.settings).length,

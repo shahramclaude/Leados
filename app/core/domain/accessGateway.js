@@ -23,6 +23,7 @@ import { VALUE_BRIDGE_RIGHTS } from './valueBridgeRegistry.js';
 import { SPEAK_UP_RIGHTS } from './speakUpRegistry.js';
 import { SYNERGY_RIGHTS } from './synergyRegistry.js';
 import { EV_RIGHTS } from './earnedValueRegistry.js';
+import { JUST_CULTURE_RIGHTS } from './justCultureRegistry.js';
 import { routeVerdict } from './seatRegistry.js';
 import { validateMissionCommands } from './mission.js';
 import { captureBriefCase } from './missionCaptureBrief.js';
@@ -230,6 +231,14 @@ const groups = [
   [SPEAK_UP_RIGHTS.RAISE, 'speakUpRaiseConcern speakUpWithdrawConcern'],
   [SPEAK_UP_RIGHTS.ANSWER, 'speakUpAcknowledge speakUpRecordOutcome speakUpRecordWatch speakUpCloseConcern'],
   [SPEAK_UP_RIGHTS.GOVERN, 'speakUpScan speakUpSetConventions'],
+  // ADR-0218: the Just Culture Decision Record. Reading is open at every rank and
+  // the record class (individual) decides the detail. Opening, deciding, revising
+  // and withdrawing are the act of the manager on the deciding line; concurring is
+  // the act of another line the person holds. Each action re-proves that line
+  // against the live matrix, so a peer cannot answer for somebody else's line.
+  [JUST_CULTURE_RIGHTS.READ, 'justCultureReport justCultureAttentionCount justCultureCandidates'],
+  [JUST_CULTURE_RIGHTS.DECIDE, 'justCultureOpen justCultureDecide justCultureWithdraw'],
+  [JUST_CULTURE_RIGHTS.CONCUR, 'justCultureConcur'],
   // ADR-0216: the deal thesis & synergy realization register. Reading it is
   // enterprise material (rank 4+, matching the record class) — a deal's economics
   // are the owners' money. Declaring a deal or a promise is the executive act
@@ -564,6 +573,9 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // because a module whose reads are absent from SAFE_READS is unreadable under
 // enforcement while its writes are still gated — the register would vanish
 // exactly when a real organisation turned enforcement on.
+// ADR-0218: the Just Culture register's pure read surface. Each re-derives its
+// figures and grants or withholds detail through the seat engine inside the reader.
+'justCultureReport', 'justCultureAttentionCount', 'justCultureCandidates',
 'speakUpReport', 'speakUpBriefText', 'speakUpCsvRows', 'speakUpAttentionCount', 'speakUpCandidates',
 // ADR-0216: the synergy register's pure read surface. Every one of these
 // re-proves the read right inside the action. Registered here because a module
@@ -877,6 +889,9 @@ const MATRIX_LINE_SCOPED = new Set([
   // proves source/receiving-line holder authority before it writes an act.
   'workReassignmentPropose', 'workReassignmentAccept',
   'workReassignmentDecline', 'workReassignmentWithdraw',
+  // ADR-0218: opening a review names the person whose conduct it concerns, who may
+  // be reached only through a declared line. The action re-proves the deciding line.
+  'justCultureOpen',
   // ADR-0208: a declared (or previewed) case names a benefit owner the declaring
   // seat may reach only through a declared Matrix line; the action re-checks the
   // tree and the line itself before it reads or records anything.
