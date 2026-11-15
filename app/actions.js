@@ -111,6 +111,12 @@ import { createSpeakUpActions } from './core/domain/speakUpActions.js';
 // with a phased ladder, a reading that is claimed or verified, one-off cost to
 // achieve, and a contested saving counted nowhere.
 import { createSynergyActions } from './core/domain/synergyActions.js';
+// ADR-0217: the Earned-Value Delivery & Estimate-at-Completion Register — a
+// declared case with one accountable owner, a baselined set of work packages
+// whose increments re-add to budget to the cent, dated readings under the
+// case's declared measure, actual costs, and estimates at completion no stored
+// row can contradict.
+import { createEarnedValueActions } from './core/domain/earnedValueActions.js';
 import { createWorkRestActions } from './core/domain/workRestActions.js';
 import { createConflictRecusalActions } from './core/domain/conflictRecusalActions.js';
 // ADR-0148: Matrix Line Consent. A declared share is an ask until the line's
@@ -20317,6 +20323,10 @@ export function createApi(store, options = {}) {
   // ADR-0216: the deal synergy register. Every read re-derives every figure;
   // every write re-proves the right, the owner's reach and the verifier's place.
   Object.assign(api, createSynergyActions(store, { now: clock, idFactory: id }));
+  // ADR-0217: the earned-value register. Every read re-derives every figure
+  // from the declared rows; every write re-proves the right, the owner's reach,
+  // the increment-to-budget identity and the cut-off discipline.
+  Object.assign(api, createEarnedValueActions(store, { now: clock, idFactory: id }));
   // ADR-0209: the Cross-Line Work/Rest Recovery Ledger — recording a shift for a
   // line the acting seat HOLDS, its actual times or cancellation, a line's
   // coverage attestation, and the declared policy. No act moves or cancels a

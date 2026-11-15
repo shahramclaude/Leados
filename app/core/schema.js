@@ -271,6 +271,20 @@ import {
   normalizeSynergyReadings,
   normalizeSynergySettings,
 } from './domain/synergySchema.js';
+// ADR-0217 (Schema v171): the Earned-Value Delivery & Estimate-at-Completion
+// Register. Cases, their baselined work packages (re-proved increments and line
+// splits), dated readings (shares under the case's declared method) and actual
+// costs normalize in dependency order — a package resolves only through the case
+// that survived, a reading or an actual only through the case and (optionally)
+// the package.
+import {
+  normalizeEvActuals,
+  normalizeEvCases,
+  normalizeEvMarkers,
+  normalizeEvPackages,
+  normalizeEvReadings,
+  normalizeEvSettings,
+} from './domain/earnedValueSchema.js';
 // ADR-0185 (Schema v147): dated Matrix change-impact requests and first-person
 // line responses. Request snapshots normalize before their responses resolve.
 import {
@@ -1089,7 +1103,15 @@ export {
 // a promise invented at upgrade time would put a number on the board's table that
 // nobody made. No saving is merged with another either — the contested test runs
 // on rows a human declared.
-export const SCHEMA_VERSION = 170;
+// v171 adds the Earned-Value Delivery & Estimate-at-Completion Register
+// (ADR-0217): five EMPTY ledgers — cases, baselined work packages, dated
+// readings, actual costs, rule markers — and three declared conventions. No
+// baseline is inferred from an investment case (a case appraises a promise; this
+// measures whether the work is arriving on the curve), no package from a budget
+// envelope, no reading from a posted period, and no actual from an invoice:
+// each is a different instrument with a different signatory, and a baseline
+// invented at upgrade time would grade a programme against a plan nobody signed.
+export const SCHEMA_VERSION = 171;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -3452,6 +3474,19 @@ export const COLLECTIONS = [
   'synergyReadings',
   'synergyCosts',
   'synergyMarkers',
+  // ADR-0217 (Schema v171): the Earned-Value Delivery & Estimate-at-Completion
+  // Register. Cases (one accountable owner, one currency, one declared measure),
+  // baselined work packages whose increments are re-proved to re-add to budget to
+  // the cent, dated readings whose shares are re-checked against the case's
+  // declared method, actual costs, and identity-free rule markers. No attainment,
+  // index, estimate at completion or staleness is stored: each is re-derived on
+  // read, so a hand-edited file cannot carry a delivery position its own rows do
+  // not imply.
+  'earnedValueCases',
+  'earnedValuePackages',
+  'earnedValueReadings',
+  'earnedValueActuals',
+  'earnedValueMarkers',
 ];
 
 /** Stable empty state. `now` is an ISO string so the result is a pure value. */
@@ -8923,6 +8958,17 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.synergyReadings = normalizeSynergyReadings(raw.synergyReadings, state.synergyClaims, warnings);
   state.synergyCosts = normalizeSynergyCosts(raw.synergyCosts, state.dealTheses, state.synergyClaims, warnings);
   state.synergyMarkers = Array.isArray(raw.synergyMarkers) ? raw.synergyMarkers.slice(-400) : [];
+  // ADR-0217: a case, a package, a reading or an actual that cannot be read
+  // exactly is DROPPED with a counted warning — never repaired, never re-dated
+  // and never re-pointed at another case. A package's increments are RE-PROVED
+  // to re-add to budget to the cent; a line split that does not sum to exactly
+  // 100 is refused wholesale and the package keeps no line attribution. No EV,
+  // index, estimate at completion or state is stored: each is re-derived on read.
+  state.earnedValueCases = normalizeEvCases(raw.earnedValueCases, warnings);
+  state.earnedValuePackages = normalizeEvPackages(raw.earnedValuePackages, state.earnedValueCases, warnings);
+  state.earnedValueReadings = normalizeEvReadings(raw.earnedValueReadings, state.earnedValueCases, state.earnedValuePackages, warnings);
+  state.earnedValueActuals = normalizeEvActuals(raw.earnedValueActuals, state.earnedValueCases, state.earnedValuePackages, warnings);
+  state.earnedValueMarkers = normalizeEvMarkers(raw.earnedValueMarkers, warnings);
   state.conflictInterests = normalizeConflictInterests(raw.conflictInterests, warnings);
   state.conflictNoneDeclarations = normalizeConflictNoneDeclarations(raw.conflictNoneDeclarations, warnings);
   state.conflictStandings = normalizeConflictStandings(raw.conflictStandings, state.conflictInterests, warnings);
@@ -9838,6 +9884,25 @@ export const MIGRATIONS = {
   // upgrade time would attribute an allegation to somebody who never raised it.
   // No receiver is inferred either — impartiality is computed against the live
   // graph, and a receiver written here would be a route nobody chose.
+  // 170 → 171: ADR-0217 adds FIVE EMPTY ledgers and three declared conventions.
+  // No delivery baseline is inferred from the investment cases, envelopes or
+  // value readings an upgraded workspace already holds: a case appraises what
+  // the money is promised to return, an envelope ceilings commitments, a value
+  // bridge reads the owners' claim — none of them is a plan for the work itself.
+  // A baseline written here would grade a programme against a curve nobody
+  // declared, in the name of a person who never signed it. No line split is
+  // inferred either: attribution is published only where every package carries a
+  // split that sums to exactly 100.
+  170: (v170) => ({
+    ...v170,
+    schemaVersion: 171,
+    earnedValueCases: Array.isArray(v170.earnedValueCases) ? v170.earnedValueCases : [],
+    earnedValuePackages: Array.isArray(v170.earnedValuePackages) ? v170.earnedValuePackages : [],
+    earnedValueReadings: Array.isArray(v170.earnedValueReadings) ? v170.earnedValueReadings : [],
+    earnedValueActuals: Array.isArray(v170.earnedValueActuals) ? v170.earnedValueActuals : [],
+    earnedValueMarkers: Array.isArray(v170.earnedValueMarkers) ? v170.earnedValueMarkers : [],
+    settings: { ...(v170.settings || {}), ...normalizeEvSettings(v170.settings || {}) },
+  }),
   // 169 → 170: ADR-0216 adds FIVE EMPTY ledgers and three declared conventions.
   // No deal is inferred from the investment cases, envelopes or value readings an
   // upgraded workspace already holds: a value bridge measures what the market

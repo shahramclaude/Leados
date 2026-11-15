@@ -295,6 +295,10 @@ export const PAUSE_PERMIT_REACH_RULES = Object.freeze({
   // permitted and printed as such — a switch that hides a missing verification
   // must not itself be hidden.
   synergyAutoPropagate: 'synergyRules.js',
+  // ADR-0217: silencing the ask that requests a reading or flags an under-floor
+  // cost position. The pause is permitted and printed as such — a switch that
+  // hides a missing reading must not itself be hidden.
+  earnedValueAutoPropagate: 'earnedValueRules.js',
 });
 
 /** How much of the register a seat is shown. Mirrors the altitude disclosure ladder. */

@@ -221,6 +221,8 @@ import { buildSpeakUpReport, speakUpCsvRows } from './domain/speakUp.js';
 import { SPEAK_UP_CSV_COLUMNS, SPEAK_UP_CSV_DESCRIPTOR } from './domain/speakUpRegistry.js';
 import { buildDealSynergy, synergyCsvRows } from './domain/dealSynergy.js';
 import { SYNERGY_CSV_COLUMNS, SYNERGY_CSV_DESCRIPTOR } from './domain/synergyRegistry.js';
+import { buildEarnedValue, earnedValueCsvRows } from './domain/earnedValue.js';
+import { EV_CSV_COLUMNS, EV_CSV_DESCRIPTOR } from './domain/earnedValueRegistry.js';
 import {
   CAPITAL_RATIONING_CSV_COLUMNS,
   CAPITAL_RATIONING_CSV_DESCRIPTOR,
@@ -1503,6 +1505,11 @@ export const CSV_EXPORTS = [
   // reference crosses this boundary; currencies are never pooled and a refused
   // figure exports BLANK with its reason rather than a zero.
   SYNERGY_CSV_DESCRIPTOR,
+  // #159 (ADR-0217): earned-value delivery — identity-free. One summary row per
+  // currency over the register as read. No case name, package code, person id or
+  // evidence note crosses this boundary; currencies are never pooled and a refused
+  // figure exports BLANK with its reason rather than a zero.
+  EV_CSV_DESCRIPTOR,
 ];
 
 function personLookup(state) {
@@ -6743,6 +6750,18 @@ export function buildScopeTable(state, scope, now) {
       return {
         columns: VALUE_BRIDGE_CSV_COLUMNS.map((key) => ({ key, header: key })),
         rows: valueBridgeCsvRows(report),
+      };
+    }
+    case 'earned-value-delivery': {
+      // CSV scope #159 (ADR-0217, Schema v171). Built from the SAME reader the
+      // panel renders, so an exported figure is provably the figure that was
+      // printed, cent for cent. Aggregate and identity-free by construction: the
+      // reader's rows carry owners, codes, notes and evidence, and none of them
+      // is reachable from here.
+      const report = buildEarnedValue(state, { now, settings: state.settings || {}, seat: null });
+      return {
+        columns: EV_CSV_COLUMNS.map((key) => ({ key, header: key })),
+        rows: earnedValueCsvRows(report),
       };
     }
     case 'deal-synergy-realization': {

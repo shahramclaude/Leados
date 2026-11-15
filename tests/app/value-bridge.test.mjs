@@ -512,13 +512,13 @@ test('ADR-0214 schema: a stored row is the row its loader returns, and the migra
   // The SOURCE version is 167: an upgraded workspace carries no readings.
   const migrated = migrate({ schemaVersion: 167 });
   assert.equal(migrated.raw.schemaVersion, SCHEMA_VERSION);
-  assert.equal(migrated.applied.at(-1), '169 → 170');
+  assert.equal(migrated.applied.at(-1), '170 → 171');
   assert.deepEqual(migrated.raw.valueBridgeReadings, []);
   assert.deepEqual(migrated.raw.valueBridgeLeverClaims, []);
 
   const scope = CSV_EXPORTS.find((entry) => entry.key === VALUE_BRIDGE_CSV_SCOPE);
   assert.ok(scope, 'the export is registered');
-  assert.equal(CSV_EXPORTS.length, 158);
+  assert.equal(CSV_EXPORTS.length, 159);
 });
 
 test('ADR-0214 chains: consecutive attributed bridges add up across the whole span', () => {

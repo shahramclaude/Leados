@@ -137,14 +137,14 @@ function withDom(run) {
 /* ------------------------------------------------------------ 1. schema v169 */
 
 test('ADR-0215 schema: the bump is additive — three empty ledgers, four declared conventions', () => {
-  assert.equal(SCHEMA_VERSION, 170);
+  assert.equal(SCHEMA_VERSION, 171);
   const old = createEmptyState(T0);
   old.schemaVersion = 168;
   delete old.concernReports;
   delete old.concernActs;
   delete old.concernMarkers;
   const migrated = migrate(old);
-  assert.equal(migrated.applied.at(-1), '169 → 170');
+  assert.equal(migrated.applied.at(-1), '170 → 171');
   assert.deepEqual(migrated.raw.concernReports, []);
   assert.deepEqual(migrated.raw.concernActs, []);
   assert.deepEqual(migrated.raw.concernMarkers, []);

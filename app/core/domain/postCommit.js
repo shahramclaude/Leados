@@ -201,6 +201,7 @@ import { speakUpRule } from './speakUpRules.js';
 // ADR-0216 (Schema v170): the Deal Thesis & Synergy Realization Register
 // (RULE-SYN-01).
 import { synergyRule } from './synergyRules.js';
+import { earnedValueRule } from './earnedValueRules.js';
 
 
 // ADR-0087: the Operating Cadence Clock. Reads the finished queue after the
@@ -1224,6 +1225,18 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // itself, edits a promise or a ladder, or rates a person. Registered
   // immediately before `speakUpRule`, `seatRule` and `sealRule`.
   synergyRule,
+  // ADR-0217: the Earned-Value Delivery & Estimate-at-Completion Register. ONE
+  // rule reads the finished register with the whole-workspace view and files at
+  // most one dated ask per open case whose reading is owed (no current reading
+  // inside the staleness window, or none at all) or whose newest complete reading
+  // sits below the declared cost floor — to the case's OWNER, in text that names
+  // no case, no amount and no date, because a delegation is readable above the
+  // owner. A case whose owner has left the roster writes ONE identity-free
+  // `earnedValueMarkers` observation and asks nobody. It never records a reading,
+  // never marks progress, never changes a baseline, never withdraws a row, never
+  // decides whether a programme is worth funding and never rates a person.
+  // Registered immediately before `speakUpRule`, `seatRule` and `sealRule`.
+  earnedValueRule,
   // Registered immediately before `seatRule` and `sealRule`.
   speakUpRule,
   // ADR-0076: the Operating Seat (vertical roll-up + enforced boundaries).

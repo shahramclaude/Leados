@@ -48,6 +48,10 @@ import { renderFinanceValueBridgePanel } from './valueBridgePanel.js';
 // case says what spending returns; a deal thesis says what the combination
 // promised, who promised it, and whether anybody verified it.
 import { renderFinanceDealSynergyPanel } from './dealSynergyPanel.js';
+// ADR-0217: the eighth finance panel. An envelope says what may be spent; a
+// deal thesis says what the deal promised; an earned-value case measures
+// whether the work is arriving on the curve the budget will actually buy.
+import { renderFinanceEarnedValuePanel } from './earnedValuePanel.js';
 
 const STATUS_TONE = { active: 'good', closed: 'neutral', archived: 'neutral' };
 const LINE_TONE = { planned: 'neutral', committed: 'info', spent: 'good', released: 'neutral' };
@@ -128,10 +132,12 @@ const FINANCE_PANELS = [
   // ADR-0216: what an acquisition promised, by lever and by owner, and what was
   // verified against it.
   { key: 'synergy', label: 'Deal synergy', href: '#/finance?panel=synergy' },
+  // ADR-0217: where the programme actually is against the curve it signed.
+  { key: 'earned-value', label: 'Earned value', href: '#/finance?panel=earned-value' },
 ];
 
-function financePanelTabs(ctx, panel, { envelopes = undefined, queue = undefined, cases = undefined, rationing = undefined, variance = undefined, value = undefined, synergy = undefined } = {}) {
-  const counts = { envelopes, span: queue, cases, rationing, variance, value, synergy };
+function financePanelTabs(ctx, panel, { envelopes = undefined, queue = undefined, cases = undefined, rationing = undefined, variance = undefined, value = undefined, synergy = undefined, earnedValue = undefined } = {}) {
+  const counts = { envelopes, span: queue, cases, rationing, variance, value, synergy, 'earned-value': earnedValue };
   return tabs({
     ariaLabel: 'Budget & finance views',
     active: panel,
@@ -194,6 +200,17 @@ function synergyTabCount(ctx) {
   return result?.ok && result.count > 0 ? result.count : undefined;
 }
 
+/**
+ * ADR-0217: cases whose newest complete reading sits under the declared cost
+ * floor, plus cases stale against the staleness window. Read through the
+ * seat-checked API, so the count is the one the panel itself prints; a refused
+ * read shows no count.
+ */
+function earnedValueTabCount(ctx) {
+  const result = typeof ctx.api?.earnedValueAttentionCount === 'function' ? ctx.api.earnedValueAttentionCount() : null;
+  return result?.ok && result.count > 0 ? result.count : undefined;
+}
+
 /** Downloads are allowed to fail in a browser; then the ledger stays copyable. */
 function downloadOrCopy({ filename, text, title }) {
   if (downloadText({ filename, text, mime: 'text/plain' })) {
@@ -212,7 +229,7 @@ function downloadOrCopy({ filename, text, title }) {
 
 export function renderFinance(ctx) {
   const requestedPanel = ctx.query?.get?.('panel');
-  const panel = requestedPanel === 'span' || requestedPanel === 'cases' || requestedPanel === 'rationing' || requestedPanel === 'variance' || requestedPanel === 'value' || requestedPanel === 'synergy' ? requestedPanel : 'envelopes';
+  const panel = requestedPanel === 'span' || requestedPanel === 'cases' || requestedPanel === 'rationing' || requestedPanel === 'variance' || requestedPanel === 'value' || requestedPanel === 'synergy' || requestedPanel === 'earned-value' ? requestedPanel : 'envelopes';
   const seat = ctx.seatContext?.seat || null;
   const built = ctx.seatContext?.built || null;
   // One evaluator, two readings: the exposure re-evaluates the SAME envelopes
@@ -224,6 +241,7 @@ export function renderFinance(ctx) {
   const varianceCount = flexBudgetTabCount(ctx);
   const valueCount = valueBridgeTabCount(ctx);
   const synergyCount = synergyTabCount(ctx);
+  const earnedValueCount = earnedValueTabCount(ctx);
   if (panel === 'cases') {
     // ADR-0208: the register renders itself from its own seat-checked reader;
     // this view only lends it the shared finance navigation.
@@ -235,6 +253,23 @@ export function renderFinance(ctx) {
         rationing: rationingCount,
         variance: varianceCount,
         synergy: synergyCount,
+        earnedValue: earnedValueCount,
+      }),
+    });
+  }
+  if (panel === 'earned-value') {
+    // ADR-0217: the register renders itself from its own seat-checked reader;
+    // this view only lends it the shared finance navigation.
+    return renderFinanceEarnedValuePanel(ctx, {
+      tabs: financePanelTabs(ctx, panel, {
+        envelopes: budgetsRollup(ctx.state, ctx.now).all.length,
+        queue: exposure.queue.length + exposure.queueDeferred,
+        cases: casesCount,
+        rationing: rationingCount,
+        variance: varianceCount,
+        value: valueCount,
+        synergy: synergyCount,
+        earnedValue: earnedValueCount,
       }),
     });
   }
@@ -250,6 +285,7 @@ export function renderFinance(ctx) {
         variance: varianceCount,
         value: valueCount,
         synergy: synergyCount,
+        earnedValue: earnedValueCount,
       }),
     });
   }
@@ -265,6 +301,7 @@ export function renderFinance(ctx) {
         variance: varianceCount,
         value: valueCount,
         synergy: synergyCount,
+        earnedValue: earnedValueCount,
       }),
     });
   }
@@ -279,6 +316,7 @@ export function renderFinance(ctx) {
         rationing: rationingCount,
         variance: varianceCount,
         synergy: synergyCount,
+        earnedValue: earnedValueCount,
       }),
     });
   }
@@ -293,6 +331,7 @@ export function renderFinance(ctx) {
         rationing: rationingCount,
         variance: varianceCount,
         synergy: synergyCount,
+        earnedValue: earnedValueCount,
       }),
     });
   }
@@ -327,7 +366,7 @@ export function renderFinance(ctx) {
       subtitle: 'One ledger for the money question — what envelope you have, what is already committed against it, what has actually landed, and whether the forecast breaches. Breaches open a DACI trade-off automatically; completed funded work prompts for evidenced actuals.',
       actions: [button('Create budget envelope', () => openBudgetDialog(ctx), true)],
     }),
-    financePanelTabs(ctx, panel, { envelopes: rollup.all.length, queue: exposure.queue.length + exposure.queueDeferred, cases: casesCount, rationing: rationingCount, variance: varianceCount }),
+    financePanelTabs(ctx, panel, { envelopes: rollup.all.length, queue: exposure.queue.length + exposure.queueDeferred, cases: casesCount, rationing: rationingCount, variance: varianceCount, synergy: synergyCount, earnedValue: earnedValueCount }),
     ctx.persistError
       ? card({ body: h('p', { class: 'text-warn small' }, `Changes are not being saved: ${ctx.persistError}`) })
       : null,
