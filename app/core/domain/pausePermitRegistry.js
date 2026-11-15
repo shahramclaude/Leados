@@ -274,11 +274,11 @@ export function isPermittableSwitchKey(key) {
 }
 
 /**
- * The rule module each reach switch silences. Derived from the same source read
+ * The known rule module each switch silences (including owner-directed rules). Derived from the same source read
  * the test performs; named here so the panel can print WHICH rule goes quiet
  * instead of asserting an unnamed consequence.
  */
-export const PAUSE_PERMIT_REACH_RULES = Object.freeze({
+export const PAUSE_PERMIT_SWITCH_RULES = Object.freeze({
   cadenceAutoPropagate: 'cadenceRules.js',
   ctrAutoPropagate: 'contradictionRules.js',
   matrixInterfaceAutoPropagate: 'matrixInterfaceRules.js',
@@ -321,6 +321,12 @@ export const PAUSE_PERMIT_REACH_RULES = Object.freeze({
   // money paid twice must not itself be hidden.
   incentiveAutoPropagate: 'incentiveRules.js',
 });
+
+/** Only graph-reading rules belong to the matrix census. Owner-directed rules
+ * still have names, but naming them must not invent a second reporting line. */
+export const PAUSE_PERMIT_REACH_RULES = Object.freeze(Object.fromEntries(
+  PAUSE_PERMIT_MATRIX_REACH_SWITCHES.map((key) => [key, PAUSE_PERMIT_SWITCH_RULES[key]]),
+));
 
 /** How much of the register a seat is shown. Mirrors the altitude disclosure ladder. */
 export const PAUSE_PERMIT_DETAIL_LEVELS = Object.freeze(['visible', 'leaders', 'none']);

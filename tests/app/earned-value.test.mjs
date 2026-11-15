@@ -156,7 +156,7 @@ test('ADR-0217 migration 170 → 171 adds five EMPTY ledgers and infers no basel
   delete before.earnedValueActuals;
   delete before.earnedValueMarkers;
   const next = MIGRATIONS[170](before);
-  assert.equal(next.schemaVersion, 174);
+  assert.equal(next.schemaVersion, 171);
   assert.deepEqual(next.earnedValueCases, []);
   assert.deepEqual(next.earnedValuePackages, []);
   assert.deepEqual(next.earnedValueReadings, []);
@@ -216,9 +216,10 @@ test('ADR-0217 door: every named refusal fires and nothing is stored', () => {
   assert.equal(wrongPkg.refusal, 'earned-value:actual-unknown-package');
 
   // A convention outside its bounds is refused, never clamped.
+  const staleDaysBefore = env.store.state.settings.earnedValueStaleDays;
   const oob = env.api.earnedValueSetConventions({ earnedValueStaleDays: 500 });
   assert.equal(oob.refusal, 'earned-value:convention-out-of-bounds');
-  assert.equal(env.store.state.settings.earnedValueStaleDays, undefined, 'nothing moved');
+  assert.equal(env.store.state.settings.earnedValueStaleDays, staleDaysBefore, 'nothing moved');
 
   // The one-line-declares-another-line's-programme refusal, proved at the action.
   const peer = env.direct.earnedValueDeclareCase({ ...CASE_INPUT, ownerId: 'kai' });

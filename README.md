@@ -1,3 +1,7 @@
+## 2026-11-15 — Durable earned-value automation pauses
+
+The central settings/permit path now retains earned-value conventions and its automation switch through reload. Pause permits continue to name the synergy and earned-value rules they silence without classifying those owner-directed rules as matrix-routing controls. This is a source-runtime repair; the standalone distribution was not rebuilt in this session.
+
 ## 2026-11-15 — The bonus was paid on a number nobody signed, and the same result was paid twice
 
 **People → Incentive integrity** (`#/incentive`, [ADR-0220](./docs/adr/0220-incentive-integrity-register.md), Schema v174, CSV #162, `RULE-INC-01`) is the register of what a person was **promised**, what **decided** the payment, and whether that result was **already paid by another scheme**. A director declares a dated envelope per funding line and window — one currency, an exact integer ceiling, a written basis — and at least one measure whose direction, unit, target and **control** are stated rather than inferred; an outcome the awardee cannot influence is printed as such beside every award.

@@ -2650,6 +2650,8 @@ export const DEFAULT_SETTINGS = Object.freeze({
   // load and REFUSED (never clamped) by the setter: a typo must not move the
   // materiality line the board reads.
   ...normalizeSynergySettings({}),
+  // ADR-0217: carry earned-value conventions through the central write/load door.
+  ...normalizeEvSettings({}),
 });
 
 export const COLLECTIONS = [
@@ -4391,6 +4393,7 @@ export function normalizeSettings(raw) {
     // census would never see the switch that silences the only rule asking for a
     // verification.
     ...normalizeSynergySettings(s),
+    ...normalizeEvSettings(s),
     ...normalizeStructureHistorySettings(s),
     ...normalizeDifferencesSettings(s),
     ...normalizeFitSettings(s),
