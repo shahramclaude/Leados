@@ -1,3 +1,7 @@
+## 2026-11-15 — Session 275: comparative series attempt stopped
+
+**Built:** no production capability shipped. Identified the missing restatement-aware multi-period comparison, director / VP × matrix and single-chain; scope remains In Progress. **Benchmark:** BlackLine / SAP Group Reporting category comparison **[BENCHMARK-UNVERIFIED]**; no licensed access or hands-on parity check. **Verification:** the focused goal-attainment test initially failed to load `jsdom`; after `npm ci`, the single retry passed 14 existing tests and failed the new test because its August close overlapped the fixture's July–September close. In accordance with the one-fix stop rule, the candidate code and test were removed. No displayed-vs-stored comparison for the proposed series was verified. **Blockers:** valid nonoverlapping fixtures, implementation, integration, disclosure, and user-facing verification remain. Repository-wide gap search **[UNVERIFIED]**. No asset created.
+
 ## 2026-11-15 — Session 274: a reported quarter is a fact, not a screen (Schema v160, ADR-0206)
 
 **Scope / decision.** Director / VP PRIMARY × matrix and single-chain, on `arena/8fe1e23d-leados`. ONE item, completed: [ADR-0206](./docs/adr/0206-goal-attainment-period-close.md), the closing act that freezes a reported period's attainment figures and the dated register of every later restatement. Schema v159 → v160, three additive collections that are EMPTY at upgrade. The register deliberately invents no closure: a period nobody closed stays unclosed.
