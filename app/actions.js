@@ -100,6 +100,7 @@ import { createPriorityRankingActions } from './core/domain/priorityRankingActio
 import { createGoalCommitmentActions } from './core/domain/goalCommitmentActions.js';
 import { createGoalAttainmentActions } from './core/domain/goalAttainmentActions.js';
 import { createInvestmentCaseActions } from './core/domain/investmentCaseActions.js';
+import { createCapitalRationingActions } from './core/domain/capitalRationingActions.js';
 import { createWorkRestActions } from './core/domain/workRestActions.js';
 import { createConflictRecusalActions } from './core/domain/conflictRecusalActions.js';
 // ADR-0148: Matrix Line Consent. A declared share is an ask until the line's
@@ -20285,6 +20286,12 @@ export function createApi(store, options = {}) {
   // withdrawing it, ratifying it (never the benefit owner's own act) and
   // reviewing it against that promise. No act moves money or edits an envelope.
   Object.assign(api, createInvestmentCaseActions(store, { now: clock, idFactory: id }));
+  // ADR-0211: the Capital Rationing & Funded-Set Register. Declaring a ceiling,
+  // declaring a relation between two cases, retiring either, the conventions and
+  // the scan. Every funded set, shadow price and rank-order gap is re-derived on
+  // read by the exact kernel; nothing derived is ever stored, so the panel, the
+  // brief and CSV #153 cannot disagree.
+  Object.assign(api, createCapitalRationingActions(store, { now: clock, idFactory: id }));
   // ADR-0209: the Cross-Line Work/Rest Recovery Ledger — recording a shift for a
   // line the acting seat HOLDS, its actual times or cancellation, a line's
   // coverage attestation, and the declared policy. No act moves or cancels a

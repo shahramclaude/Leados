@@ -190,6 +190,7 @@ import { priorityRule } from './priorityRankingRules.js';
 import { goalCommitmentRule } from './goalCommitmentRules.js';
 import { goalAttainmentRule } from './goalAttainmentRules.js';
 import { investmentCaseRule } from './investmentCaseRules.js';
+import { capitalRationingRule } from './capitalRationingRules.js';
 import { workRestRule } from './workRestRules.js';
 import { conflictRecusalRule } from './conflictRecusalRules.js';
 
@@ -1152,6 +1153,18 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // chases a missing attestation and never rates a person. Registered
   // immediately before `seatRule` and `sealRule`.
   workRestRule,
+  // ADR-0211: the Capital Rationing & Funded-Set Register (RULE-CRS-01). ONE
+  // condition: a currency holds RATIFIED investment cases awaiting a selection
+  // decision and NO seat has declared a ceiling covering today. The ask goes to
+  // the lowest seat above every reporting line that holds the enterprise
+  // altitude — never to the candidates' benefit owners, and never as a
+  // recommendation to fund anything. Where that is the workspace leader, the
+  // lines share no single apex or nobody is on the roster, it records an
+  // identity-free `capitalRationingMarkers` observation and asks nobody. It
+  // never funds a case, never approves a set, never declares or edits a ceiling
+  // and never rates a person. Registered immediately before `seatRule` and
+  // `sealRule`.
+  capitalRationingRule,
   // ADR-0210: the Decision-Maker Conflict-of-Interest & Recusal register. One
   // condition: a declared interest that is REPORTABLE, whose holder sits on the
   // record as its approver, its owner or a declared line over its subject, and

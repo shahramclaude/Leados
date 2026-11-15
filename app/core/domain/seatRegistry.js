@@ -716,6 +716,18 @@ export const ACTION_RIGHTS = Object.freeze({
   'declare-investment-case': { minRank: 2, maxRank: 5, label: 'Declare a dated investment case, or withdraw one before it is decided' },
   'ratify-investment-case': { minRank: 3, maxRank: 5, label: 'Ratify or refuse an investment case, or record its post-completion review — never as its benefit owner' },
   'govern-investment-cases': { minRank: 3, maxRank: 5, label: 'Scan due post-completion reviews and set the investment-case ask window' },
+  // ADR-0211: reading the rationing register is open at every altitude and scoped
+  // by the reader to the cases in its span. DECLARING A CEILING is a claim on the
+  // enterprise's own balance sheet, so it starts at the VP / C-suite altitude —
+  // the one whose declared decision form is "what do we fund, what do we refuse".
+  // Declaring a RELATION between two cases is a director's act by rank, and the
+  // ACTION additionally refuses any seat that does not hold BOTH cases' benefit
+  // owners: a line that holds one side only would be ruling on its own
+  // alternative. Governance sits with the same window every other register uses.
+  'read-capital-rationing': { minRank: 1, maxRank: 5, label: 'Read the capital-rationing register for your own span' },
+  'declare-capital-ceiling': { minRank: 4, maxRank: 5, label: 'Declare, retire or read a capital ceiling for one currency and period' },
+  'declare-capital-relation': { minRank: 3, maxRank: 5, label: 'Declare or retire a relation between two investment cases you hold both sides of' },
+  'govern-capital-rationing': { minRank: 3, maxRank: 5, label: 'Scan for missing ceilings and set the capital-rationing ask window' },
   // ADR-0209: reading the work/rest ledger is open at every altitude and scoped
   // by the reader. Rostering starts at the FRONTLINE — a shift lead writes the
   // roster — and the action re-proves that the seat holds the very line. Which

@@ -238,6 +238,10 @@ export const PAUSE_PERMIT_MATRIX_REACH_SWITCHES = Object.freeze([
   // so silencing it reaches a second line — and that line's manager is not told
   // that a decision-maker on a record they share holds an unhandled stake.
   'conflictRecusalAutoPropagate',
+  // ADR-0211: the capital-rationing switch. The rule reads the reporting graph for
+  // the enterprise altitude that may declare a ceiling, so silencing it leaves
+  // every second line under that apex with a fund nobody has sized and no ask.
+  'capitalRationingAutoPropagate',
 ]);
 
 export function pausePermitReachesMatrix(key) {
@@ -280,6 +284,7 @@ export const PAUSE_PERMIT_REACH_RULES = Object.freeze({
   investmentCaseAutoPropagate: 'investmentCaseRules.js',
   workRestAutoPropagate: 'workRestRules.js',
   conflictRecusalAutoPropagate: 'conflictRecusalRules.js',
+  capitalRationingAutoPropagate: 'capitalRationingRules.js',
 });
 
 /** How much of the register a seat is shown. Mirrors the altitude disclosure ladder. */
