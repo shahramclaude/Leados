@@ -1,3 +1,13 @@
+## 2026-11-15 — Session 284: funded-set commitments — In Progress, not shipped
+
+**New gap / scope:** CEO and enterprise finance × matrix and single-chain: the capital-rationing engine proves a funded set but does not record a dated human commitment, supersession or release against that set. A later change to the ceiling or cases has no recorded commitment to compare against. A register must preserve exact frozen figures, refuse unproven sets, protect every matrix line, and distinguish drift from release. Wider absence is [UNVERIFIED].
+
+**Status:** In Progress, no feature shipped. The focused integration import failed on a syntax error in the new panel; one fix attempt was followed by a second syntax error. Per the session stop rule, the incomplete implementation and wiring were removed rather than leaving the existing app broken. No schema migration or user-facing change was shipped. The displayed-versus-stored check and adjacent behavior remain [UNVERIFIED].
+
+**Benchmark:** Anaplan portfolio planning is a relevant comparison for investment selection and scenario planning; hands-on feature parity and performance are [BENCHMARK-UNVERIFIED]. Higgsfield connector is unsupported; no visual asset was produced. Next: re-scope and implement the register with independently verified source APIs, matrix authority and display-to-storage tests before exposure.
+
+**Coverage:** no new coverage shipped; CEO × matrix remains the priority rotation.
+
 ## 2026-11-15 — Session 283: temporary standard waiver register — a departure with a name, a date and an end (Schema v166, [ADR-0212](./docs/adr/0212-temporary-standard-waiver-register.md), `RULE-TSW-01`, CSV #154, `#/standard-work?panel=waivers`)
 
 **Gap (closed):** Session 281 identified that leader standard work models a standard in force and silence about it, and nothing in between. A targeted search of `app/` for `waiver`, `deviation`, `concession` and `normalization` had returned nothing; wider absence is **[UNVERIFIED]**. 281 shipped no record because matrix scope, authorisation and expiry must not be guessed. This session built the record.
