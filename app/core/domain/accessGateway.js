@@ -22,6 +22,7 @@ import { FLEX_BUDGET_RIGHTS } from './flexBudgetRegistry.js';
 import { VALUE_BRIDGE_RIGHTS } from './valueBridgeRegistry.js';
 import { SPEAK_UP_RIGHTS } from './speakUpRegistry.js';
 import { SYNERGY_RIGHTS } from './synergyRegistry.js';
+import { EV_RIGHTS } from './earnedValueRegistry.js';
 import { routeVerdict } from './seatRegistry.js';
 import { validateMissionCommands } from './mission.js';
 import { captureBriefCase } from './missionCaptureBrief.js';
@@ -246,6 +247,17 @@ const groups = [
   // seat, checks the owner, and exercises RECORD for every other path.
   [SYNERGY_RIGHTS.SELF_REPORT, 'synergyRecordReading'],
   [SYNERGY_RIGHTS.GOVERN, 'synergyScan synergySetConventions'],
+  // ADR-0217: the earned-value delivery register. Reading it is portfolio
+  // material (rank 3+) — a programme's curve is the director's own. Declaring a
+  // case or its baseline names an owner and real money; the ACTION narrows it to
+  // a seat that HOLDS the owner. Recording a reading or an actual is evidence:
+  // open by rank, split inside the action by who may reach the case, which
+  // shares the declared method admits, and which cut-offs are real. The
+  // conventions and the scan are the chief's.
+  [EV_RIGHTS.READ, 'earnedValueReport earnedValueBriefText earnedValueCsvRows earnedValueAttentionCount earnedValueCandidates'],
+  [EV_RIGHTS.DECLARE, 'earnedValueDeclareCase earnedValueAddPackage earnedValueRebaselinePackage earnedValueRemovePackage earnedValueWithdrawCase'],
+  [EV_RIGHTS.RECORD, 'earnedValueRecordReading earnedValueWithdrawReading earnedValueRecordActual earnedValueWithdrawActual'],
+  [EV_RIGHTS.GOVERN, 'earnedValueScan earnedValueSetConventions'],
   // ADR-0148: answering a declared share is TWO first-person acts, split on the
   // spine rather than in prose. `accept-matrix-line` is the manager's own
   // answer (accept or decline the line they were given); it is open at every
@@ -559,6 +571,12 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // its writes are still gated — the register would vanish exactly when a real
 // organisation turned enforcement on.
 'synergyReport', 'synergyBriefText', 'synergyCsvRows', 'synergyAttentionCount', 'synergyCandidates',
+// ADR-0217: the earned-value register's pure read surface. Every one of these
+// re-proves the read right inside the action. Registered here because a module
+// whose reads are absent from SAFE_READS is unreadable under enforcement while
+// its writes are still gated — the register would vanish exactly when a real
+// organisation turned enforcement on.
+'earnedValueReport', 'earnedValueBriefText', 'earnedValueCsvRows', 'earnedValueAttentionCount', 'earnedValueCandidates',
 'standardWaiverAttentionCount', 'standardWaiverBriefText', 'standardWaiverCandidates', 'standardWaiverCsvRows', 'standardWaiverReport', 'concordanceAttentionCount', 'concordanceBriefText', 'concordanceCsvRows', 'concordanceRead', 'concordanceStats', 'disclosureAttentionCount', 'disclosureBriefText', 'disclosureCsvRows', 'disclosureGrantRead', 'disclosureGrants', 'disclosureRead', 'envoyAttentionCount', 'envoyBriefText', 'envoyCsvRows', 'envoyIdentity', 'envoyPacketText', 'envoyPreview', 'envoyRead', 'escalationBriefText', 'escalationCsvRows', 'escalationRead', 'escalationStats', 'differencesAttentionCount', 'differencesBriefText', 'differencesCsvRows', 'differencesRead', 'federationAttentionCount', 'federationBriefText', 'federationCsvRows', 'federationRead',
 'freezeLineAttentionCount', 'freezeLineBriefText', 'freezeLineConventions', 'freezeLineCsvRows', 'freezeLineReport',
 'spanCalibrationAttentionCount', 'spanCalibrationBriefText', 'spanCalibrationConventions', 'spanCalibrationCsvRows', 'spanCalibrationReport', 'spanCalibrationSettings', 'spanCalibrationSignals',

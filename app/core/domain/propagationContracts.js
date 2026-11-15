@@ -145,6 +145,7 @@ import { conflictRecusalRule } from './conflictRecusalRules.js';
 import { standardWaiverRule } from './standardWaiverRules.js';
 import { speakUpRule } from './speakUpRules.js';
 import { synergyRule } from './synergyRules.js';
+import { earnedValueRule } from './earnedValueRules.js';
 import { sealRule } from './sealRules.js';
 // ADR-0092: the Differencing Defender declares its contract like every other rule.
 import { differencingRule } from './differencingRules.js';
@@ -1147,6 +1148,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'conflictRecusalRules.js',
     purpose: 'RULE-CIR-01: reads the Decision-Maker Conflict-of-Interest & Recusal Register (`buildConflictRecusal`, ADR-0210) with the whole-workspace view on interest declarations and withdrawals, standing responses (recusal, mitigation, determination, supersession), reportable-kind rules and their retirement, roster and reporting-line changes, convention changes and explicit `conflictRecusal.scan` scans — and on any other commit, because the horizon moves with the calendar. ONE condition, filed at most once per (interest, verdict) with a deterministic `cir1:…` signature and bounded at 4 per commit with the remainder counted: `undisclosed` — a declared interest whose holder sits on the record as the hand that signs it, its owner, or a declared line over its subject, and which carries no recusal, mitigation or written determination. The ask goes to the seat ABOVE the person holding the interest — never the person themselves, because a hand does not clear its own conflict — and in a matrix to the lowest seat above EVERY line the person holds (`matrixJointApex`), never to one line’s manager on the other’s behalf. Leader-held, apex-less, self-held and off-roster conditions write ONE identity-free `conflictRecusalMarkers` observation and substitute nobody. Asks carry typed `issues-obligation` and matrix-DAG `rolls-up-to` provenance and close themselves when the interest is answered, withdrawn, out of the horizon or changes owner. It never blocks a decision, edits an approver, revokes a right, invents an interest from a surname, a shared line or a pattern, converts a mitigation into independence, or rates a person; pausable via `conflictRecusalAutoPropagate` (the pause governs EVERY path, including explicit scans).',
     writes: ['delegations', 'links', 'conflictRecusalMarkers'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: earnedValueRule,
+    module: 'earnedValueRules.js',
+    purpose: 'RULE-EVL-01: reads the Earned-Value Delivery & Estimate-at-Completion Register (`buildEarnedValue`, ADR-0217) with the whole-workspace view on case declarations and withdrawals, baseline re-baselines and removals, readings and their withdrawals, actuals and their withdrawals, convention changes and explicit `earned-value.scan` scans — and on any other commit, because a reading goes stale with the calendar. TWO conditions, filed at most once per deterministic `ev1:…` signature and bounded at 4 per commit with the remainder counted: `reading-owed` — an open case with a live baseline whose newest live reading (or its declaration, when none exists) is older than the declared staleness window — and `cost-overrun` — the newest reading is complete against the CURRENT baseline (signature matches, every live package named) and CPI is below the declared floor. Both asks go to the case’s OWNER: not to their manager (who was not given the delivery), and never to the workspace at large. A case whose owner has left the roster writes ONE identity-free `earnedValueMarkers` observation and asks nobody. The ask text is deliberately opaque — no case, no amount, no date — because a delegation is readable above the owner; the opaque signature lives only in the typed `issues-obligation` link. Asks self-close when the condition clears or the owner moves. It never records a reading, never marks progress, never changes a baseline or an actual, never withdraws a row, never decides whether a programme is worth funding, never values benefits and never rates a person; pause-governed on every path (`earnedValueAutoPropagate`), including the explicit scan.',
+    writes: ['delegations', 'links', 'earnedValueMarkers'],
     emits: [],
     scansWorkspace: true,
   },

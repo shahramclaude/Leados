@@ -243,6 +243,15 @@ export const RECORD_POLICIES = Object.freeze({
   synergyReadings: { classKey: 'enterprise', detailCeiling: 5, label: 'Dated run-rate and P&L readings, claimed or verified (report only)', route: '#/finance?panel=synergy' },
   synergyCosts: { classKey: 'enterprise', detailCeiling: 5, label: 'One-off integration costs to achieve (report only)', route: '#/finance?panel=synergy' },
   synergyMarkers: { classKey: 'enterprise', detailCeiling: 5, label: 'Deal-synergy observation markers — owner departed, verifier drifted', route: '#/finance?panel=synergy' },
+  // ADR-0217 (Schema v171): the earned-value delivery register. A delivery
+  // baseline carries the money of a programme — portfolio material, director
+  // and above, detail readable up to the VP rung. Report-only: every figure is
+  // re-derived on read by the exact BigInt kernel.
+  earnedValueCases: { classKey: 'portfolio', detailCeiling: 4, label: 'Earned-value cases — one accountable delivery owner, one currency, one declared measure (report only)', route: '#/finance?panel=earned-value' },
+  earnedValuePackages: { classKey: 'portfolio', detailCeiling: 4, label: 'Baselined work packages with increments re-proved to budget to the cent (report only)', route: '#/finance?panel=earned-value' },
+  earnedValueReadings: { classKey: 'portfolio', detailCeiling: 4, label: 'Dated progress readings under the case’s declared measure (report only)', route: '#/finance?panel=earned-value' },
+  earnedValueActuals: { classKey: 'portfolio', detailCeiling: 4, label: 'Dated actual costs, package-allocated or honestly unallocated (report only)', route: '#/finance?panel=earned-value' },
+  earnedValueMarkers: { classKey: 'portfolio', detailCeiling: 4, label: 'Earned-value observation markers — owner departed (identity-free)', route: '#/finance?panel=earned-value' },
   delegationLineActs: { classKey: 'unit', detailCeiling: 0, label: 'Cross-line ask attribution acts (report only)', route: '#/matrix?panel=asks' },
   delegationLineMarkers: { classKey: 'unit', detailCeiling: 0, label: 'Cross-line overload reconciliation markers', route: '#/matrix?panel=asks' },
   // ADR-0181: classification acts and RULE-NPW-01 markers are surfaced only
@@ -828,6 +837,19 @@ export const ACTION_RIGHTS = Object.freeze({
   // answer is a loop that closes by expiring rather than by being answered.
   'report-own-synergy-reading': { minRank: 1, maxRank: 5, label: 'Report a CLAIMED reading on a promise you own (counted nowhere until verified)' },
   'govern-deal-synergy': { minRank: 4, maxRank: 5, label: 'Set the materiality band and the verification staleness window, and scan the register' },
+  // ADR-0217: the earned-value register. Reading is portfolio material and
+  // matches the record-class floor (rank 3, director and above) — a case is a
+  // programme, not a person. Declaring a case or its baseline names an owner and
+  // money: the ACTION narrows it to a seat that HOLDS the owner — one line does
+  // not baseline another line's programme. Recording readings and actuals is
+  // evidence, open by rank at the director rung; the ACTION splits it and
+  // enforces the cut-off discipline and the method’s admitted shares. The
+  // conventions are the chief's (rank 4): the staleness window and the cost
+  // floor are what every line reads against.
+  'read-earned-value': { minRank: 3, maxRank: 5, label: 'Read the earned-value delivery register for your span and the programmes on the ledger' },
+  'declare-earned-value': { minRank: 3, maxRank: 5, label: 'Declare a case and its baselined work packages, or re-baseline them — only for a person you hold' },
+  'record-earned-value': { minRank: 3, maxRank: 5, label: 'Record a dated reading under the declared measure, or an actual cost, on a case you can reach' },
+  'govern-earned-value': { minRank: 4, maxRank: 5, label: 'Set the staleness window and the cost floor, and scan the register' },
   // ADR-0209: reading the work/rest ledger is open at every altitude and scoped
   // by the reader. Rostering starts at the FRONTLINE — a shift lead writes the
   // roster — and the action re-proves that the seat holds the very line. Which

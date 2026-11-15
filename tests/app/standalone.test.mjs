@@ -386,7 +386,17 @@ test('standalone artifact exists and is a single inline HTML document', () => {
   // source modules = 16,904 bytes per module, still far below the unchanged
   // 24,000 density guard. Ceiling moves 15,350,000 -> 15,650,000 only because
   // real capability was added; the density bound still catches a duplication.
-  assert.ok(bytes < 15_650_000, `standalone file is unexpectedly large (${bytes} bytes)`);
+  // ADR-0216 (Session 289, Schema v170) adds the synergy register: six domain
+  // modules and one generated diagram. The suite measured the merged tree.
+  // ADR-0217 (Session 290, Schema v171) adds the earned-value register: six
+  // domain modules (registry, schema/loaders, the BigInt kernel, the pure
+  // reader, the dated actions, the spine rule), one finance panel, one CSV scope
+  // and one generated diagram (109,166 bytes, inlined as a data URI, which is
+  // where most of the growth is). Measured build: 15,859,570 bytes / 924 source
+  // modules = 17,162 bytes per module, still far below the unchanged 24,000
+  // density guard. Ceiling moves 15,650,000 -> 16,000,000 only because real
+  // capability was added; the density bound still catches a duplication.
+  assert.ok(bytes < 16_000_000, `standalone file is unexpectedly large (${bytes} bytes)`);
   // Derived from the folder, not from a list in this file: the day a panel adds
   // a diagram, an enumerator that names the old two would still pass. Same
   // lesson the build script learned in ADR-0186.

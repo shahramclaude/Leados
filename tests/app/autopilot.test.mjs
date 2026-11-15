@@ -154,15 +154,15 @@ async function withDom(fn) {
 /* ------------------------------------------------------------ 1. schema */
 
 test('Schema v58 is additive: a v57 workspace gains two empty collections and no invented agreement', () => {
-  assert.equal(SCHEMA_VERSION, 170);
+  assert.equal(SCHEMA_VERSION, 171);
   const empty = createEmptyState(NOW.toISOString());
   assert.deepEqual(empty.autopilotPolicies, []);
   assert.deepEqual(empty.autopilotRuns, []);
 
   const migrated = migrate({ schemaVersion: 57, settings: {}, people: [], autopilotPolicies: undefined });
-  assert.equal(migrated.raw.schemaVersion, 170);
-  assert.equal(migrated.applied.at(-1), '169 → 170', 'the whole chain runs to the current schema');
-  assert.equal(migrated.raw.schemaVersion, 170);
+  assert.equal(migrated.raw.schemaVersion, 171);
+  assert.equal(migrated.applied.at(-1), '170 → 171', 'the whole chain runs to the current schema');
+  assert.equal(migrated.raw.schemaVersion, 171);
   assert.deepEqual(migrated.raw.autopilotPolicies, []);
   assert.deepEqual(migrated.raw.autopilotRuns, []);
 
