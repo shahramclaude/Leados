@@ -1,3 +1,13 @@
+## 2026-11-15 — Session 275: restatement-aware comparative series (In Progress)
+
+**Gap:** Director / VP × matrix and single-chain need a multi-period series that distinguishes frozen reported figures from accepted restatements; individual closed periods alone cannot support this comparison. Count each goal once in its recorded home line; do not treat an unacknowledged or unprovable restatement as accepted. Different-length or noncontiguous periods need explicit qualification, and cohort counts are not causal performance. Repository-wide absence of an equivalent series is **[UNVERIFIED]**.
+
+**Attempt stopped:** A candidate aggregate read engine was not shipped. The focused test first could not load `jsdom`; after `npm ci`, the one retry passed the 14 existing tests but the new test failed because its August period overlapped the existing July–September closure. Per session stop rule the candidate and failing test were removed rather than committed unverified. The user-facing series, disclosure, export and integration remain **In Progress**, not delivered.
+
+**Benchmark:** BlackLine and SAP Group Reporting are relevant restatement/comparative controls; no hands-on comparison was possible. **[BENCHMARK-UNVERIFIED]**. No visual asset was built.
+
+**Coverage map:** unchanged — director / VP primary 274; CEO / C-suite 273; frontline / mid-manager 272. **Next:** frontline / mid-manager × matrix — cross-window enabling declarations, the rotation named in Session 274.
+
 ## 2026-11-15 — Session 274: the quarter that was reported, and the record that kept moving under it (Schema v160, [ADR-0206](./docs/adr/0206-goal-attainment-period-close.md), `RULE-GAR-01`, CSV #149, `#/matrix?panel=attainment`)
 
 **Delivered — director / VP PRIMARY × matrix and single-chain.** Every other matrix screen re-derives its figures from today's record, which is exactly right for a roll-up and exactly wrong for a period that has been reported upward. A late check-in dated inside September, a due date corrected from October into September, or a goal re-owned after the close all silently move what a September attainment report *would* say — so the trend it supported stops being a trend. ONE item, completed: the closing act and its restatement register.
