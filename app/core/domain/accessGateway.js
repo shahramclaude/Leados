@@ -298,7 +298,7 @@ const groups = [
   [PRV_RIGHTS.READ, 'portfolioReport portfolioAttentionCount portfolioCandidates'],
   [PRV_RIGHTS.DECLARE, 'portfolioDeclareUnit portfolioScan'],
   [PRV_RIGHTS.REVIEW, 'portfolioRecordReview'],
-  [PRV_RIGHTS.VERDICT, 'portfolioRecordVerdict portfolioRetireUnit'],
+  [PRV_RIGHTS.VERDICT, 'portfolioRecordVerdict portfolioRetireUnit portfolioCompleteExit'],
   [PRV_RIGHTS.TRACK, 'portfolioRecordMilestone'],
   [DWM_RIGHTS.DECLARE, 'dutyMeansDeclareDuty dutyMeansRetireDuty dutyMeansAddRequirement dutyMeansScan'],
   [DWM_RIGHTS.SUPPLY, 'dutyMeansRecordAct'],
@@ -958,7 +958,7 @@ const MATRIX_LINE_SCOPED = new Set([
   'dutyMeansDeclareDuty', 'dutyMeansRetireDuty', 'dutyMeansAddRequirement',
   'dutyMeansRecordAct', 'dutyMeansGovernGap',
   'portfolioDeclareUnit', 'portfolioRetireUnit', 'portfolioRecordReview',
-  'portfolioRecordVerdict', 'portfolioRecordMilestone',
+  'portfolioRecordVerdict', 'portfolioRecordMilestone', 'portfolioCompleteExit',
   // ADR-0208: a declared (or previewed) case names a benefit owner the declaring
   // seat may reach only through a declared Matrix line; the action re-checks the
   // tree and the line itself before it reads or records anything.

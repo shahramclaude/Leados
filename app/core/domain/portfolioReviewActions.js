@@ -1,23 +1,27 @@
 /**
  * app/core/domain/portfolioReviewActions.js — seat-checked commands and reads
- * of the Enterprise Portfolio Review Register (ADR-0222, Schema v176,
- * `#/portfolio`).
+ * of the Enterprise Portfolio Review Register (ADR-0222, Schema v177,
+ * `#/portfolio-review`).
  *
- * FIVE HUMAN COMMANDS + SCAN + THREE READS
- *   - `portfolioDeclareUnit`     — VP/executive or CEO declares a business
- *                                  unit with its owning line, currency, review
- *                                  due date, and written basis;
+ * SIX HUMAN COMMANDS + SCAN + THREE READS
+ *   - `portfolioDeclareUnit`     — CEO (rank 5) declares a business unit with
+ *                                  its owning line, currency, review due date,
+ *                                  and written basis;
  *   - `portfolioRetireUnit`      — CEO (rank 5) retires a unit with a dated
  *                                  written reason;
- *   - `portfolioRecordReview`    — owning line (or a seat above it) records a
- *                                  dated review with measured cents and cited
- *                                  evidence;
+ *   - `portfolioRecordReview`    — executive owning line (or seat >= rank 4
+ *                                  above it) records a dated review with
+ *                                  measured cents and cited evidence;
  *   - `portfolioRecordVerdict`   — CEO (rank 5) records keep / fix / sell /
  *                                  exit with a dated rationale; fix carries a
  *                                  re-review date, sell/exit carry expected
  *                                  proceeds and an expected date;
- *   - `portfolioRecordMilestone` — owning line (or above) adds or completes a
- *                                  milestone on a verdict;
+ *   - `portfolioRecordMilestone` — director+ owning line (or above, rank >= 3)
+ *                                  adds or updates/completes a verdict
+ *                                  milestone;
+ *   - `portfolioCompleteExit`    — CEO (rank 5) closes a sell/exit verdict on
+ *                                  dated settlement evidence and exact actual
+ *                                  proceeds once all milestones are done;
  *   - `portfolioScan`            — re-evaluates `RULE-PRV-01` (pause-governed).
  */
 
@@ -25,7 +29,6 @@ import { dayKey } from '../time.js';
 import { activeSeat, buildSeats, canAct } from './seat.js';
 import { matrixLineScopeFor } from './matrix.js';
 import {
-  activeManagersOf,
   buildPortfolioReview,
   isHolderOrAbove,
   portfolioReviewAttentionCount as portfolioAttentionCount,
@@ -41,6 +44,7 @@ import {
   PRV_VERDICT_KEYS,
 } from './portfolioReviewRegistry.js';
 import {
+  normalizePortfolioExits,
   normalizePortfolioMilestones,
   normalizePortfolioReviews,
   normalizePortfolioUnits,
@@ -61,6 +65,7 @@ export const PRV_EVENTS = Object.freeze({
   REVIEW_RECORDED: 'portfolioReview.review.recorded',
   VERDICT_RECORDED: 'portfolioReview.verdict.recorded',
   MILESTONE_RECORDED: 'portfolioReview.milestone.recorded',
+  EXIT_COMPLETED: 'portfolioReview.exit.completed',
   SCANNED: 'portfolioReview.scanned',
 });
 
@@ -225,6 +230,12 @@ export function createPortfolioReviewActions(store, { now, idFactory }) {
       const unit = loaded.find((u) => u.id === unitId);
       if (!unit) return fail('That unit is not on the record.', 'unitId', REFUSAL('unit-not-found'));
       if (unit.retiredOn) return fail('That unit has already been retired.', 'unitId', REFUSAL('unit-already-retired'));
+      const verdicts = normalizePortfolioVerdicts(rows('portfolioVerdicts'), []);
+      const exits = normalizePortfolioExits(rows('portfolioExits'), []);
+      const latestVerdict = verdicts.filter((v) => v.unitId === unitId).sort((a, b) => a.decidedOn.localeCompare(b.decidedOn)).at(-1);
+      if (latestVerdict && exits.some((e) => e.verdictId === latestVerdict.id)) {
+        return fail('That unit’s sell/exit verdict has already completed settlement.', 'unitId', REFUSAL('exit-already-completed'));
+      }
 
       const retiredOn = input?.retiredOn === undefined ? check.today : prvDay(input.retiredOn);
       if (!retiredOn || retiredOn < unit.declaredOn || retiredOn > check.today) {
@@ -266,6 +277,12 @@ export function createPortfolioReviewActions(store, { now, idFactory }) {
       const unit = units.find((u) => u.id === unitId);
       if (!unit) return fail('That unit is not on the record.', 'unitId', REFUSAL('unit-not-found'));
       if (unit.retiredOn) return fail('Cannot review a retired unit.', 'unitId', REFUSAL('unit-retired'));
+      const verdictsForUnit = normalizePortfolioVerdicts(rows('portfolioVerdicts'), []).filter((v) => v.unitId === unitId);
+      const exits = normalizePortfolioExits(rows('portfolioExits'), []);
+      const latestV = verdictsForUnit.sort((a, b) => a.decidedOn.localeCompare(b.decidedOn)).at(-1);
+      if (latestV && exits.some((e) => e.verdictId === latestV.id)) {
+        return fail('Cannot record a review on a unit whose exit has already completed settlement.', 'unitId', REFUSAL('exit-already-completed'));
+      }
 
       const g = liveGraph(check);
       if (!g.ok) return g;
@@ -344,6 +361,12 @@ export function createPortfolioReviewActions(store, { now, idFactory }) {
       const unit = units.find((u) => u.id === unitId);
       if (!unit) return fail('That unit is not on the record.', 'unitId', REFUSAL('unit-not-found'));
       if (unit.retiredOn) return fail('Cannot verdict a retired unit.', 'unitId', REFUSAL('unit-retired'));
+      const existingVerdicts = normalizePortfolioVerdicts(rows('portfolioVerdicts'), []);
+      const existingExits = normalizePortfolioExits(rows('portfolioExits'), []);
+      const priorVerdict = existingVerdicts.filter((v) => v.unitId === unitId).sort((a, b) => a.decidedOn.localeCompare(b.decidedOn)).at(-1);
+      if (priorVerdict && existingExits.some((e) => e.verdictId === priorVerdict.id)) {
+        return fail('That unit has already completed exit settlement and cannot be re-verdicted.', 'unitId', REFUSAL('exit-already-completed'));
+      }
 
       const reviews = normalizePortfolioReviews(rows('portfolioReviews'), []);
       const review = reviews.filter((r) => r.unitId === unitId && r.assessedOn <= check.today)
@@ -447,6 +470,10 @@ export function createPortfolioReviewActions(store, { now, idFactory }) {
       const unit = units.find((u) => u.id === verdict.unitId);
       if (!unit) return fail('The parent unit for this verdict is missing.', 'verdictId', REFUSAL('unit-not-found'));
       if (unit.retiredOn) return fail('Cannot track milestones on a retired unit.', 'verdictId', REFUSAL('unit-retired'));
+      const exits = normalizePortfolioExits(rows('portfolioExits'), []);
+      if (exits.some((e) => e.verdictId === verdict.id)) {
+        return fail('Cannot modify milestones after sell/exit settlement is completed.', 'verdictId', REFUSAL('exit-already-completed'));
+      }
 
       const g = liveGraph(check);
       if (!g.ok) return g;
@@ -509,7 +536,96 @@ export function createPortfolioReviewActions(store, { now, idFactory }) {
       return saved({ milestoneId, milestone: verified[0] });
     },
 
-    /* ------------------------------------------------------------ 6. scan */
+    /* -------------------------------------------------- 6. complete exit */
+
+    portfolioCompleteExit(verdictIdInput, input = {}) {
+      const check = seatFor(PRV_RIGHTS.VERDICT);
+      if (!check.ok) return check;
+      const verdictId = prvId(verdictIdInput);
+      if (!verdictId) return fail('Name the sell or exit verdict to complete.', 'verdictId', REFUSAL('missing-verdict-id'));
+
+      const verdicts = normalizePortfolioVerdicts(rows('portfolioVerdicts'), []);
+      const verdict = verdicts.find((v) => v.id === verdictId);
+      if (!verdict) return fail('That verdict is not on the record.', 'verdictId', REFUSAL('verdict-not-found'));
+      if (verdict.verdict !== 'sell' && verdict.verdict !== 'exit') {
+        return fail('Only a sell or exit verdict can be completed as a disposal settlement.', 'verdictId', REFUSAL('not-disposal-verdict'));
+      }
+
+      const units = normalizePortfolioUnits(rows('portfolioUnits'), []);
+      const unit = units.find((u) => u.id === verdict.unitId);
+      if (!unit) return fail('The parent unit for this verdict is missing.', 'verdictId', REFUSAL('unit-not-found'));
+      if (unit.retiredOn) return fail('Cannot complete disposal on an already retired unit.', 'verdictId', REFUSAL('unit-retired'));
+
+      const latestForUnit = verdicts
+        .filter((v) => v.unitId === unit.id && v.decidedOn <= check.today)
+        .sort((a, b) => a.decidedOn.localeCompare(b.decidedOn))
+        .at(-1);
+      if (!latestForUnit || latestForUnit.id !== verdict.id) {
+        return fail('Only the unit’s current latest verdict can be completed; this verdict was superseded.', 'verdictId', REFUSAL('superseded-verdict'));
+      }
+
+      const existingExits = normalizePortfolioExits(rows('portfolioExits'), []);
+      if (existingExits.length >= L.exitsMax) {
+        return fail(`The register holds at most ${L.exitsMax} completed exits.`, null, REFUSAL('cap-exceeded'));
+      }
+      if (existingExits.some((e) => e.verdictId === verdict.id)) {
+        return fail('This sell/exit verdict has already been completed.', 'verdictId', REFUSAL('exit-already-completed'));
+      }
+
+      const milestones = normalizePortfolioMilestones(rows('portfolioMilestones'), [])
+        .filter((m) => m.verdictId === verdict.id);
+      if (milestones.some((m) => !m.doneOn)) {
+        return fail('Mark all milestones on this sell/exit verdict done before recording exit completion.', 'verdictId', REFUSAL('open-milestones-remain'));
+      }
+
+      const completedOn = input?.completedOn === undefined ? check.today : prvDay(input.completedOn);
+      if (!completedOn || completedOn < verdict.decidedOn || completedOn > check.today) {
+        return fail('Completion date must lie between the verdict decision date and today.', 'completedOn', REFUSAL('invalid-completed-on'));
+      }
+      const actualProceedsCents = parsePrvMoneyToCents(input?.amount, { allowZero: true });
+      if (actualProceedsCents === null) {
+        return fail('Enter the actual realized proceeds with at most 2 decimal places (no commas or rounding); zero is allowed for a wind-down.', 'amount', REFUSAL('invalid-amount'));
+      }
+      const evidenceKind = prvText(input?.evidenceKind, 32);
+      const evidenceId = prvText(input?.evidenceId, L.evidenceIdMax + 1);
+      if (!PRV_EVIDENCE_KIND_KEYS.includes(evidenceKind) || !evidenceId || evidenceId.length > L.evidenceIdMax) {
+        return fail('Cite a valid settlement evidence kind and identifier.', 'evidenceId', REFUSAL('missing-evidence'));
+      }
+      const basis = prvText(input?.basis, L.basisMax + 1);
+      if (basis.length < L.basisMin || basis.length > L.basisMax) {
+        return fail(`State the settlement basis in ${L.basisMin} to ${L.basisMax} characters.`, 'basis', REFUSAL('invalid-basis'));
+      }
+
+      const exitId = idFactory('prvx');
+      const candidate = {
+        id: exitId,
+        verdictId: verdict.id,
+        unitId: unit.id,
+        completedOn,
+        recordedById: check.actorId,
+        actualProceedsCents,
+        evidenceKind,
+        evidenceId,
+        basis,
+      };
+      const verified = normalizePortfolioExits([candidate], []);
+      if (verified.length !== 1) {
+        return fail('The exit completion failed schema verification and was not saved.', null, REFUSAL('schema-rejected'));
+      }
+
+      store.update((draft) => {
+        if (!Array.isArray(draft.portfolioExits)) draft.portfolioExits = [];
+        draft.portfolioExits.push(verified[0]);
+      }, {
+        type: PRV_EVENTS.EXIT_COMPLETED,
+        entity: 'portfolioExit',
+        entityId: exitId,
+        summary: `Portfolio ${verdict.verdict} completed on the Portfolio Review Register, settled ${completedOn}.`,
+      });
+      return saved({ exitId, exit: verified[0] });
+    },
+
+    /* ------------------------------------------------------------ 7. scan */
 
     portfolioScan() {
       const check = seatFor(PRV_RIGHTS.DECLARE);

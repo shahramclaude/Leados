@@ -569,7 +569,7 @@ test('every currency is solved on its own: no ceiling, no set and no shadow pric
  */
 
 test('RULE-CRS-01 is registered end to end: schema v165, three collections, the spine, the gateway and CSV #153', () => {
-  assert.equal(SCHEMA_VERSION, 176);
+  assert.equal(SCHEMA_VERSION, 177);
   for (const key of ['capitalCeilings', 'capitalRelations', 'capitalRationingMarkers']) {
     assert.ok(COLLECTIONS.includes(key), `${key} is a declared collection`);
   }
@@ -776,7 +776,7 @@ test('migration 164 → 165 adds three EMPTY collections and two conventions, an
   delete raw.capitalRelations;
   delete raw.capitalRationingMarkers;
   const { state } = normalizeState({ ...raw, schemaVersion: 164 }, { now: new Date(T0) });
-  assert.equal(state.schemaVersion, 176);
+  assert.equal(state.schemaVersion, 177);
   assert.deepEqual(state.capitalCeilings, [], 'no ceiling is inferred from the budget envelopes an upgraded workspace already holds');
   assert.deepEqual(state.capitalRelations, [], 'no relation is inferred between existing cases');
   assert.deepEqual(state.capitalRationingMarkers, []);

@@ -747,7 +747,7 @@ test('ADR-0213 panel and CSV: every printed cell is the reader’s integer, and 
  */
 
 test('ADR-0213 registration: schema v167, two empty ledgers, CSV scope #155, rights and gateway rows — and no new spine rule', () => {
-  assert.equal(SCHEMA_VERSION, 176);
+  assert.equal(SCHEMA_VERSION, 177);
   assert.ok(COLLECTIONS.includes('flexBudgetPlans') && COLLECTIONS.includes('flexBudgetActuals'));
   const empty = createEmptyState(T0);
   assert.deepEqual([empty.flexBudgetPlans, empty.flexBudgetActuals], [[], []]);
@@ -775,9 +775,9 @@ test('ADR-0213 registration: schema v167, two empty ledgers, CSV scope #155, rig
   delete old.flexBudgetPlans;
   delete old.flexBudgetActuals;
   const migrated = migrate(old);
-  assert.equal(migrated.applied.at(-1), '175 → 176');
+  assert.equal(migrated.applied.at(-1), '176 → 177');
   assert.deepEqual([migrated.raw.flexBudgetPlans, migrated.raw.flexBudgetActuals], [[], []], 'no standard is invented from an envelope');
-  assert.equal(migrated.raw.schemaVersion, 176);
+  assert.equal(migrated.raw.schemaVersion, 177);
 
   // Every exported surface the wiring names really exists on the assembled API.
   const { api } = seed();

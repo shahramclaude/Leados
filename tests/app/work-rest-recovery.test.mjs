@@ -264,8 +264,8 @@ test('v163 is additive, starts empty, seeds no limit and invents no shift', () =
   for (const key of ['workRestShifts', 'workRestActs', 'workRestCoverage', 'workRestPolicies', 'workRestMarkers']) delete old[key];
   old.people = [person('lou', null, 'lead'), person('sam', 'lou', 'ic')];
   const next = migrate(old);
-  assert.equal(SCHEMA_VERSION, 176);
-  assert.deepEqual(next.applied.at(-1), '175 → 176');
+  assert.equal(SCHEMA_VERSION, 177);
+  assert.deepEqual(next.applied.at(-1), '176 → 177');
   for (const key of ['workRestShifts', 'workRestActs', 'workRestCoverage', 'workRestPolicies', 'workRestMarkers']) {
     assert.deepEqual(next.raw[key], [], `${key} starts empty`);
     assert.ok(COLLECTIONS.includes(key), `${key} is a collection`);

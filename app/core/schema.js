@@ -327,10 +327,12 @@ import {
   normalizeDutyMeansRequirements,
   normalizeDutyMeansSettings,
 } from './domain/dutyMeansSchema.js';
-// ADR-0222 (Schema v176): the Enterprise Portfolio Review Register. Fail-closed
+// ADR-0222 (Schema v177): the Enterprise Portfolio Review Register. Fail-closed
 // business units, dated reviews with measured cents, CEO keep/fix/sell/exit
-// verdicts, verdict milestones, and identity-free rule markers.
+// verdicts, verdict milestones, disposal exit settlements, and identity-free
+// rule markers (`portfolioReviewMarkers`, keeping `portfolioMarkers` for v55).
 import {
+  normalizePortfolioExits,
   normalizePortfolioMarkers,
   normalizePortfolioMilestones,
   normalizePortfolioReviews,
@@ -1176,7 +1178,11 @@ export {
 // declared conventions (`dutyMeansResponseDays`, `dutyMeansAutoPropagate`). No
 // duty or requirement is inferred from an existing goal, case, delegation or
 // reporting-line percentage.
-export const SCHEMA_VERSION = 176;
+// ADR-0222 (Schema v176 → v177): the Enterprise Portfolio Review Register —
+// business units, dated reviews, CEO verdicts, verdict milestones, dated
+// sell/exit settlement ledger (`portfolioExits`), and identity-free rule markers
+// (`portfolioReviewMarkers`, leaving `portfolioMarkers` to Schema v55).
+export const SCHEMA_VERSION = 177;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -3591,7 +3597,8 @@ export const COLLECTIONS = [
   'portfolioReviews',
   'portfolioVerdicts',
   'portfolioMilestones',
-  'portfolioMarkers',
+  'portfolioExits',
+  'portfolioReviewMarkers',
 ];
 
 /** Stable empty state. `now` is an ISO string so the result is a pure value. */
@@ -9117,15 +9124,16 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.dutyMeansRequirements = normalizeDutyMeansRequirements(raw.dutyMeansRequirements, warnings);
   state.dutyMeansActs = normalizeDutyMeansActs(raw.dutyMeansActs, warnings);
   state.dutyMeansMarkers = normalizeDutyMeansMarkers(raw.dutyMeansMarkers, warnings);
-  // ADR-0222 (Schema v176): fail-closed business units, dated reviews with
-  // measured cents, CEO verdicts, verdict milestones and identity-free markers.
-  // Stored cents are read as integers only, never re-parsed; unit states and
-  // milestone states are re-derived on read.
+  // ADR-0222 (Schema v177): fail-closed business units, dated reviews with
+  // measured cents, CEO verdicts, verdict milestones, dated exit settlements,
+  // and identity-free markers (`portfolioReviewMarkers`, distinct from v55's
+  // `portfolioMarkers` string array). Stored cents are read as integers only.
   state.portfolioUnits = normalizePortfolioUnits(raw.portfolioUnits, warnings);
   state.portfolioReviews = normalizePortfolioReviews(raw.portfolioReviews, warnings);
   state.portfolioVerdicts = normalizePortfolioVerdicts(raw.portfolioVerdicts, warnings);
   state.portfolioMilestones = normalizePortfolioMilestones(raw.portfolioMilestones, warnings);
-  state.portfolioMarkers = normalizePortfolioMarkers(raw.portfolioMarkers, warnings);
+  state.portfolioExits = normalizePortfolioExits(raw.portfolioExits, warnings);
+  state.portfolioReviewMarkers = normalizePortfolioMarkers(raw.portfolioReviewMarkers, warnings);
   state.conflictInterests = normalizeConflictInterests(raw.conflictInterests, warnings);
   state.conflictNoneDeclarations = normalizeConflictNoneDeclarations(raw.conflictNoneDeclarations, warnings);
   state.conflictStandings = normalizeConflictStandings(raw.conflictStandings, state.conflictInterests, warnings);
@@ -9914,6 +9922,27 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  // 176 → 177: ADR-0222 completion. Separates PRV's object markers from
+  // Schema v55's string `portfolioMarkers` into `portfolioReviewMarkers`, and
+  // adds the empty `portfolioExits` disposal-settlement ledger.
+  176: (previous) => {
+    const rawMarkers = Array.isArray(previous.portfolioMarkers) ? previous.portfolioMarkers : [];
+    const dpfMarkers = rawMarkers.filter((m) => typeof m === 'string');
+    const existingPrv = Array.isArray(previous.portfolioReviewMarkers) ? previous.portfolioReviewMarkers : [];
+    const extractedPrv = rawMarkers.filter((m) => m && typeof m === 'object');
+    const seenIds = new Set(existingPrv.map((m) => m?.id).filter(Boolean));
+    const prvMarkers = [
+      ...existingPrv,
+      ...extractedPrv.filter((m) => !m.id || !seenIds.has(m.id)),
+    ];
+    return {
+      ...previous,
+      schemaVersion: 177,
+      portfolioMarkers: dpfMarkers,
+      portfolioReviewMarkers: prvMarkers,
+      portfolioExits: Array.isArray(previous.portfolioExits) ? previous.portfolioExits : [],
+    };
+  },
   // ADR-0222: empty ledgers only; no evidence or verdict is invented.
   175: (previous) => ({
     ...previous, schemaVersion: 176,

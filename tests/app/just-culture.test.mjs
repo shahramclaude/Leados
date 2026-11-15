@@ -129,7 +129,7 @@ function withDom(run) {
 /* ------------------------------------------------------------ 1. schema v172 */
 
 test('ADR-0218 schema: the bump is additive — two empty ledgers, and no review inferred from an upgraded workspace', () => {
-  assert.equal(SCHEMA_VERSION, 176);
+  assert.equal(SCHEMA_VERSION, 177);
 
   const v171 = {
     ...createEmptyState(T0),
@@ -141,8 +141,8 @@ test('ADR-0218 schema: the bump is additive — two empty ledgers, and no review
   delete v171.justCultureReviews;
   delete v171.justCultureActs;
   const migrated = migrate(v171);
-  assert.equal(migrated.applied.at(-1), '175 → 176', 'the whole chain runs to the current schema');
-  assert.equal(migrated.raw.schemaVersion, 176);
+  assert.equal(migrated.applied.at(-1), '176 → 177', 'the whole chain runs to the current schema');
+  assert.equal(migrated.raw.schemaVersion, 177);
   assert.deepEqual(migrated.raw.justCultureReviews, []);
   assert.deepEqual(migrated.raw.justCultureActs, []);
 });

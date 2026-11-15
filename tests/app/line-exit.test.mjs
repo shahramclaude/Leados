@@ -502,8 +502,8 @@ test('schema v126 past v127 is additive all the way to v128: an upgraded workspa
   delete legacy.settings.lineExitDueDays;
 
   const migrated = migrate(legacy);
-  assert.equal(SCHEMA_VERSION, 176);
-  assert.equal(migrated.raw.schemaVersion, 176);
+  assert.equal(SCHEMA_VERSION, 177);
+  assert.equal(migrated.raw.schemaVersion, 177);
   assert.deepEqual(migrated.raw.lineExitRemedies, []);
   assert.deepEqual(migrated.raw.lineExitMarkers, []);
   assert.equal(migrated.raw.settings.lineExitDueDays, 7);

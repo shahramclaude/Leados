@@ -202,7 +202,7 @@ function withDom(run) {
 /* ------------------------------------------------------------- 1. schema */
 
 test('ADR-0219 schema: the bump is additive — three empty ledgers, and nothing is inferred', () => {
-  assert.equal(SCHEMA_VERSION, 176);
+  assert.equal(SCHEMA_VERSION, 177);
   for (const key of ['riskAppetiteStatements', 'riskDeclarations', 'riskAppetiteMarkers']) {
     assert.ok(COLLECTIONS.includes(key), `${key} is a declared collection`);
   }
@@ -219,8 +219,8 @@ test('ADR-0219 schema: the bump is additive — three empty ledgers, and nothing
   delete v172.riskDeclarations;
   delete v172.riskAppetiteMarkers;
   const migrated = migrate(v172);
-  assert.equal(migrated.applied.at(-1), '175 → 176', 'the whole chain runs to the current schema');
-  assert.equal(migrated.raw.schemaVersion, 176);
+  assert.equal(migrated.applied.at(-1), '176 → 177', 'the whole chain runs to the current schema');
+  assert.equal(migrated.raw.schemaVersion, 177);
   assert.deepEqual(migrated.raw.riskAppetiteStatements, []);
   assert.deepEqual(migrated.raw.riskDeclarations, []);
   assert.deepEqual(migrated.raw.riskAppetiteMarkers, []);

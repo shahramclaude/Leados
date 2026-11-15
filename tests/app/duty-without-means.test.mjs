@@ -201,7 +201,7 @@ function seed(nowDay = '2026-11-15') {
 /* ------------------------------------------- 1. Schema, migration & parsers */
 
 test('ADR-0221 Schema v175: additive migration, persisted conventions, exact integer parsers and zero ×100 reload inflation', () => {
-  assert.equal(SCHEMA_VERSION, 176);
+  assert.equal(SCHEMA_VERSION, 177);
   for (const col of ['dutyMeansDuties', 'dutyMeansRequirements', 'dutyMeansActs', 'dutyMeansMarkers']) {
     assert.ok(COLLECTIONS.includes(col), `${col} registered in COLLECTIONS`);
   }
@@ -219,8 +219,8 @@ test('ADR-0221 Schema v175: additive migration, persisted conventions, exact int
   const v174 = { schemaVersion: 174, people: [], settings: {} };
   assert.equal(typeof MIGRATIONS[174], 'function');
   const migrated = migrate(v174);
-  assert.equal(migrated.raw.schemaVersion, 176);
-  assert.equal(migrated.applied.at(-1), '175 → 176');
+  assert.equal(migrated.raw.schemaVersion, 177);
+  assert.equal(migrated.applied.at(-1), '176 → 177');
   assert.deepEqual(migrated.raw.dutyMeansDuties, []);
   assert.deepEqual(migrated.raw.dutyMeansRequirements, []);
   assert.deepEqual(migrated.raw.dutyMeansActs, []);

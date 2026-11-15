@@ -1,30 +1,34 @@
 /**
  * app/core/domain/portfolioReview.js — pure read model for the Enterprise
- * Portfolio Review Register (Keep / Fix / Sell / Exit, ADR-0222, Schema v176,
- * CSV #164, `#/portfolio`).
+ * Portfolio Review Register (Keep / Fix / Sell / Exit, ADR-0222, Schema v177,
+ * CSV #164, `#/portfolio-review`).
  *
- * ONE READER. The `#/portfolio` view, navigation attention badge, CSV export
- * #164, and post-commit rule `RULE-PRV-01` all read `buildPortfolioReview`.
- * None of them computes a unit state, milestone state, or joint-apex addressee
- * of its own. Nothing in this file mutates state.
+ * ONE READER. The `#/portfolio-review` view, navigation attention badge, CSV
+ * export #164, and post-commit rule `RULE-PRV-01` all read
+ * `buildPortfolioReview`. None of them computes a unit state, milestone state,
+ * authority window, or joint-apex addressee of its own. Nothing in this file
+ * mutates state.
  *
  * TWO CLAIMS KEPT APART (Bulletproof Reliability Mandate)
- *   - `countsReconcile`: live unit states sum to `unitsLiveInScopeN`, milestone
- *     states sum to the milestones on live verdicts, and every currency row
- *     re-adds from the printed integers (latest measured cents and latest
- *     expected proceeds).
+ *   - `countsReconcile`: live unit states sum to `unitsLive`, completed exits
+ *     sum to `unitsCompleted`, milestone states sum to `milestonesTotal`, and
+ *     every currency row re-adds from the printed integers (latest measured
+ *     cents, live expected proceeds, and realized proceeds on completed exits).
  *   - `figuresComplete`: zero orphan rows, zero unmeasurable or unreviewed
  *     units, zero overdue reviews, zero pending verdicts, zero overdue
- *     milestones, and a clean matrix graph.
+ *     milestones, zero past-due sell/exit commitments, and a clean matrix graph.
  */
 
 import { dayKey } from '../time.js';
 import { LEADER_ID } from './chain.js';
+import { altitudeRank } from './chainRegistry.js';
 import { buildMatrix, matrixJointApex } from './matrix.js';
 import {
+  PRV_CONDITION_KINDS,
   PRV_CSV_COLUMNS,
   PRV_ENGINE_VERSION,
   PRV_FRAMEWORKS,
+  PRV_MARKER_REASONS,
   PRV_MILESTONE_STATES,
   PRV_RULE_ID,
   PRV_SETTING_KEYS,
@@ -35,6 +39,7 @@ import {
 } from './portfolioReviewRegistry.js';
 import {
   formatPrvMoney,
+  normalizePortfolioExits,
   normalizePortfolioMarkers,
   normalizePortfolioMilestones,
   normalizePortfolioReviews,
@@ -142,6 +147,141 @@ export function strictJointApex(matrix, holderIds = []) {
   };
 }
 
+/**
+ * Right-capable escalation resolver.
+ *
+ * Finds the lowest joint seat(s) on `matrix` that BOTH hold every active line
+ * of `holderId` AND possess `altitudeRank >= minRank`. Never assigns a lower
+ * apex whose action rights refuse the act, and never represents `LEADER_ID` as
+ * a person delegation — `LEADER_ID` maps explicitly to `chiefQueue: true`.
+ */
+export function resolvePortfolioAuthority(matrix, holderId, minRank = 1, { allowHolder = false } = {}) {
+  const rankOf = (id) => altitudeRank(matrix?.nodes?.get(id)?.altitude) || 0;
+  if (!matrix || !holderId || !matrix.nodes?.has(holderId)) {
+    return {
+      ok: false,
+      targetState: 'owner-off-roster',
+      reason: PRV_MARKER_REASONS.OWNER_OFF_ROSTER,
+      requiredRank: minRank,
+      seatIds: [],
+      chiefQueue: false,
+      disconnected: true,
+      topReached: false,
+    };
+  }
+  if (allowHolder && rankOf(holderId) >= minRank) {
+    if (holderId === LEADER_ID) {
+      return {
+        ok: true,
+        targetState: 'chief-queue',
+        reason: PRV_MARKER_REASONS.CHIEF_DECISION_OWED,
+        requiredRank: minRank,
+        seatIds: [],
+        chiefQueue: true,
+        disconnected: false,
+        topReached: true,
+      };
+    }
+    return {
+      ok: true,
+      targetState: 'seat',
+      reason: 'holder-authorized',
+      requiredRank: minRank,
+      seatIds: [holderId],
+      chiefQueue: false,
+      disconnected: false,
+      topReached: false,
+    };
+  }
+
+  const mgrs = activeManagersOf(matrix, holderId);
+  if (!mgrs.length) {
+    return {
+      ok: false,
+      targetState: 'no-joint-apex',
+      reason: PRV_MARKER_REASONS.NO_JOINT_APEX,
+      requiredRank: minRank,
+      seatIds: [],
+      chiefQueue: false,
+      disconnected: true,
+      topReached: false,
+    };
+  }
+
+  let common = null;
+  for (const mgrId of mgrs) {
+    const node = matrix.nodes.get(mgrId);
+    const reachUp = new Set([mgrId, ...(node?.ancestors || [])]);
+    if (common === null) {
+      common = reachUp;
+    } else {
+      for (const candidate of [...common]) {
+        if (!reachUp.has(candidate)) common.delete(candidate);
+      }
+    }
+  }
+  if (!common || !common.size) {
+    return {
+      ok: false,
+      targetState: 'no-joint-apex',
+      reason: PRV_MARKER_REASONS.NO_JOINT_APEX,
+      requiredRank: minRank,
+      seatIds: [],
+      chiefQueue: false,
+      disconnected: true,
+      topReached: false,
+    };
+  }
+
+  const eligible = [...common].filter((id) => rankOf(id) >= minRank);
+  if (!eligible.length) {
+    return {
+      ok: false,
+      targetState: 'no-authority',
+      reason: PRV_MARKER_REASONS.NO_AUTHORITY_AT_RANK,
+      requiredRank: minRank,
+      seatIds: [],
+      chiefQueue: false,
+      disconnected: false,
+      topReached: true,
+    };
+  }
+
+  const minimal = [];
+  for (const candidate of eligible) {
+    let dominated = false;
+    for (const other of eligible) {
+      if (other === candidate) continue;
+      if (matrix.nodes.get(other)?.ancestors?.has(candidate)) {
+        dominated = true;
+        break;
+      }
+    }
+    if (!dominated) minimal.push(candidate);
+  }
+
+  const rosterSeats = minimal.filter((id) => id !== LEADER_ID).sort();
+  const includesLeader = minimal.includes(LEADER_ID);
+  return {
+    ok: rosterSeats.length > 0 || includesLeader,
+    targetState: rosterSeats.length > 0 && includesLeader
+      ? 'seat-and-chief'
+      : includesLeader
+        ? 'chief-queue'
+        : 'seat',
+    reason: includesLeader && rosterSeats.length === 0
+      ? PRV_MARKER_REASONS.CHIEF_DECISION_OWED
+      : rosterSeats.length === 1
+        ? 'unique-joint-apex'
+        : 'diamond-joint-apex',
+    requiredRank: minRank,
+    seatIds: rosterSeats,
+    chiefQueue: includesLeader,
+    disconnected: false,
+    topReached: includesLeader,
+  };
+}
+
 function governingRow(rows, asOf, dateField) {
   const eligible = list(rows).filter((row) => !asOf || row[dateField] <= asOf);
   if (!eligible.length) return null;
@@ -192,7 +332,8 @@ export function buildPortfolioReview(state, { now = new Date(), settings = null,
   const reviewsRaw = normalizePortfolioReviews(state?.portfolioReviews, loadWarnings);
   const verdictsRaw = normalizePortfolioVerdicts(state?.portfolioVerdicts, loadWarnings);
   const milestonesRaw = normalizePortfolioMilestones(state?.portfolioMilestones, loadWarnings);
-  const markers = normalizePortfolioMarkers(state?.portfolioMarkers, loadWarnings);
+  const exitsRaw = normalizePortfolioExits(state?.portfolioExits, loadWarnings);
+  const markers = normalizePortfolioMarkers(state?.portfolioReviewMarkers, loadWarnings);
 
   const { matrix, error: matrixError } = portfolioReviewMatrix(state, now, settings || state?.settings || {});
   const peopleById = new Map(list(state?.people).filter((p) => p?.id).map((p) => [p.id, p]));
@@ -221,34 +362,55 @@ export function buildPortfolioReview(state, { now = new Date(), settings = null,
     if (!milestonesByVerdict.has(ms.verdictId)) milestonesByVerdict.set(ms.verdictId, []);
     milestonesByVerdict.get(ms.verdictId).push(ms);
   }
+  const exitByVerdict = new Map();
+  let orphanExitsN = 0;
+  for (const ex of exitsRaw) {
+    const v = verdictById.get(ex.verdictId);
+    if (!v || v.unitId !== ex.unitId || (v.verdict !== 'sell' && v.verdict !== 'exit') || exitByVerdict.has(ex.verdictId)) {
+      orphanExitsN += 1;
+      continue;
+    }
+    exitByVerdict.set(ex.verdictId, ex);
+  }
 
   let unitsOutsideScopeN = 0;
   const units = [];
   const reviews = [];
   const verdicts = [];
   const milestones = [];
+  const exits = [];
   const escalations = [];
 
   for (const unit of unitsRaw) {
     const visible = inSeatSpan(seat, unit.owningLineHolderId);
     if (!visible) { unitsOutsideScopeN += 1; continue; }
 
-    const isRetired = Boolean(unit.retiredOn && unit.retiredOn <= asOf);
-    const status = isRetired ? 'retired' : 'live';
     const ownerOnRoster = Boolean(matrix?.nodes?.has(unit.owningLineHolderId));
     const unitReviews = reviewsByUnit.get(unit.id) || [];
     const unitVerdicts = verdictsByUnit.get(unit.id) || [];
     const latestReview = governingRow(unitReviews, asOf, 'assessedOn');
     const latestVerdict = governingRow(unitVerdicts, asOf, 'decidedOn');
+    const rawLatestExit = latestVerdict ? exitByVerdict.get(latestVerdict.id) || null : null;
+    const latestExit = rawLatestExit && rawLatestExit.completedOn <= asOf ? rawLatestExit : null;
+
+    const isRetired = Boolean(unit.retiredOn && unit.retiredOn <= asOf);
+    const isCompleted = !isRetired && Boolean(latestExit);
+    const status = isRetired ? 'retired' : isCompleted ? 'completed' : 'live';
 
     const reviewAgeDays = latestReview ? (prvDaysBetween(latestReview.assessedOn, asOf) ?? 0) : null;
-    const reviewOverdue = Boolean(latestReview && (reviewAgeDays > conv[PRV_SETTING_KEYS.reviewDays]
+    const reviewOverdue = status === 'live' && Boolean(latestReview && (reviewAgeDays > conv[PRV_SETTING_KEYS.reviewDays]
       || (latestVerdict?.verdict === 'fix' && latestVerdict.reReviewOn <= asOf && latestReview.assessedOn < latestVerdict.reReviewOn)));
-    const verdictStale = Boolean(latestVerdict && latestReview && (latestVerdict.reviewId !== latestReview.id || latestVerdict.decidedOn < latestReview.assessedOn));
+    const verdictStale = status === 'live' && Boolean(latestVerdict && latestReview && (latestVerdict.reviewId !== latestReview.id || latestVerdict.decidedOn < latestReview.assessedOn));
+    const executionOverdue = status === 'live'
+      && (latestVerdict?.verdict === 'sell' || latestVerdict?.verdict === 'exit')
+      && Boolean(latestVerdict?.expectedOn && latestVerdict.expectedOn < asOf);
 
     let unitState = 'keep';
     let stateReason = 'verdict-current';
-    if (matrixError || !ownerOnRoster) {
+    if (isCompleted) {
+      unitState = latestVerdict.verdict;
+      stateReason = 'exit-completed';
+    } else if (matrixError || !ownerOnRoster) {
       unitState = 'unmeasurable';
       stateReason = matrixError || 'owning-line-off-roster';
     } else if (!latestReview) {
@@ -293,6 +455,9 @@ export function buildPortfolioReview(state, { now = new Date(), settings = null,
     const milestonesOpenN = evaluatedMilestones.length - milestonesDoneN - milestonesOverdueN;
 
     const jointApex = strictJointApex(matrix, [unit.owningLineHolderId]);
+    const reviewAuthority = resolvePortfolioAuthority(matrix, unit.owningLineHolderId, 4, { allowHolder: true });
+    const verdictAuthority = resolvePortfolioAuthority(matrix, unit.owningLineHolderId, 5, { allowHolder: false });
+    const trackAuthority = resolvePortfolioAuthority(matrix, unit.owningLineHolderId, 3, { allowHolder: false });
     const stateMeta = prvUnitStateByKey(unitState);
     const verdictMeta = latestVerdict ? prvVerdictByKey(latestVerdict.verdict) : null;
     const evidenceMeta = latestReview ? prvEvidenceByKey(latestReview.evidenceKind) : null;
@@ -313,8 +478,10 @@ export function buildPortfolioReview(state, { now = new Date(), settings = null,
       retiredById: unit.retiredById,
       retirementReason: unit.retirementReason,
       state: unitState,
-      stateLabel: stateMeta?.label || unitState,
-      stateTone: stateMeta?.tone || 'warn',
+      stateLabel: isCompleted
+        ? `${verdictMeta?.label || unitState} — completed (${latestExit.completedOn})`
+        : (stateMeta?.label || unitState),
+      stateTone: isCompleted ? 'good' : (stateMeta?.tone || 'warn'),
       stateSays: stateMeta?.says || '',
       stateReason,
       reviewsN: unitReviews.length,
@@ -348,14 +515,45 @@ export function buildPortfolioReview(state, { now = new Date(), settings = null,
         reReviewOn: latestVerdict.reReviewOn,
         stale: verdictStale,
       } : null,
+      latestExit: latestExit ? {
+        id: latestExit.id,
+        verdictId: latestExit.verdictId,
+        verdict: latestVerdict.verdict,
+        verdictLabel: verdictMeta?.label || latestVerdict.verdict,
+        completedOn: latestExit.completedOn,
+        recordedById: latestExit.recordedById,
+        recordedByName: personLabel(peopleById, latestExit.recordedById),
+        actualProceedsCents: latestExit.actualProceedsCents,
+        actualProceedsDisplay: formatPrvMoney(unit.currency, latestExit.actualProceedsCents),
+        evidenceKind: latestExit.evidenceKind,
+        evidenceLabel: prvEvidenceByKey(latestExit.evidenceKind)?.label || latestExit.evidenceKind,
+        evidenceId: latestExit.evidenceId,
+        basis: latestExit.basis,
+      } : null,
       milestones: evaluatedMilestones,
       milestonesDoneN,
       milestonesOpenN,
       milestonesOverdueN,
-      executionOverdue: Boolean(latestVerdict?.expectedOn && latestVerdict.expectedOn < asOf),
+      executionOverdue,
       escalation: jointApex,
+      authorities: {
+        review: reviewAuthority,
+        verdict: verdictAuthority,
+        track: trackAuthority,
+      },
     };
     units.push(unitRow);
+    if (unitRow.latestExit) {
+      exits.push({
+        ...unitRow.latestExit,
+        unitId: unit.id,
+        unitName: unit.name,
+        currency: unit.currency,
+        expectedProceedsCents: latestVerdict?.expectedProceedsCents ?? null,
+        expectedProceedsDisplay: unitRow.latestVerdict?.expectedProceedsDisplay || null,
+        expectedOn: latestVerdict?.expectedOn || null,
+      });
+    }
 
     for (const rev of unitReviews) {
       reviews.push({
@@ -396,26 +594,84 @@ export function buildPortfolioReview(state, { now = new Date(), settings = null,
         reReviewOn: v.reReviewOn,
         isLatest: latestVerdict?.id === v.id,
         milestonesN: (milestonesByVerdict.get(v.id) || []).length,
+        exitCompleted: Boolean(exitByVerdict.get(v.id)),
       });
     }
 
-    if (status === 'live' && (unitState === 'review-overdue' || unitState === 'verdict-pending'
-      || milestonesOverdueN > 0)) {
-      escalations.push({
-        unitId: unit.id,
-        unitName: unit.name,
-        state: unitState,
-        stateLabel: unitRow.stateLabel,
-        owningLineHolderId: unit.owningLineHolderId,
-        owningLineName: unitRow.owningLineName,
-        milestonesOverdueN,
-        jointApex,
-        apexNames: jointApex.apexIds.map((id) => personLabel(peopleById, id)),
-      });
+    if (status === 'live') {
+      const pushEscalation = ({ conditionKind, signature, state, stateLabel, dueOn, authority }) => {
+        const seatNames = authority.seatIds.map((id) => personLabel(peopleById, id));
+        escalations.push({
+          conditionKind,
+          signature,
+          unitId: unit.id,
+          unitName: unit.name,
+          state,
+          stateLabel,
+          owningLineHolderId: unit.owningLineHolderId,
+          owningLineName: unitRow.owningLineName,
+          dueOn,
+          milestonesOverdueN,
+          requiredRank: authority.requiredRank,
+          authority,
+          seatIds: authority.seatIds,
+          seatNames,
+          chiefQueue: authority.chiefQueue,
+          jointApex: authority,
+          apexNames: authority.chiefQueue && !seatNames.length
+            ? ['Chief (CEO) decision queue']
+            : seatNames,
+        });
+      };
+
+      if (unitState === 'review-overdue' || (unitState === 'unreviewed' && unit.reviewDueOn <= asOf)) {
+        pushEscalation({
+          conditionKind: PRV_CONDITION_KINDS.REVIEW_OVERDUE,
+          signature: `prv1:review:${unit.id}`,
+          state: unitState,
+          stateLabel: unitState === 'unreviewed' ? 'Initial review overdue' : 'Review overdue',
+          dueOn: unit.reviewDueOn,
+          authority: reviewAuthority,
+        });
+      }
+      if (unitState === 'verdict-pending') {
+        pushEscalation({
+          conditionKind: PRV_CONDITION_KINDS.VERDICT_PENDING,
+          signature: `prv1:verdict:${unit.id}`,
+          state: 'verdict-pending',
+          stateLabel: 'Reviewed, verdict pending',
+          dueOn: unit.latestReview?.assessedOn || unit.reviewDueOn,
+          authority: verdictAuthority,
+        });
+      }
+      if (milestonesOverdueN > 0 && latestVerdict) {
+        const overdueMs = evaluatedMilestones.filter((m) => m.state === 'overdue');
+        const overdueIds = overdueMs.map((m) => m.id).sort().join(',');
+        const earliestDueOn = overdueMs.map((m) => m.dueOn).sort()[0] || asOf;
+        pushEscalation({
+          conditionKind: PRV_CONDITION_KINDS.EXECUTION_SLIPPAGE,
+          signature: `prv1:slippage:${unit.id}:${overdueIds}`,
+          state: 'execution-slippage',
+          stateLabel: `Milestone slippage (${milestonesOverdueN} overdue)`,
+          dueOn: earliestDueOn,
+          authority: trackAuthority,
+        });
+      }
+      if (executionOverdue && latestVerdict) {
+        pushEscalation({
+          conditionKind: PRV_CONDITION_KINDS.EXECUTION_OVERDUE,
+          signature: `prv1:exit-overdue:${unit.id}:${latestVerdict.id}`,
+          state: 'execution-overdue',
+          stateLabel: `Expected ${latestVerdict.verdict} completion date passed (${latestVerdict.expectedOn})`,
+          dueOn: latestVerdict.expectedOn,
+          authority: verdictAuthority,
+        });
+      }
     }
   }
 
   const liveUnits = units.filter((u) => u.status === 'live');
+  const completedUnits = units.filter((u) => u.status === 'completed');
   const retiredUnits = units.filter((u) => u.status === 'retired');
 
   const stateCounts = Object.fromEntries(PRV_UNIT_STATES.map((s) => [s.key, 0]));
@@ -424,35 +680,54 @@ export function buildPortfolioReview(state, { now = new Date(), settings = null,
   const milestoneStateCounts = { done: 0, open: 0, overdue: 0 };
   for (const m of milestones) milestoneStateCounts[m.state] = (milestoneStateCounts[m.state] || 0) + 1;
 
-  // Per-currency exact BigInt conservation over live units: latest measured
-  // cents and latest expected proceeds, never pooled across currencies.
+  // Per-currency exact BigInt conservation: live measured cents & live expected
+  // proceeds, plus realized exit proceeds on completed exits — never pooled
+  // across currencies or collapsed between expected and realized.
   const byCurrency = new Map();
-  for (const u of liveUnits) {
-    if (!byCurrency.has(u.currency)) {
-      byCurrency.set(u.currency, {
-        currency: u.currency, unitsN: 0, measuredCents: 0n, proceedsCents: 0n,
+  const ensureBucket = (currency) => {
+    if (!byCurrency.has(currency)) {
+      byCurrency.set(currency, {
+        currency,
+        unitsN: 0,
+        completedUnitsN: 0,
+        measuredCents: 0n,
+        proceedsCents: 0n,
+        realizedProceedsCents: 0n,
       });
     }
-    const bucket = byCurrency.get(u.currency);
+    return byCurrency.get(currency);
+  };
+  for (const u of liveUnits) {
+    const bucket = ensureBucket(u.currency);
     bucket.unitsN += 1;
     if (u.latestReview) bucket.measuredCents += BigInt(u.latestReview.measuredCents);
     if (u.latestVerdict && u.latestVerdict.expectedProceedsCents !== null) {
       bucket.proceedsCents += BigInt(u.latestVerdict.expectedProceedsCents);
     }
   }
+  for (const u of completedUnits) {
+    const bucket = ensureBucket(u.currency);
+    bucket.completedUnitsN += 1;
+    if (u.latestExit) bucket.realizedProceedsCents += BigInt(u.latestExit.actualProceedsCents);
+  }
   const currencies = [...byCurrency.values()]
     .sort((a, b) => a.currency.localeCompare(b.currency))
     .map((b) => {
       const measured = Number(b.measuredCents);
       const proceeds = Number(b.proceedsCents);
+      const realized = Number(b.realizedProceedsCents);
+      const safe = Number.isSafeInteger(measured) && Number.isSafeInteger(proceeds) && Number.isSafeInteger(realized);
       return {
         currency: b.currency,
         unitsN: b.unitsN,
+        completedUnitsN: b.completedUnitsN,
         measuredCents: Number.isSafeInteger(measured) ? measured : null,
         proceedsCents: Number.isSafeInteger(proceeds) ? proceeds : null,
+        realizedProceedsCents: Number.isSafeInteger(realized) ? realized : null,
         measuredDisplay: Number.isSafeInteger(measured) ? formatPrvMoney(b.currency, measured) : 'REFUSED: total exceeds safe integer cents',
         proceedsDisplay: Number.isSafeInteger(proceeds) ? formatPrvMoney(b.currency, proceeds) : 'REFUSED: total exceeds safe integer cents',
-        reconciles: Number.isSafeInteger(measured) && Number.isSafeInteger(proceeds),
+        realizedProceedsDisplay: Number.isSafeInteger(realized) ? formatPrvMoney(b.currency, realized) : 'REFUSED: total exceeds safe integer cents',
+        reconciles: safe,
       };
     });
 
@@ -460,8 +735,10 @@ export function buildPortfolioReview(state, { now = new Date(), settings = null,
   const sumMilestones = Object.values(milestoneStateCounts).reduce((acc, n) => acc + n, 0);
   const countsReconcile = sumStates === liveUnits.length
     && sumMilestones === milestones.length
+    && units.length === liveUnits.length + completedUnits.length + retiredUnits.length
     && currencies.every((c) => c.reconciles);
 
+  const executionOverdueUnitsN = liveUnits.filter((u) => u.executionOverdue).length;
   const incompleteReasons = [];
   if (!countsReconcile) incompleteReasons.push('aggregate-overflow');
   if (unitsOutsideScopeN > 0) incompleteReasons.push(`units-outside-scope:${unitsOutsideScopeN}`);
@@ -470,16 +747,30 @@ export function buildPortfolioReview(state, { now = new Date(), settings = null,
   if (orphanReviewsN > 0) incompleteReasons.push(`orphan-reviews:${orphanReviewsN}`);
   if (orphanVerdictsN > 0) incompleteReasons.push(`orphan-verdicts:${orphanVerdictsN}`);
   if (orphanMilestonesN > 0) incompleteReasons.push(`orphan-milestones:${orphanMilestonesN}`);
+  if (orphanExitsN > 0) incompleteReasons.push(`orphan-exits:${orphanExitsN}`);
   if (stateCounts['unmeasurable'] > 0) incompleteReasons.push(`unmeasurable-units:${stateCounts['unmeasurable']}`);
   if (stateCounts['unreviewed'] > 0) incompleteReasons.push(`unreviewed-units:${stateCounts['unreviewed']}`);
   if (stateCounts['review-overdue'] > 0) incompleteReasons.push(`review-overdue-units:${stateCounts['review-overdue']}`);
   if (stateCounts['verdict-pending'] > 0) incompleteReasons.push(`verdict-pending-units:${stateCounts['verdict-pending']}`);
   if (milestoneStateCounts['overdue'] > 0) incompleteReasons.push(`overdue-milestones:${milestoneStateCounts['overdue']}`);
+  if (executionOverdueUnitsN > 0) incompleteReasons.push(`execution-date-passed:${executionOverdueUnitsN}`);
 
-  if (liveUnits.some((u) => u.executionOverdue)) incompleteReasons.push('execution-date-passed');
   const figuresComplete = incompleteReasons.length === 0;
   const asks = indexPortfolioReviewAsks(state);
   const openMarkers = markers.filter((m) => !m.resolvedOn);
+  const chiefQueue = escalations.filter((e) => e.chiefQueue).map((e) => ({
+    signature: e.signature,
+    unitId: e.unitId,
+    unitName: e.unitName,
+    kind: e.conditionKind,
+    state: e.state,
+    stateLabel: e.stateLabel,
+    owningLineHolderId: e.owningLineHolderId,
+    owningLineName: e.owningLineName,
+    dueOn: e.dueOn,
+    requiredRank: e.requiredRank,
+    reason: PRV_MARKER_REASONS.CHIEF_DECISION_OWED,
+  }));
 
   return {
     asOf,
@@ -499,11 +790,14 @@ export function buildPortfolioReview(state, { now = new Date(), settings = null,
     counts: {
       unitsTotal: units.length,
       unitsLive: liveUnits.length,
+      unitsCompleted: completedUnits.length,
       unitsRetired: retiredUnits.length,
       reviewsTotal: reviews.length,
       verdictsTotal: verdicts.length,
       milestonesTotal: milestones.length,
+      exitsTotal: exits.length,
       escalationsLive: escalations.length,
+      chiefQueueTotal: chiefQueue.length,
       openAsksN: asks.filter((a) => a.task && a.task.status === 'active').length,
       openMarkersN: openMarkers.length,
       unitStates: stateCounts,
@@ -514,38 +808,47 @@ export function buildPortfolioReview(state, { now = new Date(), settings = null,
       orphanReviewsN,
       orphanVerdictsN,
       orphanMilestonesN,
+      orphanExitsN,
       unreviewedUnitsN: stateCounts['unreviewed'],
       reviewOverdueUnitsN: stateCounts['review-overdue'],
       verdictPendingUnitsN: stateCounts['verdict-pending'],
       overdueMilestonesN: milestoneStateCounts['overdue'],
+      executionOverdueUnitsN,
     },
     claims: { countsReconcile, figuresComplete, incompleteReasons },
     units,
     reviews,
     verdicts,
     milestones,
+    exits,
     escalations,
+    chiefQueue,
     markers: openMarkers,
   };
 }
 
 /**
  * Navigation badge count for the active seat: exact number of open conditions
- * where THIS seat owes an answer (reviewing an overdue unit it owns, or
- * governing a verdict-pending / slippage escalation as joint apex).
+ * where THIS seat both holds the authority (`rank >= requiredRank`) and owns
+ * the escalation — or `report.chiefQueue` items when acting as rank-5 chief /
+ * undeclared operator. Never counts obligations whose right the seat lacks.
  */
 export function portfolioReviewAttentionCount(state, { now = new Date(), settings = null, seat = null } = {}) {
-  if (!seat || seat.readOnly || !seat.id || seat.isLeader) return 0;
+  if (!seat || seat.readOnly) return 0;
   const report = buildPortfolioReview(state, { now, settings, seat: null });
   if (report.matrixError) return 0;
-  let owed = 0;
-  for (const unit of report.units) {
-    if (unit.status !== 'live') continue;
-    if ((unit.state === 'review-overdue' || (unit.state === 'unreviewed' && unit.reviewDueOn <= report.asOf)) && unit.owningLineHolderId === seat.id) owed += 1;
-    if ((unit.state === 'verdict-pending' || unit.milestonesOverdueN > 0)
-      && unit.escalation.apexIds.includes(seat.id)) owed += 1;
+  const rank = seat.rank ?? (seat.fullAccess ? 5 : 0);
+  if (seat.fullAccess) {
+    return report.escalations.filter((item) => (
+      (item.chiefQueue || item.authority?.targetState === 'no-authority')
+      && rank >= item.requiredRank
+    )).length;
   }
-  return owed;
+  if (seat.isLeader) {
+    return report.chiefQueue.filter((item) => rank >= item.requiredRank).length;
+  }
+  if (!seat.id) return 0;
+  return report.escalations.filter((item) => item.seatIds.includes(seat.id) && rank >= item.requiredRank).length;
 }
 
 export function portfolioReviewCandidates(state, { now = new Date(), settings = null, seat = null } = {}) {
@@ -583,6 +886,7 @@ export function portfolioReviewCsvRows(report) {
     as_of: report.asOf,
     engine_version: report.engineVersion,
     units_live_total: c.unitsLive,
+    units_completed_total: c.unitsCompleted,
     units_retired_total: c.unitsRetired,
     units_keep: c.unitStates['keep'] || 0,
     units_fix: c.unitStates['fix'] || 0,
@@ -608,6 +912,7 @@ export function portfolioReviewCsvRows(report) {
     currency: '',
     money_measured_cents: '',
     money_expected_proceeds_cents: '',
+    money_realized_proceeds_cents: '',
   }];
 
   for (const cur of report.currencies) {
@@ -617,6 +922,7 @@ export function portfolioReviewCsvRows(report) {
       currency: cur.currency,
       money_measured_cents: cur.measuredCents,
       money_expected_proceeds_cents: cur.proceedsCents,
+      money_realized_proceeds_cents: cur.realizedProceedsCents,
     });
   }
 

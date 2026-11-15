@@ -66,6 +66,8 @@ const ROUTES = [
   ['#/matrix?panel=turns', 'Matrix non-promotable work turns'],
   ['#/incentive', 'Incentive integrity'],
   ['#/means', 'Duty without means'],
+  ['#/portfolio', 'Decision portfolio'],
+  ['#/portfolio-review', 'Portfolio review'],
   ['#/settings', 'Settings'],
 ];
 
@@ -223,6 +225,20 @@ test('a11y: detail screens and open dialogs also pass axe-core', async () => {
     assert.ok(env.document.querySelector('[role="dialog"]'));
     env.document.dispatchEvent(new env.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     assert.equal(env.document.activeElement, opener, 'focus returned to the control that opened the dialog');
+
+    // ADR-0222: #/portfolio-review dialogs also pass axe-core with real controls and Escape focus return.
+    app.ctx.navigate('#/portfolio-review');
+    const declareBtn = env.document.querySelector('[data-testid="prv-declare-unit"]');
+    assert.ok(declareBtn, 'the portfolio review screen offers Declare unit');
+    declareBtn.focus();
+    declareBtn.click();
+    const prvDialog = env.document.querySelector('[role="dialog"]');
+    assert.ok(prvDialog, 'portfolio review dialog opened');
+    assert.ok(prvDialog.querySelector('form input, form select, form textarea'), 'dialog mounts real form fields');
+    assert.ok(prvDialog.querySelector('.modal-foot button[data-testid="prv-modal-submit"]'), 'dialog mounts real submit button');
+    assert.deepEqual(await axeViolations(env, '[role="dialog"]'), [], 'portfolio review dialog');
+    env.document.dispatchEvent(new env.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    assert.equal(env.document.querySelector('[role="dialog"]'), null);
   } finally {
     env.dom.window.close();
   }
