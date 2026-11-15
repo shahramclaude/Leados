@@ -14,6 +14,7 @@ import { PRIORITY_BALLOT_RIGHTS } from './priorityRankingRegistry.js';
 import { GOAL_COMMITMENT_RIGHTS } from './goalCommitmentRegistry.js';
 import { GOAL_ATTAINMENT_RIGHTS } from './goalAttainmentRegistry.js';
 import { INVESTMENT_CASE_RIGHTS } from './investmentCaseRegistry.js';
+import { CAPITAL_RATIONING_RIGHTS } from './capitalRationingRegistry.js';
 import { WORK_REST_RIGHTS } from './workRestRegistry.js';
 import { CONFLICT_RECUSAL_RIGHTS } from './conflictRecusalRegistry.js';
 import { routeVerdict } from './seatRegistry.js';
@@ -151,6 +152,14 @@ const groups = [
   [INVESTMENT_CASE_RIGHTS.DECLARE, 'investmentCaseDeclare investmentCaseWithdraw investmentCasePreview investmentCaseCandidates'],
   [INVESTMENT_CASE_RIGHTS.RATIFY, 'investmentCaseDecide investmentCaseReview'],
   [INVESTMENT_CASE_RIGHTS.GOVERN, 'investmentCaseScan investmentCaseSetConventions'],
+  // ADR-0211: the capital-rationing register. Its pure reads sit on the read right
+  // and in SAFE_READS. Declaring a ceiling is the enterprise altitude's act;
+  // declaring a relation is a director's act AND the ACTION refuses any seat that
+  // does not hold BOTH cases' benefit owners.
+  [CAPITAL_RATIONING_RIGHTS.READ, 'capitalRationingReport capitalRationingBriefText capitalRationingCsvRows capitalRationingAttentionCount'],
+  [CAPITAL_RATIONING_RIGHTS.DECLARE_CEILING, 'capitalRationingCandidates capitalRationingDeclareCeiling capitalRationingRetireCeiling'],
+  [CAPITAL_RATIONING_RIGHTS.DECLARE_RELATION, 'capitalRationingDeclareRelation capitalRationingRetireRelation'],
+  [CAPITAL_RATIONING_RIGHTS.GOVERN, 'capitalRationingScan capitalRationingSetConventions'],
   // ADR-0209: reading the work/rest ledger is open at every altitude and scoped
   // by the reader. ROSTERING — a shift, its actual times or cancellation, a
   // coverage attestation — is the act of whoever holds the LINE the work is for,
@@ -456,7 +465,12 @@ const FIRST_ID_COLLECTION = Object.freeze({
   createActionBundle: 'cases', updateActionBundle: 'actionBundles', saveActionBundlePreview: 'actionBundles', commitActionBundle: 'actionBundles', withdrawActionBundle: 'actionBundles', archiveActionBundle: 'actionBundles',
 });
 
-export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boardContinuity', 'boardContinuityText', 'boardCsvRows', 'boardMemoText', 'boardPreview', 'boardRead', 'cadenceAttentionCount', 'cadenceBriefText', 'cadenceCsvRows', 'cadencePreviewForum', 'cadenceRead', 'carryoverAttentionCount', 'carryoverBriefText', 'carryoverCsvRows', 'carryoverReleasePreview', 'carryoverReport', 'catchballBriefText', 'catchballCsvRows', 'catchballPreviewFeasibility', 'catchballRead', 'conflictRecusalAttentionCount', 'conflictRecusalBriefText', 'conflictRecusalCsvRows', 'conflictRecusalReport', 'conflictRecusalNoInterestCandidates', 'concordanceAttentionCount', 'concordanceBriefText', 'concordanceCsvRows', 'concordanceRead', 'concordanceStats', 'disclosureAttentionCount', 'disclosureBriefText', 'disclosureCsvRows', 'disclosureGrantRead', 'disclosureGrants', 'disclosureRead', 'envoyAttentionCount', 'envoyBriefText', 'envoyCsvRows', 'envoyIdentity', 'envoyPacketText', 'envoyPreview', 'envoyRead', 'escalationBriefText', 'escalationCsvRows', 'escalationRead', 'escalationStats', 'differencesAttentionCount', 'differencesBriefText', 'differencesCsvRows', 'differencesRead', 'federationAttentionCount', 'federationBriefText', 'federationCsvRows', 'federationRead',
+export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boardContinuity', 'boardContinuityText', 'boardCsvRows', 'boardMemoText', 'boardPreview', 'boardRead', 'cadenceAttentionCount', 'cadenceBriefText', 'cadenceCsvRows', 'cadencePreviewForum', 'cadenceRead', 'carryoverAttentionCount', 'carryoverBriefText', 'carryoverCsvRows', 'carryoverReleasePreview', 'carryoverReport', 'catchballBriefText', 'catchballCsvRows', 'catchballPreviewFeasibility', 'catchballRead', 'conflictRecusalAttentionCount', 'conflictRecusalBriefText', 'conflictRecusalCsvRows', 'conflictRecusalReport', 'conflictRecusalNoInterestCandidates',
+// ADR-0211: the capital-rationing register's pure read surface. Registered here
+// because a module whose reads are absent from SAFE_READS is unreadable under
+// enforcement while its writes are still gated — the funded set would vanish
+// exactly when a real organisation turned enforcement on.
+'capitalRationingAttentionCount', 'capitalRationingBriefText', 'capitalRationingCsvRows', 'capitalRationingReport', 'concordanceAttentionCount', 'concordanceBriefText', 'concordanceCsvRows', 'concordanceRead', 'concordanceStats', 'disclosureAttentionCount', 'disclosureBriefText', 'disclosureCsvRows', 'disclosureGrantRead', 'disclosureGrants', 'disclosureRead', 'envoyAttentionCount', 'envoyBriefText', 'envoyCsvRows', 'envoyIdentity', 'envoyPacketText', 'envoyPreview', 'envoyRead', 'escalationBriefText', 'escalationCsvRows', 'escalationRead', 'escalationStats', 'differencesAttentionCount', 'differencesBriefText', 'differencesCsvRows', 'differencesRead', 'federationAttentionCount', 'federationBriefText', 'federationCsvRows', 'federationRead',
 'freezeLineAttentionCount', 'freezeLineBriefText', 'freezeLineConventions', 'freezeLineCsvRows', 'freezeLineReport',
 'spanCalibrationAttentionCount', 'spanCalibrationBriefText', 'spanCalibrationConventions', 'spanCalibrationCsvRows', 'spanCalibrationReport', 'spanCalibrationSettings', 'spanCalibrationSignals',
 'reputationAttentionCount', 'reputationBriefText', 'reputationConventions', 'reputationCounterfactual', 'reputationCsvRows', 'reputationPriceAsk', 'reputationReport', 'reputationSignals',
@@ -760,6 +774,10 @@ const MATRIX_LINE_SCOPED = new Set([
   // seat may reach only through a declared Matrix line; the action re-checks the
   // tree and the line itself before it reads or records anything.
   'investmentCaseDeclare', 'investmentCasePreview',
+  // ADR-0211: a relation between two cases is declared across the matrix — the
+  // seat may hold one side through a declared line — so the action re-proves that
+  // it holds BOTH owners before it writes a constraint on the fund.
+  'capitalRationingDeclareRelation', 'capitalRationingRetireRelation', 'capitalRationingCandidates',
   // ADR-0209: a shift (declared or previewed) and a coverage attestation name a
   // person the acting seat may hold only through a declared Matrix line — which
   // is exactly the case the ledger exists for. The action re-proves that the

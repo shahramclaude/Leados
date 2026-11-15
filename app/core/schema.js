@@ -211,6 +211,17 @@ import {
   normalizeConflictRules,
   normalizeConflictStandings,
 } from './domain/conflictRecusalSchema.js';
+// ADR-0211 (Schema v165): the Capital Rationing & Funded-Set Register. Fail-closed
+// normalizers for the two append-only declarations and the rule's marker ledger.
+// A ceiling the loader cannot read exactly is dropped rather than clamped, and a
+// shared-benefit relation outside the open interval (0, 10000) bp is dropped
+// rather than carried as a constraint nobody declared.
+import {
+  normalizeCapitalCeilings,
+  normalizeCapitalRationingMarkers,
+  normalizeCapitalRationingSettings,
+  normalizeCapitalRelations,
+} from './domain/capitalRationingSchema.js';
 // ADR-0185 (Schema v147): dated Matrix change-impact requests and first-person
 // line responses. Request snapshots normalize before their responses resolve.
 import {
@@ -1015,7 +1026,7 @@ export {
 // and a shift invented here would manufacture a rest — or a breach — nobody
 // recorded. No statutory limit is seeded either: which limits bind a person is
 // a human declaration with its source in writing.
-export const SCHEMA_VERSION = 164;
+export const SCHEMA_VERSION = 165;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -2488,6 +2499,11 @@ export const DEFAULT_SETTINGS = Object.freeze({
   // relationship kind is a convention: a rule declares the reportable kinds with
   // its source, and with no rule every reading is honestly `unsearched`.
   ...normalizeConflictRecusalSettings({}),
+  // ADR-0211: the capital-rationing conventions — the ask window and the
+  // automation pause. Clamped on load, refused (never clamped) by the setter.
+  // NOTHING ELSE IS A CONVENTION: a ceiling, a period and a relation are human
+  // declarations on a dated ledger, never settings that could be tuned.
+  ...normalizeCapitalRationingSettings({}),
 });
 
 export const COLLECTIONS = [
@@ -3304,6 +3320,14 @@ export const COLLECTIONS = [
   'conflictStandings',
   'conflictRules',
   'conflictRecusalMarkers',
+  // ADR-0211 (Schema v165): the Capital Rationing & Funded-Set Register. Declared
+  // capital ceilings, declared relations between investment cases, and the rule's
+  // bounded marker ledger. No funded set, optimal value, shadow price, node count
+  // or verdict is stored: each is re-derived on read by an exact integer search,
+  // so a hand-edited file cannot carry a plan its own ceilings do not imply.
+  'capitalCeilings',
+  'capitalRelations',
+  'capitalRationingMarkers',
 ];
 
 /** Stable empty state. `now` is an ISO string so the result is a pure value. */
@@ -4113,6 +4137,10 @@ export function normalizeSettings(raw) {
     // spread here would vanish on every load and the pause census would never see
     // the switch that silences a rule reading the reporting graph.
     ...normalizeConflictRecusalSettings(s),
+    // ADR-0211: named here for the same reason — a capital-rationing convention
+    // not spread here would vanish on every load and the pause census would never
+    // see the switch that silences a rule reading the reporting graph.
+    ...normalizeCapitalRationingSettings(s),
     ...normalizeStructureHistorySettings(s),
     ...normalizeDifferencesSettings(s),
     ...normalizeFitSettings(s),
@@ -8709,6 +8737,13 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // named person's stake to a record nobody declared it against. A standing row
   // is admitted only through an interest that exists, and a supersession must
   // point at an earlier row of the SAME interest or it resolves to none.
+  // ADR-0211 (Schema v165): the capital-rationing declarations. A ceiling or a
+  // relation that cannot be read exactly is dropped with a counted warning and
+  // NO constraint is invented in its place — a ceiling nobody declared or a link
+  // nobody agreed to would ration real money against a fiction.
+  state.capitalCeilings = normalizeCapitalCeilings(raw.capitalCeilings, warnings);
+  state.capitalRelations = normalizeCapitalRelations(raw.capitalRelations, warnings);
+  state.capitalRationingMarkers = normalizeCapitalRationingMarkers(raw.capitalRationingMarkers, warnings);
   state.conflictInterests = normalizeConflictInterests(raw.conflictInterests, warnings);
   state.conflictNoneDeclarations = normalizeConflictNoneDeclarations(raw.conflictNoneDeclarations, warnings);
   state.conflictStandings = normalizeConflictStandings(raw.conflictStandings, state.conflictInterests, warnings);
@@ -9592,6 +9627,22 @@ export const MIGRATIONS = {
     conflictRules: Array.isArray(v163.conflictRules) ? v163.conflictRules : [],
     conflictRecusalMarkers: Array.isArray(v163.conflictRecusalMarkers) ? v163.conflictRecusalMarkers : [],
     settings: { ...(v163.settings || {}), ...normalizeConflictRecusalSettings(v163.settings || {}) },
+  }),
+  // 164 → 165: ADR-0211 adds THREE EMPTY append-only ledgers and two declared
+  // conventions. No ceiling is inferred from the budget envelopes an upgraded
+  // workspace already holds: an envelope is authority to spend on operations and
+  // a capital ceiling is a claim on the balance sheet, held by a different seat,
+  // and a ceiling invented from them would fabricate a constraint nobody signed.
+  // No relation is inferred between existing cases either — exclusivity,
+  // dependency and shared benefit are facts only a human can declare, and a
+  // relation guessed at upgrade time would ration the whole fund wrongly.
+  164: (v164) => ({
+    ...v164,
+    schemaVersion: 165,
+    capitalCeilings: Array.isArray(v164.capitalCeilings) ? v164.capitalCeilings : [],
+    capitalRelations: Array.isArray(v164.capitalRelations) ? v164.capitalRelations : [],
+    capitalRationingMarkers: Array.isArray(v164.capitalRationingMarkers) ? v164.capitalRationingMarkers : [],
+    settings: { ...(v164.settings || {}), ...normalizeCapitalRationingSettings(v164.settings || {}) },
   }),
   // 155 → 156: ADR-0196 adds one EMPTY append-only ledger. No active
   // RULE-NPW-01 ask has a receiving-line answer, effort estimate or capacity

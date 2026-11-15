@@ -208,6 +208,13 @@ import { GOAL_ATTAINMENT_CSV_COLUMNS, GOAL_ATTAINMENT_CSV_DESCRIPTOR } from './d
 // positional code and one track-record row — no person, manager, case id, title,
 // note or reason. Currencies are never pooled; a refused figure exports BLANK.
 import { buildInvestmentCases, investmentCaseCsvRows } from './domain/investmentCase.js';
+// ADR-0211 (Schema v165): CSV scope #153. Built from the SAME reader the panel
+// renders, so an exported funded set is provably the set that was printed.
+import { buildCapitalRationing, capitalRationingCsvRows } from './domain/capitalRationing.js';
+import {
+  CAPITAL_RATIONING_CSV_COLUMNS,
+  CAPITAL_RATIONING_CSV_DESCRIPTOR,
+} from './domain/capitalRationingRegistry.js';
 import { INVESTMENT_CASE_CSV_COLUMNS, INVESTMENT_CASE_CSV_DESCRIPTOR } from './domain/investmentCaseRegistry.js';
 // ADR-0209 (Schema v163): the Cross-Line Work/Rest Recovery Ledger (CSV scope
 // #151). One workspace row, one row per policy and one row per person under an
@@ -1450,6 +1457,13 @@ export const CSV_EXPORTS = [
   // text; a person exports as `person-001`, the seven verdicts are never
   // collapsed, and a figure that cannot be claimed exports BLANK with its reason.
   CONFLICT_RECUSAL_CSV_DESCRIPTOR,
+  // #153 (ADR-0211): capital rationing funded sets, the shadow price of the
+  // ceiling and the measured cost of the profitability-index order — identity-
+  // free. No person, manager, case id, title, note or reason text; a candidate
+  // exports as `K01` and a relation as `R01`, currencies are never pooled, net
+  // present values are never summed across valuation days, and a figure that
+  // cannot be claimed exports BLANK with its reason key, never zero.
+  CAPITAL_RATIONING_CSV_DESCRIPTOR,
 ];
 
 function personLookup(state) {
@@ -6667,6 +6681,19 @@ export function buildScopeTable(state, scope, now) {
       return {
         columns: CONFLICT_RECUSAL_CSV_COLUMNS.map((key) => ({ key, header: key })),
         rows: conflictRecusalCsvRows(report),
+      };
+    }
+    case 'capital-rationing-funded-sets': {
+      // CSV scope #153 (ADR-0211, Schema v165). Built from the SAME reader the
+      // panel renders, so an exported funded set is provably the set that was
+      // printed, and an exported gap is the gap the screen showed. A candidate
+      // and a relation export under an opaque positional code; no person,
+      // manager, case id, title, currency-owner, note or reason text reaches the
+      // file. A figure that cannot be claimed is BLANK with its reason key.
+      const report = buildCapitalRationing(state, { now, settings: state.settings || {}, seat: null });
+      return {
+        columns: CAPITAL_RATIONING_CSV_COLUMNS.map((key) => ({ key, header: key })),
+        rows: capitalRationingCsvRows(report),
       };
     }
     case 'investment-case-appraisals': {
