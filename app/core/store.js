@@ -35,6 +35,7 @@ import { estimateStateSize, quotaWarningForBytes } from './storeOptimizations.js
 // retention cap (the chain head must survive), and the session seal key is
 // derived from the vault passphrase at unlock/enable/change time — memory only.
 import { SEAL_EVENTS, SEAL_LIMITS } from './domain/sealRegistry.js';
+import { EVENT_ARCHIVE_EVENT_CAP } from './domain/eventArchiveRegistry.js';
 import { clearSealKey, deriveAndRegisterSealKey } from './domain/sealCrypto.js';
 // ADR-0087: the Attested Commit. Attestation/verification events are exempt
 // from the ordinary retention cap like seals (authorship anchors must not be
@@ -81,7 +82,7 @@ export const LOCKED_MESSAGE =
   'This workspace is encrypted and locked. Unlock it with your passphrase before anything can be written. Its saved ciphertext has not been changed.';
 export const NO_CRYPTO_MESSAGE =
   'This browser does not provide Web Crypto, so an encrypted workspace cannot be opened here. Try a current Chrome, Firefox, Edge or Safari.';
-const EVENT_CAP = 600;
+const EVENT_CAP = EVENT_ARCHIVE_EVENT_CAP;
 
 function schemaProblem(data) {
   if (!data || typeof data !== 'object' || data.schemaVersion === undefined) return null;
