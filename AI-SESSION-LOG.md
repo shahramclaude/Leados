@@ -1,3 +1,15 @@
+## 2026-11-15 — Session 281: temporary deviations and recurrence (In Progress)
+
+**Scope.** Frontline / mid-manager × single-chain, with matrix-safe attribution required. Duty: a leader needs to authorize a bounded temporary departure from a written standard and know when it expires, is restored, or repeats.
+
+**Built.** No production feature shipped. An exploratory recurrence implementation was discarded before integration: generic abnormal checks do not establish that the same deviation repeated, and its statistical and access assumptions were not verified. The new gap and the unfinished slices are recorded in `ROADMAP.md`; no schema, user interface, or coverage claim changed.
+
+**Benchmark.** [BENCHMARK-UNVERIFIED] Leucine Deviations advertises AI-assisted recurrence trending, investigations and CAPA integration (https://leucine.ai/deviations/); not independently exercised or compared. Higgsfield connector lookup returned `unsupported`; an exploratory AI-generated illustration was discarded with the unfinished feature.
+
+**Verification and blockers.** Doctrine and remote checks passed. A preliminary standalone test could not start because `jsdom` was missing; `npm ci` installed dependencies, but that test was not rerun. No display-versus-storage integrity check or adjacent feature verification was performed because no feature was shipped. Broader gap absence, matrix behavior, benchmark parity and full-suite status remain [UNVERIFIED].
+
+**Next.** Define deviation identity and authorized lifecycle, then build and verify a complete frontline / mid-manager slice without inferring repetition or choosing a matrix authority.
+
 ## 2026-11-15 — Session 279: did the hand that signed actually stand back? (Schema v164, ADR-0210)
 
 **Scope / decision.** Director / VP / CEO PRIMARY × single-chain and matrix, on `arena/7765e58b-leados`. ONE item, completed: [ADR-0210](./docs/adr/0210-conflict-recusal-ledger.md), the Decision-Maker Conflict-of-Interest & Recusal Ledger at `#/recusal`. The gap was already logged at ROADMAP.md:2927 (Session 213) and never built; `sodRegisterRegistry.js:405` printed the absence in its own words — separations of duty were checked, interests were not.
