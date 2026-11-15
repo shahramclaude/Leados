@@ -303,6 +303,7 @@ import { contradictionAttentionCount } from './core/domain/contradictionAudit.js
 import { reviewStewardshipAttentionCount } from './core/domain/reviewStewardship.js';
 import { dutyStandbyAttentionCount } from './core/domain/dutyStandby.js';
 import { standardWorkAttentionCount } from './core/domain/standardWork.js';
+import { workRestAttentionCount } from './core/domain/workRest.js';
 import { identityAttentionCount } from './core/domain/identity.js';
 
 function safeDecode(segment) {
@@ -1531,7 +1532,12 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       standby: dutyStandbyAttentionCount(state, { now: at, settings: state.settings }),
       // ADR-0190: escalated abnormalities addressed to the acting seat, plus lapsed
       // routines it owns or is the next tier for. A held routine is not counted.
-      standardWork: standardWorkAttentionCount(state, { now: at, settings: state.settings, seat: seatCtx?.seat || null }),
+      // ADR-0209: plus the people in this seat's reach who carry a PROVABLE
+      // work/rest conflict that is still ahead. Counted from shifts, amendments
+      // and policies alone — this badge sits on every route, so it never reads
+      // the reporting graph or coverage, which a conflict does not depend on.
+      standardWork: standardWorkAttentionCount(state, { now: at, settings: state.settings, seat: seatCtx?.seat || null })
+        + workRestAttentionCount(state, { now: at, seat: seatCtx?.seat || null }),
       // Schema v32: drafts written from case facts that still await a human.
       comms: (state.commsDrafts || []).filter((d) => d && d.status === 'draft').length,
       due: dueMeetings(state, at, state.settings).length,

@@ -1,15 +1,15 @@
 #!/usr/bin/env node
 /**
  * scripts/sweep-schema-pins.mjs — mechanical release-pin sweep, re-pointed at
- * every schema bump. Current target: v161 → v162 (ADR-0208, Session 277).
+ * every schema bump. Current target: v162 → v163 (ADR-0209, Session 278).
  *
- * ADR-0208 adds three new EMPTY collections (investmentCases, investmentCaseActs
- * and investmentCaseMarkers), CSV scope #150 and the 127th rule on the shared
- * spine, so its additive migration changes the current schema pin, the
- * migration-chain tails, the export-count pin and the spine-count pin. It
- * deliberately touches only test assertions: ADR/docs and source comments
- * explain their own historical version rather than being rewritten as a
- * mechanical side effect.
+ * ADR-0209 adds five new EMPTY collections (workRestShifts, workRestActs,
+ * workRestCoverage, workRestPolicies and workRestMarkers), CSV scope #151 and
+ * the 128th rule on the shared spine, so its additive migration changes the
+ * current schema pin, the migration-chain tails, the export-count pin and the
+ * spine-count pin. It deliberately touches only test assertions: ADR/docs and
+ * source comments explain their own historical version rather than being
+ * rewritten as a mechanical side effect.
  *
  * RE-POINTING IT. Change the three rows of `SWEEP` below and nothing else. Set
  * `csvExports` or `spineRules` to null for a release that adds no export scope
@@ -39,9 +39,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const SWEEP = {
-  schema: { from: 161, to: 162 },
-  csvExports: { from: [149], to: 150 },
-  spineRules: { from: [125, 126], to: 127 },
+  schema: { from: 162, to: 163 },
+  csvExports: { from: [150], to: 151 },
+  spineRules: { from: [127], to: 128 },
 };
 
 const ROOT = path.resolve(import.meta.dirname, '..');

@@ -190,6 +190,7 @@ import { priorityRule } from './priorityRankingRules.js';
 import { goalCommitmentRule } from './goalCommitmentRules.js';
 import { goalAttainmentRule } from './goalAttainmentRules.js';
 import { investmentCaseRule } from './investmentCaseRules.js';
+import { workRestRule } from './workRestRules.js';
 
 
 // ADR-0087: the Operating Cadence Clock. Reads the finished queue after the
@@ -1140,6 +1141,16 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // never moves money and never rates a person. Registered immediately before
   // `seatRule` and `sealRule`.
   investmentCaseRule,
+  // ADR-0209: the Cross-Line Work/Rest Recovery Ledger (RULE-WRR-01). ONE
+  // condition: the record PROVES a work/rest conflict whose decisive minute is
+  // still ahead. A conflict inside one line is owed to that line's holder; one
+  // made by two lines is owed to the lowest seat above BOTH. Where that is the
+  // workspace leader, the lines share no single apex or the person left the
+  // roster, it records an identity-free `workRestMarkers` observation and asks
+  // nobody. It never moves or cancels a shift, never chases the past, never
+  // chases a missing attestation and never rates a person. Registered
+  // immediately before `seatRule` and `sealRule`.
+  workRestRule,
   // ADR-0076: the Operating Seat (vertical roll-up + enforced boundaries).
   // It reads the finished record after every module has propagated, then fans
   // each open item up every leadership ancestor in the reporting tree with one

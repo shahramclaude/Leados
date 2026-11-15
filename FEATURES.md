@@ -1,3 +1,13 @@
+## 2026-11-15 · Session 278: Cross-line work/rest recovery ledger ([ADR-0209](./docs/adr/0209-cross-line-work-rest-recovery.md) · Schema v163 · `RULE-WRR-01` · CSV #151)
+
+- **What it answers.** How long a person was actually off between the end of one manager's shift and the start of another's. Live at `#/standard-work?panel=rest`. Frontline primary; a manager rosters above the line; a director declares the limits.
+- **The record.** Shifts (one person × one line × wall-clock ends in a named zone, offsets resolved at the door), amendments (actual times, cancellation), per-line coverage attestations, and declared policies with a written source. Nothing derived is stored.
+- **The arithmetic.** Elapsed whole minutes across clock changes; shifts merged across every line; four declarable limits — minimum rest, longest spell, a long rest due within a fixed time of the previous one, a total in any rolling window. No limit is built in.
+- **The readings.** Provable conflict · unproven · clear (only when every line attested the horizon) · no policy · two policies · no record. Each conflict prints the exact change that removes it.
+- **Line authority.** Only the holder of the line a shift is worked for — or a seat above that holder — records, amends or attests it. Another line's notes are withheld.
+- **The automation.** `RULE-WRR-01`: a conflict still ahead is asked of the line holder, or of the lowest seat above both lines when two lines made it; an identity-free marker where no such seat exists; self-closing; pause-governed.
+- **Not built.** In-shift breaks, night-work limits, standby classification, a fatigue-risk index, roster import. Rota-tool parity is **[BENCHMARK-UNVERIFIED]**; real-browser/AT walkthrough is **[UNVERIFIED]**.
+
 ## 2026-11-15 · Session 277: Investment case register — appraisal, ratification and post-completion review ([ADR-0208](./docs/adr/0208-investment-case-appraisal.md) · Schema v162 · `RULE-ICA-01` · CSV #150)
 
 - **What it answers.** Envelopes say how much may be spent, the delegation schedule says who may sign, and nothing said whether a spend was worth making or whether it delivered. Live at `#/finance?panel=cases` (Register · Track record · Method). VP / executive primary; a director ratifies and reviews; a manager declares.

@@ -340,7 +340,14 @@ test('standalone artifact exists and is a single inline HTML document', () => {
   // slice adds 160,051 bytes on top. Measured build: 13,762,774 bytes / 865
   // source modules = 15,910 bytes per module, still far below the unchanged
   // 24,000 density guard. Ceiling moves to 13,900,000.
-  assert.ok(bytes < 13_900_000, `standalone file is unexpectedly large (${bytes} bytes)`);
+  // ADR-0209 (Session 278, Schema v163) adds the Cross-Line Work/Rest Recovery
+  // Ledger: seven domain modules (registry, zone/instant maths, the interval
+  // kernel, schema, reader, actions, rule), one standard-work panel and one
+  // generated diagram (46,975 bytes, the sixteenth .jpg in app/assets). The
+  // slice adds 173,868 bytes. Measured build: 13,936,642 bytes / 873 source
+  // modules = 15,964 bytes per module, still far below the unchanged 24,000
+  // density guard. Ceiling moves to 14,100,000 only because capability was added.
+  assert.ok(bytes < 14_100_000, `standalone file is unexpectedly large (${bytes} bytes)`);
   // Derived from the folder, not from a list in this file: the day a panel adds
   // a diagram, an enumerator that names the old two would still pass. Same
   // lesson the build script learned in ADR-0186.

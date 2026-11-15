@@ -139,6 +139,7 @@ import { priorityRule } from './priorityRankingRules.js';
 import { goalCommitmentRule } from './goalCommitmentRules.js';
 import { goalAttainmentRule } from './goalAttainmentRules.js';
 import { investmentCaseRule } from './investmentCaseRules.js';
+import { workRestRule } from './workRestRules.js';
 import { sealRule } from './sealRules.js';
 // ADR-0092: the Differencing Defender declares its contract like every other rule.
 import { differencingRule } from './differencingRules.js';
@@ -1109,6 +1110,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'investmentCaseRules.js',
     purpose: 'RULE-ICA-01: reads the Investment Case Register (`investmentCaseDueReviews`, ADR-0208) with the whole-workspace view on case declarations, ratifications, withdrawals and reviews, roster and reporting-line changes, convention changes and explicit `investmentCase.scan` scans — and on any other commit, because a review falls due by the calendar. ONE condition, filed at most once per (case, review day) with a deterministic `ica1:…` signature and bounded at 4 per commit with the remainder counted: `review-due` — a RATIFIED case has reached a review day it declared and no review is recorded up to it. The ask goes to decision CONTROL and never to the benefit owner: the seat that ratified, while it is on the roster, holds the altitude to ratify and still sits above the owner; otherwise the lowest seat above EVERY one of the owner’s active reporting lines that holds that altitude (the joint apex of the owner’s managers, resolved through `buildMatrix` once). Where control sits with the workspace leader, the lines share no single apex, or neither ratifier nor owner is on the roster, it writes ONE identity-free `investmentCaseMarkers` observation and asks nobody. Asks self-close when the review is recorded or control moves. It never records a review, never ratifies or refuses a case, never appraises, never moves money, never edits an envelope and never rates a person. Pause-governed on every path (`investmentCaseAutoPropagate`), including the explicit scan.',
     writes: ['delegations', 'links', 'investmentCaseMarkers'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: workRestRule,
+    module: 'workRestRules.js',
+    purpose: 'RULE-WRR-01: reads the Cross-Line Work/Rest Recovery Ledger (`workRestConflictsAhead`, ADR-0209) with the whole-workspace view on shift declarations, amendments and cancellations, policy declarations and retirements, roster and reporting-line changes, convention changes and explicit `workRest.scan` scans — and on any other commit, because a conflict stops being ahead when the clock passes it. ONE condition: the record proves a double-booking, a rest shorter than the declared minimum, a spell longer than the declared maximum, an overdue long rest or a breached rolling cap whose decisive minute has not happened yet. A conflict made inside one reporting line is asked of that line’s holder; one made by two lines is asked of the lowest seat above BOTH (`matrixJointApex`). Leader-held, apex-less and off-roster conflicts get one identity-free `workRestMarkers` observation and no ask. Asks are `act-inform` delegations with `issues-obligation` and `rolls-up-to` links, idempotent per conflict signature, self-closing, capped per commit and pause-governed by `workRestAutoPropagate` on every path. It never moves or cancels a shift, never tests an undeclared limit and never rates a person.',
+    writes: ['delegations', 'links', 'workRestMarkers'],
     emits: [],
     scansWorkspace: true,
   },

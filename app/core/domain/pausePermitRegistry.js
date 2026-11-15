@@ -228,6 +228,11 @@ export const PAUSE_PERMIT_MATRIX_REACH_SWITCHES = Object.freeze([
   // it reaches a second line — and that line's manager is not told that a
   // ratified promise went unreviewed.
   'investmentCaseAutoPropagate',
+  // ADR-0209: the work/rest conflict switch. The rule reads the reporting graph
+  // for the seat above BOTH lines that made a conflict, so silencing it reaches
+  // a second line — and that line's manager is not told that the shift they
+  // rostered leaves a person short of rest.
+  'workRestAutoPropagate',
 ]);
 
 export function pausePermitReachesMatrix(key) {
@@ -268,6 +273,7 @@ export const PAUSE_PERMIT_REACH_RULES = Object.freeze({
   chargebackPostingAutoPropagate: 'chargebackPostingRules.js',
   goalAttainmentAutoPropagate: 'goalAttainmentRules.js',
   investmentCaseAutoPropagate: 'investmentCaseRules.js',
+  workRestAutoPropagate: 'workRestRules.js',
 });
 
 /** How much of the register a seat is shown. Mirrors the altitude disclosure ladder. */
