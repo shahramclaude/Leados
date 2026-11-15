@@ -224,6 +224,15 @@ export const RECORD_POLICIES = Object.freeze({
   // enterprise value, so the floor is rank 4 rather than a redacted derivative.
   valueBridgeReadings: { classKey: 'enterprise', detailCeiling: 5, label: 'Dated enterprise valuation readings (report only; every leg re-derived on read)', route: '#/finance?panel=value' },
   valueBridgeLeverClaims: { classKey: 'enterprise', detailCeiling: 5, label: 'Declared ownership of value-bridge legs (report only)', route: '#/finance?panel=value' },
+  // ADR-0215: report-only, like every governance ledger above. A concern names a
+  // reporter, a subject, a receiver and a written summary; the raw rows are NEVER
+  // handed to the generic projection. The register's own reader discloses a
+  // concern to the receiver, to the reporter, and as category/route/state to a
+  // seat that holds a party — and to everybody else as a count. The subject of a
+  // concern is shown it never.
+  concernReports: { classKey: 'unit', detailCeiling: 0, label: 'Raised concerns and the route each was given (report only; every state re-derived on read)', route: '#/speak-up' },
+  concernActs: { classKey: 'unit', detailCeiling: 0, label: 'Dated acts answering a concern — acknowledgement, outcome, retaliation check, closure, withdrawal (report only)', route: '#/speak-up' },
+  concernMarkers: { classKey: 'unit', detailCeiling: 0, label: 'Speak-up observation markers — no impartial route, receiver drifted', route: '#/speak-up' },
   delegationLineActs: { classKey: 'unit', detailCeiling: 0, label: 'Cross-line ask attribution acts (report only)', route: '#/matrix?panel=asks' },
   delegationLineMarkers: { classKey: 'unit', detailCeiling: 0, label: 'Cross-line overload reconciliation markers', route: '#/matrix?panel=asks' },
   // ADR-0181: classification acts and RULE-NPW-01 markers are surfaced only
@@ -778,6 +787,20 @@ export const ACTION_RIGHTS = Object.freeze({
   'record-value-bridge-reading': { minRank: 4, maxRank: 5, label: 'Record, restate or withdraw a dated valuation reading' },
   'claim-value-bridge-lever': { minRank: 4, maxRank: 5, label: 'Declare that a person you hold answers for one value leg over one period' },
   'govern-value-bridge': { minRank: 5, maxRank: 5, label: 'Set the window at which a bridge is printed as stale' },
+  // ADR-0215: the speak-up register. RAISING is open at every rank and every
+  // altitude, deliberately: the person who needs a channel most holds the least
+  // authority, and a register only a manager may open is a register that hears
+  // from managers. The ACTION narrows it — a named reporter must be the seat's own
+  // person or a person the seat holds, so nobody files somebody else's concern in
+  // their name. ANSWERING is open by rank because a receiver can sit anywhere, and
+  // the ACTION re-proves that the acting seat IS the named receiver and that the
+  // receiver still passes the impartiality test. Declaring the windows is a
+  // director-and-above act: the windows are the only thing that makes the promise
+  // to a reporter measurable.
+  'read-concerns': { minRank: 1, maxRank: 5, label: 'Read the speak-up register for your own span, your own concerns and the concerns routed to you' },
+  'raise-concern': { minRank: 1, maxRank: 5, label: 'Raise a concern, unnamed if you choose, or withdraw one you raised' },
+  'answer-concern': { minRank: 1, maxRank: 5, label: 'Acknowledge, resolve, check or close a concern routed to you — never one routed elsewhere' },
+  'govern-concerns': { minRank: 3, maxRank: 5, label: 'Declare the acknowledgement, outcome and retaliation-check windows, and scan the register' },
   // ADR-0209: reading the work/rest ledger is open at every altitude and scoped
   // by the reader. Rostering starts at the FRONTLINE — a shift lead writes the
   // roster — and the action re-proves that the seat holds the very line. Which

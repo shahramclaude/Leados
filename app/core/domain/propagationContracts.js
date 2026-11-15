@@ -143,6 +143,7 @@ import { capitalRationingRule } from './capitalRationingRules.js';
 import { workRestRule } from './workRestRules.js';
 import { conflictRecusalRule } from './conflictRecusalRules.js';
 import { standardWaiverRule } from './standardWaiverRules.js';
+import { speakUpRule } from './speakUpRules.js';
 import { sealRule } from './sealRules.js';
 // ADR-0092: the Differencing Defender declares its contract like every other rule.
 import { differencingRule } from './differencingRules.js';
@@ -1145,6 +1146,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'conflictRecusalRules.js',
     purpose: 'RULE-CIR-01: reads the Decision-Maker Conflict-of-Interest & Recusal Register (`buildConflictRecusal`, ADR-0210) with the whole-workspace view on interest declarations and withdrawals, standing responses (recusal, mitigation, determination, supersession), reportable-kind rules and their retirement, roster and reporting-line changes, convention changes and explicit `conflictRecusal.scan` scans — and on any other commit, because the horizon moves with the calendar. ONE condition, filed at most once per (interest, verdict) with a deterministic `cir1:…` signature and bounded at 4 per commit with the remainder counted: `undisclosed` — a declared interest whose holder sits on the record as the hand that signs it, its owner, or a declared line over its subject, and which carries no recusal, mitigation or written determination. The ask goes to the seat ABOVE the person holding the interest — never the person themselves, because a hand does not clear its own conflict — and in a matrix to the lowest seat above EVERY line the person holds (`matrixJointApex`), never to one line’s manager on the other’s behalf. Leader-held, apex-less, self-held and off-roster conditions write ONE identity-free `conflictRecusalMarkers` observation and substitute nobody. Asks carry typed `issues-obligation` and matrix-DAG `rolls-up-to` provenance and close themselves when the interest is answered, withdrawn, out of the horizon or changes owner. It never blocks a decision, edits an approver, revokes a right, invents an interest from a surname, a shared line or a pattern, converts a mitigation into independence, or rates a person; pausable via `conflictRecusalAutoPropagate` (the pause governs EVERY path, including explicit scans).',
     writes: ['delegations', 'links', 'conflictRecusalMarkers'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: speakUpRule,
+    module: 'speakUpRules.js',
+    purpose: 'RULE-SUP-01: reads the Speak-Up Concern Routing & Impartiality Register (`buildSpeakUpReport`, ADR-0215) with the whole-workspace view on concern raises and withdrawals, acknowledgements, outcomes, retaliation checks, closures, convention changes and explicit `speakUp.scan` scans — and on any other commit, because a window closes with the calendar. TWO conditions, filed at most once per deterministic `sup1:…` signature and bounded at 4 per commit with the remainder counted: `ack-overdue` — a routed concern whose declared acknowledgement window closed with no acknowledgement — and `watch-overdue` — an outcome whose declared retaliation window closed with no dated check. Both asks go to the RECEIVER, never to the reporter, never to the receiver\u2019s manager and never to the subject. A concern with no impartial route, and a receiver whose impartiality drifted after the route was chosen, write ONE identity-free `concernMarkers` observation and ask nobody. The ask text is deliberately opaque — no party, no category, no date, no detail — because a delegation is readable above the receiver; the opaque signature lives only in the typed `issues-obligation` link. Asks self-close when the condition clears or the receiver moves. It never acknowledges, resolves, checks, closes, withdraws or re-routes a concern and never rates a person; pause-governed on every path (`speakUpAutoPropagate`), including the explicit scan.',
+    writes: ['delegations', 'links', 'concernMarkers'],
     emits: [],
     scansWorkspace: true,
   },

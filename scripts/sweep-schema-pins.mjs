@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * scripts/sweep-schema-pins.mjs — mechanical release-pin sweep, re-pointed at
- * every schema bump. Current target: v166 → v167 (ADR-0213, Session 286).
+ * every schema bump. Current target: v168 → v169 (ADR-0215, Session 288).
  * ADR-0213 adds CSV scope #155 and NO rule on the shared spine, so
  * `spineRules` is null for this release.
  *
@@ -34,6 +34,19 @@
  * still exists at that key. Their expected tail IS swept, because the chain
  * now continues past them to the current head.
  *
+ * ONE-STEP EXPECTATIONS ARE EXEMPT. A test that calls a single step directly
+ * (`const next = MIGRATIONS[165](v165)`) asserts what THAT STEP returns — 166,
+ * forever — not the current head. Session 288 found `assert.equal(next
+ * .schemaVersion, 168)` in standard-waivers.test.mjs, corrupted by the blunt
+ * `schemaVersion, <from>` swap two releases earlier (ADR-0210's sweep), which
+ * silently turned a historical fact into a false head pin and left the suite
+ * red. Such blocks are now detected and skipped, and the historical value was
+ * restored by hand. `ids.length, <from>` is swept too: Session 288 found the
+ * spine count pinned in that form in work-rest-recovery.test.mjs, which the
+ * `DEFAULT_POST_COMMIT_RULES.length` pattern could not see. Positional tail
+ * pins (`ids.at(-3)`, `slice(-3)`) remain manual — a new rule shifts them by
+ * one and the failure message names the winner.
+ *
  * Do not use an old sweep after a new migration: it cannot see
  * current pins and may leave the suite asserting a historical release head.
  */
@@ -41,9 +54,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const SWEEP = {
-  schema: { from: 166, to: 167 },
-  csvExports: { from: [154], to: 155 },
-  spineRules: null,
+  schema: { from: 168, to: 169 },
+  csvExports: { from: [156], to: 157 },
+  spineRules: { from: [131], to: 132 },
 };
 
 const ROOT = path.resolve(import.meta.dirname, '..');
@@ -67,7 +80,15 @@ for (const file of files) {
     out = out.replace(pattern, () => { n += 1; totals[bucket] += 1; return replacement; });
   };
   swap(new RegExp(`SCHEMA_VERSION, ${from}\\b`, 'g'), `SCHEMA_VERSION, ${to}`, 'schema');
-  swap(new RegExp(`schemaVersion, ${from}\\b`, 'g'), `schemaVersion, ${to}`, 'schema');
+  // Split into test blocks so a one-step assertion is never mistaken for a
+  // current-head pin. `MIGRATIONS[n](` (a direct, single step) is the marker;
+  // the chain is exercised through `migrate(...)`.
+  out = out.split(/^(?=test\()/m).map((block) => {
+    if (/MIGRATIONS\[\s*['"]?\d+['"]?\s*\]\s*\(/.test(block)) return block;
+    return block.replace(new RegExp(`schemaVersion, ${from}\\b`, 'g'), () => {
+      n += 1; totals.schema += 1; return `schemaVersion, ${to}`;
+    });
+  }).join('');
   swap(new RegExp(`'${previousStep}'\\]`, 'g'), `'${previousStep}', '${newStep}']`, 'chain');
   // Some older migration tests assert only the terminal chain entry. They are
   // current-schema pins, not historical one-step migration assertions (such as
@@ -78,6 +99,7 @@ for (const file of files) {
   }
   for (const stale of SWEEP.spineRules?.from || []) {
     swap(new RegExp(`DEFAULT_POST_COMMIT_RULES\\.length, ${stale}\\b`, 'g'), `DEFAULT_POST_COMMIT_RULES.length, ${SWEEP.spineRules.to}`, 'spineRules');
+    swap(new RegExp(`ids\\.length, ${stale}\\b`, 'g'), `ids.length, ${SWEEP.spineRules.to}`, 'spineRules');
   }
   if (out !== src) {
     fs.writeFileSync(file, out);

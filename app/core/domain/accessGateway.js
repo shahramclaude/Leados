@@ -20,6 +20,7 @@ import { CONFLICT_RECUSAL_RIGHTS } from './conflictRecusalRegistry.js';
 import { STANDARD_WAIVER_RIGHTS } from './standardWaiverRegistry.js';
 import { FLEX_BUDGET_RIGHTS } from './flexBudgetRegistry.js';
 import { VALUE_BRIDGE_RIGHTS } from './valueBridgeRegistry.js';
+import { SPEAK_UP_RIGHTS } from './speakUpRegistry.js';
 import { routeVerdict } from './seatRegistry.js';
 import { validateMissionCommands } from './mission.js';
 import { captureBriefCase } from './missionCaptureBrief.js';
@@ -208,6 +209,25 @@ const groups = [
   [VALUE_BRIDGE_RIGHTS.RECORD, 'valueBridgeRecordReading valueBridgeWithdrawReading'],
   [VALUE_BRIDGE_RIGHTS.CLAIM, 'valueBridgeClaimLever valueBridgeWithdrawClaim'],
   [VALUE_BRIDGE_RIGHTS.GOVERN, 'valueBridgeSetConventions'],
+  // ADR-0215: the speak-up register. Raising is open at EVERY rank — the person
+  // who needs this most has the least authority to open a screen — and the action
+  // narrows it to a named reporter the seat actually holds, or to an unnamed
+  // record. Answering is the named receiver's alone and is re-proved against the
+  // live graph inside every act. The windows and the scan are governance.
+  //
+  // NOTE ON THE PAYLOAD BOUNDARY. This module deliberately names parties a seat
+  // does not hold: the subject of a concern is usually an ANCESTOR, and a register
+  // that could only record concerns about one's own reports would be useless
+  // exactly where it matters. The action is therefore the boundary: it proves the
+  // reporter, and it proves the receiver impartial across the whole reporting
+  // graph, refusing any receiver that holds either party. The generic
+  // "names a person outside your span" refusal below does not see these fields
+  // because they are not the sharing vocabulary (`personId`/`managerId`) — the
+  // exemption is explicit here rather than an accident of naming.
+  [SPEAK_UP_RIGHTS.READ, 'speakUpReport speakUpBriefText speakUpCsvRows speakUpAttentionCount speakUpCandidates'],
+  [SPEAK_UP_RIGHTS.RAISE, 'speakUpRaiseConcern speakUpWithdrawConcern'],
+  [SPEAK_UP_RIGHTS.ANSWER, 'speakUpAcknowledge speakUpRecordOutcome speakUpRecordWatch speakUpCloseConcern'],
+  [SPEAK_UP_RIGHTS.GOVERN, 'speakUpScan speakUpSetConventions'],
   // ADR-0148: answering a declared share is TWO first-person acts, split on the
   // spine rather than in prose. `accept-matrix-line` is the manager's own
   // answer (accept or decline the line they were given); it is open at every
@@ -508,6 +528,13 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // ADR-0213: the variance statement's pure read surface — each re-proves the
 // read right and projects by seat inside the action.
 'flexBudgetAttentionCount', 'flexBudgetBriefText', 'flexBudgetCandidates', 'flexBudgetCsvRows', 'flexBudgetReport', 'valueBridgeAttentionCount', 'valueBridgeBriefText', 'valueBridgeCandidates', 'valueBridgeCsvRows', 'valueBridgeReport',
+// ADR-0215: the speak-up register's pure read surface. Every one of these
+// re-proves the read right and projects by seat INSIDE the action, so a seat
+// outside a concern's span receives counts, never a description. Registered here
+// because a module whose reads are absent from SAFE_READS is unreadable under
+// enforcement while its writes are still gated — the register would vanish
+// exactly when a real organisation turned enforcement on.
+'speakUpReport', 'speakUpBriefText', 'speakUpCsvRows', 'speakUpAttentionCount', 'speakUpCandidates',
 'standardWaiverAttentionCount', 'standardWaiverBriefText', 'standardWaiverCandidates', 'standardWaiverCsvRows', 'standardWaiverReport', 'concordanceAttentionCount', 'concordanceBriefText', 'concordanceCsvRows', 'concordanceRead', 'concordanceStats', 'disclosureAttentionCount', 'disclosureBriefText', 'disclosureCsvRows', 'disclosureGrantRead', 'disclosureGrants', 'disclosureRead', 'envoyAttentionCount', 'envoyBriefText', 'envoyCsvRows', 'envoyIdentity', 'envoyPacketText', 'envoyPreview', 'envoyRead', 'escalationBriefText', 'escalationCsvRows', 'escalationRead', 'escalationStats', 'differencesAttentionCount', 'differencesBriefText', 'differencesCsvRows', 'differencesRead', 'federationAttentionCount', 'federationBriefText', 'federationCsvRows', 'federationRead',
 'freezeLineAttentionCount', 'freezeLineBriefText', 'freezeLineConventions', 'freezeLineCsvRows', 'freezeLineReport',
 'spanCalibrationAttentionCount', 'spanCalibrationBriefText', 'spanCalibrationConventions', 'spanCalibrationCsvRows', 'spanCalibrationReport', 'spanCalibrationSettings', 'spanCalibrationSignals',

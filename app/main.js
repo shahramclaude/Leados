@@ -155,7 +155,9 @@ import { stakeholdersRollup } from './core/domain/stakeholders.js';
 import { renderNegotiations, renderNegotiationDetail } from './views/negotiation.js';
 import { renderFinance, renderBudgetDetail } from './views/finance.js';
 import { renderConflictRecusal } from './views/conflictRecusalPanel.js';
+import { renderSpeakUp } from './views/speakUp.js';
 import { conflictRecusalAttentionCount } from './core/domain/conflictRecusal.js';
+import { speakUpAttentionCount } from './core/domain/speakUp.js';
 import { investmentCaseAttentionCount } from './core/domain/investmentCase.js';
 import { capitalRationingAttentionCount } from './core/domain/capitalRationing.js';
 import { renderStakeholders, renderStakeholderDetail } from './views/stakeholders.js';
@@ -549,6 +551,12 @@ export const NAV = [
     // register records the declared interest, the dated response, and whether the
     // response actually moved the hand.
     { route: 'recusal', label: 'Conflicts of interest', icon: '⚖', badge: 'recusal' },
+    // ADR-0215: a right to raise a concern with no instrument is a sentence. This
+    // register records the route, proves the receiver impartial against the whole
+    // reporting graph, and holds the three clocks a speak-up process owes. It sits
+    // beside the conflict-of-interest register on purpose: one asks whether a hand
+    // was independent, the other whether a voice could be heard at all.
+    { route: 'speak-up', label: 'Speak-up & impartiality', icon: '✦', badge: 'speakUp' },
     // ADR-0121: who answers for each declared duty line when the holder is out.
     { route: 'duty-cover', label: 'Duty coverage', icon: '⛨', badge: 'dutyCoverage' },
     // ADR-0140: who is accountable to whom when one person has several managers.
@@ -707,6 +715,8 @@ const RENDERERS = {
   decisions: (ctx) => renderDecisions(ctx),
   // ADR-0210: the conflict-of-interest & recusal register.
   recusal: (ctx) => renderConflictRecusal(ctx),
+  // ADR-0215: the speak-up concern routing & impartiality register.
+  'speak-up': (ctx) => renderSpeakUp(ctx),
   conflicts: (ctx) => renderConflicts(ctx),
   conflict: (ctx, segments) => renderConflictDetail(ctx, safeDecode(segments[1])),
   recognition: (ctx) => renderRecognition(ctx),
@@ -1562,6 +1572,12 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       // record and never builds the reporting graph. Opening the register is what
       // reads the record.
       recusal: conflictRecusalAttentionCount(state, { now: at, personId: seatCtx?.seat?.fullAccess ? null : (seatCtx?.seat?.nodeId || seatCtx?.seat?.id || null) }),
+      // ADR-0215: overdue acknowledgement / outcome / retaliation windows, plus
+      // concerns the record cannot route impartially and receivers whose
+      // impartiality drifted. A COUNT of owed acts and structural findings, never
+      // a name: this sits on every route, so it reads rows and builds no sentence.
+      // Opening the register is what reads the record.
+      speakUp: speakUpAttentionCount(state, { now: at, settings: state.settings, seat: seatCtx?.seat || null }),
       // Schema v32: drafts written from case facts that still await a human.
       comms: (state.commsDrafts || []).filter((d) => d && d.status === 'draft').length,
       due: dueMeetings(state, at, state.settings).length,

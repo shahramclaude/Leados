@@ -217,6 +217,8 @@ import { buildFlexBudget, flexBudgetCsvRows } from './domain/flexBudget.js';
 import { FLEX_BUDGET_CSV_COLUMNS, FLEX_BUDGET_CSV_DESCRIPTOR } from './domain/flexBudgetRegistry.js';
 import { buildValueBridge, valueBridgeCsvRows } from './domain/valueBridge.js';
 import { VALUE_BRIDGE_CSV_COLUMNS, VALUE_BRIDGE_CSV_DESCRIPTOR } from './domain/valueBridgeRegistry.js';
+import { buildSpeakUpReport, speakUpCsvRows } from './domain/speakUp.js';
+import { SPEAK_UP_CSV_COLUMNS, SPEAK_UP_CSV_DESCRIPTOR } from './domain/speakUpRegistry.js';
 import {
   CAPITAL_RATIONING_CSV_COLUMNS,
   CAPITAL_RATIONING_CSV_DESCRIPTOR,
@@ -1487,6 +1489,12 @@ export const CSV_EXPORTS = [
   // debt level; a bridge exports as `B01` and a chain as `C01`, currencies are
   // never pooled, and a withheld figure exports BLANK with its reason key.
   VALUE_BRIDGE_CSV_DESCRIPTOR,
+  // CSV scope #157 (Schema v169, ADR-0215): the speak-up register. AGGREGATE ONLY —
+  // one summary row plus one row per (category × route × state) bucket. This is the
+  // most sensitive register in the workspace: no reporter, no subject, no receiver,
+  // no id, no summary, no note and no concern date crosses this boundary, and a
+  // refused figure exports BLANK with its flag rather than a zero.
+  SPEAK_UP_CSV_DESCRIPTOR,
 ];
 
 function personLookup(state) {
@@ -6704,6 +6712,17 @@ export function buildScopeTable(state, scope, now) {
       return {
         columns: CONFLICT_RECUSAL_CSV_COLUMNS.map((key) => ({ key, header: key })),
         rows: conflictRecusalCsvRows(report),
+      };
+    }
+    case 'speak-up-concerns': {
+      // CSV scope #157 (ADR-0215, Schema v169). Built from the SAME reader the
+      // panel renders, so an exported bucket count is provably the count that was
+      // printed. Aggregate and identity-free by construction: the reader's rows
+      // carry names, references and text, and none of them is reachable from here.
+      const report = buildSpeakUpReport(state, { now, settings: state.settings || {}, seat: null });
+      return {
+        columns: SPEAK_UP_CSV_COLUMNS.map((key) => ({ key, header: key })),
+        rows: speakUpCsvRows(report),
       };
     }
     case 'value-bridge-movements': {
