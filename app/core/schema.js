@@ -317,6 +317,16 @@ import {
   normalizeIncRecoveries,
   normalizeIncentiveSettings,
 } from './domain/incentiveSchema.js';
+// ADR-0221 (Schema v175): the Duty-Without-Means Register. Fail-closed duties,
+// required authority/budget/time pillars, controlling-line responses, joint-apex
+// entrepreneurial-gap sign-offs, and identity-free rule markers.
+import {
+  normalizeDutyMeansActs,
+  normalizeDutyMeansDuties,
+  normalizeDutyMeansMarkers,
+  normalizeDutyMeansRequirements,
+  normalizeDutyMeansSettings,
+} from './domain/dutyMeansSchema.js';
 // ADR-0185 (Schema v147): dated Matrix change-impact requests and first-person
 // line responses. Request snapshots normalize before their responses resolve.
 import {
@@ -1150,7 +1160,12 @@ export {
 // instrument, and a conduct review invented at upgrade time would attribute a
 // culpability finding to a person who was never reviewed. No deciding line is
 // inferred either — ownership is named by a human, or the review is not opened.
-export const SCHEMA_VERSION = 174;
+// ADR-0221 (Schema v175): four empty ledgers (`dutyMeansDuties`,
+// `dutyMeansRequirements`, `dutyMeansActs`, `dutyMeansMarkers`) and two
+// declared conventions (`dutyMeansResponseDays`, `dutyMeansAutoPropagate`). No
+// duty or requirement is inferred from an existing goal, case, delegation or
+// reporting-line percentage.
+export const SCHEMA_VERSION = 175;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -2652,6 +2667,8 @@ export const DEFAULT_SETTINGS = Object.freeze({
   ...normalizeSynergySettings({}),
   // ADR-0217: carry earned-value conventions through the central write/load door.
   ...normalizeEvSettings({}),
+  // ADR-0221: carry duty-without-means response window and automation pause.
+  ...normalizeDutyMeansSettings({}),
 });
 
 export const COLLECTIONS = [
@@ -3553,6 +3570,10 @@ export const COLLECTIONS = [
   'incentiveAwards',
   'incentiveRecoveries',
   'incentiveMarkers',
+  'dutyMeansDuties',
+  'dutyMeansRequirements',
+  'dutyMeansActs',
+  'dutyMeansMarkers',
 ];
 
 /** Stable empty state. `now` is an ISO string so the result is a pure value. */
@@ -4394,6 +4415,7 @@ export function normalizeSettings(raw) {
     // verification.
     ...normalizeSynergySettings(s),
     ...normalizeEvSettings(s),
+    ...normalizeDutyMeansSettings(s),
     ...normalizeStructureHistorySettings(s),
     ...normalizeDifferencesSettings(s),
     ...normalizeFitSettings(s),
@@ -9069,6 +9091,13 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.incentiveAwards = normalizeIncAwards(raw.incentiveAwards, warnings);
   state.incentiveRecoveries = normalizeIncRecoveries(raw.incentiveRecoveries, warnings);
   state.incentiveMarkers = normalizeIncMarkers(raw.incentiveMarkers, warnings);
+  // ADR-0221 (Schema v175): fail-closed duties, required means pillars, acts and
+  // identity-free markers. Stored cents and hours are read as integers only,
+  // never re-parsed; verdicts and shortfalls are re-derived on read.
+  state.dutyMeansDuties = normalizeDutyMeansDuties(raw.dutyMeansDuties, warnings);
+  state.dutyMeansRequirements = normalizeDutyMeansRequirements(raw.dutyMeansRequirements, warnings);
+  state.dutyMeansActs = normalizeDutyMeansActs(raw.dutyMeansActs, warnings);
+  state.dutyMeansMarkers = normalizeDutyMeansMarkers(raw.dutyMeansMarkers, warnings);
   state.conflictInterests = normalizeConflictInterests(raw.conflictInterests, warnings);
   state.conflictNoneDeclarations = normalizeConflictNoneDeclarations(raw.conflictNoneDeclarations, warnings);
   state.conflictStandings = normalizeConflictStandings(raw.conflictStandings, state.conflictInterests, warnings);
@@ -9857,6 +9886,20 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  // 174 → 175: ADR-0221 adds FOUR EMPTY ledgers (`dutyMeansDuties`,
+  // `dutyMeansRequirements`, `dutyMeansActs`, `dutyMeansMarkers`) and two
+  // declared conventions (`dutyMeansResponseDays`, `dutyMeansAutoPropagate`). No
+  // duty, requirement or allocation is invented at upgrade time from goals,
+  // delegations, budgets or reporting-line percentages.
+  174: (v174) => ({
+    ...v174,
+    schemaVersion: 175,
+    dutyMeansDuties: Array.isArray(v174.dutyMeansDuties) ? v174.dutyMeansDuties : [],
+    dutyMeansRequirements: Array.isArray(v174.dutyMeansRequirements) ? v174.dutyMeansRequirements : [],
+    dutyMeansActs: Array.isArray(v174.dutyMeansActs) ? v174.dutyMeansActs : [],
+    dutyMeansMarkers: Array.isArray(v174.dutyMeansMarkers) ? v174.dutyMeansMarkers : [],
+    settings: { ...(v174.settings || {}), ...normalizeDutyMeansSettings(v174.settings || {}) },
+  }),
   // 173 → 174: ADR-0220 adds SIX EMPTY ledgers and one declared convention. No
   // plan is inferred from a budget, a capital envelope, a merit cycle or a
   // goal; no measure is invented from a scorecard; no award is derived from a

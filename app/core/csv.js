@@ -233,6 +233,9 @@ import { RA_CSV_COLUMNS, RA_CSV_DESCRIPTOR, RA_CSV_SCOPE } from './domain/riskAp
 // aggregate per currency and identity-free.
 import { buildIncentiveIntegrity, incentiveCsvRows } from './domain/incentiveIntegrity.js';
 import { INC_CSV_COLUMNS, INC_CSV_DESCRIPTOR, INC_CSV_SCOPE } from './domain/incentiveRegistry.js';
+// ADR-0221: CSV #163 — the duty-without-means register, aggregate and identity-free.
+import { buildDutyMeans, dutyMeansCsvRows } from './domain/dutyMeans.js';
+import { DWM_CSV_COLUMNS, DWM_CSV_DESCRIPTOR, DWM_CSV_SCOPE } from './domain/dutyMeansRegistry.js';
 import {
   CAPITAL_RATIONING_CSV_COLUMNS,
   CAPITAL_RATIONING_CSV_DESCRIPTOR,
@@ -1535,6 +1538,9 @@ export const CSV_EXPORTS = [
   // verifier, rationale or evidence reference crosses this boundary; an
   // uncomputable figure exports BLANK with its reason rather than a zero.
   INC_CSV_DESCRIPTOR,
+  // #163 (ADR-0221): duty-without-means parity — one workspace control row plus
+  // one currency row per declared currency, aggregate and identity-free.
+  DWM_CSV_DESCRIPTOR,
 ];
 
 function personLookup(state) {
@@ -6805,6 +6811,15 @@ export function buildScopeTable(state, scope, now) {
       return {
         columns: INC_CSV_COLUMNS.map((key) => ({ key, header: key })),
         rows: incentiveCsvRows(report),
+      };
+    }
+    case DWM_CSV_SCOPE: {
+      // CSV scope #163 (ADR-0221, Schema v175). Built from the SAME reader the
+      // `#/means` panel renders, aggregate and identity-free by construction.
+      const report = buildDutyMeans(state, { now, settings: state.settings || {}, seat: null });
+      return {
+        columns: DWM_CSV_COLUMNS.map((key) => ({ key, header: key })),
+        rows: dutyMeansCsvRows(report),
       };
     }
     case 'earned-value-delivery': {

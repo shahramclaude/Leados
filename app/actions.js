@@ -126,6 +126,7 @@ import { createEarnedValueActions } from './core/domain/earnedValueActions.js';
 // Every read re-derives every figure; every write proves the line.
 import { createRiskAppetiteActions } from './core/domain/riskAppetiteActions.js';
 import { createIncentiveActions } from './core/domain/incentiveActions.js';
+import { createDutyMeansActions } from './core/domain/dutyMeansActions.js';
 import { createWorkRestActions } from './core/domain/workRestActions.js';
 import { createConflictRecusalActions } from './core/domain/conflictRecusalActions.js';
 // ADR-0148: Matrix Line Consent. A declared share is an ask until the line's
@@ -20345,6 +20346,8 @@ export function createApi(store, options = {}) {
   Object.assign(api, createRiskAppetiteActions(store, { now: clock, idFactory: id }));
   // ADR-0220: the variable-pay design & incentive integrity register's commands.
   Object.assign(api, createIncentiveActions(store, { now: clock, idFactory: id }));
+  // ADR-0221: the Duty-Without-Means Register's commands and seat-checked reads.
+  Object.assign(api, createDutyMeansActions(store, { now: clock, idFactory: id }));
   // ADR-0209: the Cross-Line Work/Rest Recovery Ledger — recording a shift for a
   // line the acting seat HOLDS, its actual times or cancellation, a line's
   // coverage attestation, and the declared policy. No act moves or cancels a

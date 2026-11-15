@@ -204,6 +204,7 @@ import { synergyRule } from './synergyRules.js';
 import { earnedValueRule } from './earnedValueRules.js';
 import { riskAppetiteRule } from './riskAppetiteRules.js';
 import { incentiveRule } from './incentiveRules.js';
+import { dutyMeansRule } from './dutyMeansRules.js';
 
 
 // ADR-0087: the Operating Cadence Clock. Reads the finished queue after the
@@ -1266,6 +1267,16 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // recovery, never reverses a payment and never rates a person.
   // Registered immediately before `speakUpRule`, `seatRule` and `sealRule`.
   incentiveRule,
+  // ADR-0221: the Duty-Without-Means Register (`RULE-DWM-01`). Reads the
+  // finished register (`buildDutyMeans`) and files at most one opaque ask per
+  // condition: an unscoped duty (to the demanding line holder), an overdue
+  // unanswered means request (to the controlling line holder), or a declined /
+  // withdrawn / partial / drifted means gap (to the lowest joint apex strictly
+  // above EVERY reporting line of both the demanding and controlling lines,
+  // never to the carrier and never to one peer line over another). Where no
+  // joint apex exists, writes ONE identity-free `dutyMeansMarkers` observation.
+  // Registered immediately before `speakUpRule`, `seatRule` and `sealRule`.
+  dutyMeansRule,
   // Registered immediately before `seatRule` and `sealRule`.
   speakUpRule,
   // ADR-0076: the Operating Seat (vertical roll-up + enforced boundaries).

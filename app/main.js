@@ -165,6 +165,9 @@ import { riskAppetiteAttentionCount } from './core/domain/riskAppetite.js';
 // ADR-0220: the variable-pay design & incentive integrity register.
 import { renderIncentive } from './views/incentive.js';
 import { incentiveAttentionCount } from './core/domain/incentiveIntegrity.js';
+// ADR-0221: the Duty-Without-Means Register.
+import { renderDutyMeans } from './views/dutyMeans.js';
+import { dutyMeansAttentionCount } from './core/domain/dutyMeans.js';
 import { conflictRecusalAttentionCount } from './core/domain/conflictRecusal.js';
 import { speakUpAttentionCount } from './core/domain/speakUp.js';
 import { investmentCaseAttentionCount } from './core/domain/investmentCase.js';
@@ -583,6 +586,10 @@ export const NAV = [
     // purpose: one is the risk the enterprise carries, the other the behaviour it
     // pays for while carrying it.
     { route: 'incentive', label: 'Incentive integrity', icon: '⌁', badge: 'incentive' },
+    // ADR-0221: whether an accountable outcome duty carries the authority,
+    // budget, and protected hours required to deliver it, and where a competing
+    // matrix line holds those means locked.
+    { route: 'means', label: 'Duty without means', icon: '⚷', badge: 'means' },
     // ADR-0121: who answers for each declared duty line when the holder is out.
     { route: 'duty-cover', label: 'Duty coverage', icon: '⛨', badge: 'dutyCoverage' },
     // ADR-0140: who is accountable to whom when one person has several managers.
@@ -749,6 +756,8 @@ const RENDERERS = {
   'risk-appetite': (ctx) => renderRiskAppetite(ctx),
   // ADR-0220: the variable-pay design & incentive integrity register.
   incentive: (ctx) => renderIncentive(ctx),
+  // ADR-0221: the Duty-Without-Means Register.
+  means: (ctx) => renderDutyMeans(ctx),
   conflicts: (ctx) => renderConflicts(ctx),
   conflict: (ctx, segments) => renderConflictDetail(ctx, safeDecode(segments[1])),
   recognition: (ctx) => renderRecognition(ctx),
@@ -1621,6 +1630,9 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       // recoveries this seat holds the joint apex above, plus live plans of its
       // own with no verified reading. The same conditions RULE-INC-01 files.
       incentive: incentiveAttentionCount(state, { now: at, settings: state.settings, seat: seatCtx?.seat || null }),
+      // ADR-0221: unscoped duties, overdue means requests controlled by this
+      // seat, and unbacked means gaps escalated to this seat as joint apex.
+      means: dutyMeansAttentionCount(state, { now: at, settings: state.settings, seat: seatCtx?.seat || null }),
       // Schema v32: drafts written from case facts that still await a human.
       comms: (state.commsDrafts || []).filter((d) => d && d.status === 'draft').length,
       due: dueMeetings(state, at, state.settings).length,
@@ -2202,6 +2214,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       matrix: 'Matrix accountability — for every person with more than one manager: which lines they are accountable through, what share of them each line owns, whether those shares add back to one person, who holds each of the six decision rights, and whether every manager’s span adds up to the headcount without counting anybody twice',
       'standard-work': 'Leader standard work — the repeatable part of every leader’s job declared as routines with an observable standard, checked first-person slot by calendar slot, with adherence and its Wilson interval, lapsed routines sent to the next tier on the line the routine names, and abnormalities carried one dated tier at a time until a tier contains them',
       'duty-cover': 'Duty coverage — for every duty line this altitude (and the spans below it) is supposed to perform: who is declared answerable when the holder is absent, whether that person’s altitude can reach the duty at all, whether their access has ever been exercised on a dated record, which duty carries open work with nobody behind it, where one hand is carrying a duty alone, and — under the Absence plan panel — which dated absence windows leave a duty line with no available cover at all',
+      means: 'Duty without means — whether every accountable outcome duty carries the authority, budget, and protected hours required to deliver it, which line controls each pillar, and which cross-line locks escalate to the joint apex',
     };
     return labels[route] || 'LeadOS';
   }

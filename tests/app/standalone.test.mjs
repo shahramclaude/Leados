@@ -407,7 +407,13 @@ test('standalone artifact exists and is a single inline HTML document', () => {
   // 17,347 bytes per module, still far below the unchanged 24,000 density guard.
   // Ceiling moves 16,200,000 -> 16,500,000 only because real capability was
   // added; the density bound still catches a module inlined twice.
-  assert.ok(bytes < 16_500_000, `standalone file is unexpectedly large (${bytes} bytes)`);
+  // ADR-0221 (Session 297, Schema v175) adds the Duty-Without-Means Register:
+  // five domain modules (registry, schema/loaders, pure reader, dated actions,
+  // pause-aware spine rule), one route view, one CSV scope, and one generated
+  // diagram (`app/assets/duty-without-means-method.jpg`, 55,890 bytes, inlined
+  // as base64). Measured build: 16,506,727 bytes / 948 source modules = 17,412
+  // bytes per module, well below the unchanged 24,000 bytes/module density guard.
+  assert.ok(bytes < 16_800_000, `standalone file is unexpectedly large (${bytes} bytes)`);
   // Derived from the folder, not from a list in this file: the day a panel adds
   // a diagram, an enumerator that names the old two would still pass. Same
   // lesson the build script learned in ADR-0186.

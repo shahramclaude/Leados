@@ -258,6 +258,11 @@ export const PAUSE_PERMIT_MATRIX_REACH_SWITCHES = Object.freeze([
   // second line — and that line's manager is not told that money is being paid
   // twice for one result or that money is owed back.
   'incentiveAutoPropagate',
+  // ADR-0221: the duty-without-means switch. The rule reads the live matrix for
+  // the joint apex above demanding and controlling lines when required means
+  // are declined, withdrawn, partial, or drifted, so silencing it reaches across
+  // reporting lines.
+  'dutyMeansAutoPropagate',
 ]);
 
 export function pausePermitReachesMatrix(key) {
@@ -320,6 +325,10 @@ export const PAUSE_PERMIT_SWITCH_RULES = Object.freeze({
   // measuring. The pause is permitted and printed as such — a switch that hides
   // money paid twice must not itself be hidden.
   incentiveAutoPropagate: 'incentiveRules.js',
+  // ADR-0221: silencing the ask that requests declaring required means,
+  // answering an overdue means request, or resolving a cross-line means gap at
+  // the joint apex.
+  dutyMeansAutoPropagate: 'dutyMeansRules.js',
 });
 
 /** Only graph-reading rules belong to the matrix census. Owner-directed rules
