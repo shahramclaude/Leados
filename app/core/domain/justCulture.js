@@ -182,7 +182,7 @@ export function buildJustCultureReport(state, { now = new Date(), settings = nul
     const withheld = reviewsN < L.lineFloorN;
     if (withheld) {
       return {
-        managerId, managerName: nameOf(matrix, managerId), reviewsN, withheld: true,
+        withheld: true,
         withheldReason: `Fewer than ${L.lineFloorN} reviews held by this line: its counts are withheld, not shown as zero.`,
         byState: null, responses: null, departsN: null, contestedN: null, orphanedN: null,
       };
@@ -205,8 +205,12 @@ export function buildJustCultureReport(state, { now = new Date(), settings = nul
       contestedN: lineByState.contested,
       orphanedN: lineByState.orphaned,
     };
-  }).sort((a, b) => b.reviewsN - a.reviewsN || String(a.managerName).localeCompare(String(b.managerName)));
+  });
   const withheldLines = lines.filter((line) => line.withheld).length;
+  // Do not return a per-line row for a suppressed group: even a named row
+  // with an omitted count reveals that this manager has one or two reviews.
+  const disclosedLines = lines.filter((line) => !line.withheld)
+    .sort((a, b) => b.reviewsN - a.reviewsN || String(a.managerName).localeCompare(String(b.managerName)));
 
   // Rows: only what this seat is granted in full. Everything else is counted.
   const visible = derived.filter((row) => reviewGrant(seat, { id: row.id, personId: row.personId }) === 'full');
@@ -265,7 +269,7 @@ export function buildJustCultureReport(state, { now = new Date(), settings = nul
     rows: shown,
     rowsShown: shown.length,
     rowsCapped: rows.length - shown.length,
-    lines,
+    lines: disclosedLines,
     attention,
     attentionReason: attention ? 'Reviews where this seat owes the answers, a concurrence, or a new owner.' : '',
     perLine,

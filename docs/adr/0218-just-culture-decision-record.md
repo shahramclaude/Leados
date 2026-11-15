@@ -20,7 +20,7 @@ Just Culture (Marx, 2001) separates human error, at-risk behaviour and reckless 
 4. **Ownership is proved against the live matrix on every write.** A person with several lines must have a deciding line named; the record never chooses one. Nobody opens a review of their own conduct. The deciding line decides; every other line the person holds must concur or dissent.
 5. **A dissent contests the decision. A revision resets concurrence.** A line that ends while holding a review leaves it orphaned, not silently re-owned.
 6. **Withdrawal is possible only before a decision, and keeps the record.** A withdrawn review refuses every later act.
-7. **Disclosure.** Reviews name conduct, so they are individual material (`classKey: individual`). Above the manager altitude a seat reads counts only. Line counts below a floor of 3 are withheld, and the withholding is counted. CSV #160 carries no identity.
+7. **Disclosure.** Reviews name conduct, so they are individual material (`classKey: individual`). Above the manager altitude a seat reads counts only. Lines below a floor of 3 are omitted without their names or exact counts, and the number omitted is reported. Aggregate totals and repeated snapshots can still reveal suppressed values by inference; this is not a confidentiality guarantee. CSV #160 carries no identity.
 8. **The register does not discipline.** A formal review is a recorded referral. This register does not run it.
 
 ## Rejected
@@ -41,4 +41,5 @@ Just Culture (Marx, 2001) separates human error, at-risk behaviour and reckless 
 - The full `node --test` suite was not confirmed green at the time of writing. The migration-chain fix was applied after the last complete run, and it has not been re-run.
 - `RULE-*` spine registration (postCommit / propagationContracts) is not built. The register writes through the store's normal commit path only.
 - The Marx (2001), Reason (1997) and Dekker (2007) citation details are [UNVERIFIED].
-- `LeadOS-standalone.html` has not been rebuilt.
+- `LeadOS-standalone.html` was rebuilt in Session 292.
+- An orphaned review has no implemented reassignment action despite the decision refusal telling users to reassign it; safe, auditable transfer is planned.

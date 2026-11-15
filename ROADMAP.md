@@ -1,9 +1,21 @@
+## 2026-11-15 — Session 292: Just Culture small-line direct disclosure (frontline/mid-manager through director/VP × matrix and single-chain)
+
+**Shipped:** the reader omits each below-floor line entirely instead of returning its manager and exact review count; the Lines view counts withheld lines and warns that aggregates and repeated snapshots still permit inference. Eligible line counts remain computed from the stored reviews. Rebuilt the offline standalone, incorporating Session 291. This is a direct-disclosure fix, **not a confidentiality guarantee**.
+
+**New gap found (unbuilt):** an orphaned Just Culture review cannot be reassigned: `justCultureDecide` instructs the user to reassign the owner, but no reassignment action or append-only ownership history exists. A safe transfer needs explicit authority, a new live matrix line, dated reason and preservation of decisions and concurrence history. **Planned**, frontline/mid-manager × matrix and single-chain. A separate disclosure-control gap remains: totals, other reports and successive snapshots can reveal suppressed groups by differencing; a complete cross-view release policy is **Planned**, all altitudes × both structures.
+
+**Benchmark [BENCHMARK-UNVERIFIED]:** compare with Power BI-style small-cell and complementary suppression and the FCSM statistical disclosure control bar: subtraction from totals and linked tables must not reveal suppressed cells. This narrow direct-disclosure fix does not clear that bar; no claim of parity.
+
+**Verification:** Just Culture tests 15/15; the combined first run was 21/22 because the rebuilt standalone exceeded the old size ceiling. One fix updated the ceiling for the previously unbuilt Session 291 payload; standalone tests then passed 7/7, including its independent density guard and offline boot. Full suite and real-browser/AT walkthrough [UNVERIFIED]. No new visual asset was required.
+
+**Coverage:** frontline/mid-manager and director/VP × matrix and single-chain; prior primary CEO/C-suite 289, director/VP 290, frontline/mid-manager 291. **In Progress:** Just Culture spine registration remains unbuilt.
+
 ## 2026-11-15 — Session 291: Just Culture decision record — who decides a conduct review, what the answers point to, and where the decision departs from them (Schema v172, [ADR-0218](./docs/adr/0218-just-culture-decision-record.md), CSV #160, altitude frontline/mid-manager × matrix)
 
 - **Gap:** Just Culture, Planned since Session 247. Absence proof: zero word-boundary hits for "Just Culture", "justCulture" and "just-culture" in `app/`, `tests/` and `docs/` before the build. Repo-wide absence beyond those paths remains [UNVERIFIED].
 - **Built:** five-question algorithm with a pure response function; deciding-line ownership proved against the matrix; departure-from-answers requires a written reason; concurrence, dissent and revision; withdrawal; `#/just-culture` panel; CSV #160 (aggregate only); tests in `tests/app/just-culture.test.mjs`.
 - **Verification status:** targeted tests 14/14 green. The full suite was NOT confirmed green. The migration-chain fix was made after the last full run.
-- **In Progress:** `RULE-*` spine registration; rebuild of `LeadOS-standalone.html`; the Planned alternatives (Job Instruction, incoming-manager handover, stay-interview ledger, kaizen teian) remain Planned.
+- **In Progress:** `RULE-*` spine registration; standalone rebuilt in Session 292; the Planned alternatives (Job Instruction, incoming-manager handover, stay-interview ledger, kaizen teian) remain Planned.
 
 ## 2026-11-15 — Session 290: earned-value delivery & estimate-at-completion register — is this programme arriving against the curve its budget implies (Schema v171, [ADR-0217](./docs/adr/0217-earned-value-delivery-register.md), `#/finance?panel=earned-value`, CSV #159, `RULE-EVL-01`)
 
@@ -410,6 +422,9 @@
 **Verification.** `tests/app/station-coverage.test.mjs` **19/19 PASS** on hand-computed fixtures, including the Hall case where total capacity exceeds total demand and the window is still impossible, the inclusion-minimal witness, soundness against capacity, silence-as-unproven, expired/non-independent qualification, cross-pool refusal, the real spine (one rule, one contract, self-closing asks, human answers respected, past windows never asked), rights/safe-read/export pins, CSV identity-free assertions, the rendered panel against the reader, and the `self` vs `manager` consent path through the real store. **Full canonical suite: 1,014 passed / 2 failed**, both failures reproduced on a pristine worktree of the base commit `eb7186a` (`conflicts` UI modal read, `coupling` Schema v61) and untouched by this slice — zero failures added. `npm run lint` (full sweep), canonical boundary (**850 modules / 256 suites / 23 doc checks**), docs links (**1,186 / 320 files**), `check:a11y` (**119 routes**) and axe over the new panel (**0 violations**) all PASS. Standalone rebuilt (**13,284,068 bytes / 847 modules / v157**). Real-browser/AT walkthrough remains **[UNVERIFIED]**.
 
 **New gaps discovered (Step 3), added to `### Planned — Not Started
+
+- **Just Culture orphan transfer:** append-only, authorised and reasoned reassignment to a current line, retaining historic decisions and concurrence; the present instruction to reassign has no implementation. Frontline/mid-manager × matrix and single-chain.
+- **Cross-view statistical disclosure controls:** protect suppressed Just Culture groups against subtraction across aggregates and repeated releases, without pretending primary suppression alone suffices. All altitudes × matrix and single-chain.
 
 - **Deviation recurrence test over identical windows [frontline / mid-manager × single-chain and matrix — NEW Session 283]:** [ADR-0212](./docs/adr/0212-temporary-standard-waiver-register.md) counts renewal chains and prints the longest, but a chain is adjacency, not recurrence. It does not ask whether the SAME departure — same routine, same reason kind, same season — has now happened N times with gaps in between, which is the actual normalization-of-deviance test and the one a quality system would demand. Deliberately unbuilt: the identity of "the same deviation" must be defined against the record before any statistical claim is printed, and a percentage over an undefined population is a manufactured figure. Distinct from the chain review (which fires on contiguity) and from a generic abnormal-check count (which is not evidence of the same deviation).
 
