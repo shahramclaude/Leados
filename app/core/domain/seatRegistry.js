@@ -675,6 +675,14 @@ export const ACTION_RIGHTS = Object.freeze({
   'declare-goal-commitment': { minRank: 1, maxRank: 5, label: 'Declare or re-baseline what a line you hold promises of a shared person' },
   'release-goal-commitment': { minRank: 1, maxRank: 5, label: 'Release a commitment your own line declared' },
   'govern-goal-commitments': { minRank: 3, maxRank: 5, label: 'Scan goal-commitment conditions and set the horizon, ask threshold and attribution floor' },
+  // ADR-0206: reading a closed period's reported figures is open at every
+  // altitude — a frontline manager may read what was reported about their span.
+  // CLOSING a period and ACKNOWLEDGING a restatement are the acts of the altitude
+  // that reports the figure upward, so they sit at director and above; the
+  // conventions and the scan sit with every other matrix register.
+  'read-goal-attainment': { minRank: 1, maxRank: 5, label: 'Read the goal attainment period close and restatement register' },
+  'close-goal-attainment': { minRank: 4, maxRank: 5, label: 'Close an ended period’s attainment figures, or acknowledge one exact restatement of them' },
+  'govern-goal-attainment': { minRank: 3, maxRank: 5, label: 'Scan restatements and set the goal-attainment ask window' },
   // ADR-0150: onboarding a person into a matrix. Writing a line's brief is the act
   // of the manager who HOLDS that line, at whatever altitude that line's manager
   // sits (a project lead with no home-line reports gets this exactly as a

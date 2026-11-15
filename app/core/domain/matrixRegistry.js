@@ -248,6 +248,10 @@ export const MATRIX_PANELS = Object.freeze([
   // to named budget envelopes, with reversals, drift audits and binding decay
   // printed, never corrected.
   Object.freeze({ key: 'postings', label: 'Postings', hint: 'Which closed quarters’ chargeback statements have been posted as dated period facts against named budget envelopes, which are complete and still unposted, and which posted figures the record no longer reproduces (ADR-0194).' }),
+  // ADR-0206 (Session 274): the goal attainment period close and restatement
+  // register — the figures that were reported for an ended period, and whether
+  // the record still reproduces them.
+  Object.freeze({ key: 'attainment', label: 'Attainment close', hint: 'Which ended period’s attainment figures have been closed as a dated fact, which still reproduce exactly, and — where they do not — the exact goal count that moved and why (ADR-0206).' }),
 ]);
 
 export const MATRIX_PANEL_KEYS = Object.freeze(MATRIX_PANELS.map((p) => p.key));

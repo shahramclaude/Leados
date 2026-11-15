@@ -151,6 +151,19 @@ import {
   normalizeGoalCommitmentSettings,
   normalizeGoalCommitments,
 } from './domain/goalCommitmentSchema.js';
+// ADR-0206 (Schema v160): the Goal Attainment Period Close & Restatement
+// Register — one append-only closing act (a declared, already-ended period, the
+// bucket and span of every goal that fell due inside it, and the counts the act
+// reported, which are re-proved against its own entries on load), one append-only
+// acknowledgement ledger keyed by restatement fingerprint, and the rule's bounded
+// marker ledger. Nothing derived — no live bucket, delta, verdict or fingerprint —
+// is stored.
+import {
+  normalizeGoalAttainmentClosures,
+  normalizeGoalAttainmentMarkers,
+  normalizeGoalAttainmentNotes,
+  normalizeGoalAttainmentSettings,
+} from './domain/goalAttainmentSchema.js';
 // ADR-0185 (Schema v147): dated Matrix change-impact requests and first-person
 // line responses. Request snapshots normalize before their responses resolve.
 import {
@@ -921,7 +934,15 @@ export {
 // strongly connected components, the unsatisfiable verdict and the enabler-
 // closed witness are recomputed on every read, so a replayed workspace cannot
 // carry a stale order or a stale impossibility.
-export const SCHEMA_VERSION = 159;
+// v160 adds the Goal Attainment Period Close & Restatement Register (ADR-0206):
+// three EMPTY append-only ledgers — `goalAttainmentClosures`, `goalAttainmentNotes`
+// and `goalAttainmentMarkers` — plus two declared conventions. No period is
+// closed at upgrade time and no reported figure is reconstructed from today's
+// goals: a workspace that never froze a period's figures has nothing to restate,
+// and inventing a closure at upgrade would fabricate a report nobody made and
+// then grade the record against it. Nothing derived is stored either — every
+// bucket, delta, verdict, cause and fingerprint is recomputed on read.
+export const SCHEMA_VERSION = 160;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -2374,6 +2395,10 @@ export const DEFAULT_SETTINGS = Object.freeze({
   // the automation pause. Clamped on load, refused (never clamped) by the
   // setter, and printed on the panel. None is fitted from the record.
   ...normalizeChargebackPostingSettings({}),
+  // ADR-0206: the goal-attainment conventions — the restatement ask window and
+  // the automation pause. Clamped on load, refused (never clamped) by the
+  // setter, and printed on the panel. None is fitted from the record.
+  ...normalizeGoalAttainmentSettings({}),
 });
 
 export const COLLECTIONS = [
@@ -3151,6 +3176,15 @@ export const COLLECTIONS = [
   // printed verdict cannot drift from its evidence.
   'chargebackPostings',
   'chargebackPostingMarkers',
+  // ADR-0206 (Schema v160): the Goal Attainment Period Close & Restatement
+  // Register. One append-only closing-act ledger, one append-only acknowledgement
+  // ledger and the restatement rule's bounded marker ledger. Nothing derived — no
+  // live bucket, delta, verdict, cause or restatement fingerprint — is stored;
+  // every one is re-derived on read, so a replayed workspace cannot carry a stale
+  // claim that a reported period still reproduces.
+  'goalAttainmentClosures',
+  'goalAttainmentNotes',
+  'goalAttainmentMarkers',
 ];
 
 /** Stable empty state. `now` is an ISO string so the result is a pure value. */
@@ -3944,6 +3978,10 @@ export function normalizeSettings(raw) {
     // by field, so a posting convention not spread here would vanish on every
     // load and the pause census would never see the posting switch.
     ...normalizeChargebackPostingSettings(s),
+    // ADR-0206: named here for the same reason — this object is rebuilt field by
+    // field, so an attainment convention not spread here would vanish on every
+    // load and the pause census would never see the restatement switch.
+    ...normalizeGoalAttainmentSettings(s),
     ...normalizeStructureHistorySettings(s),
     ...normalizeDifferencesSettings(s),
     ...normalizeFitSettings(s),
@@ -8506,6 +8544,13 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // KEPT as signed; decay is the read model's finding, not a load repair.
   state.chargebackPostings = normalizeChargebackPostings(raw.chargebackPostings, warnings);
   state.chargebackPostingMarkers = normalizeChargebackPostingMarkers(raw.chargebackPostingMarkers);
+  // ADR-0206 (Schema v160): the goal-attainment ledgers. A closure's reported
+  // counts are re-proved against its own entries HERE, and a row that fails is
+  // dropped with a counted warning rather than re-totalled into a figure nobody
+  // reported.
+  state.goalAttainmentClosures = normalizeGoalAttainmentClosures(raw.goalAttainmentClosures, warnings);
+  state.goalAttainmentNotes = normalizeGoalAttainmentNotes(raw.goalAttainmentNotes, state.goalAttainmentClosures, warnings);
+  state.goalAttainmentMarkers = normalizeGoalAttainmentMarkers(raw.goalAttainmentMarkers, warnings);
   state.delegationLineActs = normalizeDelegationLineActs(raw.delegationLineActs, state, warnings);
   state.delegationLineMarkers = normalizeDelegationLineMarkers(raw.delegationLineMarkers);
   // ADR-0181 (Schema v144): a malformed classification act, an act naming a
@@ -9309,6 +9354,20 @@ export const MIGRATIONS = {
     ...v158,
     schemaVersion: 159,
     stationEnables: Array.isArray(v158.stationEnables) ? v158.stationEnables : [],
+  }),
+  // 159 → 160: ADR-0206 adds THREE EMPTY append-only ledgers and two declared
+  // conventions. No period is closed on upgrade and no reported figure is
+  // reconstructed from the goals, check-ins and structure an upgraded workspace
+  // already holds: a workspace that never froze a period's figures has nothing to
+  // restate, and a closure invented here would fabricate a report nobody made —
+  // then print the live record as a restatement of it.
+  159: (v159) => ({
+    ...v159,
+    schemaVersion: 160,
+    goalAttainmentClosures: Array.isArray(v159.goalAttainmentClosures) ? v159.goalAttainmentClosures : [],
+    goalAttainmentNotes: Array.isArray(v159.goalAttainmentNotes) ? v159.goalAttainmentNotes : [],
+    goalAttainmentMarkers: Array.isArray(v159.goalAttainmentMarkers) ? v159.goalAttainmentMarkers : [],
+    settings: { ...(v159.settings || {}), ...normalizeGoalAttainmentSettings(v159.settings || {}) },
   }),
   // 155 → 156: ADR-0196 adds one EMPTY append-only ledger. No active
   // RULE-NPW-01 ask has a receiving-line answer, effort estimate or capacity

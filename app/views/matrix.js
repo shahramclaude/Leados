@@ -110,6 +110,7 @@ import { renderMatrixPriorityPanel } from './matrixPriorityPanel.js';
 // one line's view of its own objective; this panel is the only place two
 // lines' promises about the SAME person are read against each other.
 import { renderMatrixGoalCommitmentPanel } from './matrixGoalCommitmentPanel.js';
+import { renderMatrixGoalAttainmentPanel } from './matrixGoalAttainmentPanel.js';
 
 const PANELS = MATRIX_PANELS;
 
@@ -923,6 +924,7 @@ export function renderMatrix(ctx) {
     panel === 'alignment' ? renderMatrixInterfaceAlignmentPanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
     panel === 'priority' ? renderMatrixPriorityPanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
     panel === 'commitments' ? renderMatrixGoalCommitmentPanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
+    panel === 'attainment' ? renderMatrixGoalAttainmentPanel(ctx) : null,
     panel === 'chargeback' ? renderMatrixChargebackPanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,
     panel === 'postings' ? renderMatrixChargebackPostingPanel(ctx) : null,
     panel === 'continuity' ? renderContinuityPanel(ctx, { now: new Date(`${report.today}T12:00:00.000Z`) }) : null,

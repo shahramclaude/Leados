@@ -102,7 +102,7 @@ const scanDraft = (state) => {
 /* ---------------------------------------------------- 1. storage sanity */
 
 test('the rehearsal introduces no schema change and no persisted collection', () => {
-  assert.equal(SCHEMA_VERSION, 159);
+  assert.equal(SCHEMA_VERSION, 160);
   const state = fixture1();
   assert.deepEqual(state.jurFindings, []);
 });

@@ -197,6 +197,12 @@ import { buildWorkReassignments, workReassignmentCsvRows } from './domain/workRe
 import { WORK_REASSIGNMENT_CSV_COLUMNS, WORK_REASSIGNMENT_CSV_DESCRIPTOR } from './domain/workReassignmentRegistry.js';
 import { buildStationCoverage, stationCoverageCsvRows } from './domain/stationCoverage.js';
 import { STATION_COVERAGE_CSV_COLUMNS, STATION_COVERAGE_CSV_DESCRIPTOR } from './domain/stationCoverageRegistry.js';
+// ADR-0206 (Schema v160): the Goal Attainment Period Close & Restatement
+// Register (CSV scope #149). Aggregate only — one workspace row, one row per
+// closed period and one row per span slice, with the span exported as a
+// positional code and no person, manager, goal id, title, label, note or reason.
+import { buildGoalAttainment, goalAttainmentCsvRows } from './domain/goalAttainment.js';
+import { GOAL_ATTAINMENT_CSV_COLUMNS, GOAL_ATTAINMENT_CSV_DESCRIPTOR } from './domain/goalAttainmentRegistry.js';
 import { buildPausePermits, pausePermitCsvRows } from './domain/pausePermits.js';
 import { PAUSE_PERMIT_CSV_COLUMNS, PAUSE_PERMIT_CSV_DESCRIPTOR } from './domain/pausePermitRegistry.js';
 import { STRUCTURE_HISTORY_CSV_COLUMNS } from './domain/structureHistoryRegistry.js';
@@ -1410,6 +1416,11 @@ export const CSV_EXPORTS = [
   // title, note or record id; a withheld or unprovable figure exports BLANK with
   // its reason, never zero.
   STATION_COVERAGE_CSV_DESCRIPTOR,
+  // #149 (ADR-0206): goal attainment period closes and restatements —
+  // aggregate, no identities. No person, manager, span name, goal id, goal
+  // title, period label, note or reason text; a span exports as `S01` and a
+  // withheld figure exports BLANK with its reason, never zero.
+  GOAL_ATTAINMENT_CSV_DESCRIPTOR,
 ];
 
 function personLookup(state) {
@@ -6606,6 +6617,19 @@ export function buildScopeTable(state, scope, now) {
       // manager, ask title or free text crosses the boundary.
       const report = buildWorkTurns(state, { now, settings: state.settings || {} });
       return { columns: WORK_TURN_CSV_COLUMNS.map((key) => ({ key, header: key })), rows: workTurnCsvRows(report) };
+    }
+    case 'goal-attainment-closures': {
+      // CSV scope #149 (ADR-0206, Schema v160). Built from the SAME reader the
+      // panel renders, so an exported count is provably the count that was
+      // printed. Aggregate only: a span is exported as a positional code and no
+      // person, manager, goal id, goal title, period label, note or reason
+      // reaches the file. A withheld or unprovable figure prints its reason; it
+      // is never a zero.
+      const report = buildGoalAttainment(state, { now, settings: state.settings || {}, seat: null });
+      return {
+        columns: GOAL_ATTAINMENT_CSV_COLUMNS.map((key) => ({ key, header: key })),
+        rows: goalAttainmentCsvRows(report),
+      };
     }
     case 'skill-station-coverage': {
       // CSV scope #148 (ADR-0201, Schema v157). Built from the SAME reader the
