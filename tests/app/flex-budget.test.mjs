@@ -747,14 +747,15 @@ test('ADR-0213 panel and CSV: every printed cell is the reader’s integer, and 
  */
 
 test('ADR-0213 registration: schema v167, two empty ledgers, CSV scope #155, rights and gateway rows — and no new spine rule', () => {
-  assert.equal(SCHEMA_VERSION, 167);
+  assert.equal(SCHEMA_VERSION, 168);
   assert.ok(COLLECTIONS.includes('flexBudgetPlans') && COLLECTIONS.includes('flexBudgetActuals'));
   const empty = createEmptyState(T0);
   assert.deepEqual([empty.flexBudgetPlans, empty.flexBudgetActuals], [[], []]);
   assert.equal(empty.settings[FLEX_BUDGET_SETTING_KEYS.actualsDueDays], 15);
 
-  assert.equal(CSV_EXPORTS.length, 155);
-  assert.equal(CSV_EXPORTS.at(-1), FLEX_BUDGET_CSV_DESCRIPTOR);
+  assert.equal(CSV_EXPORTS.length, 156);
+  assert.ok(CSV_EXPORTS.includes(FLEX_BUDGET_CSV_DESCRIPTOR), 'the flex-budget export is registered');
+  assert.equal(CSV_EXPORTS.at(-2), FLEX_BUDGET_CSV_DESCRIPTOR, 'ADR-0214’s value-bridge export is registered after it');
   assert.equal(FLEX_BUDGET_CSV_DESCRIPTOR.sensitive, false);
   assert.equal(new Set(FLEX_BUDGET_CSV_COLUMNS).size, FLEX_BUDGET_CSV_COLUMNS.length);
 
@@ -774,9 +775,9 @@ test('ADR-0213 registration: schema v167, two empty ledgers, CSV scope #155, rig
   delete old.flexBudgetPlans;
   delete old.flexBudgetActuals;
   const migrated = migrate(old);
-  assert.equal(migrated.applied.at(-1), '166 → 167');
+  assert.equal(migrated.applied.at(-1), '167 → 168');
   assert.deepEqual([migrated.raw.flexBudgetPlans, migrated.raw.flexBudgetActuals], [[], []], 'no standard is invented from an envelope');
-  assert.equal(migrated.raw.schemaVersion, 167);
+  assert.equal(migrated.raw.schemaVersion, 168);
 
   // Every exported surface the wiring names really exists on the assembled API.
   const { api } = seed();

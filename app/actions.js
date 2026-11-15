@@ -103,6 +103,9 @@ import { createInvestmentCaseActions } from './core/domain/investmentCaseActions
 import { createCapitalRationingActions } from './core/domain/capitalRationingActions.js';
 import { createStandardWaiverActions } from './core/domain/standardWaiverActions.js';
 import { createFlexBudgetActions } from './core/domain/flexBudgetActions.js';
+// ADR-0214: the enterprise value bridge — two dated readings, four attributed
+// legs, and a leg owner declared rather than guessed.
+import { createValueBridgeActions } from './core/domain/valueBridgeActions.js';
 import { createWorkRestActions } from './core/domain/workRestActions.js';
 import { createConflictRecusalActions } from './core/domain/conflictRecusalActions.js';
 // ADR-0148: Matrix Line Consent. A declared share is an ask until the line's
@@ -20302,6 +20305,7 @@ export function createApi(store, options = {}) {
   // ADR-0213: the flexible-budget variance statement — a declared standard,
   // dated actuals, and an exact split of the gap. Nothing derived is stored.
   Object.assign(api, createFlexBudgetActions(store, { now: clock, idFactory: id }));
+  Object.assign(api, createValueBridgeActions(store, { now: clock, idFactory: id }));
   // ADR-0209: the Cross-Line Work/Rest Recovery Ledger — recording a shift for a
   // line the acting seat HOLDS, its actual times or cancellation, a line's
   // coverage attestation, and the declared policy. No act moves or cancels a

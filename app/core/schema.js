@@ -242,6 +242,14 @@ import {
   normalizeFlexBudgetPlans,
   normalizeFlexBudgetSettings,
 } from './domain/flexBudgetSchema.js';
+// ADR-0214 (Schema v168): the Enterprise Value Bridge. Dated valuation readings
+// and declared leg ownership; every leg, level and attainment is re-derived on
+// read from these rows and from nothing else.
+import {
+  normalizeValueBridgeLeverClaims,
+  normalizeValueBridgeReadings,
+  normalizeValueBridgeSettings,
+} from './domain/valueBridgeSchema.js';
 // ADR-0185 (Schema v147): dated Matrix change-impact requests and first-person
 // line responses. Request snapshots normalize before their responses resolve.
 import {
@@ -1052,7 +1060,7 @@ export {
 // ledger and no actual from a posted period: each is a different instrument
 // with a different signatory, and a standard invented at upgrade time would
 // print a variance against a fiction and name somebody as its owner.
-export const SCHEMA_VERSION = 167;
+export const SCHEMA_VERSION = 168;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -3378,6 +3386,13 @@ export const COLLECTIONS = [
   // verdict or attribution is stored: each is re-derived on read.
   'flexBudgetPlans',
   'flexBudgetActuals',
+  // ADR-0214 (Schema v168): the Enterprise Value Bridge. Dated readings of
+  // EBITDA, the multiple and net debt, and the declared ownership of each leg.
+  // No enterprise value, equity value, leg, rounding count or attainment is
+  // stored: each is re-derived on read by the exact kernel, so a hand-edited
+  // file cannot carry a bridge its own two readings do not imply.
+  'valueBridgeReadings',
+  'valueBridgeLeverClaims',
 ];
 
 /** Stable empty state. `now` is an ISO string so the result is a pure value. */
@@ -4197,6 +4212,9 @@ export function normalizeSettings(raw) {
     ...normalizeStandardWaiverSettings(s),
     // ADR-0213: named here so the declared due window survives every load.
     ...normalizeFlexBudgetSettings(s),
+    // ADR-0214: the staleness window of a printed bridge. A typo falls back to the
+    // documented default rather than switching the freshness claim off.
+    ...normalizeValueBridgeSettings(s),
     ...normalizeStructureHistorySettings(s),
     ...normalizeDifferencesSettings(s),
     ...normalizeFitSettings(s),
@@ -8814,6 +8832,12 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // resolve only through plans that survived.
   state.flexBudgetPlans = normalizeFlexBudgetPlans(raw.flexBudgetPlans, warnings);
   state.flexBudgetActuals = normalizeFlexBudgetActuals(raw.flexBudgetActuals, state.flexBudgetPlans, warnings);
+  // ADR-0214: a reading or a claim that cannot be read exactly is DROPPED with a
+  // counted warning — never repaired. A reading whose perimeter claim cannot be
+  // honoured is KEPT and loaded as `unseparated`, because its levels are true and
+  // an absent adjustment must never become a zero adjustment.
+  state.valueBridgeReadings = normalizeValueBridgeReadings(raw.valueBridgeReadings, warnings);
+  state.valueBridgeLeverClaims = normalizeValueBridgeLeverClaims(raw.valueBridgeLeverClaims, warnings);
   state.conflictInterests = normalizeConflictInterests(raw.conflictInterests, warnings);
   state.conflictNoneDeclarations = normalizeConflictNoneDeclarations(raw.conflictNoneDeclarations, warnings);
   state.conflictStandings = normalizeConflictStandings(raw.conflictStandings, state.conflictInterests, warnings);
@@ -9717,6 +9741,18 @@ export const MIGRATIONS = {
   // or investment cases an upgraded workspace already holds: an envelope is a
   // ceiling on commitments, not a standard quantity at a standard price, and a
   // standard guessed here would print a variance nobody declared a baseline for.
+  // 167 → 168: ADR-0214 adds TWO EMPTY ledgers and one declared convention.
+  // Nothing is inferred from the investment cases, envelopes or variance
+  // statements an upgraded workspace already holds: none of them is a reading of
+  // what the market paid for the company, and a valuation invented at upgrade
+  // time would be a claim about the owners' money that nobody signed.
+  167: (v167) => ({
+    ...v167,
+    schemaVersion: 168,
+    valueBridgeReadings: Array.isArray(v167.valueBridgeReadings) ? v167.valueBridgeReadings : [],
+    valueBridgeLeverClaims: Array.isArray(v167.valueBridgeLeverClaims) ? v167.valueBridgeLeverClaims : [],
+    settings: { ...(v167.settings || {}), ...normalizeValueBridgeSettings(v167.settings || {}) },
+  }),
   166: (v166) => ({
     ...v166,
     schemaVersion: 167,
