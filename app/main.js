@@ -159,6 +159,9 @@ import { renderSpeakUp } from './views/speakUp.js';
 // ADR-0218: the Just Culture decision record.
 import { renderJustCulture } from './views/justCulture.js';
 import { justCultureAttentionCount } from './core/domain/justCulture.js';
+// ADR-0219: the enterprise risk-appetite register.
+import { renderRiskAppetite } from './views/riskAppetite.js';
+import { riskAppetiteAttentionCount } from './core/domain/riskAppetite.js';
 import { conflictRecusalAttentionCount } from './core/domain/conflictRecusal.js';
 import { speakUpAttentionCount } from './core/domain/speakUp.js';
 import { investmentCaseAttentionCount } from './core/domain/investmentCase.js';
@@ -566,6 +569,11 @@ export const NAV = [
     // only when every other line the person holds has answered. Beside speak-up on
     // purpose: one asks whether a voice was heard, the other whether a finding was fair.
     { route: 'just-culture', label: 'Just Culture review', icon: '⚑', badge: 'justCulture' },
+    // ADR-0219: how much risk the enterprise declared it will carry, what named
+    // lines have declared it is actually carrying, and whether the ceiling was
+    // measured over the whole population. The executive decision form asks the
+    // question; this is the instrument that answers it.
+    { route: 'risk-appetite', label: 'Risk appetite', icon: '◎', badge: 'riskAppetite' },
     // ADR-0121: who answers for each declared duty line when the holder is out.
     { route: 'duty-cover', label: 'Duty coverage', icon: '⛨', badge: 'dutyCoverage' },
     // ADR-0140: who is accountable to whom when one person has several managers.
@@ -728,6 +736,8 @@ const RENDERERS = {
   'speak-up': (ctx) => renderSpeakUp(ctx),
   // ADR-0218: the Just Culture decision record.
   'just-culture': (ctx) => renderJustCulture(ctx),
+  // ADR-0219: the enterprise risk-appetite register.
+  'risk-appetite': (ctx) => renderRiskAppetite(ctx),
   conflicts: (ctx) => renderConflicts(ctx),
   conflict: (ctx, segments) => renderConflictDetail(ctx, safeDecode(segments[1])),
   recognition: (ctx) => renderRecognition(ctx),
@@ -1592,6 +1602,10 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       // ADR-0218: reviews this seat owes an answer, a concurrence or a new owner —
       // the same figure the Just Culture panel prints for the seat.
       justCulture: justCultureAttentionCount(state, { now: at, settings: state.settings, seat: seatCtx?.seat || null }),
+      // ADR-0219: breached tolerances this seat holds the joint seat above, passed
+      // review dates it declared, and domains carrying risk with no appetite.
+      // The same three figures the panel prints for the seat.
+      riskAppetite: riskAppetiteAttentionCount(state, { now: at, settings: state.settings, seat: seatCtx?.seat || null }),
       // Schema v32: drafts written from case facts that still await a human.
       comms: (state.commsDrafts || []).filter((d) => d && d.status === 'draft').length,
       due: dueMeetings(state, at, state.settings).length,

@@ -292,6 +292,17 @@ import {
   normalizeJustCultureActs,
   normalizeJustCultureReviews,
 } from './domain/justCultureSchema.js';
+// ADR-0219 (Schema v173): the Enterprise Risk Appetite & Tolerance Breach
+// Register. Statements (one exact ceiling per domain/measure/currency) and risk
+// declarations (one retention per live operational risk) normalize fail-closed:
+// a row that cannot be read exactly is dropped with a counted warning, and the
+// stored cents form is NEVER routed back through a major-unit parser.
+import {
+  normalizeRaMarkers,
+  normalizeRiskAppetiteSettings,
+  normalizeRiskAppetiteStatements,
+  normalizeRiskDeclarations,
+} from './domain/riskAppetiteSchema.js';
 // ADR-0185 (Schema v147): dated Matrix change-impact requests and first-person
 // line responses. Request snapshots normalize before their responses resolve.
 import {
@@ -1125,7 +1136,7 @@ export {
 // instrument, and a conduct review invented at upgrade time would attribute a
 // culpability finding to a person who was never reviewed. No deciding line is
 // inferred either — ownership is named by a human, or the review is not opened.
-export const SCHEMA_VERSION = 172;
+export const SCHEMA_VERSION = 173;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -3507,6 +3518,14 @@ export const COLLECTIONS = [
   // hand-edited file cannot carry a settlement its own acts do not imply.
   'justCultureReviews',
   'justCultureActs',
+  // ADR-0219 (Schema v173): the Enterprise Risk Appetite & Tolerance Breach
+  // Register. Appetite statements, the retained exposure declared for each live
+  // risk, and identity-free rule markers. No measured figure, verdict, coverage
+  // claim or escalation is stored: each is re-derived on read, so a hand-edited
+  // file cannot carry a tolerance verdict its own rows do not imply.
+  'riskAppetiteStatements',
+  'riskDeclarations',
+  'riskAppetiteMarkers',
 ];
 
 /** Stable empty state. `now` is an ISO string so the result is a pure value. */
@@ -3759,6 +3778,10 @@ export function normalizeSettings(raw) {
     negotiationReviewDays: clampInt(s.negotiationReviewDays, 1, 365, d.negotiationReviewDays),
     budgetWatchPct: clampInt(s.budgetWatchPct, 50, 100, d.budgetWatchPct),
     forecastAutoPropagate: s.forecastAutoPropagate !== false,
+    // ADR-0219: the risk-appetite rule's switch. Declared in the persistence
+    // vocabulary so updateSettings can move it, and defaulted ON so a switch that
+    // hides a breached ceiling is never the silent default.
+    riskAppetiteAutoPropagate: s.riskAppetiteAutoPropagate !== false,
     forecastCoveragePct: clampInt(s.forecastCoveragePct, 50, 95, d.forecastCoveragePct),
     tempoDelegatedMaxDays: clampInt(s.tempoDelegatedMaxDays, 1, 90, d.tempoDelegatedMaxDays),
     tempoCrossCuttingMaxDays: clampInt(s.tempoCrossCuttingMaxDays, 1, 180, d.tempoCrossCuttingMaxDays),
@@ -8994,6 +9017,14 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // refused unless every question on its path is answered.
   state.justCultureReviews = normalizeJustCultureReviews(raw.justCultureReviews, warnings);
   state.justCultureActs = normalizeJustCultureActs(raw.justCultureActs, state.justCultureReviews, warnings);
+  // ADR-0219: a statement or declaration that cannot be read exactly is DROPPED
+  // with a counted warning — never repaired, re-dated, re-keyed or re-pointed at
+  // another case. A declaration naming a case this workspace does not hold is
+  // KEPT: dropping it would silently remove a risk from coverage, which is the
+  // exact failure this register exists to prevent. No verdict is stored.
+  state.riskAppetiteStatements = normalizeRiskAppetiteStatements(raw.riskAppetiteStatements, warnings);
+  state.riskDeclarations = normalizeRiskDeclarations(raw.riskDeclarations, warnings);
+  state.riskAppetiteMarkers = normalizeRaMarkers(raw.riskAppetiteMarkers, warnings);
   state.conflictInterests = normalizeConflictInterests(raw.conflictInterests, warnings);
   state.conflictNoneDeclarations = normalizeConflictNoneDeclarations(raw.conflictNoneDeclarations, warnings);
   state.conflictStandings = normalizeConflictStandings(raw.conflictStandings, state.conflictInterests, warnings);
@@ -9788,6 +9819,21 @@ export const MIGRATIONS = {
   // person nobody reviewed. No deciding line is inferred either — the matrix can hold
   // several lines for one person, and choosing one for them would be the silent
   // ownership the matrix mandate forbids.
+  172: (v172) => ({
+    ...v172,
+    schemaVersion: 173,
+    // 172 → 173: ADR-0219 adds THREE EMPTY ledgers and one declared convention.
+    // No tolerance is inferred from an investment case, a budget envelope, an
+    // operational case's FMEA rating or the culture signals an upgraded
+    // workspace already holds: an appetite is a decision a board made, and a
+    // number written here would put a ceiling on the record that nobody
+    // declared. No retention is inferred either — a declaration needs a named
+    // line and a written basis, and neither can be manufactured at upgrade time.
+    riskAppetiteStatements: Array.isArray(v172.riskAppetiteStatements) ? v172.riskAppetiteStatements : [],
+    riskDeclarations: Array.isArray(v172.riskDeclarations) ? v172.riskDeclarations : [],
+    riskAppetiteMarkers: Array.isArray(v172.riskAppetiteMarkers) ? v172.riskAppetiteMarkers : [],
+    settings: { ...(v172.settings || {}), ...normalizeRiskAppetiteSettings(v172.settings || {}) },
+  }),
   171: (v171) => ({
     ...v171,
     schemaVersion: 172,

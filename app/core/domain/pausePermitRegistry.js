@@ -247,6 +247,11 @@ export const PAUSE_PERMIT_MATRIX_REACH_SWITCHES = Object.freeze([
   // leaves that manager's own manager without the review — and silencing it also
   // leaves every lapsed departure unclosed, in silence.
   'standardWaiverAutoPropagate',
+
+  // ADR-0219: the risk-appetite switch. The rule reads the reporting graph for
+  // the joint seat above every line carrying a breached risk, so silencing it
+  // reaches a second line — and that line's manager is not told.
+  'riskAppetiteAutoPropagate',
 ]);
 
 export function pausePermitReachesMatrix(key) {
@@ -299,6 +304,11 @@ export const PAUSE_PERMIT_REACH_RULES = Object.freeze({
   // cost position. The pause is permitted and printed as such — a switch that
   // hides a missing reading must not itself be hidden.
   earnedValueAutoPropagate: 'earnedValueRules.js',
+  // ADR-0218's Just Culture register has no rule of its own, so no switch. ADR-0219:
+  // silencing the ask that requests a decision on a breached tolerance, a missing
+  // appetite or a passed review. The pause is permitted and printed as such — a
+  // switch that hides a breached ceiling must not itself be hidden.
+  riskAppetiteAutoPropagate: 'riskAppetiteRules.js',
 });
 
 /** How much of the register a seat is shown. Mirrors the altitude disclosure ladder. */

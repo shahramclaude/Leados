@@ -23,6 +23,7 @@ import { VALUE_BRIDGE_RIGHTS } from './valueBridgeRegistry.js';
 import { SPEAK_UP_RIGHTS } from './speakUpRegistry.js';
 import { SYNERGY_RIGHTS } from './synergyRegistry.js';
 import { EV_RIGHTS } from './earnedValueRegistry.js';
+import { RA_RIGHTS } from './riskAppetiteRegistry.js';
 import { JUST_CULTURE_RIGHTS } from './justCultureRegistry.js';
 import { routeVerdict } from './seatRegistry.js';
 import { validateMissionCommands } from './mission.js';
@@ -267,6 +268,15 @@ const groups = [
   [EV_RIGHTS.DECLARE, 'earnedValueDeclareCase earnedValueAddPackage earnedValueRebaselinePackage earnedValueRemovePackage earnedValueWithdrawCase'],
   [EV_RIGHTS.RECORD, 'earnedValueRecordReading earnedValueWithdrawReading earnedValueRecordActual earnedValueWithdrawActual'],
   [EV_RIGHTS.GOVERN, 'earnedValueScan earnedValueSetConventions'],
+  // ADR-0219: the enterprise risk-appetite register. Reading it is portfolio
+  // material (rank 3+). Declaring a tolerance is an executive act (rank 4+);
+  // declaring the retained exposure of one live risk is a director's act,
+  // narrowed inside the action to a seat that HOLDS the case owner and refuses
+  // the owner themselves — the hand that carries the consequence does not write
+  // the number. The scan is the declarer's act because it files the asks.
+  [RA_RIGHTS.READ, 'riskAppetiteReport riskAppetiteAttentionCount riskAppetiteCandidates'],
+  [RA_RIGHTS.DECLARE, 'riskAppetiteDeclareStatement riskAppetiteRetireStatement riskAppetiteScan'],
+  [RA_RIGHTS.CARRY, 'riskAppetiteDeclareRisk riskAppetiteWithdrawRisk'],
   // ADR-0148: answering a declared share is TWO first-person acts, split on the
   // spine rather than in prose. `accept-matrix-line` is the manager's own
   // answer (accept or decline the line they were given); it is open at every
@@ -589,6 +599,12 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // its writes are still gated — the register would vanish exactly when a real
 // organisation turned enforcement on.
 'earnedValueReport', 'earnedValueBriefText', 'earnedValueCsvRows', 'earnedValueAttentionCount', 'earnedValueCandidates',
+// ADR-0219: the risk-appetite register's pure read surface. Every one of these
+// re-proves the read right inside the action. Registered here because a module
+// whose reads are absent from SAFE_READS is unreadable under enforcement while
+// its writes are still gated — the register would vanish exactly when a real
+// organisation turned enforcement on.
+'riskAppetiteReport', 'riskAppetiteAttentionCount', 'riskAppetiteCandidates',
 'standardWaiverAttentionCount', 'standardWaiverBriefText', 'standardWaiverCandidates', 'standardWaiverCsvRows', 'standardWaiverReport', 'concordanceAttentionCount', 'concordanceBriefText', 'concordanceCsvRows', 'concordanceRead', 'concordanceStats', 'disclosureAttentionCount', 'disclosureBriefText', 'disclosureCsvRows', 'disclosureGrantRead', 'disclosureGrants', 'disclosureRead', 'envoyAttentionCount', 'envoyBriefText', 'envoyCsvRows', 'envoyIdentity', 'envoyPacketText', 'envoyPreview', 'envoyRead', 'escalationBriefText', 'escalationCsvRows', 'escalationRead', 'escalationStats', 'differencesAttentionCount', 'differencesBriefText', 'differencesCsvRows', 'differencesRead', 'federationAttentionCount', 'federationBriefText', 'federationCsvRows', 'federationRead',
 'freezeLineAttentionCount', 'freezeLineBriefText', 'freezeLineConventions', 'freezeLineCsvRows', 'freezeLineReport',
 'spanCalibrationAttentionCount', 'spanCalibrationBriefText', 'spanCalibrationConventions', 'spanCalibrationCsvRows', 'spanCalibrationReport', 'spanCalibrationSettings', 'spanCalibrationSignals',
@@ -892,6 +908,11 @@ const MATRIX_LINE_SCOPED = new Set([
   // ADR-0218: opening a review names the person whose conduct it concerns, who may
   // be reached only through a declared line. The action re-proves the deciding line.
   'justCultureOpen',
+  // ADR-0219: declaring the retention of a risk names a case whose owner may be
+  // reachable only through a declared line, and withdrawing one names a
+  // declaration. Each action independently re-proves the owner's reach and
+  // refuses the owner themselves.
+  'riskAppetiteDeclareRisk', 'riskAppetiteWithdrawRisk',
   // ADR-0208: a declared (or previewed) case names a benefit owner the declaring
   // seat may reach only through a declared Matrix line; the action re-checks the
   // tree and the line itself before it reads or records anything.

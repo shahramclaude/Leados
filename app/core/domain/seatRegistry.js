@@ -239,6 +239,13 @@ export const RECORD_POLICIES = Object.freeze({
   // a decision can never be readable when its review is not.
   justCultureReviews: { classKey: 'individual', label: 'Just Culture decision reviews — the conduct under review, its deciding line and the event', route: '#/just-culture' },
   justCultureActs: { classKey: 'individual', label: 'Just Culture decisions, concurrences, dissents and withdrawals', route: '#/just-culture' },
+  // ADR-0219: an appetite statement is a board-level declaration and a risk
+  // declaration is a named line's retention. Both are PORTFOLIO material: the
+  // register's own reader discloses the exact ceiling to the director altitude
+  // and above, and the generic projection never hands over the raw rows.
+  riskAppetiteStatements: { classKey: 'portfolio', detailCeiling: 4, label: 'Declared appetite statements — one exact ceiling per domain, measure and currency (report only)', route: '#/risk-appetite' },
+  riskDeclarations: { classKey: 'portfolio', detailCeiling: 4, label: 'Declared retained exposure per live risk, with its written basis (report only)', route: '#/risk-appetite' },
+  riskAppetiteMarkers: { classKey: 'portfolio', detailCeiling: 4, label: 'Risk-appetite observation markers — no joint seat, declarer departed (identity-free)', route: '#/risk-appetite' },
   // ADR-0216: a deal thesis, its promises, their readings and one-off costs are
   // ENTERPRISE material — a synergy belongs to the whole deal, not to one line's
   // reading of it, and below the executive altitude there is no honest per-line
@@ -832,6 +839,14 @@ export const ACTION_RIGHTS = Object.freeze({
   'read-just-culture': { minRank: 1, maxRank: 5, label: 'Read the Just Culture reviews on the people your span and declared lines hold — full detail at the manager altitude, counts above it' },
   'decide-just-culture': { minRank: 1, maxRank: 2, label: 'Open, decide, revise or withdraw a Just Culture review on a person whose deciding line you hold' },
   'concur-just-culture': { minRank: 1, maxRank: 2, label: 'Concur with or dissent from a Just Culture decision, as another line the person holds' },
+  // ADR-0219: the enterprise risk-appetite register. Reading is portfolio
+  // material (rank 3, director and above) and matches the record class. The
+  // ceiling is declared at the executive altitude (rank 4) and the retention by
+  // a director's line (rank 3) — always narrowed in the action to a seat that
+  // HOLDS the case owner, and never by the owner themselves.
+  'read-risk-appetite': { minRank: 3, maxRank: 5, label: 'Read the enterprise risk-appetite register: every declared ceiling, its measured population and whether coverage is complete' },
+  'declare-risk-appetite': { minRank: 4, maxRank: 5, label: 'Declare, retire or review an appetite statement for a risk domain, and scan the register for owed decisions' },
+  'carry-risk-appetite': { minRank: 3, maxRank: 5, label: 'Declare or withdraw the retained exposure of one live risk whose owner you hold — never your own' },
   // ADR-0216: the deal synergy register. Reading is enterprise material and
   // matches the record-class floor (rank 4) rather than letting a director read a
   // number the class would deny. Declaring a promise is an executive act, and the

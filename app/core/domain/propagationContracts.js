@@ -146,6 +146,7 @@ import { standardWaiverRule } from './standardWaiverRules.js';
 import { speakUpRule } from './speakUpRules.js';
 import { synergyRule } from './synergyRules.js';
 import { earnedValueRule } from './earnedValueRules.js';
+import { riskAppetiteRule } from './riskAppetiteRules.js';
 import { sealRule } from './sealRules.js';
 // ADR-0092: the Differencing Defender declares its contract like every other rule.
 import { differencingRule } from './differencingRules.js';
@@ -1148,6 +1149,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'conflictRecusalRules.js',
     purpose: 'RULE-CIR-01: reads the Decision-Maker Conflict-of-Interest & Recusal Register (`buildConflictRecusal`, ADR-0210) with the whole-workspace view on interest declarations and withdrawals, standing responses (recusal, mitigation, determination, supersession), reportable-kind rules and their retirement, roster and reporting-line changes, convention changes and explicit `conflictRecusal.scan` scans — and on any other commit, because the horizon moves with the calendar. ONE condition, filed at most once per (interest, verdict) with a deterministic `cir1:…` signature and bounded at 4 per commit with the remainder counted: `undisclosed` — a declared interest whose holder sits on the record as the hand that signs it, its owner, or a declared line over its subject, and which carries no recusal, mitigation or written determination. The ask goes to the seat ABOVE the person holding the interest — never the person themselves, because a hand does not clear its own conflict — and in a matrix to the lowest seat above EVERY line the person holds (`matrixJointApex`), never to one line’s manager on the other’s behalf. Leader-held, apex-less, self-held and off-roster conditions write ONE identity-free `conflictRecusalMarkers` observation and substitute nobody. Asks carry typed `issues-obligation` and matrix-DAG `rolls-up-to` provenance and close themselves when the interest is answered, withdrawn, out of the horizon or changes owner. It never blocks a decision, edits an approver, revokes a right, invents an interest from a surname, a shared line or a pattern, converts a mitigation into independence, or rates a person; pausable via `conflictRecusalAutoPropagate` (the pause governs EVERY path, including explicit scans).',
     writes: ['delegations', 'links', 'conflictRecusalMarkers'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: riskAppetiteRule,
+    module: 'riskAppetiteRules.js',
+    purpose: 'RULE-RAP-01: reads the Enterprise Risk Appetite & Tolerance Breach Register (`buildRiskAppetite`, ADR-0219) with the whole-workspace view on statement declarations and retirements, risk declarations and withdrawals, convention changes and explicit `riskAppetite.scan` scans — and on any other commit, because a review date passes and a ceiling is breached by the calendar as much as by a write. THREE conditions, filed at most once per (deterministic `rap1:…` signature, addressee) and bounded at 4 per commit with the remainder counted: `tolerance-breached` — a live statement whose DECLARED population is over its exact ceiling; `appetite-missing` — risk carried in a domain with no live statement at all, because the absence of a ceiling is not an unlimited ceiling; `review-overdue` — a live statement past its own review date. Breaches and missing appetites go to the lowest seat above EVERY line carrying the risk (`matrixJointApex` over the case owners), never to one line’s manager on another’s behalf and never to the risk owner, who cannot clear the ceiling they carry; a genuine diamond tie files one ask per joint apex; a disconnected graph or an off-roster declarer writes ONE identity-free `riskAppetiteMarkers` observation and substitutes nobody. The ask text is deliberately opaque — no domain, no amount, no date — because a delegation is readable above the addressee; the opaque signature lives only in the typed `issues-obligation` link. Asks carry typed `issues-obligation` provenance and close themselves when the condition clears or the addressee moves. It never declares, amends or retires a statement, never records or withdraws a retention, never converts or pools a currency, never decides that a risk is acceptable and never rates a person; pause-governed on every path (`riskAppetiteAutoPropagate`), including the explicit scan.',
+    writes: ['delegations', 'links', 'riskAppetiteMarkers'],
     emits: [],
     scansWorkspace: true,
   },

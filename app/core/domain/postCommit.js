@@ -202,6 +202,7 @@ import { speakUpRule } from './speakUpRules.js';
 // (RULE-SYN-01).
 import { synergyRule } from './synergyRules.js';
 import { earnedValueRule } from './earnedValueRules.js';
+import { riskAppetiteRule } from './riskAppetiteRules.js';
 
 
 // ADR-0087: the Operating Cadence Clock. Reads the finished queue after the
@@ -1237,6 +1238,19 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // decides whether a programme is worth funding and never rates a person.
   // Registered immediately before `speakUpRule`, `seatRule` and `sealRule`.
   earnedValueRule,
+  // ADR-0219: the Enterprise Risk Appetite & Tolerance Breach Register. ONE rule
+  // reads the finished register with the whole-workspace view and files at most
+  // one dated ask per condition: a breached tolerance (to the lowest seat above
+  // EVERY line carrying the risk, never to one line's manager on another's
+  // behalf and never to the risk owner), risk carried in a domain with no live
+  // appetite (same escalation — the absence of a ceiling is not an unlimited
+  // ceiling), or a passed review date (to the person who declared it). A
+  // condition with no joint seat, or a declarer who has left the roster, writes
+  // ONE identity-free `riskAppetiteMarkers` observation and asks nobody. It
+  // never declares, amends or retires a statement, never records or withdraws a
+  // retention, never converts a currency and never rates a person.
+  // Registered immediately before `speakUpRule`, `seatRule` and `sealRule`.
+  riskAppetiteRule,
   // Registered immediately before `seatRule` and `sealRule`.
   speakUpRule,
   // ADR-0076: the Operating Seat (vertical roll-up + enforced boundaries).

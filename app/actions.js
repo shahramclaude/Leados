@@ -120,6 +120,11 @@ import { createSynergyActions } from './core/domain/synergyActions.js';
 // case's declared measure, actual costs, and estimates at completion no stored
 // row can contradict.
 import { createEarnedValueActions } from './core/domain/earnedValueActions.js';
+// ADR-0219: the Enterprise Risk Appetite & Tolerance Breach Register — an exact
+// ceiling per domain/measure/currency, the retained exposure declared for each
+// live risk, and a breach escalated to the joint seat above the carrying lines.
+// Every read re-derives every figure; every write proves the line.
+import { createRiskAppetiteActions } from './core/domain/riskAppetiteActions.js';
 import { createWorkRestActions } from './core/domain/workRestActions.js';
 import { createConflictRecusalActions } from './core/domain/conflictRecusalActions.js';
 // ADR-0148: Matrix Line Consent. A declared share is an ask until the line's
@@ -20333,6 +20338,10 @@ export function createApi(store, options = {}) {
   // from the declared rows; every write re-proves the right, the owner's reach,
   // the increment-to-budget identity and the cut-off discipline.
   Object.assign(api, createEarnedValueActions(store, { now: clock, idFactory: id }));
+  // ADR-0219: the risk-appetite register. A tolerance is stored in the exact
+  // field its measure owns; money is converted once, in integer arithmetic, and
+  // the line above the risk owner is the line that may declare its retention.
+  Object.assign(api, createRiskAppetiteActions(store, { now: clock, idFactory: id }));
   // ADR-0209: the Cross-Line Work/Rest Recovery Ledger — recording a shift for a
   // line the acting seat HOLDS, its actual times or cancellation, a line's
   // coverage attestation, and the declared policy. No act moves or cancels a
