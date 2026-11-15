@@ -220,7 +220,7 @@ function withDom(run) {
  */
 
 test('ADR-0216 migration 169 → 170 adds five EMPTY ledgers and three conventions, and infers no deal', () => {
-  assert.equal(SCHEMA_VERSION, 172);
+  assert.equal(SCHEMA_VERSION, 173);
   for (const key of ['dealTheses', 'synergyClaims', 'synergyReadings', 'synergyCosts', 'synergyMarkers']) {
     assert.ok(COLLECTIONS.includes(key), `${key} is a declared collection`);
   }
@@ -248,7 +248,7 @@ test('ADR-0216 migration 169 → 170 adds five EMPTY ledgers and three conventio
   assert.equal(next.valueBridgeReadings.length, 1, 'the existing record is left exactly as it was');
 
   const migrated = migrate({ ...createEmptyState(T0), schemaVersion: 169 });
-  assert.equal(migrated.raw.schemaVersion, 172); // full chain to current head
+  assert.equal(migrated.raw.schemaVersion, 173); // full chain to current head
   assert.equal(buildDealSynergy(migrated.raw, { now: at('2026-11-15'), settings: migrated.raw.settings }).counts.deals, 0);
 });
 

@@ -226,6 +226,9 @@ import { buildEarnedValue, earnedValueCsvRows } from './domain/earnedValue.js';
 import { buildJustCultureReport, justCultureCsvRows } from './domain/justCulture.js';
 import { JUST_CULTURE_CSV_COLUMNS, JUST_CULTURE_CSV_DESCRIPTOR, JUST_CULTURE_CSV_SCOPE } from './domain/justCultureRegistry.js';
 import { EV_CSV_COLUMNS, EV_CSV_DESCRIPTOR } from './domain/earnedValueRegistry.js';
+// ADR-0219: CSV #161 — the enterprise risk-appetite register, identity-free.
+import { buildRiskAppetite, riskAppetiteCsvRows } from './domain/riskAppetite.js';
+import { RA_CSV_COLUMNS, RA_CSV_DESCRIPTOR, RA_CSV_SCOPE } from './domain/riskAppetiteRegistry.js';
 import {
   CAPITAL_RATIONING_CSV_COLUMNS,
   CAPITAL_RATIONING_CSV_DESCRIPTOR,
@@ -1518,6 +1521,11 @@ export const CSV_EXPORTS = [
   // basis note or date of any review crosses this boundary; an uncomputable count is
   // blank with its reason.
   JUST_CULTURE_CSV_DESCRIPTOR,
+  // #161 (ADR-0219): the enterprise risk-appetite register — aggregate only. One
+  // summary row, one row per live statement and one row per domain. No declarer, no
+  // case, no owner and no basis note crosses this boundary; an uncomputable figure
+  // exports BLANK with its reason rather than a zero.
+  RA_CSV_DESCRIPTOR,
 ];
 
 function personLookup(state) {
@@ -6768,6 +6776,16 @@ export function buildScopeTable(state, scope, now) {
       return {
         columns: JUST_CULTURE_CSV_COLUMNS.map((key) => ({ key, header: key })),
         rows: justCultureCsvRows(report),
+      };
+    }
+    case RA_CSV_SCOPE: {
+      // CSV scope #161 (ADR-0219, Schema v173). Built from the SAME reader the
+      // panel renders, with no seat: every figure is an aggregate over the whole
+      // record, so no identity is reachable from this export.
+      const report = buildRiskAppetite(state, { now, settings: state.settings || {}, seat: null });
+      return {
+        columns: RA_CSV_COLUMNS.map((key) => ({ key, header: key })),
+        rows: riskAppetiteCsvRows(report),
       };
     }
     case 'earned-value-delivery': {
