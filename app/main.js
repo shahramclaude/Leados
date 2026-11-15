@@ -306,6 +306,7 @@ import { contradictionAttentionCount } from './core/domain/contradictionAudit.js
 import { reviewStewardshipAttentionCount } from './core/domain/reviewStewardship.js';
 import { dutyStandbyAttentionCount } from './core/domain/dutyStandby.js';
 import { standardWorkAttentionCount } from './core/domain/standardWork.js';
+import { standardWaiverAttentionCount } from './core/domain/standardWaiver.js';
 import { workRestAttentionCount } from './core/domain/workRest.js';
 import { identityAttentionCount } from './core/domain/identity.js';
 
@@ -1547,7 +1548,12 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       // and policies alone — this badge sits on every route, so it never reads
       // the reporting graph or coverage, which a conflict does not depend on.
       standardWork: standardWorkAttentionCount(state, { now: at, settings: state.settings, seat: seatCtx?.seat || null })
-        + workRestAttentionCount(state, { now: at, seat: seatCtx?.seat || null }),
+        + workRestAttentionCount(state, { now: at, seat: seatCtx?.seat || null })
+        // ADR-0212: lapsed departures still owed a dated answer, and chains at
+        // the declared review threshold. Zero until somebody asks, so a workspace
+        // that never waives a standard pays nothing for this line — the guard
+        // below returns before the reporting graph is built.
+        + standardWaiverAttentionCount(state, { now: at, settings: state.settings, seat: seatCtx?.seat || null }),
       // ADR-0210: declared interests still in force with no dated response on
       // file — plus the acting person's own declarations. A COUNT of declared
       // work owed, never a verdict: this sits on every route, so it reads no

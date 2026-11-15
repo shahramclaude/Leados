@@ -101,6 +101,7 @@ import { createGoalCommitmentActions } from './core/domain/goalCommitmentActions
 import { createGoalAttainmentActions } from './core/domain/goalAttainmentActions.js';
 import { createInvestmentCaseActions } from './core/domain/investmentCaseActions.js';
 import { createCapitalRationingActions } from './core/domain/capitalRationingActions.js';
+import { createStandardWaiverActions } from './core/domain/standardWaiverActions.js';
 import { createWorkRestActions } from './core/domain/workRestActions.js';
 import { createConflictRecusalActions } from './core/domain/conflictRecusalActions.js';
 // ADR-0148: Matrix Line Consent. A declared share is an ask until the line's
@@ -20292,6 +20293,11 @@ export function createApi(store, options = {}) {
   // read by the exact kernel; nothing derived is ever stored, so the panel, the
   // brief and CSV #153 cannot disagree.
   Object.assign(api, createCapitalRationingActions(store, { now: clock, idFactory: id }));
+  // ADR-0212 (Schema v166): the Temporary Standard Waiver Register. Five acts —
+  // request, answer, decide, revoke, conventions — plus the scan. The door
+  // resolves the line holder from the matrix on every answer and refuses the
+  // requester, a peer line and an ancestor alike.
+  Object.assign(api, createStandardWaiverActions(store, { now: clock, idFactory: id }));
   // ADR-0209: the Cross-Line Work/Rest Recovery Ledger — recording a shift for a
   // line the acting seat HOLDS, its actual times or cancellation, a line's
   // coverage attestation, and the declared policy. No act moves or cancels a

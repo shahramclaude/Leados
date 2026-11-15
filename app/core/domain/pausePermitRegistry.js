@@ -242,6 +242,11 @@ export const PAUSE_PERMIT_MATRIX_REACH_SWITCHES = Object.freeze([
   // the enterprise altitude that may declare a ceiling, so silencing it leaves
   // every second line under that apex with a fund nobody has sized and no ask.
   'capitalRationingAutoPropagate',
+  // ADR-0212: the standard-waiver switch. The rule reads the reporting graph for
+  // the home line of the manager who kept renewing a departure, so silencing it
+  // leaves that manager's own manager without the review — and silencing it also
+  // leaves every lapsed departure unclosed, in silence.
+  'standardWaiverAutoPropagate',
 ]);
 
 export function pausePermitReachesMatrix(key) {
@@ -285,6 +290,7 @@ export const PAUSE_PERMIT_REACH_RULES = Object.freeze({
   workRestAutoPropagate: 'workRestRules.js',
   conflictRecusalAutoPropagate: 'conflictRecusalRules.js',
   capitalRationingAutoPropagate: 'capitalRationingRules.js',
+  standardWaiverAutoPropagate: 'standardWaiverRules.js',
 });
 
 /** How much of the register a seat is shown. Mirrors the altitude disclosure ladder. */

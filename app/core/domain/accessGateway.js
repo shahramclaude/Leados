@@ -17,6 +17,7 @@ import { INVESTMENT_CASE_RIGHTS } from './investmentCaseRegistry.js';
 import { CAPITAL_RATIONING_RIGHTS } from './capitalRationingRegistry.js';
 import { WORK_REST_RIGHTS } from './workRestRegistry.js';
 import { CONFLICT_RECUSAL_RIGHTS } from './conflictRecusalRegistry.js';
+import { STANDARD_WAIVER_RIGHTS } from './standardWaiverRegistry.js';
 import { routeVerdict } from './seatRegistry.js';
 import { validateMissionCommands } from './mission.js';
 import { captureBriefCase } from './missionCaptureBrief.js';
@@ -178,6 +179,17 @@ const groups = [
   [CONFLICT_RECUSAL_RIGHTS.DECLARE, 'conflictRecusalDeclareInterest conflictRecusalWithdrawInterest conflictRecusalDeclareNoInterest conflictRecusalWithdrawNoInterest conflictRecusalCandidates conflictRecusalNoInterestCandidates'],
   [CONFLICT_RECUSAL_RIGHTS.DECIDE, 'conflictRecusalRecordStanding'],
   [CONFLICT_RECUSAL_RIGHTS.GOVERN, 'conflictRecusalDeclareRule conflictRecusalRetireRule conflictRecusalScan conflictRecusalSetConventions'],
+  // ADR-0212: the temporary standard waiver register. Every read is a pure,
+  // seat-scoped adapter and sits in SAFE_READS. Asking is the routine owner's
+  // own act (the ACTION narrows it); answering is the line holder's (the ACTION
+  // re-resolves the line and refuses anybody else, including the requester);
+  // closing is the owner's or the authoriser's act. The scan and the conventions
+  // stay on the governing right.
+  [STANDARD_WAIVER_RIGHTS.READ, 'standardWaiverReport standardWaiverBriefText standardWaiverCsvRows standardWaiverAttentionCount'],
+  [STANDARD_WAIVER_RIGHTS.REQUEST, 'standardWaiverCandidates standardWaiverRequest'],
+  [STANDARD_WAIVER_RIGHTS.AUTHORISE, 'standardWaiverAnswer standardWaiverRevoke'],
+  [STANDARD_WAIVER_RIGHTS.DECIDE, 'standardWaiverDecide'],
+  [STANDARD_WAIVER_RIGHTS.GOVERN, 'standardWaiverScan standardWaiverSetConventions'],
   // ADR-0148: answering a declared share is TWO first-person acts, split on the
   // spine rather than in prose. `accept-matrix-line` is the manager's own
   // answer (accept or decline the line they were given); it is open at every
@@ -470,7 +482,12 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // because a module whose reads are absent from SAFE_READS is unreadable under
 // enforcement while its writes are still gated — the funded set would vanish
 // exactly when a real organisation turned enforcement on.
-'capitalRationingAttentionCount', 'capitalRationingBriefText', 'capitalRationingCsvRows', 'capitalRationingReport', 'concordanceAttentionCount', 'concordanceBriefText', 'concordanceCsvRows', 'concordanceRead', 'concordanceStats', 'disclosureAttentionCount', 'disclosureBriefText', 'disclosureCsvRows', 'disclosureGrantRead', 'disclosureGrants', 'disclosureRead', 'envoyAttentionCount', 'envoyBriefText', 'envoyCsvRows', 'envoyIdentity', 'envoyPacketText', 'envoyPreview', 'envoyRead', 'escalationBriefText', 'escalationCsvRows', 'escalationRead', 'escalationStats', 'differencesAttentionCount', 'differencesBriefText', 'differencesCsvRows', 'differencesRead', 'federationAttentionCount', 'federationBriefText', 'federationCsvRows', 'federationRead',
+'capitalRationingAttentionCount', 'capitalRationingBriefText', 'capitalRationingCsvRows', 'capitalRationingReport',
+// ADR-0212: the standard-waiver register's pure read surface. Registered here
+// because a module whose reads are absent from SAFE_READS is unreadable under
+// enforcement while its writes are still gated — the register would vanish
+// exactly when a real organisation turned enforcement on.
+'standardWaiverAttentionCount', 'standardWaiverBriefText', 'standardWaiverCandidates', 'standardWaiverCsvRows', 'standardWaiverReport', 'concordanceAttentionCount', 'concordanceBriefText', 'concordanceCsvRows', 'concordanceRead', 'concordanceStats', 'disclosureAttentionCount', 'disclosureBriefText', 'disclosureCsvRows', 'disclosureGrantRead', 'disclosureGrants', 'disclosureRead', 'envoyAttentionCount', 'envoyBriefText', 'envoyCsvRows', 'envoyIdentity', 'envoyPacketText', 'envoyPreview', 'envoyRead', 'escalationBriefText', 'escalationCsvRows', 'escalationRead', 'escalationStats', 'differencesAttentionCount', 'differencesBriefText', 'differencesCsvRows', 'differencesRead', 'federationAttentionCount', 'federationBriefText', 'federationCsvRows', 'federationRead',
 'freezeLineAttentionCount', 'freezeLineBriefText', 'freezeLineConventions', 'freezeLineCsvRows', 'freezeLineReport',
 'spanCalibrationAttentionCount', 'spanCalibrationBriefText', 'spanCalibrationConventions', 'spanCalibrationCsvRows', 'spanCalibrationReport', 'spanCalibrationSettings', 'spanCalibrationSignals',
 'reputationAttentionCount', 'reputationBriefText', 'reputationConventions', 'reputationCounterfactual', 'reputationCsvRows', 'reputationPriceAsk', 'reputationReport', 'reputationSignals',

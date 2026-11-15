@@ -246,7 +246,7 @@ test('the register declares its rights, its pause, its export and its place on t
   assert.match(ruleSource, /investmentCaseAutoPropagate\s*===\s*false/, 'and stops when it is switched off');
   assert.match(ruleSource, /buildMatrix/, 'and reads the reporting graph, so silencing it can reach a second line');
   // CSV scope #150, identity-free.
-  assert.equal(CSV_EXPORTS.length, 153);
+  assert.equal(CSV_EXPORTS.length, 154);
   assert.equal(CSV_EXPORTS[149].key, INVESTMENT_CASE_CSV_SCOPE);
   assert.equal(CSV_EXPORTS[149].sensitive, false);
   // Report-only ledgers: the generic seat projection never hands the raw rows out.
@@ -264,8 +264,8 @@ test('v162 is additive, starts empty, assumes no hurdle rate and invents no case
   old.people = [person('mia', null, 'manager')];
   old.budgets = [{ id: 'b1', name: 'Capex FY27', currency: 'DKK', limit: 500000, status: 'active', ownerId: 'mia', lines: [], createdAt: AT, updatedAt: AT }];
   const next = migrate(old);
-  assert.equal(SCHEMA_VERSION, 165);
-  assert.deepEqual(next.applied.at(-1), '164 → 165');
+  assert.equal(SCHEMA_VERSION, 166);
+  assert.deepEqual(next.applied.at(-1), '165 → 166');
   assert.deepEqual([next.raw.investmentCases, next.raw.investmentCaseActs, next.raw.investmentCaseMarkers], [[], [], []]);
   assert.equal(next.raw.settings.investmentCaseAskDueDays, 14);
   assert.equal(next.raw.settings.investmentCaseAutoPropagate, true);
