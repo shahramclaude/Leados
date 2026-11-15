@@ -14,6 +14,7 @@ import { PRIORITY_BALLOT_RIGHTS } from './priorityRankingRegistry.js';
 import { GOAL_COMMITMENT_RIGHTS } from './goalCommitmentRegistry.js';
 import { GOAL_ATTAINMENT_RIGHTS } from './goalAttainmentRegistry.js';
 import { INVESTMENT_CASE_RIGHTS } from './investmentCaseRegistry.js';
+import { WORK_REST_RIGHTS } from './workRestRegistry.js';
 import { routeVerdict } from './seatRegistry.js';
 import { validateMissionCommands } from './mission.js';
 import { captureBriefCase } from './missionCaptureBrief.js';
@@ -149,6 +150,16 @@ const groups = [
   [INVESTMENT_CASE_RIGHTS.DECLARE, 'investmentCaseDeclare investmentCaseWithdraw investmentCasePreview investmentCaseCandidates'],
   [INVESTMENT_CASE_RIGHTS.RATIFY, 'investmentCaseDecide investmentCaseReview'],
   [INVESTMENT_CASE_RIGHTS.GOVERN, 'investmentCaseScan investmentCaseSetConventions'],
+  // ADR-0209: reading the work/rest ledger is open at every altitude and scoped
+  // by the reader. ROSTERING — a shift, its actual times or cancellation, a
+  // coverage attestation — is the act of whoever holds the LINE the work is for,
+  // a frontline lead included; the rank window only admits the seat, and the
+  // ACTION re-proves the line and refuses a manager who merely sees the person.
+  // Declaring which limits apply is governance and starts at the director.
+  [WORK_REST_RIGHTS.READ, 'workRestReport workRestBriefText workRestCsvRows workRestAttentionCount'],
+  [WORK_REST_RIGHTS.ROSTER, 'workRestCandidates workRestPreviewShift workRestDeclareShift workRestAmendShift workRestAttestCoverage workRestWithdrawCoverage'],
+  [WORK_REST_RIGHTS.POLICY, 'workRestDeclarePolicy workRestRetirePolicy'],
+  [WORK_REST_RIGHTS.GOVERN, 'workRestScan workRestSetConventions'],
   // ADR-0148: answering a declared share is TWO first-person acts, split on the
   // spine rather than in prose. `accept-matrix-line` is the manager's own
   // answer (accept or decline the line they were given); it is open at every
@@ -656,6 +667,10 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // line it holds, and everything else as a count. A refused figure is a printed
 // reason, never a zero.
 'investmentCaseReport', 'investmentCaseBriefText', 'investmentCaseCsvRows', 'investmentCaseAttentionCount',
+// ADR-0209: the work/rest ledger is scoped INSIDE the read model — a seat
+// receives the people in its reporting tree or on a line it holds; everyone else
+// is a count. Shift notes are disclosed only to a seat that holds the shift's line.
+'workRestReport', 'workRestBriefText', 'workRestCsvRows', 'workRestAttentionCount',
 'standardWorkReport', 'standardWorkBriefText', 'standardWorkAttentionCount', 'standardWorkCandidates']);
 const refusal = (reason) => ({ ok: false, code: 'scope-refusal', error: reason, field: 'scope' });
 
@@ -736,6 +751,11 @@ const MATRIX_LINE_SCOPED = new Set([
   // seat may reach only through a declared Matrix line; the action re-checks the
   // tree and the line itself before it reads or records anything.
   'investmentCaseDeclare', 'investmentCasePreview',
+  // ADR-0209: a shift (declared or previewed) and a coverage attestation name a
+  // person the acting seat may hold only through a declared Matrix line — which
+  // is exactly the case the ledger exists for. The action re-proves that the
+  // seat holds the very line the shift is worked for.
+  'workRestDeclareShift', 'workRestPreviewShift', 'workRestAttestCoverage',
 ]);
 
 /** Exact method allowlist + rank + record/person scope. No arbitrary API names. */

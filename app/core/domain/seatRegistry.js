@@ -188,6 +188,14 @@ export const RECORD_POLICIES = Object.freeze({
   investmentCases: { classKey: 'unit', detailCeiling: 0, label: 'Investment cases (report only; every figure re-derived on read)', route: '#/finance?panel=cases' },
   investmentCaseActs: { classKey: 'unit', detailCeiling: 0, label: 'Investment case ratification, withdrawal and review acts (report only)', route: '#/finance?panel=cases' },
   investmentCaseMarkers: { classKey: 'unit', detailCeiling: 0, label: 'Investment case review observation markers', route: '#/finance?panel=cases' },
+  // ADR-0209: report-only. A shift row names a person and their hours; the raw
+  // rows are never handed to the generic projection. The ledger's own reader
+  // discloses a person to the seat whose tree or declared line holds them.
+  workRestShifts: { classKey: 'unit', detailCeiling: 0, label: 'Declared shifts (report only; every spell and rest re-derived on read)', route: '#/standard-work?panel=rest' },
+  workRestActs: { classKey: 'unit', detailCeiling: 0, label: 'Shift amendments — actual times and cancellations (report only)', route: '#/standard-work?panel=rest' },
+  workRestCoverage: { classKey: 'unit', detailCeiling: 0, label: 'Per-line coverage attestations of the work record (report only)', route: '#/standard-work?panel=rest' },
+  workRestPolicies: { classKey: 'unit', detailCeiling: 0, label: 'Declared work/rest policies with their written source (report only)', route: '#/standard-work?panel=rest' },
+  workRestMarkers: { classKey: 'unit', detailCeiling: 0, label: 'Work/rest conflict observation markers', route: '#/standard-work?panel=rest' },
   delegationLineActs: { classKey: 'unit', detailCeiling: 0, label: 'Cross-line ask attribution acts (report only)', route: '#/matrix?panel=asks' },
   delegationLineMarkers: { classKey: 'unit', detailCeiling: 0, label: 'Cross-line overload reconciliation markers', route: '#/matrix?panel=asks' },
   // ADR-0181: classification acts and RULE-NPW-01 markers are surfaced only
@@ -699,6 +707,14 @@ export const ACTION_RIGHTS = Object.freeze({
   'declare-investment-case': { minRank: 2, maxRank: 5, label: 'Declare a dated investment case, or withdraw one before it is decided' },
   'ratify-investment-case': { minRank: 3, maxRank: 5, label: 'Ratify or refuse an investment case, or record its post-completion review — never as its benefit owner' },
   'govern-investment-cases': { minRank: 3, maxRank: 5, label: 'Scan due post-completion reviews and set the investment-case ask window' },
+  // ADR-0209: reading the work/rest ledger is open at every altitude and scoped
+  // by the reader. Rostering starts at the FRONTLINE — a shift lead writes the
+  // roster — and the action re-proves that the seat holds the very line. Which
+  // limits apply is a governance declaration and starts at the director.
+  'read-work-rest': { minRank: 1, maxRank: 5, label: 'Read the work/rest recovery ledger for your own span' },
+  'roster-work-rest': { minRank: 1, maxRank: 5, label: 'Record a shift, its actual times or cancellation, or attest a line’s work record — only for a line you hold' },
+  'declare-work-rest-policy': { minRank: 3, maxRank: 5, label: 'Declare or retire the work/rest limits that apply, with their written source' },
+  'govern-work-rest': { minRank: 3, maxRank: 5, label: 'Scan work/rest conflicts and set the ledger’s reading horizon' },
   // ADR-0150: onboarding a person into a matrix. Writing a line's brief is the act
   // of the manager who HOLDS that line, at whatever altitude that line's manager
   // sits (a project lead with no home-line reports gets this exactly as a

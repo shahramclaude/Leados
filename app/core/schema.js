@@ -183,6 +183,20 @@ import {
   normalizeInvestmentCases,
   normalizeInvestmentCaseSettings,
 } from './domain/investmentCaseSchema.js';
+// ADR-0209 (Schema v163): the Cross-Line Work/Rest Recovery Ledger — declared
+// shifts (one person × one reporting line × two wall-clock ends with the UTC
+// offsets they resolved to; immutable once declared), their dated amendments
+// (actual times, cancellation), per-line coverage attestations, declared policies
+// with a written source, and the rule's bounded marker ledger. Nothing derived —
+// no spell, rest, total or verdict — is stored.
+import {
+  normalizeWorkRestActs,
+  normalizeWorkRestCoverage,
+  normalizeWorkRestMarkers,
+  normalizeWorkRestPolicies,
+  normalizeWorkRestSettings,
+  normalizeWorkRestShifts,
+} from './domain/workRestSchema.js';
 // ADR-0185 (Schema v147): dated Matrix change-impact requests and first-person
 // line responses. Request snapshots normalize before their responses resolve.
 import {
@@ -979,7 +993,15 @@ export {
 // named person to it. No hurdle rate is assumed either. Nothing derived is
 // stored: every present value, rate, payback, ratio and status is recomputed on
 // read from the flows, so a replayed workspace cannot carry a stale figure.
-export const SCHEMA_VERSION = 162;
+// v163 adds the Cross-Line Work/Rest Recovery Ledger (ADR-0209): five EMPTY
+// ledgers — `workRestShifts`, `workRestActs`, `workRestCoverage`,
+// `workRestPolicies` and `workRestMarkers` — plus three declared conventions. No
+// shift is inferred at upgrade from a station window, a duty roster, a cadence
+// or a calendar: none of them says when a person started and stopped working,
+// and a shift invented here would manufacture a rest — or a breach — nobody
+// recorded. No statutory limit is seeded either: which limits bind a person is
+// a human declaration with its source in writing.
+export const SCHEMA_VERSION = 163;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -2441,6 +2463,11 @@ export const DEFAULT_SETTINGS = Object.freeze({
   // printed on the panel. No hurdle rate is a convention: each case declares its
   // own, and none is assumed.
   ...normalizeInvestmentCaseSettings({}),
+  // ADR-0209: the work/rest conventions — how far behind and ahead of today the
+  // ledger reads, and the automation pause. Clamped on load, refused (never
+  // clamped) by the setter. No rest or hours limit is a convention: a policy
+  // declares it, with its source.
+  ...normalizeWorkRestSettings({}),
 });
 
 export const COLLECTIONS = [
@@ -3239,6 +3266,15 @@ export const COLLECTIONS = [
   'investmentCases',
   'investmentCaseActs',
   'investmentCaseMarkers',
+  // ADR-0209 (Schema v163): the Cross-Line Work/Rest Recovery Ledger. Declared
+  // shifts, their amendments, per-line coverage attestations, declared policies
+  // and the rule's bounded marker ledger. No spell, rest, rolling total, verdict
+  // or owner is stored; each is re-derived on read from these rows.
+  'workRestShifts',
+  'workRestActs',
+  'workRestCoverage',
+  'workRestPolicies',
+  'workRestMarkers',
 ];
 
 /** Stable empty state. `now` is an ISO string so the result is a pure value. */
@@ -4040,6 +4076,10 @@ export function normalizeSettings(raw) {
     // field, so an investment-case convention not spread here would vanish on
     // every load and the pause census would never see the review switch.
     ...normalizeInvestmentCaseSettings(s),
+    // ADR-0209: named here for the same reason — a work/rest convention not
+    // spread here would vanish on every load and the pause census would never
+    // see the conflict switch.
+    ...normalizeWorkRestSettings(s),
     ...normalizeStructureHistorySettings(s),
     ...normalizeDifferencesSettings(s),
     ...normalizeFitSettings(s),
@@ -8619,6 +8659,17 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.investmentCases = normalizeInvestmentCases(raw.investmentCases, warnings);
   state.investmentCaseActs = normalizeInvestmentCaseActs(raw.investmentCaseActs, state.investmentCases, warnings);
   state.investmentCaseMarkers = normalizeInvestmentCaseMarkers(raw.investmentCaseMarkers, warnings);
+  // ADR-0209 (Schema v163): the work/rest ledgers. A shift whose ends cannot be
+  // read to the exact minute is dropped with a counted warning, never repaired;
+  // an amendment is read through its shift, so an act on a shift that does not
+  // exist — or after its cancellation — cannot be manufactured by a hand-edited
+  // file. A policy with no written source or half a threshold pair is dropped
+  // and NO limit is assumed in its place.
+  state.workRestShifts = normalizeWorkRestShifts(raw.workRestShifts, warnings);
+  state.workRestActs = normalizeWorkRestActs(raw.workRestActs, state.workRestShifts, warnings);
+  state.workRestCoverage = normalizeWorkRestCoverage(raw.workRestCoverage, warnings);
+  state.workRestPolicies = normalizeWorkRestPolicies(raw.workRestPolicies, warnings);
+  state.workRestMarkers = normalizeWorkRestMarkers(raw.workRestMarkers, warnings);
   state.delegationLineActs = normalizeDelegationLineActs(raw.delegationLineActs, state, warnings);
   state.delegationLineMarkers = normalizeDelegationLineMarkers(raw.delegationLineMarkers);
   // ADR-0181 (Schema v144): a malformed classification act, an act naming a
@@ -9463,6 +9514,22 @@ export const MIGRATIONS = {
     investmentCaseActs: Array.isArray(v161.investmentCaseActs) ? v161.investmentCaseActs : [],
     investmentCaseMarkers: Array.isArray(v161.investmentCaseMarkers) ? v161.investmentCaseMarkers : [],
     settings: { ...(v161.settings || {}), ...normalizeInvestmentCaseSettings(v161.settings || {}) },
+  }),
+  // 162 → 163: ADR-0209 adds FIVE EMPTY ledgers and three declared conventions.
+  // No shift is inferred from the station windows, duty rosters, cadences or
+  // 1:1 dates an upgraded workspace already holds: none of them records when a
+  // person started and stopped working, and an invented shift would manufacture
+  // a rest or a breach nobody recorded. No policy is seeded — no statutory limit
+  // is assumed for anyone.
+  162: (v162) => ({
+    ...v162,
+    schemaVersion: 163,
+    workRestShifts: Array.isArray(v162.workRestShifts) ? v162.workRestShifts : [],
+    workRestActs: Array.isArray(v162.workRestActs) ? v162.workRestActs : [],
+    workRestCoverage: Array.isArray(v162.workRestCoverage) ? v162.workRestCoverage : [],
+    workRestPolicies: Array.isArray(v162.workRestPolicies) ? v162.workRestPolicies : [],
+    workRestMarkers: Array.isArray(v162.workRestMarkers) ? v162.workRestMarkers : [],
+    settings: { ...(v162.settings || {}), ...normalizeWorkRestSettings(v162.settings || {}) },
   }),
   // 155 → 156: ADR-0196 adds one EMPTY append-only ledger. No active
   // RULE-NPW-01 ask has a receiving-line answer, effort estimate or capacity

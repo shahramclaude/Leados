@@ -209,6 +209,12 @@ import { GOAL_ATTAINMENT_CSV_COLUMNS, GOAL_ATTAINMENT_CSV_DESCRIPTOR } from './d
 // note or reason. Currencies are never pooled; a refused figure exports BLANK.
 import { buildInvestmentCases, investmentCaseCsvRows } from './domain/investmentCase.js';
 import { INVESTMENT_CASE_CSV_COLUMNS, INVESTMENT_CASE_CSV_DESCRIPTOR } from './domain/investmentCaseRegistry.js';
+// ADR-0209 (Schema v163): the Cross-Line Work/Rest Recovery Ledger (CSV scope
+// #151). One workspace row, one row per policy and one row per person under an
+// opaque positional code — no person, manager, shift id, clock time, label or
+// note. A figure that cannot be claimed exports BLANK with its reason.
+import { buildWorkRest, workRestCsvRows } from './domain/workRest.js';
+import { WORK_REST_CSV_COLUMNS, WORK_REST_CSV_DESCRIPTOR } from './domain/workRestRegistry.js';
 import { buildPausePermits, pausePermitCsvRows } from './domain/pausePermits.js';
 import { PAUSE_PERMIT_CSV_COLUMNS, PAUSE_PERMIT_CSV_DESCRIPTOR } from './domain/pausePermitRegistry.js';
 import { STRUCTURE_HISTORY_CSV_COLUMNS } from './domain/structureHistoryRegistry.js';
@@ -1432,6 +1438,11 @@ export const CSV_EXPORTS = [
   // case exports as `C01`, currencies are never pooled, net present values are
   // never added across cases, and a refused figure exports BLANK with its reason.
   INVESTMENT_CASE_CSV_DESCRIPTOR,
+  // #151 (ADR-0209): the cross-line work/rest recovery ledger — identity-free.
+  // No person, manager, shift id, clock time, policy label or note; a person
+  // exports as `W01`, a policy as `P01`, durations are whole minutes, and a
+  // figure that cannot be claimed exports BLANK with its reason, never zero.
+  WORK_REST_CSV_DESCRIPTOR,
 ];
 
 function personLookup(state) {
@@ -6628,6 +6639,17 @@ export function buildScopeTable(state, scope, now) {
       // manager, ask title or free text crosses the boundary.
       const report = buildWorkTurns(state, { now, settings: state.settings || {} });
       return { columns: WORK_TURN_CSV_COLUMNS.map((key) => ({ key, header: key })), rows: workTurnCsvRows(report) };
+    }
+    case 'work-rest-recovery': {
+      // CSV scope #151 (ADR-0209, Schema v163). Built from the SAME reader the
+      // panel renders, so an exported minute is provably the minute that was
+      // printed. A person is exported under a positional code; no person,
+      // manager, shift id, clock time, label or note reaches the file.
+      const report = buildWorkRest(state, { now, settings: state.settings || {}, seat: null });
+      return {
+        columns: WORK_REST_CSV_COLUMNS.map((key) => ({ key, header: key })),
+        rows: workRestCsvRows(report),
+      };
     }
     case 'investment-case-appraisals': {
       // CSV scope #150 (ADR-0208, Schema v162). Built from the SAME reader the
