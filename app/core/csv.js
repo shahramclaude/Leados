@@ -222,6 +222,9 @@ import { SPEAK_UP_CSV_COLUMNS, SPEAK_UP_CSV_DESCRIPTOR } from './domain/speakUpR
 import { buildDealSynergy, synergyCsvRows } from './domain/dealSynergy.js';
 import { SYNERGY_CSV_COLUMNS, SYNERGY_CSV_DESCRIPTOR } from './domain/synergyRegistry.js';
 import { buildEarnedValue, earnedValueCsvRows } from './domain/earnedValue.js';
+// ADR-0218: CSV #160 — the Just Culture register, aggregate only.
+import { buildJustCultureReport, justCultureCsvRows } from './domain/justCulture.js';
+import { JUST_CULTURE_CSV_COLUMNS, JUST_CULTURE_CSV_DESCRIPTOR, JUST_CULTURE_CSV_SCOPE } from './domain/justCultureRegistry.js';
 import { EV_CSV_COLUMNS, EV_CSV_DESCRIPTOR } from './domain/earnedValueRegistry.js';
 import {
   CAPITAL_RATIONING_CSV_COLUMNS,
@@ -1510,6 +1513,11 @@ export const CSV_EXPORTS = [
   // evidence note crosses this boundary; currencies are never pooled and a refused
   // figure exports BLANK with its reason rather than a zero.
   EV_CSV_DESCRIPTOR,
+  // #160 (ADR-0218): the Just Culture decision record — aggregate only. Counts of
+  // reviews by state, by response and by departure. No person, line, event, reference,
+  // basis note or date of any review crosses this boundary; an uncomputable count is
+  // blank with its reason.
+  JUST_CULTURE_CSV_DESCRIPTOR,
 ];
 
 function personLookup(state) {
@@ -6750,6 +6758,16 @@ export function buildScopeTable(state, scope, now) {
       return {
         columns: VALUE_BRIDGE_CSV_COLUMNS.map((key) => ({ key, header: key })),
         rows: valueBridgeCsvRows(report),
+      };
+    }
+    case JUST_CULTURE_CSV_SCOPE: {
+      // CSV scope #160 (ADR-0218, Schema v172). Built from the SAME reader the panel
+      // renders, with no seat: every figure is a count over every review held, so no
+      // identity is reachable from this export.
+      const report = buildJustCultureReport(state, { now, settings: state.settings || {}, seat: null });
+      return {
+        columns: JUST_CULTURE_CSV_COLUMNS.map((key) => ({ key, header: key })),
+        rows: justCultureCsvRows(report),
       };
     }
     case 'earned-value-delivery': {

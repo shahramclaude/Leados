@@ -1,3 +1,10 @@
+## 2026-11-15 — Session 291: Just Culture decision record — who decides a conduct review, what the answers point to, and where the decision departs from them (Schema v172, [ADR-0218](./docs/adr/0218-just-culture-decision-record.md), CSV #160, altitude frontline/mid-manager × matrix)
+
+- **Gap:** Just Culture, Planned since Session 247. Absence proof: zero word-boundary hits for "Just Culture", "justCulture" and "just-culture" in `app/`, `tests/` and `docs/` before the build. Repo-wide absence beyond those paths remains [UNVERIFIED].
+- **Built:** five-question algorithm with a pure response function; deciding-line ownership proved against the matrix; departure-from-answers requires a written reason; concurrence, dissent and revision; withdrawal; `#/just-culture` panel; CSV #160 (aggregate only); tests in `tests/app/just-culture.test.mjs`.
+- **Verification status:** targeted tests 14/14 green. The full suite was NOT confirmed green. The migration-chain fix was made after the last full run.
+- **In Progress:** `RULE-*` spine registration; rebuild of `LeadOS-standalone.html`; the Planned alternatives (Job Instruction, incoming-manager handover, stay-interview ledger, kaizen teian) remain Planned.
+
 ## 2026-11-15 — Session 290: earned-value delivery & estimate-at-completion register — is this programme arriving against the curve its budget implies (Schema v171, [ADR-0217](./docs/adr/0217-earned-value-delivery-register.md), `#/finance?panel=earned-value`, CSV #159, `RULE-EVL-01`)
 
 **Status: Shipped.** Altitude **director / VP**, structure **matrix**.

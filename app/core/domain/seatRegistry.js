@@ -233,6 +233,12 @@ export const RECORD_POLICIES = Object.freeze({
   concernReports: { classKey: 'unit', detailCeiling: 0, label: 'Raised concerns and the route each was given (report only; every state re-derived on read)', route: '#/speak-up' },
   concernActs: { classKey: 'unit', detailCeiling: 0, label: 'Dated acts answering a concern — acknowledgement, outcome, retaliation check, closure, withdrawal (report only)', route: '#/speak-up' },
   concernMarkers: { classKey: 'unit', detailCeiling: 0, label: 'Speak-up observation markers — no impartial route, receiver drifted', route: '#/speak-up' },
+  // ADR-0218: a review names a person's conduct and a decision is a verdict on it, so
+  // both are INDIVIDUAL material — the same class as coaching notes and 1:1 content.
+  // Above the manager altitude a seat reads counts only. Acts carry the person id so
+  // a decision can never be readable when its review is not.
+  justCultureReviews: { classKey: 'individual', label: 'Just Culture decision reviews — the conduct under review, its deciding line and the event', route: '#/just-culture' },
+  justCultureActs: { classKey: 'individual', label: 'Just Culture decisions, concurrences, dissents and withdrawals', route: '#/just-culture' },
   // ADR-0216: a deal thesis, its promises, their readings and one-off costs are
   // ENTERPRISE material — a synergy belongs to the whole deal, not to one line's
   // reading of it, and below the executive altitude there is no honest per-line
@@ -820,6 +826,12 @@ export const ACTION_RIGHTS = Object.freeze({
   'raise-concern': { minRank: 1, maxRank: 5, label: 'Raise a concern, unnamed if you choose, or withdraw one you raised' },
   'answer-concern': { minRank: 1, maxRank: 5, label: 'Acknowledge, resolve, check or close a concern routed to you — never one routed elsewhere' },
   'govern-concerns': { minRank: 3, maxRank: 5, label: 'Declare the acknowledgement, outcome and retaliation-check windows, and scan the register' },
+  // ADR-0218: the Just Culture Decision Record. Individual conduct material: the
+  // manager altitude and below may decide and concur, and only on a person whose
+  // line they hold. Reading is open at every rank; the record class decides detail.
+  'read-just-culture': { minRank: 1, maxRank: 5, label: 'Read the Just Culture reviews on the people your span and declared lines hold — full detail at the manager altitude, counts above it' },
+  'decide-just-culture': { minRank: 1, maxRank: 2, label: 'Open, decide, revise or withdraw a Just Culture review on a person whose deciding line you hold' },
+  'concur-just-culture': { minRank: 1, maxRank: 2, label: 'Concur with or dissent from a Just Culture decision, as another line the person holds' },
   // ADR-0216: the deal synergy register. Reading is enterprise material and
   // matches the record-class floor (rank 4) rather than letting a director read a
   // number the class would deny. Declaring a promise is an executive act, and the

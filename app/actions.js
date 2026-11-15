@@ -107,6 +107,9 @@ import { createFlexBudgetActions } from './core/domain/flexBudgetActions.js';
 // legs, and a leg owner declared rather than guessed.
 import { createValueBridgeActions } from './core/domain/valueBridgeActions.js';
 import { createSpeakUpActions } from './core/domain/speakUpActions.js';
+// ADR-0218: the Just Culture Decision Record — open, decide, concur or dissent,
+// withdraw. Every write re-proves the line the actor holds; every read is derived.
+import { createJustCultureActions } from './core/domain/justCultureActions.js';
 // ADR-0216: the deal thesis & synergy realization register — a dated promise
 // with a phased ladder, a reading that is claimed or verified, one-off cost to
 // achieve, and a contested saving counted nowhere.
@@ -20320,6 +20323,9 @@ export function createApi(store, options = {}) {
   // ADR-0215: the speak-up register. Every read is seat-projected inside the
   // action; every write re-proves the right, the reporter and the receiver.
   Object.assign(api, createSpeakUpActions(store, { now: clock, idFactory: id }));
+  // ADR-0218: the Just Culture Decision Record. The deciding line and every
+  // concurring line are proved against the matrix on every write.
+  Object.assign(api, createJustCultureActions(store, { now: clock, idFactory: id }));
   // ADR-0216: the deal synergy register. Every read re-derives every figure;
   // every write re-proves the right, the owner's reach and the verifier's place.
   Object.assign(api, createSynergyActions(store, { now: clock, idFactory: id }));

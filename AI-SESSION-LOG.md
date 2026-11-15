@@ -1,3 +1,7 @@
+## Session 291 — 2026-11-15: Just Culture decision record (Schema v172, [ADR-0218](./docs/adr/0218-just-culture-decision-record.md), CSV #160)
+
+Built the Just Culture decision record for frontline/mid-manager × matrix. Five questions drive a pure expectation function, and the screen prints the response the answers point to beside the response chosen. Departures require a written reason. Ownership is proved against the matrix on every write. Verification: targeted `just-culture.test.mjs` 14/14. The full suite was not confirmed green; the migration-chain correction (`'170 → 171'` kept in `applied` arrays) landed after the last full run and was not re-run. The sweep of 186 test files that moved the schema pins to 172 is the other unverified part. Shipped on user instruction to stop verifying.
+
 ## Session 290 — 2026-11-15: earned-value delivery & estimate-at-completion register (Schema v171, [ADR-0217](./docs/adr/0217-earned-value-delivery-register.md), CSV #159, `RULE-EVL-01`)
 
 **Step 0–1.** `NORTH_STAR.md` present with all four binding mandates in full (matrix leadership, bulletproof reliability, visual/content integrity, competitive benchmark). Remote `https://github.com/shahramclaude/Leados.git` matches; branch `arena/9e3ca1ce-leados` at base `4c14a3f` = `main` = `origin/main`, 0 ahead / 0 behind. Higgsfield connector `list_connector_tools(higgsfield)` → `unsupported` (re-verified) — the built-in image generator produced `app/assets/earned-value-method.jpg`.

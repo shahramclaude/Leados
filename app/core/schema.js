@@ -285,6 +285,13 @@ import {
   normalizeEvReadings,
   normalizeEvSettings,
 } from './domain/earnedValueSchema.js';
+// ADR-0218 (Schema v172): the Just Culture Decision Record. Reviews name one
+// person and one deciding line; acts are append-only and load only in sequence.
+// Reviews normalize first, so an act can resolve only through a surviving review.
+import {
+  normalizeJustCultureActs,
+  normalizeJustCultureReviews,
+} from './domain/justCultureSchema.js';
 // ADR-0185 (Schema v147): dated Matrix change-impact requests and first-person
 // line responses. Request snapshots normalize before their responses resolve.
 import {
@@ -1111,7 +1118,14 @@ export {
 // envelope, no reading from a posted period, and no actual from an invoice:
 // each is a different instrument with a different signatory, and a baseline
 // invented at upgrade time would grade a programme against a plan nobody signed.
-export const SCHEMA_VERSION = 171;
+// v172 adds the Just Culture Decision Record (ADR-0218): two EMPTY ledgers —
+// reviews (one person, one deciding line, one event) and append-only decision,
+// concurrence, dissent, revision and withdrawal acts. No review is inferred from
+// an incident, a feedback note, a 1:1 or a conflict: each of those is a different
+// instrument, and a conduct review invented at upgrade time would attribute a
+// culpability finding to a person who was never reviewed. No deciding line is
+// inferred either — ownership is named by a human, or the review is not opened.
+export const SCHEMA_VERSION = 172;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -3487,6 +3501,12 @@ export const COLLECTIONS = [
   'earnedValueReadings',
   'earnedValueActuals',
   'earnedValueMarkers',
+  // ADR-0218 (Schema v172): the Just Culture Decision Record. Reviews and their
+  // append-only acts. No state, expected response, count or ownership finding is
+  // stored: each is re-derived on read from the acts and the live matrix, so a
+  // hand-edited file cannot carry a settlement its own acts do not imply.
+  'justCultureReviews',
+  'justCultureActs',
 ];
 
 /** Stable empty state. `now` is an ISO string so the result is a pure value. */
@@ -8969,6 +8989,11 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.earnedValueReadings = normalizeEvReadings(raw.earnedValueReadings, state.earnedValueCases, state.earnedValuePackages, warnings);
   state.earnedValueActuals = normalizeEvActuals(raw.earnedValueActuals, state.earnedValueCases, state.earnedValuePackages, warnings);
   state.earnedValueMarkers = normalizeEvMarkers(raw.earnedValueMarkers, warnings);
+  // ADR-0218: a review or act that cannot be read exactly is dropped with a counted
+  // warning. An act resolves only through a surviving review, and a decision row is
+  // refused unless every question on its path is answered.
+  state.justCultureReviews = normalizeJustCultureReviews(raw.justCultureReviews, warnings);
+  state.justCultureActs = normalizeJustCultureActs(raw.justCultureActs, state.justCultureReviews, warnings);
   state.conflictInterests = normalizeConflictInterests(raw.conflictInterests, warnings);
   state.conflictNoneDeclarations = normalizeConflictNoneDeclarations(raw.conflictNoneDeclarations, warnings);
   state.conflictStandings = normalizeConflictStandings(raw.conflictStandings, state.conflictInterests, warnings);
@@ -9757,6 +9782,18 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  // 171 → 172: ADR-0218 adds TWO EMPTY ledgers, the reviews and their append-only
+  // acts. No review is inferred from an incident, feedback, a 1:1 or a conflict: a
+  // conduct review opened at upgrade time would attribute a culpability finding to a
+  // person nobody reviewed. No deciding line is inferred either — the matrix can hold
+  // several lines for one person, and choosing one for them would be the silent
+  // ownership the matrix mandate forbids.
+  171: (v171) => ({
+    ...v171,
+    schemaVersion: 172,
+    justCultureReviews: Array.isArray(v171.justCultureReviews) ? v171.justCultureReviews : [],
+    justCultureActs: Array.isArray(v171.justCultureActs) ? v171.justCultureActs : [],
+  }),
   // 157 → 158: ADR-0202 extends the `chargebackPostings` vocabulary with a
   // dated `acknowledge` act — a human decision that ONE exact drift signature
   // stands: the posted figures are the accepted period fact, divergence
