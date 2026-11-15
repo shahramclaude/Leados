@@ -60,10 +60,12 @@
 
 import { dayKey } from '../time.js';
 import { LEADER_ID } from './chain.js';
-import { buildMatrix } from './matrix.js';
+import { buildMatrix, matrixJointApex } from './matrix.js';
 import { normalizeSkillTasks, normalizeSkillActs } from './skillCoverageSchema.js';
 import {
   STATION_COVERAGE_ENGINE_VERSION,
+  STATION_COVERAGE_FEED_RELATIONS,
+  STATION_COVERAGE_FEED_STATUSES,
   STATION_COVERAGE_LIMITS,
   STATION_COVERAGE_SETTING_KEYS,
   STATION_COVERAGE_STATION_STATES,
@@ -74,14 +76,18 @@ import {
   normalizeStationAvailability,
   normalizeStationCoverageSettings,
   normalizeStationEnables,
+  normalizeStationWindowEnables,
   normalizeStationWindows,
   stationCoverageDay,
   stationCoverageDays,
+  stationWindowRelation,
 } from './stationCoverageSchema.js';
 
 const byKey = (rows) => new Map(rows.map((r) => [r.key, r]));
 const VERDICT = byKey(STATION_COVERAGE_VERDICTS);
 const STATE = byKey(STATION_COVERAGE_STATION_STATES);
+const RELATION = byKey(STATION_COVERAGE_FEED_RELATIONS);
+const FEED_STATUS = byKey(STATION_COVERAGE_FEED_STATUSES);
 // The seat engine keeps `scope`/`lineScope` as Sets; an Array.isArray check
 // alone would silently collapse every ancestor's reach to just the actor,
 // hiding every subordinate's windows from the roll-up. Accept both.
@@ -282,14 +288,16 @@ export function buildStationCoverage(state, { now = new Date(), seat = null } = 
   const availability = normalizeStationAvailability(state?.stationAvailability,
     { windows, stations, people: matrix.roster }, warnings);
   const enables = normalizeStationEnables(state?.stationEnables, { windows, stations }, warnings);
+  const windowEnables = normalizeStationWindowEnables(state?.stationWindowEnables, { windows, stations }, warnings);
 
   const operator = !seat || seat.fullAccess === true;
   const actorId = operator ? LEADER_ID : (seat.nodeId || seat.id);
   const reach = operator ? null : new Set([actorId, ...list(seat.scope), ...list(seat.lineScope)]);
   const visible = (nodeId) => operator || reach.has(nodeId);
 
-  const invalidN = [...windows, ...stations, ...availability, ...enables].filter((r) => r.invalid).length;
-  const futureN = [...windows, ...stations, ...availability, ...enables].flatMap((r) => [r.declaredAt, r.withdrawnAt, r.retiredOn])
+  const ledgers = [...windows, ...stations, ...availability, ...enables, ...windowEnables];
+  const invalidN = ledgers.filter((r) => r.invalid).length;
+  const futureN = ledgers.flatMap((r) => [r.declaredAt, r.withdrawnAt, r.retiredOn])
     .filter((v) => typeof v === 'string' && v > now.toISOString()).length;
 
   const globalReasons = [];
@@ -645,6 +653,260 @@ export function buildStationCoverage(state, { now = new Date(), seat = null } = 
     });
   }
 
+  /* ------------------------------------------- cross-window orders (ADR-0207) */
+
+  // Every window keeps the reading it earned from its own stations and people;
+  // the cross-window pass ADDS a claim beside it and may overrule only the two
+  // verdicts that would otherwise read as reassurance (`feasible`, `inert`).
+  // A proven shortage, an unsatisfiable cycle or an unproven register is never
+  // overwritten: those are already stronger statements about this window.
+  for (const row of windowRows) {
+    row.baseVerdict = row.verdict;
+    for (const station of row.stations) station.baseState = station.state;
+  }
+  const rowById = new Map(windowRows.map((r) => [r.windowId, r]));
+  const windowById = new Map(windows.filter((w) => !w.invalid).map((w) => [w.id, w]));
+  const declaredWindowEnables = windowEnables.filter((e) => !e.invalid);
+  const MANNABLE = new Set(['covered', 'exact', 'single-point']);
+  const UNMANNABLE = new Set(['short', 'no-available', 'no-qualified', 'blocked-by-enabler']);
+  const UNREADABLE = new Set(['withheld', 'refused']);
+
+  /** Effective state of a station: its own reading, unless its prerequisite fails. */
+  const stationStateOf = (station) => (station.feedBlocked ? 'blocked-by-enabler' : station.baseState);
+
+  /** One declared cross-window prerequisite, decided from the calendar and the feeder's own record. */
+  function readFeed(row, edge) {
+    const fromWindow = windowById.get(edge.fromWindowId) || null;
+    const toWindow = windowById.get(edge.toWindowId) || null;
+    const feederRow = rowById.get(edge.fromWindowId) || null;
+    const detail = operator || actorId === row.holderId || (feederRow && actorId === feederRow.holderId);
+    const relation = stationWindowRelation(fromWindow, toWindow);
+    const feederStation = feederRow ? feederRow.stations.find((s) => s.stationId === edge.fromStationId) || null : null;
+    const base = {
+      id: edge.id,
+      fromWindowId: edge.fromWindowId,
+      fromWindowLabel: detail ? (fromWindow?.label || 'Window off the register') : null,
+      fromWindowFromDay: fromWindow?.fromDay || null,
+      fromWindowToDay: fromWindow?.toDay || null,
+      fromWindowVerdict: feederRow ? feederRow.baseVerdict : null,
+      fromWindowFeedStatus: feederRow ? feederRow.feed?.status || 'none' : null,
+      fromStationId: edge.fromStationId,
+      fromTitle: detail ? (feederStation?.title || 'Station off the register') : null,
+      fromState: feederStation ? stationStateOf(feederStation) : null,
+      toStationId: edge.toStationId,
+      toTitle: detail ? (row.stations.find((s) => s.stationId === edge.toStationId)?.title || 'Station off the register') : null,
+      relation,
+      relationLabel: RELATION.get(relation)?.label || 'Relation unreadable',
+      declaredBy: detail ? matrix.nodes.get(edge.byId)?.name || 'Declarant off the roster' : null,
+      basis: edge.basis,
+      reason: detail ? edge.reason : null,
+      declaredAt: edge.declaredAt,
+    };
+    const dependentLive = row.stations.some((s) => s.stationId === edge.toStationId);
+    if (!dependentLive) return { ...base, status: 'dangling', proven: false,
+      why: 'The dependent station is no longer live in this window; the declaration is retained and carries no order.' };
+    if (row.retiredOn || toWindow?.retiredOn || fromWindow?.retiredOn) {
+      return { ...base, status: 'dangling', proven: false,
+        why: 'One of the windows in this declaration has been retired; the declaration is retained and carries no order.' };
+    }
+    if (!feederRow || !feederStation) {
+      return { ...base, status: 'dangling', proven: false,
+        why: 'The feeder station is no longer live in its window; the declaration is retained and carries no order.' };
+    }
+    if (relation === 'contradiction') {
+      return { ...base, status: 'contradiction', proven: true,
+        why: 'The consumer window is over before the feeder window opens, so under a prerequisite-to-start order the feeder can never be manned first — whatever anyone is assigned.' };
+    }
+    if (relation === 'same-day' || relation === 'overlap') {
+      return { ...base, status: 'ambiguous', proven: false,
+        why: relation === 'same-day'
+          ? 'The two windows meet on exactly one calendar day. The register holds no clock below the day, so the declared order is neither proven nor contradicted.'
+          : 'The two windows overlap, so the consumer could come up before the feeder. A running order honouring the declaration exists, but the calendar does not force it.' };
+    }
+    if (relation !== 'strict') {
+      return { ...base, status: 'unproven', proven: false,
+        why: 'The two window ranges could not be compared, so no order is claimed.' };
+    }
+    if (!feederRow.feed) {
+      // The feeder window is outside this seat's reach. The calendar relation is
+      // still published (it is a fact about two dated declarations); whether the
+      // feeder can be manned is another span's record and is not shown here.
+      return { ...base, status: 'withheld', proven: false,
+        why: 'The prerequisite window is outside this seat’s reach, so whether its feeder station can be manned is not readable here. The order is declared; the feeder’s staffing is counted, not guessed.' };
+    }
+    const feedStatus = feederRow.feed.status;
+    if (feedStatus === 'blocked' || feedStatus === 'contradicted') {
+      return { ...base, status: 'blocked', proven: true,
+        why: 'The feeder window itself cannot run as declared, so no station in it comes up — including the feeder this window waits for.' };
+    }
+    if (feedStatus === 'unproven') {
+      return { ...base, status: 'unproven', proven: false,
+        why: 'The feeder window’s own prerequisites cannot be read, so whether this window can be fed is not proved either way.' };
+    }
+    const feederState = stationStateOf(feederStation);
+    if (UNMANNABLE.has(feederState)) {
+      return { ...base, status: 'blocked', proven: true,
+        why: `The feeder station reads ${STATE.get(feederState)?.label || feederState}. Its pool is printed in its own window; nobody is moved or substituted here.` };
+    }
+    if (UNREADABLE.has(feederState)) {
+      return { ...base, status: 'unproven', proven: false,
+        why: `The feeder station reads ${STATE.get(feederState)?.label || feederState}, so whether it can be manned is not proved either way.` };
+    }
+    if (!MANNABLE.has(feederState)) {
+      return { ...base, status: 'unproven', proven: false,
+        why: 'The feeder station’s state is not a manning claim, so no order is claimed from it.' };
+    }
+    return { ...base, status: 'order', proven: true,
+      why: 'The feeder window closes strictly before this window opens, so the order holds for every possible running order, and the feeder station has enough qualified, available people.' };
+  }
+
+  /** The order statuses a live declaration can carry, and the feed status each implies. */
+  const FEED_OF_EDGE = {
+    order: 'fed', blocked: 'blocked', unproven: 'unproven',
+    ambiguous: 'ambiguous', contradiction: 'contradicted',
+    withheld: null, dangling: null,
+  };
+  const STATUS_FIELDS = { order: 'orderN', blocked: 'blockedN', unproven: 'unprovenN', ambiguous: 'ambiguousN', contradiction: 'contradictedN', withheld: 'withheldN', dangling: 'danglingN' };
+
+  const signatureOf = (row) => JSON.stringify([row.verdict, row.stations.map((s) => stationStateOf(s)), row.feed && {
+    status: row.feed.status, counts: row.feed.counts, order: row.feed.order,
+  }]);
+
+  let passes = 0;
+  let previous = windowRows.map(() => '');
+  for (;;) {
+    passes += 1;
+    for (const row of windowRows) {
+      const mine = declaredWindowEnables.filter((e) => e.toWindowId === row.windowId);
+      const live = mine.filter((e) => !e.retiredOn);
+      const edges = live.map((e) => readFeed(row, e));
+      const counts = { orderN: 0, blockedN: 0, unprovenN: 0, ambiguousN: 0, contradictedN: 0, withheldN: 0, danglingN: 0 };
+      for (const edge of edges) counts[STATUS_FIELDS[edge.status]] += 1;
+      // A station whose declared prerequisite cannot be met cannot be manned
+      // first, so its state says so rather than reading `covered`.
+      const blockedStations = new Set();
+      for (const edge of edges) {
+        if (edge.status === 'blocked' || edge.status === 'contradiction') blockedStations.add(edge.toStationId);
+      }
+      for (const station of row.stations) station.feedBlocked = blockedStations.has(station.stationId);
+      let status = 'none';
+      let severity = 0;
+      for (const edge of edges) {
+        const candidate = FEED_OF_EDGE[edge.status];
+        if (!candidate) continue;
+        const weight = FEED_STATUS.get(candidate)?.severity || 0;
+        if (weight > severity) { severity = weight; status = candidate; }
+      }
+      const downstream = declaredWindowEnables.filter((e) => e.fromWindowId === row.windowId && !e.retiredOn);
+      row.feed = {
+        detail: operator || actorId === row.holderId || mine.some((e) => actorId === rowById.get(e.fromWindowId)?.holderId),
+        declaredN: mine.length,
+        liveN: live.length,
+        retiredN: mine.length - live.length,
+        ...counts,
+        status,
+        severity,
+        downstreamN: downstream.length,
+        downstreamWindowsN: new Set(downstream.map((e) => e.toWindowId)).size,
+        order: edges.map((e) => [e.toStationId, e.status]),
+        edges,
+      };
+    }
+    const now2 = windowRows.map(signatureOf);
+    if (now2.every((sig, i) => sig === previous[i])) break;
+    previous = now2;
+    // The dependency graph only propagates forward in calendar time, so this
+    // always settles; the bound is a guard, never a silent truncation.
+    if (passes > windowRows.length + 2) break;
+  }
+
+  /* ------------------------------------------- what the cross-window pass changed */
+
+  const FEED_REASON = {
+    blocked: 'A declared prerequisite cannot be manned',
+    contradicted: 'The calendar forbids the declared prerequisite order',
+    unproven: 'A declared prerequisite cannot be read',
+    ambiguous: 'The declared prerequisite order is not proven by the calendar',
+  };
+  for (const row of windowRows) {
+    for (const station of row.stations) {
+      if (clean && station.feedBlocked) {
+        const edge = row.feed.edges.find((e) => e.toStationId === station.stationId && (e.status === 'blocked' || e.status === 'contradiction'));
+        station.state = 'blocked-by-enabler';
+        station.reason = edge && edge.fromTitle
+          ? `Its declared prerequisite “${edge.fromTitle}”${edge.fromWindowLabel ? ` in “${edge.fromWindowLabel}”` : ''} cannot be manned, so this station may not be manned first.`
+          : 'Its declared cross-window prerequisite cannot be manned, so this station may not be manned first.';
+      } else {
+        station.state = station.baseState;
+      }
+      delete station.baseState;
+      delete station.feedBlocked;
+    }
+    const override = clean && (row.feed.status === 'blocked' || row.feed.status === 'contradicted')
+      && (row.baseVerdict === 'feasible' || row.baseVerdict === 'inert');
+    row.verdict = override ? 'blocked' : row.baseVerdict;
+    row.verdictLabel = VERDICT.get(row.verdict)?.label || row.verdict;
+    row.proven = ['feasible', 'infeasible', 'unsatisfiable', 'blocked'].includes(row.verdict);
+    delete row.baseVerdict;
+    // Only the three proven or unprovable classes enter `reasons` (which governs
+    // "figures complete"); the two ambiguity classes are printed beside the
+    // figures as their own claim and never silently degrade the arithmetic.
+    const narration = row.feed.edges.filter((e) => ['blocked', 'contradiction', 'unproven', 'ambiguous'].includes(e.status));
+    const proofEdges = narration.filter((e) => e.status !== 'ambiguous');
+    for (const edge of proofEdges) {
+      const status = edge.status === 'contradiction' ? 'contradicted' : edge.status;
+      if (row.feed.detail && edge.toTitle && edge.fromTitle) {
+        row.reasons.push(`${FEED_REASON[status]}: “${edge.toTitle}” waits for “${edge.fromTitle}” in “${edge.fromWindowLabel}” (${edge.fromWindowFromDay} → ${edge.fromWindowToDay}; ${edge.relationLabel.toLowerCase()}). ${edge.why}`);
+      } else {
+        row.reasons.push(`${FEED_REASON[status]} for a station in this window. ${edge.toTitle ? edge.why : 'The feeder and the dependent are not named here — only the windows’ holders or the local operator can read them.'}`);
+      }
+    }
+    row.feed.reasons = narration
+      .filter((e) => e.status === 'ambiguous')
+      .map((e) => (row.feed.detail && e.toTitle && e.fromTitle
+        ? `“${e.toTitle}” waits for “${e.fromTitle}” in “${e.fromWindowLabel}” (${e.fromWindowFromDay} → ${e.fromWindowToDay}). ${e.why}`
+        : `A declared prerequisite order is not proven by the calendar. ${e.why}`));
+    row.feed.statusLabel = FEED_STATUS.get(row.feed.status)?.label || row.feed.status;
+    row.feed.says = FEED_STATUS.get(row.feed.status)?.says || '';
+    row.feed.countsReconcile = ['order', 'blocked', 'unproven', 'ambiguous', 'contradiction', 'withheld', 'dangling']
+      .reduce((n, key) => n + (row.feed[STATUS_FIELDS[key]] || 0), 0) === row.feed.liveN;
+  }
+
+  /*
+   * Which OTHER windows this seat may pair with this one. An order between two
+   * managers' windows belongs to the seat that holds both, so a candidate is
+   * offered only where this actor IS the lowest joint apex of the two holders
+   * (or where the operator view is scribery). The action re-checks it; the
+   * screen never offers a declaration the door would refuse.
+   */
+  const canDeclareWindowEnable = !seat?.readOnly && matrix.nodes.has(actorId) && clean;
+  const liveWindowCandidates = canDeclareWindowEnable
+    ? windows.filter((w) => !w.invalid && !w.retiredOn && visible(w.holderId)).map((w) => ({
+      windowId: w.id,
+      label: w.label,
+      holderId: w.holderId,
+      fromDay: w.fromDay,
+      toDay: w.toDay,
+      stations: stations.filter((st) => !st.invalid && !st.retiredOn && st.windowId === w.id)
+        .map((st) => ({ stationId: st.id, title: st.title, requirement: st.requirement })),
+    })).filter((w) => w.stations.length)
+    : [];
+  for (const row of windowRows) {
+    const targets = [];
+    if (canDeclareWindowEnable && !row.past) {
+      for (const candidate of liveWindowCandidates) {
+        if (candidate.windowId === row.windowId) continue;
+        if (!operator) {
+          const apex = matrixJointApex(matrix, [row.holderId, candidate.holderId]);
+          if (!apex.unique || apex.apexId !== actorId) continue;
+        }
+        targets.push(candidate);
+      }
+    }
+    row.feed.targets = targets;
+    row.feed.canDeclare = targets.length > 0 && row.stations.length > 0;
+  }
+
   /* --------------------------------------------------------------- roll-up */
 
   const stationStateCounts = Object.fromEntries(STATION_COVERAGE_STATION_STATES.map((s) => [s.key, 0]));
@@ -665,12 +927,14 @@ export function buildStationCoverage(state, { now = new Date(), seat = null } = 
     let infeasible = 0;
     let unproven = 0;
     let unsatisfiable = 0;
+    let blocked = 0;
     const stationIds = new Set();
     for (const r of below) {
       for (const s of r.stations) { stationIds.add(s.stationId); stationsN += 1; demandN += s.demand; }
       if (r.verdict === 'infeasible') infeasible += 1;
       if (r.verdict === 'unproven') unproven += 1;
       if (r.verdict === 'unsatisfiable') unsatisfiable += 1;
+      if (r.verdict === 'blocked') blocked += 1;
     }
     for (const r of below) for (const s of r.stations) for (const p of s.people || []) people.add(p.personId);
     const certified = clean && below.every((r) => r.verdict !== 'withheld');
@@ -678,7 +942,7 @@ export function buildStationCoverage(state, { now = new Date(), seat = null } = 
       nodeId: node.id, name: node.name, windowsN: below.length, stationsN, demandN,
       distinctStationsN: stationIds.size,
       peopleN: certified ? people.size : null,
-      infeasibleN: infeasible, unprovenN: unproven, unsatisfiableN: unsatisfiable,
+      infeasibleN: infeasible, unprovenN: unproven, unsatisfiableN: unsatisfiable, blockedN: blocked,
     });
   }
 
@@ -700,6 +964,23 @@ export function buildStationCoverage(state, { now = new Date(), seat = null } = 
     unprovenN: verdictCounts.unproven,
     inertN: verdictCounts.inert,
     unsatisfiableN: verdictCounts.unsatisfiable,
+    blockedWindowsN: verdictCounts.blocked,
+    crossWindowEdgesN: windowRows.reduce((n, r) => n + r.feed.declaredN, 0),
+    crossWindowLiveN: windowRows.reduce((n, r) => n + r.feed.liveN, 0),
+    crossWindowRetiredN: windowRows.reduce((n, r) => n + r.feed.retiredN, 0),
+    crossWindowOrderN: windowRows.reduce((n, r) => n + r.feed.orderN, 0),
+    crossWindowBlockedN: windowRows.reduce((n, r) => n + r.feed.blockedN, 0),
+    crossWindowUnprovenN: windowRows.reduce((n, r) => n + r.feed.unprovenN, 0),
+    crossWindowWithheldN: windowRows.reduce((n, r) => n + r.feed.withheldN, 0),
+    crossWindowAmbiguousN: windowRows.reduce((n, r) => n + r.feed.ambiguousN, 0),
+    crossWindowContradictionsN: windowRows.reduce((n, r) => n + r.feed.contradictedN, 0),
+    crossWindowDanglingN: windowRows.reduce((n, r) => n + r.feed.danglingN, 0),
+    crossWindowDownstreamN: windowRows.reduce((n, r) => n + r.feed.downstreamN, 0),
+    feedBlockedWindowsN: windowRows.filter((r) => r.feed.status === 'blocked').length,
+    feedContradictedWindowsN: windowRows.filter((r) => r.feed.status === 'contradicted').length,
+    feedAmbiguousWindowsN: windowRows.filter((r) => r.feed.status === 'ambiguous').length,
+    feedUnprovenWindowsN: windowRows.filter((r) => r.feed.status === 'unproven').length,
+    feedFedWindowsN: windowRows.filter((r) => r.feed.status === 'fed').length,
     enablingEdgesN: windowRows.reduce((n, r) => n + r.precedence.liveN, 0),
     enablingDeclaredN: windowRows.reduce((n, r) => n + r.precedence.declaredN, 0),
     precedenceCyclesN: windowRows.reduce((n, r) => n + r.precedence.cycles.length, 0),
@@ -715,14 +996,34 @@ export function buildStationCoverage(state, { now = new Date(), seat = null } = 
   // Proven windows carry a reason by construction: the unsatisfiable-cycle
   // report is a proof, not a gap in the figures. It therefore does not block
   // "figures complete" — any OTHER printed reason does, exactly as before.
-  const PROVEN_REASON = /^The enabling declarations form a cycle/;
-  const figuresComplete = clean && windowRows.every((r) => r.verdict !== 'unproven' && r.reasons.every((reason) => PROVEN_REASON.test(reason)));
+  // Proven windows carry a reason by construction: the unsatisfiable-cycle
+  // report and a cross-window prerequisite that provably cannot be met are
+  // proofs, not gaps in the figures. They therefore do not block "figures
+  // complete" — any OTHER printed reason does, exactly as before.
+  const PROVEN_REASON = /^(The enabling declarations form a cycle|A declared prerequisite cannot be manned|The calendar forbids the declared prerequisite order)/;
+  const feedUnreadable = windowRows.filter((r) => r.feed.status === 'unproven');
+  const figuresComplete = clean
+    && !feedUnreadable.length
+    && windowRows.every((r) => r.verdict !== 'unproven' && r.reasons.every((reason) => PROVEN_REASON.test(reason)));
+  // A second, separate claim: every declared cross-window prerequisite is
+  // decided by the calendar. A window can print complete figures about its own
+  // people while its declared order remains unprovable, and these are different
+  // facts that are reported separately, never collapsed into one word.
+  const feedAmbiguous = windowRows.filter((r) => r.feed.status === 'ambiguous');
+  const ordersComplete = clean && !feedAmbiguous.length;
   const claims = {
     countsReconcile: STATION_COVERAGE_VERDICTS.reduce((n, v) => n + verdictCounts[v.key], 0) === windowRows.length
-      && STATION_COVERAGE_STATION_STATES.reduce((n, s) => n + (stationStateCounts[s.key] || 0), 0) === totals.stationsN,
+      && STATION_COVERAGE_STATION_STATES.reduce((n, s) => n + (stationStateCounts[s.key] || 0), 0) === totals.stationsN
+      && windowRows.every((r) => r.feed.countsReconcile)
+      && totals.crossWindowLiveN === totals.crossWindowOrderN + totals.crossWindowBlockedN
+        + totals.crossWindowUnprovenN + totals.crossWindowWithheldN + totals.crossWindowAmbiguousN
+        + totals.crossWindowContradictionsN + totals.crossWindowDanglingN,
     figuresComplete,
+    ordersComplete,
     reasons: [...new Set([
       ...(figuresComplete ? [] : windowRows.filter((r) => r.verdict === 'unproven').map((r) => `“${r.label}” could not be proven.`)),
+      ...(figuresComplete ? [] : feedUnreadable.map((r) => `“${r.label}” waits on a prerequisite that cannot be read, so its runnability is not proved.`)),
+      ...(ordersComplete ? [] : feedAmbiguous.map((r) => `“${r.label}” declares a prerequisite order the calendar does not prove; the order is counted, not assumed.`)),
     ])],
   };
 
@@ -747,8 +1048,9 @@ export function buildStationCoverage(state, { now = new Date(), seat = null } = 
     claims,
     canDeclare,
     canDeclareAvailability: !seat?.readOnly && clean,
-    method: 'A station is manned only by someone with a live, unexpired manager-attested U or O qualification on that station’s own task, who is in its holder’s live reporting-line pool, and who declared availability covering the whole window. Feasibility is an exact capacitated bipartite matching, not a percentage. A shortage is proven only when nobody is silent. Enabling declarations are decided as prerequisite-to-start (at-or-before): an enabling graph with a cycle containing a sequential station proves no running order exists; a cycle of only concurrent stations collapses to their shared instant and is printed as a co-requisite loop. Nobody is scheduled: a feasible window is a proof of possibility, not an assignment.',
-    internal: { matrix, qualifiedByTask, windows, stations, availability, enables, tasks },
+    canDeclareWindowEnable,
+    method: 'A station is manned only by someone with a live, unexpired manager-attested U or O qualification on that station’s own task, who is in its holder’s live reporting-line pool, and who declared availability covering the whole window. Feasibility is an exact capacitated bipartite matching, not a percentage. A shortage is proven only when nobody is silent. Enabling declarations are decided as prerequisite-to-start (at-or-before): an enabling graph with a cycle containing a sequential station proves no running order exists; a cycle of only concurrent stations collapses to their shared instant and is printed as a co-requisite loop. A CROSS-WINDOW declaration is decided by the calendar at the only resolution the record holds — whole days: only a feeder window that closes strictly before the consumer window opens proves the order; windows that meet or overlap leave it unproven and counted; a consumer window that is over before the feeder opens contradicts it. A consumer whose proven prerequisite cannot be manned is never printed feasible. Nobody is scheduled: a feasible window is a proof of possibility, not an assignment.',
+    internal: { matrix, qualifiedByTask, windows, stations, availability, enables, windowEnables, tasks },
   };
 }
 
@@ -771,11 +1073,18 @@ export function stationCoverageCsvRows(report) {
     available_people_n: t.statementsN, available_capacity_n: t.availableCapacityN,
     feasible_windows_n: t.feasibleN, infeasible_windows_n: t.infeasibleN,
     unproven_windows_n: t.unprovenN, inert_windows_n: t.inertN,
-    unsatisfiable_windows_n: t.unsatisfiableN, enabling_edges_n: t.enablingEdgesN,
+    unsatisfiable_windows_n: t.unsatisfiableN, blocked_windows_n: t.blockedWindowsN,
+    enabling_edges_n: t.enablingEdgesN,
     precedence_cycles_n: t.precedenceCyclesN,
+    cross_window_edges_n: t.crossWindowLiveN,
+    cross_window_order_edges_n: t.crossWindowOrderN,
+    cross_window_ambiguous_edges_n: t.crossWindowAmbiguousN,
+    cross_window_contradictions_n: t.crossWindowContradictionsN,
+    feed_ambiguous_windows_n: t.feedAmbiguousWindowsN,
     deficient_sets_n: t.deficientSetsN, max_deficit_n: t.maxDeficitN,
     witness_complete: yesNo(report.claims.figuresComplete),
     counts_reconcile: yesNo(report.claims.countsReconcile), figures_complete: yesNo(report.claims.figuresComplete),
+    orders_complete: yesNo(report.claims.ordersComplete),
     claim_reason: report.claims.reasons.join(' | '),
   }];
   for (const v of STATION_COVERAGE_VERDICTS) {
@@ -795,7 +1104,9 @@ export function stationCoverageBriefText(report) {
     `Engine ${report.engineVersion} · scope: ${report.scope}`,
     '',
     `${t.windowsN} declared window(s) · ${t.concurrentN} simultaneous station(s) · ${t.demandN} declared headcount · ${t.statementsN} availability statement(s) · ${t.enablingEdgesN} live enabling declaration(s)`,
-    `Proven feasible: ${t.feasibleN} · proven infeasible: ${t.infeasibleN} · unsatisfiable: ${t.unsatisfiableN} · unproven: ${t.unprovenN} · nothing to prove: ${t.inertN}`,
+    `Cross-window prerequisites: ${t.crossWindowLiveN} live (${t.crossWindowRetiredN} retired, retained) — ${t.crossWindowOrderN} calendar order(s), ${t.crossWindowAmbiguousN} not proven by the calendar, ${t.crossWindowContradictionsN} contradicted, ${t.crossWindowBlockedN} provisionally blocked, ${t.crossWindowUnprovenN} unreadable, ${t.crossWindowWithheldN} outside this seat’s reach, ${t.crossWindowDanglingN} dangling. Windows waiting on a prerequisite: ${t.feedFedWindowsN} fed, ${t.feedAmbiguousWindowsN} unproven order, ${t.feedBlockedWindowsN} blocked, ${t.feedContradictedWindowsN} contradicted`,
+    `Proven feasible: ${t.feasibleN} · proven infeasible: ${t.infeasibleN} · unsatisfiable: ${t.unsatisfiableN} · blocked by a prerequisite: ${t.blockedWindowsN} · unproven: ${t.unprovenN} · nothing to prove: ${t.inertN}`,
+    `Figures complete: ${report.claims.figuresComplete ? 'yes' : 'no'} · every declared prerequisite order proven by the calendar: ${report.claims.ordersComplete ? 'yes' : 'no'}`,
     `Deficient sets found: ${t.deficientSetsN} · largest exact deficit: ${t.maxDeficitN} · precedence cycles: ${t.precedenceCyclesN} (${t.unsatisfiableCyclesN} unsatisfiable, ${t.coRequisiteLoopsN} co-requisite)`,
     '',
   ];
@@ -815,6 +1126,17 @@ export function stationCoverageBriefText(report) {
     if (row.witness) {
       lines.push(`   deficient set: ${row.witness.stationTitles.map((x) => `“${x}”`).join(', ')}`);
       lines.push(`   demand ${row.witness.demandN} vs ${row.witness.peopleN} person(s) carrying ${row.witness.capacityN} · deficit ${row.witness.deficitN}${row.witness.minimal ? ' (inclusion-minimal)' : ''}${typeof row.witness.enablerClosed === 'boolean' ? ` · enabler-closed: ${row.witness.enablerClosed ? 'yes' : 'no (printed as found)'}` : ''}`);
+    }
+    if (row.feed.declaredN || row.feed.downstreamN) {
+      lines.push(`   prerequisites: ${row.feed.liveN} live cross-window declaration(s)${row.feed.retiredN ? ` (${row.feed.retiredN} retired, retained)` : ''} · ${row.feed.statusLabel}${row.feed.downstreamN ? ` · this window is a declared feeder for ${row.feed.downstreamWindowsN} window(s), ${row.feed.downstreamN} declaration(s)` : ''}`);
+      if (row.feed.detail) {
+        for (const edge of row.feed.edges) {
+          lines.push(`   ${edge.fromTitle ? `“${edge.fromTitle}” (${edge.fromWindowLabel} ${edge.fromWindowFromDay} → ${edge.fromWindowToDay}) → “${edge.toTitle}”` : 'prerequisite (members withheld from this seat)'}: ${edge.relationLabel} · ${edge.status}${edge.declaredBy ? ` · declared by ${edge.declaredBy}` : ''}`);
+        }
+      } else if (row.feed.liveN) {
+        lines.push('   prerequisite rows are withheld: only the windows’ holders or the local operator can read who must come up first.');
+      }
+      for (const reason of row.feed.reasons) lines.push(`   not proven: ${reason}`);
     }
     for (const reason of row.reasons) lines.push(`   refused: ${reason}`);
   }

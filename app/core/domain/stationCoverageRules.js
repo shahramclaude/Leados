@@ -26,6 +26,17 @@
  *      permissible answers: retire one enabling declaration, or retire or
  *      re-declare one station. Co-requisite loops (all-concurrent cycles) are
  *      satisfiable by the shared instant and are never asked about.
+ *   4. `feed-contradiction` (ADR-0207) — a cross-window declaration the calendar
+ *      can never satisfy: the consumer window is over before the feeder window
+ *      opens. ONE dated ask goes to the lowest joint apex of the two windows'
+ *      holders, because a declaration that spans two lines is repaired by the
+ *      seat that holds both; only a declarer may retire it. 
+ *   5. `feed-blocked` (ADR-0207) — a consumer window whose PROVEN earlier feeder
+ *      station cannot be manned. The register does not print that window
+ *      feasible, and one dated ask goes to the joint apex of the two holders —
+ *      unless that apex is the feeder's own holder, who is already being asked
+ *      to staff the feeder window, in which case an identity-free observation is
+ *      recorded instead of a second ask about the same cause.
  *
  * WHAT IT NEVER DOES. It never assigns, schedules, or fills a station; never
  * infers availability or consent; never picks a station's own holder as the
@@ -136,6 +147,57 @@ export function stationCoverageConditions(report) {
         observation: `A simultaneous window cannot be proven because availability statements are missing.`,
       });
     }
+    const windowById = new Map(report.internal.windows.filter((w) => !w.invalid).map((w) => [w.id, w]));
+    const holderOf = (windowId) => windowById.get(windowId)?.holderId || null;
+    if (row.feed && row.feed.contradictedN > 0) {
+      const edges = row.feed.edges.filter((e) => e.status === 'contradiction');
+      const holders = [...new Set([row.holderId, ...edges.map((e) => holderOf(e.fromWindowId))].filter(Boolean))].sort();
+      const apex = matrixJointApex(matrix, holders);
+      const seatState = apex.unique ? seatOf(apex.apexId) : apex.disconnected ? 'off-roster' : 'unresolved';
+      const detail = edges.map((e) => `“${clip(e.fromTitle || 'feeder station', 60)}” in “${clip(e.fromWindowLabel || 'an earlier window', 60)}” (${e.fromWindowFromDay} → ${e.fromWindowToDay}) → “${clip(e.toTitle || 'dependent station', 60)}” in “${clip(row.label, 60)}” (${row.fromDay} → ${row.toDay})`).join('; ');
+      out.push({
+        kind: 'feed-contradiction',
+        signature: stationCoverageSignature('feed-contradiction', [row.windowId, edges.map((e) => e.id).sort().join('+')]),
+        seatState,
+        seatId: seatState === 'seat' ? apex.apexId : null,
+        dueOn: addDays(report.today, on),
+        title: `Repair a cross-window prerequisite the calendar cannot meet`,
+        expectedOutcome: `A declared prerequisite in “${clip(row.label, 80)}” can never be satisfied: ${detail}. The consumer window is over before the feeder window opens, so under a prerequisite-to-start order the feeder can never be manned first — whatever anyone is assigned, and whatever the roster holds. This is a contradiction in the declarations, not a shortage of people. On #/${STATION_COVERAGE_ROUTE}?panel=stations, record ONE human decision: retire the declaration (with a written reason), or retire and re-declare the window whose days are wrong, or retire or re-declare the station that no longer waits for the other. This ask closes itself when the calendar no longer contradicts a live declaration. It does not name a person and it is not a finding about anyone’s performance.`,
+        observation: 'A cross-window prerequisite is contradicted by the declared windows: the consumer window is over before the feeder opens.',
+      });
+    } else if (row.feed && row.feed.blockedN > 0 && row.feed.status === 'blocked') {
+      const edges = row.feed.edges.filter((e) => e.status === 'blocked');
+      const feederHolders = [...new Set(edges.map((e) => holderOf(e.fromWindowId)).filter(Boolean))].sort();
+      const apex = matrixJointApex(matrix, [...new Set([row.holderId, ...feederHolders])].sort());
+      const seatState = apex.unique ? seatOf(apex.apexId) : apex.disconnected ? 'off-roster' : 'unresolved';
+      const detail = edges.map((e) => `“${clip(e.fromTitle || 'feeder station', 60)}” in “${clip(e.fromWindowLabel || 'an earlier window', 60)}” (${e.fromWindowFromDay} → ${e.fromWindowToDay}) → “${clip(e.toTitle || 'dependent station', 60)}”`).join('; ');
+      if (seatState === 'seat' && feederHolders.includes(apex.apexId)) {
+        // The seat that must fix the feeder is already being asked to staff it by
+        // the `proven-shortage` condition. A second ask about the same cause
+        // would be noise, so the block is recorded as an observation instead.
+        out.push({
+          kind: 'feed-blocked',
+          signature: stationCoverageSignature('feed-blocked', [row.windowId, feederHolders.join('+')]),
+          seatState: 'already-asked',
+          seatId: null,
+          dueOn: addDays(report.today, on),
+          title: `A prerequisite cannot be manned`,
+          expectedOutcome: '',
+          observation: 'A consumer window is blocked by a declared prerequisite in another window; the seat that must staff that feeder is already carrying the ask for it.',
+        });
+      } else {
+        out.push({
+          kind: 'feed-blocked',
+          signature: stationCoverageSignature('feed-blocked', [row.windowId, feederHolders.join('+')]),
+          seatState,
+          seatId: seatState === 'seat' ? apex.apexId : null,
+          dueOn: addDays(report.today, on),
+          title: `“${clip(row.label, 90)}” cannot run: its declared prerequisite cannot be manned`,
+          expectedOutcome: `The window “${clip(row.label, 80)}” (${row.fromDay} → ${row.toDay}) waits on a station in an earlier window that has nobody qualified and available — or whose own window cannot run as declared: ${detail}. So the dependent station may not be manned first, and the window cannot run as declared even though its own people are sufficient. This is a fact about the declarations and the feeder’s record, not a rating of anyone’s pool. On #/${STATION_COVERAGE_ROUTE}?panel=stations, record ONE human decision: staff the feeder window, move or retire the dependent station, retire the declaration if the order is wrong, or declare in writing that the downstream window will run without its prerequisite. This ask closes itself when the registered block is gone. It does not name a person to move.`,
+          observation: 'A consumer window is blocked by a declared prerequisite in another window that cannot be manned.',
+        })
+      }
+    }
     if (row.precedence && row.precedence.unsatisfiableCyclesN > 0) {
       // A declaration contradiction is the window holder's to repair — only
       // the declarer may retire an edge or a station. One ask per cycle.
@@ -222,7 +284,9 @@ export function stationCoverageRule(draft, ctx = {}) {
           ? 'It is owned by the workspace leader and is printed on the leader’s own board; no delegation was filed.'
           : condition.seatState === 'off-roster'
             ? 'The line it belongs to is no longer held by anyone on the active roster; nobody was substituted.'
-            : 'The stations are held by managers with no single common apex on the reporting graph; nobody was asked on a guess.';
+            : condition.seatState === 'already-asked'
+              ? 'The cause sits in one feeder window whose own holder already carries the ask to staff it; a second ask about the same cause was not filed.'
+              : 'The stations are held by managers with no single common apex on the reporting graph; nobody was asked on a guess.';
         const detail = `${condition.observation} ${why}`;
         draft.matrixMarkers.push({ key, at: nowIso, ruleId: STATION_COVERAGE_RULE_ID, kind: STATION_COVERAGE_MARKER_KIND, detail: clip(detail, 300) });
         if (draft.matrixMarkers.length > MATRIX_LIMITS.markers) draft.matrixMarkers.splice(0, draft.matrixMarkers.length - MATRIX_LIMITS.markers);
@@ -273,7 +337,11 @@ export function stationCoverageRule(draft, ctx = {}) {
     noteEffect(ctx, out, 'delegated', 'delegation', taskId,
       condition.kind === 'proven-shortage'
         ? `Asked the joint apex of a provably short simultaneous window to decide, due ${condition.dueOn}.`
-        : `Asked a window’s holder to obtain the availability statements that make it provable, due ${condition.dueOn}.`);
+        : condition.kind === 'feed-contradiction'
+          ? `Asked the joint apex of two windows to repair a prerequisite the calendar can never meet, due ${condition.dueOn}.`
+          : condition.kind === 'feed-blocked'
+            ? `Asked the joint apex of two windows to decide about a window blocked by a prerequisite that cannot be manned, due ${condition.dueOn}.`
+            : `Asked a window’s holder to obtain the availability statements that make it provable, due ${condition.dueOn}.`);
   }
   if (deferred) {
     noteEffect(ctx, out, 'deferred', 'workspace', STATION_COVERAGE_ROUTE,

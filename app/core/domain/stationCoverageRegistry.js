@@ -82,11 +82,39 @@
  * rest. Whether the printed witness is enabler-closed is COMPUTED AND PRINTED,
  * never forced — Hall's condition needs no closure, and forcing one could drop
  * a load-bearing station.
+ *
+ * CROSS-WINDOW ORDERS (ADR-0207, Schema v161). The intra-window register above
+ * can only order two stations that run inside ONE declared window. Real work
+ * crosses shifts: the feeder runs in Monday's window and the consumer in
+ * Tuesday's, and nothing in the register could say so. `stationWindowEnables`
+ * adds that declaration — one dated, reasoned row naming a feeder station in
+ * one window and a dependent station in another — and the reader decides what
+ * the CALENDAR proves, never what a human assumed:
+ *
+ *   strict        the feeder window CLOSES before the consumer window OPENS:
+ *                 the order is proven for every possible running order;
+ *   same-day      the two windows meet on exactly one calendar day. The
+ *                 register holds NO clock below the day, so the order is not
+ *                 proven and is not a contradiction — it is counted, named and
+ *                 excluded from every claim;
+ *   overlap       the windows share more than a boundary day: satisfiable, but
+ *                 the calendar does not force the order — same treatment;
+ *   contradiction the consumer window is over before the feeder window opens:
+ *                 the declared order can never be met, whatever anyone is
+ *                 assigned. The consumer cannot run its declared prerequisite.
+ *
+ * Only a `strict` declaration is an ORDER. A consumer window whose proven
+ * prerequisite cannot be manned does not read `feasible`: its verdict reads
+ * `blocked`, and the dependent station reads `blocked-by-enabler`, because a
+ * matching proof about this window's own people says nothing about whether its
+ * declared upstream can come up. The empty state is unchanged: a workspace with
+ * no cross-window declaration reads exactly as it did before ADR-0207.
  */
 
-export const STATION_COVERAGE_ENGINE_VERSION = 'station-coverage-2026.11-v2';
+export const STATION_COVERAGE_ENGINE_VERSION = 'station-coverage-2026.11-v3';
 export const STATION_COVERAGE_ADR = 'ADR-0201';
 export const STATION_COVERAGE_PRECEDENCE_ADR = 'ADR-0204';
+export const STATION_COVERAGE_WINDOW_EDGE_ADR = 'ADR-0207';
 export const STATION_COVERAGE_RULE_ID = 'RULE-SSC-01';
 export const STATION_COVERAGE_ROUTE = 'standard-work';
 export const STATION_COVERAGE_PANEL = 'stations';
@@ -104,6 +132,8 @@ export const STATION_COVERAGE_EVENTS = Object.freeze({
   AVAILABILITY_WITHDRAWN: 'stations.availability.withdrawn',
   ENABLE_DECLARED: 'stations.enable.declared',
   ENABLE_RETIRED: 'stations.enable.retired',
+  WINDOW_ENABLE_DECLARED: 'stations.window-enable.declared',
+  WINDOW_ENABLE_RETIRED: 'stations.window-enable.retired',
   CONVENTIONS: 'stations.conventions.set',
   SCAN: 'stations.scan',
 });
@@ -169,10 +199,53 @@ export const STATION_COVERAGE_LIMITS = Object.freeze({
   availability: 4000,
   enables: 2400,
   enablesPerWindow: 120,
+  /** Cross-window declarations are one ledger across every window pair. */
+  windowEnables: 1200,
+  /** One ordered window pair can hold only so many edges before a human cannot audit it. */
+  windowEnablesPerPair: 120,
   asksPerCommit: 6,
   /** The deficient-set search enumerates bounded subsets; the remainder is declared, never hidden. */
   witnessSubsetSize: 5,
 });
+
+/**
+ * Which of two declared windows the calendar puts first. Four facts, printed as
+ * four words — `same-day` and `overlap` are neither an order nor a defect, and
+ * `contradiction` is a proof the declared order can never be met.
+ */
+export const STATION_COVERAGE_FEED_RELATIONS = Object.freeze([
+  Object.freeze({ key: 'strict', label: 'Calendar order proven — the feeder window closes first', proven: true, impossible: false,
+    says: 'The feeder window’s last day is strictly before the consumer window’s first day, so the feeder can come up before the consumer whatever order anyone uses. This is the only relation the register counts as an order.' }),
+  Object.freeze({ key: 'same-day', label: 'Windows meet on one day — order not proven', proven: false, impossible: false,
+    says: 'The feeder window ends on the consumer window’s first day. Both could come up that day, in either order, and the register holds no clock below the day — so the declared order is neither proven nor contradicted. It is counted and named, and no claim rests on it.' }),
+  Object.freeze({ key: 'overlap', label: 'Windows overlap — order not proven', proven: false, impossible: false,
+    says: 'The two windows share more than a boundary day, so the consumer could come up before the feeder. A running order that honours the declaration exists, but the calendar does not force it, so the declaration supports no claim.' }),
+  Object.freeze({ key: 'contradiction', label: 'Calendar forbids the declared order', proven: false, impossible: true,
+    says: 'The consumer window’s last day is before the feeder window’s first day: under a prerequisite-to-start order the feeder can never be manned first, whatever anyone is assigned. This is a contradiction in the declarations, not a shortage of people.' }),
+]);
+export const STATION_COVERAGE_FEED_RELATION_KEYS = Object.freeze(STATION_COVERAGE_FEED_RELATIONS.map((r) => r.key));
+
+/**
+ * What a window's declared prerequisites amount to, as ONE word per window. The
+ * keys are ordered by severity: the window reports the most serious fact its
+ * own declarations create, and every class is counted beside it rather than
+ * folded into a single reassuring word.
+ */
+export const STATION_COVERAGE_FEED_STATUSES = Object.freeze([
+  Object.freeze({ key: 'contradicted', label: 'Contradicted — the calendar forbids a declared prerequisite order', severity: 5,
+    says: 'At least one cross-window declaration naming a station in this window can never be met: the window it depends on opens after this window closes.' }),
+  Object.freeze({ key: 'blocked', label: 'Blocked — a declared prerequisite cannot be manned', severity: 4,
+    says: 'A proven earlier window declares the feeder, and that feeder station has nobody qualified and available (or its own window’s declarations contradict). This window’s own people are irrelevant to that fact.' }),
+  Object.freeze({ key: 'unproven', label: 'Prerequisite unreadable — nothing is claimed', severity: 3,
+    says: 'A cross-window declaration points at a feeder whose state is withheld or refused, so whether this window can be fed cannot be proved either way.' }),
+  Object.freeze({ key: 'ambiguous', label: 'Prerequisite order not proven by the calendar', severity: 2,
+    says: 'Every live cross-window declaration naming this window is satisfiable but not forced: the windows touch or overlap, and the register holds no clock below the day.' }),
+  Object.freeze({ key: 'fed', label: 'Fed by a proven earlier window', severity: 1,
+    says: 'Every live cross-window declaration naming this window is a proven calendar order, and every named feeder station has enough qualified, available people.' }),
+  Object.freeze({ key: 'none', label: 'No declared prerequisite', severity: 0,
+    says: 'No live cross-window declaration makes a station in this window wait for another window. Nothing is assumed about earlier shifts.' }),
+]);
+export const STATION_COVERAGE_FEED_STATUS_KEYS = Object.freeze(STATION_COVERAGE_FEED_STATUSES.map((r) => r.key));
 
 /** Who declared an availability row. The difference is printed, never blurred. */
 export const STATION_COVERAGE_AVAILABILITY_SOURCES = Object.freeze([
@@ -180,6 +253,20 @@ export const STATION_COVERAGE_AVAILABILITY_SOURCES = Object.freeze([
   Object.freeze({ key: 'manager', label: 'Declared by their line manager', says: 'A manager stated it for them; the register prints that the person did not say it themselves.' }),
 ]);
 export const STATION_COVERAGE_AVAILABILITY_SOURCE_KEYS = Object.freeze(STATION_COVERAGE_AVAILABILITY_SOURCES.map((r) => r.key));
+
+/**
+ * Who may declare that one manager's station waits for another manager's. An
+ * order between two windows is not one holder's to make: it is declared by the
+ * seat that holds BOTH lines — the lowest joint apex — or, in an operator view,
+ * scribed and labelled as such. A manager can never order a peer's window.
+ */
+export const STATION_COVERAGE_WINDOW_ENABLE_BASES = Object.freeze([
+  Object.freeze({ key: 'joint-apex', label: 'Declared by the seat holding both windows',
+    says: 'The declaring seat is the lowest joint apex of the two window holders on the reporting graph, so one person is accountable for both windows.' }),
+  Object.freeze({ key: 'operator', label: 'Declared in the operator view',
+    says: 'The local operator view scribed the declaration. The register prints that no single leadership seat was required to hold both windows.' }),
+]);
+export const STATION_COVERAGE_WINDOW_ENABLE_BASE_KEYS = Object.freeze(STATION_COVERAGE_WINDOW_ENABLE_BASES.map((r) => r.key));
 
 /**
  * What a station's simultaneous requirement is measured over. `concurrent`
@@ -211,6 +298,8 @@ export const STATION_COVERAGE_VERDICTS = Object.freeze([
     says: 'The record is missing the evidence a feasibility claim would rest on: a station with nobody qualified, nobody available, or an unresolved reporting graph. Nothing is claimed either way.' }),
   Object.freeze({ key: 'unsatisfiable', label: 'Unsatisfiable — an enabling cycle cannot be ordered', tone: 'bad',
     says: 'A cycle of enabling declarations forces at least one station onto an instant the declarations give it no access to: a sequential station onto the shared simultaneous instant, or a concurrent station off it. No running order exists, whatever anyone is assigned. The declarations contradict each other, not the roster.' }),
+  Object.freeze({ key: 'blocked', label: 'Blocked — a declared prerequisite window cannot be manned', tone: 'bad',
+    says: 'This window’s own stations could be manned — the capacity proof passed or was unnecessary — but a cross-window declaration makes a station here wait for a station in an earlier window, and that feeder station cannot be manned (or that window’s declarations contradict). The window cannot run as declared, so it is never printed feasible. The feeder is named, and no person is moved.' }),
   Object.freeze({ key: 'inert', label: 'No concurrent station declared', tone: 'neutral',
     says: 'This window declares no simultaneous requirement, or one station alone, which cannot compete with itself. Nothing to prove.' }),
 ]);
@@ -230,6 +319,7 @@ export const STATION_COVERAGE_STATION_STATES = Object.freeze([
   Object.freeze({ key: 'no-available', label: 'Nobody available', says: 'Qualified people exist, but none declared availability covering this window.' }),
   Object.freeze({ key: 'withheld', label: 'Withheld below the disclosure floor', says: 'Too few people to print without identifying them to an ancestor.' }),
   Object.freeze({ key: 'refused', label: 'Refused — the record cannot support a claim', says: 'An invalid ledger row or a reporting-graph defect makes the pool unprovable.' }),
+  Object.freeze({ key: 'blocked-by-enabler', label: 'Blocked — its declared cross-window prerequisite cannot be manned', says: 'A declared prerequisite in an earlier window cannot be manned (or its order is impossible), so this station may not be manned first. Its own qualified and available people are still printed: this is a fact about the declaration, not a rating of the pool.' }),
 ]);
 export const STATION_COVERAGE_STATION_STATE_KEYS = Object.freeze(STATION_COVERAGE_STATION_STATES.map((r) => r.key));
 
@@ -258,9 +348,11 @@ export const STATION_COVERAGE_CSV_COLUMNS = Object.freeze([
   'windows_n', 'live_windows_n', 'stations_n', 'concurrent_stations_n', 'sequential_stations_n',
   'demand_n', 'qualified_edges_n', 'available_people_n', 'available_capacity_n',
   'feasible_windows_n', 'infeasible_windows_n', 'unproven_windows_n', 'inert_windows_n',
-  'unsatisfiable_windows_n', 'enabling_edges_n', 'precedence_cycles_n',
+  'unsatisfiable_windows_n', 'blocked_windows_n', 'enabling_edges_n', 'precedence_cycles_n',
+  'cross_window_edges_n', 'cross_window_order_edges_n', 'cross_window_ambiguous_edges_n',
+  'cross_window_contradictions_n', 'feed_ambiguous_windows_n',
   'deficient_sets_n', 'max_deficit_n', 'witness_complete', 'station_state_n',
-  'counts_reconcile', 'figures_complete', 'claim_reason',
+  'counts_reconcile', 'figures_complete', 'orders_complete', 'claim_reason',
 ]);
 
 export const STATION_COVERAGE_CSV_DESCRIPTOR = Object.freeze({
@@ -269,7 +361,7 @@ export const STATION_COVERAGE_CSV_DESCRIPTOR = Object.freeze({
   group: 'analytics',
   sensitive: false,
   filenameSlug: 'skill-station-coverage',
-  description: 'One workspace summary row plus one row per window verdict, station state and refusal reason: declared simultaneous windows, station demand, qualified-attestation edges, declared availability and its exact capacity, whether each window was proven feasible by maximum matching, how many deficient sets were found and the largest exact deficit, plus declarable station-to-station enabling edges, how many windows carry an unsatisfiable enabling cycle, and how many precedence cycles were found. NO person, manager, line, station title, task title, note, reason or record id. A withheld or unprovable figure exports BLANK with its reason — never zero.',
+  description: 'One workspace summary row plus one row per window verdict, station state and refusal reason: declared simultaneous windows, station demand, qualified-attestation edges, declared availability and its exact capacity, whether each window was proven feasible by maximum matching, how many deficient sets were found and the largest exact deficit, plus declarable station-to-station enabling edges, how many windows carry an unsatisfiable enabling cycle, how many precedence cycles were found, and how many declared CROSS-WINDOW prerequisites the calendar proves, leaves ambiguous or contradicts — with how many windows are blocked by a prerequisite that cannot be manned. NO person, manager, line, station title, task title, window label, note, reason or record id. A withheld or unprovable figure exports BLANK with its reason — never zero.',
 });
 
 /* ------------------------------------------------------------------ method */
@@ -289,4 +381,8 @@ export const STATION_COVERAGE_FRAMEWORKS = Object.freeze([
     applies: 'Enabling declarations induce a precedence graph over the window’s stations. A directed cycle with at least one sequential member is a contradiction with no running order; a cycle of only concurrent stations collapses to their shared instant and is a co-requisite loop, printed as such.' }),
   Object.freeze({ name: 'Interlock and start-up discipline', citation: 'Ohno (1988); IEC 61511 on permit-to-work sequencing',
     applies: 'A station that must wait for another station is a declared interlock, not a hope. The register prints the declaration order contradiction exactly, and asks a human to retire the declaration that is wrong — never to guess an order.' }),
+  Object.freeze({ name: 'Temporal constraint reasoning at the resolution of the record', citation: 'Allen (1983) interval algebra; Dechter, Meiri & Pearl (1991) simple temporal networks',
+    applies: 'A cross-window order is decidable only to the resolution the record actually holds — whole calendar days. Two windows that meet inside one day admit both orders; the register says so instead of picking one. Only a window that closes strictly before another opens proves the order, and a window that opens after the consumer has closed contradicts it.' }),
+  Object.freeze({ name: 'Critical-path and multi-shift handover discipline', citation: 'Goldratt (1997) critical chain; Shingo (1989) on setup and changeover across shifts',
+    applies: 'A feeder window has to be manned before the consumer window opens, so a shortage upstream is a shortage of the downstream run — propagated, printed and made the reason a window is not called feasible, rather than discovered on the next shift.' }),
 ]);
