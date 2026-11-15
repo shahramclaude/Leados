@@ -2,8 +2,9 @@
  * app/core/domain/stationCoverageRules.js — `RULE-SSC-01` on the shared
  * post-commit spine (ADR-0201, Schema v157).
  *
- * TWO CONDITIONS, both read from the one reader (`buildStationCoverage`) with
- * the whole-workspace view and never re-derived here:
+ * TWO CONDITIONS PLUS THE ADR-0204 PRECEDENCE CONDITION, all read from the one
+ * reader (`buildStationCoverage`) with the whole-workspace view and never
+ * re-derived here:
  *
  *   1. `proven-shortage` — a window's simultaneous demand is PROVEN infeasible:
  *      the exact deficient set is known and nobody in the pool is silent. ONE
@@ -17,6 +18,14 @@
  *      way because qualified people made no availability statement. ONE dated
  *      ask goes to that window's holder to obtain the statements. Silence is
  *      the condition, and the ask is about the silence — not about the person.
+ *   3. `precedence-cycle` (ADR-0204) — a window carries an enabling cycle with
+ *      at least one sequential member: no running order exists whatever anyone
+ *      is assigned. ONE dated ask goes to that window's own holder (a
+ *      declaration contradiction is theirs to repair — only the declarer can
+ *      retire an edge or a station), naming the cycle's stations and the
+ *      permissible answers: retire one enabling declaration, or retire or
+ *      re-declare one station. Co-requisite loops (all-concurrent cycles) are
+ *      satisfiable by the shared instant and are never asked about.
  *
  * WHAT IT NEVER DOES. It never assigns, schedules, or fills a station; never
  * infers availability or consent; never picks a station's own holder as the
@@ -126,6 +135,24 @@ export function stationCoverageConditions(report) {
         expectedOutcome: `${row.undeclaredN} qualified person(s) in the window “${clip(row.label, 80)}” (${row.fromDay} → ${row.toDay}) have made no availability statement, so whether its ${row.concurrentN} simultaneous station(s) can be manned cannot be proven either way. On #/${STATION_COVERAGE_ROUTE}?panel=stations, obtain and record each person’s own availability (or your own statement as their line holder, which is printed as yours). Silence is not unavailability and it is not consent; the register refuses to assume either. This ask closes itself when the statements are on record.`,
         observation: `A simultaneous window cannot be proven because availability statements are missing.`,
       });
+    }
+    if (row.precedence && row.precedence.unsatisfiableCyclesN > 0) {
+      // A declaration contradiction is the window holder's to repair — only
+      // the declarer may retire an edge or a station. One ask per cycle.
+      const seatState = seatOf(row.holderId);
+      for (const cycle of row.precedence.cycles.filter((c) => c.unsatisfiable)) {
+        const cycleList = (cycle.stationTitles || cycle.stationIds).map((t) => `“${clip(t, 60)}”`).join(' → ');
+        out.push({
+          kind: 'precedence-cycle',
+          signature: stationCoverageSignature('precedence-cycle', [row.windowId, cycle.stationIds.slice().sort().join('+')]),
+          seatState,
+          seatId: seatState === 'seat' ? row.holderId : null,
+          dueOn: addDays(report.today, on),
+          title: `Resolve the enabling cycle in “${clip(row.label, 90)}”`,
+          expectedOutcome: `In the window “${clip(row.label, 80)}” (${row.fromDay} → ${row.toDay}) the enabling declarations form a cycle: ${cycleList} → ${clip((cycle.stationTitles || cycle.stationIds)[0], 60)}. At least one member is sequential, so no running order exists whatever anyone is assigned — this is a contradiction in the declarations, not a shortage of people. On #/${STATION_COVERAGE_ROUTE}?panel=stations, record ONE human decision: retire one enabling declaration in the cycle (with a written reason), or retire or re-declare one of the stations — or, if the declared requirements are what is wrong, re-declare the member as concurrent, knowing that the shared simultaneous instant is the only place it can then run. This ask closes itself when no unsatisfiable cycle remains on the record. It does not name a person and it is not a finding about anyone’s performance.`,
+          observation: `A simultaneous window carries an enabling cycle with at least one sequential member; no running order exists.`,
+        });
+      }
     }
   }
   return out;

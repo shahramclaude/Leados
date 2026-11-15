@@ -147,11 +147,11 @@ function withDom(run) {
 }
 
 test('ADR-0196 is registered as Schema v156, a scoped adapter, aggregate CSV #147, matrix panel, and a no-auto-move spine contract', () => {
-  assert.equal(SCHEMA_VERSION, 158);
+  assert.equal(SCHEMA_VERSION, 159);
   assert.ok(COLLECTIONS.includes('workReassignmentActs'));
   assert.deepEqual(createEmptyState(ISO).workReassignmentActs, []);
   const upgraded = migrate({ schemaVersion: 155, appId: 'leados', meta: {}, settings: {} });
-  assert.deepEqual(upgraded.applied, ['155 → 156', '156 → 157', '157 → 158']);
+  assert.deepEqual(upgraded.applied, ['155 → 156', '156 → 157', '157 → 158', '158 → 159']);
   assert.deepEqual(upgraded.raw.workReassignmentActs, [], 'upgrade invents neither consent nor capacity');
 
   for (const right of Object.values(WORK_REASSIGNMENT_RIGHTS)) assert.ok(ACTION_RIGHTS[right], `${right} is a declared right`);

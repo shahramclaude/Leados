@@ -15,13 +15,14 @@ import {
 import {
   normalizeStationCoverageSettings,
   stationCoverageAvailabilityError,
+  stationEnableError,
   stationCoverageStationError,
   stationCoverageWindowError,
   stationCoverageDay,
 } from './stationCoverageSchema.js';
 
 const text = (v, max = 400) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
-const LEDGERS = ['stationWindows', 'skillStations', 'stationAvailability'];
+const LEDGERS = ['stationWindows', 'skillStations', 'stationAvailability', 'stationEnables'];
 
 export function createStationCoverageActions(store, { now, idFactory }) {
   const fail = (error) => ({ ok: false, error });
@@ -201,6 +202,64 @@ export function createStationCoverageActions(store, { now, idFactory }) {
         target.note = note;
       }, { type: 'stations.availability.withdrawn', entity: 'stationCoverage', entityId: availabilityId,
         summary: 'An availability statement was withdrawn with a written reason; it no longer covers the window.' });
+      return { ok: true, saved: !store.persistError, warning: store.persistError || null };
+    },
+    /**
+     * An enabling declaration: this station must come up before that one, in the
+     * same window. Same authority as the stations themselves — the window's own
+     * holder — and it declares an ORDER, never a staffing. Refusals name the
+     * contradiction rather than guessing between two readings.
+     */
+    stationCoverageDeclareEnable(input = {}) {
+      const c = context('declare-station-coverage');
+      if (!c.ok) return c;
+      if (!c.report.clean) return fail(c.report.reasons.join(' '));
+      const window = (store.state.stationWindows || []).find((r) => r.id === input.windowId && !r.invalid && !r.retiredOn);
+      if (!window || window.holderId !== c.actorId) return fail('Declare the enabling declaration inside a live window of your own. An order is never filed into another manager’s window.');
+      if ((store.state.stationEnables || []).length >= STATION_COVERAGE_LIMITS.enables) return fail('Enabling-declaration register is full. Export the workspace before proceeding.');
+      const inWindow = (store.state.stationEnables || []).filter((r) => !r.invalid && !r.retiredOn && r.windowId === window.id);
+      if (inWindow.length >= STATION_COVERAGE_LIMITS.enablesPerWindow) return fail(`One window holds at most ${STATION_COVERAGE_LIMITS.enablesPerWindow} enabling declarations.`);
+      const liveStations = (store.state.skillStations || []).filter((r) => !r.invalid && !r.retiredOn && r.windowId === window.id);
+      const from = liveStations.find((r) => r.id === input.fromStationId);
+      const to = liveStations.find((r) => r.id === input.toStationId);
+      if (!from) return fail('Name a live station in this window as the enabler — the one that must come up first.');
+      if (!to) return fail('Name a live station in this window as the dependent — the one that waits.');
+      if (from.id === to.id) return fail('A station cannot enable itself; the declaration is a contradiction, not an order.');
+      const reason = text(input.reason, STATION_COVERAGE_BOUNDS.enablingReason[1]);
+      if (reason.length < STATION_COVERAGE_BOUNDS.enablingReason[0]) return fail(`An enabling declaration needs a written reason of at least ${STATION_COVERAGE_BOUNDS.enablingReason[0]} characters.`);
+      const clash = inWindow.some((r) => r.fromStationId === from.id && r.toStationId === to.id);
+      if (clash) return fail('A live enabling declaration for this ordered pair is already live. Retire it first if it is wrong; two live declarations would leave the precedence graph to choose between them.');
+      const row = {
+        id: idFactory('station-enable'),
+        windowId: window.id,
+        holderId: c.actorId,
+        fromStationId: from.id,
+        toStationId: to.id,
+        reason,
+        declaredAt: c.at.toISOString(),
+        retiredOn: null,
+        retiredBy: null,
+      };
+      const error = stationEnableError(row, { windows: store.state.stationWindows || [], stations: store.state.skillStations || [] });
+      if (error) return fail(error);
+      return save('stationEnables', row, 'stations.enable.declared',
+        'A line holder declared that one station must come up before another in the same window.');
+    },
+    stationCoverageRetireEnable(enableId, reason = '') {
+      const c = context('declare-station-coverage');
+      if (!c.ok) return c;
+      const row = (store.state.stationEnables || []).find((r) => r.id === enableId && !r.invalid);
+      if (!row || row.holderId !== c.actorId) return fail('Only the holder who declared this enabling declaration can retire it. No successor is inferred.');
+      if (row.retiredOn) return fail('This enabling declaration was already retired. Its history remains on record.');
+      const note = text(reason, 400);
+      if (note.length < 5) return fail('Retiring an enabling declaration needs a written reason of at least 5 characters.');
+      store.update((draft) => {
+        const target = draft.stationEnables.find((r) => r.id === enableId);
+        target.retiredOn = c.report.today;
+        target.retiredBy = c.actorId;
+        target.retireReason = note;
+      }, { type: 'stations.enable.retired', entity: 'stationCoverage', entityId: enableId,
+        summary: 'An enabling declaration was retired with a written reason; the order it imposed is gone, the declaration stays on record.' });
       return { ok: true, saved: !store.persistError, warning: store.persistError || null };
     },
     stationCoverageSetConventions(input = {}) {

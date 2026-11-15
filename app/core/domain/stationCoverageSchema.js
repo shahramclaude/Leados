@@ -1,9 +1,9 @@
 /**
  * app/core/domain/stationCoverageSchema.js — fail-closed storage contract and
  * window arithmetic for Skill-Constrained Simultaneous Station Coverage
- * (ADR-0201, Schema v157).
+ * (ADR-0201, Schema v157; extended by ADR-0204, Schema v159).
  *
- * THREE append-only ledgers and nothing else:
+ * FOUR append-only ledgers and nothing else:
  *
  *   1. `stationWindows`     — one declared, contiguous, dated window that says
  *                             which stations must run within it;
@@ -15,12 +15,17 @@
  *   3. `stationAvailability`— one dated, first-person or explicitly
  *                             manager-declared statement that a named person is
  *                             available for a named window, with an integer
- *                             capacity (how many stations they can hold at once).
+ *                             capacity (how many stations they can hold at once);
+ *   4. `stationEnables`     — one dated declaration that station A must come up
+ *                             before station B in the SAME window ("B may not
+ *                             be manned before A is manned"), with a written
+ *                             reason, retirable by the same holder. It declares
+ *                             an order; it never staffs either station.
  *
  * NOTHING DERIVED IS STORED — no feasibility verdict, no matching, no deficient
- * set, no station state. Every one of those is recomputed on read from the
- * ledgers plus the matrix DAG, so a replayed workspace cannot carry a stale
- * proof of feasibility.
+ * set, no station state, no cycle. Every one of those is recomputed on read
+ * from the ledgers plus the matrix DAG, so a replayed workspace cannot carry a
+ * stale proof of feasibility.
  *
  * A row that cannot be read exactly is RETAINED and marked invalid, never
  * repaired. Repairing would turn a malformed declaration into a claim a human
@@ -178,6 +183,52 @@ export function stationCoverageAvailabilityError(r, { windows = [], stations = [
   return null;
 }
 
+/**
+ * An enabling declaration: station `fromStationId` must come up before station
+ * `toStationId` in the same window. Same authority and same file discipline as
+ * the stations themselves — the window's own holder declares it, it is dated,
+ * and it is retirable only by that holder with a written reason. A declaration
+ * that cannot be read exactly is retained and refused, never repaired.
+ */
+export function stationEnableError(r, { windows = [], stations = [] } = {}) {
+  if (!r || typeof r !== 'object' || r.invalid) return 'Invalid enabling declaration retained; repair the source register before any precedence is claimed.';
+  if (!id(r.id) || !id(r.windowId) || !id(r.holderId) || !id(r.fromStationId) || !id(r.toStationId)) {
+    return 'Enabling declaration identity, window, holder or station endpoint is invalid.';
+  }
+  const window = windows.find((w) => w && w.id === r.windowId && !stationCoverageWindowError(w));
+  if (!window) return 'Enabling declaration names a window that is not a readable declaration.';
+  if (r.holderId !== window.holderId) return 'An enabling declaration is filed in its own holder’s window; it is never filed into another manager’s window.';
+  if (r.fromStationId === r.toStationId) return 'A station cannot enable itself; the declaration is a contradiction, not an order.';
+  const liveStations = stations.filter((st) => st && st.windowId === r.windowId && !stationCoverageStationError(st, windows));
+  const from = liveStations.find((st) => st.id === r.fromStationId);
+  const to = liveStations.find((st) => st.id === r.toStationId);
+  if (!from) return 'Enabling declaration names an enabler that is not a readable station in this window.';
+  if (!to) return 'Enabling declaration names a dependent that is not a readable station in this window.';
+  const reason = text(r.reason, STATION_COVERAGE_BOUNDS.enablingReason[1] + 1);
+  if (reason.length < STATION_COVERAGE_BOUNDS.enablingReason[0]) {
+    return `An enabling declaration needs a written reason of at least ${STATION_COVERAGE_BOUNDS.enablingReason[0]} characters.`;
+  }
+  if (!stamp(r.declaredAt)) return 'Enabling declaration timestamp is invalid.';
+  if (r.declaredAt < window.declaredAt) return 'Enabling declaration predates its window; the declaration order is a contradiction.';
+  if (from.declaredAt && r.declaredAt < from.declaredAt) return 'Enabling declaration predates its enabler station; the declaration order is a contradiction.';
+  if (to.declaredAt && r.declaredAt < to.declaredAt) return 'Enabling declaration predates its dependent station; the declaration order is a contradiction.';
+  if (!(r.retiredOn === null || stationCoverageDay(r.retiredOn))) {
+    return 'Enabling declaration retirement day is unreadable; a retirement may be dated any real day, including before the window begins.';
+  }
+  if (!(r.retiredBy === null || id(r.retiredBy))) return 'Enabling declaration retirement declarer is invalid.';
+  if (r.retiredOn && !r.retiredBy) return 'A retirement must name who retired the declaration.';
+  if (!r.retiredOn && r.retiredBy) return 'A retirement declarer exists with no retirement; the row is a contradiction.';
+  // The retirement carries its own written reason beside the original
+  // declaration — the original is never edited.
+  if (r.retiredOn) {
+    const retireReason = text(r.retireReason, 401);
+    if (retireReason.length < 5) return 'A retirement must carry a written reason of at least 5 characters; the original declaration is never edited.';
+  } else if (r.retireReason !== null && r.retireReason !== undefined && r.retireReason !== '') {
+    return 'A retirement reason exists with no retirement; the row is a contradiction.';
+  }
+  return null;
+}
+
 /* -------------------------------------------------------------- normalizers */
 
 function normalizeLedger(raw, warnings, name, limit, validate) {
@@ -231,6 +282,47 @@ export function normalizeStationAvailability(raw, { windows = [], stations = [],
       continue;
     }
     live.set(key, row);
+  }
+  return rows;
+}
+
+export function normalizeStationEnables(raw, { windows = [], stations = [] } = {}, warnings = []) {
+  const rows = normalizeLedger(raw, warnings, 'stationEnables', STATION_COVERAGE_LIMITS.enables,
+    (r) => stationEnableError(r, { windows, stations }));
+  // One live declaration per ordered pair. A second live row for the same
+  // (window, enabler, dependent) would leave the acyclic check to choose
+  // between them — choosing is the substitution this register refuses, so the
+  // later declaration is retained and refused rather than silently preferred.
+  const live = new Map();
+  const perWindow = new Map();
+  for (const row of rows) {
+    if (row.invalid || row.retiredOn) continue;
+    const key = JSON.stringify([row.windowId, row.fromStationId, row.toStationId]);
+    if (live.has(key)) {
+      row.invalid = true;
+      row.error = 'Two live enabling declarations for one ordered pair in one window; the register refused rather than picking one.';
+      warnings.push('stationEnables: two live declarations for one ordered pair. Coverage withheld.');
+      continue;
+    }
+    live.set(key, row);
+    perWindow.set(row.windowId, (perWindow.get(row.windowId) || 0) + 1);
+  }
+  // A window can hold only so many edges before the precedence graph stops being
+  // something a human can actually audit. The excess is retained and refused,
+  // never dropped.
+  for (const [windowId, count] of perWindow) {
+    if (count > STATION_COVERAGE_LIMITS.enablesPerWindow) {
+      warnings.push(`stationEnables: window ${windowId} carries ${count} live enabling declarations, over the ${STATION_COVERAGE_LIMITS.enablesPerWindow} bound; coverage withheld until the register is repaired.`);
+      let seen = 0;
+      for (const row of rows) {
+        if (row.invalid || row.retiredOn || row.windowId !== windowId) continue;
+        seen += 1;
+        if (seen > STATION_COVERAGE_LIMITS.enablesPerWindow) {
+          row.invalid = true;
+          row.error = `More than ${STATION_COVERAGE_LIMITS.enablesPerWindow} live enabling declarations in one window; the excess is retained and refused.`;
+        }
+      }
+    }
   }
   return rows;
 }

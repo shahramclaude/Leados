@@ -221,7 +221,7 @@ function withDom(run) {
 /* ------------------------------------------------------------- 1. registration */
 
 test('registration: schema v148, the 34th matrix panel, CSV scope #140, RULE-CSA-01, one safe read', () => {
-  assert.equal(SCHEMA_VERSION, 158);
+  assert.equal(SCHEMA_VERSION, 159);
   assert.ok(MATRIX_PANELS.some((panel) => panel.key === 'change-saturation'), 'the panel is on the matrix tab bar');
   assert.equal(MATRIX_PANELS.filter((panel) => panel.key === 'change-saturation').length, 1, 'exactly one panel entry');
   assert.equal(MATRIX_PANELS.length, 38, 'the 38th matrix panel is ADR-0196’s Transfer gate, after ADR-0191 priority, ADR-0193 goal commitments and ADR-0194 postings');

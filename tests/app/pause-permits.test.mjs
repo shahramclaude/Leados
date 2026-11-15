@@ -137,7 +137,7 @@ const GOOD_PERMIT = (key, over = {}) => ({
  */
 
 test('the register is registered end to end: schema v145, two collections, the spine, the gateway and CSV #136', () => {
-  assert.equal(SCHEMA_VERSION, 158);
+  assert.equal(SCHEMA_VERSION, 159);
   assert.equal(COLLECTIONS.includes('pausePermits'), true);
   assert.equal(COLLECTIONS.includes('pausePermitMarkers'), true);
 
@@ -526,8 +526,8 @@ test('migration 144 → 145 adds two empty collections and four conventions, and
     delegations: [],
   };
   const { raw: migrated, applied } = migrate(raw);
-  assert.deepEqual(applied, ['144 → 145', '145 → 146', '146 → 147', '147 → 148', '148 → 149', '149 → 150', '150 → 151', '151 → 152', '152 → 153', '153 → 154', '154 → 155', '155 → 156', '156 → 157', '157 → 158']);
-  assert.equal(migrated.schemaVersion, 158);
+  assert.deepEqual(applied, ['144 → 145', '145 → 146', '146 → 147', '147 → 148', '148 → 149', '149 → 150', '150 → 151', '151 → 152', '152 → 153', '153 → 154', '154 → 155', '155 → 156', '156 → 157', '157 → 158', '158 → 159']);
+  assert.equal(migrated.schemaVersion, 159);
   assert.deepEqual(migrated.pausePermits, []);
   assert.deepEqual(migrated.pausePermitMarkers, []);
   // A workspace already running with a control off keeps it off: the pause now
@@ -540,7 +540,7 @@ test('migration 144 → 145 adds two empty collections and four conventions, and
   assert.equal(migrated.settings.pausePermitDefaultDays, 365);
 
   const loaded = normalizeState(migrated, { now: NOW });
-  assert.equal(loaded.state.schemaVersion, 158);
+  assert.equal(loaded.state.schemaVersion, 159);
   assert.deepEqual(loaded.state.pausePermits, []);
   assert.equal(loaded.state.settings.loadAutoPropagate, false);
 });
