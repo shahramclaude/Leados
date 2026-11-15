@@ -211,6 +211,8 @@ import { buildInvestmentCases, investmentCaseCsvRows } from './domain/investment
 // ADR-0211 (Schema v165): CSV scope #153. Built from the SAME reader the panel
 // renders, so an exported funded set is provably the set that was printed.
 import { buildCapitalRationing, capitalRationingCsvRows } from './domain/capitalRationing.js';
+import { buildStandardWaivers, standardWaiverCsvRows } from './domain/standardWaiver.js';
+import { STANDARD_WAIVER_CSV_COLUMNS, STANDARD_WAIVER_CSV_DESCRIPTOR } from './domain/standardWaiverRegistry.js';
 import {
   CAPITAL_RATIONING_CSV_COLUMNS,
   CAPITAL_RATIONING_CSV_DESCRIPTOR,
@@ -1464,6 +1466,12 @@ export const CSV_EXPORTS = [
   // present values are never summed across valuation days, and a figure that
   // cannot be claimed exports BLANK with its reason key, never zero.
   CAPITAL_RATIONING_CSV_DESCRIPTOR,
+  // #154 (ADR-0212): temporary standard-work waivers — identity-free. No person,
+  // manager, routine id, routine title, reason, safeguard or basis text; a
+  // routine exports as `R01`, a derived state gets its own count row, the
+  // request total is reconciled against the state rows, and a figure that cannot
+  // be claimed exports BLANK with its reason, never zero.
+  STANDARD_WAIVER_CSV_DESCRIPTOR,
 ];
 
 function personLookup(state) {
@@ -6681,6 +6689,18 @@ export function buildScopeTable(state, scope, now) {
       return {
         columns: CONFLICT_RECUSAL_CSV_COLUMNS.map((key) => ({ key, header: key })),
         rows: conflictRecusalCsvRows(report),
+      };
+    }
+    case 'standard-work-waivers': {
+      // CSV scope #154 (ADR-0212, Schema v166). Built from the SAME reader the
+      // panel renders, so an exported state count is provably the count that was
+      // printed. Aggregate and positional only: no person, manager, routine id,
+      // title, reason, safeguard or basis text reaches the file. A share that
+      // falls below the closed-slot floor exports BLANK with its reason.
+      const report = buildStandardWaivers(state, { now, settings: state.settings || {}, seat: null });
+      return {
+        columns: STANDARD_WAIVER_CSV_COLUMNS.map((key) => ({ key, header: key })),
+        rows: standardWaiverCsvRows(report),
       };
     }
     case 'capital-rationing-funded-sets': {

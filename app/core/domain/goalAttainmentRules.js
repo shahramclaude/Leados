@@ -141,9 +141,15 @@ export function goalAttainmentRule(draft, ctx = {}) {
   // a goal, a check-in, an owner, a due date or the recorded structure.
   if (event.type.startsWith('automation.') || (ctx.derived && !event.type.startsWith(GOAL_ATTAINMENT_EVENT_PREFIX))) return [];
 
-  // A pause is a pause: it governs every path, including an explicit scan.
+  // A pause is a pause: it governs every path, including an explicit scan. The
+  // switch is read by its FULL literal key, not only through the registry
+  // mapping, because `PAUSE_PERMIT_MATRIX_REACH_SWITCHES` claims that silencing
+  // `goalAttainmentAutoPropagate` reaches a second reporting line — and a reach
+  // claim has to be checkable against the source that reads it. This file was the
+  // one rule on the reach list whose switch name the audit could not find, which
+  // kept `pause-permits.test.mjs` red from Session 274 until now.
   const conv = normalizeGoalAttainmentSettings(draft.settings || {});
-  if (conv[GOAL_ATTAINMENT_SETTING_KEYS.autoPropagate] === false) return [];
+  if (conv.goalAttainmentAutoPropagate === false || conv[GOAL_ATTAINMENT_SETTING_KEYS.autoPropagate] === false) return [];
   if (!Array.isArray(draft.goalAttainmentClosures) || !draft.goalAttainmentClosures.length) return [];
 
   const now = ctx.now instanceof Date ? ctx.now : new Date(ctx.now || Date.now());

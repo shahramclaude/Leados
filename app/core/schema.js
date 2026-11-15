@@ -222,6 +222,18 @@ import {
   normalizeCapitalRationingSettings,
   normalizeCapitalRelations,
 } from './domain/capitalRationingSchema.js';
+// ADR-0212 (Schema v166): the Temporary Standard Waiver Register. Fail-closed
+// normalizers for the requests, their answers, the closing decisions and the
+// rule's marker ledger. A grant wider than the request it answers is dropped
+// rather than carried as an authority nobody gave, and a revocation is never
+// un-revoked by a loader that could not read its reason.
+import {
+  normalizeStandardWaiverDecisions,
+  normalizeStandardWaiverGrants,
+  normalizeStandardWaiverMarkers,
+  normalizeStandardWaiverRequests,
+  normalizeStandardWaiverSettings,
+} from './domain/standardWaiverSchema.js';
 // ADR-0185 (Schema v147): dated Matrix change-impact requests and first-person
 // line responses. Request snapshots normalize before their responses resolve.
 import {
@@ -1026,7 +1038,7 @@ export {
 // and a shift invented here would manufacture a rest — or a breach — nobody
 // recorded. No statutory limit is seeded either: which limits bind a person is
 // a human declaration with its source in writing.
-export const SCHEMA_VERSION = 165;
+export const SCHEMA_VERSION = 166;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -2504,6 +2516,13 @@ export const DEFAULT_SETTINGS = Object.freeze({
   // NOTHING ELSE IS A CONVENTION: a ceiling, a period and a relation are human
   // declarations on a dated ledger, never settings that could be tuned.
   ...normalizeCapitalRationingSettings({}),
+  // ADR-0212: the standard-waiver conventions — the default and maximum window,
+  // the renewal review threshold, the ask window, the reading horizon, the
+  // closed-slot floor below which no share is claimed, and the automation
+  // pause. Clamped on load, REFUSED (never clamped) by the setter. A window is
+  // bounded because a temporary departure that runs for a year is a change of
+  // standard wearing a waiver's name.
+  ...normalizeStandardWaiverSettings({}),
 });
 
 export const COLLECTIONS = [
@@ -3328,6 +3347,14 @@ export const COLLECTIONS = [
   'capitalCeilings',
   'capitalRelations',
   'capitalRationingMarkers',
+  // ADR-0212 (Schema v166): the Temporary Standard Waiver Register. Dated
+  // requests, their answers, the closing decisions and the rule's bounded marker
+  // ledger. No state, chain length, coverage share or verdict is stored: each is
+  // re-derived on read from these rows plus the routine they name.
+  'standardWaiverRequests',
+  'standardWaiverGrants',
+  'standardWaiverDecisions',
+  'standardWaiverMarkers',
 ];
 
 /** Stable empty state. `now` is an ISO string so the result is a pure value. */
@@ -4141,6 +4168,10 @@ export function normalizeSettings(raw) {
     // not spread here would vanish on every load and the pause census would never
     // see the switch that silences a rule reading the reporting graph.
     ...normalizeCapitalRationingSettings(s),
+    // ADR-0212: named here for the same reason — a waiver convention not spread
+    // here would vanish on every load and the pause census would never see the
+    // switch that silences the rule reading the reporting graph.
+    ...normalizeStandardWaiverSettings(s),
     ...normalizeStructureHistorySettings(s),
     ...normalizeDifferencesSettings(s),
     ...normalizeFitSettings(s),
@@ -8744,6 +8775,15 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.capitalCeilings = normalizeCapitalCeilings(raw.capitalCeilings, warnings);
   state.capitalRelations = normalizeCapitalRelations(raw.capitalRelations, warnings);
   state.capitalRationingMarkers = normalizeCapitalRationingMarkers(raw.capitalRationingMarkers, warnings);
+  // ADR-0212 (Schema v166): a request whose routine is not on the record, whose
+  // reason or safeguard is below the declared floor, or whose window is reversed
+  // is DROPPED with a counted warning — never repaired into a departure nobody
+  // asked for. Answers and decisions are resolved only through requests that
+  // survived, so an orphaned row cannot resurrect an authority.
+  state.standardWaiverRequests = normalizeStandardWaiverRequests(raw.standardWaiverRequests, state.standardWorkRoutines, warnings);
+  state.standardWaiverGrants = normalizeStandardWaiverGrants(raw.standardWaiverGrants, state.standardWaiverRequests, warnings);
+  state.standardWaiverDecisions = normalizeStandardWaiverDecisions(raw.standardWaiverDecisions, state.standardWaiverRequests, state.standardWaiverGrants, state.standardWorkRoutines, warnings);
+  state.standardWaiverMarkers = normalizeStandardWaiverMarkers(raw.standardWaiverMarkers);
   state.conflictInterests = normalizeConflictInterests(raw.conflictInterests, warnings);
   state.conflictNoneDeclarations = normalizeConflictNoneDeclarations(raw.conflictNoneDeclarations, warnings);
   state.conflictStandings = normalizeConflictStandings(raw.conflictStandings, state.conflictInterests, warnings);
@@ -9636,6 +9676,21 @@ export const MIGRATIONS = {
   // No relation is inferred between existing cases either — exclusivity,
   // dependency and shared benefit are facts only a human can declare, and a
   // relation guessed at upgrade time would ration the whole fund wrongly.
+  // 165 → 166: ADR-0212 adds FOUR EMPTY ledgers and six declared conventions.
+  // No waiver is inferred from the routines, checks or abnormalities an upgraded
+  // workspace already holds: a routine says what the standard is, and says
+  // nothing at all about a dated permission to depart from it. A waiver invented
+  // at upgrade time would fabricate authority over work somebody did, and then
+  // hold it against the person who did it.
+  165: (v165) => ({
+    ...v165,
+    schemaVersion: 166,
+    standardWaiverRequests: Array.isArray(v165.standardWaiverRequests) ? v165.standardWaiverRequests : [],
+    standardWaiverGrants: Array.isArray(v165.standardWaiverGrants) ? v165.standardWaiverGrants : [],
+    standardWaiverDecisions: Array.isArray(v165.standardWaiverDecisions) ? v165.standardWaiverDecisions : [],
+    standardWaiverMarkers: Array.isArray(v165.standardWaiverMarkers) ? v165.standardWaiverMarkers : [],
+    settings: { ...(v165.settings || {}), ...normalizeStandardWaiverSettings(v165.settings || {}) },
+  }),
   164: (v164) => ({
     ...v164,
     schemaVersion: 165,

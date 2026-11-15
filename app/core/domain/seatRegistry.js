@@ -205,6 +205,14 @@ export const RECORD_POLICIES = Object.freeze({
   conflictStandings: { classKey: 'unit', detailCeiling: 0, label: 'Responses to declared interests — recusal, mitigation, determination (report only)', route: '#/recusal' },
   conflictRules: { classKey: 'unit', detailCeiling: 0, label: 'Reportable-conflict rules and their written sources', route: '#/recusal' },
   conflictRecusalMarkers: { classKey: 'unit', detailCeiling: 0, label: 'Conflict-of-interest observation markers', route: '#/recusal' },
+  // ADR-0212: report-only, like every governance ledger above. A request names a
+  // person, a routine and a written reason; the raw rows are never handed to the
+  // generic projection. The register's own reader discloses a routine to the seat
+  // whose tree or declared line holds its owner, and withholds everybody else.
+  standardWaiverRequests: { classKey: 'unit', detailCeiling: 0, label: 'Temporary standard-work waiver requests (report only; every state re-derived on read)', route: '#/standard-work?panel=waivers' },
+  standardWaiverGrants: { classKey: 'unit', detailCeiling: 0, label: 'Answers to waiver requests — grant, refusal, revocation (report only)', route: '#/standard-work?panel=waivers' },
+  standardWaiverDecisions: { classKey: 'unit', detailCeiling: 0, label: 'Closing decisions on waivers — standard restored, routine retired (report only)', route: '#/standard-work?panel=waivers' },
+  standardWaiverMarkers: { classKey: 'unit', detailCeiling: 0, label: 'Standard-waiver ask & observation markers', route: '#/standard-work?panel=waivers' },
   delegationLineActs: { classKey: 'unit', detailCeiling: 0, label: 'Cross-line ask attribution acts (report only)', route: '#/matrix?panel=asks' },
   delegationLineMarkers: { classKey: 'unit', detailCeiling: 0, label: 'Cross-line overload reconciliation markers', route: '#/matrix?panel=asks' },
   // ADR-0181: classification acts and RULE-NPW-01 markers are surfaced only
@@ -678,6 +686,17 @@ export const ACTION_RIGHTS = Object.freeze({
   'declare-standard-work': { minRank: 1, maxRank: 5, label: 'Declare or retire a standard-work routine for yourself or a leader you hold a line over' },
   'record-standard-work': { minRank: 1, maxRank: 5, label: 'Record your own standard-work check, or your own tier act on an abnormality addressed to you' },
   'govern-standard-work': { minRank: 3, maxRank: 5, label: 'Set the standard-work read window, lapse run and tier window' },
+  // ADR-0212: temporary standard waivers. Asking is the routine owner's own act,
+  // so the rank window admits every leadership altitude and the ACTION narrows it
+  // to the person who owes the standard. Authorising is the line holder's act at
+  // the manager altitude and above. Closing a departure is the owner's or the
+  // authoriser's own act. Governing the windows and the review threshold is the
+  // rank 3–5 window every other register's conventions use.
+  'read-standard-work-waivers': { minRank: 1, maxRank: 5, label: 'Read the temporary standard waiver register within your span' },
+  'request-standard-work-waiver': { minRank: 1, maxRank: 5, label: 'Ask to set aside the written standard of a routine you owe' },
+  'authorise-standard-work-waiver': { minRank: 2, maxRank: 5, label: 'Answer a waiver request as the holder of the line the routine is owed under' },
+  'decide-standard-work-waiver': { minRank: 1, maxRank: 5, label: 'Record that the standard is back in force, or that the routine was retired' },
+  'govern-standard-work-waivers': { minRank: 3, maxRank: 5, label: 'Set the waiver window, renewal review threshold, reading horizon and slot floor' },
   // ADR-0191: the cross-line priority ballot. Declaring a round freezes one
   // person's work set for the lines that share them — a management act at any
   // leadership altitude, so the action narrows it rather than the rank. Casting

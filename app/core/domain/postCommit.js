@@ -193,6 +193,8 @@ import { investmentCaseRule } from './investmentCaseRules.js';
 import { capitalRationingRule } from './capitalRationingRules.js';
 import { workRestRule } from './workRestRules.js';
 import { conflictRecusalRule } from './conflictRecusalRules.js';
+// ADR-0212 (Schema v166): the Temporary Standard Waiver Register (RULE-TSW-01).
+import { standardWaiverRule } from './standardWaiverRules.js';
 
 
 // ADR-0087: the Operating Cadence Clock. Reads the finished queue after the
@@ -1176,6 +1178,21 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // decision, edits an approver, revokes a right or rates a person. Registered
   // immediately before `seatRule` and `sealRule`.
   conflictRecusalRule,
+  // ADR-0212: the Temporary Standard Waiver Register (RULE-TSW-01). Reads the ONE
+  // waiver reader with the whole-workspace view. TWO conditions: a granted
+  // departure whose last day passed with no closing decision becomes ONE dated
+  // ask to the LINE HOLDER WHO GRANTED IT (never to the person who owes the
+  // standard, who would be asked to certify their own exception); and a routine
+  // carrying a contiguous renewal chain at or beyond the declared threshold
+  // becomes ONE dated ask to the seat ABOVE the renewing line holder on their
+  // HOME line — the renewing manager is the last person who can decide the
+  // departure has become the standard, and a peer line holds no authority over
+  // the authority they granted. Leader-held, top-tier and off-roster conditions
+  // record one identity-free `standardWaiverMarkers` observation and ask nobody.
+  // It never grants, refuses, revokes or closes a waiver, never rewrites a
+  // routine's standard and never rates a person. Registered immediately before
+  // `seatRule` and `sealRule`.
+  standardWaiverRule,
   // ADR-0076: the Operating Seat (vertical roll-up + enforced boundaries).
   // It reads the finished record after every module has propagated, then fans
   // each open item up every leadership ancestor in the reporting tree with one

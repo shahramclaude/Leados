@@ -347,7 +347,14 @@ test('standalone artifact exists and is a single inline HTML document', () => {
   // slice adds 173,868 bytes. Measured build: 13,936,642 bytes / 873 source
   // modules = 15,964 bytes per module, still far below the unchanged 24,000
   // density guard. Ceiling moves to 14,100,000 only because capability was added.
-  assert.ok(bytes < 14_100_000, `standalone file is unexpectedly large (${bytes} bytes)`);
+  // ADR-0212 (Session 282, Schema v166) adds the Temporary Standard Waiver
+  // Register: six domain modules (registry, schema/loaders, the pure reader, the
+  // dated actions, the pause-aware rule), one standard-work panel and one
+  // generated diagram (267,637 bytes, the nineteenth .jpg in app/assets). The
+  // slice adds 853,985 bytes. Measured build: 14,790,627 bytes / 892 source
+  // modules = 16,581 bytes per module, still far below the unchanged 24,000
+  // density guard. Ceiling moves to 14,950,000 only because capability was added.
+  assert.ok(bytes < 14_950_000, `standalone file is unexpectedly large (${bytes} bytes)`);
   // Derived from the folder, not from a list in this file: the day a panel adds
   // a diagram, an enumerator that names the old two would still pass. Same
   // lesson the build script learned in ADR-0186.
