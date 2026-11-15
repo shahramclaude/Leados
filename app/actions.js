@@ -893,6 +893,7 @@ import {
   sealBriefText,
   verifySealChain,
 } from './core/domain/sealChain.js';
+import { createEventArchiveActions } from './core/domain/eventArchiveActions.js';
 import {
   CHANGE_IMPACT_KINDS,
   CHANGE_KINDS,
@@ -20710,6 +20711,9 @@ export function createApi(store, options = {}) {
   // ADR-0087: the Attested Commit — seat credential sessions and verification,
   // on the same gateway (attest-seat-identity / govern-attestation rights).
   Object.assign(api, createIdentityActions(store, { now: clock }));
+  // ADR-0205: bounded encrypted external event archives. Creation is guarded
+  // inside the action as full-operator-only; status and verification are reads.
+  Object.assign(api, createEventArchiveActions(store, { now: clock, cryptoRef: options.cryptoRef }));
   // ADR-0080: one fail-closed API boundary. The local operator is unchanged;
   // a declared seat gets only reviewed adapters, with rank and span checks.
   return guardApi(api, store, { now: clock });

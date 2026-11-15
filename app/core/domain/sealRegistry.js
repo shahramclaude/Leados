@@ -27,6 +27,7 @@ export const SEAL_EVENTS = Object.freeze({
   ENABLED: 'seal.enabled',
   DISABLED: 'seal.disabled',
   SCAN: 'seal.scan',
+  ARCHIVE_CREATED: 'seal.archive.created',
 });
 
 /** Event types that always trigger a seal, even when automatic sealing is off. */

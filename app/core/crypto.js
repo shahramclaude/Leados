@@ -53,7 +53,9 @@ export const PASSPHRASE_MIN_DISTINCT = 4;
 
 export const PURPOSE_WORKSPACE = 'workspace';
 export const PURPOSE_EXPORT = 'export';
-const PURPOSES = new Set([PURPOSE_WORKSPACE, PURPOSE_EXPORT]);
+/** A passphrase-protected, read-only event archive — never a workspace backup. */
+export const PURPOSE_EVENT_ARCHIVE = 'event-archive';
+const PURPOSES = new Set([PURPOSE_WORKSPACE, PURPOSE_EXPORT, PURPOSE_EVENT_ARCHIVE]);
 
 const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 const B64_LOOKUP = (() => {

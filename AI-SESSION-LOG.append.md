@@ -1,3 +1,11 @@
+# AI Session Log — Session 273 (append buffer)
+
+2026-11-15 · Bounded encrypted event archives · CEO / C-suite PRIMARY × matrix and single-chain · Schema v159 unchanged · ADR-0205 · `#/seal?panel=archive`.
+
+Kept the live 600-event cap and added an explicitly encrypted external capsule for a closed UTC window: verified genesis-to-anchor seal proof, separate reporting of pre-anchor payload gaps and anchor-content completeness, complete sealed window blocks, later closing seal, declared purpose and finite retention. Verification is aggregate-only and never restores rows. API/access gateway and Integrity & Seals UI wired. Before release, `seal.archive.created` must be durably persisted and verified as a complete sealed block; the explicit seal trigger covers auto-sealing off, paused and on. Failed persistence withholds ciphertext.
+
+Focused archive **8/8**, seal-chain **15/15**, lint, canonical boundary, docs links, 119-route heading check, standalone **7/7** all pass. Whole suite and real-browser/AT remain **[UNVERIFIED]**. Chargeback reader integration and external deletion/retention enforcement remain **In Progress**; trusted external timestamps are out of browser scope; WORM/archive commercial parity **[BENCHMARK-UNVERIFIED]**.
+
 # AI Session Log — Session 265 (append buffer)
 
 2026-11-14 · Automation spine cost, frozen pass inputs and clock fidelity · Schema v156 unchanged · ADR-0197 · 6 files, 7 new tests · standalone 13,069,298 bytes / 831 modules.

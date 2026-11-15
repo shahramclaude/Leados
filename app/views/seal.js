@@ -15,8 +15,7 @@
 
 import { h, toast } from '../ui/dom.js';
 import { downloadText } from '../ui/download.js';
-import { pageHeader, card, stat, badge, banner, tabs, emptyState, table } from '../ui/components.js';
-import { formatDate } from '../core/time.js';
+import { pageHeader, card, stat, badge, banner, tabs, emptyState } from '../ui/components.js';
 
 const formatDateTime = (iso) => {
   if (!iso) return '—';
@@ -24,12 +23,14 @@ const formatDateTime = (iso) => {
   return `${d.slice(0, 10)} ${d.slice(11, 16)}Z`;
 };
 import { sealAttentionCount } from '../core/domain/sealChain.js';
+import { renderEventArchivePanel } from './eventArchive.js';
 
 const PANELS = [
   { key: 'chain', label: 'Chain' },
   { key: 'spans', label: 'Span attestations' },
   { key: 'blocks', label: 'Sealed blocks' },
   { key: 'certificate', label: 'Certificate' },
+  { key: 'archive', label: 'Archive capsules' },
 ];
 
 const panelFor = (q) => {
@@ -230,6 +231,7 @@ export function renderSeal(ctx) {
     spans: spansPanel(ctx, report),
     blocks: blocksPanel(ctx, report),
     certificate: certificatePanel(ctx, report),
+    archive: renderEventArchivePanel(ctx),
   };
   return h('div', { class: 'page' },
     pageHeader({
