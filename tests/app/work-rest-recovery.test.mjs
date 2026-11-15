@@ -327,7 +327,9 @@ test('the ledger is wired to the spine: rights, reads, record policies, CSV scop
   for (const key of ['workRestShifts', 'workRestActs', 'workRestCoverage', 'workRestPolicies', 'workRestMarkers']) assert.equal(RECORD_POLICIES[key].detailCeiling, 0, `${key} is report-only`);
 
   const ids = DEFAULT_POST_COMMIT_RULES.map((rule) => rule.id);
-  assert.equal(ids.length, 128);
+  // The spine grows by one rule per shipped register: 128 at ADR-0209, 129
+  // (recusal), 130 (capital rationing) and 131 (standard waivers) since.
+  assert.equal(ids.length, 131);
   const spot = ids.indexOf('workRestRule');
   assert.ok(spot >= 0, 'RULE-WRR-01 is on the shared spine');
   assert.equal(ids.lastIndexOf('workRestRule'), spot, 'registered exactly once');
@@ -341,7 +343,9 @@ test('the ledger is wired to the spine: rights, reads, record policies, CSV scop
   assert.ok(fs.readFileSync(path.join(REPO, 'app/core/domain/workRestRules.js'), 'utf8').includes('workRestAutoPropagate === false'), 'the rule names its pause switch literally');
 
   assert.equal(CSV_EXPORTS.length, 154);
-  assert.equal(CSV_EXPORTS.at(-1).key, WORK_REST_CSV_SCOPE);
+  // The export list is append-only, so this scope keeps its own row and is no
+  // longer the last one; the tail pin belongs to the newest register's suite.
+  assert.ok(CSV_EXPORTS.some((row) => row.key === WORK_REST_CSV_SCOPE), 'scope #151 is still registered');
 });
 
 /* ----------------------------------------------------------------- 5. door */

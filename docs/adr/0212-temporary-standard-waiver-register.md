@@ -1,6 +1,6 @@
 # ADR-0212: Temporary Standard Waiver Register — a departure with a name, a date and an end
 
-Date: 2026-11-15 · Session 282 · Schema v166 (additive: `standardWaiverRequests`, `standardWaiverGrants`, `standardWaiverDecisions`, `standardWaiverMarkers`, plus seven conventions) · Status: Accepted
+Date: 2026-11-15 · Session 283 · Schema v166 (additive: `standardWaiverRequests`, `standardWaiverGrants`, `standardWaiverDecisions`, `standardWaiverMarkers`, plus seven conventions) · Status: Accepted
 
 ## Context
 
