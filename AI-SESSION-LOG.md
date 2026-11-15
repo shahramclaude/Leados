@@ -1,3 +1,11 @@
+## Session 284 — 2026-11-15: funded-set commitment register stopped, not shipped
+
+**Scope:** CEO / enterprise finance × matrix and single-chain. New gap: the proven capital-rationing set is not a dated commitment, release or supersession, and changes cannot be checked against such a record. Wider absence [UNVERIFIED].
+
+**Outcome:** Implementation was attempted but not completed. The focused integration import failed on a panel syntax error; after one fix attempt it failed again on a second panel syntax error. In accordance with the one-fix stop rule, incomplete code and wiring were removed. No migration, panel, rule, asset or feature shipped. The displayed-versus-stored integrity check and adjacent behavior were not verified.
+
+**Benchmark:** Anaplan portfolio planning is a relevant category comparison, but hands-on parity is [BENCHMARK-UNVERIFIED]. Higgsfield connector returned unsupported; no asset was produced. Next work should prove exact frozen values, refusal handling and matrix authority before exposing this register.
+
 ## Session 283 — 2026-11-15: temporary standard waiver register (Schema v166, [ADR-0212](./docs/adr/0212-temporary-standard-waiver-register.md), `RULE-TSW-01`, CSV #154, `#/standard-work?panel=waivers`)
 
 **Gap (closed):** Session 281 opened it and shipped nothing. Leader standard work models a standard in force and silence about that standard; the space between — a deliberate, authorised, temporary departure — had no record anywhere in `app/` (targeted search: `waiver`, `deviation`, `concession`, `normalization` → nothing; wider absence **[UNVERIFIED]**). That space is where Vaughan's **normalization of deviance** actually happens: each exception small, each justified on the day, nobody totalling them.
