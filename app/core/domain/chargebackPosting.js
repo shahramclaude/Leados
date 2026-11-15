@@ -60,6 +60,7 @@ import {
   CHARGEBACK_STANDING_TONES,
 } from './chargebackPostingRegistry.js';
 import { normalizeChargebackPostingSettings } from './chargebackPostingSchema.js';
+import { attributePostingDrift, driftAttributionBriefLine } from './chargebackDriftAttribution.js';
 
 export const periodCurrencyKey = (from, to, currency) => `${from}..${to}|${currency}`;
 
@@ -235,6 +236,11 @@ export function buildChargebackPostingLedger(state = {}, { now = new Date(), set
 
   const auditCounts = { faithful: 0, drifted: 0, 'statement-regressed': 0, 'window-unreadable': 0, 'not-audited': 0 };
   const driftAckCounts = { acknowledged: 0, unacknowledged: 0, 'no-drift': 0 };
+  const attributionCounts = { attributed: 0, 'no-candidates': 0, refused: 0, 'not-run': 0 };
+  const attributionTotals = {
+    candidatesN: 0, linkedN: 0, unlinkedN: 0, unresolvedN: 0, unorderedN: 0,
+    windowEventsN: 0, excludedN: 0, reconcileFailedN: 0,
+  };
   const bindingCounts = { bound: 0, 'no-envelope': 0, decayed: 0 };
   let rowsTotalN = 0;
   let rowsWithheldN = 0;
@@ -253,10 +259,12 @@ export function buildChargebackPostingLedger(state = {}, { now = new Date(), set
     const drifts = [];
     let driftsOmittedN = 0;
     let driftSignature = null;
+    let driftAudit = null;
     if (doc.reverse) {
       verdict = 'not-audited';
     } else {
       const audit = auditPostingDrift(post, statementFor(post.periodFrom, post.periodTo));
+      driftAudit = audit;
       verdict = audit.verdict;
       auditDetail = audit.detail;
       driftSignature = audit.signature;
@@ -280,6 +288,25 @@ export function buildChargebackPostingLedger(state = {}, { now = new Date(), set
       }
     }
     auditCounts[verdict] += 1;
+
+    /* 2a-attr. WHAT LANDED on this period between the posting and today
+     * (ADR-0203). Derived here, in the same reader the panel, the brief, the
+     * CSV and the rule all call, so no surface can print a candidate the
+     * others do not see. Candidates, never causes: the join proves the act was
+     * in the window and touches a frozen or drifted account, nothing more. */
+    const attribution = attributePostingDrift({
+      post, drift: driftAudit, state, now: at, readable: readableAccount, nameOf: rawName,
+    });
+    attributionCounts[attribution.verdict] += 1;
+    attributionTotals.candidatesN += attribution.counts.linkedN;
+    attributionTotals.linkedN += attribution.counts.linkedN;
+    attributionTotals.unlinkedN += attribution.counts.unlinkedN;
+    attributionTotals.unresolvedN += attribution.counts.unresolvedN;
+    attributionTotals.unorderedN += attribution.counts.unorderedN;
+    attributionTotals.windowEventsN += attribution.counts.windowEventsN;
+    attributionTotals.excludedN += attribution.counts.outOfPeriodN + attribution.counts.notFigureMovingN
+      + attribution.counts.unattributableN + attribution.counts.outsideFamilyN;
+    if (attribution.countsReconcile !== true) attributionTotals.reconcileFailedN += 1;
 
     /* 2a-ack. What a HUMAN has decided about this drift (ADR-0202). The
      * acknowledgement covering the CURRENT signature is the only one that
@@ -376,6 +403,7 @@ export function buildChargebackPostingLedger(state = {}, { now = new Date(), set
         ackStateReason: CHARGEBACK_DRIFT_ACK_REASONS[ackState],
         ack: ackView(matchingAck || (verdict !== 'drifted' ? latestAck : null)),
         priorAck: ackView(priorAck),
+        attribution,
       },
       rowsN: post.rows.length,
       rows,
@@ -473,6 +501,20 @@ export function buildChargebackPostingLedger(state = {}, { now = new Date(), set
     standing: { ...standingCounts },
     driftAcks: { ...driftAckCounts },
     driftAcksReconcile: driftAckCounts.acknowledged + driftAckCounts.unacknowledged + driftAckCounts['no-drift'] === postingRows.length,
+    /* ADR-0203: what landed on each drifted posting's period. Counts, and two
+     * claims kept apart — how many candidates the record supports, and whether
+     * every counted in-window act landed in exactly one bucket. */
+    attributions: { ...attributionCounts },
+    attributionsReconcile: attributionCounts.attributed + attributionCounts['no-candidates']
+      + attributionCounts.refused + attributionCounts['not-run'] === postingRows.length,
+    attributionCandidatesN: attributionTotals.candidatesN,
+    attributionLinkedN: attributionTotals.linkedN,
+    attributionUnlinkedN: attributionTotals.unlinkedN,
+    attributionUnresolvedN: attributionTotals.unresolvedN,
+    attributionUnorderedN: attributionTotals.unorderedN,
+    attributionWindowEventsN: attributionTotals.windowEventsN,
+    attributionExcludedN: attributionTotals.excludedN,
+    attributionCountsReconcile: attributionTotals.reconcileFailedN === 0,
     openAsksN,
     openDriftAsksN,
   };
@@ -546,6 +588,7 @@ export function chargebackPostingBriefText(report) {
       : `Last completed quarter: ${q.stateLabel}${q.reason ? ` — ${q.reason}` : ''}`,
     `Open posting asks (RULE-CBP-01): ${b.openAsksN} (${b.openDriftAsksN} about drift).`,
     `Drift decisions: ${b.driftAcks.acknowledged} acknowledged in writing, ${b.driftAcks.unacknowledged} awaiting a dated decision.`,
+    driftAttributionBriefLine(b),
     'A posting freezes the complete statement against named envelopes; it writes no budget line and changes no envelope figure. Drift and binding decay are reported, never corrected; a drift is decided by a dated human act — acknowledge the posted figures as the period fact, or reverse — and no acknowledgement edits a cent.',
   ];
   return lines.join('\n');
@@ -560,6 +603,7 @@ export function chargebackPostingCsvRows(report) {
   const empty = {
     period_from: '', period_to: '', period_days: '', currency: '', posting_state: '', audit_verdict: '',
     drift_signature: '', drift_ack_state: '', drift_ack_on: '',
+    drift_attribution: '', drift_window_days: '', drift_event_coverage: '',
     posted_on: '', reversed_on: '', via: '', rows_n: '', rows_bound_n: '', rows_no_envelope_n: '', rows_decayed_n: '',
     entries: '', priced_share_days: '', total_charged_cents: '', total_credited_cents: '',
     total_charged: '', total_credited: '', zero_sum: '',
@@ -581,6 +625,11 @@ export function chargebackPostingCsvRows(report) {
     drift_ack_acknowledged: b.driftAcks.acknowledged,
     drift_ack_unacknowledged: b.driftAcks.unacknowledged,
     open_drift_asks: b.openDriftAsksN,
+    drift_attributed: b.attributions.attributed,
+    drift_no_candidates: b.attributions['no-candidates'],
+    drift_attribution_refused: b.attributions.refused,
+    drift_candidates: b.attributionCandidatesN,
+    drift_candidates_linked: b.attributionLinkedN,
     rows_total: b.rowsTotalN,
     rows_bound: b.rowsBoundN,
     rows_no_envelope: b.rowsNoEnvelopeN,
@@ -606,6 +655,7 @@ export function chargebackPostingCsvRows(report) {
       postings: '', postings_live: '', postings_reversed: '', postings_conflicted: '',
       audits_faithful: '', audits_drifted: '', audits_statement_regressed: '', audits_window_unreadable: '', audits_not_audited: '', audits_reconcile: '',
       drift_ack_acknowledged: '', drift_ack_unacknowledged: '', open_drift_asks: '',
+      drift_attributed: '', drift_no_candidates: '', drift_attribution_refused: '',
       rows_total: '', rows_bound: '', rows_no_envelope: '', rows_decayed: '', rows_reconcile: '',
       quarter_from: '', quarter_to: '', quarter_state: '', quarter_reason: '',
       currencies_postable: '', currencies_posted: '', currencies_posted_drifted: '', currencies_conflicted: '',
@@ -619,6 +669,11 @@ export function chargebackPostingCsvRows(report) {
       drift_signature: p.audit.driftSignature || '',
       drift_ack_state: p.audit.ackState === 'unacknowledged' || p.audit.ackState === 'acknowledged' ? p.audit.ackState : '',
       drift_ack_on: p.audit.ackState === 'acknowledged' && p.audit.ack ? p.audit.ack.decidedOn : '',
+      drift_attribution: p.audit.attribution.verdict,
+      drift_candidates: p.audit.attribution.counts.candidatesN,
+      drift_candidates_linked: p.audit.attribution.counts.linkedN,
+      drift_window_days: p.audit.attribution.window && p.audit.attribution.window.days !== null ? p.audit.attribution.window.days : '',
+      drift_event_coverage: p.audit.attribution.coverage ? p.audit.attribution.coverage.state : '',
       posted_on: p.postedOn,
       reversed_on: p.reversedOn || '',
       via: p.via,

@@ -82,6 +82,8 @@ export const CHARGEBACK_POSTING_LIMITS = Object.freeze({
   postings: 100,
   /** Printed per-account drift lines per posting; the remainder is counted. */
   drifts: 20,
+  /** Printed candidate acts per drifted posting; the remainder is counted. */
+  attributionCandidates: 12,
 });
 
 export const CHARGEBACK_POSTING_DEFAULTS = Object.freeze({ askDueDays: 10, autoPropagate: true });
@@ -189,6 +191,98 @@ export const CHARGEBACK_DRIFT_ACK_REASONS = Object.freeze({
   'no-drift': 'Today’s re-derivation either reproduces every posted cent or does not run (the statement regressed or the window is refused), so there is no drift signature to decide.',
 });
 
+/**
+ * WHAT LANDED ON THE POSTED PERIOD (ADR-0203). A drift says WHICH accounts
+ * moved by WHICH cents; it cannot say what moved them. The record can: every
+ * act that can change a statement figure is a dated event. Attribution joins
+ * the drift window (the posting instant → today) against the event log and
+ * prints the acts the record CANNOT EXCLUDE, each tied — or explicitly not
+ * tied — to the accounts this posting froze.
+ *
+ * Three honesty rules the vocabulary exists to enforce:
+ *  1. A candidate is never a culprit. The families below are acts that CAN
+ *     move a figure; nothing here proves any of them DID.
+ *  2. Only acts that price or re-share something are in a family. A
+ *     `transfer.price.proposed` prices nothing (`compileTransferPrices` gives
+ *     a proposal no cover), so a proposal is NOT a candidate — the confirmation
+ *     that made it a price is.
+ *  3. Where the log cannot cover the window, the join is REFUSED with the
+ *     reason printed — never reported as "nothing happened".
+ */
+export const CHARGEBACK_DRIFT_ACT_FAMILIES = Object.freeze({
+  price: Object.freeze({
+    label: 'Two-key transfer price',
+    /** A proposal prices nothing, so it is deliberately absent. */
+    events: Object.freeze(['transfer.price.confirmed', 'transfer.price.retired']),
+    basis: 'the agreement’s own lending and borrowing line accounts, over the days it actually prices',
+  }),
+  line: Object.freeze({
+    label: 'Reporting line',
+    events: Object.freeze(['matrix.line.declared', 'matrix.line.retuned', 'matrix.line.ended']),
+    basis: 'the line’s own manager account (the charged side) and its person’s home-line account as the record reads today',
+  }),
+  roster: Object.freeze({
+    label: 'Person record',
+    events: Object.freeze(['person.updated', 'person.archived', 'person.restored']),
+    basis: 'the accounts of every line this person is on as the record reads today, and their home-line account',
+  }),
+});
+
+/** What the join could establish between one candidate act and this posting. */
+export const CHARGEBACK_DRIFT_LINK_STATES = Object.freeze(['linked', 'unlinked', 'unresolved']);
+export const CHARGEBACK_DRIFT_LINK_LABELS = Object.freeze({
+  linked: 'Tied to a line account this posting froze',
+  unlinked: 'In the window, but the record ties it to no account this posting froze',
+  unresolved: 'In the window, but the record it names is gone',
+});
+export const CHARGEBACK_DRIFT_LINK_TONES = Object.freeze({ linked: 'warn', unlinked: 'neutral', unresolved: 'bad' });
+
+/** Why an in-window, in-family act was NOT counted as a candidate at all. */
+export const CHARGEBACK_DRIFT_EXCLUSIONS = Object.freeze(['out-of-period', 'not-figure-moving', 'unattributable', 'outside-family']);
+export const CHARGEBACK_DRIFT_EXCLUSION_LABELS = Object.freeze({
+  'out-of-period': 'outside this posting’s period',
+  'not-figure-moving': 'cannot move a figure (a price withdrawn or declined before it was ever agreed)',
+  unattributable: 'logged with no record id to join on',
+  'outside-family': 'not an act that can change a statement figure',
+});
+
+/**
+ * What the attribution of ONE drifted posting concluded. `not-run` is not a
+ * refusal: there is no drift to attribute.
+ */
+export const CHARGEBACK_DRIFT_ATTRIBUTION_VERDICTS = Object.freeze([
+  'attributed', 'no-candidates', 'refused', 'not-run',
+]);
+export const CHARGEBACK_DRIFT_ATTRIBUTION_LABELS = Object.freeze({
+  attributed: 'Candidate acts on the record — none of them proven',
+  'no-candidates': 'No candidate act on the record inside the window',
+  refused: 'Attribution REFUSED — the event log cannot cover the window',
+  'not-run': 'Nothing to attribute',
+});
+export const CHARGEBACK_DRIFT_ATTRIBUTION_TONES = Object.freeze({
+  attributed: 'warn', 'no-candidates': 'neutral', refused: 'bad', 'not-run': 'neutral',
+});
+export const CHARGEBACK_DRIFT_ATTRIBUTION_REASONS = Object.freeze({
+  attributed: 'These dated acts landed on this period between posting and today, and each one touches at least one line account whose posted cents no longer reproduce. That is a candidate list, not a finding: the record cannot exclude them, and it cannot prove any of them moved a cent.',
+  'no-candidates': 'The log covers the whole window and holds no act of a figure-moving family tied to an account this posting froze. That is a statement about the record, not a statement that nothing happened — an act made outside LeadOS leaves no event here.',
+  refused: 'The event log is a bounded, oldest-first record, so the beginning of this window may already be gone. A candidate list built on a log that cannot see back to the posting would be a guess dressed as an answer, so the join is refused and the reason is printed.',
+  'not-run': 'Attribution runs only on a drifted live posting: there is no moved cent to explain.',
+});
+
+/**
+ * What the log can and cannot see. `covered` is a proof, not an assumption:
+ * ordinary events are evicted oldest-first (`capEvents`), so the surviving set
+ * is a SUFFIX of the full log — if the earliest survivor is at or before the
+ * posting instant, nothing inside the window was evicted.
+ */
+export const CHARGEBACK_DRIFT_COVERAGE_STATES = Object.freeze(['covered', 'refused']);
+export const CHARGEBACK_DRIFT_COVERAGE_BASIS = Object.freeze({
+  covered: 'the oldest surviving event is at or before the posting, and ordinary events are evicted oldest-first, so the surviving log is a suffix that covers the whole window',
+  empty: 'the workspace event log holds no event at all',
+  truncated: 'the oldest surviving event is newer than the posting, so the start of the window is no longer on the record',
+  'no-window': 'the posting is dated after today, so there is no window to search',
+});
+
 export const CHARGEBACK_POSTING_RULE_RELATIONS = Object.freeze(['rolls-up-to']);
 
 export const CHARGEBACK_POSTING_QUESTIONS = Object.freeze([
@@ -207,6 +301,7 @@ export const CHARGEBACK_POSTING_METHOD = Object.freeze([
   'One LIVE posting per (period, currency). Posting again requires a dated reversal first — an appended act with a written reason, never an edit. A reversed posting stays on the record as history; an imported workspace carrying two live postings for one period and currency is printed as CONFLICTED, and neither is picked.',
   'Every read re-derives the posting’s own period from the live record and compares it to the frozen figures, account by account, as integer equality: FAITHFUL, DRIFTED (with the exact cents then and now), STATEMENT-REGRESSED or PERIOD-UNREADABLE. Drift is reported, never corrected — the posting proves what was signed; the comparison proves whether the record still says it.',
   'A drifted posting is a DECISION someone owes, not a footnote. The exact drift is fingerprinted (one signature per distinct set of moved cents), RULE-CBP-01 puts ONE dated ask in front of the posting’s own joint apex, and a human answers with one of two dated acts: ACKNOWLEDGE in writing — the posted figures stand as the accepted period fact, divergence noted — or REVERSE with a written reason and re-post. The acknowledgement is append-only, covers exactly the signature it names, and never edits a figure; a drift that grows or moves is a new signature and a new ask.',
+  'The drift window — the posting instant to today — is then joined against the workspace event log, and the acts that CAN move a statement figure (a confirmed or retired two-key price, a declared, retuned or ended reporting line, a changed person record) are printed as CANDIDATES. Each candidate carries its own dated act id and the exact link the record supports to the accounts this posting froze, with the moved cents beside it. A candidate is never named a cause: the join proves the act was in the window and touched the account, not that it moved the cent. Acts of no figure-moving family are counted, not printed; an act whose record is gone prints as UNRESOLVED; and where the log cannot see back to the posting the whole join is REFUSED with the reason, because a candidate list from a truncated log is a guess.',
   'RULE-CBP-01 notices a complete, unposted quarter currency and puts ONE dated ask in front of the lowest joint apex of every line the statement names — the one seat the whole internal trade rolls up to. An ambiguous apex, the workspace leader, or an off-roster apex is recorded as an identity-free observation; nobody is substituted. The rule never posts, never reverses and never binds an envelope.',
   'Seats are workflow declarations, not authentication. A posting records the seat or the operator view that signed it; accounts outside the reading seat are counted and withheld, exactly as the statement itself withholds them.',
 ]);
@@ -216,7 +311,9 @@ export const CHARGEBACK_POSTING_LIMITS_TEXT = Object.freeze([
   'One period, one currency per posting. Currencies are never pooled and no exchange rate is applied; a multi-currency quarter is posted once per currency.',
   'The figures are the statement’s figures: declared share-days × two-key prices (ADR-0177). Posting does not re-measure anything and cannot include a share-day the statement refused.',
   'Reversal restores postability; it does not restate the envelope record, because none was written. The reversed document remains on the ledger as dated history.',
-  'The audit compares the posting against the record as it reads TODAY. It cannot say which intervening act moved the figures — it prints the delta, not a culprit.',
+  'The audit compares the posting against the record as it reads TODAY. It prints the delta, and it prints the dated acts that could have produced it — but it never names a culprit, scores a person or ranks one candidate above another. Attribution is a candidate list the record cannot exclude; causation stays a human judgement made on that list.',
+  'Attribution reads only the workspace event log, which is bounded and evicts oldest-first. Where the surviving log cannot see back to the posting instant the join is refused outright and counted as a refusal — the panel never prints an empty candidate list where an unreadable window is the real reason.',
+  'A candidate act is dated by the event log’s own instant. An act logged at the SAME instant as the posting cannot be ordered against it, and is printed as unordered rather than silently placed before or after.',
   'An acknowledgement settles the DECISION about a drift, not the arithmetic: no cent changes, no account is re-bound, and the re-derived statement keeps printing its own truth beside the accepted one.',
   'Asks are routed to the lowest joint apex of the statement’s lines in the matrix DAG. Where that apex is ambiguous, the workspace leader, or off the roster, an identity-free observation is recorded and nobody is asked on somebody else’s behalf.',
 ]);
@@ -226,12 +323,15 @@ export const CHARGEBACK_POSTING_CSV_COLUMNS = Object.freeze([
   'postings', 'postings_live', 'postings_reversed', 'postings_conflicted',
   'audits_faithful', 'audits_drifted', 'audits_statement_regressed', 'audits_window_unreadable', 'audits_not_audited', 'audits_reconcile',
   'drift_ack_acknowledged', 'drift_ack_unacknowledged', 'open_drift_asks',
+  'drift_attributed', 'drift_no_candidates', 'drift_attribution_refused',
+  'drift_candidates', 'drift_candidates_linked',
   'rows_total', 'rows_bound', 'rows_no_envelope', 'rows_decayed', 'rows_reconcile',
   'quarter_from', 'quarter_to', 'quarter_state', 'quarter_reason',
   'currencies_postable', 'currencies_posted', 'currencies_posted_drifted', 'currencies_conflicted',
   'open_asks',
   'period_from', 'period_to', 'period_days', 'currency', 'posting_state', 'audit_verdict',
   'drift_signature', 'drift_ack_state', 'drift_ack_on',
+  'drift_attribution', 'drift_candidates', 'drift_candidates_linked', 'drift_window_days', 'drift_event_coverage',
   'posted_on', 'reversed_on', 'via',
   'rows_n', 'rows_bound_n', 'rows_no_envelope_n', 'rows_decayed_n',
   'entries', 'priced_share_days',
@@ -245,5 +345,5 @@ export const CHARGEBACK_POSTING_CSV_DESCRIPTOR = Object.freeze({
   group: 'analytics',
   sensitive: false,
   filenameSlug: 'chargeback-postings',
-  description: 'One summary row for the chargeback posting ledger — how many period postings exist, how many are live, reversed or conflicted, what today’s re-derivation says about each (faithful / drifted / regressed / unreadable), how many drifted postings carry a written acknowledgement of their exact drift signature and how many still await that dated decision (with the open drift asks), how many posted lines are bound to a budget envelope, declared unbound, or have decayed bindings, and the last completed quarter’s postability per currency — plus one row per posting with its period, currency, frozen integer-cent totals, zero-sum check, drift signature and acknowledgement state. Aggregate and identity-free: no person, manager, envelope name or id, note or reason text is exported. A withheld figure is a BLANK cell, never a zero.',
+  description: 'One summary row for the chargeback posting ledger — how many period postings exist, how many are live, reversed or conflicted, what today’s re-derivation says about each (faithful / drifted / regressed / unreadable), how many drifted postings carry a written acknowledgement of their exact drift signature and how many still await that dated decision (with the open drift asks), how many drifted postings carry at least one record-linked CANDIDATE act, how many have none, how many refused the join because the event log cannot cover the window, and the candidate counts behind them; how many posted lines are bound to a budget envelope, declared unbound, or have decayed bindings; and the last completed quarter’s postability per currency — plus one row per posting with its period, currency, frozen integer-cent totals, zero-sum check, drift signature, acknowledgement state and attribution verdict with its candidate counts and window. Aggregate and identity-free: no person, manager, envelope name or id, candidate act id, note or reason text is exported. A withheld figure is a BLANK cell, never a zero.',
 });
