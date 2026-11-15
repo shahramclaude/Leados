@@ -38,6 +38,9 @@ import {
   openBudgetDialog,
   openBudgetLineDialog,
 } from '../ui/finance-modals.js';
+// ADR-0208: the third finance panel. An envelope says how much MAY be spent;
+// an investment case says what the spending is promised to return.
+import { renderFinanceInvestmentCasePanel } from './financeInvestmentCasePanel.js';
 
 const STATUS_TONE = { active: 'good', closed: 'neutral', archived: 'neutral' };
 const LINE_TONE = { planned: 'neutral', committed: 'info', spent: 'good', released: 'neutral' };
@@ -107,21 +110,33 @@ function calibrationCard(ctx) {
 }
 
 const FINANCE_PANELS = [
-  { key: 'envelopes', label: 'Envelopes' },
-  { key: 'span', label: 'Span exposure' },
+  { key: 'envelopes', label: 'Envelopes', href: '#/finance' },
+  { key: 'span', label: 'Span exposure', href: '#/finance?panel=span' },
+  { key: 'cases', label: 'Investment cases', href: '#/finance?panel=cases' },
 ];
 
-function financePanelTabs(ctx, panel, { envelopes = undefined, queue = undefined } = {}) {
+function financePanelTabs(ctx, panel, { envelopes = undefined, queue = undefined, cases = undefined } = {}) {
+  const counts = { envelopes, span: queue, cases };
   return tabs({
     ariaLabel: 'Budget & finance views',
     active: panel,
     items: FINANCE_PANELS.map((item) => ({
       key: item.key,
       label: item.label,
-      count: item.key === 'envelopes' ? envelopes : queue,
+      count: counts[item.key],
     })),
-    onSelect: (key) => ctx.navigate(key === 'envelopes' ? '#/finance' : '#/finance?panel=span'),
+    onSelect: (key) => ctx.navigate((FINANCE_PANELS.find((item) => item.key === key) || FINANCE_PANELS[0]).href),
   });
+}
+
+/**
+ * What this seat owes an act on in the investment-case register: proposals it
+ * may ratify plus reviews it owes. Read through the seat-checked API, so the
+ * count is the one the panel itself prints; a refused read shows no count.
+ */
+function investmentCaseTabCount(ctx) {
+  const result = typeof ctx.api?.investmentCaseAttentionCount === 'function' ? ctx.api.investmentCaseAttentionCount() : null;
+  return result?.ok && result.count > 0 ? result.count : undefined;
 }
 
 /** Downloads are allowed to fail in a browser; then the ledger stays copyable. */
@@ -141,14 +156,27 @@ function downloadOrCopy({ filename, text, title }) {
 }
 
 export function renderFinance(ctx) {
-  const panel = ctx.query?.get?.('panel') === 'span' ? 'span' : 'envelopes';
+  const requestedPanel = ctx.query?.get?.('panel');
+  const panel = requestedPanel === 'span' || requestedPanel === 'cases' ? requestedPanel : 'envelopes';
   const seat = ctx.seatContext?.seat || null;
   const built = ctx.seatContext?.built || null;
   // One evaluator, two readings: the exposure re-evaluates the SAME envelopes
   // through `evaluateBudget` with the SAME watch convention and the same day as
   // the envelope list, so the panel and the roll-up cannot disagree.
   const exposure = buildBudgetExposure(ctx.state, { now: ctx.now, seat, built });
-  if (panel === 'span') return renderSpanExposure(ctx, exposure, seat);
+  const casesCount = investmentCaseTabCount(ctx);
+  if (panel === 'cases') {
+    // ADR-0208: the register renders itself from its own seat-checked reader;
+    // this view only lends it the shared finance navigation.
+    return renderFinanceInvestmentCasePanel(ctx, {
+      tabs: financePanelTabs(ctx, panel, {
+        envelopes: budgetsRollup(ctx.state, ctx.now).all.length,
+        queue: exposure.queue.length + exposure.queueDeferred,
+        cases: casesCount,
+      }),
+    });
+  }
+  if (panel === 'span') return renderSpanExposure(ctx, exposure, seat, casesCount);
   const rollup = budgetsRollup(ctx.state, ctx.now);
   const requested = ctx.query.get('filter');
   const filter = FILTERS.includes(requested) ? requested : 'active';
@@ -179,7 +207,7 @@ export function renderFinance(ctx) {
       subtitle: 'One ledger for the money question — what envelope you have, what is already committed against it, what has actually landed, and whether the forecast breaches. Breaches open a DACI trade-off automatically; completed funded work prompts for evidenced actuals.',
       actions: [button('Create budget envelope', () => openBudgetDialog(ctx), true)],
     }),
-    financePanelTabs(ctx, panel, { envelopes: rollup.all.length, queue: exposure.queue.length + exposure.queueDeferred }),
+    financePanelTabs(ctx, panel, { envelopes: rollup.all.length, queue: exposure.queue.length + exposure.queueDeferred, cases: casesCount }),
     ctx.persistError
       ? card({ body: h('p', { class: 'text-warn small' }, `Changes are not being saved: ${ctx.persistError}`) })
       : null,
@@ -266,7 +294,7 @@ function positionCell(row) {
  * the currency position, the branch attribution and the review queue are one
  * reading of one evaluation, not three screens that can drift apart.
  */
-function renderSpanExposure(ctx, exposure, seat) {
+function renderSpanExposure(ctx, exposure, seat, casesCount = undefined) {
   const enforced = Boolean(seat && !seat.fullAccess);
   const canRead = !exposure.refused;
   const ledger = canRead ? budgetExposureText(exposure) : '';
@@ -287,7 +315,7 @@ function renderSpanExposure(ctx, exposure, seat) {
   if (exposure.refused) {
     return h('div', { class: 'page' },
       header,
-      financePanelTabs(ctx, 'span', { envelopes: undefined, queue: undefined }),
+      financePanelTabs(ctx, 'span', { envelopes: undefined, queue: undefined, cases: casesCount }),
       banner({ tone: 'bad', title: 'No money reading is available at this seat', body: exposure.refusals.join(' ') }),
       card({
         title: 'Why the blank is the correct answer',
@@ -350,7 +378,7 @@ function renderSpanExposure(ctx, exposure, seat) {
 
   return h('div', { class: 'page' },
     header,
-    financePanelTabs(ctx, 'span', { envelopes: undefined, queue: exposure.queue.length + exposure.queueDeferred }),
+    financePanelTabs(ctx, 'span', { envelopes: undefined, queue: exposure.queue.length + exposure.queueDeferred, cases: casesCount }),
     ctx.persistError
       ? card({ body: h('p', { class: 'text-warn small' }, `Changes are not being saved: ${ctx.persistError}`) })
       : null,

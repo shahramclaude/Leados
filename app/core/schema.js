@@ -170,6 +170,19 @@ import {
   normalizeGoalAttainmentNotes,
   normalizeGoalAttainmentSettings,
 } from './domain/goalAttainmentSchema.js';
+// ADR-0208 (Schema v162): the Investment Case Register — one append-only ledger
+// of declared cases (a named benefit owner, a currency, a price basis, a hurdle
+// rate, a review day and dated flows in whole cents; immutable once declared),
+// one append-only ledger of dated acts (approve, reject, withdraw, review) read
+// through the case's own lifecycle, and the rule's bounded marker ledger.
+// Nothing derived — no present value, rate of return, payback, ratio or status —
+// is stored.
+import {
+  normalizeInvestmentCaseActs,
+  normalizeInvestmentCaseMarkers,
+  normalizeInvestmentCases,
+  normalizeInvestmentCaseSettings,
+} from './domain/investmentCaseSchema.js';
 // ADR-0185 (Schema v147): dated Matrix change-impact requests and first-person
 // line responses. Request snapshots normalize before their responses resolve.
 import {
@@ -957,7 +970,16 @@ export {
 // one waits for the other. Nothing derived is stored either — the relation, the
 // feed status and the propagated block are recomputed on every read, so a
 // replayed workspace cannot carry a stale order or a stale impossibility.
-export const SCHEMA_VERSION = 161;
+// v162 adds the Investment Case Register (ADR-0208): three EMPTY append-only
+// ledgers — `investmentCases`, `investmentCaseActs` and `investmentCaseMarkers` —
+// plus two declared conventions. No case is inferred at upgrade from a budget
+// envelope, a commitment line, a priced decision or an org change: an envelope
+// says how much MAY be spent, never what the spending was promised to return,
+// and inventing a case here would fabricate a promise nobody made — then hold a
+// named person to it. No hurdle rate is assumed either. Nothing derived is
+// stored: every present value, rate, payback, ratio and status is recomputed on
+// read from the flows, so a replayed workspace cannot carry a stale figure.
+export const SCHEMA_VERSION = 162;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -2414,6 +2436,11 @@ export const DEFAULT_SETTINGS = Object.freeze({
   // the automation pause. Clamped on load, refused (never clamped) by the
   // setter, and printed on the panel. None is fitted from the record.
   ...normalizeGoalAttainmentSettings({}),
+  // ADR-0208: the investment-case conventions — the review ask window and the
+  // automation pause. Clamped on load, refused (never clamped) by the setter, and
+  // printed on the panel. No hurdle rate is a convention: each case declares its
+  // own, and none is assumed.
+  ...normalizeInvestmentCaseSettings({}),
 });
 
 export const COLLECTIONS = [
@@ -3204,6 +3231,14 @@ export const COLLECTIONS = [
   'goalAttainmentClosures',
   'goalAttainmentNotes',
   'goalAttainmentMarkers',
+  // ADR-0208 (Schema v162): the Investment Case Register. One append-only case
+  // ledger, one append-only act ledger and the review rule's bounded marker
+  // ledger. Nothing derived — no present value, rate of return, payback, ratio,
+  // lifecycle status or track record — is stored; every one is re-derived on
+  // read, so a printed figure cannot drift from the flows beneath it.
+  'investmentCases',
+  'investmentCaseActs',
+  'investmentCaseMarkers',
 ];
 
 /** Stable empty state. `now` is an ISO string so the result is a pure value. */
@@ -4001,6 +4036,10 @@ export function normalizeSettings(raw) {
     // field, so an attainment convention not spread here would vanish on every
     // load and the pause census would never see the restatement switch.
     ...normalizeGoalAttainmentSettings(s),
+    // ADR-0208: named here for the same reason — this object is rebuilt field by
+    // field, so an investment-case convention not spread here would vanish on
+    // every load and the pause census would never see the review switch.
+    ...normalizeInvestmentCaseSettings(s),
     ...normalizeStructureHistorySettings(s),
     ...normalizeDifferencesSettings(s),
     ...normalizeFitSettings(s),
@@ -8572,6 +8611,14 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.goalAttainmentClosures = normalizeGoalAttainmentClosures(raw.goalAttainmentClosures, warnings);
   state.goalAttainmentNotes = normalizeGoalAttainmentNotes(raw.goalAttainmentNotes, state.goalAttainmentClosures, warnings);
   state.goalAttainmentMarkers = normalizeGoalAttainmentMarkers(raw.goalAttainmentMarkers, warnings);
+  // ADR-0208 (Schema v162): the investment-case ledgers. A case that cannot be
+  // read to the exact cent is dropped with a counted warning, never repaired; an
+  // act is read through its case's lifecycle, so a second decision, a review of
+  // a case nobody ratified, or a ratification signed by the case's own benefit
+  // owner cannot be manufactured by a hand-edited file.
+  state.investmentCases = normalizeInvestmentCases(raw.investmentCases, warnings);
+  state.investmentCaseActs = normalizeInvestmentCaseActs(raw.investmentCaseActs, state.investmentCases, warnings);
+  state.investmentCaseMarkers = normalizeInvestmentCaseMarkers(raw.investmentCaseMarkers, warnings);
   state.delegationLineActs = normalizeDelegationLineActs(raw.delegationLineActs, state, warnings);
   state.delegationLineMarkers = normalizeDelegationLineMarkers(raw.delegationLineMarkers);
   // ADR-0181 (Schema v144): a malformed classification act, an act naming a
@@ -9401,6 +9448,21 @@ export const MIGRATIONS = {
     ...v160,
     schemaVersion: 161,
     stationWindowEnables: Array.isArray(v160.stationWindowEnables) ? v160.stationWindowEnables : [],
+  }),
+  // 161 → 162: ADR-0208 adds THREE EMPTY append-only ledgers and two declared
+  // conventions. No investment case is inferred from the budget envelopes,
+  // commitment lines, priced decisions or org changes an upgraded workspace
+  // already holds: an envelope says how much may be spent, never what that
+  // spending was promised to return, and a case invented here would fabricate a
+  // promise nobody made and then hold a named person to it. No hurdle rate is
+  // assumed either — every case declares its own.
+  161: (v161) => ({
+    ...v161,
+    schemaVersion: 162,
+    investmentCases: Array.isArray(v161.investmentCases) ? v161.investmentCases : [],
+    investmentCaseActs: Array.isArray(v161.investmentCaseActs) ? v161.investmentCaseActs : [],
+    investmentCaseMarkers: Array.isArray(v161.investmentCaseMarkers) ? v161.investmentCaseMarkers : [],
+    settings: { ...(v161.settings || {}), ...normalizeInvestmentCaseSettings(v161.settings || {}) },
   }),
   // 155 → 156: ADR-0196 adds one EMPTY append-only ledger. No active
   // RULE-NPW-01 ask has a receiving-line answer, effort estimate or capacity

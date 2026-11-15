@@ -208,16 +208,16 @@ function withDom(run) {
 /* ---------------------------------------------------------- 1. registration */
 
 test('registration: schema v151, two ledgers, CSV #144, RULE-SOC-01 as spine rule 121, rights and pause switch', () => {
-  assert.equal(SCHEMA_VERSION, 161);
+  assert.equal(SCHEMA_VERSION, 162);
   for (const key of ['priorityRounds', 'priorityBallots']) assert.ok(COLLECTIONS.includes(key), `${key} is a declared collection`);
   const scope = CSV_EXPORTS.find((entry) => entry.key === PRIORITY_BALLOT_CSV_SCOPE);
   assert.ok(scope, 'CSV #144 is registered');
   assert.equal(scope.sensitive, false, 'the export is aggregate-only');
-  assert.equal(CSV_EXPORTS.length, 149);
+  assert.equal(CSV_EXPORTS.length, 150);
   const contract = PROPAGATION_CONTRACTS.find((c) => c.rule?.id === 'priorityRule');
   assert.ok(contract, 'RULE-SOC-01 declares its propagation contract');
   assert.deepEqual(contract.writes, ['delegations', 'links', 'matrixMarkers']);
-  assert.equal(DEFAULT_POST_COMMIT_RULES.length, 125);
+  assert.equal(DEFAULT_POST_COMMIT_RULES.length, 127);
   assert.equal(PROPAGATION_CONTRACTS.length, DEFAULT_POST_COMMIT_RULES.length, 'one contract per spine rule');
   assert.deepEqual(DEFAULT_POST_COMMIT_RULES.slice(-4).map((rule) => rule.id), ['priorityRule', 'goalCommitmentRule', 'seatRule', 'sealRule'],
     'RULE-SOC-01 stays ahead of the goal-commitment rule (ADR-0193), the seat roll-up and the seal');

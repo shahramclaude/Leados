@@ -329,7 +329,18 @@ test('standalone artifact exists and is a single inline HTML document', () => {
   // Measured build: 13,393,040 bytes / 848 source modules = 15,793 bytes per
   // module, still far below the unchanged 24,000 density guard. The ceiling
   // moves only because real capability was added.
-  assert.ok(bytes < 13_500_000, `standalone file is unexpectedly large (${bytes} bytes)`);
+  // ADR-0208 (Session 277, Schema v162) adds the Investment Case Register: six
+  // domain modules (an exact BigInt appraisal kernel, registry, schema, reader,
+  // actions, rule), one finance panel and one generated diagram (37,516 bytes,
+  // the fifteenth .jpg in app/assets). Two measurements, because the file committed before this
+  // session was older than its own source — it contained neither Session 274's
+  // nor Session 276's code, since neither session rebuilt. Rebuilding that
+  // UNCHANGED tree gives 13,602,723 bytes / 858 modules: already past the
+  // 13,500,000 ceiling, unseen because this test reads the committed file. This
+  // slice adds 160,051 bytes on top. Measured build: 13,762,774 bytes / 865
+  // source modules = 15,910 bytes per module, still far below the unchanged
+  // 24,000 density guard. Ceiling moves to 13,900,000.
+  assert.ok(bytes < 13_900_000, `standalone file is unexpectedly large (${bytes} bytes)`);
   // Derived from the folder, not from a list in this file: the day a panel adds
   // a diagram, an enumerator that names the old two would still pass. Same
   // lesson the build script learned in ADR-0186.

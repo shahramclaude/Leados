@@ -13,6 +13,7 @@ import { STANDARD_WORK_RIGHTS } from './standardWorkRegistry.js';
 import { PRIORITY_BALLOT_RIGHTS } from './priorityRankingRegistry.js';
 import { GOAL_COMMITMENT_RIGHTS } from './goalCommitmentRegistry.js';
 import { GOAL_ATTAINMENT_RIGHTS } from './goalAttainmentRegistry.js';
+import { INVESTMENT_CASE_RIGHTS } from './investmentCaseRegistry.js';
 import { routeVerdict } from './seatRegistry.js';
 import { validateMissionCommands } from './mission.js';
 import { captureBriefCase } from './missionCaptureBrief.js';
@@ -138,6 +139,16 @@ const groups = [
   [GOAL_ATTAINMENT_RIGHTS.READ, 'matrixGoalAttainmentReport matrixGoalAttainmentBriefText matrixGoalAttainmentCsvRows matrixGoalAttainmentAttentionCount'],
   [GOAL_ATTAINMENT_RIGHTS.CLOSE, 'matrixGoalAttainmentClose matrixGoalAttainmentAcknowledge matrixGoalAttainmentCandidates'],
   [GOAL_ATTAINMENT_RIGHTS.GOVERN, 'matrixGoalAttainmentScan matrixGoalAttainmentSetConventions'],
+  // ADR-0208: the investment case register. Its pure reads sit on the read right
+  // and in SAFE_READS. DECLARING a case (and withdrawing it before a decision) is
+  // the proposer's act. RATIFYING and REVIEWING are decision control: the rank
+  // window is director and above, and the ACTION additionally refuses the case's
+  // own benefit owner and any seat that does not hold that owner in its tree or
+  // on a declared line. The scan/conventions stay on the governing right.
+  [INVESTMENT_CASE_RIGHTS.READ, 'investmentCaseReport investmentCaseBriefText investmentCaseCsvRows investmentCaseAttentionCount'],
+  [INVESTMENT_CASE_RIGHTS.DECLARE, 'investmentCaseDeclare investmentCaseWithdraw investmentCasePreview investmentCaseCandidates'],
+  [INVESTMENT_CASE_RIGHTS.RATIFY, 'investmentCaseDecide investmentCaseReview'],
+  [INVESTMENT_CASE_RIGHTS.GOVERN, 'investmentCaseScan investmentCaseSetConventions'],
   // ADR-0148: answering a declared share is TWO first-person acts, split on the
   // spine rather than in prose. `accept-matrix-line` is the manager's own
   // answer (accept or decline the line they were given); it is open at every
@@ -640,6 +651,11 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // projected at the seat's disclosure level. A withheld figure is a printed
 // reason, never a zero.
 'matrixGoalAttainmentReport', 'matrixGoalAttainmentBriefText', 'matrixGoalAttainmentCsvRows', 'matrixGoalAttainmentAttentionCount',
+// ADR-0208: the investment case register is scoped INSIDE the read model — a
+// seat receives the cases whose benefit owner sits in its reporting tree or on a
+// line it holds, and everything else as a count. A refused figure is a printed
+// reason, never a zero.
+'investmentCaseReport', 'investmentCaseBriefText', 'investmentCaseCsvRows', 'investmentCaseAttentionCount',
 'standardWorkReport', 'standardWorkBriefText', 'standardWorkAttentionCount', 'standardWorkCandidates']);
 const refusal = (reason) => ({ ok: false, code: 'scope-refusal', error: reason, field: 'scope' });
 
@@ -716,6 +732,10 @@ const MATRIX_LINE_SCOPED = new Set([
   // proves source/receiving-line holder authority before it writes an act.
   'workReassignmentPropose', 'workReassignmentAccept',
   'workReassignmentDecline', 'workReassignmentWithdraw',
+  // ADR-0208: a declared (or previewed) case names a benefit owner the declaring
+  // seat may reach only through a declared Matrix line; the action re-checks the
+  // tree and the line itself before it reads or records anything.
+  'investmentCaseDeclare', 'investmentCasePreview',
 ]);
 
 /** Exact method allowlist + rank + record/person scope. No arbitrary API names. */

@@ -161,9 +161,11 @@ test('the engine registers its rights, its pause, its export and its place on th
   assert.ok(SAFE_READS.has('matrixGoalAttainmentReport'));
   assert.ok(SAFE_READS.has('matrixGoalAttainmentCsvRows'));
   assert.equal(SAFE_READS.has('matrixGoalAttainmentClose'), false, 'closing a period needs the declared right');
-  // One rule, immediately before seatRule and sealRule, with a matching contract.
+  // One rule, in the closing block before seatRule and sealRule, with a matching
+  // contract. Pinned as an order rather than "third from last": ADR-0208's rule
+  // registered between it and them, and the next one will too.
   const ids = DEFAULT_POST_COMMIT_RULES.map((rule) => rule.id);
-  assert.equal(ids.indexOf('goalAttainmentRule'), ids.length - 3);
+  assert.ok(ids.indexOf('goalAttainmentRule') >= 0 && ids.indexOf('goalAttainmentRule') < ids.indexOf('seatRule'));
   assert.equal(ids.at(-2), 'seatRule');
   assert.equal(ids.at(-1), 'sealRule');
   const contract = PROPAGATION_CONTRACTS.find((row) => row.rule?.id === 'goalAttainmentRule');
@@ -188,8 +190,8 @@ test('v160 is additive, starts empty and invents no closed period', () => {
   old.people = [person('kim', null)];
   old.goals = [goal('g1', 'kim', '2026-09-20', { checkins: [chk('c1', '2026-09-10', 'on-track')] })];
   const next = migrate(old);
-  assert.equal(SCHEMA_VERSION, 161);
-  assert.deepEqual(next.applied.at(-1), '160 → 161');
+  assert.equal(SCHEMA_VERSION, 162);
+  assert.deepEqual(next.applied.at(-1), '161 → 162');
   assert.deepEqual(next.raw.goalAttainmentClosures, []);
   assert.deepEqual(next.raw.goalAttainmentNotes, []);
   assert.deepEqual(next.raw.goalAttainmentMarkers, []);

@@ -182,6 +182,12 @@ export const RECORD_POLICIES = Object.freeze({
   transferPriceMarkers: { classKey: 'unit', detailCeiling: 0, label: 'Transfer-price ask & observation markers', route: '#/matrix?panel=chargeback' },
   chargebackPostings: { classKey: 'unit', detailCeiling: 0, label: 'Chargeback period postings (dated posting/reversal acts; audits re-derived on read)', route: '#/matrix?panel=postings' },
   chargebackPostingMarkers: { classKey: 'unit', detailCeiling: 0, label: 'Chargeback posting ask & observation markers', route: '#/matrix?panel=postings' },
+  // ADR-0208: report-only, like every money ledger above. The raw rows are never
+  // handed to the generic projection; the register's own reader discloses a case
+  // to the seat whose tree or declared line holds its benefit owner.
+  investmentCases: { classKey: 'unit', detailCeiling: 0, label: 'Investment cases (report only; every figure re-derived on read)', route: '#/finance?panel=cases' },
+  investmentCaseActs: { classKey: 'unit', detailCeiling: 0, label: 'Investment case ratification, withdrawal and review acts (report only)', route: '#/finance?panel=cases' },
+  investmentCaseMarkers: { classKey: 'unit', detailCeiling: 0, label: 'Investment case review observation markers', route: '#/finance?panel=cases' },
   delegationLineActs: { classKey: 'unit', detailCeiling: 0, label: 'Cross-line ask attribution acts (report only)', route: '#/matrix?panel=asks' },
   delegationLineMarkers: { classKey: 'unit', detailCeiling: 0, label: 'Cross-line overload reconciliation markers', route: '#/matrix?panel=asks' },
   // ADR-0181: classification acts and RULE-NPW-01 markers are surfaced only
@@ -683,6 +689,16 @@ export const ACTION_RIGHTS = Object.freeze({
   'read-goal-attainment': { minRank: 1, maxRank: 5, label: 'Read the goal attainment period close and restatement register' },
   'close-goal-attainment': { minRank: 4, maxRank: 5, label: 'Close an ended period’s attainment figures, or acknowledge one exact restatement of them' },
   'govern-goal-attainment': { minRank: 3, maxRank: 5, label: 'Scan restatements and set the goal-attainment ask window' },
+  // ADR-0208: reading investment cases is open at every altitude and scoped by
+  // the reader to the seat's own span. DECLARING a case is a manager's act and
+  // above — a frontline lead's horizon is the week, and a capital promise is not
+  // a week's work. RATIFYING and REVIEWING are decision control, which starts at
+  // the director altitude and is the executive altitude's own decision form
+  // ("investment & risk appetite"); the action further refuses the benefit owner.
+  'read-investment-cases': { minRank: 1, maxRank: 5, label: 'Read the investment case register for your own span' },
+  'declare-investment-case': { minRank: 2, maxRank: 5, label: 'Declare a dated investment case, or withdraw one before it is decided' },
+  'ratify-investment-case': { minRank: 3, maxRank: 5, label: 'Ratify or refuse an investment case, or record its post-completion review — never as its benefit owner' },
+  'govern-investment-cases': { minRank: 3, maxRank: 5, label: 'Scan due post-completion reviews and set the investment-case ask window' },
   // ADR-0150: onboarding a person into a matrix. Writing a line's brief is the act
   // of the manager who HOLDS that line, at whatever altitude that line's manager
   // sits (a project lead with no home-line reports gets this exactly as a

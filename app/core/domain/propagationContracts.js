@@ -138,6 +138,7 @@ import { stationCoverageRule } from './stationCoverageRules.js';
 import { priorityRule } from './priorityRankingRules.js';
 import { goalCommitmentRule } from './goalCommitmentRules.js';
 import { goalAttainmentRule } from './goalAttainmentRules.js';
+import { investmentCaseRule } from './investmentCaseRules.js';
 import { sealRule } from './sealRules.js';
 // ADR-0092: the Differencing Defender declares its contract like every other rule.
 import { differencingRule } from './differencingRules.js';
@@ -1100,6 +1101,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'goalAttainmentRules.js',
     purpose: 'RULE-GAR-01: reads the Goal Attainment Period Close & Restatement Register (`buildGoalAttainment`, ADR-0206) with the whole-workspace view on period closes, acknowledgements, goal and check-in writes, due-date and owner edits, reporting-line and roster changes, recorded structure changes, convention changes and explicit `goalAttainment.scan` / `matrix.scan` scans. ONE condition, filed at most once per (closure, restatement fingerprint) with a deterministic `gar1:…` signature and bounded at 4 per commit with the remainder counted: `restated-period` — a CLOSED period that no longer reproduces the figures reported for it (goals added to or removed from the period, an attainment bucket moved, a goal moved span, or both) while no dated acknowledgement of THAT exact fingerprint is on file — addressed to the LOWEST JOINT APEX of the spans whose printed figures moved, because the restatement is a fact about those spans and no single one of them owns it. A period that still reproduces, a period that cannot be re-derived (the record is missing, not restated) and an acknowledged restatement are all left alone; a moved ownerless slice carries no holder and never becomes part of an apex. Asks carry typed `issues-obligation` and matrix-DAG `rolls-up-to` provenance and close themselves when the restatement is acknowledged or the period reproduces again. A no-holder, unresolved-apex, leader-held or off-roster condition records ONE identity-free `goalAttainmentMarkers` observation (kind: `goal-attainment`) and substitutes nobody. It never edits a goal, a check-in, a due date, an owner or a closed figure, never re-closes a period, never infers attainment from prose and never rates a person; pausable via `goalAttainmentAutoPropagate` (the pause governs EVERY path, including explicit scans).',
     writes: ['delegations', 'links', 'goalAttainmentMarkers'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: investmentCaseRule,
+    module: 'investmentCaseRules.js',
+    purpose: 'RULE-ICA-01: reads the Investment Case Register (`investmentCaseDueReviews`, ADR-0208) with the whole-workspace view on case declarations, ratifications, withdrawals and reviews, roster and reporting-line changes, convention changes and explicit `investmentCase.scan` scans — and on any other commit, because a review falls due by the calendar. ONE condition, filed at most once per (case, review day) with a deterministic `ica1:…` signature and bounded at 4 per commit with the remainder counted: `review-due` — a RATIFIED case has reached a review day it declared and no review is recorded up to it. The ask goes to decision CONTROL and never to the benefit owner: the seat that ratified, while it is on the roster, holds the altitude to ratify and still sits above the owner; otherwise the lowest seat above EVERY one of the owner’s active reporting lines that holds that altitude (the joint apex of the owner’s managers, resolved through `buildMatrix` once). Where control sits with the workspace leader, the lines share no single apex, or neither ratifier nor owner is on the roster, it writes ONE identity-free `investmentCaseMarkers` observation and asks nobody. Asks self-close when the review is recorded or control moves. It never records a review, never ratifies or refuses a case, never appraises, never moves money, never edits an envelope and never rates a person. Pause-governed on every path (`investmentCaseAutoPropagate`), including the explicit scan.',
+    writes: ['delegations', 'links', 'investmentCaseMarkers'],
     emits: [],
     scansWorkspace: true,
   },

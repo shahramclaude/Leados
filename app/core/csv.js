@@ -203,6 +203,12 @@ import { STATION_COVERAGE_CSV_COLUMNS, STATION_COVERAGE_CSV_DESCRIPTOR } from '.
 // positional code and no person, manager, goal id, title, label, note or reason.
 import { buildGoalAttainment, goalAttainmentCsvRows } from './domain/goalAttainment.js';
 import { GOAL_ATTAINMENT_CSV_COLUMNS, GOAL_ATTAINMENT_CSV_DESCRIPTOR } from './domain/goalAttainmentRegistry.js';
+// ADR-0208 (Schema v162): the Investment Case Register (CSV scope #150). One
+// workspace row, one row per currency, one row per case under an opaque
+// positional code and one track-record row — no person, manager, case id, title,
+// note or reason. Currencies are never pooled; a refused figure exports BLANK.
+import { buildInvestmentCases, investmentCaseCsvRows } from './domain/investmentCase.js';
+import { INVESTMENT_CASE_CSV_COLUMNS, INVESTMENT_CASE_CSV_DESCRIPTOR } from './domain/investmentCaseRegistry.js';
 import { buildPausePermits, pausePermitCsvRows } from './domain/pausePermits.js';
 import { PAUSE_PERMIT_CSV_COLUMNS, PAUSE_PERMIT_CSV_DESCRIPTOR } from './domain/pausePermitRegistry.js';
 import { STRUCTURE_HISTORY_CSV_COLUMNS } from './domain/structureHistoryRegistry.js';
@@ -1421,6 +1427,11 @@ export const CSV_EXPORTS = [
   // title, period label, note or reason text; a span exports as `S01` and a
   // withheld figure exports BLANK with its reason, never zero.
   GOAL_ATTAINMENT_CSV_DESCRIPTOR,
+  // #150 (ADR-0208): investment case appraisals and post-completion reviews —
+  // identity-free. No person, manager, case id, title, note or reason text; a
+  // case exports as `C01`, currencies are never pooled, net present values are
+  // never added across cases, and a refused figure exports BLANK with its reason.
+  INVESTMENT_CASE_CSV_DESCRIPTOR,
 ];
 
 function personLookup(state) {
@@ -6617,6 +6628,18 @@ export function buildScopeTable(state, scope, now) {
       // manager, ask title or free text crosses the boundary.
       const report = buildWorkTurns(state, { now, settings: state.settings || {} });
       return { columns: WORK_TURN_CSV_COLUMNS.map((key) => ({ key, header: key })), rows: workTurnCsvRows(report) };
+    }
+    case 'investment-case-appraisals': {
+      // CSV scope #150 (ADR-0208, Schema v162). Built from the SAME reader the
+      // panel renders, so an exported figure is provably the figure that was
+      // printed. A case is exported under a positional code; no person, manager,
+      // case id, title, note or reason reaches the file. A figure that cannot be
+      // claimed prints its reason; it is never a zero.
+      const report = buildInvestmentCases(state, { now, settings: state.settings || {}, seat: null });
+      return {
+        columns: INVESTMENT_CASE_CSV_COLUMNS.map((key) => ({ key, header: key })),
+        rows: investmentCaseCsvRows(report),
+      };
     }
     case 'goal-attainment-closures': {
       // CSV scope #149 (ADR-0206, Schema v160). Built from the SAME reader the

@@ -189,6 +189,7 @@ import { stationCoverageRule } from './stationCoverageRules.js';
 import { priorityRule } from './priorityRankingRules.js';
 import { goalCommitmentRule } from './goalCommitmentRules.js';
 import { goalAttainmentRule } from './goalAttainmentRules.js';
+import { investmentCaseRule } from './investmentCaseRules.js';
 
 
 // ADR-0087: the Operating Cadence Clock. Reads the finished queue after the
@@ -1127,6 +1128,18 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // and never rates a person. Registered immediately before `seatRule` and
   // `sealRule`.
   goalAttainmentRule,
+  // ADR-0208: the Investment Case Register (RULE-ICA-01). ONE condition: a
+  // RATIFIED case has reached a review day it declared and no review is recorded
+  // up to it. The review is owed to decision CONTROL, never to the benefit owner:
+  // the seat that ratified while it still sits above the owner, otherwise the
+  // lowest seat above EVERY one of the owner's active lines that holds the
+  // altitude to ratify. Where control sits with the workspace leader, the lines
+  // share no single apex or nobody is left on the roster, it records an
+  // identity-free `investmentCaseMarkers` observation and asks nobody. It never
+  // records a review, never ratifies, never judges whether a case delivered,
+  // never moves money and never rates a person. Registered immediately before
+  // `seatRule` and `sealRule`.
+  investmentCaseRule,
   // ADR-0076: the Operating Seat (vertical roll-up + enforced boundaries).
   // It reads the finished record after every module has propagated, then fans
   // each open item up every leadership ancestor in the reporting tree with one

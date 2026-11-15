@@ -154,6 +154,7 @@ import { budgetsRollup } from './core/domain/finance.js';
 import { stakeholdersRollup } from './core/domain/stakeholders.js';
 import { renderNegotiations, renderNegotiationDetail } from './views/negotiation.js';
 import { renderFinance, renderBudgetDetail } from './views/finance.js';
+import { investmentCaseAttentionCount } from './core/domain/investmentCase.js';
 import { renderStakeholders, renderStakeholderDetail } from './views/stakeholders.js';
 import { renderForecasts } from './views/forecasts.js';
 import { renderTempo, tempoDebtCount } from './views/tempo.js';
@@ -1581,7 +1582,12 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       watch: buildWatchReport(state, at).queue.length,
       changes: changesRollup(state, at).attention.length,
       negotiations: negotiationsRollup(state, at).attention.length,
-      finance: budgetsRollup(state, at).attention.length,
+      // ADR-0208: envelopes needing attention, plus the investment cases THIS
+      // seat owes an act on — proposals it may ratify and post-completion reviews
+      // it owes. Counted from lifecycle and reach alone: this badge sits on every
+      // route, so it appraises no case and never reads the reporting graph.
+      finance: budgetsRollup(state, at).attention.length
+        + investmentCaseAttentionCount(state, { now: at, seat: seatCtx?.seat || null }),
       stakeholders: stakeholdersRollup(state, at).attention.length,
       forecast: (() => {
         const report = forecastIntegrityReport(state, at);
