@@ -52,7 +52,7 @@ import {
   PAUSE_PERMIT_DETAIL_REASONS,
   PAUSE_PERMIT_LIMITS,
   PAUSE_PERMIT_METHOD,
-  PAUSE_PERMIT_REACH_RULES,
+  PAUSE_PERMIT_SWITCH_RULES,
   PAUSE_PERMIT_RIGHTS,
   PAUSE_PERMIT_SETTING_KEYS,
   PAUSE_PERMIT_STATES,
@@ -198,7 +198,7 @@ export function buildPausePermits(state, { now = new Date(), settings = null, ma
       revokedById: p.revokedById,
       state: stateKey,
       reachesMatrix: pausePermitReachesMatrix(p.key),
-      reachRule: PAUSE_PERMIT_REACH_RULES[p.key] || null,
+      reachRule: PAUSE_PERMIT_SWITCH_RULES[p.key] || null,
     });
   }
   board.permitsTotalN = permits.length;
@@ -262,7 +262,7 @@ export function buildPausePermits(state, { now = new Date(), settings = null, ma
       stateLabel: PAUSE_PERMIT_STATE_LABELS[stateKey],
       stateReason: PAUSE_PERMIT_STATE_REASONS[stateKey],
       reachesMatrix: pausePermitReachesMatrix(key),
-      reachRule: PAUSE_PERMIT_REACH_RULES[key] || null,
+      reachRule: PAUSE_PERMIT_SWITCH_RULES[key] || null,
       permitN: history.length,
       permit: live
         ? {

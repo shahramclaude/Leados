@@ -45,6 +45,7 @@ import {
   PAUSE_PERMIT_CSV_COLUMNS,
   PAUSE_PERMIT_MATRIX_REACH_SWITCHES,
   PAUSE_PERMIT_REACH_RULES,
+  PAUSE_PERMIT_SWITCH_RULES,
   PAUSE_PERMIT_RULE_ID,
   PAUSE_PERMIT_STATES,
 } from '../../app/core/domain/pausePermitRegistry.js';
@@ -299,13 +300,14 @@ test('the switches claimed to reach a second reporting line are exactly the swit
   // module that reads the reporting graph AND is gated by a switch is listed.
   const spine = fs.readFileSync(path.join(root, 'postCommit.js'), 'utf8');
   const imported = [...spine.matchAll(/from '\.\/([A-Za-z0-9]+Rules\.js)'/g)].map((m) => m[1]);
-  const claimed = new Set(Object.values(PAUSE_PERMIT_REACH_RULES));
+  const claimed = new Set(Object.keys(PAUSE_PERMIT_REACH_RULES));
+  const vocabulary = fixture().settings;
   for (const ruleModule of new Set(imported)) {
     const src = fs.readFileSync(path.join(root, ruleModule), 'utf8');
     if (!/buildMatrix|reportingLines|matrixLineScope|matrixJointApex|personAllocation/.test(src)) continue;
     const gated = [...src.matchAll(/([a-z][A-Za-z0-9]*Auto[A-Z][a-z]+)\s*(?:===|\!==)/g)].map((m) => m[1]);
     for (const key of gated) {
-      const carried = fs.readFileSync(path.join(root, '../schema.js'), 'utf8').includes(key);
+      const carried = Object.hasOwn(vocabulary, key);
       if (!carried) continue;
       assert.ok(claimed.has(key), `${key} gates ${ruleModule}, which reads the reporting graph, so it belongs on the reach list`);
     }
@@ -562,4 +564,28 @@ test('the census is derived from the settings in force, so a new engine’s swit
   assert.equal(report.board.switchesDeclaredN, switches.length);
   assert.equal(report.board.states.on, switches.length, 'a new workspace has every switch on');
   assert.equal(report.board.reachSwitchesN, PAUSE_PERMIT_MATRIX_REACH_SWITCHES.length);
+});
+
+
+test('owner-directed controls survive the real permit door and reload without claiming matrix reach', () => {
+  for (const key of ['synergyAutoPropagate', 'earnedValueAutoPropagate']) {
+    const { api, store, map } = seed(fixture());
+    assert.equal(store.state.settings[key], true);
+    const result = api.updateSettings({ [key]: false }, GOOD_PERMIT(key));
+    assert.equal(result.ok, true, result.error);
+    const bytes = JSON.parse(map.get(STORAGE_KEY));
+    assert.equal(bytes.settings[key], false);
+    assert.equal(bytes.pausePermits.length, 1);
+    assert.equal(bytes.pausePermits[0].key, key);
+    const reboot = seed(bytes);
+    assert.equal(reboot.store.state.settings[key], false);
+    assert.deepEqual(reboot.store.state.pausePermits, store.state.pausePermits);
+    const report = read(reboot.store.state);
+    const row = report.switches.find((r) => r.key === key);
+    assert.equal(row.stateKey, 'permitted');
+    assert.equal(row.reachesMatrix, false);
+    assert.equal(row.reachRule, PAUSE_PERMIT_SWITCH_RULES[key]);
+    assert.equal(report.board.reachOffN, 0);
+    assert.equal(Object.hasOwn(PAUSE_PERMIT_REACH_RULES, key), false);
+  }
 });
