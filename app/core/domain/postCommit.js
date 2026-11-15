@@ -198,6 +198,9 @@ import { standardWaiverRule } from './standardWaiverRules.js';
 // ADR-0215 (Schema v169): the Speak-Up Concern Routing & Impartiality Register
 // (RULE-SUP-01).
 import { speakUpRule } from './speakUpRules.js';
+// ADR-0216 (Schema v170): the Deal Thesis & Synergy Realization Register
+// (RULE-SYN-01).
+import { synergyRule } from './synergyRules.js';
 
 
 // ADR-0087: the Operating Cadence Clock. Reads the finished queue after the
@@ -1210,6 +1213,17 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // delegation is readable above the receiver, so an informative ask would leak it
   // to exactly the people the route was chosen to avoid. It never acknowledges,
   // resolves, checks, closes or withdraws anything and never rates a person.
+  // ADR-0216: the Deal Thesis & Synergy Realization Register. ONE rule reads the
+  // finished register with the whole-workspace view and files at most one dated
+  // ask per promise whose phase is due with no verification, or whose newest
+  // verification has gone stale — to the promise's OWNER, in text that names no
+  // deal, no lever and no amount, because a delegation is readable above the
+  // owner. A promise whose owner has left the roster, and a reading whose verifier
+  // is no longer above the owner, write ONE identity-free `synergyMarkers`
+  // observation and ask nobody. It never records a reading, verifies anything
+  // itself, edits a promise or a ladder, or rates a person. Registered
+  // immediately before `speakUpRule`, `seatRule` and `sealRule`.
+  synergyRule,
   // Registered immediately before `seatRule` and `sealRule`.
   speakUpRule,
   // ADR-0076: the Operating Seat (vertical roll-up + enforced boundaries).

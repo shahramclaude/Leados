@@ -44,6 +44,10 @@ import { renderFinanceInvestmentCasePanel } from './financeInvestmentCasePanel.j
 import { renderFinanceCapitalRationingPanel } from './capitalRationingPanel.js';
 import { renderFinanceFlexBudgetPanel } from './flexBudgetPanel.js';
 import { renderFinanceValueBridgePanel } from './valueBridgePanel.js';
+// ADR-0216: the seventh finance panel. An envelope says what may be spent; a
+// case says what spending returns; a deal thesis says what the combination
+// promised, who promised it, and whether anybody verified it.
+import { renderFinanceDealSynergyPanel } from './dealSynergyPanel.js';
 
 const STATUS_TONE = { active: 'good', closed: 'neutral', archived: 'neutral' };
 const LINE_TONE = { planned: 'neutral', committed: 'info', spent: 'good', released: 'neutral' };
@@ -121,10 +125,13 @@ const FINANCE_PANELS = [
   { key: 'variance', label: 'Variance statements', href: '#/finance?panel=variance' },
   // ADR-0214: what moved the owners' claim on the company, and whose leg it was.
   { key: 'value', label: 'Enterprise value', href: '#/finance?panel=value' },
+  // ADR-0216: what an acquisition promised, by lever and by owner, and what was
+  // verified against it.
+  { key: 'synergy', label: 'Deal synergy', href: '#/finance?panel=synergy' },
 ];
 
-function financePanelTabs(ctx, panel, { envelopes = undefined, queue = undefined, cases = undefined, rationing = undefined, variance = undefined, value = undefined } = {}) {
-  const counts = { envelopes, span: queue, cases, rationing, variance, value };
+function financePanelTabs(ctx, panel, { envelopes = undefined, queue = undefined, cases = undefined, rationing = undefined, variance = undefined, value = undefined, synergy = undefined } = {}) {
+  const counts = { envelopes, span: queue, cases, rationing, variance, value, synergy };
   return tabs({
     ariaLabel: 'Budget & finance views',
     active: panel,
@@ -177,6 +184,16 @@ function valueBridgeTabCount(ctx) {
   return result?.ok && result.count > 0 ? result.count : undefined;
 }
 
+/**
+ * ADR-0216: promises due with no verification, verified short of the promise, or
+ * carrying a stale verification. Read through the seat-checked API, so the count
+ * is the one the panel itself prints; a refused read shows no count.
+ */
+function synergyTabCount(ctx) {
+  const result = typeof ctx.api?.synergyAttentionCount === 'function' ? ctx.api.synergyAttentionCount() : null;
+  return result?.ok && result.count > 0 ? result.count : undefined;
+}
+
 /** Downloads are allowed to fail in a browser; then the ledger stays copyable. */
 function downloadOrCopy({ filename, text, title }) {
   if (downloadText({ filename, text, mime: 'text/plain' })) {
@@ -195,7 +212,7 @@ function downloadOrCopy({ filename, text, title }) {
 
 export function renderFinance(ctx) {
   const requestedPanel = ctx.query?.get?.('panel');
-  const panel = requestedPanel === 'span' || requestedPanel === 'cases' || requestedPanel === 'rationing' || requestedPanel === 'variance' || requestedPanel === 'value' ? requestedPanel : 'envelopes';
+  const panel = requestedPanel === 'span' || requestedPanel === 'cases' || requestedPanel === 'rationing' || requestedPanel === 'variance' || requestedPanel === 'value' || requestedPanel === 'synergy' ? requestedPanel : 'envelopes';
   const seat = ctx.seatContext?.seat || null;
   const built = ctx.seatContext?.built || null;
   // One evaluator, two readings: the exposure re-evaluates the SAME envelopes
@@ -206,6 +223,7 @@ export function renderFinance(ctx) {
   const rationingCount = capitalRationingTabCount(ctx);
   const varianceCount = flexBudgetTabCount(ctx);
   const valueCount = valueBridgeTabCount(ctx);
+  const synergyCount = synergyTabCount(ctx);
   if (panel === 'cases') {
     // ADR-0208: the register renders itself from its own seat-checked reader;
     // this view only lends it the shared finance navigation.
@@ -216,6 +234,22 @@ export function renderFinance(ctx) {
         cases: casesCount,
         rationing: rationingCount,
         variance: varianceCount,
+        synergy: synergyCount,
+      }),
+    });
+  }
+  if (panel === 'synergy') {
+    // ADR-0216: the register renders itself from its own seat-checked reader;
+    // this view only lends it the shared finance navigation.
+    return renderFinanceDealSynergyPanel(ctx, {
+      tabs: financePanelTabs(ctx, panel, {
+        envelopes: budgetsRollup(ctx.state, ctx.now).all.length,
+        queue: exposure.queue.length + exposure.queueDeferred,
+        cases: casesCount,
+        rationing: rationingCount,
+        variance: varianceCount,
+        value: valueCount,
+        synergy: synergyCount,
       }),
     });
   }
@@ -230,6 +264,7 @@ export function renderFinance(ctx) {
         rationing: rationingCount,
         variance: varianceCount,
         value: valueCount,
+        synergy: synergyCount,
       }),
     });
   }
@@ -243,6 +278,7 @@ export function renderFinance(ctx) {
         cases: casesCount,
         rationing: rationingCount,
         variance: varianceCount,
+        synergy: synergyCount,
       }),
     });
   }
@@ -256,6 +292,7 @@ export function renderFinance(ctx) {
         cases: casesCount,
         rationing: rationingCount,
         variance: varianceCount,
+        synergy: synergyCount,
       }),
     });
   }

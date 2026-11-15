@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * scripts/sweep-schema-pins.mjs — mechanical release-pin sweep, re-pointed at
- * every schema bump. Current target: v168 → v169 (ADR-0215, Session 288).
+ * every schema bump. Current target: v169 → v170 (ADR-0216, Session 289).
  * ADR-0213 adds CSV scope #155 and NO rule on the shared spine, so
  * `spineRules` is null for this release.
  *
@@ -54,9 +54,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const SWEEP = {
-  schema: { from: 168, to: 169 },
-  csvExports: { from: [156], to: 157 },
-  spineRules: { from: [131], to: 132 },
+  schema: { from: 169, to: 170 },
+  csvExports: { from: [157], to: 158 },
+  spineRules: { from: [132], to: 133 },
 };
 
 const ROOT = path.resolve(import.meta.dirname, '..');

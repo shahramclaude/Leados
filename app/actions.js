@@ -107,6 +107,10 @@ import { createFlexBudgetActions } from './core/domain/flexBudgetActions.js';
 // legs, and a leg owner declared rather than guessed.
 import { createValueBridgeActions } from './core/domain/valueBridgeActions.js';
 import { createSpeakUpActions } from './core/domain/speakUpActions.js';
+// ADR-0216: the deal thesis & synergy realization register — a dated promise
+// with a phased ladder, a reading that is claimed or verified, one-off cost to
+// achieve, and a contested saving counted nowhere.
+import { createSynergyActions } from './core/domain/synergyActions.js';
 import { createWorkRestActions } from './core/domain/workRestActions.js';
 import { createConflictRecusalActions } from './core/domain/conflictRecusalActions.js';
 // ADR-0148: Matrix Line Consent. A declared share is an ask until the line's
@@ -20310,6 +20314,9 @@ export function createApi(store, options = {}) {
   // ADR-0215: the speak-up register. Every read is seat-projected inside the
   // action; every write re-proves the right, the reporter and the receiver.
   Object.assign(api, createSpeakUpActions(store, { now: clock, idFactory: id }));
+  // ADR-0216: the deal synergy register. Every read re-derives every figure;
+  // every write re-proves the right, the owner's reach and the verifier's place.
+  Object.assign(api, createSynergyActions(store, { now: clock, idFactory: id }));
   // ADR-0209: the Cross-Line Work/Rest Recovery Ledger — recording a shift for a
   // line the acting seat HOLDS, its actual times or cancellation, a line's
   // coverage attestation, and the declared policy. No act moves or cancels a
