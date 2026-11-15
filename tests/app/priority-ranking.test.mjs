@@ -208,12 +208,12 @@ function withDom(run) {
 /* ---------------------------------------------------------- 1. registration */
 
 test('registration: schema v151, two ledgers, CSV #144, RULE-SOC-01 as spine rule 121, rights and pause switch', () => {
-  assert.equal(SCHEMA_VERSION, 166);
+  assert.equal(SCHEMA_VERSION, 167);
   for (const key of ['priorityRounds', 'priorityBallots']) assert.ok(COLLECTIONS.includes(key), `${key} is a declared collection`);
   const scope = CSV_EXPORTS.find((entry) => entry.key === PRIORITY_BALLOT_CSV_SCOPE);
   assert.ok(scope, 'CSV #144 is registered');
   assert.equal(scope.sensitive, false, 'the export is aggregate-only');
-  assert.equal(CSV_EXPORTS.length, 154);
+  assert.equal(CSV_EXPORTS.length, 155);
   const contract = PROPAGATION_CONTRACTS.find((c) => c.rule?.id === 'priorityRule');
   assert.ok(contract, 'RULE-SOC-01 declares its propagation contract');
   assert.deepEqual(contract.writes, ['delegations', 'links', 'matrixMarkers']);

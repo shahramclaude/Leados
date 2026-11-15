@@ -116,21 +116,21 @@ function harness(initial) {
 /* ------------------------------------------------------------------ 1. schema */
 
 test('schema v80 is additive and invents no reading, marker or moved date', () => {
-  assert.equal(SCHEMA_VERSION, 166);
+  assert.equal(SCHEMA_VERSION, 167);
   const v79 = { ...createEmptyState(NOW.toISOString()), schemaVersion: 79 };
   delete v79.solvencyReadings;
   delete v79.solvencyMarkers;
   delete v79.solvencyRenegotiations;
   const migrated = migrate(v79);
-  assert.equal(migrated.applied.at(-1), '165 → 166', 'the whole chain runs to the current schema');
+  assert.equal(migrated.applied.at(-1), '166 → 167', 'the whole chain runs to the current schema');
   assert.deepEqual(migrated.raw.solvencyReadings, []);
   assert.deepEqual(migrated.raw.solvencyMarkers, []);
   assert.deepEqual(migrated.raw.solvencyRenegotiations, []);
   assert.equal(MIGRATIONS[79] !== undefined, true);
   const normalized = normalizeState(migrated.raw, { now: NOW }).state;
   assert.deepEqual(normalized.solvencyReadings, []);
-  assert.equal(normalized.schemaVersion, 166);
-  assert.equal(normalized.schemaVersion, 166);
+  assert.equal(normalized.schemaVersion, 167);
+  assert.equal(normalized.schemaVersion, 167);
 });
 
 test('the three normalizers are fail-closed and drop what they cannot read', () => {
@@ -598,7 +598,7 @@ test('insights carry the domain, and the badge counts only what is urgent', () =
 });
 
 test('CSV scope #70 exports aggregates only, and a refusal is blank rather than zero', () => {
-  assert.equal(CSV_EXPORTS.length, 154);
+  assert.equal(CSV_EXPORTS.length, 155);
   const scope = CSV_EXPORTS.find((e) => e.key === 'promise-solvency');
   assert.ok(scope);
   const state = buildDemoState(NOW);

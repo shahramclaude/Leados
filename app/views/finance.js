@@ -42,6 +42,7 @@ import {
 // an investment case says what the spending is promised to return.
 import { renderFinanceInvestmentCasePanel } from './financeInvestmentCasePanel.js';
 import { renderFinanceCapitalRationingPanel } from './capitalRationingPanel.js';
+import { renderFinanceFlexBudgetPanel } from './flexBudgetPanel.js';
 
 const STATUS_TONE = { active: 'good', closed: 'neutral', archived: 'neutral' };
 const LINE_TONE = { planned: 'neutral', committed: 'info', spent: 'good', released: 'neutral' };
@@ -115,10 +116,12 @@ const FINANCE_PANELS = [
   { key: 'span', label: 'Span exposure', href: '#/finance?panel=span' },
   { key: 'cases', label: 'Investment cases', href: '#/finance?panel=cases' },
   { key: 'rationing', label: 'Capital rationing', href: '#/finance?panel=rationing' },
+  // ADR-0213: why cost differs from budget — volume, price or usage.
+  { key: 'variance', label: 'Variance statements', href: '#/finance?panel=variance' },
 ];
 
-function financePanelTabs(ctx, panel, { envelopes = undefined, queue = undefined, cases = undefined, rationing = undefined } = {}) {
-  const counts = { envelopes, span: queue, cases, rationing };
+function financePanelTabs(ctx, panel, { envelopes = undefined, queue = undefined, cases = undefined, rationing = undefined, variance = undefined } = {}) {
+  const counts = { envelopes, span: queue, cases, rationing, variance };
   return tabs({
     ariaLabel: 'Budget & finance views',
     active: panel,
@@ -151,6 +154,16 @@ function capitalRationingTabCount(ctx) {
   return result?.ok && result.count > 0 ? result.count : undefined;
 }
 
+/**
+ * ADR-0213: variance statements this seat may record against whose FINAL
+ * actuals are past due. Read through the seat-checked API, so the count is the
+ * one the panel itself prints; a refused read shows no count.
+ */
+function flexBudgetTabCount(ctx) {
+  const result = typeof ctx.api?.flexBudgetAttentionCount === 'function' ? ctx.api.flexBudgetAttentionCount() : null;
+  return result?.ok && result.count > 0 ? result.count : undefined;
+}
+
 /** Downloads are allowed to fail in a browser; then the ledger stays copyable. */
 function downloadOrCopy({ filename, text, title }) {
   if (downloadText({ filename, text, mime: 'text/plain' })) {
@@ -169,7 +182,7 @@ function downloadOrCopy({ filename, text, title }) {
 
 export function renderFinance(ctx) {
   const requestedPanel = ctx.query?.get?.('panel');
-  const panel = requestedPanel === 'span' || requestedPanel === 'cases' || requestedPanel === 'rationing' ? requestedPanel : 'envelopes';
+  const panel = requestedPanel === 'span' || requestedPanel === 'cases' || requestedPanel === 'rationing' || requestedPanel === 'variance' ? requestedPanel : 'envelopes';
   const seat = ctx.seatContext?.seat || null;
   const built = ctx.seatContext?.built || null;
   // One evaluator, two readings: the exposure re-evaluates the SAME envelopes
@@ -178,6 +191,7 @@ export function renderFinance(ctx) {
   const exposure = buildBudgetExposure(ctx.state, { now: ctx.now, seat, built });
   const casesCount = investmentCaseTabCount(ctx);
   const rationingCount = capitalRationingTabCount(ctx);
+  const varianceCount = flexBudgetTabCount(ctx);
   if (panel === 'cases') {
     // ADR-0208: the register renders itself from its own seat-checked reader;
     // this view only lends it the shared finance navigation.
@@ -186,6 +200,21 @@ export function renderFinance(ctx) {
         envelopes: budgetsRollup(ctx.state, ctx.now).all.length,
         queue: exposure.queue.length + exposure.queueDeferred,
         cases: casesCount,
+        rationing: rationingCount,
+        variance: varianceCount,
+      }),
+    });
+  }
+  if (panel === 'variance') {
+    // ADR-0213: the variance statement renders itself from its own seat-checked
+    // reader; this view only lends it the shared finance navigation.
+    return renderFinanceFlexBudgetPanel(ctx, {
+      tabs: financePanelTabs(ctx, panel, {
+        envelopes: budgetsRollup(ctx.state, ctx.now).all.length,
+        queue: exposure.queue.length + exposure.queueDeferred,
+        cases: casesCount,
+        rationing: rationingCount,
+        variance: varianceCount,
       }),
     });
   }
@@ -198,6 +227,7 @@ export function renderFinance(ctx) {
         queue: exposure.queue.length + exposure.queueDeferred,
         cases: casesCount,
         rationing: rationingCount,
+        variance: varianceCount,
       }),
     });
   }
@@ -232,7 +262,7 @@ export function renderFinance(ctx) {
       subtitle: 'One ledger for the money question — what envelope you have, what is already committed against it, what has actually landed, and whether the forecast breaches. Breaches open a DACI trade-off automatically; completed funded work prompts for evidenced actuals.',
       actions: [button('Create budget envelope', () => openBudgetDialog(ctx), true)],
     }),
-    financePanelTabs(ctx, panel, { envelopes: rollup.all.length, queue: exposure.queue.length + exposure.queueDeferred, cases: casesCount, rationing: rationingCount }),
+    financePanelTabs(ctx, panel, { envelopes: rollup.all.length, queue: exposure.queue.length + exposure.queueDeferred, cases: casesCount, rationing: rationingCount, variance: varianceCount }),
     ctx.persistError
       ? card({ body: h('p', { class: 'text-warn small' }, `Changes are not being saved: ${ctx.persistError}`) })
       : null,

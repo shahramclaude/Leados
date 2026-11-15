@@ -148,14 +148,14 @@ function read(store, now = T0) {
  */
 
 test('registration: schema v166, four ledgers, CSV #154, RULE-TSW-01 as spine rule 131, rights, pause and contract', () => {
-  assert.equal(SCHEMA_VERSION, 166);
+  assert.equal(SCHEMA_VERSION, 167);
   for (const key of ['standardWaiverRequests', 'standardWaiverGrants', 'standardWaiverDecisions', 'standardWaiverMarkers']) {
     assert.ok(COLLECTIONS.includes(key), `${key} is a declared collection`);
   }
   const scope = CSV_EXPORTS.find((entry) => entry.key === STANDARD_WAIVER_CSV_SCOPE);
   assert.ok(scope, 'CSV #154 is registered');
   assert.equal(scope.sensitive, false, 'the export is aggregate-only');
-  assert.equal(CSV_EXPORTS.length, 154);
+  assert.equal(CSV_EXPORTS.length, 155);
   assert.equal(DEFAULT_POST_COMMIT_RULES.length, 131);
   assert.equal(PROPAGATION_CONTRACTS.length, DEFAULT_POST_COMMIT_RULES.length, 'one contract per spine rule');
   const ids = DEFAULT_POST_COMMIT_RULES.map((rule) => rule.id);
@@ -196,7 +196,7 @@ test('migration 165 → 166 adds four EMPTY ledgers and the conventions; no waiv
   v165.settings = { ...v165.settings };
   for (const key of Object.values(STANDARD_WAIVER_SETTING_KEYS)) delete v165.settings[key];
   const next = MIGRATIONS[165](v165);
-  assert.equal(next.schemaVersion, 166);
+  assert.equal(next.schemaVersion, 167);
   assert.deepEqual(next.standardWaiverRequests, []);
   assert.deepEqual(next.standardWaiverGrants, []);
   assert.deepEqual(next.standardWaiverDecisions, []);
