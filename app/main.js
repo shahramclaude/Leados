@@ -311,6 +311,7 @@ import { standardWorkAttentionCount } from './core/domain/standardWork.js';
 import { standardWaiverAttentionCount } from './core/domain/standardWaiver.js';
 import { flexBudgetAttentionCount } from './core/domain/flexBudget.js';
 import { valueBridgeAttentionCount } from './core/domain/valueBridge.js';
+import { synergyAttentionCount } from './core/domain/dealSynergy.js';
 import { workRestAttentionCount } from './core/domain/workRest.js';
 import { identityAttentionCount } from './core/domain/identity.js';
 
@@ -1645,7 +1646,10 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
         // ADR-0214: bridges whose attribution was refused, whose closing reading
         // is stale, or whose leg two lines both claim. Counts only — the exact
         // kernel never runs from a navigation badge.
-        + valueBridgeAttentionCount(state, { now: at, settings: state.settings, seat: seatCtx?.seat || null }),
+        + valueBridgeAttentionCount(state, { now: at, settings: state.settings, seat: seatCtx?.seat || null })
+        // ADR-0216: promises that are due and unverified, or verified and short.
+        // Counts only — a navigation badge re-derives states, never a total.
+        + synergyAttentionCount(state, { now: at, settings: state.settings, seat: seatCtx?.seat || null }),
       stakeholders: stakeholdersRollup(state, at).attention.length,
       forecast: (() => {
         const report = forecastIntegrityReport(state, at);

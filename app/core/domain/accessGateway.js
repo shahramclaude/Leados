@@ -21,6 +21,7 @@ import { STANDARD_WAIVER_RIGHTS } from './standardWaiverRegistry.js';
 import { FLEX_BUDGET_RIGHTS } from './flexBudgetRegistry.js';
 import { VALUE_BRIDGE_RIGHTS } from './valueBridgeRegistry.js';
 import { SPEAK_UP_RIGHTS } from './speakUpRegistry.js';
+import { SYNERGY_RIGHTS } from './synergyRegistry.js';
 import { routeVerdict } from './seatRegistry.js';
 import { validateMissionCommands } from './mission.js';
 import { captureBriefCase } from './missionCaptureBrief.js';
@@ -228,6 +229,23 @@ const groups = [
   [SPEAK_UP_RIGHTS.RAISE, 'speakUpRaiseConcern speakUpWithdrawConcern'],
   [SPEAK_UP_RIGHTS.ANSWER, 'speakUpAcknowledge speakUpRecordOutcome speakUpRecordWatch speakUpCloseConcern'],
   [SPEAK_UP_RIGHTS.GOVERN, 'speakUpScan speakUpSetConventions'],
+  // ADR-0216: the deal thesis & synergy realization register. Reading it is
+  // enterprise material (rank 4+, matching the record class) — a deal's economics
+  // are the owners' money. Declaring a deal or a promise is the executive act
+  // that signs it, and the ACTION further refuses a seat that does not HOLD the
+  // owner it names: one line does not promise another line's saving. Recording a
+  // reading is open by rank and split inside the action — a `verified` reading is
+  // refused to the owner and to any seat that is not ABOVE the owner on a line.
+  [SYNERGY_RIGHTS.READ, 'synergyReport synergyBriefText synergyCsvRows synergyAttentionCount synergyCandidates'],
+  [SYNERGY_RIGHTS.DECLARE, 'synergyDeclareDeal synergyDeclareClaim synergyWithdrawClaim'],
+  [SYNERGY_RIGHTS.RECORD, 'synergyWithdrawReading synergyRecordCost'],
+  // The write this rank-gated list cannot express: a claimed reading is open to
+  // the promise's OWN owner at any altitude, and to everybody else only with the
+  // recording right. The gateway therefore admits the call through the open
+  // right and synergyActions.synergyRecordReading narrows it — it re-resolves the
+  // seat, checks the owner, and exercises RECORD for every other path.
+  [SYNERGY_RIGHTS.SELF_REPORT, 'synergyRecordReading'],
+  [SYNERGY_RIGHTS.GOVERN, 'synergyScan synergySetConventions'],
   // ADR-0148: answering a declared share is TWO first-person acts, split on the
   // spine rather than in prose. `accept-matrix-line` is the manager's own
   // answer (accept or decline the line they were given); it is open at every
@@ -535,6 +553,12 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // enforcement while its writes are still gated — the register would vanish
 // exactly when a real organisation turned enforcement on.
 'speakUpReport', 'speakUpBriefText', 'speakUpCsvRows', 'speakUpAttentionCount', 'speakUpCandidates',
+// ADR-0216: the synergy register's pure read surface. Every one of these
+// re-proves the read right inside the action. Registered here because a module
+// whose reads are absent from SAFE_READS is unreadable under enforcement while
+// its writes are still gated — the register would vanish exactly when a real
+// organisation turned enforcement on.
+'synergyReport', 'synergyBriefText', 'synergyCsvRows', 'synergyAttentionCount', 'synergyCandidates',
 'standardWaiverAttentionCount', 'standardWaiverBriefText', 'standardWaiverCandidates', 'standardWaiverCsvRows', 'standardWaiverReport', 'concordanceAttentionCount', 'concordanceBriefText', 'concordanceCsvRows', 'concordanceRead', 'concordanceStats', 'disclosureAttentionCount', 'disclosureBriefText', 'disclosureCsvRows', 'disclosureGrantRead', 'disclosureGrants', 'disclosureRead', 'envoyAttentionCount', 'envoyBriefText', 'envoyCsvRows', 'envoyIdentity', 'envoyPacketText', 'envoyPreview', 'envoyRead', 'escalationBriefText', 'escalationCsvRows', 'escalationRead', 'escalationStats', 'differencesAttentionCount', 'differencesBriefText', 'differencesCsvRows', 'differencesRead', 'federationAttentionCount', 'federationBriefText', 'federationCsvRows', 'federationRead',
 'freezeLineAttentionCount', 'freezeLineBriefText', 'freezeLineConventions', 'freezeLineCsvRows', 'freezeLineReport',
 'spanCalibrationAttentionCount', 'spanCalibrationBriefText', 'spanCalibrationConventions', 'spanCalibrationCsvRows', 'spanCalibrationReport', 'spanCalibrationSettings', 'spanCalibrationSignals',

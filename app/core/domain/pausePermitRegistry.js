@@ -291,6 +291,10 @@ export const PAUSE_PERMIT_REACH_RULES = Object.freeze({
   conflictRecusalAutoPropagate: 'conflictRecusalRules.js',
   capitalRationingAutoPropagate: 'capitalRationingRules.js',
   standardWaiverAutoPropagate: 'standardWaiverRules.js',
+  // ADR-0216: silencing the ask that requests a verification. The pause is
+  // permitted and printed as such — a switch that hides a missing verification
+  // must not itself be hidden.
+  synergyAutoPropagate: 'synergyRules.js',
 });
 
 /** How much of the register a seat is shown. Mirrors the altitude disclosure ladder. */

@@ -219,6 +219,8 @@ import { buildValueBridge, valueBridgeCsvRows } from './domain/valueBridge.js';
 import { VALUE_BRIDGE_CSV_COLUMNS, VALUE_BRIDGE_CSV_DESCRIPTOR } from './domain/valueBridgeRegistry.js';
 import { buildSpeakUpReport, speakUpCsvRows } from './domain/speakUp.js';
 import { SPEAK_UP_CSV_COLUMNS, SPEAK_UP_CSV_DESCRIPTOR } from './domain/speakUpRegistry.js';
+import { buildDealSynergy, synergyCsvRows } from './domain/dealSynergy.js';
+import { SYNERGY_CSV_COLUMNS, SYNERGY_CSV_DESCRIPTOR } from './domain/synergyRegistry.js';
 import {
   CAPITAL_RATIONING_CSV_COLUMNS,
   CAPITAL_RATIONING_CSV_DESCRIPTOR,
@@ -1495,6 +1497,12 @@ export const CSV_EXPORTS = [
   // no id, no summary, no note and no concern date crosses this boundary, and a
   // refused figure exports BLANK with its flag rather than a zero.
   SPEAK_UP_CSV_DESCRIPTOR,
+  // #158 (ADR-0216): deal theses and synergy realization — identity-free. One
+  // summary row per currency plus one row per (lever × effect × state) bucket. No
+  // owner, no deal name, no saving reference, no thesis text and no evidence
+  // reference crosses this boundary; currencies are never pooled and a refused
+  // figure exports BLANK with its reason rather than a zero.
+  SYNERGY_CSV_DESCRIPTOR,
 ];
 
 function personLookup(state) {
@@ -6735,6 +6743,18 @@ export function buildScopeTable(state, scope, now) {
       return {
         columns: VALUE_BRIDGE_CSV_COLUMNS.map((key) => ({ key, header: key })),
         rows: valueBridgeCsvRows(report),
+      };
+    }
+    case 'deal-synergy-realization': {
+      // CSV scope #158 (ADR-0216, Schema v170). Built from the SAME reader the
+      // panel renders, so an exported figure is provably the figure that was
+      // printed, cent for cent. Aggregate and identity-free by construction: the
+      // reader's rows carry owners, saving references and evidence text, and none
+      // of them is reachable from here.
+      const report = buildDealSynergy(state, { now, settings: state.settings || {}, seat: null });
+      return {
+        columns: SYNERGY_CSV_COLUMNS.map((key) => ({ key, header: key })),
+        rows: synergyCsvRows(report),
       };
     }
     case 'flex-budget-variance-statements': {

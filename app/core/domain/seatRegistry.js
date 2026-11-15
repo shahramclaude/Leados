@@ -233,6 +233,16 @@ export const RECORD_POLICIES = Object.freeze({
   concernReports: { classKey: 'unit', detailCeiling: 0, label: 'Raised concerns and the route each was given (report only; every state re-derived on read)', route: '#/speak-up' },
   concernActs: { classKey: 'unit', detailCeiling: 0, label: 'Dated acts answering a concern — acknowledgement, outcome, retaliation check, closure, withdrawal (report only)', route: '#/speak-up' },
   concernMarkers: { classKey: 'unit', detailCeiling: 0, label: 'Speak-up observation markers — no impartial route, receiver drifted', route: '#/speak-up' },
+  // ADR-0216: a deal thesis, its promises, their readings and one-off costs are
+  // ENTERPRISE material — a synergy belongs to the whole deal, not to one line's
+  // reading of it, and below the executive altitude there is no honest per-line
+  // view of it. Report only: the panel reads its own seat-checked report, never
+  // the raw rows, so a promise is never handed to the generic projection.
+  dealTheses: { classKey: 'enterprise', detailCeiling: 5, label: 'Deal theses (report only; every figure re-derived on read)', route: '#/finance?panel=synergy' },
+  synergyClaims: { classKey: 'enterprise', detailCeiling: 5, label: 'Promised synergy levers and their phased ladders (report only)', route: '#/finance?panel=synergy' },
+  synergyReadings: { classKey: 'enterprise', detailCeiling: 5, label: 'Dated run-rate and P&L readings, claimed or verified (report only)', route: '#/finance?panel=synergy' },
+  synergyCosts: { classKey: 'enterprise', detailCeiling: 5, label: 'One-off integration costs to achieve (report only)', route: '#/finance?panel=synergy' },
+  synergyMarkers: { classKey: 'enterprise', detailCeiling: 5, label: 'Deal-synergy observation markers — owner departed, verifier drifted', route: '#/finance?panel=synergy' },
   delegationLineActs: { classKey: 'unit', detailCeiling: 0, label: 'Cross-line ask attribution acts (report only)', route: '#/matrix?panel=asks' },
   delegationLineMarkers: { classKey: 'unit', detailCeiling: 0, label: 'Cross-line overload reconciliation markers', route: '#/matrix?panel=asks' },
   // ADR-0181: classification acts and RULE-NPW-01 markers are surfaced only
@@ -801,6 +811,23 @@ export const ACTION_RIGHTS = Object.freeze({
   'raise-concern': { minRank: 1, maxRank: 5, label: 'Raise a concern, unnamed if you choose, or withdraw one you raised' },
   'answer-concern': { minRank: 1, maxRank: 5, label: 'Acknowledge, resolve, check or close a concern routed to you — never one routed elsewhere' },
   'govern-concerns': { minRank: 3, maxRank: 5, label: 'Declare the acknowledgement, outcome and retaliation-check windows, and scan the register' },
+  // ADR-0216: the deal synergy register. Reading is enterprise material and
+  // matches the record-class floor (rank 4) rather than letting a director read a
+  // number the class would deny. Declaring a promise is an executive act, and the
+  // ACTION narrows it to a seat that HOLDS the owner — one line never promises
+  // another line's saving. Recording a reading is open to the director altitude
+  // because a reading is evidence, not authority; the ACTION splits it, refusing
+  // the owner as verifier and refusing any seat that is not above the owner.
+  'read-deal-synergy': { minRank: 4, maxRank: 5, label: 'Read the deal thesis & synergy register and the realization of every promise' },
+  'declare-deal-synergy': { minRank: 4, maxRank: 5, label: 'Declare a deal thesis or a promise owned by a person you hold, or withdraw a promise' },
+  'record-synergy-reading': { minRank: 3, maxRank: 5, label: 'Record a run-rate or P&L reading, or a one-off cost — verified readings only above the owner' },
+  // ADR-0216: the owner of a promise may state their OWN number at any altitude.
+  // A claimed reading is counted nowhere until a seat above them verifies it, so
+  // this is the weakest act on the register — and it must be open, because
+  // RULE-SYN-01 asks the owner every cycle and an ask a frontline lead cannot
+  // answer is a loop that closes by expiring rather than by being answered.
+  'report-own-synergy-reading': { minRank: 1, maxRank: 5, label: 'Report a CLAIMED reading on a promise you own (counted nowhere until verified)' },
+  'govern-deal-synergy': { minRank: 4, maxRank: 5, label: 'Set the materiality band and the verification staleness window, and scan the register' },
   // ADR-0209: reading the work/rest ledger is open at every altitude and scoped
   // by the reader. Rostering starts at the FRONTLINE — a shift lead writes the
   // roster — and the action re-proves that the seat holds the very line. Which

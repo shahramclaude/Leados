@@ -144,6 +144,7 @@ import { workRestRule } from './workRestRules.js';
 import { conflictRecusalRule } from './conflictRecusalRules.js';
 import { standardWaiverRule } from './standardWaiverRules.js';
 import { speakUpRule } from './speakUpRules.js';
+import { synergyRule } from './synergyRules.js';
 import { sealRule } from './sealRules.js';
 // ADR-0092: the Differencing Defender declares its contract like every other rule.
 import { differencingRule } from './differencingRules.js';
@@ -1146,6 +1147,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'conflictRecusalRules.js',
     purpose: 'RULE-CIR-01: reads the Decision-Maker Conflict-of-Interest & Recusal Register (`buildConflictRecusal`, ADR-0210) with the whole-workspace view on interest declarations and withdrawals, standing responses (recusal, mitigation, determination, supersession), reportable-kind rules and their retirement, roster and reporting-line changes, convention changes and explicit `conflictRecusal.scan` scans — and on any other commit, because the horizon moves with the calendar. ONE condition, filed at most once per (interest, verdict) with a deterministic `cir1:…` signature and bounded at 4 per commit with the remainder counted: `undisclosed` — a declared interest whose holder sits on the record as the hand that signs it, its owner, or a declared line over its subject, and which carries no recusal, mitigation or written determination. The ask goes to the seat ABOVE the person holding the interest — never the person themselves, because a hand does not clear its own conflict — and in a matrix to the lowest seat above EVERY line the person holds (`matrixJointApex`), never to one line’s manager on the other’s behalf. Leader-held, apex-less, self-held and off-roster conditions write ONE identity-free `conflictRecusalMarkers` observation and substitute nobody. Asks carry typed `issues-obligation` and matrix-DAG `rolls-up-to` provenance and close themselves when the interest is answered, withdrawn, out of the horizon or changes owner. It never blocks a decision, edits an approver, revokes a right, invents an interest from a surname, a shared line or a pattern, converts a mitigation into independence, or rates a person; pausable via `conflictRecusalAutoPropagate` (the pause governs EVERY path, including explicit scans).',
     writes: ['delegations', 'links', 'conflictRecusalMarkers'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: synergyRule,
+    module: 'synergyRules.js',
+    purpose: 'RULE-SYN-01: reads the Deal Thesis & Synergy Realization Register (`buildDealSynergy`, ADR-0216) with the whole-workspace view on deal declarations, promise declarations and withdrawals, readings and their withdrawals, one-off costs, convention changes and explicit `synergy.scan` scans — and on any other commit, because a phase comes due and a verification goes stale with the calendar. TWO conditions, filed at most once per deterministic `syn1:…` signature and bounded at 4 per commit with the remainder counted: `unverified` — a phase of a promise’s ladder has come due and no VERIFIED reading exists — and `verified-stale` — the newest verified reading is older than the declared staleness window. Both asks go to the promise’s OWNER: not to their manager (who was not given the promise), not to a verifier (there may be none) and never to a deal team. A promise whose owner has left the roster, and a reading whose verifier is no longer above the owner on any line, write ONE identity-free `synergyMarkers` observation and ask nobody. The ask text is deliberately opaque — no deal, no lever, no amount, no date — because a delegation is readable above the owner; the opaque signature lives only in the typed `issues-obligation` link. Asks self-close when the condition clears or the owner moves. It never records a reading, verifies anything itself, changes a promise or a ladder, withdraws a row, judges whether a deal was worth doing or rates a person; pause-governed on every path (`synergyAutoPropagate`), including the explicit scan.',
+    writes: ['delegations', 'links', 'synergyMarkers'],
     emits: [],
     scansWorkspace: true,
   },

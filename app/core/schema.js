@@ -259,6 +259,18 @@ import {
   normalizeConcernReports,
   normalizeSpeakUpSettings,
 } from './domain/speakUpSchema.js';
+// ADR-0216 (Schema v170): the Deal Thesis & Synergy Realization Register. Deals,
+// their promises with phased ladders, dated readings and one-off costs normalize
+// in dependency order — a promise resolves only through a deal that survived, a
+// reading only through a promise, and a cost only through a deal (and a promise
+// from the same deal).
+import {
+  normalizeDealTheses,
+  normalizeSynergyClaims,
+  normalizeSynergyCosts,
+  normalizeSynergyReadings,
+  normalizeSynergySettings,
+} from './domain/synergySchema.js';
 // ADR-0185 (Schema v147): dated Matrix change-impact requests and first-person
 // line responses. Request snapshots normalize before their responses resolve.
 import {
@@ -1069,7 +1081,15 @@ export {
 // ledger and no actual from a posted period: each is a different instrument
 // with a different signatory, and a standard invented at upgrade time would
 // print a variance against a fiction and name somebody as its owner.
-export const SCHEMA_VERSION = 169;
+// v170 adds the Deal Thesis & Synergy Realization Register (ADR-0216): five
+// EMPTY ledgers — deals, promises, readings, one-off costs, rule markers — and
+// three declared conventions. No deal is inferred from an investment case, no
+// promise from a budget envelope, no reading from a posted period, and no cost
+// from an invoice: each is a different instrument with a different signatory, and
+// a promise invented at upgrade time would put a number on the board's table that
+// nobody made. No saving is merged with another either — the contested test runs
+// on rows a human declared.
+export const SCHEMA_VERSION = 170;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -2563,6 +2583,12 @@ export const DEFAULT_SETTINGS = Object.freeze({
   // setter, and COPIED onto each concern when it is raised: a convention changed
   // later cannot rewrite the promise already made to a reporter.
   ...normalizeSpeakUpSettings({}),
+  // ADR-0216: the synergy register's three conventions — the materiality band a
+  // shortfall must exceed to read as `behind`, the age at which the newest
+  // verification is printed as stale, and the automation pause. All clamped on
+  // load and REFUSED (never clamped) by the setter: a typo must not move the
+  // materiality line the board reads.
+  ...normalizeSynergySettings({}),
 });
 
 export const COLLECTIONS = [
@@ -3415,6 +3441,17 @@ export const COLLECTIONS = [
   'concernReports',
   'concernActs',
   'concernMarkers',
+  // ADR-0216 (Schema v170): the Deal Thesis & Synergy Realization Register.
+  // Deals and their thesis, promises with a phased ladder and one accountable
+  // owner, dated readings (a run-rate or a period P&L, claimed or verified) and
+  // one-off costs to achieve. No state, promised-to-date figure, contested
+  // amount, capture, verification share or payback is stored: each is re-derived
+  // on read, so a hand-edited file cannot carry a synergy the rows do not imply.
+  'dealTheses',
+  'synergyClaims',
+  'synergyReadings',
+  'synergyCosts',
+  'synergyMarkers',
 ];
 
 /** Stable empty state. `now` is an ISO string so the result is a pure value. */
@@ -4241,6 +4278,11 @@ export function normalizeSettings(raw) {
     // here would vanish on every load and the pause census would never see the
     // switch that silences the only rule chasing an overdue acknowledgement.
     ...normalizeSpeakUpSettings(s),
+    // ADR-0216: named here for the same reason — a materiality band or a
+    // staleness window not spread here would vanish on every load and the pause
+    // census would never see the switch that silences the only rule asking for a
+    // verification.
+    ...normalizeSynergySettings(s),
     ...normalizeStructureHistorySettings(s),
     ...normalizeDifferencesSettings(s),
     ...normalizeFitSettings(s),
@@ -8870,6 +8912,17 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.concernReports = normalizeConcernReports(raw.concernReports, warnings);
   state.concernActs = normalizeConcernActs(raw.concernActs, state.concernReports, warnings);
   state.concernMarkers = normalizeConcernMarkers(raw.concernMarkers);
+  // ADR-0216: a deal, a promise, a reading or a cost that cannot be read exactly
+  // is DROPPED with a counted warning — never repaired, never re-dated and never
+  // re-pointed at another deal. Each loader resolves only against rows that
+  // survived the one before it, and the promise loader RECOMPUTES the saving key
+  // from the reference a human typed, so a hand-edited file cannot hide or
+  // manufacture a double count.
+  state.dealTheses = normalizeDealTheses(raw.dealTheses, warnings);
+  state.synergyClaims = normalizeSynergyClaims(raw.synergyClaims, state.dealTheses, warnings);
+  state.synergyReadings = normalizeSynergyReadings(raw.synergyReadings, state.synergyClaims, warnings);
+  state.synergyCosts = normalizeSynergyCosts(raw.synergyCosts, state.dealTheses, state.synergyClaims, warnings);
+  state.synergyMarkers = Array.isArray(raw.synergyMarkers) ? raw.synergyMarkers.slice(-400) : [];
   state.conflictInterests = normalizeConflictInterests(raw.conflictInterests, warnings);
   state.conflictNoneDeclarations = normalizeConflictNoneDeclarations(raw.conflictNoneDeclarations, warnings);
   state.conflictStandings = normalizeConflictStandings(raw.conflictStandings, state.conflictInterests, warnings);
@@ -9785,6 +9838,23 @@ export const MIGRATIONS = {
   // upgrade time would attribute an allegation to somebody who never raised it.
   // No receiver is inferred either — impartiality is computed against the live
   // graph, and a receiver written here would be a route nobody chose.
+  // 169 → 170: ADR-0216 adds FIVE EMPTY ledgers and three declared conventions.
+  // No deal is inferred from the investment cases, envelopes or value readings an
+  // upgraded workspace already holds: a value bridge measures what the market
+  // paid and what moved, and says nothing about the promise made at signing. A
+  // promise written here would put a number on a board's table that nobody made,
+  // in the name of a person who never promised it. No saving is merged with a
+  // record either — contested promises are found only among rows a human entered.
+  169: (v169) => ({
+    ...v169,
+    schemaVersion: 170,
+    dealTheses: Array.isArray(v169.dealTheses) ? v169.dealTheses : [],
+    synergyClaims: Array.isArray(v169.synergyClaims) ? v169.synergyClaims : [],
+    synergyReadings: Array.isArray(v169.synergyReadings) ? v169.synergyReadings : [],
+    synergyCosts: Array.isArray(v169.synergyCosts) ? v169.synergyCosts : [],
+    synergyMarkers: Array.isArray(v169.synergyMarkers) ? v169.synergyMarkers : [],
+    settings: { ...(v169.settings || {}), ...normalizeSynergySettings(v169.settings || {}) },
+  }),
   168: (v168) => ({
     ...v168,
     schemaVersion: 169,

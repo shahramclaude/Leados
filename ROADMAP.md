@@ -1,3 +1,23 @@
+## 2026-11-15 — Session 289: deal thesis & synergy realization register — what each acquisition promised, to whom, by when, and what was ever checked (Schema v170, [ADR-0216](./docs/adr/0216-deal-synergy-realization-register.md), `#/finance?panel=synergy`, CSV #158, `RULE-SYN-01`)
+
+**Status: Shipped.** Altitude **CEO/C-suite**, structure **matrix**.
+
+**New gap found this session (and built):** nothing in the workspace recorded what a completed acquisition *promised* — the lever, the accountable owner, the dated ladder of run-rates, the one-off cost to achieve, the evidence anybody verified, or the saving two lines both claimed. The four adjacent finance surfaces disclaim it in their own code: ADR-0214 excludes the acquisition perimeter from the value bridge by construction, ADR-0208 appraises an organic case, ADR-0211 rations a capital ceiling, ADR-0213 divides a cost budget. Searches of `app/` for `synergy`, `run-rate`, `post-merger`, `integration`, `deal thesis`, `realization`, `cost to achieve`, `pm i` found **no implementation and no logged gap**. Wider absence **[UNVERIFIED]**.
+
+**The failure this exists to prevent** is the one that survives an audit: a deal closes, the synergy file says 40m, the number is repeated in three board packs, and nobody can say which of it a named seat ever verified against evidence — or that two divisions have been counting the same saving twice, each with a straight face.
+
+**What shipped.** Five domain modules (`synergyRegistry.js`, `synergySchema.js`, `synergyMath.js`, `dealSynergy.js`, `synergyRules.js`, `synergyActions.js`), one finance panel (`#/finance?panel=synergy`: Thesis / Contested / Method), and wiring in `schema.js` (v169 → v170, five EMPTY ledgers, three conventions, migration step 169), `actions.js`, `csv.js` (scope #158, 24 identity-free columns), `accessGateway.js`, `seatRegistry.js`, `postCommit.js`, `propagationContracts.js`, `pausePermitRegistry.js`, `main.js` and `views/finance.js`. `RULE-SYN-01` is spine rule **133/133**. Generated method illustration `app/assets/deal-synergy-realization.jpg`.
+
+**The five refusals, which are the product:** (1) a phase is due ≠ the promise was missed — `unverified` outranks `behind`; (2) the exit run-rate ≠ the P&L gained — two totals, never added or annualised; (3) two owners ≠ it happened twice — contested money is counted **nowhere** in the headline, both names printed, never split; (4) one currency is not a total across currencies — no grand total object exists; (5) a verifier **was** above the owner ≠ a verifier **is** — `verifiedDrifted` is recomputed on every read and the promise reads `unverified` again.
+
+**Three real defects the suite caught before ship, with what each was:** the panel rendered an entire ledger as em dashes because the shared table reads row *objects* by column key and was handed arrays (found by the cell-by-cell `data-cents` assertion); a reading with an unparseable date silently defaulted to **today**, letting a stale number wear the date it was typed; and a promise whose only verification had drifted still read `met`. A fourth correction was structural: `report-own-synergy-reading` (rank 1–5) was added because `RULE-SYN-01` asks the **owner** every cycle and the 3–5 recording right made a frontline owner's ask unanswerable — a claimed reading is counted nowhere, so it is open at every altitude and narrowed inside the action.
+
+**In Progress (stated, not implied):** premium versus realised value, discounting a synergy to a present value, annualising a period, converting a currency, and any per-segment split. The register prints that boundary in `SYNERGY_METHOD` and on the Method tab.
+
+**Benchmark.** **[BENCHMARK-UNVERIFIED]** against iLEVEL / DealCloud / Anaplan–Pigment from category knowledge. Differentiators shipped: attribution that refuses itself, and contested ownership named rather than split.
+
+**Verify.** `tests/app/deal-synergy.test.mjs` 22/22 green (migration, every named refusal, the printed identity against an independent oracle with randomised promises, claimed-vs-verified, the phase ladder, reach and drift, run-rate vs P&L, currency separation, payback refusals, the rule's idempotence and pause, authority, cell-by-cell `data-cents` against the reader's integers, and the CSV boundary). Schema pins swept (v169 → v170, CSV [157] → 158, spine [132] → 133).
+
 ## 2026-11-15 — Session 288: speak-up concern routing & the impartiality register — who heard it, in what role, and what came back (Schema v169, [ADR-0215](./docs/adr/0215-speak-up-concern-routing-impartiality-register.md), `#/speak-up`, CSV #157, `RULE-SUP-01`)
 
 **Status: Shipped.**
