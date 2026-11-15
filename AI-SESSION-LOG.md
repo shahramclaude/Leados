@@ -1,3 +1,23 @@
+## Session 294 — 2026-11-15: pause-permit switch coverage attempt stopped, not shipped
+
+**Step 0–1.** `NORTH_STAR.md` exists with all four binding mandates (Matrix Leadership, Bulletproof Reliability, Visual/Content Integrity, Competitive Benchmark). `origin` is `https://github.com/shahramclaude/Leados.git`; current branch `arena/731ddc11-leados`, base `aebfa2bd2386a426a721c037017b94ebd73b41d9`.
+
+**Step 2 — orient.** Read the doctrine, ROADMAP head and Planned section, and log Sessions 293–291. Spot-checked `pausePermitRegistry.js`, `pausePermits.js`, `pausePermitPanel.js`, `schema.js`, `synergyRules.js`, `earnedValueRules.js`, and `tests/app/pause-permits.test.mjs`.
+
+**Step 3 — new gap found and logged.** Risk concentration by shared dependency/counterparty `[CEO / C-suite × matrix and single-chain]`: ADR-0219 reads per-risk appetite and ADR-0012 reads dependency/vendor concentration, but no shared reader identifies multiple individually in-tolerance risks relying on the same dependency or counterparty. Targeted module inspection found no integration between `riskAppetite.js` and `resilience.js`; broader absence is **[UNVERIFIED]**. Added to ROADMAP Planned.
+
+**Step 4 — scope.** Selected director / VP (the altitude authorised to grant workspace-wide pause permits) × matrix and single-chain. Duty: pause a rule through its actual permit door and trust the pause/permit pair to survive normalization and reload, while not claiming graph reach for owner-directed rules.
+
+**Step 5 — implementation stopped.** The base had 24 matrix-reach switches but 26 switch-to-rule mappings; `synergyAutoPropagate` and `earnedValueAutoPropagate` were mapped but missing from the central settings vocabulary. A prototype added both settings keys and a governed-permit reload test; it was not retained. The intended repair also needed to separate all switch-to-rule names from the narrower matrix-reach inventory.
+
+**Step 7 — verification / stop rule.** `node --test tests/app/pause-permits.test.mjs` returned **14/15**. The new real-permit + normalization + reload test passed; the matrix-reach census failed. One correction attempt updated the census to read normalized settings, but the focused retry remained **14/15** because that draft still did not account correctly for settings contributed by domain-specific normalizers. Following the stop rule, all production/test changes were reverted. No feature shipped. Whole suite, standalone, browser/AT and display-to-storage verification for a retained change were not run: **[UNVERIFIED]**.
+
+**Benchmark [BENCHMARK-UNVERIFIED].** ServiceNow IRM / Archer control exception and bypass governance is the specialist bar (named authoriser, written rationale, compensating control, finite expiry). No hands-on comparison occurred; no parity claim.
+
+**Asset / blockers.** No new user-facing visual or communication asset was produced; no UI change was retained. Higgsfield was not required for this code-only attempt. The matrix-reach inventory remains the implementation blocker. README unchanged because no user-facing change shipped.
+
+**Next.** CEO / C-suite × matrix and single-chain: cross-entity, cross-currency appetite under a declared FX policy, the first Planned risk-appetite item. The pause-permit mapping issue remains open and must be re-derived against the full settings normalization path before another implementation attempt.
+
 ## Session 291 — 2026-11-15: Just Culture decision record (Schema v172, [ADR-0218](./docs/adr/0218-just-culture-decision-record.md), CSV #160)
 
 Built the Just Culture decision record for frontline/mid-manager × matrix. Five questions drive a pure expectation function, and the screen prints the response the answers point to beside the response chosen. Departures require a written reason. Ownership is proved against the matrix on every write. Verification: targeted `just-culture.test.mjs` 14/14. The full suite was not confirmed green; the migration-chain correction (`'170 → 171'` kept in `applied` arrays) landed after the last full run and was not re-run. The sweep of 186 test files that moved the schema pins to 172 is the other unverified part. Shipped on user instruction to stop verifying.
