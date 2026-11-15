@@ -398,7 +398,16 @@ test('standalone artifact exists and is a single inline HTML document', () => {
   // capability was added; the density bound still catches a duplication.
   // ADR-0218 adds the Just Culture modules and its embedded method illustration.
   // The rebuilt artifact is 16,047,132 bytes; retain the independent density guard.
-  assert.ok(bytes < 16_200_000, `standalone file is unexpectedly large (${bytes} bytes)`);
+  // ADR-0220 (Session 295, Schema v174) adds the Variable-Pay Design & Incentive
+  // Integrity Register: five domain modules (registry, schema/loaders, the pure
+  // reader, the dated actions, the pause-aware spine rule), one route view, one
+  // CSV scope and one generated diagram (94,596 bytes at 1536x864, the
+  // twenty-sixth .jpg in app/assets, inlined as a data URI — which is where most
+  // of the growth is). Measured build: 16,340,165 bytes / 942 source modules =
+  // 17,347 bytes per module, still far below the unchanged 24,000 density guard.
+  // Ceiling moves 16,200,000 -> 16,500,000 only because real capability was
+  // added; the density bound still catches a module inlined twice.
+  assert.ok(bytes < 16_500_000, `standalone file is unexpectedly large (${bytes} bytes)`);
   // Derived from the folder, not from a list in this file: the day a panel adds
   // a diagram, an enumerator that names the old two would still pass. Same
   // lesson the build script learned in ADR-0186.

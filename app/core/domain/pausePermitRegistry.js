@@ -252,6 +252,12 @@ export const PAUSE_PERMIT_MATRIX_REACH_SWITCHES = Object.freeze([
   // the joint seat above every line carrying a breached risk, so silencing it
   // reaches a second line — and that line's manager is not told.
   'riskAppetiteAutoPropagate',
+  // ADR-0220: the incentive-integrity switch. The rule reads the reporting graph
+  // for the joint seat above EVERY funding line with an over-ceiling envelope, a
+  // contested outcome or an outstanding recovery, so silencing it reaches a
+  // second line — and that line's manager is not told that money is being paid
+  // twice for one result or that money is owed back.
+  'incentiveAutoPropagate',
 ]);
 
 export function pausePermitReachesMatrix(key) {
@@ -309,6 +315,11 @@ export const PAUSE_PERMIT_REACH_RULES = Object.freeze({
   // appetite or a passed review. The pause is permitted and printed as such — a
   // switch that hides a breached ceiling must not itself be hidden.
   riskAppetiteAutoPropagate: 'riskAppetiteRules.js',
+  // ADR-0220: silencing the ask that requests a decision on an over-ceiling
+  // envelope, a contested outcome, an outstanding recovery or a plan nobody is
+  // measuring. The pause is permitted and printed as such — a switch that hides
+  // money paid twice must not itself be hidden.
+  incentiveAutoPropagate: 'incentiveRules.js',
 });
 
 /** How much of the register a seat is shown. Mirrors the altitude disclosure ladder. */

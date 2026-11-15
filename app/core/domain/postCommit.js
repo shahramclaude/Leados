@@ -203,6 +203,7 @@ import { speakUpRule } from './speakUpRules.js';
 import { synergyRule } from './synergyRules.js';
 import { earnedValueRule } from './earnedValueRules.js';
 import { riskAppetiteRule } from './riskAppetiteRules.js';
+import { incentiveRule } from './incentiveRules.js';
 
 
 // ADR-0087: the Operating Cadence Clock. Reads the finished queue after the
@@ -1251,6 +1252,20 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // retention, never converts a currency and never rates a person.
   // Registered immediately before `speakUpRule`, `seatRule` and `sealRule`.
   riskAppetiteRule,
+  // ADR-0220: the Variable-Pay Design & Incentive Integrity Register. ONE rule
+  // reads the finished register with the whole-workspace view and files at most
+  // one dated ask per condition: an over-ceiling envelope (to the lowest seat
+  // above EVERY funding line, never to the funding line itself and never to an
+  // awardee), the same outcome paid by two plans whose windows overlap (to the
+  // seat above BOTH lines — the register does not pick a winner), a recovery
+  // that is owed and uncovered (to the same seat above the line), or a live plan
+  // with no verified reading at all (to the plan's own owner). A condition with
+  // no joint seat, or a funding line that has left the roster, writes ONE
+  // identity-free `incentiveMarkers` observation and asks nobody. It never
+  // declares, amends or retires a plan, never records a reading, an award or a
+  // recovery, never reverses a payment and never rates a person.
+  // Registered immediately before `speakUpRule`, `seatRule` and `sealRule`.
+  incentiveRule,
   // Registered immediately before `seatRule` and `sealRule`.
   speakUpRule,
   // ADR-0076: the Operating Seat (vertical roll-up + enforced boundaries).

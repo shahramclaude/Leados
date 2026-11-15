@@ -144,7 +144,7 @@ const row = (env, caseId) => report(env).rows.find((entry) => entry.id === caseI
  */
 
 test('ADR-0217 migration 170 → 171 adds five EMPTY ledgers and infers no baseline', () => {
-  assert.equal(SCHEMA_VERSION, 173);
+  assert.equal(SCHEMA_VERSION, 174);
   for (const key of ['earnedValueCases', 'earnedValuePackages', 'earnedValueReadings', 'earnedValueActuals', 'earnedValueMarkers']) {
     assert.ok(COLLECTIONS.includes(key), `${key} is a declared collection`);
   }
@@ -156,7 +156,7 @@ test('ADR-0217 migration 170 → 171 adds five EMPTY ledgers and infers no basel
   delete before.earnedValueActuals;
   delete before.earnedValueMarkers;
   const next = MIGRATIONS[170](before);
-  assert.equal(next.schemaVersion, 173);
+  assert.equal(next.schemaVersion, 174);
   assert.deepEqual(next.earnedValueCases, []);
   assert.deepEqual(next.earnedValuePackages, []);
   assert.deepEqual(next.earnedValueReadings, []);
@@ -165,7 +165,7 @@ test('ADR-0217 migration 170 → 171 adds five EMPTY ledgers and infers no basel
   // The existing record is left exactly as it was; nothing is invented.
   assert.equal((before.synergyMarkers || []).length, 0);
   const migrated = migrate({ ...createEmptyState(T0), schemaVersion: 170 });
-  assert.equal(migrated.raw.schemaVersion, 173);
+  assert.equal(migrated.raw.schemaVersion, 174);
   assert.equal(buildEarnedValue(migrated.raw, { now: at('2026-11-15'), settings: migrated.raw.settings }).counts.casesOpen, 0);
 });
 
