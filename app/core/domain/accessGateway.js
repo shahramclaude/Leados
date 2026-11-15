@@ -24,6 +24,7 @@ import { SPEAK_UP_RIGHTS } from './speakUpRegistry.js';
 import { SYNERGY_RIGHTS } from './synergyRegistry.js';
 import { EV_RIGHTS } from './earnedValueRegistry.js';
 import { RA_RIGHTS } from './riskAppetiteRegistry.js';
+import { INC_RIGHTS } from './incentiveRegistry.js';
 import { JUST_CULTURE_RIGHTS } from './justCultureRegistry.js';
 import { routeVerdict } from './seatRegistry.js';
 import { validateMissionCommands } from './mission.js';
@@ -277,6 +278,17 @@ const groups = [
   [RA_RIGHTS.READ, 'riskAppetiteReport riskAppetiteAttentionCount riskAppetiteCandidates'],
   [RA_RIGHTS.DECLARE, 'riskAppetiteDeclareStatement riskAppetiteRetireStatement riskAppetiteScan'],
   [RA_RIGHTS.CARRY, 'riskAppetiteDeclareRisk riskAppetiteWithdrawRisk'],
+  // ADR-0220: the variable-pay design & incentive integrity register. Reading it
+  // is open at the manager altitude because a team envelope is a manager's own
+  // instrument; the row class and the span filter decide what is printed.
+  // Designing is narrowed inside the action to a seat that HOLDS the funding
+  // line. Verification is narrowed further — above the line, never the owner,
+  // never a beneficiary — and recovery is an executive act.
+  [INC_RIGHTS.READ, 'incentiveReport incentiveAttentionCount incentiveCandidates'],
+  [INC_RIGHTS.DESIGN, 'incentiveDeclarePlan incentiveRetirePlan incentiveAddMeasure incentiveScan'],
+  [INC_RIGHTS.VERIFY, 'incentiveRecordReading'],
+  [INC_RIGHTS.AWARD, 'incentiveRecordAward'],
+  [INC_RIGHTS.RECOVER, 'incentiveRecordRecovery'],
   // ADR-0148: answering a declared share is TWO first-person acts, split on the
   // spine rather than in prose. `accept-matrix-line` is the manager's own
   // answer (accept or decline the line they were given); it is open at every
@@ -605,6 +617,12 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // its writes are still gated — the register would vanish exactly when a real
 // organisation turned enforcement on.
 'riskAppetiteReport', 'riskAppetiteAttentionCount', 'riskAppetiteCandidates',
+// ADR-0220: the variable-pay register's pure read surface. Every one of these
+// re-proves the read right inside the action. Registered here because a module
+// whose reads are absent from SAFE_READS is unreadable under enforcement while
+// its writes are still gated — the register would vanish exactly when a real
+// organisation turned enforcement on.
+'incentiveReport', 'incentiveAttentionCount', 'incentiveCandidates',
 'standardWaiverAttentionCount', 'standardWaiverBriefText', 'standardWaiverCandidates', 'standardWaiverCsvRows', 'standardWaiverReport', 'concordanceAttentionCount', 'concordanceBriefText', 'concordanceCsvRows', 'concordanceRead', 'concordanceStats', 'disclosureAttentionCount', 'disclosureBriefText', 'disclosureCsvRows', 'disclosureGrantRead', 'disclosureGrants', 'disclosureRead', 'envoyAttentionCount', 'envoyBriefText', 'envoyCsvRows', 'envoyIdentity', 'envoyPacketText', 'envoyPreview', 'envoyRead', 'escalationBriefText', 'escalationCsvRows', 'escalationRead', 'escalationStats', 'differencesAttentionCount', 'differencesBriefText', 'differencesCsvRows', 'differencesRead', 'federationAttentionCount', 'federationBriefText', 'federationCsvRows', 'federationRead',
 'freezeLineAttentionCount', 'freezeLineBriefText', 'freezeLineConventions', 'freezeLineCsvRows', 'freezeLineReport',
 'spanCalibrationAttentionCount', 'spanCalibrationBriefText', 'spanCalibrationConventions', 'spanCalibrationCsvRows', 'spanCalibrationReport', 'spanCalibrationSettings', 'spanCalibrationSignals',
@@ -913,6 +931,12 @@ const MATRIX_LINE_SCOPED = new Set([
   // declaration. Each action independently re-proves the owner's reach and
   // refuses the owner themselves.
   'riskAppetiteDeclareRisk', 'riskAppetiteWithdrawRisk',
+  // ADR-0220: every variable-pay write names a funding line (and an award names a
+  // person) that the acting seat may reach only through the tree or a declared
+  // line. Each action independently re-proves the hold, refuses the owner's own
+  // number, and refuses an award to the awarder.
+  'incentiveDeclarePlan', 'incentiveRetirePlan', 'incentiveAddMeasure', 'incentiveRecordReading',
+  'incentiveRecordAward', 'incentiveRecordRecovery',
   // ADR-0208: a declared (or previewed) case names a benefit owner the declaring
   // seat may reach only through a declared Matrix line; the action re-checks the
   // tree and the line itself before it reads or records anything.

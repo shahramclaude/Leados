@@ -303,6 +303,20 @@ import {
   normalizeRiskAppetiteStatements,
   normalizeRiskDeclarations,
 } from './domain/riskAppetiteSchema.js';
+// ADR-0220 (Schema v174): the Variable-Pay Design & Incentive Integrity
+// Register. Plans, measures, verified readings, awards, recovery acts and
+// identity-free markers normalize fail-closed; a reading's figure is checked
+// against its measure's unit, and stored cents are never re-parsed from their
+// own form.
+import {
+  normalizeIncAwards,
+  normalizeIncMarkers,
+  normalizeIncMeasures,
+  normalizeIncPlans,
+  normalizeIncReadings,
+  normalizeIncRecoveries,
+  normalizeIncentiveSettings,
+} from './domain/incentiveSchema.js';
 // ADR-0185 (Schema v147): dated Matrix change-impact requests and first-person
 // line responses. Request snapshots normalize before their responses resolve.
 import {
@@ -1136,7 +1150,7 @@ export {
 // instrument, and a conduct review invented at upgrade time would attribute a
 // culpability finding to a person who was never reviewed. No deciding line is
 // inferred either — ownership is named by a human, or the review is not opened.
-export const SCHEMA_VERSION = 173;
+export const SCHEMA_VERSION = 174;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -3526,6 +3540,17 @@ export const COLLECTIONS = [
   'riskAppetiteStatements',
   'riskDeclarations',
   'riskAppetiteMarkers',
+  // ADR-0220 (Schema v174): the Variable-Pay Design & Incentive Integrity
+  // Register. Plans, their measures, verified readings, awards, recovery acts
+  // and identity-free rule markers. No verdict, bucket, contest, coverage claim
+  // or escalation is stored: each is re-derived on read, so a hand-edited file
+  // cannot carry an integrity verdict its own rows do not imply.
+  'incentivePlans',
+  'incentiveMeasures',
+  'incentiveReadings',
+  'incentiveAwards',
+  'incentiveRecoveries',
+  'incentiveMarkers',
 ];
 
 /** Stable empty state. `now` is an ISO string so the result is a pure value. */
@@ -3782,6 +3807,11 @@ export function normalizeSettings(raw) {
     // vocabulary so updateSettings can move it, and defaulted ON so a switch that
     // hides a breached ceiling is never the silent default.
     riskAppetiteAutoPropagate: s.riskAppetiteAutoPropagate !== false,
+    // ADR-0220: the incentive-integrity rule's switch. Declared in the
+    // persistence vocabulary so updateSettings can move it, and defaulted ON so a
+    // switch that hides an over-ceiling envelope or an outstanding recovery is
+    // never the silent default.
+    incentiveAutoPropagate: s.incentiveAutoPropagate !== false,
     forecastCoveragePct: clampInt(s.forecastCoveragePct, 50, 95, d.forecastCoveragePct),
     tempoDelegatedMaxDays: clampInt(s.tempoDelegatedMaxDays, 1, 90, d.tempoDelegatedMaxDays),
     tempoCrossCuttingMaxDays: clampInt(s.tempoCrossCuttingMaxDays, 1, 180, d.tempoCrossCuttingMaxDays),
@@ -9025,6 +9055,17 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.riskAppetiteStatements = normalizeRiskAppetiteStatements(raw.riskAppetiteStatements, warnings);
   state.riskDeclarations = normalizeRiskDeclarations(raw.riskDeclarations, warnings);
   state.riskAppetiteMarkers = normalizeRaMarkers(raw.riskAppetiteMarkers, warnings);
+  // ADR-0220: a plan, measure, award or recovery act that cannot be read exactly
+  // is DROPPED with a counted warning. A reading is resolved AFTER its measures,
+  // because the measure's unit decides which field the figure belongs in; a
+  // reading whose measure did not survive is dropped and counted, never guessed
+  // into the money field. No verdict, bucket or contest is stored.
+  state.incentivePlans = normalizeIncPlans(raw.incentivePlans, warnings);
+  state.incentiveMeasures = normalizeIncMeasures(raw.incentiveMeasures, warnings);
+  state.incentiveReadings = normalizeIncReadings(raw.incentiveReadings, state.incentiveMeasures, warnings);
+  state.incentiveAwards = normalizeIncAwards(raw.incentiveAwards, warnings);
+  state.incentiveRecoveries = normalizeIncRecoveries(raw.incentiveRecoveries, warnings);
+  state.incentiveMarkers = normalizeIncMarkers(raw.incentiveMarkers, warnings);
   state.conflictInterests = normalizeConflictInterests(raw.conflictInterests, warnings);
   state.conflictNoneDeclarations = normalizeConflictNoneDeclarations(raw.conflictNoneDeclarations, warnings);
   state.conflictStandings = normalizeConflictStandings(raw.conflictStandings, state.conflictInterests, warnings);
@@ -9813,6 +9854,23 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  // 173 → 174: ADR-0220 adds SIX EMPTY ledgers and one declared convention. No
+  // plan is inferred from a budget, a capital envelope, a merit cycle or a
+  // goal; no measure is invented from a scorecard; no award is derived from a
+  // payment the workspace cannot see. A variable-pay envelope is a decision a
+  // funding line made, with a written basis, and manufacturing one at upgrade
+  // time would put a ceiling on the record that nobody declared.
+  173: (v173) => ({
+    ...v173,
+    schemaVersion: 174,
+    incentivePlans: Array.isArray(v173.incentivePlans) ? v173.incentivePlans : [],
+    incentiveMeasures: Array.isArray(v173.incentiveMeasures) ? v173.incentiveMeasures : [],
+    incentiveReadings: Array.isArray(v173.incentiveReadings) ? v173.incentiveReadings : [],
+    incentiveAwards: Array.isArray(v173.incentiveAwards) ? v173.incentiveAwards : [],
+    incentiveRecoveries: Array.isArray(v173.incentiveRecoveries) ? v173.incentiveRecoveries : [],
+    incentiveMarkers: Array.isArray(v173.incentiveMarkers) ? v173.incentiveMarkers : [],
+    settings: { ...(v173.settings || {}), ...normalizeIncentiveSettings(v173.settings || {}) },
+  }),
   // 171 → 172: ADR-0218 adds TWO EMPTY ledgers, the reviews and their append-only
   // acts. No review is inferred from an incident, feedback, a 1:1 or a conflict: a
   // conduct review opened at upgrade time would attribute a culpability finding to a

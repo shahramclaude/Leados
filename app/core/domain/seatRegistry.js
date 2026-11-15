@@ -246,6 +246,21 @@ export const RECORD_POLICIES = Object.freeze({
   riskAppetiteStatements: { classKey: 'portfolio', detailCeiling: 4, label: 'Declared appetite statements — one exact ceiling per domain, measure and currency (report only)', route: '#/risk-appetite' },
   riskDeclarations: { classKey: 'portfolio', detailCeiling: 4, label: 'Declared retained exposure per live risk, with its written basis (report only)', route: '#/risk-appetite' },
   riskAppetiteMarkers: { classKey: 'portfolio', detailCeiling: 4, label: 'Risk-appetite observation markers — no joint seat, declarer departed (identity-free)', route: '#/risk-appetite' },
+  // ADR-0220: the variable-pay register. A PLAN, its MEASURES and its READINGS
+  // are unit material: the funding line and the line above read the envelope and
+  // the evidence, and above the director altitude the register is counts and
+  // rates. Every row is span-scoped by its `ownerId`, so a manager reads their
+  // own envelope and never a peer line's.
+  incentivePlans: { classKey: 'unit', detailCeiling: 3, label: 'Variable-pay plans — a funding line’s envelope, window and written basis (report only)', route: '#/incentive' },
+  incentiveMeasures: { classKey: 'unit', detailCeiling: 3, label: 'Declared incentive measures — outcome key, direction, exact target and declared control (report only)', route: '#/incentive' },
+  incentiveReadings: { classKey: 'unit', detailCeiling: 3, label: 'Verified readings behind a measure, with their evidence reference (report only)', route: '#/incentive' },
+  // AWARDS and RECOVERIES are money for a named person. Item detail stops ABOVE
+  // the director: the line that administers the plan reads its own awards, and
+  // the executive above it reads counts and control totals — the same posture the
+  // merit terminal takes with pay, applied to variable pay.
+  incentiveAwards: { classKey: 'unit', detailCeiling: 3, label: 'Individual variable-pay awards — money for a named person, on a measured or discretionary basis (report only)', route: '#/incentive' },
+  incentiveRecoveries: { classKey: 'unit', detailCeiling: 3, label: 'Recovery acts against an award — demanded, recovered or waived, with a written reason (report only)', route: '#/incentive' },
+  incentiveMarkers: { classKey: 'unit', detailCeiling: 3, label: 'Incentive-integrity observation markers — no joint seat, funding line departed (identity-free)', route: '#/incentive' },
   // ADR-0216: a deal thesis, its promises, their readings and one-off costs are
   // ENTERPRISE material — a synergy belongs to the whole deal, not to one line's
   // reading of it, and below the executive altitude there is no honest per-line
@@ -847,6 +862,16 @@ export const ACTION_RIGHTS = Object.freeze({
   'read-risk-appetite': { minRank: 3, maxRank: 5, label: 'Read the enterprise risk-appetite register: every declared ceiling, its measured population and whether coverage is complete' },
   'declare-risk-appetite': { minRank: 4, maxRank: 5, label: 'Declare, retire or review an appetite statement for a risk domain, and scan the register for owed decisions' },
   'carry-risk-appetite': { minRank: 3, maxRank: 5, label: 'Declare or withdraw the retained exposure of one live risk whose owner you hold — never your own' },
+  // ADR-0220: the variable-pay design & incentive integrity register. Reading is
+  // open to the manager altitude because a team envelope is a manager's own
+  // instrument; the row class and the span filter decide what is printed. Every
+  // write is narrowed inside the action to a seat that HOLDS the funding line —
+  // and verification is narrowed further, to a seat ABOVE it.
+  'read-incentive-integrity': { minRank: 2, maxRank: 5, label: 'Read the variable-pay register for the plans your lines fund: envelopes, measures, verified readings, awards and recovery status' },
+  'design-incentive-plan': { minRank: 2, maxRank: 5, label: 'Declare, measure or retire a variable-pay plan on a funding line you hold, and scan the register for owed decisions' },
+  'verify-incentive-reading': { minRank: 2, maxRank: 5, label: 'Record a verified reading for a measure on a plan whose funding line sits below you — never your own number and never one you are paid on' },
+  'award-incentive': { minRank: 2, maxRank: 5, label: 'Record an award for a person you hold on a live plan that funds your line — never for yourself' },
+  'recover-incentive': { minRank: 4, maxRank: 5, label: 'Record a clawback, malus or written waiver against an award whose funding line sits below you' },
   // ADR-0216: the deal synergy register. Reading is enterprise material and
   // matches the record-class floor (rank 4) rather than letting a director read a
   // number the class would deny. Declaring a promise is an executive act, and the

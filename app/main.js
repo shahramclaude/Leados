@@ -162,6 +162,9 @@ import { justCultureAttentionCount } from './core/domain/justCulture.js';
 // ADR-0219: the enterprise risk-appetite register.
 import { renderRiskAppetite } from './views/riskAppetite.js';
 import { riskAppetiteAttentionCount } from './core/domain/riskAppetite.js';
+// ADR-0220: the variable-pay design & incentive integrity register.
+import { renderIncentive } from './views/incentive.js';
+import { incentiveAttentionCount } from './core/domain/incentiveIntegrity.js';
 import { conflictRecusalAttentionCount } from './core/domain/conflictRecusal.js';
 import { speakUpAttentionCount } from './core/domain/speakUp.js';
 import { investmentCaseAttentionCount } from './core/domain/investmentCase.js';
@@ -574,6 +577,12 @@ export const NAV = [
     // measured over the whole population. The executive decision form asks the
     // question; this is the instrument that answers it.
     { route: 'risk-appetite', label: 'Risk appetite', icon: '◎', badge: 'riskAppetite' },
+    // ADR-0220: what the variable pay in a leader's remit actually pays for, who
+    // verifies the number, what the record can prove, and where the same outcome
+    // is paid twice because a person sits on two lines. Beside risk appetite on
+    // purpose: one is the risk the enterprise carries, the other the behaviour it
+    // pays for while carrying it.
+    { route: 'incentive', label: 'Incentive integrity', icon: '⌁', badge: 'incentive' },
     // ADR-0121: who answers for each declared duty line when the holder is out.
     { route: 'duty-cover', label: 'Duty coverage', icon: '⛨', badge: 'dutyCoverage' },
     // ADR-0140: who is accountable to whom when one person has several managers.
@@ -738,6 +747,8 @@ const RENDERERS = {
   'just-culture': (ctx) => renderJustCulture(ctx),
   // ADR-0219: the enterprise risk-appetite register.
   'risk-appetite': (ctx) => renderRiskAppetite(ctx),
+  // ADR-0220: the variable-pay design & incentive integrity register.
+  incentive: (ctx) => renderIncentive(ctx),
   conflicts: (ctx) => renderConflicts(ctx),
   conflict: (ctx, segments) => renderConflictDetail(ctx, safeDecode(segments[1])),
   recognition: (ctx) => renderRecognition(ctx),
@@ -1606,6 +1617,10 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       // review dates it declared, and domains carrying risk with no appetite.
       // The same three figures the panel prints for the seat.
       riskAppetite: riskAppetiteAttentionCount(state, { now: at, settings: state.settings, seat: seatCtx?.seat || null }),
+      // ADR-0220: over-ceiling envelopes, contested outcomes and outstanding
+      // recoveries this seat holds the joint apex above, plus live plans of its
+      // own with no verified reading. The same conditions RULE-INC-01 files.
+      incentive: incentiveAttentionCount(state, { now: at, settings: state.settings, seat: seatCtx?.seat || null }),
       // Schema v32: drafts written from case facts that still await a human.
       comms: (state.commsDrafts || []).filter((d) => d && d.status === 'draft').length,
       due: dueMeetings(state, at, state.settings).length,

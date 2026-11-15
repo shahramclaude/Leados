@@ -229,6 +229,10 @@ import { EV_CSV_COLUMNS, EV_CSV_DESCRIPTOR } from './domain/earnedValueRegistry.
 // ADR-0219: CSV #161 — the enterprise risk-appetite register, identity-free.
 import { buildRiskAppetite, riskAppetiteCsvRows } from './domain/riskAppetite.js';
 import { RA_CSV_COLUMNS, RA_CSV_DESCRIPTOR, RA_CSV_SCOPE } from './domain/riskAppetiteRegistry.js';
+// ADR-0220: CSV #162 — the variable-pay design & incentive integrity register,
+// aggregate per currency and identity-free.
+import { buildIncentiveIntegrity, incentiveCsvRows } from './domain/incentiveIntegrity.js';
+import { INC_CSV_COLUMNS, INC_CSV_DESCRIPTOR, INC_CSV_SCOPE } from './domain/incentiveRegistry.js';
 import {
   CAPITAL_RATIONING_CSV_COLUMNS,
   CAPITAL_RATIONING_CSV_DESCRIPTOR,
@@ -1526,6 +1530,11 @@ export const CSV_EXPORTS = [
   // case, no owner and no basis note crosses this boundary; an uncomputable figure
   // exports BLANK with its reason rather than a zero.
   RA_CSV_DESCRIPTOR,
+  // #162 (ADR-0220): variable-pay design & incentive integrity — aggregate per
+  // currency. One summary row per currency. No plan label, measure key, person,
+  // verifier, rationale or evidence reference crosses this boundary; an
+  // uncomputable figure exports BLANK with its reason rather than a zero.
+  INC_CSV_DESCRIPTOR,
 ];
 
 function personLookup(state) {
@@ -6786,6 +6795,16 @@ export function buildScopeTable(state, scope, now) {
       return {
         columns: RA_CSV_COLUMNS.map((key) => ({ key, header: key })),
         rows: riskAppetiteCsvRows(report),
+      };
+    }
+    case INC_CSV_SCOPE: {
+      // CSV scope #162 (ADR-0220, Schema v174). Built from the SAME reader the
+      // panel renders, with no seat: every figure is an aggregate over the whole
+      // record, so no identity is reachable from this export.
+      const report = buildIncentiveIntegrity(state, { now, settings: state.settings || {}, seat: null });
+      return {
+        columns: INC_CSV_COLUMNS.map((key) => ({ key, header: key })),
+        rows: incentiveCsvRows(report),
       };
     }
     case 'earned-value-delivery': {

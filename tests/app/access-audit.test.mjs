@@ -64,6 +64,7 @@ const ROUTES = [
   ['#/matrix?panel=remedies', 'Matrix pattern remedies'],
   ['#/matrix?panel=one-on-ones', 'Matrix 1:1 line coverage'],
   ['#/matrix?panel=turns', 'Matrix non-promotable work turns'],
+  ['#/incentive', 'Incentive integrity'],
   ['#/settings', 'Settings'],
 ];
 
