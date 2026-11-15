@@ -264,8 +264,8 @@ test('v163 is additive, starts empty, seeds no limit and invents no shift', () =
   for (const key of ['workRestShifts', 'workRestActs', 'workRestCoverage', 'workRestPolicies', 'workRestMarkers']) delete old[key];
   old.people = [person('lou', null, 'lead'), person('sam', 'lou', 'ic')];
   const next = migrate(old);
-  assert.equal(SCHEMA_VERSION, 167);
-  assert.deepEqual(next.applied.at(-1), '166 → 167');
+  assert.equal(SCHEMA_VERSION, 168);
+  assert.deepEqual(next.applied.at(-1), '167 → 168');
   for (const key of ['workRestShifts', 'workRestActs', 'workRestCoverage', 'workRestPolicies', 'workRestMarkers']) {
     assert.deepEqual(next.raw[key], [], `${key} starts empty`);
     assert.ok(COLLECTIONS.includes(key), `${key} is a collection`);
@@ -342,7 +342,7 @@ test('the ledger is wired to the spine: rights, reads, record policies, CSV scop
   assert.equal(PAUSE_PERMIT_REACH_RULES.workRestAutoPropagate, 'workRestRules.js');
   assert.ok(fs.readFileSync(path.join(REPO, 'app/core/domain/workRestRules.js'), 'utf8').includes('workRestAutoPropagate === false'), 'the rule names its pause switch literally');
 
-  assert.equal(CSV_EXPORTS.length, 155);
+  assert.equal(CSV_EXPORTS.length, 156);
   // The export list is append-only, so this scope keeps its own row and is no
   // longer the last one; the tail pin belongs to the newest register's suite.
   assert.ok(CSV_EXPORTS.some((row) => row.key === WORK_REST_CSV_SCOPE), 'scope #151 is still registered');

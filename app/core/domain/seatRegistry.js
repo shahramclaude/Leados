@@ -218,6 +218,12 @@ export const RECORD_POLICIES = Object.freeze({
   // seat-checked report, never the raw rows.
   flexBudgetPlans: { classKey: 'unit', detailCeiling: 0, label: 'Flexible-budget standards (report only; every variance re-derived on read)', route: '#/finance?panel=variance' },
   flexBudgetActuals: { classKey: 'unit', detailCeiling: 0, label: 'Actuals recorded against a flexible-budget standard (report only)', route: '#/finance?panel=variance' },
+  // ADR-0214: a valuation reading is the owners' claim on the whole company, and
+  // a leg claim names a person as answerable for part of it. Both are ENTERPRISE
+  // material: below the executive altitude there is no honest per-line reading of
+  // enterprise value, so the floor is rank 4 rather than a redacted derivative.
+  valueBridgeReadings: { classKey: 'enterprise', detailCeiling: 5, label: 'Dated enterprise valuation readings (report only; every leg re-derived on read)', route: '#/finance?panel=value' },
+  valueBridgeLeverClaims: { classKey: 'enterprise', detailCeiling: 5, label: 'Declared ownership of value-bridge legs (report only)', route: '#/finance?panel=value' },
   delegationLineActs: { classKey: 'unit', detailCeiling: 0, label: 'Cross-line ask attribution acts (report only)', route: '#/matrix?panel=asks' },
   delegationLineMarkers: { classKey: 'unit', detailCeiling: 0, label: 'Cross-line overload reconciliation markers', route: '#/matrix?panel=asks' },
   // ADR-0181: classification acts and RULE-NPW-01 markers are surfaced only
@@ -763,6 +769,15 @@ export const ACTION_RIGHTS = Object.freeze({
   'declare-flex-budget-plan': { minRank: 3, maxRank: 5, label: 'Declare or retire a cost standard for a budget holder you hold — never your own' },
   'record-flex-budget-actuals': { minRank: 1, maxRank: 5, label: 'Record or withdraw actuals against a declared cost standard' },
   'govern-flex-budget': { minRank: 4, maxRank: 5, label: 'Set the window in which final actuals are due' },
+  // ADR-0214: equity value is enterprise material — the record class floor is
+  // rank 4, and the right matches it rather than letting a director read a number
+  // the record class would deny. Recording a reading is the same altitude;
+  // claiming a leg names a person and is re-proved against the reporting graph;
+  // the staleness window is a chief's declaration.
+  'read-value-bridge': { minRank: 4, maxRank: 5, label: 'Read the enterprise value bridges and the declared ownership of their legs' },
+  'record-value-bridge-reading': { minRank: 4, maxRank: 5, label: 'Record, restate or withdraw a dated valuation reading' },
+  'claim-value-bridge-lever': { minRank: 4, maxRank: 5, label: 'Declare that a person you hold answers for one value leg over one period' },
+  'govern-value-bridge': { minRank: 5, maxRank: 5, label: 'Set the window at which a bridge is printed as stale' },
   // ADR-0209: reading the work/rest ledger is open at every altitude and scoped
   // by the reader. Rostering starts at the FRONTLINE — a shift lead writes the
   // roster — and the action re-proves that the seat holds the very line. Which

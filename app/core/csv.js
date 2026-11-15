@@ -215,6 +215,8 @@ import { buildStandardWaivers, standardWaiverCsvRows } from './domain/standardWa
 import { STANDARD_WAIVER_CSV_COLUMNS, STANDARD_WAIVER_CSV_DESCRIPTOR } from './domain/standardWaiverRegistry.js';
 import { buildFlexBudget, flexBudgetCsvRows } from './domain/flexBudget.js';
 import { FLEX_BUDGET_CSV_COLUMNS, FLEX_BUDGET_CSV_DESCRIPTOR } from './domain/flexBudgetRegistry.js';
+import { buildValueBridge, valueBridgeCsvRows } from './domain/valueBridge.js';
+import { VALUE_BRIDGE_CSV_COLUMNS, VALUE_BRIDGE_CSV_DESCRIPTOR } from './domain/valueBridgeRegistry.js';
 import {
   CAPITAL_RATIONING_CSV_COLUMNS,
   CAPITAL_RATIONING_CSV_DESCRIPTOR,
@@ -1480,6 +1482,11 @@ export const CSV_EXPORTS = [
   // pooled, interim statements never enter a roll-up, and a figure that is
   // withheld or cannot be claimed exports BLANK with its reason key, never zero.
   FLEX_BUDGET_CSV_DESCRIPTOR,
+  // #156 (ADR-0214): enterprise value bridges — identity-free. No person,
+  // manager, reading id, basis or reason text, and no multiple, EBITDA or net
+  // debt level; a bridge exports as `B01` and a chain as `C01`, currencies are
+  // never pooled, and a withheld figure exports BLANK with its reason key.
+  VALUE_BRIDGE_CSV_DESCRIPTOR,
 ];
 
 function personLookup(state) {
@@ -6697,6 +6704,18 @@ export function buildScopeTable(state, scope, now) {
       return {
         columns: CONFLICT_RECUSAL_CSV_COLUMNS.map((key) => ({ key, header: key })),
         rows: conflictRecusalCsvRows(report),
+      };
+    }
+    case 'value-bridge-movements': {
+      // CSV scope #156 (ADR-0214, Schema v168). Built from the SAME reader the
+      // panel renders, so an exported movement is provably the movement printed,
+      // cent for cent. A bridge and a chain export under an opaque positional
+      // code; ownership exports as counts only. A withheld figure is BLANK with
+      // its reason key, never zero.
+      const report = buildValueBridge(state, { now, settings: state.settings || {}, seat: null });
+      return {
+        columns: VALUE_BRIDGE_CSV_COLUMNS.map((key) => ({ key, header: key })),
+        rows: valueBridgeCsvRows(report),
       };
     }
     case 'flex-budget-variance-statements': {

@@ -43,6 +43,7 @@ import {
 import { renderFinanceInvestmentCasePanel } from './financeInvestmentCasePanel.js';
 import { renderFinanceCapitalRationingPanel } from './capitalRationingPanel.js';
 import { renderFinanceFlexBudgetPanel } from './flexBudgetPanel.js';
+import { renderFinanceValueBridgePanel } from './valueBridgePanel.js';
 
 const STATUS_TONE = { active: 'good', closed: 'neutral', archived: 'neutral' };
 const LINE_TONE = { planned: 'neutral', committed: 'info', spent: 'good', released: 'neutral' };
@@ -118,10 +119,12 @@ const FINANCE_PANELS = [
   { key: 'rationing', label: 'Capital rationing', href: '#/finance?panel=rationing' },
   // ADR-0213: why cost differs from budget — volume, price or usage.
   { key: 'variance', label: 'Variance statements', href: '#/finance?panel=variance' },
+  // ADR-0214: what moved the owners' claim on the company, and whose leg it was.
+  { key: 'value', label: 'Enterprise value', href: '#/finance?panel=value' },
 ];
 
-function financePanelTabs(ctx, panel, { envelopes = undefined, queue = undefined, cases = undefined, rationing = undefined, variance = undefined } = {}) {
-  const counts = { envelopes, span: queue, cases, rationing, variance };
+function financePanelTabs(ctx, panel, { envelopes = undefined, queue = undefined, cases = undefined, rationing = undefined, variance = undefined, value = undefined } = {}) {
+  const counts = { envelopes, span: queue, cases, rationing, variance, value };
   return tabs({
     ariaLabel: 'Budget & finance views',
     active: panel,
@@ -164,6 +167,16 @@ function flexBudgetTabCount(ctx) {
   return result?.ok && result.count > 0 ? result.count : undefined;
 }
 
+/**
+ * ADR-0214: bridges with a refused attribution, a stale closing reading or a
+ * leg two lines both claim. Read through the seat-checked API, so the count is
+ * the one the panel itself prints; a refused read shows no count.
+ */
+function valueBridgeTabCount(ctx) {
+  const result = typeof ctx.api?.valueBridgeAttentionCount === 'function' ? ctx.api.valueBridgeAttentionCount() : null;
+  return result?.ok && result.count > 0 ? result.count : undefined;
+}
+
 /** Downloads are allowed to fail in a browser; then the ledger stays copyable. */
 function downloadOrCopy({ filename, text, title }) {
   if (downloadText({ filename, text, mime: 'text/plain' })) {
@@ -182,7 +195,7 @@ function downloadOrCopy({ filename, text, title }) {
 
 export function renderFinance(ctx) {
   const requestedPanel = ctx.query?.get?.('panel');
-  const panel = requestedPanel === 'span' || requestedPanel === 'cases' || requestedPanel === 'rationing' || requestedPanel === 'variance' ? requestedPanel : 'envelopes';
+  const panel = requestedPanel === 'span' || requestedPanel === 'cases' || requestedPanel === 'rationing' || requestedPanel === 'variance' || requestedPanel === 'value' ? requestedPanel : 'envelopes';
   const seat = ctx.seatContext?.seat || null;
   const built = ctx.seatContext?.built || null;
   // One evaluator, two readings: the exposure re-evaluates the SAME envelopes
@@ -192,6 +205,7 @@ export function renderFinance(ctx) {
   const casesCount = investmentCaseTabCount(ctx);
   const rationingCount = capitalRationingTabCount(ctx);
   const varianceCount = flexBudgetTabCount(ctx);
+  const valueCount = valueBridgeTabCount(ctx);
   if (panel === 'cases') {
     // ADR-0208: the register renders itself from its own seat-checked reader;
     // this view only lends it the shared finance navigation.
@@ -202,6 +216,20 @@ export function renderFinance(ctx) {
         cases: casesCount,
         rationing: rationingCount,
         variance: varianceCount,
+      }),
+    });
+  }
+  if (panel === 'value') {
+    // ADR-0214: the bridge renders itself from its own seat-checked reader; this
+    // view only lends it the shared finance navigation.
+    return renderFinanceValueBridgePanel(ctx, {
+      tabs: financePanelTabs(ctx, panel, {
+        envelopes: budgetsRollup(ctx.state, ctx.now).all.length,
+        queue: exposure.queue.length + exposure.queueDeferred,
+        cases: casesCount,
+        rationing: rationingCount,
+        variance: varianceCount,
+        value: valueCount,
       }),
     });
   }

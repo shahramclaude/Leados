@@ -377,7 +377,15 @@ test('standalone artifact exists and is a single inline HTML document', () => {
   // modules = 16,752 bytes per module, still far below the unchanged 24,000
   // density guard. Ceiling moves 15,000,000 -> 15,150,000 only because real
   // capability was added; the density bound still catches a duplication.
-  assert.ok(bytes < 15_150_000, `standalone file is unexpectedly large (${bytes} bytes)`);
+  // ADR-0214 (Session 287, Schema v168) adds the Enterprise Value Bridge: five
+  // domain modules (the exact rational kernel, registry, schema/loaders, the
+  // pure reader, the dated actions), one finance panel and one generated diagram
+  // (50,935 bytes, the twenty-second .jpg in app/assets). The slice adds
+  // 147,940 bytes. Measured build: 15,191,213 bytes / 904 source modules =
+  // 16,804 bytes per module, still far below the unchanged 24,000 density
+  // guard. Ceiling moves 15,150,000 -> 15,350,000 only because real capability
+  // was added; the density bound still catches a duplication.
+  assert.ok(bytes < 15_350_000, `standalone file is unexpectedly large (${bytes} bytes)`);
   // Derived from the folder, not from a list in this file: the day a panel adds
   // a diagram, an enumerator that names the old two would still pass. Same
   // lesson the build script learned in ADR-0186.

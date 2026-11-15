@@ -19,6 +19,7 @@ import { WORK_REST_RIGHTS } from './workRestRegistry.js';
 import { CONFLICT_RECUSAL_RIGHTS } from './conflictRecusalRegistry.js';
 import { STANDARD_WAIVER_RIGHTS } from './standardWaiverRegistry.js';
 import { FLEX_BUDGET_RIGHTS } from './flexBudgetRegistry.js';
+import { VALUE_BRIDGE_RIGHTS } from './valueBridgeRegistry.js';
 import { routeVerdict } from './seatRegistry.js';
 import { validateMissionCommands } from './mission.js';
 import { captureBriefCase } from './missionCaptureBrief.js';
@@ -199,6 +200,14 @@ const groups = [
   [FLEX_BUDGET_RIGHTS.DECLARE, 'flexBudgetDeclarePlan flexBudgetRetirePlan'],
   [FLEX_BUDGET_RIGHTS.RECORD, 'flexBudgetRecordActuals flexBudgetWithdrawActuals'],
   [FLEX_BUDGET_RIGHTS.GOVERN, 'flexBudgetSetConventions'],
+  // ADR-0214: the enterprise value bridge. Equity value is ENTERPRISE material
+  // (rank 4+). Recording a reading is an executive act; claiming a leg re-proves
+  // inside the action that the seat holds the claimant through its tree or a
+  // declared line; the staleness window is the chief's to set.
+  [VALUE_BRIDGE_RIGHTS.READ, 'valueBridgeReport valueBridgeBriefText valueBridgeCsvRows valueBridgeAttentionCount valueBridgeCandidates'],
+  [VALUE_BRIDGE_RIGHTS.RECORD, 'valueBridgeRecordReading valueBridgeWithdrawReading'],
+  [VALUE_BRIDGE_RIGHTS.CLAIM, 'valueBridgeClaimLever valueBridgeWithdrawClaim'],
+  [VALUE_BRIDGE_RIGHTS.GOVERN, 'valueBridgeSetConventions'],
   // ADR-0148: answering a declared share is TWO first-person acts, split on the
   // spine rather than in prose. `accept-matrix-line` is the manager's own
   // answer (accept or decline the line they were given); it is open at every
@@ -498,7 +507,7 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // exactly when a real organisation turned enforcement on.
 // ADR-0213: the variance statement's pure read surface — each re-proves the
 // read right and projects by seat inside the action.
-'flexBudgetAttentionCount', 'flexBudgetBriefText', 'flexBudgetCandidates', 'flexBudgetCsvRows', 'flexBudgetReport',
+'flexBudgetAttentionCount', 'flexBudgetBriefText', 'flexBudgetCandidates', 'flexBudgetCsvRows', 'flexBudgetReport', 'valueBridgeAttentionCount', 'valueBridgeBriefText', 'valueBridgeCandidates', 'valueBridgeCsvRows', 'valueBridgeReport',
 'standardWaiverAttentionCount', 'standardWaiverBriefText', 'standardWaiverCandidates', 'standardWaiverCsvRows', 'standardWaiverReport', 'concordanceAttentionCount', 'concordanceBriefText', 'concordanceCsvRows', 'concordanceRead', 'concordanceStats', 'disclosureAttentionCount', 'disclosureBriefText', 'disclosureCsvRows', 'disclosureGrantRead', 'disclosureGrants', 'disclosureRead', 'envoyAttentionCount', 'envoyBriefText', 'envoyCsvRows', 'envoyIdentity', 'envoyPacketText', 'envoyPreview', 'envoyRead', 'escalationBriefText', 'escalationCsvRows', 'escalationRead', 'escalationStats', 'differencesAttentionCount', 'differencesBriefText', 'differencesCsvRows', 'differencesRead', 'federationAttentionCount', 'federationBriefText', 'federationCsvRows', 'federationRead',
 'freezeLineAttentionCount', 'freezeLineBriefText', 'freezeLineConventions', 'freezeLineCsvRows', 'freezeLineReport',
 'spanCalibrationAttentionCount', 'spanCalibrationBriefText', 'spanCalibrationConventions', 'spanCalibrationCsvRows', 'spanCalibrationReport', 'spanCalibrationSettings', 'spanCalibrationSignals',
@@ -811,6 +820,10 @@ const MATRIX_LINE_SCOPED = new Set([
   // through a declared Matrix line. The action re-proves that hold — and that
   // the holder is not the seat itself — before it writes.
   'flexBudgetDeclarePlan',
+  // ADR-0214: a value leg is claimed for a person the seat may hold only through
+  // a declared Matrix line — the exact case a matrix exists for. The action
+  // re-proves the hold before it writes a claim about somebody's promise.
+  'valueBridgeClaimLever', 'valueBridgeWithdrawClaim',
   // ADR-0209: a shift (declared or previewed) and a coverage attestation name a
   // person the acting seat may hold only through a declared Matrix line — which
   // is exactly the case the ledger exists for. The action re-proves that the
