@@ -347,13 +347,17 @@ test('standalone artifact exists and is a single inline HTML document', () => {
   // slice adds 173,868 bytes. Measured build: 13,936,642 bytes / 873 source
   // modules = 15,964 bytes per module, still far below the unchanged 24,000
   // density guard. Ceiling moves to 14,100,000 only because capability was added.
-  // Session 280 completed ADR-0207's surface (no new module) and added the
-  // seventeenth .jpg (57,380 bytes) to app/assets, which the build inlines: the
-  // slice adds 88,148 bytes over Session 279's artifact. Measured build:
-  // 14,242,232 bytes / 879 source modules = 16,203 bytes per module, still far
-  // below the unchanged 24,000 density guard. Ceiling moves to 14,300,000 only
-  // because a real asset was added; the density bound still catches a duplication.
-  assert.ok(bytes < 14_300_000, `standalone file is unexpectedly large (${bytes} bytes)`);
+  // Session 282 completed ADR-0207's surface (no new module) and added the
+  // cross-window .jpg (57,380 bytes). The measurement below is taken on the
+  // MERGED tree: main carried Session 280's capital-rationing register (seven
+  // domain modules and another generated diagram) that its own session did not
+  // rebuild into this artifact, so the slice measured here includes both and
+  // cannot be attributed to one of them. Measured build: 14,423,174 bytes / 886
+  // source modules = 16,278 bytes per module, still far below the unchanged
+  // 24,000 density guard. Ceiling moves 14,100,000 -> 14,500,000 only because
+  // real capability and a real asset were added; the density bound still
+  // catches a duplication.
+  assert.ok(bytes < 14_500_000, `standalone file is unexpectedly large (${bytes} bytes)`);
   // Derived from the folder, not from a list in this file: the day a panel adds
   // a diagram, an enumerator that names the old two would still pass. Same
   // lesson the build script learned in ADR-0186.

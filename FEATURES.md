@@ -1,4 +1,4 @@
-## 2026-11-15 · Session 280: Cross-window prerequisites on the screen — what the calendar proves, and what it refuses to claim (ADR-0207 · Schema v161 unchanged · `RULE-SSC-01` extended · CSV #148 extended)
+## 2026-11-15 · Session 282: Cross-window prerequisites on the screen — what the calendar proves, and what it refuses to claim (ADR-0207 · Schema v161 unchanged · `RULE-SSC-01` extended · CSV #148 extended)
 
 - **What it answers.** The enabling register (ADR-0204) could order two stations inside ONE window; real work crosses shifts. Can Monday's feeder in one manager's window be said to precede Tuesday's consumer in another's — and can the record prove it? Live at `#/standard-work?panel=stations`.
 - **The declaration.** One dated, written declaration between two DIFFERENT windows, made only by the seat that holds both — the lowest joint apex of the two window holders — or by the operator view, which is printed as scribery. A declaration the calendar contradicts is still recordable, then proved and sent back to its declarer.
