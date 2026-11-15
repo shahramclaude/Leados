@@ -1,3 +1,9 @@
+## 2026-11-15 — Held accountable for the outcome while another line holds the authority, budget, and hours
+
+**Governance → Duty without means** (`#/means`, [ADR-0221](./docs/adr/0221-duty-without-means-register.md), Schema v175, CSV #163, `RULE-DWM-01`) is the parity ledger for **accountability without means**. A frontline supervisor or mid-manager puts an assigned outcome duty on the record — or a demanding line declares one on a person it holds — alongside the concrete **decision authority**, **budget envelope**, and **protected capacity hours** required to deliver it and the specific line holder (`controllingHolderId`) who controls each pillar.
+
+A demanding line cannot promise another matrix line's hours, authority, or budget (`dutyMeans:demanding-line-cannot-supply-other-line`), a carrier cannot self-certify their own means or unilaterally retire an owed duty, and a declared reporting-line share (`shareH`) is printed as context rather than multiplied into fabricated hours. Per currency and per pillar, `covered + acceptedGap + unbackedShortfall === required` holds with zero cross-requirement netting and zero FX conversion. Unresolved cross-line locks and declined means route through `matrixJointApex` strictly above **both** the demanding line and every controlling line, where an executive may either supply the means, rescope the duty, or sign a written Simons **entrepreneurial gap** that protects the carrier from unresourced blame.
+
 ## 2026-11-15 — Durable earned-value automation pauses
 
 The central settings/permit path now retains earned-value conventions and its automation switch through reload. Pause permits continue to name the synergy and earned-value rules they silence without classifying those owner-directed rules as matrix-routing controls. This is a source-runtime repair; the standalone distribution was not rebuilt in this session.

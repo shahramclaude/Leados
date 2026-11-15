@@ -261,6 +261,15 @@ export const RECORD_POLICIES = Object.freeze({
   incentiveAwards: { classKey: 'unit', detailCeiling: 3, label: 'Individual variable-pay awards — money for a named person, on a measured or discretionary basis (report only)', route: '#/incentive' },
   incentiveRecoveries: { classKey: 'unit', detailCeiling: 3, label: 'Recovery acts against an award — demanded, recovered or waived, with a written reason (report only)', route: '#/incentive' },
   incentiveMarkers: { classKey: 'unit', detailCeiling: 3, label: 'Incentive-integrity observation markers — no joint seat, funding line departed (identity-free)', route: '#/incentive' },
+  // ADR-0221: the Duty-Without-Means Register. Report-only (`detailCeiling: 0`)
+  // so raw rows are never handed to the generic projection; `buildDutyMeans`
+  // discloses duties to the carrier, demanding line, controlling line, and
+  // joint-apex ancestors, while redacting individual contributor identity above
+  // the director altitude.
+  dutyMeansDuties: { classKey: 'unit', detailCeiling: 0, label: 'Declared accountable duties and their demanding lines (report only; verdicts re-derived on read)', route: '#/means' },
+  dutyMeansRequirements: { classKey: 'unit', detailCeiling: 0, label: 'Required authority, budget and protected-time pillars per duty (report only)', route: '#/means' },
+  dutyMeansActs: { classKey: 'unit', detailCeiling: 0, label: 'Controlling-line supply, refusal, withdrawal and joint-apex entrepreneurial-gap acts (report only)', route: '#/means' },
+  dutyMeansMarkers: { classKey: 'unit', detailCeiling: 0, label: 'Duty-without-means observation markers — no joint apex, holder off roster (identity-free)', route: '#/means' },
   // ADR-0216: a deal thesis, its promises, their readings and one-off costs are
   // ENTERPRISE material — a synergy belongs to the whole deal, not to one line's
   // reading of it, and below the executive altitude there is no honest per-line
@@ -872,6 +881,15 @@ export const ACTION_RIGHTS = Object.freeze({
   'verify-incentive-reading': { minRank: 2, maxRank: 5, label: 'Record a verified reading for a measure on a plan whose funding line sits below you — never your own number and never one you are paid on' },
   'award-incentive': { minRank: 2, maxRank: 5, label: 'Record an award for a person you hold on a live plan that funds your line — never for yourself' },
   'recover-incentive': { minRank: 4, maxRank: 5, label: 'Record a clawback, malus or written waiver against an award whose funding line sits below you' },
+  // ADR-0221: the Duty-Without-Means Register. Frontline leads and mid-managers
+  // (rank 1+) read and declare duties they carry (or duties on people they hold)
+  // and their required means; managers+ (rank 2+) supply, decline or revoke
+  // means on lines they control; directors+ (rank 3+) govern joint-apex
+  // entrepreneurial gaps strictly above both demanding and controlling lines.
+  'read-duty-means': { minRank: 1, maxRank: 5, label: 'Read the Duty-Without-Means Register for duties in your span or addressed to your line' },
+  'declare-duty-means': { minRank: 1, maxRank: 5, label: 'Declare an accountable duty or required means pillar, retire a duty as demanding line, or scan parity' },
+  'supply-duty-means': { minRank: 2, maxRank: 5, label: 'Record supplied, declined or revoked means on a requirement controlled by your line — never self-certified' },
+  'govern-duty-means': { minRank: 3, maxRank: 5, label: 'Accept a bounded Simons entrepreneurial gap strictly above both the demanding line and the controlling line' },
   // ADR-0216: the deal synergy register. Reading is enterprise material and
   // matches the record-class floor (rank 4) rather than letting a director read a
   // number the class would deny. Declaring a promise is an executive act, and the

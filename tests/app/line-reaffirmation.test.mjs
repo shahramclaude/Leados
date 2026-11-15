@@ -462,8 +462,8 @@ test('a single-chain workspace is inert: no row, no term, no ask, and the schema
   assert.equal(report.board.linesN, 0);
   assert.match(report.singleChainNote, /no second share/);
   assert.equal(JSON.stringify(normalized), before, 'a read mutates nothing');
-  assert.equal(SCHEMA_VERSION, 174);
-  assert.equal(migrate({ schemaVersion: 128, settings: {} }).raw.schemaVersion, 174);
+  assert.equal(SCHEMA_VERSION, 175);
+  assert.equal(migrate({ schemaVersion: 128, settings: {} }).raw.schemaVersion, 175);
 });
 
 test('the vocabulary is closed and the state counts reconcile by construction', () => {

@@ -25,6 +25,7 @@ import { SYNERGY_RIGHTS } from './synergyRegistry.js';
 import { EV_RIGHTS } from './earnedValueRegistry.js';
 import { RA_RIGHTS } from './riskAppetiteRegistry.js';
 import { INC_RIGHTS } from './incentiveRegistry.js';
+import { DWM_RIGHTS } from './dutyMeansRegistry.js';
 import { JUST_CULTURE_RIGHTS } from './justCultureRegistry.js';
 import { routeVerdict } from './seatRegistry.js';
 import { validateMissionCommands } from './mission.js';
@@ -289,6 +290,13 @@ const groups = [
   [INC_RIGHTS.VERIFY, 'incentiveRecordReading'],
   [INC_RIGHTS.AWARD, 'incentiveRecordAward'],
   [INC_RIGHTS.RECOVER, 'incentiveRecordRecovery'],
+  // ADR-0221: the Duty-Without-Means Register. Reads are open from frontline
+  // upward and re-proved inside the action; writes prove carrier/demanding/
+  // controlling/joint-apex standing against the live matrix graph.
+  [DWM_RIGHTS.READ, 'dutyMeansReport dutyMeansAttentionCount dutyMeansCandidates'],
+  [DWM_RIGHTS.DECLARE, 'dutyMeansDeclareDuty dutyMeansRetireDuty dutyMeansAddRequirement dutyMeansScan'],
+  [DWM_RIGHTS.SUPPLY, 'dutyMeansRecordAct'],
+  [DWM_RIGHTS.GOVERN, 'dutyMeansGovernGap'],
   // ADR-0148: answering a declared share is TWO first-person acts, split on the
   // spine rather than in prose. `accept-matrix-line` is the manager's own
   // answer (accept or decline the line they were given); it is open at every
@@ -623,6 +631,7 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // its writes are still gated — the register would vanish exactly when a real
 // organisation turned enforcement on.
 'incentiveReport', 'incentiveAttentionCount', 'incentiveCandidates',
+'dutyMeansReport', 'dutyMeansAttentionCount', 'dutyMeansCandidates',
 'standardWaiverAttentionCount', 'standardWaiverBriefText', 'standardWaiverCandidates', 'standardWaiverCsvRows', 'standardWaiverReport', 'concordanceAttentionCount', 'concordanceBriefText', 'concordanceCsvRows', 'concordanceRead', 'concordanceStats', 'disclosureAttentionCount', 'disclosureBriefText', 'disclosureCsvRows', 'disclosureGrantRead', 'disclosureGrants', 'disclosureRead', 'envoyAttentionCount', 'envoyBriefText', 'envoyCsvRows', 'envoyIdentity', 'envoyPacketText', 'envoyPreview', 'envoyRead', 'escalationBriefText', 'escalationCsvRows', 'escalationRead', 'escalationStats', 'differencesAttentionCount', 'differencesBriefText', 'differencesCsvRows', 'differencesRead', 'federationAttentionCount', 'federationBriefText', 'federationCsvRows', 'federationRead',
 'freezeLineAttentionCount', 'freezeLineBriefText', 'freezeLineConventions', 'freezeLineCsvRows', 'freezeLineReport',
 'spanCalibrationAttentionCount', 'spanCalibrationBriefText', 'spanCalibrationConventions', 'spanCalibrationCsvRows', 'spanCalibrationReport', 'spanCalibrationSettings', 'spanCalibrationSignals',
@@ -937,6 +946,10 @@ const MATRIX_LINE_SCOPED = new Set([
   // number, and refuses an award to the awarder.
   'incentiveDeclarePlan', 'incentiveRetirePlan', 'incentiveAddMeasure', 'incentiveRecordReading',
   'incentiveRecordAward', 'incentiveRecordRecovery',
+  // ADR-0221: each duty-without-means write proves carrier, demanding-line,
+  // controlling-line, or strict joint-apex standing against the live matrix.
+  'dutyMeansDeclareDuty', 'dutyMeansRetireDuty', 'dutyMeansAddRequirement',
+  'dutyMeansRecordAct', 'dutyMeansGovernGap',
   // ADR-0208: a declared (or previewed) case names a benefit owner the declaring
   // seat may reach only through a declared Matrix line; the action re-checks the
   // tree and the line itself before it reads or records anything.

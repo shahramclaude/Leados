@@ -54,9 +54,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const SWEEP = {
-  schema: { from: 170, to: 171 },
-  csvExports: { from: [158], to: 159 },
-  spineRules: { from: [133], to: 134 },
+  schema: { from: 174, to: 175 },
+  csvExports: { from: [162], to: 163 },
+  spineRules: { from: [135, 136], to: 137 },
 };
 
 const ROOT = path.resolve(import.meta.dirname, '..');
@@ -92,8 +92,9 @@ for (const file of files) {
   swap(new RegExp(`'${previousStep}'\\]`, 'g'), `'${previousStep}', '${newStep}']`, 'chain');
   // Some older migration tests assert only the terminal chain entry. They are
   // current-schema pins, not historical one-step migration assertions (such as
-  // `MIGRATIONS['156']`), so move this terminal pin too.
-  swap(new RegExp(`\\.applied\\.at\\(-1\\), '${previousStep}'`, 'g'), `.applied.at(-1), '${newStep}'`, 'chain');
+  // `MIGRATIONS['156']`), so move this terminal pin too (and repair any prior
+  // comma-appended duplicates).
+  swap(/\.applied\.at\(-1\),\s*(?:'\d+\s*→\s*\d+',\s*)*'\d+\s*→\s*\d+'/g, `.applied.at(-1), '${newStep}'`, 'chain');
   for (const stale of SWEEP.csvExports?.from || []) {
     swap(new RegExp(`CSV_EXPORTS\\.length, ${stale}\\b`, 'g'), `CSV_EXPORTS.length, ${SWEEP.csvExports.to}`, 'csvExports');
   }
