@@ -215,6 +215,8 @@ import { INVESTMENT_CASE_CSV_COLUMNS, INVESTMENT_CASE_CSV_DESCRIPTOR } from './d
 // note. A figure that cannot be claimed exports BLANK with its reason.
 import { buildWorkRest, workRestCsvRows } from './domain/workRest.js';
 import { WORK_REST_CSV_COLUMNS, WORK_REST_CSV_DESCRIPTOR } from './domain/workRestRegistry.js';
+import { buildConflictRecusal, conflictRecusalCsvRows } from './domain/conflictRecusal.js';
+import { CONFLICT_RECUSAL_CSV_COLUMNS, CONFLICT_RECUSAL_CSV_DESCRIPTOR } from './domain/conflictRecusalRegistry.js';
 import { buildPausePermits, pausePermitCsvRows } from './domain/pausePermits.js';
 import { PAUSE_PERMIT_CSV_COLUMNS, PAUSE_PERMIT_CSV_DESCRIPTOR } from './domain/pausePermitRegistry.js';
 import { STRUCTURE_HISTORY_CSV_COLUMNS } from './domain/structureHistoryRegistry.js';
@@ -1443,6 +1445,11 @@ export const CSV_EXPORTS = [
   // exports as `W01`, a policy as `P01`, durations are whole minutes, and a
   // figure that cannot be claimed exports BLANK with its reason, never zero.
   WORK_REST_CSV_DESCRIPTOR,
+  // #152 (ADR-0210): the decision-maker conflict-of-interest & recusal register
+  // — identity-free. No person, manager, record id, title, reason or control
+  // text; a person exports as `person-001`, the seven verdicts are never
+  // collapsed, and a figure that cannot be claimed exports BLANK with its reason.
+  CONFLICT_RECUSAL_CSV_DESCRIPTOR,
 ];
 
 function personLookup(state) {
@@ -6649,6 +6656,17 @@ export function buildScopeTable(state, scope, now) {
       return {
         columns: WORK_REST_CSV_COLUMNS.map((key) => ({ key, header: key })),
         rows: workRestCsvRows(report),
+      };
+    }
+    case 'conflict-recusal': {
+      // CSV scope #152 (ADR-0210, Schema v164). Built from the SAME reader the
+      // panel renders, so an exported verdict is provably the verdict that was
+      // printed. A person exports under a positional code; no person, manager,
+      // record id, title, reason or control text reaches the file.
+      const report = buildConflictRecusal(state, { now, settings: state.settings || {}, seat: null });
+      return {
+        columns: CONFLICT_RECUSAL_CSV_COLUMNS.map((key) => ({ key, header: key })),
+        rows: conflictRecusalCsvRows(report),
       };
     }
     case 'investment-case-appraisals': {

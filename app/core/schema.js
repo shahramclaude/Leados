@@ -197,6 +197,20 @@ import {
   normalizeWorkRestSettings,
   normalizeWorkRestShifts,
 } from './domain/workRestSchema.js';
+// ADR-0210 (Schema v164): the Decision-Maker Conflict-of-Interest & Recusal
+// Ledger. Four collections, every one EMPTY at upgrade: declared interests,
+// dated standing responses, reportable-kind rules and the rule's bounded marker
+// ledger. Nothing derived — no verdict, position, coverage claim, lateness or
+// owner — is stored; each is re-derived on read from these rows and the record
+// an interest names.
+import {
+  normalizeConflictInterests,
+  normalizeConflictNoneDeclarations,
+  normalizeConflictRecusalMarkers,
+  normalizeConflictRecusalSettings,
+  normalizeConflictRules,
+  normalizeConflictStandings,
+} from './domain/conflictRecusalSchema.js';
 // ADR-0185 (Schema v147): dated Matrix change-impact requests and first-person
 // line responses. Request snapshots normalize before their responses resolve.
 import {
@@ -1001,7 +1015,7 @@ export {
 // and a shift invented here would manufacture a rest — or a breach — nobody
 // recorded. No statutory limit is seeded either: which limits bind a person is
 // a human declaration with its source in writing.
-export const SCHEMA_VERSION = 163;
+export const SCHEMA_VERSION = 164;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -2468,6 +2482,12 @@ export const DEFAULT_SETTINGS = Object.freeze({
   // clamped) by the setter. No rest or hours limit is a convention: a policy
   // declares it, with its source.
   ...normalizeWorkRestSettings({}),
+  // ADR-0210: the conflict/recusal conventions — how far back the register reads,
+  // the latency after which a declaration reads as late, and the automation
+  // pause. Clamped on load, refused (never clamped) by the setter. No
+  // relationship kind is a convention: a rule declares the reportable kinds with
+  // its source, and with no rule every reading is honestly `unsearched`.
+  ...normalizeConflictRecusalSettings({}),
 });
 
 export const COLLECTIONS = [
@@ -3275,6 +3295,15 @@ export const COLLECTIONS = [
   'workRestCoverage',
   'workRestPolicies',
   'workRestMarkers',
+  // ADR-0210 (Schema v164): the Decision-Maker Conflict-of-Interest & Recusal
+  // Ledger. Declared interests, dated standing responses, reportable-kind rules
+  // and the rule's bounded marker ledger. No verdict, position, coverage claim,
+  // lateness or owner is stored; each is re-derived on read.
+  'conflictInterests',
+  'conflictNoneDeclarations',
+  'conflictStandings',
+  'conflictRules',
+  'conflictRecusalMarkers',
 ];
 
 /** Stable empty state. `now` is an ISO string so the result is a pure value. */
@@ -4080,6 +4109,10 @@ export function normalizeSettings(raw) {
     // spread here would vanish on every load and the pause census would never
     // see the conflict switch.
     ...normalizeWorkRestSettings(s),
+    // ADR-0210: named here for the same reason — a conflict/recusal convention not
+    // spread here would vanish on every load and the pause census would never see
+    // the switch that silences a rule reading the reporting graph.
+    ...normalizeConflictRecusalSettings(s),
     ...normalizeStructureHistorySettings(s),
     ...normalizeDifferencesSettings(s),
     ...normalizeFitSettings(s),
@@ -8670,6 +8703,17 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.workRestCoverage = normalizeWorkRestCoverage(raw.workRestCoverage, warnings);
   state.workRestPolicies = normalizeWorkRestPolicies(raw.workRestPolicies, warnings);
   state.workRestMarkers = normalizeWorkRestMarkers(raw.workRestMarkers, warnings);
+  // ADR-0210 (Schema v164): an interest whose record kind or id cannot be read
+  // exactly, or whose person is missing, is DROPPED with a counted warning —
+  // never repaired into "probably a decision", because that would attach a
+  // named person's stake to a record nobody declared it against. A standing row
+  // is admitted only through an interest that exists, and a supersession must
+  // point at an earlier row of the SAME interest or it resolves to none.
+  state.conflictInterests = normalizeConflictInterests(raw.conflictInterests, warnings);
+  state.conflictNoneDeclarations = normalizeConflictNoneDeclarations(raw.conflictNoneDeclarations, warnings);
+  state.conflictStandings = normalizeConflictStandings(raw.conflictStandings, state.conflictInterests, warnings);
+  state.conflictRules = normalizeConflictRules(raw.conflictRules, warnings);
+  state.conflictRecusalMarkers = normalizeConflictRecusalMarkers(raw.conflictRecusalMarkers, warnings);
   state.delegationLineActs = normalizeDelegationLineActs(raw.delegationLineActs, state, warnings);
   state.delegationLineMarkers = normalizeDelegationLineMarkers(raw.delegationLineMarkers);
   // ADR-0181 (Schema v144): a malformed classification act, an act naming a
@@ -9530,6 +9574,24 @@ export const MIGRATIONS = {
     workRestPolicies: Array.isArray(v162.workRestPolicies) ? v162.workRestPolicies : [],
     workRestMarkers: Array.isArray(v162.workRestMarkers) ? v162.workRestMarkers : [],
     settings: { ...(v162.settings || {}), ...normalizeWorkRestSettings(v162.settings || {}) },
+  }),
+  // 163 → 164: ADR-0210 adds FOUR EMPTY ledgers and three declared conventions.
+  // No interest is inferred from the decisions, cases, requisitions or budgets an
+  // upgraded workspace already holds: a record names an approver, an owner and a
+  // day, and says nothing at all about who holds a stake in it. An interest
+  // invented here would fabricate a named person's conflict and then hold it
+  // against them. No relationship kind is made reportable either — with no rule
+  // every reading is `unsearched`, which is the honest state of a workspace
+  // nobody has yet told what to ask about.
+  163: (v163) => ({
+    ...v163,
+    schemaVersion: 164,
+    conflictInterests: Array.isArray(v163.conflictInterests) ? v163.conflictInterests : [],
+    conflictNoneDeclarations: Array.isArray(v163.conflictNoneDeclarations) ? v163.conflictNoneDeclarations : [],
+    conflictStandings: Array.isArray(v163.conflictStandings) ? v163.conflictStandings : [],
+    conflictRules: Array.isArray(v163.conflictRules) ? v163.conflictRules : [],
+    conflictRecusalMarkers: Array.isArray(v163.conflictRecusalMarkers) ? v163.conflictRecusalMarkers : [],
+    settings: { ...(v163.settings || {}), ...normalizeConflictRecusalSettings(v163.settings || {}) },
   }),
   // 155 → 156: ADR-0196 adds one EMPTY append-only ledger. No active
   // RULE-NPW-01 ask has a receiving-line answer, effort estimate or capacity

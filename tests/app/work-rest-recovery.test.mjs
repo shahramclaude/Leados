@@ -264,8 +264,8 @@ test('v163 is additive, starts empty, seeds no limit and invents no shift', () =
   for (const key of ['workRestShifts', 'workRestActs', 'workRestCoverage', 'workRestPolicies', 'workRestMarkers']) delete old[key];
   old.people = [person('lou', null, 'lead'), person('sam', 'lou', 'ic')];
   const next = migrate(old);
-  assert.equal(SCHEMA_VERSION, 163);
-  assert.deepEqual(next.applied.at(-1), '162 → 163');
+  assert.equal(SCHEMA_VERSION, 164);
+  assert.deepEqual(next.applied.at(-1), '163 → 164');
   for (const key of ['workRestShifts', 'workRestActs', 'workRestCoverage', 'workRestPolicies', 'workRestMarkers']) {
     assert.deepEqual(next.raw[key], [], `${key} starts empty`);
     assert.ok(COLLECTIONS.includes(key), `${key} is a collection`);
@@ -340,7 +340,7 @@ test('the ledger is wired to the spine: rights, reads, record policies, CSV scop
   assert.equal(PAUSE_PERMIT_REACH_RULES.workRestAutoPropagate, 'workRestRules.js');
   assert.ok(fs.readFileSync(path.join(REPO, 'app/core/domain/workRestRules.js'), 'utf8').includes('workRestAutoPropagate === false'), 'the rule names its pause switch literally');
 
-  assert.equal(CSV_EXPORTS.length, 151);
+  assert.equal(CSV_EXPORTS.length, 152);
   assert.equal(CSV_EXPORTS.at(-1).key, WORK_REST_CSV_SCOPE);
 });
 

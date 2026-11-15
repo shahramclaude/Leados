@@ -140,6 +140,7 @@ import { goalCommitmentRule } from './goalCommitmentRules.js';
 import { goalAttainmentRule } from './goalAttainmentRules.js';
 import { investmentCaseRule } from './investmentCaseRules.js';
 import { workRestRule } from './workRestRules.js';
+import { conflictRecusalRule } from './conflictRecusalRules.js';
 import { sealRule } from './sealRules.js';
 // ADR-0092: the Differencing Defender declares its contract like every other rule.
 import { differencingRule } from './differencingRules.js';
@@ -1118,6 +1119,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'workRestRules.js',
     purpose: 'RULE-WRR-01: reads the Cross-Line Work/Rest Recovery Ledger (`workRestConflictsAhead`, ADR-0209) with the whole-workspace view on shift declarations, amendments and cancellations, policy declarations and retirements, roster and reporting-line changes, convention changes and explicit `workRest.scan` scans — and on any other commit, because a conflict stops being ahead when the clock passes it. ONE condition: the record proves a double-booking, a rest shorter than the declared minimum, a spell longer than the declared maximum, an overdue long rest or a breached rolling cap whose decisive minute has not happened yet. A conflict made inside one reporting line is asked of that line’s holder; one made by two lines is asked of the lowest seat above BOTH (`matrixJointApex`). Leader-held, apex-less and off-roster conflicts get one identity-free `workRestMarkers` observation and no ask. Asks are `act-inform` delegations with `issues-obligation` and `rolls-up-to` links, idempotent per conflict signature, self-closing, capped per commit and pause-governed by `workRestAutoPropagate` on every path. It never moves or cancels a shift, never tests an undeclared limit and never rates a person.',
     writes: ['delegations', 'links', 'workRestMarkers'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: conflictRecusalRule,
+    module: 'conflictRecusalRules.js',
+    purpose: 'RULE-CIR-01: reads the Decision-Maker Conflict-of-Interest & Recusal Register (`buildConflictRecusal`, ADR-0210) with the whole-workspace view on interest declarations and withdrawals, standing responses (recusal, mitigation, determination, supersession), reportable-kind rules and their retirement, roster and reporting-line changes, convention changes and explicit `conflictRecusal.scan` scans — and on any other commit, because the horizon moves with the calendar. ONE condition, filed at most once per (interest, verdict) with a deterministic `cir1:…` signature and bounded at 4 per commit with the remainder counted: `undisclosed` — a declared interest whose holder sits on the record as the hand that signs it, its owner, or a declared line over its subject, and which carries no recusal, mitigation or written determination. The ask goes to the seat ABOVE the person holding the interest — never the person themselves, because a hand does not clear its own conflict — and in a matrix to the lowest seat above EVERY line the person holds (`matrixJointApex`), never to one line’s manager on the other’s behalf. Leader-held, apex-less, self-held and off-roster conditions write ONE identity-free `conflictRecusalMarkers` observation and substitute nobody. Asks carry typed `issues-obligation` and matrix-DAG `rolls-up-to` provenance and close themselves when the interest is answered, withdrawn, out of the horizon or changes owner. It never blocks a decision, edits an approver, revokes a right, invents an interest from a surname, a shared line or a pattern, converts a mitigation into independence, or rates a person; pausable via `conflictRecusalAutoPropagate` (the pause governs EVERY path, including explicit scans).',
+    writes: ['delegations', 'links', 'conflictRecusalMarkers'],
     emits: [],
     scansWorkspace: true,
   },
