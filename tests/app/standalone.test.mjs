@@ -324,7 +324,12 @@ test('standalone artifact exists and is a single inline HTML document', () => {
   // Measured build: 13,120,112 bytes / 838 source modules = 15,656 bytes per
   // module, still far below the unchanged 24,000 density guard. Ceiling moves
   // to 13,300,000 for this efficiency/intelligence/automation slice.
-  assert.ok(bytes < 13_300_000, `standalone file is unexpectedly large (${bytes} bytes)`);
+  // ADR-0204 (Session 272, Schema v159) adds one empty ledger, the precedence
+  // reader/actions/rule wiring and a tenth generated diagram (54,936 bytes).
+  // Measured build: 13,393,040 bytes / 848 source modules = 15,793 bytes per
+  // module, still far below the unchanged 24,000 density guard. The ceiling
+  // moves only because real capability was added.
+  assert.ok(bytes < 13_500_000, `standalone file is unexpectedly large (${bytes} bytes)`);
   // Derived from the folder, not from a list in this file: the day a panel adds
   // a diagram, an enumerator that names the old two would still pass. Same
   // lesson the build script learned in ADR-0186.

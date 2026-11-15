@@ -1,7 +1,9 @@
 /**
  * app/core/domain/stationCoverageRegistry.js — closed vocabularies for
  * Skill-Constrained Simultaneous Station Coverage (ADR-0201, Schema v157,
- * RULE-SSC-01, CSV scope #147→#148, `#/standard-work?panel=stations`).
+ * RULE-SSC-01, CSV scope #148, `#/standard-work?panel=stations`; extended by
+ * ADR-0204, Schema v159, with declared station-to-station enabling edges, an
+ * exact acyclic check and a precedence-aware witness).
  *
  * WHAT IS BEING MODELLED, AND WHY IT IS NOT SKILL COVERAGE.
  *
@@ -46,10 +48,45 @@
  * where no single apex holds them all, the condition is printed and an
  * identity-free observation is recorded instead of asking a partial set of
  * holders. No person is ever assigned, and no station is ever filled.
+ *
+ * PRECEDENCE (ADR-0204, Schema v159). A station that can only run when another
+ * is manned is NOT modelled as an independent node. The window holder declares
+ * enabling edges ("A must come up before B") as append-only dated rows; the
+ * reader decides exactly what they imply. Semantics are uniform:
+ *
+ *   an enabling edge is a prerequisite to start, decided as AT-OR-BEFORE.
+ *   Every station in the window's live register occupies a start instant: the
+ *   `concurrent` set shares the one instant all of them are up by definition;
+ *   a `sequential` station occupies some other instant inside the window (it is
+ *   never simultaneous with the concurrent set), but the register holds NO
+ *   intra-window clock and claims none.
+ *
+ * A directed cycle in the live enabling graph forces all of its members to one
+ * instant. A cycle whose members are ALL `concurrent` collapses to that shared
+ * instant and is satisfiable — it is printed as a declared co-requisite loop,
+ * never as a defect and never as infeasibility. A cycle with AT LEAST ONE
+ * sequential member is a contradiction: the sequential member cannot be moved
+ * onto the shared instant and at least one concurrent member cannot leave it.
+ * No running order exists, whatever anyone is assigned — the window reads
+ * `unsatisfiable`, a proof from the declarations themselves, not from capacity.
+ * The deficient-set witness is then never printed: there is no shortage to
+ * name, only declarations that contradict each other.
+ *
+ * When the enabling graph is acyclic (or only co-requisite loops remain), the
+ * enabling order exists and the simultaneous proof is UNCHANGED — every
+ * declared station is mandatory, so co-requisites among the concurrent set
+ * cannot relax or tighten the matching. What the order DOES refine is the
+ * witness: the inclusion-minimal deficient set is shrunk in reverse enabling
+ * order (the most-downstream station is dropped first), so whenever an equally
+ * small proof exists it names the upstream stations whose failure forces the
+ * rest. Whether the printed witness is enabler-closed is COMPUTED AND PRINTED,
+ * never forced — Hall's condition needs no closure, and forcing one could drop
+ * a load-bearing station.
  */
 
-export const STATION_COVERAGE_ENGINE_VERSION = 'station-coverage-2026.11-v1';
+export const STATION_COVERAGE_ENGINE_VERSION = 'station-coverage-2026.11-v2';
 export const STATION_COVERAGE_ADR = 'ADR-0201';
+export const STATION_COVERAGE_PRECEDENCE_ADR = 'ADR-0204';
 export const STATION_COVERAGE_RULE_ID = 'RULE-SSC-01';
 export const STATION_COVERAGE_ROUTE = 'standard-work';
 export const STATION_COVERAGE_PANEL = 'stations';
@@ -65,6 +102,8 @@ export const STATION_COVERAGE_EVENTS = Object.freeze({
   STATION_RETIRED: 'stations.retired',
   AVAILABILITY_DECLARED: 'stations.availability.declared',
   AVAILABILITY_WITHDRAWN: 'stations.availability.withdrawn',
+  ENABLE_DECLARED: 'stations.enable.declared',
+  ENABLE_RETIRED: 'stations.enable.retired',
   CONVENTIONS: 'stations.conventions.set',
   SCAN: 'stations.scan',
 });
@@ -99,6 +138,7 @@ export const STATION_COVERAGE_BOUNDS = Object.freeze({
   capacity: [1, 10],
   peoplePerStation: [1, 60],
   stationsPerWindow: [1, 40],
+  enablingReason: [10, 400],
   availabilityDays: [1, 366],
   askDays: [1, 30],
   disclosureFloorN: [0, 20],
@@ -127,6 +167,8 @@ export const STATION_COVERAGE_LIMITS = Object.freeze({
   windows: 120,
   stations: 600,
   availability: 4000,
+  enables: 2400,
+  enablesPerWindow: 120,
   asksPerCommit: 6,
   /** The deficient-set search enumerates bounded subsets; the remainder is declared, never hidden. */
   witnessSubsetSize: 5,
@@ -167,6 +209,8 @@ export const STATION_COVERAGE_VERDICTS = Object.freeze([
     says: 'No legal assignment exists. The stations named in the witness cannot all be manned from the people qualified and available for them, and the exact deficit is printed.' }),
   Object.freeze({ key: 'unproven', label: 'Unproven — the register cannot answer', tone: 'warn',
     says: 'The record is missing the evidence a feasibility claim would rest on: a station with nobody qualified, nobody available, or an unresolved reporting graph. Nothing is claimed either way.' }),
+  Object.freeze({ key: 'unsatisfiable', label: 'Unsatisfiable — an enabling cycle cannot be ordered', tone: 'bad',
+    says: 'A cycle of enabling declarations forces at least one station onto an instant the declarations give it no access to: a sequential station onto the shared simultaneous instant, or a concurrent station off it. No running order exists, whatever anyone is assigned. The declarations contradict each other, not the roster.' }),
   Object.freeze({ key: 'inert', label: 'No concurrent station declared', tone: 'neutral',
     says: 'This window declares no simultaneous requirement, or one station alone, which cannot compete with itself. Nothing to prove.' }),
 ]);
@@ -200,6 +244,7 @@ export const STATION_COVERAGE_REFUSALS = Object.freeze([
   Object.freeze({ key: 'holder-off-roster', says: 'A station’s holder is no longer on the active roster.' }),
   Object.freeze({ key: 'window-unreadable', says: 'The declared window is not a readable calendar range.' }),
   Object.freeze({ key: 'subset-cap', says: 'The deficient-set search could not enumerate every subset at this size; the printed witness is the best found and is labelled as such.' }),
+  Object.freeze({ key: 'enabling-cycle', says: 'A cycle of enabling declarations contradicts the requirement vocabulary of at least one of its members; no running order exists until one declaration or one station is retired.' }),
 ]);
 export const STATION_COVERAGE_REFUSAL_KEYS = Object.freeze(STATION_COVERAGE_REFUSALS.map((r) => r.key));
 
@@ -213,6 +258,7 @@ export const STATION_COVERAGE_CSV_COLUMNS = Object.freeze([
   'windows_n', 'live_windows_n', 'stations_n', 'concurrent_stations_n', 'sequential_stations_n',
   'demand_n', 'qualified_edges_n', 'available_people_n', 'available_capacity_n',
   'feasible_windows_n', 'infeasible_windows_n', 'unproven_windows_n', 'inert_windows_n',
+  'unsatisfiable_windows_n', 'enabling_edges_n', 'precedence_cycles_n',
   'deficient_sets_n', 'max_deficit_n', 'witness_complete', 'station_state_n',
   'counts_reconcile', 'figures_complete', 'claim_reason',
 ]);
@@ -223,7 +269,7 @@ export const STATION_COVERAGE_CSV_DESCRIPTOR = Object.freeze({
   group: 'analytics',
   sensitive: false,
   filenameSlug: 'skill-station-coverage',
-  description: 'One workspace summary row plus one row per window verdict, station state and refusal reason: declared simultaneous windows, station demand, qualified-attestation edges, declared availability and its exact capacity, whether each window was proven feasible by maximum matching, how many deficient sets were found and the largest exact deficit. NO person, manager, line, station title, task title, note or record id. A withheld or unprovable figure exports BLANK with its reason — never zero.',
+  description: 'One workspace summary row plus one row per window verdict, station state and refusal reason: declared simultaneous windows, station demand, qualified-attestation edges, declared availability and its exact capacity, whether each window was proven feasible by maximum matching, how many deficient sets were found and the largest exact deficit, plus declarable station-to-station enabling edges, how many windows carry an unsatisfiable enabling cycle, and how many precedence cycles were found. NO person, manager, line, station title, task title, note, reason or record id. A withheld or unprovable figure exports BLANK with its reason — never zero.',
 });
 
 /* ------------------------------------------------------------------ method */
@@ -239,4 +285,8 @@ export const STATION_COVERAGE_FRAMEWORKS = Object.freeze([
     applies: 'Qualification is an attested, expiring level (I/L/U/O); only unexpired U and O count toward independent coverage.' }),
   Object.freeze({ name: 'Consent is not capacity', citation: 'Organizational justice: voice and consent (Folger, 1977); Gilbreth (1911) on the worker’s own statement',
     applies: 'Availability and consent are dated human statements about a named window. Showing up is not inferred from being able to.' }),
+  Object.freeze({ name: 'Topological ordering and strongly connected components', citation: 'Tarjan (1972); Kahn (1962)',
+    applies: 'Enabling declarations induce a precedence graph over the window’s stations. A directed cycle with at least one sequential member is a contradiction with no running order; a cycle of only concurrent stations collapses to their shared instant and is a co-requisite loop, printed as such.' }),
+  Object.freeze({ name: 'Interlock and start-up discipline', citation: 'Ohno (1988); IEC 61511 on permit-to-work sequencing',
+    applies: 'A station that must wait for another station is a declared interlock, not a hope. The register prints the declaration order contradiction exactly, and asks a human to retire the declaration that is wrong — never to guess an order.' }),
 ]);

@@ -115,10 +115,15 @@ import { normalizeSkillTasks, normalizeSkillActs } from './domain/skillCoverageS
 // ADR-0201 (Schema v157): skill-constrained simultaneous station coverage. Three
 // append-only ledgers and three declared conventions; no verdict, matching,
 // deficient set or station state is ever stored — every one is re-derived on read.
+// ADR-0204 (Schema v159): one more append-only ledger — `stationEnables` — for
+// declared station-to-station enabling declarations ("A must come up before B").
+// No cycle, order index, co-requisite loop or feasibility verdict is ever stored;
+// the precedence graph is recomputed on every read from the declarations.
 import {
   normalizeSkillStationRows,
   normalizeStationAvailability,
   normalizeStationCoverageSettings,
+  normalizeStationEnables,
   normalizeStationWindows,
 } from './domain/stationCoverageSchema.js';
 import { normalizeInterfaceAlignmentSettings } from './domain/interfaceAlignmentSchema.js';
@@ -906,7 +911,17 @@ export {
 // workspace opens with every drifted posting reading `unacknowledged`, and
 // the drift signature itself is recomputed on every read from the frozen
 // posting against its re-derived period, so it can never go stale in storage.
-export const SCHEMA_VERSION = 158;
+// v159 adds the Station Enabling Declaration ledger (ADR-0204): one append-only
+// ledger — `stationEnables` — carrying declared station-to-station enabling
+// declarations ("A must come up before B" in one declared window). It starts
+// EMPTY. No interlock, precedence edge, start order, cycle or co-requisite
+// loop is inferred from the stations an upgraded workspace already holds: a
+// station register says which stations must be manned, never which one waits
+// for another. Nothing derived is stored either — the enabling graph, the
+// strongly connected components, the unsatisfiable verdict and the enabler-
+// closed witness are recomputed on every read, so a replayed workspace cannot
+// carry a stale order or a stale impossibility.
+export const SCHEMA_VERSION = 159;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -3119,6 +3134,9 @@ export const COLLECTIONS = [
   'stationWindows',
   'skillStations',
   'stationAvailability',
+  // ADR-0204 (Schema v159): declared station-to-station enabling declarations.
+  // Nothing derived (no order, cycle or verdict) is stored.
+  'stationEnables',
   // ADR-0193 + ADR-0195 (Schema v153 → v155): the Cross-Line Goal Commitment
   // Conflict register. One append-only ledger of dated declarations plus the
   // rule's marker ledger. No overlap, verdict, peak day, capacity sum, target
@@ -7905,6 +7923,8 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.skillStations = normalizeSkillStationRows(raw.skillStations, state.stationWindows, warnings);
   state.stationAvailability = normalizeStationAvailability(raw.stationAvailability,
     { windows: state.stationWindows, stations: state.skillStations, people: null }, warnings);
+  state.stationEnables = normalizeStationEnables(raw.stationEnables,
+    { windows: state.stationWindows, stations: state.skillStations }, warnings);
   state.standardWorkRoutines = normalizeStandardWorkRoutines(raw.standardWorkRoutines, warnings);
   state.standardWorkChecks = normalizeStandardWorkChecks(raw.standardWorkChecks, state.standardWorkRoutines, warnings);
   state.standardWorkTierActs = normalizeStandardWorkTierActs(raw.standardWorkTierActs, state.standardWorkChecks, warnings);
@@ -9277,6 +9297,19 @@ export const MIGRATIONS = {
   // `unacknowledged` — an absence of decision, never a sign-off — and each
   // drift signature is recomputed from the record by the shared reader.
   157: (v157) => ({ ...v157, schemaVersion: 158 }),
+  // 158 → 159: ADR-0204 adds one EMPTY append-only ledger — `stationEnables` —
+  // for declared station-to-station enabling declarations ("A must come up
+  // before B" in one declared window). No interlock, precedence edge, start
+  // order, cycle or co-requisite loop is inferred from the stations, ILUO
+  // attestations or availability statements that already exist: a station
+  // register says which stations must be manned, never which one waits for
+  // another — and inventing an order at upgrade time would fabricate an
+  // interlock nobody declared, then print it as an unsatisfiable window.
+  158: (v158) => ({
+    ...v158,
+    schemaVersion: 159,
+    stationEnables: Array.isArray(v158.stationEnables) ? v158.stationEnables : [],
+  }),
   // 155 → 156: ADR-0196 adds one EMPTY append-only ledger. No active
   // RULE-NPW-01 ask has a receiving-line answer, effort estimate or capacity
   // reservation inferred from its text, owner or current reporting lines; an

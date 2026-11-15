@@ -27,6 +27,26 @@
  * Hall's condition failing, and it is evidence a leader can act on; a percentage
  * or a red badge would not be.
  *
+ * PRECEDENCE (ADR-0204, Schema v159). A station that can only run when another is
+ * manned is not an independent node. The holder declares enabling edges ("A must
+ * come up before B") as append-only dated rows; the reader builds the precedence
+ * graph over the window's LIVE stations and decides it exactly. Semantics are
+ * uniform — at-or-before (prerequisite to start). The `concurrent` set shares the
+ * one instant all of them are up; a `sequential` station occupies some other
+ * instant inside the window. A directed cycle forces all of its members to one
+ * instant: a cycle whose members are ALL concurrent collapses to the shared
+ * instant and is a declared CO-REQUISITE LOOP — printed, satisfiable, never a
+ * defect. A cycle with at least one sequential member is a contradiction: no
+ * running order exists whatever anyone is assigned, and the window reads
+ * `unsatisfiable`. When no unsatisfiable cycle exists the enabling order exists,
+ * the simultaneous matching proof is unchanged (every declared station is
+ * mandatory, so co-requisites cannot relax it), and the deficient-set witness is
+ * shrunk in reverse enabling order, preferring upstream load-bearing stations;
+ * whether the printed witness is enabler-closed is computed and printed, never
+ * forced. Cross-type enabling edges carry the same order claim and are decided
+ * by the same cycle rule — never by assumed intra-window timing, because the
+ * register holds no clock below the day.
+ *
  * WHAT IT REFUSES TO CLAIM (the bulletproof mandate, applied literally):
  *  - It never reads a person who declared nothing as unavailable. Silence is
  *    UNKNOWN. A shortage is therefore only printed as `infeasible` when every
@@ -53,6 +73,7 @@ import {
   normalizeSkillStationRows,
   normalizeStationAvailability,
   normalizeStationCoverageSettings,
+  normalizeStationEnables,
   normalizeStationWindows,
   stationCoverageDay,
   stationCoverageDays,
@@ -61,7 +82,10 @@ import {
 const byKey = (rows) => new Map(rows.map((r) => [r.key, r]));
 const VERDICT = byKey(STATION_COVERAGE_VERDICTS);
 const STATE = byKey(STATION_COVERAGE_STATION_STATES);
-const list = (v) => (Array.isArray(v) ? v : []);
+// The seat engine keeps `scope`/`lineScope` as Sets; an Array.isArray check
+// alone would silently collapse every ancestor's reach to just the actor,
+// hiding every subordinate's windows from the roll-up. Accept both.
+const list = (v) => (Array.isArray(v) ? v : v instanceof Set ? [...v] : []);
 const round1 = (n) => Math.round(n * 10) / 10;
 
 /* ------------------------------------------------------- exact integer flow */
@@ -122,6 +146,94 @@ function maxFlowInt(n, edges, source, sink) {
   return { flow, reachable: seen };
 }
 
+/* -------------------------------------------------- precedence: exact SCC */
+
+/**
+ * Tarjan's strongly connected components over the window's live enabling graph.
+ * Returns one array of station ids per component. At most 40 stations share one
+ * window, so the recursion is trivially bounded. Node and edge iteration order
+ * is deterministic (ids pre-sorted), so the same declarations always yield the
+ * same components, in the same order.
+ */
+function stronglyConnectedComponents(nodeIds, arcs) {
+  const adjacency = new Map(nodeIds.map((id) => [id, []]));
+  for (const [from, to] of arcs) if (adjacency.has(from) && adjacency.has(to)) adjacency.get(from).push(to);
+  const index = new Map();
+  const low = new Map();
+  const onStack = new Set();
+  const stack = [];
+  let counter = 0;
+  const components = [];
+  const connect = (v) => {
+    index.set(v, counter);
+    low.set(v, counter);
+    counter += 1;
+    stack.push(v);
+    onStack.add(v);
+    for (const w of adjacency.get(v)) {
+      if (!index.has(w)) {
+        connect(w);
+        low.set(v, Math.min(low.get(v), low.get(w)));
+      } else if (onStack.has(w)) {
+        low.set(v, Math.min(low.get(v), index.get(w)));
+      }
+    }
+    if (low.get(v) === index.get(v)) {
+      const component = [];
+      for (;;) {
+        const w = stack.pop();
+        onStack.delete(w);
+        component.push(w);
+        if (w === v) break;
+      }
+      components.push(component);
+    }
+  };
+  for (const v of nodeIds) if (!index.has(v)) connect(v);
+  return components;
+}
+
+/**
+ * A topological depth per station over the condensation DAG: 0 for a source
+ * (most upstream), deeper for stations that must come later. Co-requisite loops
+ * are collapsed into their component, so the condensation is always a DAG and
+ * the depths are total and deterministic. Used ONLY to prefer upstream
+ * load-bearing stations when shrinking the deficient-set witness; it never
+ * enters the feasibility arithmetic.
+ */
+function enablingDepths(components, arcs) {
+  const componentOf = new Map();
+  components.forEach((component, i) => { for (const id of component) componentOf.set(id, i); });
+  const successors = components.map(() => new Set());
+  const indegree = new Array(components.length).fill(0);
+  for (const [a, b] of arcs) {
+    const ca = componentOf.get(a); const cb = componentOf.get(b);
+    if (ca === cb || ca === undefined || cb === undefined) continue;
+    if (!successors[ca].has(cb)) { successors[ca].add(cb); indegree[cb] += 1; }
+  }
+  const depth = new Array(components.length).fill(0);
+  const queue = [];
+  for (let i = 0; i < components.length; i += 1) if (!indegree[i]) queue.push(i);
+  const remaining = [...indegree];
+  while (queue.length) {
+    const c = queue.shift();
+    for (const d of successors[c]) {
+      depth[d] = Math.max(depth[d], depth[c] + 1);
+      remaining[d] -= 1;
+      if (!remaining[d]) queue.push(d);
+    }
+  }
+  const out = new Map();
+  components.forEach((component, i) => { for (const id of component) out.set(id, depth[i]); });
+  return out;
+}
+
+/** True when every dependent in the subset carries its enablers with it. */
+const enablerClosedSubset = (arcs, subsetIds) => {
+  const set = new Set(subsetIds);
+  return arcs.every(([a, b]) => !set.has(b) || set.has(a));
+};
+
 /* ------------------------------------------------------------------- helpers */
 
 const qualifiedNow = (acts, tasks, today) => {
@@ -169,14 +281,15 @@ export function buildStationCoverage(state, { now = new Date(), seat = null } = 
   const stations = normalizeSkillStationRows(state?.skillStations, windows, warnings);
   const availability = normalizeStationAvailability(state?.stationAvailability,
     { windows, stations, people: matrix.roster }, warnings);
+  const enables = normalizeStationEnables(state?.stationEnables, { windows, stations }, warnings);
 
   const operator = !seat || seat.fullAccess === true;
   const actorId = operator ? LEADER_ID : (seat.nodeId || seat.id);
   const reach = operator ? null : new Set([actorId, ...list(seat.scope), ...list(seat.lineScope)]);
   const visible = (nodeId) => operator || reach.has(nodeId);
 
-  const invalidN = [...windows, ...stations, ...availability].filter((r) => r.invalid).length;
-  const futureN = [...windows, ...stations, ...availability].flatMap((r) => [r.declaredAt, r.withdrawnAt])
+  const invalidN = [...windows, ...stations, ...availability, ...enables].filter((r) => r.invalid).length;
+  const futureN = [...windows, ...stations, ...availability, ...enables].flatMap((r) => [r.declaredAt, r.withdrawnAt, r.retiredOn])
     .filter((v) => typeof v === 'string' && v > now.toISOString()).length;
 
   const globalReasons = [];
@@ -205,6 +318,39 @@ export function buildStationCoverage(state, { now = new Date(), seat = null } = 
     const concurrent = live.filter((s) => s.requirement === 'concurrent');
     const sequential = live.filter((s) => s.requirement === 'sequential');
     const reasons = [];
+
+    /* ------------------------------------------- enabling graph (ADR-0204) */
+    const windowDetail = operator || actorId === window.holderId;
+    const stationById = new Map(live.map((s) => [s.id, s]));
+    const windowEnables = enables.filter((e) => !e.invalid && e.windowId === window.id);
+    const liveEnables = windowEnables.filter((e) => !e.retiredOn);
+    const danglingEnablesN = liveEnables.filter((e) => !stationById.has(e.fromStationId) || !stationById.has(e.toStationId)).length;
+    const arcs = liveEnables
+      .filter((e) => stationById.has(e.fromStationId) && stationById.has(e.toStationId))
+      .map((e) => [e.fromStationId, e.toStationId]);
+    const nodeIds = [...stationById.keys()].sort();
+    const components = stronglyConnectedComponents(nodeIds, arcs);
+    const enablingDepth = enablingDepths(components, arcs);
+    const cycles = [];
+    for (const component of components) {
+      const selfLoop = component.length === 1 && arcs.some(([a, b]) => a === component[0] && b === component[0]);
+      if (component.length === 1 && !selfLoop) continue;
+      const stationIds = component.slice().sort();
+      const stationTitles = stationIds.map((id) => stationById.get(id)?.title || 'Station off the register');
+      const allConcurrent = stationIds.every((id) => stationById.get(id)?.requirement === 'concurrent');
+      cycles.push({ stationIds, stationTitles, allConcurrent, unsatisfiable: !allConcurrent });
+    }
+    cycles.sort((a, b) => a.stationIds.join('+').localeCompare(b.stationIds.join('+')));
+    const unsatisfiableCycles = cycles.filter((c) => c.unsatisfiable);
+    const coRequisiteLoopsN = cycles.length - unsatisfiableCycles.length;
+    for (const cycle of unsatisfiableCycles) {
+      if (windowDetail) {
+        const chain = [...cycle.stationTitles, cycle.stationTitles[0]].map((t) => `“${String(t).slice(0, 60)}”`).join(' → ');
+        reasons.push(`The enabling declarations form a cycle: ${chain}. At least one station in it is sequential, so the cycle cannot collapse onto the shared simultaneous instant — no running order exists whatever anyone is assigned. Retire one enabling declaration or one station.`);
+      } else {
+        reasons.push('The enabling declarations form a cycle containing at least one sequential station: no running order exists whatever anyone is assigned. The declarations contradict each other, not the roster. The members are not named here — only the window’s holder or the local operator can read them; retire one enabling declaration, or retire or re-declare one station.');
+      }
+    }
     if (!clean) reasons.push(...globalReasons);
     if (!holderOn) reasons.push('The window’s holder is no longer on the active roster; nobody is substituted.');
 
@@ -289,11 +435,13 @@ export function buildStationCoverage(state, { now = new Date(), seat = null } = 
     let witness = null;
     let undeclaredN = 0;
 
-    // A single concurrent station has nobody to compete with, so there is no
-    // Hall question to answer. The vocabulary says `inert` for exactly this
-    // case; labelling it `feasible` would claim a simultaneity proof that was
-    // never needed.
-    if (simultaneous.length > 1 && provable) {
+    // A cycle of enabling declarations that cannot collapse onto the shared
+    // simultaneous instant is a contradiction in the DECLARATIONS, not a
+    // capacity question. No matching is attempted and no "feasible" can be
+    // printed: the impossibility is proven by the declarations themselves.
+    if (unsatisfiableCycles.length) {
+      verdict = 'unsatisfiable';
+    } else if (simultaneous.length > 1 && provable) {
       // Distinct people who could serve at least one simultaneous station.
       const candidates = new Map(); // personId -> { capacity }
       for (const row of simultaneous) {
@@ -361,10 +509,16 @@ export function buildStationCoverage(state, { now = new Date(), seat = null } = 
         // be load-bearing, so the leader reads the smallest true cause. The loop
         // repeats until no single station can be dropped while the subset stays
         // deficient, and the result is ASSERTED minimal rather than assumed.
+        // Enabling order breaks ALL ties: the set is shrunk most-downstream
+        // first, so an equally small proof names the upstream stations whose
+        // failure forces the rest. Closure is computed and printed, never
+        // forced — Hall's condition needs none.
+        const enablesOrder = (a, b) => ((enablingDepth.get(b.stationId) || 0) - (enablingDepth.get(a.stationId) || 0))
+          || String(a.stationId).localeCompare(String(b.stationId));
         let shrunk = true;
         while (shrunk) {
           shrunk = false;
-          for (const row of set.slice()) {
+          for (const row of set.slice().sort(enablesOrder)) {
             const without = set.filter((r) => r.stationId !== row.stationId);
             if (without.length && deficitOf(without) > 0) { set = without; shrunk = true; break; }
           }
@@ -383,6 +537,7 @@ export function buildStationCoverage(state, { now = new Date(), seat = null } = 
           capacityN: [...people].reduce((n, p) => n + candidates.get(p).capacity, 0),
           deficitN: Math.max(0, deficit),
           minimal,
+          enablerClosed: enablerClosedSubset(arcs, set.map((r) => r.stationId)),
           enumerationCapped: simultaneous.length > STATION_COVERAGE_LIMITS.witnessSubsetSize * 8,
         };
         // A shortage is only a PROVEN impossibility when nobody's silence could
@@ -406,7 +561,12 @@ export function buildStationCoverage(state, { now = new Date(), seat = null } = 
       else reasons.push(...globalReasons);
     }
 
-    if (simultaneous.length < 2) verdict = 'inert';
+    // A single concurrent station has nobody to compete with, so there is no
+    // Hall question to answer. The vocabulary says `inert` for exactly this
+    // case; labelling it `feasible` would claim a simultaneity proof that was
+    // never needed. An unsatisfiable enabling cycle keeps its own verdict:
+    // the feasibility question was never reached.
+    if (simultaneous.length < 2 && !unsatisfiableCycles.length) verdict = 'inert';
 
     // Stations with no qualified or no available people are printed as their own
     // reasons regardless of the verdict, so a 'feasible' window can never hide a
@@ -429,7 +589,8 @@ export function buildStationCoverage(state, { now = new Date(), seat = null } = 
       past: window.toDay < today,
       verdict,
       verdictLabel: verdictRow?.label || verdict,
-      proven: verdict === 'feasible' || verdict === 'infeasible',
+      proven: verdict === 'feasible' || verdict === 'infeasible' || verdict === 'unsatisfiable',
+      detail: windowDetail,
       stationsN: live.length,
       concurrentN: simultaneous.length,
       sequentialN: sequential.length,
@@ -451,6 +612,36 @@ export function buildStationCoverage(state, { now = new Date(), seat = null } = 
       sequentialNote: sequential.length
         ? 'Sequential stations are counted against availability but excluded from the simultaneous proof: whether two of them collide inside the window is a levelling question, not a Hall question.'
         : null,
+      // The declared enabling structure of this window, printed whether or not
+      // the verdict turned on it — but at two depths. The holder (or the local
+      // operator) reads the rows: station identity, the declared reason and any
+      // cycle membership. Anyone else reading through their reach reads counts
+      // only: how many declarations are live, how many cycles exist and whether
+      // they are unsatisfiable — never the station identity, the reason, or the
+      // record ids. The disclosure floor governs people, not stations, but
+      // declaration detail is row-level evidence a span should not quietly
+      // inherit.
+      precedence: {
+        declaredN: windowEnables.length,
+        liveN: liveEnables.length,
+        retiredN: windowEnables.length - liveEnables.length,
+        danglingN: danglingEnablesN,
+        detail: windowDetail,
+        cycles: windowDetail
+          ? cycles.map((c) => ({ stationIds: c.stationIds, stationTitles: c.stationTitles, allConcurrent: c.allConcurrent, unsatisfiable: c.unsatisfiable }))
+          : cycles.map((c) => ({ stationIds: [], stationTitles: [], allConcurrent: c.allConcurrent, unsatisfiable: c.unsatisfiable })),
+        unsatisfiableCyclesN: unsatisfiableCycles.length,
+        coRequisiteLoopsN,
+        enablerClosed: witness ? witness.enablerClosed : null,
+        edges: windowDetail ? liveEnables.map((e) => ({
+            id: e.id,
+            fromStationId: e.fromStationId,
+            toStationId: e.toStationId,
+            fromTitle: stationById.get(e.fromStationId)?.title || 'Station off the register',
+            toTitle: stationById.get(e.toStationId)?.title || 'Station off the register',
+            reason: e.reason,
+        })) : [],
+      },
     });
   }
 
@@ -473,11 +664,13 @@ export function buildStationCoverage(state, { now = new Date(), seat = null } = 
     let demandN = 0;
     let infeasible = 0;
     let unproven = 0;
+    let unsatisfiable = 0;
     const stationIds = new Set();
     for (const r of below) {
       for (const s of r.stations) { stationIds.add(s.stationId); stationsN += 1; demandN += s.demand; }
       if (r.verdict === 'infeasible') infeasible += 1;
       if (r.verdict === 'unproven') unproven += 1;
+      if (r.verdict === 'unsatisfiable') unsatisfiable += 1;
     }
     for (const r of below) for (const s of r.stations) for (const p of s.people || []) people.add(p.personId);
     const certified = clean && below.every((r) => r.verdict !== 'withheld');
@@ -485,7 +678,7 @@ export function buildStationCoverage(state, { now = new Date(), seat = null } = 
       nodeId: node.id, name: node.name, windowsN: below.length, stationsN, demandN,
       distinctStationsN: stationIds.size,
       peopleN: certified ? people.size : null,
-      infeasibleN: infeasible, unprovenN: unproven,
+      infeasibleN: infeasible, unprovenN: unproven, unsatisfiableN: unsatisfiable,
     });
   }
 
@@ -506,6 +699,12 @@ export function buildStationCoverage(state, { now = new Date(), seat = null } = 
     infeasibleN: verdictCounts.infeasible,
     unprovenN: verdictCounts.unproven,
     inertN: verdictCounts.inert,
+    unsatisfiableN: verdictCounts.unsatisfiable,
+    enablingEdgesN: windowRows.reduce((n, r) => n + r.precedence.liveN, 0),
+    enablingDeclaredN: windowRows.reduce((n, r) => n + r.precedence.declaredN, 0),
+    precedenceCyclesN: windowRows.reduce((n, r) => n + r.precedence.cycles.length, 0),
+    unsatisfiableCyclesN: windowRows.reduce((n, r) => n + r.precedence.unsatisfiableCyclesN, 0),
+    coRequisiteLoopsN: windowRows.reduce((n, r) => n + r.precedence.coRequisiteLoopsN, 0),
     statementsN: windowRows.reduce((n, r) => n + r.statementsN, 0),
     withdrawnN: windowRows.reduce((n, r) => n + r.withdrawnN, 0),
     availableCapacityN: windowRows.reduce((n, r) => n + r.availableCapacityN, 0),
@@ -513,7 +712,11 @@ export function buildStationCoverage(state, { now = new Date(), seat = null } = 
     undeclaredN: windowRows.reduce((n, r) => n + r.undeclaredN, 0),
   };
 
-  const figuresComplete = clean && windowRows.every((r) => r.verdict !== 'unproven' && !r.reasons.length);
+  // Proven windows carry a reason by construction: the unsatisfiable-cycle
+  // report is a proof, not a gap in the figures. It therefore does not block
+  // "figures complete" — any OTHER printed reason does, exactly as before.
+  const PROVEN_REASON = /^The enabling declarations form a cycle/;
+  const figuresComplete = clean && windowRows.every((r) => r.verdict !== 'unproven' && r.reasons.every((reason) => PROVEN_REASON.test(reason)));
   const claims = {
     countsReconcile: STATION_COVERAGE_VERDICTS.reduce((n, v) => n + verdictCounts[v.key], 0) === windowRows.length
       && STATION_COVERAGE_STATION_STATES.reduce((n, s) => n + (stationStateCounts[s.key] || 0), 0) === totals.stationsN,
@@ -544,8 +747,8 @@ export function buildStationCoverage(state, { now = new Date(), seat = null } = 
     claims,
     canDeclare,
     canDeclareAvailability: !seat?.readOnly && clean,
-    method: 'A station is manned only by someone with a live, unexpired manager-attested U or O qualification on that station’s own task, who is in its holder’s live reporting-line pool, and who declared availability covering the whole window. Feasibility is an exact capacitated bipartite matching, not a percentage. A shortage is proven only when nobody is silent. Nobody is scheduled: a feasible window is a proof of possibility, not an assignment.',
-    internal: { matrix, qualifiedByTask, windows, stations, availability, tasks },
+    method: 'A station is manned only by someone with a live, unexpired manager-attested U or O qualification on that station’s own task, who is in its holder’s live reporting-line pool, and who declared availability covering the whole window. Feasibility is an exact capacitated bipartite matching, not a percentage. A shortage is proven only when nobody is silent. Enabling declarations are decided as prerequisite-to-start (at-or-before): an enabling graph with a cycle containing a sequential station proves no running order exists; a cycle of only concurrent stations collapses to their shared instant and is printed as a co-requisite loop. Nobody is scheduled: a feasible window is a proof of possibility, not an assignment.',
+    internal: { matrix, qualifiedByTask, windows, stations, availability, enables, tasks },
   };
 }
 
@@ -568,6 +771,8 @@ export function stationCoverageCsvRows(report) {
     available_people_n: t.statementsN, available_capacity_n: t.availableCapacityN,
     feasible_windows_n: t.feasibleN, infeasible_windows_n: t.infeasibleN,
     unproven_windows_n: t.unprovenN, inert_windows_n: t.inertN,
+    unsatisfiable_windows_n: t.unsatisfiableN, enabling_edges_n: t.enablingEdgesN,
+    precedence_cycles_n: t.precedenceCyclesN,
     deficient_sets_n: t.deficientSetsN, max_deficit_n: t.maxDeficitN,
     witness_complete: yesNo(report.claims.figuresComplete),
     counts_reconcile: yesNo(report.claims.countsReconcile), figures_complete: yesNo(report.claims.figuresComplete),
@@ -589,17 +794,27 @@ export function stationCoverageBriefText(report) {
     `Skill-constrained simultaneous station coverage — ${report.today}`,
     `Engine ${report.engineVersion} · scope: ${report.scope}`,
     '',
-    `${t.windowsN} declared window(s) · ${t.concurrentN} simultaneous station(s) · ${t.demandN} declared headcount · ${t.statementsN} availability statement(s)`,
-    `Proven feasible: ${t.feasibleN} · proven infeasible: ${t.infeasibleN} · unproven: ${t.unprovenN} · nothing to prove: ${t.inertN}`,
-    `Deficient sets found: ${t.deficientSetsN} · largest exact deficit: ${t.maxDeficitN}`,
+    `${t.windowsN} declared window(s) · ${t.concurrentN} simultaneous station(s) · ${t.demandN} declared headcount · ${t.statementsN} availability statement(s) · ${t.enablingEdgesN} live enabling declaration(s)`,
+    `Proven feasible: ${t.feasibleN} · proven infeasible: ${t.infeasibleN} · unsatisfiable: ${t.unsatisfiableN} · unproven: ${t.unprovenN} · nothing to prove: ${t.inertN}`,
+    `Deficient sets found: ${t.deficientSetsN} · largest exact deficit: ${t.maxDeficitN} · precedence cycles: ${t.precedenceCyclesN} (${t.unsatisfiableCyclesN} unsatisfiable, ${t.coRequisiteLoopsN} co-requisite)`,
     '',
   ];
   for (const row of report.windows) {
     lines.push(`— ${row.label} (${row.fromDay} → ${row.toDay}) · ${row.verdictLabel}`);
     if (row.matching) lines.push(`   demand ${row.matching.totalDemand} · matched ${row.matching.matchedN} · ${row.matching.peopleN} candidate(s) with ${row.matching.capacityN} declared concurrent capacity`);
+    if (row.precedence.declaredN) {
+      lines.push(`   enabling declarations: ${row.precedence.liveN} live${row.precedence.retiredN ? ` (${row.precedence.retiredN} retired, retained)` : ''} · cycles: ${row.precedence.cycles.length} (${row.precedence.unsatisfiableCyclesN} unsatisfiable, ${row.precedence.coRequisiteLoopsN} co-requisite)${row.precedence.danglingN ? ` · ${row.precedence.danglingN} pointing at a retired station (carried as order, no effect)` : ''}`);
+      for (const cycle of row.precedence.cycles) {
+        if (!cycle.stationTitles.length) {
+          lines.push(`   ${cycle.unsatisfiable ? 'UNSATISFIABLE' : 'co-requisite'} cycle: members withheld — only the window’s holder or the local operator can read them`);
+          continue;
+        }
+        lines.push(`   ${cycle.unsatisfiable ? 'UNSATISFIABLE' : 'co-requisite'} cycle: ${cycle.stationTitles.join(' → ')} → ${cycle.stationTitles[0]}`);
+      }
+    }
     if (row.witness) {
       lines.push(`   deficient set: ${row.witness.stationTitles.map((x) => `“${x}”`).join(', ')}`);
-      lines.push(`   demand ${row.witness.demandN} vs ${row.witness.peopleN} person(s) carrying ${row.witness.capacityN} · deficit ${row.witness.deficitN}${row.witness.minimal ? ' (inclusion-minimal)' : ''}`);
+      lines.push(`   demand ${row.witness.demandN} vs ${row.witness.peopleN} person(s) carrying ${row.witness.capacityN} · deficit ${row.witness.deficitN}${row.witness.minimal ? ' (inclusion-minimal)' : ''}${typeof row.witness.enablerClosed === 'boolean' ? ` · enabler-closed: ${row.witness.enablerClosed ? 'yes' : 'no (printed as found)'}` : ''}`);
     }
     for (const reason of row.reasons) lines.push(`   refused: ${reason}`);
   }

@@ -39,6 +39,7 @@ import {
 import {
   normalizeSkillStationRows,
   normalizeStationAvailability,
+  normalizeStationEnables,
   normalizeStationWindows,
 } from '../../app/core/domain/stationCoverageSchema.js';
 import {
@@ -62,6 +63,9 @@ const station = (id, windowId, holderId, taskId, extra = {}) => ({ id, windowId,
   standard: 'Manned and running to the documented standard for the whole shift.', taskId, requirement: 'concurrent', demand: 1, declaredAt: AT, retiredOn: null, ...extra });
 const avail = (id, personId, windowId, byId, extra = {}) => ({ id, personId, windowId, byId, basis: byId === personId ? 'self' : 'manager',
   fromDay: SHIFT, toDay: SHIFT, capacity: 1, declaredAt: AT, withdrawnAt: null, withdrawnBy: null, note: '', stationIds: [], ...extra });
+const enable = (id, windowId, holderId, fromStationId, toStationId, extra = {}) => ({ id, windowId, holderId, fromStationId, toStationId,
+  reason: 'Interlock: the downstream machine must never run ahead of the one feeding it.', declaredAt: AT,
+  retiredOn: null, retiredBy: null, retireReason: null, ...extra });
 
 function fixture(patch = {}) {
   const raw = createEmptyState(NOW.toISOString());
@@ -89,22 +93,25 @@ const HALL = {
 
 /* ------------------------------------------------------------------ schema */
 
-test('v157 migration is additive, empty and infers no shift from the ILUO register', () => {
+test('v159 migration is additive, empty and infers no order from the ILUO register', () => {
   const old = { ...createEmptyState(AT), schemaVersion: 156 };
-  delete old.stationWindows; delete old.skillStations; delete old.stationAvailability;
+  delete old.stationWindows; delete old.skillStations; delete old.stationAvailability; delete old.stationEnables;
   old.people = [person('kim', null)];
   old.skillTasks = [task('T1', 'kim')];
   old.skillActs = [act('q1', 'T1', 'ria', 'kim')];
   const next = migrate(old);
-  assert.equal(SCHEMA_VERSION, 158);
-  assert.deepEqual(next.applied, ['156 → 157', '157 → 158']);
+  assert.equal(SCHEMA_VERSION, 159);
+  assert.deepEqual(next.applied, ['156 → 157', '157 → 158', '158 → 159']);
   assert.deepEqual(next.raw.stationWindows, []);
   assert.deepEqual(next.raw.skillStations, []);
   assert.deepEqual(next.raw.stationAvailability, []);
-  // The three ledgers are real collections, and a qualification is NOT turned
+  assert.deepEqual(next.raw.stationEnables, []);
+  // All four ledgers are real collections, and a qualification is NOT turned
   // into a station: what a person CAN do says nothing about where they must be.
-  assert.ok(COLLECTIONS.includes('stationWindows') && COLLECTIONS.includes('skillStations') && COLLECTIONS.includes('stationAvailability'));
+  assert.ok(COLLECTIONS.includes('stationWindows') && COLLECTIONS.includes('skillStations')
+    && COLLECTIONS.includes('stationAvailability') && COLLECTIONS.includes('stationEnables'));
   assert.equal(normalizeState(next.raw, { now: NOW }).state.skillStations.length, 0);
+  assert.equal(normalizeState(next.raw, { now: NOW }).state.stationEnables.length, 0);
   // The conventions came across as declared defaults, not as an inferred pause.
   assert.equal(normalizeState(next.raw, { now: NOW }).state.settings.stationCoverageAutoPropagate, true);
 });
@@ -350,6 +357,9 @@ test('CSV #148 exports the same figures the screen printed, with no identities',
   assert.equal(workspace.infeasible_windows_n, report.totals.infeasibleN);
   assert.equal(workspace.max_deficit_n, report.totals.maxDeficitN);
   assert.equal(workspace.demand_n, report.totals.demandN);
+  assert.equal(typeof workspace.unsatisfiable_windows_n, 'number');
+  assert.equal(typeof workspace.enabling_edges_n, 'number');
+  assert.equal(typeof workspace.precedence_cycles_n, 'number');
   assert.equal(workspace.contingent_fix_n, undefined);
   const exported = exportWorkspaceCsv(draft, 'skill-station-coverage', { now: NOW });
   assert.equal(exported.ok, true, exported.reason);
@@ -409,6 +419,13 @@ test('the stations panel prints the reader’s own figures, proves the witness a
     const bytes = fs.readFileSync(new URL('../../app/assets/station-coverage.jpg', import.meta.url));
     assert.ok(bytes.length > 10000);
     assert.equal(bytes.readUInt16BE(0), 0xffd8);
+    // The precedence explainer asset is a real asset too, and the register section rendered.
+    const precImg = document.querySelector('img[src$="station-precedence.jpg"]');
+    assert.ok(precImg && precImg.alt.includes('cycle'));
+    const precBytes = fs.readFileSync(new URL('../../app/assets/station-precedence.jpg', import.meta.url));
+    assert.ok(precBytes.length > 10000);
+    assert.equal(precBytes.readUInt16BE(0), 0xffd8);
+    assert.ok(document.querySelector('[data-testid="station-precedence-W1"]'));
   } finally {
     for (const k of keys) {
       const d = old.get(k);
@@ -484,4 +501,217 @@ test('the reader and the brief agree, and a span is not summed from overlapping 
   // Roll-ups: a window reached through two lines is counted once at the ancestor.
   assert.equal(report.totals.windowsN, report.windows.length);
   assert.equal(report.claims.countsReconcile, true);
+});
+
+/* ------------------------------------------- enabling declarations (ADR-0204) */
+
+test('enabling normalizer: self-edges, ghosts, short reasons and duplicate ordered pairs are retained and refused', () => {
+  const okWin = normalizeStationWindows([win('W1', 'ann')], []);
+  const okStations = normalizeSkillStationRows(
+    [station('S1', 'W1', 'ann', 'T1'), station('S2', 'W1', 'ann', 'T2'), station('S3', 'W1', 'ann', 'T3')],
+    okWin, []);
+  const warnings = [];
+  const rows = normalizeStationEnables([
+    enable('e1', 'W1', 'ann', 'S1', 'S1'),                    // self-edge
+    enable('e2', 'W1', 'ann', 'S1', 'S9'),                    // unknown dependent
+    enable('e3', 'W1', 'ann', 'S1', 'S2', { reason: 'short' }), // reason floor
+    enable('e4', 'W1', 'ann', 'S1', 'S2'),                    // valid
+    enable('e5', 'W1', 'ann', 'S1', 'S2'),                    // duplicate live ordered pair
+    enable('e6', 'W1', 'ann', 'S3', 'S1', { retiredOn: '2026-11-16', retiredBy: 'ann',
+      retireReason: 'Interlock removed after the line was modified.' }), // valid retirement
+  ], { windows: okWin, stations: okStations }, warnings);
+  assert.equal(rows.filter((r) => r.invalid).length, 4);
+  assert.equal(rows.find((r) => r.id === 'e4').invalid, undefined);
+  assert.equal(rows.find((r) => r.id === 'e6').invalid, undefined);
+  // Retired rows never count as live for the duplicate rule.
+  assert.equal(rows.find((r) => r.id === 'e4').invalid, undefined, 'the survivor stays live and readable');
+});
+
+test('an unsatisfiable enabling cycle (mixed concurrent + sequential) is proven from the declarations, not the roster', () => {
+  const patch = {
+    ...HALL,
+    skillStations: [
+      station('S1', 'W1', 'ann', 'T1'),
+      station('S2', 'W1', 'ann', 'T2', { requirement: 'sequential' }),
+      station('S3', 'W1', 'ann', 'T3'),
+    ],
+    stationEnables: [enable('e1', 'W1', 'ann', 'S1', 'S2'), enable('e2', 'W1', 'ann', 'S2', 'S1')],
+  };
+  const row = read(fixture(patch)).windows[0];
+  assert.equal(row.verdict, 'unsatisfiable');
+  assert.equal(row.matching, null, 'no matching is claimed for a declaration contradiction');
+  assert.equal(row.witness, null, 'there is no shortage to name');
+  assert.equal(row.proven, true, 'the impossibility IS a proof, taken from the declarations');
+  assert.equal(row.precedence.unsatisfiableCyclesN, 1);
+  assert.equal(row.precedence.cycles[0].stationIds.join('+'), 'S1+S2');
+  assert.ok(row.reasons.some((r) => r.includes('no running order')));
+  // The window is not reported as capacity-infeasible: two different facts, never collapsed.
+  assert.equal(read(fixture(patch)).totals.unsatisfiableN, 1);
+  assert.equal(read(fixture(patch)).totals.infeasibleN, 0);
+});
+
+test('a cycle of only concurrent stations collapses to the shared instant and is a co-requisite loop, not a defect', () => {
+  const patch = {
+    ...HALL,
+    stationEnables: [enable('e1', 'W1', 'ann', 'S1', 'S2'), enable('e2', 'W1', 'ann', 'S2', 'S1')],
+  };
+  const row = read(fixture(patch)).windows[0];
+  // The capacity proof still runs: both stations are mandatory and the Hall
+  // deficiency that fails there fails here, independently of the declarations.
+  assert.equal(row.verdict, 'infeasible');
+  assert.equal(row.precedence.coRequisiteLoopsN, 1);
+  assert.equal(row.precedence.unsatisfiableCyclesN, 0);
+  assert.equal(row.precedence.cycles[0].allConcurrent, true);
+  assert.equal(row.witness.deficitN, 1);
+});
+
+test('a clean enabling chain changes nothing about feasibility, and the witness is printed with its closure', () => {
+  // Not closed: S3 feeds S1, but the minimal witness is {S1, S2} — printed as found.
+  const unclosed = read(fixture({ ...HALL, stationEnables: [enable('e1', 'W1', 'ann', 'S3', 'S1')] })).windows[0];
+  assert.equal(unclosed.verdict, 'infeasible');
+  assert.deepEqual(unclosed.witness.stationIds.slice().sort(), ['S1', 'S2']);
+  assert.equal(unclosed.witness.enablerClosed, false);
+  assert.equal(unclosed.precedence.enablerClosed, false);
+  // Closed: S1 feeds S2, and the minimal witness {S1, S2} carries its enabler.
+  const closed = read(fixture({ ...HALL, stationEnables: [enable('e1', 'W1', 'ann', 'S1', 'S2')] })).windows[0];
+  assert.equal(closed.witness.enablerClosed, true);
+  assert.equal(closed.precedence.enablerClosed, true);
+});
+
+test('an enabling declaration pointing at a station retired before this read is retained and carries no order — nothing is inferred from it', () => {
+  const pastWindow = '2026-10-05';
+  const patch = {
+    ...HALL,
+    stationWindows: [win('W2', 'ann', { fromDay: pastWindow, toDay: pastWindow, declaredAt: '2026-10-01T09:00:00.000Z' })],
+    skillStations: [
+      station('S1', 'W2', 'ann', 'T1', { declaredAt: '2026-10-02T09:00:00.000Z' }),
+      station('S9', 'W2', 'ann', 'T1', { declaredAt: '2026-10-02T09:00:00.000Z', retiredOn: '2026-10-06' }),
+    ],
+    stationAvailability: [],
+    stationEnables: [enable('e1', 'W2', 'ann', 'S1', 'S9', { declaredAt: '2026-10-03T09:00:00.000Z' })],
+  };
+  const row = read(fixture(patch)).windows[0];
+  assert.equal(row.precedence.danglingN, 1, 'the edge references a station that was retired before this read');
+  assert.equal(row.precedence.liveN, 1);
+  assert.equal(row.precedence.cycles.length, 0, 'a dangling declaration induces no order');
+});
+
+test('enabling declarations through the real store: ordered pair, holder-only, retirable once, original preserved', () => {
+  const data = new Map([[STORAGE_KEY, JSON.stringify(fixture(HALL))]]);
+  const storage = { getItem: (k) => data.get(k) ?? null, setItem: (k, v) => data.set(k, String(v)), removeItem: (k) => data.delete(k) };
+  let i = 0;
+  const idFactory = (prefix) => `${prefix}-e${++i}`;
+  const store = createStore({ storage, now: () => NOW, idFactory, postCommitRules: [] });
+  store.load();
+  const api = guardApi(createApi(store, { now: () => NOW, idFactory }), store, { now: () => NOW.getTime() });
+  const seat = (id) => store.update((draft) => { draft.settings = { ...draft.settings, activeSeatId: id }; },
+    { type: 'seat.declared', entity: 'settings', entityId: 'seat', summary: 'test seat' });
+  seat('ann');
+  const ok = api.stationCoverageDeclareEnable({ windowId: 'W1', fromStationId: 'S3', toStationId: 'S1',
+    reason: 'The feeder station must be manned before the station it feeds may run.' });
+  assert.equal(ok.ok, true, ok.error);
+  const dup = api.stationCoverageDeclareEnable({ windowId: 'W1', fromStationId: 'S3', toStationId: 'S1',
+    reason: 'A second declaration of the same ordered pair must be refused.' });
+  assert.equal(dup.ok, false);
+  assert.ok(dup.error.includes('already live'));
+  const self = api.stationCoverageDeclareEnable({ windowId: 'W1', fromStationId: 'S1', toStationId: 'S1',
+    reason: 'A station can never enable itself, under any circumstances.' });
+  assert.equal(self.ok, false);
+  // Another manager may not declare an order inside Ann's window.
+  seat('bob');
+  const stranger = api.stationCoverageDeclareEnable({ windowId: 'W1', fromStationId: 'S3', toStationId: 'S1',
+    reason: 'A peer manager declaring an order in a window that is not theirs.' });
+  assert.equal(stranger.ok, false);
+  seat('ann');
+  const row = store.state.stationEnables.at(-1);
+  const retire = api.stationCoverageRetireEnable(row.id, 'Interlock removed after the modification was commissioned.');
+  assert.equal(retire.ok, true, retire.error);
+  const kept = store.state.stationEnables.find((r) => r.id === row.id);
+  assert.equal(kept.retiredOn, NOW.toISOString().slice(0, 10));
+  assert.ok(kept.retireReason.includes('commissioned'), 'the retirement carries its own written reason');
+  assert.ok(kept.reason.includes('feeder station'), 'the original declaration is never edited');
+  const again = api.stationCoverageRetireEnable(row.id, 'Twice over.');
+  assert.equal(again.ok, false);
+});
+
+test('RULE-SSC-01 asks the window holder to resolve an unsatisfiable enabling cycle, never for a co-requisite loop, and closes itself', () => {
+  const patch = {
+    ...HALL,
+    skillStations: [
+      station('S1', 'W1', 'ann', 'T1'),
+      station('S2', 'W1', 'ann', 'T2', { requirement: 'sequential' }),
+      station('S3', 'W1', 'ann', 'T3'),
+    ],
+    stationEnables: [enable('e1', 'W1', 'ann', 'S1', 'S2'), enable('e2', 'W1', 'ann', 'S2', 'S1')],
+  };
+  const draft = JSON.parse(JSON.stringify(fixture(patch)));
+  const effects = stationCoverageRule(draft, { event: { type: 'stations.enable.declared' }, now: NOW, idFactory: (p) => `${p}-c1` });
+  assert.ok(effects.some((e) => e.action === 'delegated'));
+  const ask = indexStationCoverageAsks(draft).find((a) => a.signature.startsWith('ssc1:precedence-cycle'));
+  assert.ok(ask, 'a precedence-cycle ask was filed');
+  assert.equal(ask.seatId, 'ann');
+  assert.ok(ask.task.expectedOutcome.includes('no running order exists'));
+  assert.ok(ask.task.expectedOutcome.includes('sequential'));
+  // Idempotent on the same record.
+  const again = stationCoverageRule(draft, { event: { type: 'stations.enable.declared' }, now: NOW, idFactory: (p) => `${p}-c3` });
+  assert.equal(again.filter((e) => e.action === 'delegated').length, 0);
+  // Retiring one declaration closes the ask by itself.
+  const target = draft.stationEnables.find((e) => e.id === 'e1');
+  target.retiredOn = NOW.toISOString().slice(0, 10);
+  target.retiredBy = 'ann';
+  target.retireReason = 'Test retirement.';
+  stationCoverageRule(draft, { event: { type: 'stations.enable.retired' }, now: NOW, idFactory: (p) => `${p}-c4` });
+  const closed = indexStationCoverageAsks(draft).find((a) => a.signature.startsWith('ssc1:precedence-cycle'));
+  assert.equal(closed.task.status, 'done');
+  assert.ok(closed.task.completionNote.includes('[station-coverage cleared]'));
+  // The all-concurrent co-requisite loop files NO precedence ask — it is satisfiable by the shared instant.
+  const coReq = { ...patch, skillStations: patch.skillStations.map((s) => (s.id === 'S2' ? { ...s, requirement: 'concurrent' } : s)) };
+  const draft2 = JSON.parse(JSON.stringify(fixture(coReq)));
+  stationCoverageRule(draft2, { event: { type: 'stations.enable.declared' }, now: NOW, idFactory: (p) => `${p}-c5` });
+  assert.equal(indexStationCoverageAsks(draft2).filter((a) => a.signature.startsWith('ssc1:precedence-cycle')).length, 0);
+});
+
+test('an ancestor reading a subordinate’s window sees the precedence counts, never the declarations themselves', () => {
+  const patch = {
+    ...HALL,
+    skillStations: [
+      station('S1', 'W1', 'ann', 'T1'),
+      station('S2', 'W1', 'ann', 'T2', { requirement: 'sequential' }),
+      station('S3', 'W1', 'ann', 'T3'),
+    ],
+    stationEnables: [enable('e1', 'W1', 'ann', 'S1', 'S2', { reason: 'The drill interlock is not to be bypassed by whoever draws the roster.' }),
+      enable('e2', 'W1', 'ann', 'S2', 'S1')],
+  };
+  const state = fixture(patch);
+  // Ann's own read sees the rows in full.
+  const own = buildSeats(state).byId.get('ann');
+  const mine = buildStationCoverage(state, { now: NOW, seat: own }).windows[0];
+  assert.equal(mine.precedence.detail, true);
+  assert.equal(mine.precedence.edges.length, 2);
+  assert.ok(mine.precedence.edges[0].reason.includes('drill interlock'));
+
+  // Ada, Ann's line holder, reads below the default floor for a four-person
+  // pool (her altitude floors at 6): counts only, never the declarations.
+  const ada = buildSeats(state).byId.get('ada');
+  assert.ok(ada, 'the VP seat exists');
+  const report = buildStationCoverage(state, { now: NOW, seat: ada });
+  const row = report.windows[0];
+  assert.equal(row.verdict, 'unsatisfiable', 'the declaration contradiction is proven, not hidden');
+  assert.equal(row.precedence.detail, false);
+  assert.equal(row.precedence.liveN, 2, 'counts still roll up');
+  assert.equal(row.precedence.cycles.length, 1);
+  assert.equal(row.precedence.unsatisfiableCyclesN, 1);
+  assert.deepEqual(row.precedence.cycles[0].stationTitles, [], 'cycle membership is withheld');
+  assert.deepEqual(row.precedence.cycles[0].stationIds, []);
+  assert.deepEqual(row.precedence.edges, [], 'no from/to titles, reasons or record ids escape reach');
+  assert.ok(row.reasons.some((r) => r.startsWith('The enabling declarations form a cycle')));
+  assert.ok(!row.reasons.some((r) => r.includes('Station S1') || r.includes('Station S2')), 'no station title in the reasons');
+  const brief = stationCoverageBriefText(report);
+  assert.ok(brief.includes('members withheld'));
+  assert.ok(!brief.includes('Station S1') && !brief.includes('drill interlock'), 'nothing row-level in the brief');
+  const csv = JSON.stringify(stationCoverageCsvRows(report));
+  assert.ok(!csv.includes('Station S1') && !csv.includes('drill interlock'), 'nothing row-level in the CSV');
+  // And the holder reads exactly what the ancestor could not.
+  const full = stationCoverageBriefText(buildStationCoverage(state, { now: NOW, seat: own }));
+  assert.ok(full.includes('Station S1'));
 });

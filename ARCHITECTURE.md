@@ -1,3 +1,25 @@
+## 2026-11-15 — Session 272 architecture delta (Schema v158 → v159)
+
+**One more declaration ledger, one new proof boundary, zero change to the
+capacity mathematics.** `app/core/domain/stationCoverage.js` now also builds the
+live enabling graph over the window's stations from the append-only
+`stationEnables` ledger (ADR-0204): strongly connected components (Tarjan,
+deterministic order, ≤40 nodes) decide the precedence structure exactly.
+A cycle with any sequential member is `unsatisfiable` — proven from the
+declarations, no match attempted; an all-concurrent cycle is a co-requisite
+loop, printed, satisfiable by the shared instant. With an order in hand, the
+Hall proof is unchanged and the deficient-set shrink now drops most-downstream
+stations first; `enablerClosed` is computed and printed on the witness, never
+forced. The reader stays the single read model for panel, brief, CSV #148 and
+`RULE-SSC-01` (whose third condition, `precedence-cycle`, asks the window's own
+holder per unsatisfiable cycle and never fires for co-requisite loops). New
+files/edits: `stationEnables` in `stationCoverageSchema.js` (fail-closed,
+invalid retained), v158→v159 migration in `app/core/schema.js`, two new actions
+(holder-only, original reasons never edited on retire), panel enabling
+register + precedence explainer, CSV #148 extended (aggregate, no titles).
+Layer boundaries held: view imports no domain maths; the rule touches only
+`delegations`, `links` and `matrixMarkers`; nothing derived is stored.
+
 ## 2026-11-14 — Session 269 architecture delta (Schema v156 → v157)
 
 **One reader decides a subset question.** `app/core/domain/stationCoverage.js`
