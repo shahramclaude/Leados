@@ -100,8 +100,8 @@ test('v159 migration is additive, empty and infers no order from the ILUO regist
   old.skillTasks = [task('T1', 'kim')];
   old.skillActs = [act('q1', 'T1', 'ria', 'kim')];
   const next = migrate(old);
-  assert.equal(SCHEMA_VERSION, 161);
-  assert.deepEqual(next.applied, ['156 → 157', '157 → 158', '158 → 159', '159 → 160', '160 → 161']);
+  assert.equal(SCHEMA_VERSION, 162);
+  assert.deepEqual(next.applied, ['156 → 157', '157 → 158', '158 → 159', '159 → 160', '160 → 161', '161 → 162']);
   assert.deepEqual(next.raw.stationWindows, []);
   assert.deepEqual(next.raw.skillStations, []);
   assert.deepEqual(next.raw.stationAvailability, []);
@@ -344,7 +344,7 @@ test('rights, safe reads and the export register are wired exactly once', () => 
   assert.equal(ACTION_RIGHTS['govern-station-coverage'].minRank, 3);
   const keys = CSV_EXPORTS.map((e) => e.key);
   assert.equal(keys.filter((k) => k === 'skill-station-coverage').length, 1);
-  assert.equal(CSV_EXPORTS.length, 149, 'the export count moved from 147 to 148 and nothing else did');
+  assert.equal(CSV_EXPORTS.length, 150, 'the export count moved from 147 to 148 and nothing else did');
 });
 
 /* ------------------------------------------------------------------- CSV */

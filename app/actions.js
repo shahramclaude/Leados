@@ -99,6 +99,7 @@ import { createStandardWorkActions } from './core/domain/standardWorkActions.js'
 import { createPriorityRankingActions } from './core/domain/priorityRankingActions.js';
 import { createGoalCommitmentActions } from './core/domain/goalCommitmentActions.js';
 import { createGoalAttainmentActions } from './core/domain/goalAttainmentActions.js';
+import { createInvestmentCaseActions } from './core/domain/investmentCaseActions.js';
 // ADR-0148: Matrix Line Consent. A declared share is an ask until the line's
 // manager accepts or declines it AND the person acknowledges it. Two
 // first-person commands, one scan, and three aggregate reads that report `ok`.
@@ -20278,6 +20279,10 @@ export function createApi(store, options = {}) {
   // an ended period's reported figures, acknowledging one exact restatement, and
   // the conventions. No act edits a goal, a check-in or a closed figure.
   Object.assign(api, createGoalAttainmentActions(store, { now: clock, idFactory: id }));
+  // ADR-0208: the Investment Case Register — declaring a dated capital promise,
+  // withdrawing it, ratifying it (never the benefit owner's own act) and
+  // reviewing it against that promise. No act moves money or edits an envelope.
+  Object.assign(api, createInvestmentCaseActions(store, { now: clock, idFactory: id }));
   // ADR-0177: the Cross-Line Labour Chargeback & Internal Transfer-Price Ledger.
   // Proposing, confirming and retiring a price are first-person two-key acts
   // through the same reviewed gateway; every charge is derived on read.

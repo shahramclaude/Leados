@@ -223,6 +223,11 @@ export const PAUSE_PERMIT_MATRIX_REACH_SWITCHES = Object.freeze([
   // moved, so silencing it reaches a second line — and that line's manager is
   // not told that a figure reported upward has changed.
   'goalAttainmentAutoPropagate',
+  // ADR-0208: the investment-case review switch. The rule reads the reporting
+  // graph for the seat above EVERY one of a benefit owner's lines, so silencing
+  // it reaches a second line — and that line's manager is not told that a
+  // ratified promise went unreviewed.
+  'investmentCaseAutoPropagate',
 ]);
 
 export function pausePermitReachesMatrix(key) {
@@ -262,6 +267,7 @@ export const PAUSE_PERMIT_REACH_RULES = Object.freeze({
   goalCommitmentAutoPropagate: 'goalCommitmentRules.js',
   chargebackPostingAutoPropagate: 'chargebackPostingRules.js',
   goalAttainmentAutoPropagate: 'goalAttainmentRules.js',
+  investmentCaseAutoPropagate: 'investmentCaseRules.js',
 });
 
 /** How much of the register a seat is shown. Mirrors the altitude disclosure ladder. */
