@@ -100,8 +100,8 @@ test('v159 migration is additive, empty and infers no order from the ILUO regist
   old.skillTasks = [task('T1', 'kim')];
   old.skillActs = [act('q1', 'T1', 'ria', 'kim')];
   const next = migrate(old);
-  assert.equal(SCHEMA_VERSION, 159);
-  assert.deepEqual(next.applied, ['156 → 157', '157 → 158', '158 → 159']);
+  assert.equal(SCHEMA_VERSION, 160);
+  assert.deepEqual(next.applied, ['156 → 157', '157 → 158', '158 → 159', '159 → 160']);
   assert.deepEqual(next.raw.stationWindows, []);
   assert.deepEqual(next.raw.skillStations, []);
   assert.deepEqual(next.raw.stationAvailability, []);

@@ -12,6 +12,7 @@ import { AAR_CORROBORATION_RIGHTS } from './aarCorroborationRegistry.js';
 import { STANDARD_WORK_RIGHTS } from './standardWorkRegistry.js';
 import { PRIORITY_BALLOT_RIGHTS } from './priorityRankingRegistry.js';
 import { GOAL_COMMITMENT_RIGHTS } from './goalCommitmentRegistry.js';
+import { GOAL_ATTAINMENT_RIGHTS } from './goalAttainmentRegistry.js';
 import { routeVerdict } from './seatRegistry.js';
 import { validateMissionCommands } from './mission.js';
 import { captureBriefCase } from './missionCaptureBrief.js';
@@ -130,6 +131,13 @@ const groups = [
   [GOAL_COMMITMENT_RIGHTS.DECLARE, 'matrixGoalCommitmentDeclare matrixGoalCommitmentRebaseline matrixGoalCommitmentCandidates'],
   [GOAL_COMMITMENT_RIGHTS.RELEASE, 'matrixGoalCommitmentRelease'],
   [GOAL_COMMITMENT_RIGHTS.GOVERN, 'matrixGoalCommitmentScan matrixGoalCommitmentSetConventions'],
+  // ADR-0206: the goal-attainment register. Its pure reads sit on the read right
+  // and in SAFE_READS; CLOSING a period and ACKNOWLEDGING a restatement are the
+  // acts of the altitude that reports the figure upward (director and above), and
+  // the scan/conventions stay on the governing right. Nothing here edits a goal.
+  [GOAL_ATTAINMENT_RIGHTS.READ, 'matrixGoalAttainmentReport matrixGoalAttainmentBriefText matrixGoalAttainmentCsvRows matrixGoalAttainmentAttentionCount'],
+  [GOAL_ATTAINMENT_RIGHTS.CLOSE, 'matrixGoalAttainmentClose matrixGoalAttainmentAcknowledge matrixGoalAttainmentCandidates'],
+  [GOAL_ATTAINMENT_RIGHTS.GOVERN, 'matrixGoalAttainmentScan matrixGoalAttainmentSetConventions'],
   // ADR-0148: answering a declared share is TWO first-person acts, split on the
   // spine rather than in prose. `accept-matrix-line` is the manager's own
   // answer (accept or decline the line they were given); it is open at every
@@ -627,6 +635,11 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // everything else is counts with a printed reason.
 'skillCoverageReport',
 'stationCoverageReport', 'stationCoverageCsvRows', 'stationCoverageBriefText',
+// ADR-0206: the goal-attainment register is scoped INSIDE the read model — every
+// seat reads the aggregate figures, while span names and sub-floor cells are
+// projected at the seat's disclosure level. A withheld figure is a printed
+// reason, never a zero.
+'matrixGoalAttainmentReport', 'matrixGoalAttainmentBriefText', 'matrixGoalAttainmentCsvRows', 'matrixGoalAttainmentAttentionCount',
 'standardWorkReport', 'standardWorkBriefText', 'standardWorkAttentionCount', 'standardWorkCandidates']);
 const refusal = (reason) => ({ ok: false, code: 'scope-refusal', error: reason, field: 'scope' });
 

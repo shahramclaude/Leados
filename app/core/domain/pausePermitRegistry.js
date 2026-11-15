@@ -218,6 +218,11 @@ export const PAUSE_PERMIT_MATRIX_REACH_SWITCHES = Object.freeze([
   // for the joint apex of every line the period statement names, so silencing
   // it reaches every one of those lines — and none of their managers is told.
   'chargebackPostingAutoPropagate',
+  // ADR-0206: the goal-attainment restatement switch. The rule reads the
+  // reporting graph for the joint apex of every span whose reported figures
+  // moved, so silencing it reaches a second line — and that line's manager is
+  // not told that a figure reported upward has changed.
+  'goalAttainmentAutoPropagate',
 ]);
 
 export function pausePermitReachesMatrix(key) {
@@ -256,6 +261,7 @@ export const PAUSE_PERMIT_REACH_RULES = Object.freeze({
   priorityBallotAutoPropagate: 'priorityRankingRules.js',
   goalCommitmentAutoPropagate: 'goalCommitmentRules.js',
   chargebackPostingAutoPropagate: 'chargebackPostingRules.js',
+  goalAttainmentAutoPropagate: 'goalAttainmentRules.js',
 });
 
 /** How much of the register a seat is shown. Mirrors the altitude disclosure ladder. */

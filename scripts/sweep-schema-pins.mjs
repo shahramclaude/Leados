@@ -1,19 +1,19 @@
 #!/usr/bin/env node
 /**
  * scripts/sweep-schema-pins.mjs — mechanical schema-pin sweep, re-pointed at
- * every schema bump. Current target: v158 → v159 (ADR-0204, Session 272).
+ * every schema bump. Current target: v159 → v160 (ADR-0206, Session 274).
  *
- * ADR-0204 adds one new EMPTY collection (stationEnables) and extends CSV #148, so
- * its additive schema migration changes the current schema pin and the
- * migration-chain tails. It deliberately touches only test assertions: ADR/docs
+ * ADR-0206 adds three new EMPTY collections (goalAttainmentClosures, Notes and
+ * Markers) and CSV #149, so its additive migration changes the current schema pin
+ * and the migration-chain tails. It deliberately touches only test assertions: ADR/docs
  * and source comments explain their own historical version rather than being
  * rewritten as a mechanical side effect.
  *
  * Updates, in every tests/app/*.test.mjs:
- *   SCHEMA_VERSION, 158            → SCHEMA_VERSION, 159
- *   schemaVersion, 158             → schemaVersion, 159
- *   '157 → 158']                   → '157 → 158', '158 → 159']   (migration chains)
- *   .applied.at(-1), '157 → 158'   → .applied.at(-1), '158 → 159'
+ *   SCHEMA_VERSION, 159            → SCHEMA_VERSION, 160
+ *   schemaVersion, 159             → schemaVersion, 160
+ *   '158 → 159']                   → '158 → 159', '159 → 160']   (migration chains)
+ *   .applied.at(-1), '158 → 159'   → .applied.at(-1), '159 → 160'
  *                                      (legacy-to-current head pins)
  *
  * One-step historical migration tests keep their OWN from-version (colon form,
@@ -39,13 +39,13 @@ for (const file of files) {
   const src = fs.readFileSync(file, 'utf8');
   let out = src;
   let n = 0;
-  out = out.replace(/SCHEMA_VERSION, 158/g, () => { n += 1; return 'SCHEMA_VERSION, 159'; });
-  out = out.replace(/schemaVersion, 158/g, () => { n += 1; return 'schemaVersion, 159'; });
-  out = out.replace(new RegExp(`'157 ${ARROW} 158']`, 'g'), () => { n += 1; return `'157 ${ARROW} 158', '158 ${ARROW} 159']`; });
+  out = out.replace(/SCHEMA_VERSION, 159/g, () => { n += 1; return 'SCHEMA_VERSION, 160'; });
+  out = out.replace(/schemaVersion, 159/g, () => { n += 1; return 'schemaVersion, 160'; });
+  out = out.replace(new RegExp(`'158 ${ARROW} 159']`, 'g'), () => { n += 1; return `'158 ${ARROW} 159', '159 ${ARROW} 160']`; });
   // Some older migration tests assert only the terminal chain entry. They are
   // current-schema pins, not historical one-step migration assertions (such as
   // `MIGRATIONS['156']`), so move this terminal pin too.
-  out = out.replace(new RegExp(`\\.applied\\.at\\(-1\\), '157 ${ARROW} 158'`, 'g'), () => { n += 1; return `.applied.at(-1), '158 ${ARROW} 159'`; });
+  out = out.replace(new RegExp(`\\.applied\\.at\\(-1\\), '158 ${ARROW} 159'`, 'g'), () => { n += 1; return `.applied.at(-1), '159 ${ARROW} 160'`; });
   if (out !== src) {
     fs.writeFileSync(file, out);
     touched += 1;

@@ -98,6 +98,7 @@ import { createStationCoverageActions } from './core/domain/stationCoverageActio
 import { createStandardWorkActions } from './core/domain/standardWorkActions.js';
 import { createPriorityRankingActions } from './core/domain/priorityRankingActions.js';
 import { createGoalCommitmentActions } from './core/domain/goalCommitmentActions.js';
+import { createGoalAttainmentActions } from './core/domain/goalAttainmentActions.js';
 // ADR-0148: Matrix Line Consent. A declared share is an ask until the line's
 // manager accepts or declines it AND the person acknowledges it. Two
 // first-person commands, one scan, and three aggregate reads that report `ok`.
@@ -20273,6 +20274,10 @@ export function createApi(store, options = {}) {
   // ADR-0193: the Cross-Line Goal Commitment Conflict register — declarations,
   // re-baselines, releases, conventions and the RULE-GCC-01 scan.
   Object.assign(api, createGoalCommitmentActions(store, { now: clock, idFactory: id }));
+  // ADR-0206: the Goal Attainment Period Close & Restatement Register — closing
+  // an ended period's reported figures, acknowledging one exact restatement, and
+  // the conventions. No act edits a goal, a check-in or a closed figure.
+  Object.assign(api, createGoalAttainmentActions(store, { now: clock, idFactory: id }));
   // ADR-0177: the Cross-Line Labour Chargeback & Internal Transfer-Price Ledger.
   // Proposing, confirming and retiring a price are first-person two-key acts
   // through the same reviewed gateway; every charge is derived on read.

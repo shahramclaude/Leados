@@ -188,6 +188,7 @@ import { standardWorkRule } from './standardWorkRules.js';
 import { stationCoverageRule } from './stationCoverageRules.js';
 import { priorityRule } from './priorityRankingRules.js';
 import { goalCommitmentRule } from './goalCommitmentRules.js';
+import { goalAttainmentRule } from './goalAttainmentRules.js';
 
 
 // ADR-0087: the Operating Cadence Clock. Reads the finished queue after the
@@ -1113,6 +1114,19 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // re-points a goal, never infers a measure from goal text and never rates a
   // person. Registered immediately before `seatRule` and `sealRule`.
   goalCommitmentRule,
+  // ADR-0206: the Goal Attainment Period Close & Restatement Register
+  // (RULE-GAR-01). Reads the ONE attainment reader with the whole-workspace view.
+  // A closed period that no longer reproduces the figures reported for it — and
+  // whose exact restatement nobody has acknowledged — becomes ONE dated ask to
+  // the LOWEST JOINT APEX of the spans whose printed figures moved. A faithful
+  // period, a period that cannot be re-derived, and an acknowledged restatement
+  // are all left alone. With no moved span holder, no single apex, a leader-held
+  // apex or an off-roster holder it records an identity-free
+  // `goalAttainmentMarkers` observation and asks nobody. It never edits a goal, a
+  // check-in, a due date, an owner or a closed figure, never re-closes a period
+  // and never rates a person. Registered immediately before `seatRule` and
+  // `sealRule`.
+  goalAttainmentRule,
   // ADR-0076: the Operating Seat (vertical roll-up + enforced boundaries).
   // It reads the finished record after every module has propagated, then fans
   // each open item up every leadership ancestor in the reporting tree with one
