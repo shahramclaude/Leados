@@ -9,6 +9,8 @@ import { card, table, banner } from '../ui/components.js';
 import { serializeCsv } from '../core/csv.js';
 import {
   STATION_COVERAGE_CSV_COLUMNS,
+  STATION_COVERAGE_FEED_RELATIONS,
+  STATION_COVERAGE_FEED_STATUSES,
   STATION_COVERAGE_REQUIREMENTS,
   STATION_COVERAGE_STATION_STATES,
 } from '../core/domain/stationCoverageRegistry.js';
@@ -16,6 +18,25 @@ import {
 const n = (value) => (value === null || value === undefined ? 'Withheld' : String(value));
 const DIAGRAM_URL = './app/assets/station-coverage.jpg';
 const PRECEDENCE_DIAGRAM_URL = './app/assets/station-precedence.jpg';
+const CROSS_WINDOW_DIAGRAM_URL = './app/assets/station-cross-window.jpg';
+
+/**
+ * A cross-window prerequisite is decided by the calendar, not by the holder.
+ * These two maps are the only place the screen decides how a decided fact
+ * looks; the fact itself always comes from the reader (ADR-0207).
+ */
+const FEED_TONE = { fed: 'good', blocked: 'bad', contradicted: 'bad', unproven: 'warn', ambiguous: 'warn', none: 'neutral' };
+const EDGE_STATUS_LABEL = {
+  order: 'Order proven by the calendar',
+  blocked: 'Blocked — the feeder cannot be manned',
+  contradiction: 'Contradicted — the calendar forbids the order',
+  unproven: 'Unproven — the feeder cannot be read',
+  ambiguous: 'Not proven — the windows touch or overlap',
+  withheld: 'Withheld — the feeder window is outside this seat’s reach',
+  dangling: 'Dangling — retained, carries no order',
+};
+const feedLabel = (key) => STATION_COVERAGE_FEED_STATUSES.find((s) => s.key === key)?.label || key;
+const relationLabel = (key) => STATION_COVERAGE_FEED_RELATIONS.find((r) => r.key === key)?.label || 'Relation unreadable';
 
 function finish(ctx, result) {
   if (!result?.ok) { toast(result?.error || 'The station declaration was refused.', 'bad'); return; }
@@ -99,6 +120,131 @@ function retireEnable(ctx, enable) {
     h('button', { type: 'button', class: 'btn btn-danger', 'data-testid': 'station-enable-retire-save',
       onClick: () => finish(ctx, ctx.api.stationCoverageRetireEnable(enable.id, form.getValues().reason)) }, 'Retire'),
   ] });
+}
+
+/* ------------------------------------------- cross-window prerequisites (ADR-0207) */
+
+/**
+ * A declaration between two windows belongs to the seat that holds BOTH, so the
+ * one list offered is a list of two-window pairs the door will accept. The
+ * dependent station is picked in the window being read; the feeder is picked
+ * from the other window, whose id travels with the choice because a select
+ * cannot ask a second select what it holds.
+ */
+function declareCrossWindow(ctx, row) {
+  const pairs = [];
+  for (const target of row.feed?.targets || []) {
+    for (const station of target.stations) {
+      pairs.push({
+        value: `${target.windowId}::${station.stationId}`,
+        label: `${target.label} (${target.fromDay} → ${target.toDay}) — ${station.title}`,
+      });
+    }
+  }
+  if (!pairs.length || !row.stations.length) return;
+  dialog(ctx, `Cross-shift prerequisite for “${row.label}”`, [
+    { name: 'toStationId', label: `Which station in “${row.label}” waits?`, type: 'select',
+      value: row.stations[0].stationId,
+      options: row.stations.map((s) => ({ value: s.stationId, label: `${s.title} (${s.requirement})` })),
+      help: 'The dependent station — it may not be manned before the enabler it waits for.' },
+    { name: 'pair', label: 'Which station in another window must come up first?', type: 'select',
+      value: pairs[0].value, options: pairs,
+      help: 'Only windows this seat holds both lines for are offered: an order between two windows is not one holder’s to make. The calendar decides on read whether the order is proven, ambiguous or contradicted.' },
+    { name: 'reason', label: 'Why must the other window’s station come up first? (at least 10 characters)', type: 'textarea', value: '',
+      help: 'The physical, procedural, safety or hand-over reason — a feed line, a permit, a start-up sequence. Not a scheduling preference, and not who should do it.' },
+  ], (v) => {
+    const [fromWindowId, fromStationId] = String(v.pair || '').split('::');
+    return ctx.api.stationCoverageDeclareWindowEnable({
+      fromWindowId, fromStationId, toWindowId: row.windowId, toStationId: v.toStationId, reason: v.reason,
+    });
+  }, 'Record prerequisite');
+}
+
+function retireCrossWindow(ctx, edge) {
+  const form = buildForm([
+    { name: 'reason', label: `Why is “${edge.fromTitle}” → “${edge.toTitle}” being retired?`, type: 'textarea', value: '',
+      help: 'At least 5 characters. The original declaration stays on record; the order it imposed is gone.' },
+  ]);
+  openModal({ title: 'Retire this cross-window prerequisite?', body: form.node, footer: [
+    h('button', { type: 'button', class: 'btn btn-ghost', onClick: closeAllModals }, 'Cancel'),
+    h('button', { type: 'button', class: 'btn btn-danger', 'data-testid': 'station-cross-retire-save',
+      onClick: () => finish(ctx, ctx.api.stationCoverageRetireWindowEnable(edge.id, form.getValues().reason)) }, 'Retire'),
+  ] });
+}
+
+/**
+ * What this window waits for, in the register's own words. A window with no
+ * declaration says so; a window whose declaration the calendar cannot prove
+ * prints the reason rather than a reassuring badge. A declaration the seat
+ * cannot read is counted and withheld, never guessed.
+ */
+function crossWindowSection(ctx, row, report) {
+  const f = row.feed;
+  if (!f) return null;
+  if (!f.declaredN && !f.downstreamN && !f.canDeclare) return null;
+  const canDeclare = f.canDeclare && !row.past;
+  const status = STATION_COVERAGE_FEED_STATUSES.find((s) => s.key === f.status);
+  const actions = canDeclare
+    ? [h('button', { type: 'button', class: 'btn btn-small', 'data-testid': `station-cross-add-${row.windowId}`, onClick: () => declareCrossWindow(ctx, row) }, 'Declare cross-shift prerequisite')]
+    : [];
+  const counts = [
+    ['orderN', 'proven order'],
+    ['blockedN', 'blocked'],
+    ['ambiguousN', 'not proven'],
+    ['contradictedN', 'contradicted'],
+    ['unprovenN', 'unreadable'],
+    ['withheldN', 'outside reach'],
+    ['danglingN', 'dangling'],
+  ].filter(([key]) => f[key]).map(([key, label]) => `${f[key]} ${label}`);
+  const columns = [
+    { key: 'fromWindowLabel', label: 'Feeder window', render: (e) => (e.fromWindowLabel ? `${e.fromWindowLabel} (${e.fromWindowFromDay} → ${e.fromWindowToDay})` : 'Withheld') },
+    { key: 'fromTitle', label: 'Must come up first', render: (e) => e.fromTitle || 'Withheld' },
+    { key: 'toTitle', label: 'Waits for it' },
+    { key: 'relation', label: 'Calendar relation', render: (e) => relationLabel(e.relation) },
+    { key: 'status', label: 'What the register proves', render: (e) => EDGE_STATUS_LABEL[e.status] || e.status },
+    { key: 'declaredBy', label: 'Declared by', render: (e) => (e.declaredBy ? `${e.declaredBy}${e.basis === 'operator' ? ' (operator view)' : ''}` : 'Withheld') },
+    { key: 'reason', label: 'Declared reason', render: (e) => e.reason || 'Withheld' },
+    ...(f.edges.some((e) => e.canRetire) ? [{
+      key: 'retire', label: '',
+      render: (e) => (e.canRetire
+        ? h('button', { type: 'button', class: 'btn btn-ghost btn-small', 'data-testid': `station-cross-retire-${e.id}`, onClick: () => retireCrossWindow(ctx, e) }, 'Retire…')
+        : '—'),
+    }] : []),
+  ];
+  return card({
+    title: 'Prerequisites from other windows — does the calendar prove the order?',
+    subtitle: f.declaredN
+      ? `${f.declaredN} declared · ${f.liveN} live${f.retiredN ? ` · ${f.retiredN} retired, retained` : ''} · ${f.status === 'none' ? 'no declaration carries an order' : feedLabel(f.status)}`
+      : (f.downstreamN
+        ? `Nothing waited on here · this window is a declared feeder for ${f.downstreamWindowsN} other window(s)`
+        : 'Nothing declared. Two shifts that touch say nothing about which waits for the other until a human declares it.'),
+    attrs: { 'data-testid': `station-cross-${row.windowId}`, 'data-feed-status': f.status },
+    actions,
+    body: h('div', { class: 'stack' },
+      status && f.status !== 'none'
+        ? banner({ tone: FEED_TONE[f.status] || 'neutral', title: status.label, body: status.says })
+        : null,
+      counts.length ? h('p', { class: 'muted small', 'data-testid': `station-cross-counts-${row.windowId}` }, `Decided by the calendar: ${counts.join(' · ')}.`) : null,
+      f.detail === false
+        ? h('p', { class: 'muted small' }, 'Declaration rows are withheld: only the two windows’ holders or the local operator can read who must come up first, the declared reason or the feeder’s staffing. The counts above are the honest roll-up for a span.')
+        : f.edges.length
+          ? table({ caption: `Cross-window prerequisites naming ${row.label}`, columns, rows: f.edges,
+              emptyMessage: 'No live cross-window declaration names this window.' })
+          : h('p', { class: 'muted small' }, f.downstreamN
+            ? 'This window is a declared feeder for other work. Nothing in it says another window must come up first.'
+            : 'No station in this window waits for another window. A feeder in an earlier shift is an order only when a seat holding both declares it.'),
+      ...f.reasons.map((reason) => h('p', { class: 'muted small', 'data-testid': `station-cross-reason-${row.windowId}` }, reason)),
+      f.downstreamN
+        ? h('p', { class: 'muted small' }, `This window is named as a feeder by ${f.downstreamN} live declaration(s) across ${f.downstreamWindowsN} other window(s). Whether those windows can run is read there, not here, and no figure on this card is a promise about them.`)
+        : null,
+      canDeclare
+        ? h('p', { class: 'muted small' }, 'A declaration records a human act; it never schedules anyone. An order the calendar contradicts is still recordable, because the register’s job is to prove the consequence and ask its declarer to repair it.')
+        : null,
+      report.scope === 'workspace' && f.declaredN
+        ? h('p', { class: 'muted small' }, 'Printed in the operator view, which reads every declaration in the workspace. A row declared where no single seat held both windows is labelled as scribed on its own row.')
+        : null,
+    ),
+  });
 }
 
 function csv(ctx, today) {
@@ -253,7 +399,59 @@ function windowCard(ctx, row, tasks, report) {
         : h('p', { class: 'muted small' }, 'Individual rows are withheld: only the window’s holder or the local operator can read them.'),
     ),
   });
-  return h('div', { class: 'stack' }, windowCardNode, enablingSection(ctx, row, report));
+  return h('div', { class: 'stack' }, windowCardNode, enablingSection(ctx, row, report), crossWindowSection(ctx, row, report));
+}
+
+/**
+ * The whole-register reading of ADR-0207: every class counted beside the
+ * number, the two claims printed as two claims, and the method stated in the
+ * register's own words. It adds no figure of its own.
+ */
+function crossWindowCard(report) {
+  const t = report.totals;
+  const rows = report.windows.filter((w) => w.feed && (w.feed.declaredN || w.feed.downstreamN));
+  const classes = [
+    ['crossWindowOrderN', 'proven order'],
+    ['crossWindowBlockedN', 'blocked'],
+    ['crossWindowAmbiguousN', 'not proven'],
+    ['crossWindowContradictionsN', 'contradicted'],
+    ['crossWindowUnprovenN', 'unreadable'],
+    ['crossWindowWithheldN', 'outside reach'],
+    ['crossWindowDanglingN', 'dangling'],
+  ].filter(([key]) => t[key]).map(([key, label]) => `${t[key]} ${label}`);
+  return card({
+    title: 'Cross-window prerequisites — what the calendar proves, and what it refuses to claim',
+    subtitle: t.crossWindowLiveN
+      ? `${t.crossWindowLiveN} live declaration(s)${t.crossWindowRetiredN ? ` · ${t.crossWindowRetiredN} retired, retained` : ''} · ${classes.join(' · ') || 'no decided class'}`
+      : 'No cross-window prerequisite is declared. An order between two shifts is a human act, never an inference from the calendar.',
+    attrs: { 'data-testid': 'station-cross-summary' },
+    body: h('div', { class: 'stack' },
+      h('p', { 'data-testid': 'station-cross-claims' },
+        `Two separate claims: the printed figures are the computed figures — ${report.claims.figuresComplete ? 'yes' : 'no'}; every declared prerequisite order is proven by the calendar — ${report.claims.ordersComplete ? 'yes' : 'no'}. A window can print complete figures about its own people while a declared order remains unprovable, and this register never collapses the two into one word.`),
+      report.claims.ordersComplete
+        ? null
+        : banner({ tone: 'warn', title: 'A declared prerequisite order is not proven by the calendar',
+            body: 'It is counted and named, and no claim rests on it. The windows either meet on a day or overlap, so the record cannot say which comes up first; nothing below the day is inferred.' }),
+      table({ caption: 'Windows with a declared cross-window prerequisite', columns: [
+        { key: 'label', label: 'Window' },
+        { key: 'feedStatusLabel', label: 'Waits on', render: (w) => (w.feed.declaredN && w.feed.status === 'none' ? 'Declared, carries no order' : feedLabel(w.feed.status)) },
+        { key: 'liveN', label: 'Live', render: (w) => w.feed.liveN },
+        { key: 'orderN', label: 'Proven order', render: (w) => w.feed.orderN },
+        { key: 'blockedN', label: 'Blocked', render: (w) => w.feed.blockedN },
+        { key: 'ambiguousN', label: 'Not proven', render: (w) => w.feed.ambiguousN },
+        { key: 'contradictedN', label: 'Contradicted', render: (w) => w.feed.contradictedN },
+        { key: 'withheldN', label: 'Outside reach', render: (w) => w.feed.withheldN },
+        { key: 'danglingN', label: 'Dangling', render: (w) => w.feed.danglingN },
+        { key: 'downstreamN', label: 'Feeds', render: (w) => w.feed.downstreamN },
+      ], rows, emptyMessage: 'No window waits on another yet. Declare a prerequisite from a window’s own card; only the seat holding both windows is offered the control.' }),
+      h('details', null, h('summary', null, 'How the calendar decides a cross-shift prerequisite'),
+        h('figure', null,
+          h('img', { src: CROSS_WINDOW_DIAGRAM_URL, alt: 'Conceptual illustration on a timeline: a blue block and an orange block are separated by a dashed vertical boundary, with a solid arrow running from a circle in the blue block to a circle in the orange one. Below, two blocks that touch at their edges, and two blocks that overlap, each carry a dashed double-headed arrow between their circles, so neither order is fixed.', style: { width: '100%', height: 'auto' } }),
+          h('figcaption', { class: 'muted small' }, 'AI-generated method illustration, not workspace data. Between two windows the calendar can prove an order, fail to prove one, or forbid one — and those are printed as three different facts.')),
+        h('p', { class: 'muted small' }, 'A single window’s enabling register can order two stations inside it (ADR-0204). Work crosses shifts: the feeder runs on Monday and the consumer on Tuesday, in two different managers’ windows. The record holds no clock below the whole day, so that limit becomes the decision procedure rather than a footnote: only a feeder window that closes strictly before the consumer window opens proves the order; windows that meet on one day or overlap leave it satisfiable but unproven; a consumer window that is over before the feeder opens contradicts it outright.'),
+        h('p', { class: 'muted small' }, 'A consumer whose proven feeder cannot be manned is never printed feasible — the dependent station reads “blocked by its enabler” while still printing its own real qualified and available counts. Impossibility propagates through chains to a fixed point. The declaration itself still belongs to the seat that holds both windows: one manager cannot order another’s work, and a declaration the calendar contradicts is recorded, proved and then sent back to its declarer to repair.')),
+    ),
+  });
 }
 
 export function renderStationCoveragePanel(ctx) {
@@ -276,7 +474,7 @@ export function renderStationCoveragePanel(ctx) {
       ],
       body: h('div', { class: 'stack' },
         h('p', { 'data-testid': 'station-summary' },
-          `${t.windowsN} window(s) · ${t.concurrentN} simultaneous station(s) · ${t.demandN} declared headcount · ${t.feasibleN} proven feasible · ${t.infeasibleN} proven infeasible · ${t.unsatisfiableN} unsatisfiable · ${t.unprovenN} unproven · ${t.deficientSetsN} deficient set(s) · largest exact deficit ${t.maxDeficitN}.`),
+          `${t.windowsN} window(s) · ${t.concurrentN} simultaneous station(s) · ${t.demandN} declared headcount · ${t.feasibleN} proven feasible · ${t.infeasibleN} proven infeasible · ${t.unsatisfiableN} unsatisfiable · ${t.blockedWindowsN} blocked by a prerequisite · ${t.unprovenN} unproven · ${t.deficientSetsN} deficient set(s) · largest exact deficit ${t.maxDeficitN} · ${t.crossWindowLiveN} live cross-window prerequisite(s), of which ${t.crossWindowOrderN} proven by the calendar and ${t.crossWindowAmbiguousN} not proven.`),
         ...r.reasons.map((reason) => banner({ tone: 'warn', title: 'Coverage withheld', body: reason })),
         h('p', { class: 'muted small' }, r.method),
         h('p', { class: 'muted small' }, 'This is not the skills register: coverage there counts qualified people per task. This register answers a different question — whether the same person is being counted by two stations that must run at the same moment. Availability is a dated human statement and is never assumed; nobody is scheduled by this screen.'),
@@ -290,6 +488,7 @@ export function renderStationCoveragePanel(ctx) {
             h('img', { src: PRECEDENCE_DIAGRAM_URL, alt: 'Conceptual illustration: stations arranged as an order. A clean chain of enabling declarations reads as an arrow sequence; one declaration loops back on itself and closes a cycle that cannot be ordered, breaking the chain.', style: { width: '100%', height: 'auto' } }),
             h('figcaption', { class: 'muted small' }, 'AI-generated method illustration, not workspace data. Precedence is decided exactly from the declared enabling declarations (Tarjan’s strongly connected components); a cycle with a sequential member is unsatisfiable, an all-concurrent cycle is a co-requisite loop.')))),
     }),
+    crossWindowCard(r),
     ...live.map((row) => windowCard(ctx, row, tasks, r)),
     past.length
       ? card({ title: 'Past windows', subtitle: 'History: a shift that has happened is evidence, not a duty. Nobody is asked to staff it.',

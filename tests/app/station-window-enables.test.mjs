@@ -10,6 +10,8 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import { JSDOM } from 'jsdom';
 
 import { createEmptyState, normalizeState, SCHEMA_VERSION } from '../../app/core/schema.js';
 import { createStore, STORAGE_KEY } from '../../app/core/store.js';
@@ -29,6 +31,7 @@ import {
 } from '../../app/core/domain/stationCoverageSchema.js';
 import { STATION_COVERAGE_CSV_COLUMNS } from '../../app/core/domain/stationCoverageRegistry.js';
 import { CSV_EXPORTS, exportWorkspaceCsv, parseCsv } from '../../app/core/csv.js';
+import { renderStandardWork } from '../../app/views/standardWork.js';
 
 const NOW = new Date('2026-11-20T12:00:00.000Z');
 const AT = '2026-11-10T09:00:00.000Z';
@@ -399,7 +402,7 @@ test('a feeder station no longer live leaves the declaration dangling', () => {
   assert.equal(w2.stations[0].state, 'single-point', 'the dependent station is not punished for a dead feeder');
 });
 
-test('a seat that cannot see the feeder window reads the declaration as dangling, never as a claim', () => {
+test('a seat that cannot see the feeder window reads the declaration as withheld, never as a claim', () => {
   const state = fixture({ ...BASE,
     stationWindowEnables: [
       { id: 'e1', fromWindowId: 'W1', fromStationId: 'S1', toWindowId: 'W2', toStationId: 'S2', byId: 'ann', basis: 'joint-apex', reason: 'The feed line must be up before the pack station can run.', declaredAt: AT, retiredOn: null, retiredBy: null, retireReason: null },
@@ -412,11 +415,16 @@ test('a seat that cannot see the feeder window reads the declaration as dangling
   assert.equal(report.windows.length, 1, 'windows outside the seat\u2019s reach are not readable');
   assert.equal(w2.feed.declaredN, 1);
   assert.equal(w2.feed.liveN, 1);
-  assert.equal(w2.feed.danglingN, 1);
+  assert.equal(w2.feed.danglingN, 0);
+  // ADR-0207 promises the difference between a declaration that is dangling and
+  // one whose feeder is another span's record: this is the latter, counted as
+  // withheld and never repaired into a claim about a window the seat cannot see.
+  assert.equal(w2.feed.withheldN, 1);
   const edge = w2.feed.edges[0];
-  assert.equal(edge.status, 'dangling');
+  assert.equal(edge.status, 'withheld');
   assert.equal(edge.proven, false);
-  assert.ok(edge.why.includes('feeder station is no longer live in its window'));
+  assert.equal(edge.fromTitle, null, 'the feeder station is another span\u2019s record');
+  assert.ok(edge.why.includes('outside this seat\u2019s reach'));
   assert.equal(w2.verdict, 'inert');
   // Below the disclosure floor the dependent's own coverage is withheld from
   // this span view — but it is never re-labelled `blocked-by-enabler` for a
@@ -719,4 +727,120 @@ test('the joint apex is still Ann with a second line in play, and a peer seat is
     fromWindowId: 'W1', fromStationId: 'S1', toWindowId: 'W2', toStationId: 'S2',
     reason: 'Ada holds Ann\u2019s line but not Kim\u2019s: not the apex of both windows.',
   }).ok, false);
+});
+
+/* ------------------------------------------------------------------ the panel */
+
+// The panel's own fixture: the two windows sit AFTER the reader's day, so they
+// are live work rather than history. Nothing else changes — the calendar
+// relation between Monday and Tuesday is still `strict`.
+const PANEL = {
+  ...BASE,
+  stationWindows: [win('W1', 'ann', '2026-12-07', '2026-12-07'), win('W2', 'kim', '2026-12-08', '2026-12-08')],
+  stationAvailability: [
+    avail('a1', 'kim', 'W1', '2026-12-07', '2026-12-07', 'kim'),
+    avail('a2', 'toni', 'W2', '2026-12-08', '2026-12-08', 'toni'),
+  ],
+  stationWindowEnables: [E1],
+};
+
+function withDom(fn) {
+  const dom = new JSDOM('<!doctype html><html><body><div id="root"></div><div id="modal-root"></div></body></html>', { url: 'https://example.test/' });
+  const keys = ['window', 'document', 'HTMLElement', 'Node', 'requestAnimationFrame', 'cancelAnimationFrame'];
+  const old = new Map(keys.map((k) => [k, Object.getOwnPropertyDescriptor(globalThis, k)]));
+  for (const k of keys) {
+    const value = dom.window[k];
+    Object.defineProperty(globalThis, k, {
+      value: k.includes('AnimationFrame') && typeof value === 'function' ? value.bind(dom.window) : value,
+      configurable: true, writable: true,
+    });
+  }
+  try {
+    return fn(dom);
+  } finally {
+    for (const k of keys) {
+      const d = old.get(k);
+      if (d) Object.defineProperty(globalThis, k, d); else delete globalThis[k];
+    }
+  }
+}
+
+test('the stations panel prints the cross-window reading from the reader and offers only a declaration the door accepts', () => {
+  withDom(() => {
+    const { store, api, takeSeat } = openStore(PANEL);
+    takeSeat('ann');
+    const eventsBefore = store.state.events.length;
+    const ctx = { api, query: new URLSearchParams('panel=stations'), navigate() {}, refresh() {} };
+    document.getElementById('root').append(renderStandardWork(ctx));
+    const r = api.stationCoverageReport().report;
+    const w2 = r.windows.find((row) => row.windowId === 'W2');
+    // The figure the header prints is the reader's own figure, not a second count.
+    const summary = document.querySelector('[data-testid="station-summary"]').textContent;
+    assert.ok(summary.includes(`${r.totals.crossWindowLiveN} live cross-window prerequisite(s)`), summary);
+    assert.ok(summary.includes(`${r.totals.crossWindowOrderN} proven by the calendar`), summary);
+    // The workspace card prints two separate claims, in the register's words.
+    const claims = document.querySelector('[data-testid="station-cross-claims"]').textContent;
+    assert.ok(claims.includes('every declared prerequisite order is proven by the calendar — yes'), claims);
+    assert.ok(document.querySelector('[data-testid="station-cross-summary"]'));
+    // The consumer window reads what the engine decided, beside its own figures.
+    const cardNode = document.querySelector('[data-testid="station-cross-W2"]');
+    assert.ok(cardNode);
+    assert.equal(cardNode.getAttribute('data-feed-status'), 'fed');
+    assert.equal(w2.feed.status, 'fed');
+    assert.ok(cardNode.textContent.includes('Fed by a proven earlier window'));
+    assert.ok(cardNode.textContent.includes(`${w2.feed.orderN} proven order`));
+    assert.ok(cardNode.textContent.includes('Station S1'));
+    assert.ok(cardNode.textContent.includes('ANN'));
+    assert.ok(cardNode.textContent.includes(E1.reason));
+    // The declarer may retire their own declaration; the door re-checks it.
+    assert.ok(document.querySelector('[data-testid="station-cross-retire-e1"]'));
+    // The joint apex is offered the declaration; neither station is scheduled.
+    assert.ok(document.querySelector('[data-testid="station-cross-add-W2"]'));
+    const labels = [...document.querySelectorAll('button')].map((b) => b.textContent.toLowerCase()).join(' | ');
+    assert.equal(/assign|schedule|deploy|level/.test(labels), false, labels);
+    // The method illustration is a real asset and is captioned as generated.
+    const img = document.querySelector('img[src$="station-cross-window.jpg"]');
+    assert.ok(img && img.alt.length > 60);
+    const bytes = fs.readFileSync(new URL('../../app/assets/station-cross-window.jpg', import.meta.url));
+    assert.ok(bytes.length > 10000);
+    assert.equal(bytes.readUInt16BE(0), 0xffd8);
+    // Reading the panel wrote nothing and appended no event.
+    assert.equal(store.state.stationWindowEnables.length, 1);
+    assert.equal(store.state.events.length, eventsBefore);
+  });
+});
+
+test('a seat that holds only one of the two windows is offered no declaration, and the feeder stays withheld', () => {
+  withDom(() => {
+    const { store, api, takeSeat } = openStore(PANEL);
+    takeSeat('kim');
+    const ctx = { api, query: new URLSearchParams('panel=stations'), navigate() {}, refresh() {} };
+    document.getElementById('root').append(renderStandardWork(ctx));
+    const r = api.stationCoverageReport().report;
+    const w2 = r.windows.find((row) => row.windowId === 'W2');
+    // Kim holds W2 and not W1: the feeder window is outside her reach, so its
+    // staffing is withheld. A withheld declaration carries no order, so the
+    // window itself claims nothing.
+    assert.equal(w2.feed.status, 'none');
+    assert.equal(w2.feed.withheldN, 1);
+    assert.equal(w2.feed.danglingN, 0);
+    assert.equal(w2.feed.orderN, 0);
+    // The screen must not offer a declaration the door would refuse.
+    assert.equal(document.querySelectorAll('[data-testid^="station-cross-add-"]').length, 0);
+    // Nor a retire control for a declaration somebody else made.
+    assert.equal(document.querySelectorAll('[data-testid^="station-cross-retire-"]').length, 0);
+    const cardNode = document.querySelector('[data-testid="station-cross-W2"]');
+    assert.ok(cardNode);
+    assert.ok(cardNode.textContent.includes('1 outside reach'));
+    assert.ok(cardNode.textContent.includes('Withheld — the feeder window is outside this seat’s reach'));
+    // She is one of the two windows' holders, so she may read WHO must come up
+    // first; only the feeder's staffing is another span's record.
+    assert.ok(cardNode.textContent.includes('Station S1'));
+    // She still reads her own window's figures: the withholding is the
+    // feeder's record, not a punishment of her own stations.
+    assert.equal(w2.stations[0].state, 'single-point');
+    const windowCard = document.querySelector('[data-testid="station-window-W2"]');
+    assert.ok(windowCard && windowCard.textContent.includes(w2.verdictLabel));
+    assert.equal(store.state.stationWindowEnables.length, 1);
+  });
 });

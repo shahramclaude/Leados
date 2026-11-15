@@ -701,6 +701,9 @@ export function buildStationCoverage(state, { now = new Date(), seat = null } = 
       basis: edge.basis,
       reason: detail ? edge.reason : null,
       declaredAt: edge.declaredAt,
+      // The action re-checks this on write; the screen must not offer a retire
+      // control the door would refuse. No successor is inferred.
+      canRetire: clean && !seat?.readOnly && (operator || edge.byId === actorId),
     };
     const dependentLive = row.stations.some((s) => s.stationId === edge.toStationId);
     if (!dependentLive) return { ...base, status: 'dangling', proven: false,
@@ -709,7 +712,23 @@ export function buildStationCoverage(state, { now = new Date(), seat = null } = 
       return { ...base, status: 'dangling', proven: false,
         why: 'One of the windows in this declaration has been retired; the declaration is retained and carries no order.' };
     }
-    if (!feederRow || !feederStation) {
+    // A window that is not on the register at all is a dangling declaration.
+    // A window that IS on the register but outside this seat's reach is a
+    // different fact, and ADR-0207 promises the difference: the declaration is
+    // read, its relation printed, and the feeder's staffing withheld. Saying
+    // "no longer live" here would assert something about another span's record
+    // that this seat cannot see.
+    if (!fromWindow) {
+      return { ...base, status: 'dangling', proven: false,
+        why: 'The feeder window is not on the register any more; the declaration is retained and carries no order.' };
+    }
+    if (!feederRow) {
+      return { ...base,
+        fromTitle: detail ? (stations.find((s) => !s.invalid && s.id === edge.fromStationId)?.title || null) : null,
+        status: 'withheld', proven: false,
+        why: 'The prerequisite window is outside this seat’s reach, so whether its feeder station can be manned is not readable here. The order is declared; the feeder’s staffing is counted, not guessed.' };
+    }
+    if (!feederStation) {
       return { ...base, status: 'dangling', proven: false,
         why: 'The feeder station is no longer live in its window; the declaration is retained and carries no order.' };
     }
