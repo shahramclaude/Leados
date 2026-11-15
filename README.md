@@ -1,3 +1,7 @@
+## 2026-11-15 — Portfolio review source preview (blocked, not released)
+
+The source app now includes **Governance → Portfolio review** (`#/portfolio`, [ADR-0222](./docs/adr/0222-enterprise-portfolio-review-register.md)): declared business units, dated evidence, keep/fix/sell/exit judgements and verdict milestones. This work is **In Progress**, not suitable for trusted operating decisions yet: verification stopped on a second convention-test failure, executive obligation routing and execution-date handling still need completion. The standalone HTML has not been rebuilt. See the Session 298 entry in [ROADMAP.md](./ROADMAP.md) for exact verification and limitations.
+
 ## 2026-11-15 — Held accountable for the outcome while another line holds the authority, budget, and hours
 
 **Governance → Duty without means** (`#/means`, [ADR-0221](./docs/adr/0221-duty-without-means-register.md), Schema v175, CSV #163, `RULE-DWM-01`) is the parity ledger for **accountability without means**. A frontline supervisor or mid-manager puts an assigned outcome duty on the record — or a demanding line declares one on a person it holds — alongside the concrete **decision authority**, **budget envelope**, and **protected capacity hours** required to deliver it and the specific line holder (`controllingHolderId`) who controls each pillar.

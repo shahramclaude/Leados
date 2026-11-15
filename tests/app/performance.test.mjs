@@ -141,7 +141,7 @@ function concernById(env, id) {
 
 describe('Schema v62 — additive and honest', () => {
   test('the version, the collection and the settings are pinned', () => {
-    assert.equal(SCHEMA_VERSION, 175);
+    assert.equal(SCHEMA_VERSION, 176);
     const empty = createEmptyState(NOW.toISOString());
     assert.deepEqual(empty.performanceConcerns, []);
     assert.equal(empty.settings.perfMinObservations, 3);
@@ -155,9 +155,9 @@ describe('Schema v62 — additive and honest', () => {
 
   test('a v61 workspace gains an empty concern list and nothing else', () => {
     const migrated = migrate({ schemaVersion: 61, settings: {}, people: [] });
-    assert.equal(migrated.raw.schemaVersion, 175);
-    assert.equal(migrated.applied.at(-1), '174 → 175', 'the whole chain runs to the current schema');
-    assert.equal(migrated.raw.schemaVersion, 175);
+    assert.equal(migrated.raw.schemaVersion, 176);
+    assert.equal(migrated.applied.at(-1), '175 → 176', 'the whole chain runs to the current schema');
+    assert.equal(migrated.raw.schemaVersion, 176);
     assert.deepEqual(migrated.raw.performanceConcerns, []);
   });
 
@@ -729,7 +729,7 @@ describe('CSV scope #52 — facts, never prose', () => {
     const descriptor = CSV_EXPORTS.find((row) => row.key === 'performance');
     assert.ok(descriptor, 'scope registered');
     assert.equal(descriptor.sensitive, true);
-    assert.equal(CSV_EXPORTS.length, 163);
+    assert.equal(CSV_EXPORTS.length, 164);
 
     const env = harness();
     openFullyDocumented(env);

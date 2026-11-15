@@ -54,9 +54,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const SWEEP = {
-  schema: { from: 174, to: 175 },
-  csvExports: { from: [162], to: 163 },
-  spineRules: { from: [135, 136], to: 137 },
+  schema: { from: 175, to: 176 },
+  csvExports: { from: [163], to: 164 },
+  spineRules: { from: [137], to: 138 },
 };
 
 const ROOT = path.resolve(import.meta.dirname, '..');

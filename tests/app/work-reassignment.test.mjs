@@ -147,11 +147,11 @@ function withDom(run) {
 }
 
 test('ADR-0196 is registered as Schema v156, a scoped adapter, aggregate CSV #147, matrix panel, and a no-auto-move spine contract', () => {
-  assert.equal(SCHEMA_VERSION, 175);
+  assert.equal(SCHEMA_VERSION, 176);
   assert.ok(COLLECTIONS.includes('workReassignmentActs'));
   assert.deepEqual(createEmptyState(ISO).workReassignmentActs, []);
   const upgraded = migrate({ schemaVersion: 155, appId: 'leados', meta: {}, settings: {} });
-  assert.deepEqual(upgraded.applied, ['155 → 156', '156 → 157', '157 → 158', '158 → 159', '159 → 160', '160 → 161', '161 → 162', '162 → 163', '163 → 164', '164 → 165', '165 → 166', '166 → 167', '167 → 168', '168 → 169', '169 → 170', '170 → 171', '171 → 172', '172 → 173', '173 → 174', '174 → 175']);
+  assert.deepEqual(upgraded.applied, ['155 → 156', '156 → 157', '157 → 158', '158 → 159', '159 → 160', '160 → 161', '161 → 162', '162 → 163', '163 → 164', '164 → 165', '165 → 166', '166 → 167', '167 → 168', '168 → 169', '169 → 170', '170 → 171', '171 → 172', '172 → 173', '173 → 174', '174 → 175', '175 → 176']);
   assert.deepEqual(upgraded.raw.workReassignmentActs, [], 'upgrade invents neither consent nor capacity');
 
   for (const right of Object.values(WORK_REASSIGNMENT_RIGHTS)) assert.ok(ACTION_RIGHTS[right], `${right} is a declared right`);
@@ -164,7 +164,7 @@ test('ADR-0196 is registered as Schema v156, a scoped adapter, aggregate CSV #14
   assert.equal(RECORD_POLICIES.workReassignmentActs.detailCeiling, 0);
   assert.ok(MATRIX_PANELS.some((panel) => panel.key === 'reassignments'));
 
-  assert.equal(CSV_EXPORTS.length, 163);
+  assert.equal(CSV_EXPORTS.length, 164);
   assert.equal(CSV_EXPORTS.at(-1).key, WORK_REASSIGNMENT_CSV_SCOPE);
   assert.deepEqual(CSV_EXPORTS.at(-1).key, 'work-reassignments');
   assert.equal(new Set(WORK_REASSIGNMENT_CSV_COLUMNS).size, WORK_REASSIGNMENT_CSV_COLUMNS.length);

@@ -327,6 +327,17 @@ import {
   normalizeDutyMeansRequirements,
   normalizeDutyMeansSettings,
 } from './domain/dutyMeansSchema.js';
+// ADR-0222 (Schema v176): the Enterprise Portfolio Review Register. Fail-closed
+// business units, dated reviews with measured cents, CEO keep/fix/sell/exit
+// verdicts, verdict milestones, and identity-free rule markers.
+import {
+  normalizePortfolioMarkers,
+  normalizePortfolioMilestones,
+  normalizePortfolioReviews,
+  normalizePortfolioSettings,
+  normalizePortfolioUnits,
+  normalizePortfolioVerdicts,
+} from './domain/portfolioReviewSchema.js';
 // ADR-0185 (Schema v147): dated Matrix change-impact requests and first-person
 // line responses. Request snapshots normalize before their responses resolve.
 import {
@@ -1165,7 +1176,7 @@ export {
 // declared conventions (`dutyMeansResponseDays`, `dutyMeansAutoPropagate`). No
 // duty or requirement is inferred from an existing goal, case, delegation or
 // reporting-line percentage.
-export const SCHEMA_VERSION = 175;
+export const SCHEMA_VERSION = 176;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -2669,6 +2680,8 @@ export const DEFAULT_SETTINGS = Object.freeze({
   ...normalizeEvSettings({}),
   // ADR-0221: carry duty-without-means response window and automation pause.
   ...normalizeDutyMeansSettings({}),
+  // ADR-0222: carry portfolio review cadence and automation pause.
+  ...normalizePortfolioSettings({}),
 });
 
 export const COLLECTIONS = [
@@ -3574,6 +3587,11 @@ export const COLLECTIONS = [
   'dutyMeansRequirements',
   'dutyMeansActs',
   'dutyMeansMarkers',
+  'portfolioUnits',
+  'portfolioReviews',
+  'portfolioVerdicts',
+  'portfolioMilestones',
+  'portfolioMarkers',
 ];
 
 /** Stable empty state. `now` is an ISO string so the result is a pure value. */
@@ -4416,6 +4434,7 @@ export function normalizeSettings(raw) {
     ...normalizeSynergySettings(s),
     ...normalizeEvSettings(s),
     ...normalizeDutyMeansSettings(s),
+    ...normalizePortfolioSettings(s),
     ...normalizeStructureHistorySettings(s),
     ...normalizeDifferencesSettings(s),
     ...normalizeFitSettings(s),
@@ -9098,6 +9117,15 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.dutyMeansRequirements = normalizeDutyMeansRequirements(raw.dutyMeansRequirements, warnings);
   state.dutyMeansActs = normalizeDutyMeansActs(raw.dutyMeansActs, warnings);
   state.dutyMeansMarkers = normalizeDutyMeansMarkers(raw.dutyMeansMarkers, warnings);
+  // ADR-0222 (Schema v176): fail-closed business units, dated reviews with
+  // measured cents, CEO verdicts, verdict milestones and identity-free markers.
+  // Stored cents are read as integers only, never re-parsed; unit states and
+  // milestone states are re-derived on read.
+  state.portfolioUnits = normalizePortfolioUnits(raw.portfolioUnits, warnings);
+  state.portfolioReviews = normalizePortfolioReviews(raw.portfolioReviews, warnings);
+  state.portfolioVerdicts = normalizePortfolioVerdicts(raw.portfolioVerdicts, warnings);
+  state.portfolioMilestones = normalizePortfolioMilestones(raw.portfolioMilestones, warnings);
+  state.portfolioMarkers = normalizePortfolioMarkers(raw.portfolioMarkers, warnings);
   state.conflictInterests = normalizeConflictInterests(raw.conflictInterests, warnings);
   state.conflictNoneDeclarations = normalizeConflictNoneDeclarations(raw.conflictNoneDeclarations, warnings);
   state.conflictStandings = normalizeConflictStandings(raw.conflictStandings, state.conflictInterests, warnings);
@@ -9886,6 +9914,16 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  // ADR-0222: empty ledgers only; no evidence or verdict is invented.
+  175: (previous) => ({
+    ...previous, schemaVersion: 176,
+    portfolioUnits: previous.portfolioUnits || [],
+    portfolioReviews: previous.portfolioReviews || [],
+    portfolioVerdicts: previous.portfolioVerdicts || [],
+    portfolioMilestones: previous.portfolioMilestones || [],
+    portfolioMarkers: previous.portfolioMarkers || [],
+    settings: { ...previous.settings, ...normalizePortfolioSettings(previous.settings || {}) },
+  }),
   // 174 → 175: ADR-0221 adds FOUR EMPTY ledgers (`dutyMeansDuties`,
   // `dutyMeansRequirements`, `dutyMeansActs`, `dutyMeansMarkers`) and two
   // declared conventions (`dutyMeansResponseDays`, `dutyMeansAutoPropagate`). No

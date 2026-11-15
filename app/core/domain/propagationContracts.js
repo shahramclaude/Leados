@@ -149,6 +149,7 @@ import { earnedValueRule } from './earnedValueRules.js';
 import { riskAppetiteRule } from './riskAppetiteRules.js';
 import { incentiveRule } from './incentiveRules.js';
 import { dutyMeansRule } from './dutyMeansRules.js';
+import { portfolioReviewRule } from './portfolioReviewRules.js';
 import { sealRule } from './sealRules.js';
 // ADR-0092: the Differencing Defender declares its contract like every other rule.
 import { differencingRule } from './differencingRules.js';
@@ -1167,6 +1168,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'incentiveRules.js',
     purpose: 'RULE-INC-01: reads the Variable-Pay Design & Incentive Integrity Register (`buildIncentiveIntegrity`, ADR-0220) with the whole-workspace view on plan declarations and retirements, measure additions, verified readings and restatements, awards, recovery acts, convention changes and explicit `incentive.scan` scans — and on any other commit, because a plan window opens and a ceiling can be crossed by a later award as much as by a write. FOUR conditions, filed at most once per (deterministic `inc1:…` signature, addressee) and bounded at 4 per commit with the remainder counted: `plan-over-ceiling` — a plan whose awarded cents are above its declared envelope; `contested-outcome` — the same measure key paid by two plans whose windows overlap, which is the matrix double-payment case; `recovery-outstanding` — money owed back on an award with no recorded recovery or waiver covering it; and `plan-unmeasured` — a live plan whose window has opened with no verified reading on any measure. Ceiling, contest and recovery asks go to the lowest seat above EVERY funding line (`matrixJointApex` over the plan owners’ managers), re-derived from the live graph in the rule itself rather than trusted from a cached escalation, and never to the funding line that cannot clear its own overrun and never to an awardee who was paid the money; the unmeasured ask goes to the plan’s OWNER, because recording the reading is their ordinary duty. A genuine diamond tie files one ask per joint apex; a disconnected graph, an off-roster funding line or a departed owner writes ONE identity-free `incentiveMarkers` observation and substitutes nobody. The ask text is deliberately opaque — no plan, no measure, no person and no amount — because a delegation is readable above the addressee; the opaque signature lives only in the typed `issues-obligation` link. Asks carry typed `issues-obligation` provenance and close themselves when the condition clears or the addressee moves. It never declares, amends or retires a plan, never adds a measure, never records a reading, an award or a recovery, never converts or pools a currency, never decides which scheme owns a contested result, never reverses a payment and never rates a person; pause-governed on every path (`incentiveAutoPropagate`), including the explicit scan.',
     writes: ['delegations', 'links', 'incentiveMarkers'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: portfolioReviewRule,
+    module: 'portfolioReviewRules.js',
+    purpose: 'RULE-PRV-01: opaque review, verdict and execution-slippage obligations from the single portfolio reader. Review to owning line; governance to joint apex above every reporting line. Identity-free markers when unaddressable; self-closing, bounded and pause-governed.',
+    writes: ['delegations', 'links', 'portfolioMarkers'],
     emits: [],
     scansWorkspace: true,
   },

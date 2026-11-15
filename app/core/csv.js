@@ -235,6 +235,8 @@ import { buildIncentiveIntegrity, incentiveCsvRows } from './domain/incentiveInt
 import { INC_CSV_COLUMNS, INC_CSV_DESCRIPTOR, INC_CSV_SCOPE } from './domain/incentiveRegistry.js';
 // ADR-0221: CSV #163 — the duty-without-means register, aggregate and identity-free.
 import { buildDutyMeans, dutyMeansCsvRows } from './domain/dutyMeans.js';
+import { buildPortfolioReview, portfolioReviewCsvRows } from './domain/portfolioReview.js';
+import { PRV_CSV_COLUMNS, PRV_CSV_DESCRIPTOR, PRV_CSV_SCOPE } from './domain/portfolioReviewRegistry.js';
 import { DWM_CSV_COLUMNS, DWM_CSV_DESCRIPTOR, DWM_CSV_SCOPE } from './domain/dutyMeansRegistry.js';
 import {
   CAPITAL_RATIONING_CSV_COLUMNS,
@@ -1541,6 +1543,7 @@ export const CSV_EXPORTS = [
   // #163 (ADR-0221): duty-without-means parity — one workspace control row plus
   // one currency row per declared currency, aggregate and identity-free.
   DWM_CSV_DESCRIPTOR,
+  PRV_CSV_DESCRIPTOR,
 ];
 
 function personLookup(state) {
@@ -6812,6 +6815,10 @@ export function buildScopeTable(state, scope, now) {
         columns: INC_CSV_COLUMNS.map((key) => ({ key, header: key })),
         rows: incentiveCsvRows(report),
       };
+    }
+    case PRV_CSV_SCOPE: {
+      const report = buildPortfolioReview(state, { now, settings: state.settings || {}, seat: null });
+      return { columns: PRV_CSV_COLUMNS.map((key) => ({ key, header: key })), rows: portfolioReviewCsvRows(report) };
     }
     case DWM_CSV_SCOPE: {
       // CSV scope #163 (ADR-0221, Schema v175). Built from the SAME reader the
