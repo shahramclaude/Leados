@@ -157,6 +157,7 @@ import { renderFinance, renderBudgetDetail } from './views/finance.js';
 import { renderConflictRecusal } from './views/conflictRecusalPanel.js';
 import { conflictRecusalAttentionCount } from './core/domain/conflictRecusal.js';
 import { investmentCaseAttentionCount } from './core/domain/investmentCase.js';
+import { capitalRationingAttentionCount } from './core/domain/capitalRationing.js';
 import { renderStakeholders, renderStakeholderDetail } from './views/stakeholders.js';
 import { renderForecasts } from './views/forecasts.js';
 import { renderTempo, tempoDebtCount } from './views/tempo.js';
@@ -1608,7 +1609,11 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       // it owes. Counted from lifecycle and reach alone: this badge sits on every
       // route, so it appraises no case and never reads the reporting graph.
       finance: budgetsRollup(state, at).attention.length
-        + investmentCaseAttentionCount(state, { now: at, seat: seatCtx?.seat || null }),
+        + investmentCaseAttentionCount(state, { now: at, seat: seatCtx?.seat || null })
+        // ADR-0211: currencies holding ratified candidates with no declared
+        // ceiling. Counted from lifecycle and reach alone — it declares nothing
+        // and never runs the exact search from a navigation badge.
+        + capitalRationingAttentionCount(state, { now: at, seat: seatCtx?.seat || null }),
       stakeholders: stakeholdersRollup(state, at).attention.length,
       forecast: (() => {
         const report = forecastIntegrityReport(state, at);

@@ -145,7 +145,7 @@ function withDom(fn) {
 }
 
 test('ADR-0194/0202 registration: introduced at Schema v154, current Schema v158, empty migration, spine order and parity, gateway, seat policy, panel #37, CSV #146, pause-permit reach', () => {
-  assert.equal(SCHEMA_VERSION, 164);
+  assert.equal(SCHEMA_VERSION, 165);
   const empty = createEmptyState(ISO);
   assert.deepEqual(empty.chargebackPostings, []);
   assert.deepEqual(empty.chargebackPostingMarkers, []);
@@ -153,7 +153,7 @@ test('ADR-0194/0202 registration: introduced at Schema v154, current Schema v158
   assert.equal(empty.settings.chargebackPostingAutoPropagate, true);
 
   const { raw, applied } = migrate({ schemaVersion: 153, appId: 'leados', meta: {}, settings: {} });
-  assert.deepEqual(applied, ['153 → 154', '154 → 155', '155 → 156', '156 → 157', '157 → 158', '158 → 159', '159 → 160', '160 → 161', '161 → 162', '162 → 163', '163 → 164']);
+  assert.deepEqual(applied, ['153 → 154', '154 → 155', '155 → 156', '156 → 157', '157 → 158', '158 → 159', '159 → 160', '160 → 161', '161 → 162', '162 → 163', '163 → 164', '164 → 165']);
   assert.deepEqual(raw.chargebackPostings, [], 'no period fact is fabricated on upgrade');
   assert.deepEqual(raw.chargebackPostingMarkers, []);
 
@@ -178,7 +178,7 @@ test('ADR-0194/0202 registration: introduced at Schema v154, current Schema v158
   assert.equal(RECORD_POLICIES.chargebackPostings.detailCeiling, 0);
   assert.equal(RECORD_POLICIES.chargebackPostingMarkers.detailCeiling, 0);
   assert.ok(MATRIX_PANELS.some((p) => p.key === 'postings'));
-  assert.equal(CSV_EXPORTS.length, 152);
+  assert.equal(CSV_EXPORTS.length, 153);
   assert.ok(CSV_EXPORTS.some((d) => d.key === 'chargeback-postings'));
 
   assert.ok(PAUSE_PERMIT_MATRIX_REACH_SWITCHES.includes('chargebackPostingAutoPropagate'), 'the switch reaches a second line, so it is on the permit list');
