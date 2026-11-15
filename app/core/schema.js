@@ -234,6 +234,14 @@ import {
   normalizeStandardWaiverRequests,
   normalizeStandardWaiverSettings,
 } from './domain/standardWaiverSchema.js';
+// ADR-0213 (Schema v167): the Flexible-Budget Variance Statement. Declared
+// standards and dated actuals; recordings resolve only through a plan that
+// survived its own reading.
+import {
+  normalizeFlexBudgetActuals,
+  normalizeFlexBudgetPlans,
+  normalizeFlexBudgetSettings,
+} from './domain/flexBudgetSchema.js';
 // ADR-0185 (Schema v147): dated Matrix change-impact requests and first-person
 // line responses. Request snapshots normalize before their responses resolve.
 import {
@@ -1038,7 +1046,13 @@ export {
 // and a shift invented here would manufacture a rest — or a breach — nobody
 // recorded. No statutory limit is seeded either: which limits bind a person is
 // a human declaration with its source in writing.
-export const SCHEMA_VERSION = 166;
+// v167 adds the Flexible-Budget Variance Statement (ADR-0213): two EMPTY
+// ledgers — declared standards and dated actuals — and one convention. No
+// standard is inferred from a budget envelope, no rate from the transfer-price
+// ledger and no actual from a posted period: each is a different instrument
+// with a different signatory, and a standard invented at upgrade time would
+// print a variance against a fiction and name somebody as its owner.
+export const SCHEMA_VERSION = 167;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -2523,6 +2537,10 @@ export const DEFAULT_SETTINGS = Object.freeze({
   // bounded because a temporary departure that runs for a year is a change of
   // standard wearing a waiver's name.
   ...normalizeStandardWaiverSettings({}),
+  // ADR-0213: the one convention of the variance statement — how many days
+  // after a period ends its final actuals are due. Clamped on load, REFUSED
+  // (never clamped) by the setter.
+  ...normalizeFlexBudgetSettings({}),
 });
 
 export const COLLECTIONS = [
@@ -3355,6 +3373,11 @@ export const COLLECTIONS = [
   'standardWaiverGrants',
   'standardWaiverDecisions',
   'standardWaiverMarkers',
+  // ADR-0213 (Schema v167): the Flexible-Budget Variance Statement. Declared
+  // standards and dated actuals. No flexible budget, variance, materiality
+  // verdict or attribution is stored: each is re-derived on read.
+  'flexBudgetPlans',
+  'flexBudgetActuals',
 ];
 
 /** Stable empty state. `now` is an ISO string so the result is a pure value. */
@@ -4172,6 +4195,8 @@ export function normalizeSettings(raw) {
     // here would vanish on every load and the pause census would never see the
     // switch that silences the rule reading the reporting graph.
     ...normalizeStandardWaiverSettings(s),
+    // ADR-0213: named here so the declared due window survives every load.
+    ...normalizeFlexBudgetSettings(s),
     ...normalizeStructureHistorySettings(s),
     ...normalizeDifferencesSettings(s),
     ...normalizeFitSettings(s),
@@ -8784,6 +8809,11 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.standardWaiverGrants = normalizeStandardWaiverGrants(raw.standardWaiverGrants, state.standardWaiverRequests, warnings);
   state.standardWaiverDecisions = normalizeStandardWaiverDecisions(raw.standardWaiverDecisions, state.standardWaiverRequests, state.standardWaiverGrants, state.standardWorkRoutines, warnings);
   state.standardWaiverMarkers = normalizeStandardWaiverMarkers(raw.standardWaiverMarkers);
+  // ADR-0213: a standard or a recording that cannot be read exactly is DROPPED
+  // with a counted warning — never repaired, clamped or zero-filled. Recordings
+  // resolve only through plans that survived.
+  state.flexBudgetPlans = normalizeFlexBudgetPlans(raw.flexBudgetPlans, warnings);
+  state.flexBudgetActuals = normalizeFlexBudgetActuals(raw.flexBudgetActuals, state.flexBudgetPlans, warnings);
   state.conflictInterests = normalizeConflictInterests(raw.conflictInterests, warnings);
   state.conflictNoneDeclarations = normalizeConflictNoneDeclarations(raw.conflictNoneDeclarations, warnings);
   state.conflictStandings = normalizeConflictStandings(raw.conflictStandings, state.conflictInterests, warnings);
@@ -9682,6 +9712,18 @@ export const MIGRATIONS = {
   // nothing at all about a dated permission to depart from it. A waiver invented
   // at upgrade time would fabricate authority over work somebody did, and then
   // hold it against the person who did it.
+  // 166 → 167: ADR-0213 adds TWO EMPTY ledgers and one declared convention.
+  // Nothing is inferred from the envelopes, transfer prices, chargeback periods
+  // or investment cases an upgraded workspace already holds: an envelope is a
+  // ceiling on commitments, not a standard quantity at a standard price, and a
+  // standard guessed here would print a variance nobody declared a baseline for.
+  166: (v166) => ({
+    ...v166,
+    schemaVersion: 167,
+    flexBudgetPlans: Array.isArray(v166.flexBudgetPlans) ? v166.flexBudgetPlans : [],
+    flexBudgetActuals: Array.isArray(v166.flexBudgetActuals) ? v166.flexBudgetActuals : [],
+    settings: { ...(v166.settings || {}), ...normalizeFlexBudgetSettings(v166.settings || {}) },
+  }),
   165: (v165) => ({
     ...v165,
     schemaVersion: 166,

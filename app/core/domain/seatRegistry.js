@@ -213,6 +213,11 @@ export const RECORD_POLICIES = Object.freeze({
   standardWaiverGrants: { classKey: 'unit', detailCeiling: 0, label: 'Answers to waiver requests — grant, refusal, revocation (report only)', route: '#/standard-work?panel=waivers' },
   standardWaiverDecisions: { classKey: 'unit', detailCeiling: 0, label: 'Closing decisions on waivers — standard restored, routine retired (report only)', route: '#/standard-work?panel=waivers' },
   standardWaiverMarkers: { classKey: 'unit', detailCeiling: 0, label: 'Standard-waiver ask & observation markers', route: '#/standard-work?panel=waivers' },
+  // ADR-0213: declared standards and dated actuals name a budget holder and the
+  // declared owners of a variance. Report only: the panel reads its own
+  // seat-checked report, never the raw rows.
+  flexBudgetPlans: { classKey: 'unit', detailCeiling: 0, label: 'Flexible-budget standards (report only; every variance re-derived on read)', route: '#/finance?panel=variance' },
+  flexBudgetActuals: { classKey: 'unit', detailCeiling: 0, label: 'Actuals recorded against a flexible-budget standard (report only)', route: '#/finance?panel=variance' },
   delegationLineActs: { classKey: 'unit', detailCeiling: 0, label: 'Cross-line ask attribution acts (report only)', route: '#/matrix?panel=asks' },
   delegationLineMarkers: { classKey: 'unit', detailCeiling: 0, label: 'Cross-line overload reconciliation markers', route: '#/matrix?panel=asks' },
   // ADR-0181: classification acts and RULE-NPW-01 markers are surfaced only
@@ -747,6 +752,17 @@ export const ACTION_RIGHTS = Object.freeze({
   'declare-capital-ceiling': { minRank: 4, maxRank: 5, label: 'Declare, retire or read a capital ceiling for one currency and period' },
   'declare-capital-relation': { minRank: 3, maxRank: 5, label: 'Declare or retire a relation between two investment cases you hold both sides of' },
   'govern-capital-rationing': { minRank: 3, maxRank: 5, label: 'Scan for missing ceilings and set the capital-rationing ask window' },
+  // ADR-0213: reading a variance statement is open at every altitude and scoped
+  // by the reader. DECLARING a standard is a director's act by rank — and the
+  // ACTION refuses any seat that does not hold the budget holder, and refuses
+  // the holder outright: a standard set by the person it measures is a target
+  // they chose. RECORDING actuals is open to every seated altitude by rank,
+  // because a frontline lead can run a cost object — and the ACTION admits only
+  // the budget holder or a seat that holds them. The due window is governed at the VP / C-suite altitude.
+  'read-flex-budget': { minRank: 1, maxRank: 5, label: 'Read the flexible-budget variance statements in your span, or that name you as an owner' },
+  'declare-flex-budget-plan': { minRank: 3, maxRank: 5, label: 'Declare or retire a cost standard for a budget holder you hold — never your own' },
+  'record-flex-budget-actuals': { minRank: 1, maxRank: 5, label: 'Record or withdraw actuals against a declared cost standard' },
+  'govern-flex-budget': { minRank: 4, maxRank: 5, label: 'Set the window in which final actuals are due' },
   // ADR-0209: reading the work/rest ledger is open at every altitude and scoped
   // by the reader. Rostering starts at the FRONTLINE — a shift lead writes the
   // roster — and the action re-proves that the seat holds the very line. Which

@@ -307,6 +307,7 @@ import { reviewStewardshipAttentionCount } from './core/domain/reviewStewardship
 import { dutyStandbyAttentionCount } from './core/domain/dutyStandby.js';
 import { standardWorkAttentionCount } from './core/domain/standardWork.js';
 import { standardWaiverAttentionCount } from './core/domain/standardWaiver.js';
+import { flexBudgetAttentionCount } from './core/domain/flexBudget.js';
 import { workRestAttentionCount } from './core/domain/workRest.js';
 import { identityAttentionCount } from './core/domain/identity.js';
 
@@ -1619,7 +1620,11 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
         // ADR-0211: currencies holding ratified candidates with no declared
         // ceiling. Counted from lifecycle and reach alone — it declares nothing
         // and never runs the exact search from a navigation badge.
-        + capitalRationingAttentionCount(state, { now: at, seat: seatCtx?.seat || null }),
+        + capitalRationingAttentionCount(state, { now: at, seat: seatCtx?.seat || null })
+        // ADR-0213: variance statements this seat may record against whose FINAL
+        // actuals are past due. Counted from lifecycle and reach alone — the
+        // exact kernel never runs from a navigation badge.
+        + flexBudgetAttentionCount(state, { now: at, settings: state.settings, seat: seatCtx?.seat || null }),
       stakeholders: stakeholdersRollup(state, at).attention.length,
       forecast: (() => {
         const report = forecastIntegrityReport(state, at);

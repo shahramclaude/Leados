@@ -102,6 +102,7 @@ import { createGoalAttainmentActions } from './core/domain/goalAttainmentActions
 import { createInvestmentCaseActions } from './core/domain/investmentCaseActions.js';
 import { createCapitalRationingActions } from './core/domain/capitalRationingActions.js';
 import { createStandardWaiverActions } from './core/domain/standardWaiverActions.js';
+import { createFlexBudgetActions } from './core/domain/flexBudgetActions.js';
 import { createWorkRestActions } from './core/domain/workRestActions.js';
 import { createConflictRecusalActions } from './core/domain/conflictRecusalActions.js';
 // ADR-0148: Matrix Line Consent. A declared share is an ask until the line's
@@ -20298,6 +20299,9 @@ export function createApi(store, options = {}) {
   // resolves the line holder from the matrix on every answer and refuses the
   // requester, a peer line and an ancestor alike.
   Object.assign(api, createStandardWaiverActions(store, { now: clock, idFactory: id }));
+  // ADR-0213: the flexible-budget variance statement — a declared standard,
+  // dated actuals, and an exact split of the gap. Nothing derived is stored.
+  Object.assign(api, createFlexBudgetActions(store, { now: clock, idFactory: id }));
   // ADR-0209: the Cross-Line Work/Rest Recovery Ledger — recording a shift for a
   // line the acting seat HOLDS, its actual times or cancellation, a line's
   // coverage attestation, and the declared policy. No act moves or cancels a

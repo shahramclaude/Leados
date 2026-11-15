@@ -1,3 +1,15 @@
+## Session 286 — 2026-11-15: flexible-budget variance statement (Schema v167, [ADR-0213](./docs/adr/0213-flexible-budget-variance-statement.md), CSV #155)
+
+**Scope and outcome:** director / VP × matrix. Shipped slice 1 of a new capability: a declared cost standard, dated actuals, and an exact division of the budget gap into activity, pure price, joint price × quantity, efficiency (mix / yield), fixed spending and unplanned cost, with ownership by declaration only and the joint term shared across two matrix owners. New panel `#/finance?panel=variance`; two empty-at-upgrade ledgers; no new spine rule (131 stays).
+
+**Verification, actually run:** new suite 10 / 10; standalone built at 15,043,273 bytes / 898 modules; boundary, links, lint and heading checks clean. Two test failures during authoring were fixture defects (one-character labels; a weak random generator), fixed once each; the product code passed the oracle unchanged. A whole-suite run was stopped at 761 pass / 1 fail; that failure (`change-saturation.test.mjs`, 39 ≠ 38) reproduces on `5c38b60`. The remaining suites — including `standalone.test.mjs` with the raised ceiling and the swept schema pins — were not run to completion: **[UNVERIFIED]**.
+
+**Benchmark and asset:** Datarails FinanceOS / Pigment Analyst Agent, **[BENCHMARK-UNVERIFIED]** (not run hands-on; no transaction drill here). Higgsfield connector `unsupported` — blocker; built-in generator produced `app/assets/flex-budget-variance-bridge.jpg` (41,342 bytes, SHA-256 `aaaac3f36af902cd0b10d3c554df361208c2f44d871e9418f431c59e36e58f8b`).
+
+**New gap logged:** period-end accruals and cut-off (CEO / CFO × matrix), Planned.
+
+**Next:** run the whole suite to completion on this branch before merge; then the overdue-actuals ask rule, then a CEO × matrix item.
+
 ## Session 285 — 2026-11-15: recommendation baseline stopped, not shipped
 
 **Scope and outcome:** CEO / enterprise finance × single-chain and matrix. The intended slice would freeze a proven capital-rationing recommendation and compare it with current inputs; it would not record a human commitment, release, supersession or transfer of money. The incomplete prototype, schema-v167 migration, wiring, tests and illustration were removed after the stop rule was reached. No feature or ADR shipped; Schema v166 remains unchanged, and the commitment register stays **In Progress**.

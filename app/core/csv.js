@@ -213,6 +213,8 @@ import { buildInvestmentCases, investmentCaseCsvRows } from './domain/investment
 import { buildCapitalRationing, capitalRationingCsvRows } from './domain/capitalRationing.js';
 import { buildStandardWaivers, standardWaiverCsvRows } from './domain/standardWaiver.js';
 import { STANDARD_WAIVER_CSV_COLUMNS, STANDARD_WAIVER_CSV_DESCRIPTOR } from './domain/standardWaiverRegistry.js';
+import { buildFlexBudget, flexBudgetCsvRows } from './domain/flexBudget.js';
+import { FLEX_BUDGET_CSV_COLUMNS, FLEX_BUDGET_CSV_DESCRIPTOR } from './domain/flexBudgetRegistry.js';
 import {
   CAPITAL_RATIONING_CSV_COLUMNS,
   CAPITAL_RATIONING_CSV_DESCRIPTOR,
@@ -1472,6 +1474,12 @@ export const CSV_EXPORTS = [
   // request total is reconciled against the state rows, and a figure that cannot
   // be claimed exports BLANK with its reason, never zero.
   STANDARD_WAIVER_CSV_DESCRIPTOR,
+  // #155 (ADR-0213): flexible-budget variance statements — identity-free. No
+  // person, manager, cost-object title, line label, unit, basis or reason text;
+  // a statement exports as `S01` and a line as `S01-01`, currencies are never
+  // pooled, interim statements never enter a roll-up, and a figure that is
+  // withheld or cannot be claimed exports BLANK with its reason key, never zero.
+  FLEX_BUDGET_CSV_DESCRIPTOR,
 ];
 
 function personLookup(state) {
@@ -6689,6 +6697,18 @@ export function buildScopeTable(state, scope, now) {
       return {
         columns: CONFLICT_RECUSAL_CSV_COLUMNS.map((key) => ({ key, header: key })),
         rows: conflictRecusalCsvRows(report),
+      };
+    }
+    case 'flex-budget-variance-statements': {
+      // CSV scope #155 (ADR-0213, Schema v167). Built from the SAME reader the
+      // panel renders, so an exported variance is provably the variance that was
+      // printed, cent for cent. A statement and a line export under an opaque
+      // positional code; ownership exports only as declared / undeclared. A
+      // withheld figure is BLANK with its reason key, never zero.
+      const report = buildFlexBudget(state, { now, settings: state.settings || {}, seat: null });
+      return {
+        columns: FLEX_BUDGET_CSV_COLUMNS.map((key) => ({ key, header: key })),
+        rows: flexBudgetCsvRows(report),
       };
     }
     case 'standard-work-waivers': {

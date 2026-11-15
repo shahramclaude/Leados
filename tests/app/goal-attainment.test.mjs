@@ -190,8 +190,8 @@ test('v160 is additive, starts empty and invents no closed period', () => {
   old.people = [person('kim', null)];
   old.goals = [goal('g1', 'kim', '2026-09-20', { checkins: [chk('c1', '2026-09-10', 'on-track')] })];
   const next = migrate(old);
-  assert.equal(SCHEMA_VERSION, 166);
-  assert.deepEqual(next.applied.at(-1), '165 → 166');
+  assert.equal(SCHEMA_VERSION, 167);
+  assert.deepEqual(next.applied.at(-1), '166 → 167');
   assert.deepEqual(next.raw.goalAttainmentClosures, []);
   assert.deepEqual(next.raw.goalAttainmentNotes, []);
   assert.deepEqual(next.raw.goalAttainmentMarkers, []);

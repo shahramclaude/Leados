@@ -18,6 +18,7 @@ import { CAPITAL_RATIONING_RIGHTS } from './capitalRationingRegistry.js';
 import { WORK_REST_RIGHTS } from './workRestRegistry.js';
 import { CONFLICT_RECUSAL_RIGHTS } from './conflictRecusalRegistry.js';
 import { STANDARD_WAIVER_RIGHTS } from './standardWaiverRegistry.js';
+import { FLEX_BUDGET_RIGHTS } from './flexBudgetRegistry.js';
 import { routeVerdict } from './seatRegistry.js';
 import { validateMissionCommands } from './mission.js';
 import { captureBriefCase } from './missionCaptureBrief.js';
@@ -190,6 +191,14 @@ const groups = [
   [STANDARD_WAIVER_RIGHTS.AUTHORISE, 'standardWaiverAnswer standardWaiverRevoke'],
   [STANDARD_WAIVER_RIGHTS.DECIDE, 'standardWaiverDecide'],
   [STANDARD_WAIVER_RIGHTS.GOVERN, 'standardWaiverScan standardWaiverSetConventions'],
+  // ADR-0213: the flexible-budget variance statement. Its pure reads sit on the
+  // read right; declaring a standard and recording actuals each re-prove, inside
+  // the action, that the seat holds the budget holder (and is not the holder,
+  // for a standard).
+  [FLEX_BUDGET_RIGHTS.READ, 'flexBudgetReport flexBudgetBriefText flexBudgetCsvRows flexBudgetAttentionCount flexBudgetCandidates'],
+  [FLEX_BUDGET_RIGHTS.DECLARE, 'flexBudgetDeclarePlan flexBudgetRetirePlan'],
+  [FLEX_BUDGET_RIGHTS.RECORD, 'flexBudgetRecordActuals flexBudgetWithdrawActuals'],
+  [FLEX_BUDGET_RIGHTS.GOVERN, 'flexBudgetSetConventions'],
   // ADR-0148: answering a declared share is TWO first-person acts, split on the
   // spine rather than in prose. `accept-matrix-line` is the manager's own
   // answer (accept or decline the line they were given); it is open at every
@@ -487,6 +496,9 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // because a module whose reads are absent from SAFE_READS is unreadable under
 // enforcement while its writes are still gated — the register would vanish
 // exactly when a real organisation turned enforcement on.
+// ADR-0213: the variance statement's pure read surface — each re-proves the
+// read right and projects by seat inside the action.
+'flexBudgetAttentionCount', 'flexBudgetBriefText', 'flexBudgetCandidates', 'flexBudgetCsvRows', 'flexBudgetReport',
 'standardWaiverAttentionCount', 'standardWaiverBriefText', 'standardWaiverCandidates', 'standardWaiverCsvRows', 'standardWaiverReport', 'concordanceAttentionCount', 'concordanceBriefText', 'concordanceCsvRows', 'concordanceRead', 'concordanceStats', 'disclosureAttentionCount', 'disclosureBriefText', 'disclosureCsvRows', 'disclosureGrantRead', 'disclosureGrants', 'disclosureRead', 'envoyAttentionCount', 'envoyBriefText', 'envoyCsvRows', 'envoyIdentity', 'envoyPacketText', 'envoyPreview', 'envoyRead', 'escalationBriefText', 'escalationCsvRows', 'escalationRead', 'escalationStats', 'differencesAttentionCount', 'differencesBriefText', 'differencesCsvRows', 'differencesRead', 'federationAttentionCount', 'federationBriefText', 'federationCsvRows', 'federationRead',
 'freezeLineAttentionCount', 'freezeLineBriefText', 'freezeLineConventions', 'freezeLineCsvRows', 'freezeLineReport',
 'spanCalibrationAttentionCount', 'spanCalibrationBriefText', 'spanCalibrationConventions', 'spanCalibrationCsvRows', 'spanCalibrationReport', 'spanCalibrationSettings', 'spanCalibrationSignals',
@@ -795,6 +807,10 @@ const MATRIX_LINE_SCOPED = new Set([
   // seat may hold one side through a declared line — so the action re-proves that
   // it holds BOTH owners before it writes a constraint on the fund.
   'capitalRationingDeclareRelation', 'capitalRationingRetireRelation', 'capitalRationingCandidates',
+  // ADR-0213: a standard names a budget holder the declaring seat may hold only
+  // through a declared Matrix line. The action re-proves that hold — and that
+  // the holder is not the seat itself — before it writes.
+  'flexBudgetDeclarePlan',
   // ADR-0209: a shift (declared or previewed) and a coverage attestation name a
   // person the acting seat may hold only through a declared Matrix line — which
   // is exactly the case the ledger exists for. The action re-proves that the

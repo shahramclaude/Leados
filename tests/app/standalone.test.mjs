@@ -369,7 +369,15 @@ test('standalone artifact exists and is a single inline HTML document', () => {
   // 24,000 density guard. Ceiling moves 14,500,000 -> 15,000,000 because the
   // waiver register (six modules and a generated diagram) is real capability;
   // the density bound still catches a duplication.
-  assert.ok(bytes < 15_000_000, `standalone file is unexpectedly large (${bytes} bytes)`);
+  // ADR-0213 (Session 286, Schema v167) adds the Flexible-Budget Variance
+  // Statement: five domain modules (the exact rational kernel, registry,
+  // schema/loaders, the pure reader, the dated actions), one finance panel and
+  // one generated diagram (41,342 bytes, the twenty-first .jpg in app/assets).
+  // The slice adds 164,493 bytes. Measured build: 15,043,273 bytes / 898 source
+  // modules = 16,752 bytes per module, still far below the unchanged 24,000
+  // density guard. Ceiling moves 15,000,000 -> 15,150,000 only because real
+  // capability was added; the density bound still catches a duplication.
+  assert.ok(bytes < 15_150_000, `standalone file is unexpectedly large (${bytes} bytes)`);
   // Derived from the folder, not from a list in this file: the day a panel adds
   // a diagram, an enumerator that names the old two would still pass. Same
   // lesson the build script learned in ADR-0186.

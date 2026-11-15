@@ -3369,3 +3369,10 @@ details[open] > .nav-summary::after { content: '▾'; }
 .view-checkup .next-list { list-style: disc; padding-left: 18px; }
 .view-checkup .next-list li { margin-bottom: 5px; font-size: 13px; }
 .view-checkup .table td { vertical-align: top; }
+
+/* ADR-0213 — flexible-budget variance: diverging cause bars. Direction is
+   always written beside each bar; colour only repeats it. */
+.flex-bar { stroke: var(--panel); stroke-width: 1; }
+.flex-bar-unfavourable { fill: var(--bad); }
+.flex-bar-favourable { fill: var(--good); }
+.flex-bar-headline { stroke: var(--ink-soft); stroke-width: 1.5; }

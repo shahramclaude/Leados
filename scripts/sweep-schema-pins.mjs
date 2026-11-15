@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 /**
  * scripts/sweep-schema-pins.mjs — mechanical release-pin sweep, re-pointed at
- * every schema bump. Current target: v165 → v166 (ADR-0212, Session 282).
+ * every schema bump. Current target: v166 → v167 (ADR-0213, Session 286).
+ * ADR-0213 adds CSV scope #155 and NO rule on the shared spine, so
+ * `spineRules` is null for this release.
  *
  * ADR-0209 adds five new EMPTY collections (workRestShifts, workRestActs,
  * workRestCoverage, workRestPolicies and workRestMarkers), CSV scope #151 and
@@ -39,9 +41,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const SWEEP = {
-  schema: { from: 165, to: 166 },
-  csvExports: { from: [153], to: 154 },
-  spineRules: { from: [130], to: 131 },
+  schema: { from: 166, to: 167 },
+  csvExports: { from: [154], to: 155 },
+  spineRules: null,
 };
 
 const ROOT = path.resolve(import.meta.dirname, '..');
