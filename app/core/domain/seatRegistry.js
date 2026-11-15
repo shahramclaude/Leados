@@ -196,6 +196,15 @@ export const RECORD_POLICIES = Object.freeze({
   workRestCoverage: { classKey: 'unit', detailCeiling: 0, label: 'Per-line coverage attestations of the work record (report only)', route: '#/standard-work?panel=rest' },
   workRestPolicies: { classKey: 'unit', detailCeiling: 0, label: 'Declared work/rest policies with their written source (report only)', route: '#/standard-work?panel=rest' },
   workRestMarkers: { classKey: 'unit', detailCeiling: 0, label: 'Work/rest conflict observation markers', route: '#/standard-work?panel=rest' },
+  // ADR-0210: report-only, like every governance ledger above. An interest names
+  // a person and a record; the raw rows are never handed to the generic
+  // projection. The register's own reader discloses a person to the seat whose
+  // tree or declared line holds them, and withholds everybody else by name.
+  conflictInterests: { classKey: 'unit', detailCeiling: 0, label: 'Decision-maker interests (report only; every verdict re-derived on read)', route: '#/recusal' },
+  conflictNoneDeclarations: { classKey: 'unit', detailCeiling: 0, label: 'First-person declarations of no reportable interest (report only)', route: '#/recusal' },
+  conflictStandings: { classKey: 'unit', detailCeiling: 0, label: 'Responses to declared interests — recusal, mitigation, determination (report only)', route: '#/recusal' },
+  conflictRules: { classKey: 'unit', detailCeiling: 0, label: 'Reportable-conflict rules and their written sources', route: '#/recusal' },
+  conflictRecusalMarkers: { classKey: 'unit', detailCeiling: 0, label: 'Conflict-of-interest observation markers', route: '#/recusal' },
   delegationLineActs: { classKey: 'unit', detailCeiling: 0, label: 'Cross-line ask attribution acts (report only)', route: '#/matrix?panel=asks' },
   delegationLineMarkers: { classKey: 'unit', detailCeiling: 0, label: 'Cross-line overload reconciliation markers', route: '#/matrix?panel=asks' },
   // ADR-0181: classification acts and RULE-NPW-01 markers are surfaced only
@@ -715,6 +724,19 @@ export const ACTION_RIGHTS = Object.freeze({
   'roster-work-rest': { minRank: 1, maxRank: 5, label: 'Record a shift, its actual times or cancellation, or attest a line’s work record — only for a line you hold' },
   'declare-work-rest-policy': { minRank: 3, maxRank: 5, label: 'Declare or retire the work/rest limits that apply, with their written source' },
   'govern-work-rest': { minRank: 3, maxRank: 5, label: 'Scan work/rest conflicts and set the ledger’s reading horizon' },
+  // ADR-0210: the conflict-of-interest & recusal register. A person declares their
+  // OWN interest, or a seat that can reach them records a disclosure it received
+  // — so the declaring right is open at every leadership rank and the ACTION
+  // re-proves the route and stores which one it was. Deciding HOW a declared
+  // interest is handled (stand back, a named control, a written determination)
+  // is a director-and-above act, because it is the seat above the person that
+  // answers for the record's independence; the action refuses the holder
+  // themselves and any seat that cannot reach them. Declaring which relationship
+  // kinds are reportable is the same governance right.
+  'read-conflict-recusal': { minRank: 1, maxRank: 5, label: 'Read the conflict-of-interest & recusal register for your own span' },
+  'declare-conflict-interest': { minRank: 1, maxRank: 5, label: 'Declare your own interest, or record a disclosure from a person you can reach' },
+  'decide-conflict-standing': { minRank: 3, maxRank: 5, label: 'Record the response to a declared interest — recuse, a named control, or a written determination — never your own' },
+  'govern-conflict-recusal': { minRank: 3, maxRank: 5, label: 'Declare which relationship kinds are reportable, and set the register’s horizon' },
   // ADR-0150: onboarding a person into a matrix. Writing a line's brief is the act
   // of the manager who HOLDS that line, at whatever altitude that line's manager
   // sits (a project lead with no home-line reports gets this exactly as a

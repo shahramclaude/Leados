@@ -15,6 +15,7 @@ import { GOAL_COMMITMENT_RIGHTS } from './goalCommitmentRegistry.js';
 import { GOAL_ATTAINMENT_RIGHTS } from './goalAttainmentRegistry.js';
 import { INVESTMENT_CASE_RIGHTS } from './investmentCaseRegistry.js';
 import { WORK_REST_RIGHTS } from './workRestRegistry.js';
+import { CONFLICT_RECUSAL_RIGHTS } from './conflictRecusalRegistry.js';
 import { routeVerdict } from './seatRegistry.js';
 import { validateMissionCommands } from './mission.js';
 import { captureBriefCase } from './missionCaptureBrief.js';
@@ -160,6 +161,14 @@ const groups = [
   [WORK_REST_RIGHTS.ROSTER, 'workRestCandidates workRestPreviewShift workRestDeclareShift workRestAmendShift workRestAttestCoverage workRestWithdrawCoverage'],
   [WORK_REST_RIGHTS.POLICY, 'workRestDeclarePolicy workRestRetirePolicy'],
   [WORK_REST_RIGHTS.GOVERN, 'workRestScan workRestSetConventions'],
+  // ADR-0210: declaring an interest is the person's own first-person act (or a
+  // seat recording a disclosure it received, printed as such); deciding how it
+  // is handled is a director+ act the ACTION refuses to the holder themselves.
+  // The pure reads are SAFE_READS below.
+  [CONFLICT_RECUSAL_RIGHTS.READ, 'conflictRecusalReport conflictRecusalBriefText conflictRecusalCsvRows conflictRecusalAttentionCount'],
+  [CONFLICT_RECUSAL_RIGHTS.DECLARE, 'conflictRecusalDeclareInterest conflictRecusalWithdrawInterest conflictRecusalDeclareNoInterest conflictRecusalWithdrawNoInterest conflictRecusalCandidates conflictRecusalNoInterestCandidates'],
+  [CONFLICT_RECUSAL_RIGHTS.DECIDE, 'conflictRecusalRecordStanding'],
+  [CONFLICT_RECUSAL_RIGHTS.GOVERN, 'conflictRecusalDeclareRule conflictRecusalRetireRule conflictRecusalScan conflictRecusalSetConventions'],
   // ADR-0148: answering a declared share is TWO first-person acts, split on the
   // spine rather than in prose. `accept-matrix-line` is the manager's own
   // answer (accept or decline the line they were given); it is open at every
@@ -447,7 +456,7 @@ const FIRST_ID_COLLECTION = Object.freeze({
   createActionBundle: 'cases', updateActionBundle: 'actionBundles', saveActionBundlePreview: 'actionBundles', commitActionBundle: 'actionBundles', withdrawActionBundle: 'actionBundles', archiveActionBundle: 'actionBundles',
 });
 
-export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boardContinuity', 'boardContinuityText', 'boardCsvRows', 'boardMemoText', 'boardPreview', 'boardRead', 'cadenceAttentionCount', 'cadenceBriefText', 'cadenceCsvRows', 'cadencePreviewForum', 'cadenceRead', 'carryoverAttentionCount', 'carryoverBriefText', 'carryoverCsvRows', 'carryoverReleasePreview', 'carryoverReport', 'catchballBriefText', 'catchballCsvRows', 'catchballPreviewFeasibility', 'catchballRead', 'concordanceAttentionCount', 'concordanceBriefText', 'concordanceCsvRows', 'concordanceRead', 'concordanceStats', 'disclosureAttentionCount', 'disclosureBriefText', 'disclosureCsvRows', 'disclosureGrantRead', 'disclosureGrants', 'disclosureRead', 'envoyAttentionCount', 'envoyBriefText', 'envoyCsvRows', 'envoyIdentity', 'envoyPacketText', 'envoyPreview', 'envoyRead', 'escalationBriefText', 'escalationCsvRows', 'escalationRead', 'escalationStats', 'differencesAttentionCount', 'differencesBriefText', 'differencesCsvRows', 'differencesRead', 'federationAttentionCount', 'federationBriefText', 'federationCsvRows', 'federationRead',
+export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boardContinuity', 'boardContinuityText', 'boardCsvRows', 'boardMemoText', 'boardPreview', 'boardRead', 'cadenceAttentionCount', 'cadenceBriefText', 'cadenceCsvRows', 'cadencePreviewForum', 'cadenceRead', 'carryoverAttentionCount', 'carryoverBriefText', 'carryoverCsvRows', 'carryoverReleasePreview', 'carryoverReport', 'catchballBriefText', 'catchballCsvRows', 'catchballPreviewFeasibility', 'catchballRead', 'conflictRecusalAttentionCount', 'conflictRecusalBriefText', 'conflictRecusalCsvRows', 'conflictRecusalReport', 'conflictRecusalNoInterestCandidates', 'concordanceAttentionCount', 'concordanceBriefText', 'concordanceCsvRows', 'concordanceRead', 'concordanceStats', 'disclosureAttentionCount', 'disclosureBriefText', 'disclosureCsvRows', 'disclosureGrantRead', 'disclosureGrants', 'disclosureRead', 'envoyAttentionCount', 'envoyBriefText', 'envoyCsvRows', 'envoyIdentity', 'envoyPacketText', 'envoyPreview', 'envoyRead', 'escalationBriefText', 'escalationCsvRows', 'escalationRead', 'escalationStats', 'differencesAttentionCount', 'differencesBriefText', 'differencesCsvRows', 'differencesRead', 'federationAttentionCount', 'federationBriefText', 'federationCsvRows', 'federationRead',
 'freezeLineAttentionCount', 'freezeLineBriefText', 'freezeLineConventions', 'freezeLineCsvRows', 'freezeLineReport',
 'spanCalibrationAttentionCount', 'spanCalibrationBriefText', 'spanCalibrationConventions', 'spanCalibrationCsvRows', 'spanCalibrationReport', 'spanCalibrationSettings', 'spanCalibrationSignals',
 'reputationAttentionCount', 'reputationBriefText', 'reputationConventions', 'reputationCounterfactual', 'reputationCsvRows', 'reputationPriceAsk', 'reputationReport', 'reputationSignals',

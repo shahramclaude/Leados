@@ -101,6 +101,7 @@ import { createGoalCommitmentActions } from './core/domain/goalCommitmentActions
 import { createGoalAttainmentActions } from './core/domain/goalAttainmentActions.js';
 import { createInvestmentCaseActions } from './core/domain/investmentCaseActions.js';
 import { createWorkRestActions } from './core/domain/workRestActions.js';
+import { createConflictRecusalActions } from './core/domain/conflictRecusalActions.js';
 // ADR-0148: Matrix Line Consent. A declared share is an ask until the line's
 // manager accepts or declines it AND the person acknowledges it. Two
 // first-person commands, one scan, and three aggregate reads that report `ok`.
@@ -20289,6 +20290,12 @@ export function createApi(store, options = {}) {
   // coverage attestation, and the declared policy. No act moves or cancels a
   // shift on anyone's behalf; every spell, rest and verdict is derived on read.
   Object.assign(api, createWorkRestActions(store, { now: clock, idFactory: id }));
+  // ADR-0210: the Decision-Maker Conflict-of-Interest & Recusal Ledger — a person
+  // declares their own stake (or a seat records a disclosure it received), a seat
+  // above them records one dated response, and a director+ declares which
+  // relationship kinds are reportable. No act blocks a decision, edits an
+  // approver or revokes a right; every verdict is derived on read.
+  Object.assign(api, createConflictRecusalActions(store, { now: clock, idFactory: id }));
   // ADR-0177: the Cross-Line Labour Chargeback & Internal Transfer-Price Ledger.
   // Proposing, confirming and retiring a price are first-person two-key acts
   // through the same reviewed gateway; every charge is derived on read.

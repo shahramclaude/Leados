@@ -139,7 +139,7 @@ function feedSummary(feed) {
 /* ------------------------------------------------------------- reader */
 
 test('schema is at v161 and the cross-window ledger is a real, empty collection', () => {
-  assert.equal(SCHEMA_VERSION, 163);
+  assert.equal(SCHEMA_VERSION, 164);
   const state = normalizeState(fixture(), { now: NOW }).state;
   assert.ok(Array.isArray(state.stationWindowEnables));
   assert.equal(state.stationWindowEnables.length, 0);

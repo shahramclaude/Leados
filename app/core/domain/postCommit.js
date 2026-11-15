@@ -191,6 +191,7 @@ import { goalCommitmentRule } from './goalCommitmentRules.js';
 import { goalAttainmentRule } from './goalAttainmentRules.js';
 import { investmentCaseRule } from './investmentCaseRules.js';
 import { workRestRule } from './workRestRules.js';
+import { conflictRecusalRule } from './conflictRecusalRules.js';
 
 
 // ADR-0087: the Operating Cadence Clock. Reads the finished queue after the
@@ -1151,6 +1152,17 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // chases a missing attestation and never rates a person. Registered
   // immediately before `seatRule` and `sealRule`.
   workRestRule,
+  // ADR-0210: the Decision-Maker Conflict-of-Interest & Recusal register. One
+  // condition: a declared interest that is REPORTABLE, whose holder sits on the
+  // record as its approver, its owner or a declared line over its subject, and
+  // with no dated response — recusal, mitigation or determination — on file.
+  // The ask goes to the seat ABOVE the person, never the person themselves, and
+  // in a matrix to the lowest seat above EVERY line they hold; leader-held,
+  // apex-less, self-held and off-roster conditions record one identity-free
+  // `conflictRecusalMarkers` observation and ask nobody. It never blocks a
+  // decision, edits an approver, revokes a right or rates a person. Registered
+  // immediately before `seatRule` and `sealRule`.
+  conflictRecusalRule,
   // ADR-0076: the Operating Seat (vertical roll-up + enforced boundaries).
   // It reads the finished record after every module has propagated, then fans
   // each open item up every leadership ancestor in the reporting tree with one

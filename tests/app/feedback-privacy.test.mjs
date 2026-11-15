@@ -98,8 +98,8 @@ test('schema v134 migration preserves historical feedback as unattributed', () =
   old.schemaVersion = 133;
   delete old.feedback[2].authoredById;
   const normalized = normalizeState(old, { now: NOW }).state;
-  assert.equal(SCHEMA_VERSION, 163);
-  assert.equal(normalized.schemaVersion, 163);
+  assert.equal(SCHEMA_VERSION, 164);
+  assert.equal(normalized.schemaVersion, 164);
   assert.equal(fb(normalized, 'fb-legacy').authoredById, null);
   assert.equal(fb(normalized, 'fb-legacy').authoredAt, null);
 });
