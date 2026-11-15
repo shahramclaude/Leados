@@ -1,8 +1,8 @@
 /**
  * app/core/domain/portfolioReviewRegistry.js — closed vocabularies, limits,
  * rights, verdicts and named frameworks of the Enterprise Portfolio Review
- * Register (Keep / Fix / Sell / Exit, ADR-0222, Schema v176, CSV #164,
- * `#/portfolio`).
+ * Register (Keep / Fix / Sell / Exit, ADR-0222, Schema v177, CSV #164,
+ * `#/portfolio-review`).
  *
  * Pure leaf: zero imports, so schema, reader, actions, post-commit rule, CSV
  * export and view all share one vocabulary without cycle risk.
@@ -26,7 +26,7 @@
 
 export const PRV_ENGINE_VERSION = 'portfolio-review-2026.11-v1';
 export const PRV_RULE_ID = 'RULE-PRV-01';
-export const PRV_ROUTE = '#/portfolio';
+export const PRV_ROUTE = '#/portfolio-review';
 export const PRV_CSV_SCOPE = 'portfolio-review';
 
 export const PRV_RIGHTS = Object.freeze({
@@ -56,6 +56,7 @@ export const PRV_LIMITS = Object.freeze({
   reviewsMax: 4000,
   verdictsMax: 2000,
   milestonesMax: 6000,
+  exitsMax: 2000,
   markersMax: 2000,
   idMax: 96,
   personIdMax: 96,
@@ -76,6 +77,7 @@ export const PRV_LIMITS = Object.freeze({
   askDueReviewDays: 5,
   askDueVerdictDays: 5,
   askDueSlippageDays: 5,
+  askDueExecutionOverdueDays: 5,
 });
 
 export const PRV_EVIDENCE_KINDS = Object.freeze([
@@ -195,12 +197,15 @@ export const PRV_CONDITION_KINDS = Object.freeze({
   REVIEW_OVERDUE: 'review-overdue',
   VERDICT_PENDING: 'verdict-pending',
   EXECUTION_SLIPPAGE: 'execution-slippage',
+  EXECUTION_OVERDUE: 'execution-overdue',
 });
 
 export const PRV_MARKER_REASONS = Object.freeze({
   NO_JOINT_APEX: 'no-joint-apex',
   HOLDER_OFF_ROSTER: 'holder-off-roster',
   OWNER_OFF_ROSTER: 'owner-off-roster',
+  CHIEF_DECISION_OWED: 'chief-decision-owed',
+  NO_AUTHORITY_AT_RANK: 'no-authority-at-rank',
 });
 
 export const PRV_FRAMEWORKS = Object.freeze([
@@ -237,6 +242,7 @@ export const PRV_CSV_COLUMNS = Object.freeze([
   'row_kind',
   'currency',
   'units_live_total',
+  'units_completed_total',
   'units_retired_total',
   'units_keep',
   'units_fix',
@@ -253,6 +259,7 @@ export const PRV_CSV_COLUMNS = Object.freeze([
   'milestones_overdue',
   'money_measured_cents',
   'money_expected_proceeds_cents',
+  'money_realized_proceeds_cents',
   'counts_reconcile',
   'figures_complete',
   'incomplete_reasons',
@@ -264,5 +271,5 @@ export const PRV_CSV_DESCRIPTOR = Object.freeze({
   group: 'governance',
   sensitive: true,
   filenameSlug: 'portfolio-review',
-  description: 'One workspace control row (unit verdict states, review and verdict counts, milestone states) plus one currency row per declared currency (exact integer cents for measured value and expected proceeds) and the register’s two separate claims. No person, unit name, line holder, rationale, or evidence reference crosses this boundary.',
+  description: 'One workspace control row (unit verdict states, completed exits, review and verdict counts, milestone states) plus one currency row per declared currency (exact integer cents for measured value, expected proceeds, and realized exit proceeds) and the register’s two separate claims. No person, unit name, line holder, rationale, or evidence reference crosses this boundary.',
 });

@@ -189,7 +189,7 @@ test('the engine registers its rights, its pause, its export and its place on th
 });
 
 test('schema v155 carries the ledger, the markers, target magnitude and the conventions', () => {
-  assert.equal(SCHEMA_VERSION, 176);
+  assert.equal(SCHEMA_VERSION, 177);
   assert.ok(COLLECTIONS.includes('goalCommitments') && COLLECTIONS.includes('goalCommitmentMarkers'));
   assert.ok(MIGRATIONS['152'], 'v152 state migrates forward');
   assert.ok(MIGRATIONS['153'], 'v153 state migrates forward through chargeback posting');

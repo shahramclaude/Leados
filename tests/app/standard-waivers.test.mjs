@@ -148,7 +148,7 @@ function read(store, now = T0) {
  */
 
 test('registration: schema v166, four ledgers, CSV #154, RULE-TSW-01 as spine rule 131, rights, pause and contract', () => {
-  assert.equal(SCHEMA_VERSION, 176);
+  assert.equal(SCHEMA_VERSION, 177);
   for (const key of ['standardWaiverRequests', 'standardWaiverGrants', 'standardWaiverDecisions', 'standardWaiverMarkers']) {
     assert.ok(COLLECTIONS.includes(key), `${key} is a declared collection`);
   }

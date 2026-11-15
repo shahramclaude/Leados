@@ -145,7 +145,7 @@ function withDom(fn) {
 }
 
 test('ADR-0194/0202 registration: introduced at Schema v154, current Schema v158, empty migration, spine order and parity, gateway, seat policy, panel #37, CSV #146, pause-permit reach', () => {
-  assert.equal(SCHEMA_VERSION, 176);
+  assert.equal(SCHEMA_VERSION, 177);
   const empty = createEmptyState(ISO);
   assert.deepEqual(empty.chargebackPostings, []);
   assert.deepEqual(empty.chargebackPostingMarkers, []);
@@ -153,7 +153,7 @@ test('ADR-0194/0202 registration: introduced at Schema v154, current Schema v158
   assert.equal(empty.settings.chargebackPostingAutoPropagate, true);
 
   const { raw, applied } = migrate({ schemaVersion: 153, appId: 'leados', meta: {}, settings: {} });
-  assert.deepEqual(applied, ['153 → 154', '154 → 155', '155 → 156', '156 → 157', '157 → 158', '158 → 159', '159 → 160', '160 → 161', '161 → 162', '162 → 163', '163 → 164', '164 → 165', '165 → 166', '166 → 167', '167 → 168', '168 → 169', '169 → 170', '170 → 171', '171 → 172', '172 → 173', '173 → 174', '174 → 175', '175 → 176']);
+  assert.deepEqual(applied, ['153 → 154', '154 → 155', '155 → 156', '156 → 157', '157 → 158', '158 → 159', '159 → 160', '160 → 161', '161 → 162', '162 → 163', '163 → 164', '164 → 165', '165 → 166', '166 → 167', '167 → 168', '168 → 169', '169 → 170', '170 → 171', '171 → 172', '172 → 173', '173 → 174', '174 → 175', '175 → 176', '176 → 177']);
   assert.deepEqual(raw.chargebackPostings, [], 'no period fact is fabricated on upgrade');
   assert.deepEqual(raw.chargebackPostingMarkers, []);
 

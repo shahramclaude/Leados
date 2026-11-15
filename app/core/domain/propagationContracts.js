@@ -1174,8 +1174,8 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
   {
     rule: portfolioReviewRule,
     module: 'portfolioReviewRules.js',
-    purpose: 'RULE-PRV-01: opaque review, verdict and execution-slippage obligations from the single portfolio reader. Review to owning line; governance to joint apex above every reporting line. Identity-free markers when unaddressable; self-closing, bounded and pause-governed.',
-    writes: ['delegations', 'links', 'portfolioMarkers'],
+    purpose: 'RULE-PRV-01: right-capable opaque review (`review-portfolio` >= rank 4), verdict (`verdict-portfolio` rank 5 -> chief queue + `chief-decision-owed` marker), milestone slippage (`track-portfolio` >= rank 3 -> milestone update only), and past-due sell/exit (`verdict-portfolio` rank 5) obligations from `buildPortfolioReview`. Never asks a lower apex to perform an act its rights refuse, never names `LEADER_ID` as a person delegation addressee, writes identity-free `portfolioReviewMarkers`, self-closes, bounds to 4 per commit, and respects `portfolioAutoPropagate`.',
+    writes: ['delegations', 'links', 'portfolioReviewMarkers'],
     emits: [],
     scansWorkspace: true,
   },

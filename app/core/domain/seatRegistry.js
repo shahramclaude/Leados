@@ -266,11 +266,12 @@ export const RECORD_POLICIES = Object.freeze({
   // discloses duties to the carrier, demanding line, controlling line, and
   // joint-apex ancestors, while redacting individual contributor identity above
   // the director altitude.
-  portfolioUnits: { classKey: 'unit', detailCeiling: 0, label: 'Portfolio units (report only)', route: '#/portfolio' },
-  portfolioReviews: { classKey: 'unit', detailCeiling: 0, label: 'Portfolio dated evidence (report only)', route: '#/portfolio' },
-  portfolioVerdicts: { classKey: 'unit', detailCeiling: 0, label: 'Portfolio CEO verdicts (report only)', route: '#/portfolio' },
-  portfolioMilestones: { classKey: 'unit', detailCeiling: 0, label: 'Portfolio execution milestones (report only)', route: '#/portfolio' },
-  portfolioMarkers: { classKey: 'unit', detailCeiling: 0, label: 'Portfolio identity-free observations (report only)', route: '#/portfolio' },
+  portfolioUnits: { classKey: 'unit', detailCeiling: 0, label: 'Portfolio units (report only)', route: '#/portfolio-review' },
+  portfolioReviews: { classKey: 'unit', detailCeiling: 0, label: 'Portfolio dated evidence (report only)', route: '#/portfolio-review' },
+  portfolioVerdicts: { classKey: 'unit', detailCeiling: 0, label: 'Portfolio CEO verdicts (report only)', route: '#/portfolio-review' },
+  portfolioMilestones: { classKey: 'unit', detailCeiling: 0, label: 'Portfolio execution milestones (report only)', route: '#/portfolio-review' },
+  portfolioExits: { classKey: 'unit', detailCeiling: 0, label: 'Portfolio completed sell & exit settlements (report only)', route: '#/portfolio-review' },
+  portfolioReviewMarkers: { classKey: 'unit', detailCeiling: 0, label: 'Portfolio review identity-free observations (report only)', route: '#/portfolio-review' },
   dutyMeansDuties: { classKey: 'unit', detailCeiling: 0, label: 'Declared accountable duties and their demanding lines (report only; verdicts re-derived on read)', route: '#/means' },
   dutyMeansRequirements: { classKey: 'unit', detailCeiling: 0, label: 'Required authority, budget and protected-time pillars per duty (report only)', route: '#/means' },
   dutyMeansActs: { classKey: 'unit', detailCeiling: 0, label: 'Controlling-line supply, refusal, withdrawal and joint-apex entrepreneurial-gap acts (report only)', route: '#/means' },
@@ -894,7 +895,7 @@ export const ACTION_RIGHTS = Object.freeze({
   'read-portfolio': { minRank: 1, maxRank: 5, label: 'Read portfolio units within your span' },
   'declare-portfolio': { minRank: 5, maxRank: 5, label: 'Declare portfolio units or scan' },
   'review-portfolio': { minRank: 4, maxRank: 5, label: 'Record dated evidence for your owning line' },
-  'verdict-portfolio': { minRank: 5, maxRank: 5, label: 'Judge or retire a portfolio unit' },
+  'verdict-portfolio': { minRank: 5, maxRank: 5, label: 'Judge, retire, or complete exit settlement of a portfolio unit' },
   'track-portfolio': { minRank: 3, maxRank: 5, label: 'Track verdict execution within your line' },
   'read-duty-means': { minRank: 1, maxRank: 5, label: 'Read the Duty-Without-Means Register for duties in your span or addressed to your line' },
   'declare-duty-means': { minRank: 1, maxRank: 5, label: 'Declare an accountable duty or required means pillar, retire a duty as demanding line, or scan parity' },

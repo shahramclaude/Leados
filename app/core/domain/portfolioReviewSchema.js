@@ -1,7 +1,7 @@
 /**
  * app/core/domain/portfolioReviewSchema.js — fail-closed loaders and exact
  * integer parsers for the Enterprise Portfolio Review Register (ADR-0222,
- * Schema v176).
+ * Schema v177).
  *
  * FAIL-CLOSED BY CONSTRUCTION
  * ---------------------------
@@ -388,6 +388,54 @@ export function normalizePortfolioMilestones(raw, warnings = null) {
   return out;
 }
 
+export function normalizePortfolioExits(raw, warnings = null) {
+  if (!Array.isArray(raw)) return [];
+  const out = [];
+  const seenIds = new Set();
+  for (const item of raw) {
+    if (out.length >= L.exitsMax) {
+      pushWarn(warnings, `portfolioExits: capped at ${L.exitsMax} rows.`);
+      break;
+    }
+    if (!item || typeof item !== 'object') {
+      pushWarn(warnings, 'portfolioExits: dropped non-object row.');
+      continue;
+    }
+    const id = prvId(item.id);
+    const verdictId = prvId(item.verdictId);
+    const unitId = prvId(item.unitId);
+    if (!id || !verdictId || !unitId || seenIds.has(id)) {
+      pushWarn(warnings, `portfolioExits: dropped row with invalid or duplicate id "${prvText(item?.id, 40)}".`);
+      continue;
+    }
+    const completedOn = prvDay(item.completedOn);
+    const recordedById = prvPersonId(item.recordedById);
+    const actualProceedsCents = readStoredPrvCents(item.actualProceedsCents, { allowZero: true });
+    const evidenceKind = prvText(item.evidenceKind, 32);
+    const evidenceId = prvText(item.evidenceId, L.evidenceIdMax + 1);
+    const basis = prvText(item.basis, L.basisMax + 1);
+    if (!completedOn || !recordedById || actualProceedsCents === null
+      || !EVIDENCE_SET.has(evidenceKind) || !evidenceId || evidenceId.length > L.evidenceIdMax
+      || basis.length < L.basisMin || basis.length > L.basisMax) {
+      pushWarn(warnings, `portfolioExits(${id}): dropped row with invalid settlement date, actor, proceeds, evidence, or basis.`);
+      continue;
+    }
+    seenIds.add(id);
+    out.push({
+      id,
+      verdictId,
+      unitId,
+      completedOn,
+      recordedById,
+      actualProceedsCents,
+      evidenceKind,
+      evidenceId,
+      basis,
+    });
+  }
+  return out;
+}
+
 export function normalizePortfolioMarkers(raw, warnings = null) {
   if (!Array.isArray(raw)) return [];
   const out = [];
@@ -395,7 +443,7 @@ export function normalizePortfolioMarkers(raw, warnings = null) {
   for (const item of raw) {
     if (out.length >= L.markersMax) break;
     if (!item || typeof item !== 'object') {
-      pushWarn(warnings, 'portfolioMarkers: dropped non-object marker.');
+      pushWarn(warnings, 'portfolioReviewMarkers: dropped non-object marker.');
       continue;
     }
     const id = prvId(item.id);
@@ -403,7 +451,7 @@ export function normalizePortfolioMarkers(raw, warnings = null) {
     const reason = prvText(item.reason, 64);
     const observedOn = prvDay(item.observedOn);
     if (!id || seenIds.has(id) || !signature || !MARKER_REASON_SET.has(reason) || !observedOn) {
-      pushWarn(warnings, 'portfolioMarkers: dropped malformed marker.');
+      pushWarn(warnings, 'portfolioReviewMarkers: dropped malformed marker.');
       continue;
     }
     seenIds.add(id);

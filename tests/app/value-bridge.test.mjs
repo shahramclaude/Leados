@@ -512,7 +512,7 @@ test('ADR-0214 schema: a stored row is the row its loader returns, and the migra
   // The SOURCE version is 167: an upgraded workspace carries no readings.
   const migrated = migrate({ schemaVersion: 167 });
   assert.equal(migrated.raw.schemaVersion, SCHEMA_VERSION);
-  assert.equal(migrated.applied.at(-1), '175 → 176');
+  assert.equal(migrated.applied.at(-1), '176 → 177');
   assert.deepEqual(migrated.raw.valueBridgeReadings, []);
   assert.deepEqual(migrated.raw.valueBridgeLeverClaims, []);
 

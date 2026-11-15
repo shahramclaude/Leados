@@ -264,8 +264,8 @@ test('v162 is additive, starts empty, assumes no hurdle rate and invents no case
   old.people = [person('mia', null, 'manager')];
   old.budgets = [{ id: 'b1', name: 'Capex FY27', currency: 'DKK', limit: 500000, status: 'active', ownerId: 'mia', lines: [], createdAt: AT, updatedAt: AT }];
   const next = migrate(old);
-  assert.equal(SCHEMA_VERSION, 176);
-  assert.deepEqual(next.applied.at(-1), '175 → 176');
+  assert.equal(SCHEMA_VERSION, 177);
+  assert.deepEqual(next.applied.at(-1), '176 → 177');
   assert.deepEqual([next.raw.investmentCases, next.raw.investmentCaseActs, next.raw.investmentCaseMarkers], [[], [], []]);
   assert.equal(next.raw.settings.investmentCaseAskDueDays, 14);
   assert.equal(next.raw.settings.investmentCaseAutoPropagate, true);

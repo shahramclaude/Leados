@@ -116,21 +116,21 @@ function harness(initial) {
 /* ------------------------------------------------------------------ 1. schema */
 
 test('schema v80 is additive and invents no reading, marker or moved date', () => {
-  assert.equal(SCHEMA_VERSION, 176);
+  assert.equal(SCHEMA_VERSION, 177);
   const v79 = { ...createEmptyState(NOW.toISOString()), schemaVersion: 79 };
   delete v79.solvencyReadings;
   delete v79.solvencyMarkers;
   delete v79.solvencyRenegotiations;
   const migrated = migrate(v79);
-  assert.equal(migrated.applied.at(-1), '175 → 176', 'the whole chain runs to the current schema');
+  assert.equal(migrated.applied.at(-1), '176 → 177', 'the whole chain runs to the current schema');
   assert.deepEqual(migrated.raw.solvencyReadings, []);
   assert.deepEqual(migrated.raw.solvencyMarkers, []);
   assert.deepEqual(migrated.raw.solvencyRenegotiations, []);
   assert.equal(MIGRATIONS[79] !== undefined, true);
   const normalized = normalizeState(migrated.raw, { now: NOW }).state;
   assert.deepEqual(normalized.solvencyReadings, []);
-  assert.equal(normalized.schemaVersion, 176);
-  assert.equal(normalized.schemaVersion, 176);
+  assert.equal(normalized.schemaVersion, 177);
+  assert.equal(normalized.schemaVersion, 177);
 });
 
 test('the three normalizers are fail-closed and drop what they cannot read', () => {

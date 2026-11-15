@@ -1,40 +1,42 @@
 /**
  * app/core/domain/portfolioReviewRules.js — `RULE-PRV-01` on the shared
- * post-commit spine (ADR-0222, Schema v176).
+ * post-commit spine (ADR-0222, Schema v177, `#/portfolio-review`).
  *
- * THREE CONDITIONS, all derived from the ONE reader (`buildPortfolioReview`)
- * and the live reporting graph (`matrixJointApex` / `strictJointApex`), never
- * invented:
+ * FOUR CONDITIONS, all derived from the ONE reader (`buildPortfolioReview`)
+ * and right-capable authority resolution (`resolvePortfolioAuthority`) over
+ * the live reporting graph:
  *
- *   1. `review-overdue` — a live unit whose latest review is past the declared
- *      cadence, or a live unit with no review whose declared review due date
- *      has passed. Addressed to the OWNING LINE HOLDER
- *      (`owningLineHolderId`), who owns the evidence.
- *   2. `verdict-pending` — a live unit with a current review but no current
- *      verdict. Addressed to the LOWEST JOINT APEX strictly above the owning
- *      line (`matrixJointApex` over the owner's active managers) — the seat
- *      that must judge the portfolio.
- *   3. `execution-slippage` — a live unit whose latest verdict carries an
- *      overdue milestone. Addressed to the same joint apex, which must resolve
- *      the slippage (re-plan, re-verdict, or retire the unit).
+ *   1. `review-overdue` (`review-portfolio`, minRank 4) — a live unit whose
+ *      latest review is past cadence, or never reviewed past due date.
+ *      Addressed to the owning line if rank >= 4, otherwise the lowest
+ *      executive joint apex above its active lines.
+ *   2. `verdict-pending` (`verdict-portfolio`, minRank 5) — a live unit with a
+ *      current review awaiting a CEO/chief keep/fix/sell/exit judgement.
+ *      Lower apexes (ranks 3–4) are never asked; synthetic `LEADER_ID` routes
+ *      explicitly to the chief decision queue + `chief-decision-owed` marker.
+ *   3. `execution-slippage` (`track-portfolio`, minRank 3) — a live unit with
+ *      overdue milestone(s) on its latest verdict. Addressed to the lowest
+ *      joint apex strictly above the owning line holding `rank >= 3`, asking
+ *      only to track/update milestones (never to re-verdict or retire).
+ *   4. `execution-overdue` (`verdict-portfolio`, minRank 5) — a live `sell` or
+ *      `exit` verdict whose expected completion date passed without disposal
+ *      completion. Routed strictly to rank-5 chief authority.
  *
  * OPAQUE ASKS. Delegations roll up above the addressee, so the task title and
  * body name no unit, no person, no currency, and no amount; the signature
- * lives only in the typed `issues-obligation` link. Where no reachable
- * addressee exists on the live graph, the rule writes ONE identity-free
- * `portfolioMarkers` observation and asks nobody.
+ * lives only in the typed `issues-obligation` link. Where authority resolves
+ * to synthetic `LEADER_ID` (`chief-decision-owed`) or no reachable rank-capable
+ * addressee exists, the rule writes ONE identity-free `portfolioReviewMarkers`
+ * observation and issues zero invalid delegations.
  */
 
 import { addDays, dayKey } from '../time.js';
 import { ensureEntityLink } from './automation.js';
-import { LEADER_ID } from './chain.js';
-import { matrixJointApex } from './matrix.js';
+import { buildMatrix } from './matrix.js';
 import {
-  activeManagersOf,
   buildPortfolioReview,
   indexPortfolioReviewAsks,
-  portfolioReviewMatrix,
-  strictJointApex,
+  resolvePortfolioAuthority,
 } from './portfolioReview.js';
 import {
   PRV_CONDITION_KINDS,
@@ -68,29 +70,6 @@ function noteEffect(ctx, out, action, targetType, targetId, summary) {
   }
 }
 
-function liveJointApexForHolders(matrix, holderIds) {
-  if (!matrix) return { ok: false, reason: PRV_MARKER_REASONS.NO_JOINT_APEX, seatIds: [] };
-  const unique = [...new Set(list(holderIds).filter(Boolean))].sort();
-  if (!unique.length) return { ok: false, reason: PRV_MARKER_REASONS.OWNER_OFF_ROSTER, seatIds: [] };
-  const managers = new Set();
-  for (const holderId of unique) {
-    if (!matrix.nodes?.has(holderId)) {
-      return { ok: false, reason: PRV_MARKER_REASONS.OWNER_OFF_ROSTER, seatIds: [] };
-    }
-    const mgrs = activeManagersOf(matrix, holderId);
-    if (!mgrs.length) {
-      return { ok: false, reason: PRV_MARKER_REASONS.NO_JOINT_APEX, seatIds: [] };
-    }
-    for (const m of mgrs) managers.add(m);
-  }
-  const apex = matrixJointApex(matrix, [...managers].sort());
-  const seatIds = (apex.apexIds || []).filter((id) => id && id !== LEADER_ID && matrix.nodes.has(id));
-  if (!seatIds.length) {
-    return { ok: false, reason: PRV_MARKER_REASONS.NO_JOINT_APEX, seatIds: [] };
-  }
-  return { ok: true, reason: null, seatIds };
-}
-
 /**
  * Pure derivation of rule conditions and identity-free observations from the
  * single reader and live matrix. Exported for direct unit testing.
@@ -100,46 +79,46 @@ export function portfolioReviewConditions(state, report, { today, matrix } = {})
   const observations = [];
   if (!report?.units || !today) return { conditions, observations };
 
-  const validSeat = (id) => (id && id !== LEADER_ID && matrix?.nodes?.has?.(id) ? id : null);
-
   for (const unit of report.units) {
     if (unit.status !== 'live') continue;
 
-    /* 1. Review overdue (or never reviewed past the declared due date). */
+    /* 1. Review overdue (`review-portfolio`, minRank 4, holder allowed if rank >= 4). */
     const needsReview = unit.state === 'review-overdue'
       || (unit.state === 'unreviewed' && unit.reviewDueOn <= today);
     if (needsReview) {
       const signature = `prv1:review:${unit.id}`;
-      const owner = validSeat(unit.owningLineHolderId);
-      if (owner) {
+      const auth = resolvePortfolioAuthority(matrix, unit.owningLineHolderId, 4, { allowHolder: true });
+      if (auth.seatIds.length > 0) {
         conditions.push({
           kind: PRV_CONDITION_KINDS.REVIEW_OVERDUE,
           signature,
-          seatIds: [owner],
+          seatIds: auth.seatIds,
           dueOn: addDays(today, L.askDueReviewDays),
         });
-      } else {
-        observations.push({ signature, reason: PRV_MARKER_REASONS.OWNER_OFF_ROSTER });
+      }
+      if (auth.chiefQueue || !auth.ok) {
+        observations.push({ signature, reason: auth.reason || PRV_MARKER_REASONS.NO_JOINT_APEX });
       }
     }
 
-    /* 2. Verdict pending -> joint apex above the owning line. */
+    /* 2. Verdict pending (`verdict-portfolio`, minRank 5, never lower apex). */
     if (unit.state === 'verdict-pending') {
       const signature = `prv1:verdict:${unit.id}`;
-      const apex = liveJointApexForHolders(matrix, [unit.owningLineHolderId]);
-      if (apex.ok && apex.seatIds.length > 0) {
+      const auth = resolvePortfolioAuthority(matrix, unit.owningLineHolderId, 5, { allowHolder: false });
+      if (auth.seatIds.length > 0) {
         conditions.push({
           kind: PRV_CONDITION_KINDS.VERDICT_PENDING,
           signature,
-          seatIds: apex.seatIds,
+          seatIds: auth.seatIds,
           dueOn: addDays(today, L.askDueVerdictDays),
         });
-      } else {
-        observations.push({ signature, reason: apex.reason || PRV_MARKER_REASONS.NO_JOINT_APEX });
+      }
+      if (auth.chiefQueue || !auth.ok) {
+        observations.push({ signature, reason: auth.reason || PRV_MARKER_REASONS.NO_JOINT_APEX });
       }
     }
 
-    /* 3. Execution slippage (overdue milestone on the latest verdict). */
+    /* 3. Execution slippage (`track-portfolio`, minRank 3, milestone tracking only). */
     if (unit.milestonesOverdueN > 0 && unit.latestVerdict) {
       const overdueIds = unit.milestones
         .filter((m) => m.state === 'overdue')
@@ -147,21 +126,68 @@ export function portfolioReviewConditions(state, report, { today, matrix } = {})
         .sort()
         .join(',');
       const signature = `prv1:slippage:${unit.id}:${overdueIds}`;
-      const apex = liveJointApexForHolders(matrix, [unit.owningLineHolderId]);
-      if (apex.ok && apex.seatIds.length > 0) {
+      const auth = resolvePortfolioAuthority(matrix, unit.owningLineHolderId, 3, { allowHolder: false });
+      if (auth.seatIds.length > 0) {
         conditions.push({
           kind: PRV_CONDITION_KINDS.EXECUTION_SLIPPAGE,
           signature,
-          seatIds: apex.seatIds,
+          seatIds: auth.seatIds,
           dueOn: addDays(today, L.askDueSlippageDays),
         });
-      } else {
-        observations.push({ signature, reason: apex.reason || PRV_MARKER_REASONS.NO_JOINT_APEX });
+      }
+      if (auth.chiefQueue || !auth.ok) {
+        observations.push({ signature, reason: auth.reason || PRV_MARKER_REASONS.NO_JOINT_APEX });
+      }
+    }
+
+    /* 4. Sell/exit expected date passed without settlement (`verdict-portfolio`, minRank 5). */
+    if (unit.executionOverdue && unit.latestVerdict) {
+      const signature = `prv1:exit-overdue:${unit.id}:${unit.latestVerdict.id}`;
+      const auth = resolvePortfolioAuthority(matrix, unit.owningLineHolderId, 5, { allowHolder: false });
+      if (auth.seatIds.length > 0) {
+        conditions.push({
+          kind: PRV_CONDITION_KINDS.EXECUTION_OVERDUE,
+          signature,
+          seatIds: auth.seatIds,
+          dueOn: addDays(today, L.askDueExecutionOverdueDays),
+        });
+      }
+      if (auth.chiefQueue || !auth.ok) {
+        observations.push({ signature, reason: auth.reason || PRV_MARKER_REASONS.NO_JOINT_APEX });
       }
     }
   }
 
   return { conditions, observations };
+}
+
+function opaqueTaskText(kind) {
+  if (kind === PRV_CONDITION_KINDS.REVIEW_OVERDUE) {
+    return {
+      title: 'A dated portfolio unit review is owed on the portfolio review register',
+      outcome: `Open the Portfolio Review Register (${PRV_ROUTE}) and record dated measurement evidence for an overdue business unit within your authorized line. This task deliberately carries no unit name, no person, no amount, and no currency because delegations roll up above your seat.`,
+      summary: 'Asked an authorized executive line holder to review an overdue business unit',
+    };
+  }
+  if (kind === PRV_CONDITION_KINDS.EXECUTION_SLIPPAGE) {
+    return {
+      title: 'Overdue portfolio verdict milestones need tracking update on the portfolio review register',
+      outcome: `Open the Portfolio Review Register (${PRV_ROUTE}) and update or record completion on overdue execution milestones for a verdict within your line. This task asks only for milestone tracking and deliberately carries no unit name, no person, no amount, and no currency because delegations roll up above your seat.`,
+      summary: 'Asked the right-capable apex above the owning line to update overdue verdict milestones',
+    };
+  }
+  if (kind === PRV_CONDITION_KINDS.EXECUTION_OVERDUE) {
+    return {
+      title: 'A past-due portfolio sell/exit settlement needs judgement on the portfolio review register',
+      outcome: `Open the Portfolio Review Register (${PRV_ROUTE}) and record final sell/exit completion, extend via a new verdict, or retire a past-due disposal unit. This task deliberately carries no unit name, no person, no amount, and no currency because delegations roll up above your seat.`,
+      summary: 'Asked rank-5 verdict authority to settle or re-judge a past-due sell/exit unit',
+    };
+  }
+  return {
+    title: 'A portfolio unit verdict is owed on the portfolio review register',
+    outcome: `Open the Portfolio Review Register (${PRV_ROUTE}) and record a dated keep/fix/sell/exit judgement for a reviewed business unit. This task deliberately carries no unit name, no person, no amount, and no currency because delegations roll up above your seat.`,
+    summary: 'Asked rank-5 verdict authority to verdict a reviewed unit',
+  };
 }
 
 export function portfolioReviewRule(draft, ctx = {}) {
@@ -173,7 +199,7 @@ export function portfolioReviewRule(draft, ctx = {}) {
   // Full literal switch read required by the pause-permit reach census.
   const conv = normalizePortfolioSettings(draft.settings || {});
   if (conv.portfolioAutoPropagate === false) return [];
-  if (!list(draft.portfolioUnits).length && !list(draft.portfolioMarkers).length) return [];
+  if (!list(draft.portfolioUnits).length && !list(draft.portfolioReviewMarkers).length) return [];
 
   const now = ctx.now instanceof Date ? ctx.now : new Date(ctx.now || Date.now());
   const today = dayKey(now);
@@ -185,9 +211,8 @@ export function portfolioReviewRule(draft, ctx = {}) {
   try {
     const cleanSettings = { ...(draft.settings || {}), activeSeatId: null };
     report = buildPortfolioReview(draft, { now, settings: cleanSettings, seat: null });
-    const built = portfolioReviewMatrix(draft, now, cleanSettings);
-    if (built.error || !built.matrix) return [];
-    matrix = built.matrix;
+    matrix = buildMatrix(draft, { now, settings: cleanSettings });
+    if (!matrix) return [];
   } catch {
     return [];
   }
@@ -196,7 +221,7 @@ export function portfolioReviewRule(draft, ctx = {}) {
   const { conditions, observations } = portfolioReviewConditions(draft, report, { today, matrix });
   const existing = indexPortfolioReviewAsks(draft);
   const openAsks = existing.filter((ask) => ask.task && ask.task.status === 'active');
-  const openMarkers = list(draft.portfolioMarkers).filter((m) => m && !m.resolvedOn);
+  const openMarkers = list(draft.portfolioReviewMarkers).filter((m) => m && !m.resolvedOn);
   if (!conditions.length && !openAsks.length && !observations.length && !openMarkers.length) return [];
 
   const idFactory = typeof ctx.idFactory === 'function'
@@ -235,23 +260,23 @@ export function portfolioReviewRule(draft, ctx = {}) {
     );
   }
 
-  /* 2. Maintain identity-free markers for unaddressable conditions. */
+  /* 2. Maintain identity-free markers for chief-queue obligations & unaddressable conditions. */
   const liveObservationSigs = new Set(observations.map((o) => o.signature));
-  if (Array.isArray(draft.portfolioMarkers)) {
-    for (const marker of draft.portfolioMarkers) {
+  if (Array.isArray(draft.portfolioReviewMarkers)) {
+    for (const marker of draft.portfolioReviewMarkers) {
       if (marker && !marker.resolvedOn && !liveObservationSigs.has(marker.signature)) {
         marker.resolvedOn = today;
       }
     }
   }
   for (const obs of observations) {
-    if (!Array.isArray(draft.portfolioMarkers)) draft.portfolioMarkers = [];
-    const alreadyOpen = draft.portfolioMarkers.some(
+    if (!Array.isArray(draft.portfolioReviewMarkers)) draft.portfolioReviewMarkers = [];
+    const alreadyOpen = draft.portfolioReviewMarkers.some(
       (m) => m && !m.resolvedOn && m.signature === obs.signature,
     );
     if (alreadyOpen) continue;
     const markerId = idFactory('prvmk');
-    draft.portfolioMarkers.push({
+    draft.portfolioReviewMarkers.push({
       id: markerId,
       ruleId: PRV_RULE_ID,
       signature: obs.signature,
@@ -259,8 +284,8 @@ export function portfolioReviewRule(draft, ctx = {}) {
       observedOn: today,
       resolvedOn: null,
     });
-    if (draft.portfolioMarkers.length > L.markersMax) {
-      draft.portfolioMarkers.splice(0, draft.portfolioMarkers.length - L.markersMax);
+    if (draft.portfolioReviewMarkers.length > L.markersMax) {
+      draft.portfolioReviewMarkers.splice(0, draft.portfolioReviewMarkers.length - L.markersMax);
     }
     noteEffect(
       ctx,
@@ -276,6 +301,7 @@ export function portfolioReviewRule(draft, ctx = {}) {
   let issued = 0;
   let deferred = 0;
   for (const condition of conditions) {
+    const copy = opaqueTaskText(condition.kind);
     for (const seatId of condition.seatIds) {
       const key = openKey(condition.signature, seatId);
       if (covered.has(key)) continue;
@@ -296,13 +322,10 @@ export function portfolioReviewRule(draft, ctx = {}) {
       draft.delegations.unshift({
         id: taskId,
         personId: seatId,
-        title: clip('A dated portfolio judgement is owed on the portfolio review register', 200),
-        expectedOutcome: clip(
-          'Open the Portfolio Review Register (#/portfolio) and record the dated judgement owed by your seat — review an overdue business unit you own, verdict a reviewed unit awaiting a keep/fix/sell/exit decision, or resolve slippage on a verdict’s overdue milestones (by re-planning, re-verdicting, or retiring the unit). This task deliberately carries no unit name, no person, no amount, and no currency because delegations roll up above your seat.',
-          2000,
-        ),
+        title: clip(copy.title, 200),
+        expectedOutcome: clip(copy.outcome, 2000),
         authority: 'act-inform',
-        support: `Issued by ${PRV_RULE_ID} from the Portfolio Review Register (#/portfolio). Portfolio governance only; never a performance rating of any person.`,
+        support: `Issued by ${PRV_RULE_ID} from the Portfolio Review Register (${PRV_ROUTE}). Portfolio governance only; never a performance rating of any person.`,
         delegatedOn: today,
         dueOn: condition.dueOn,
         status: 'active',
@@ -331,11 +354,7 @@ export function portfolioReviewRule(draft, ctx = {}) {
         'delegated',
         'delegation',
         taskId,
-        condition.kind === PRV_CONDITION_KINDS.REVIEW_OVERDUE
-          ? `Asked the owning line holder to review an overdue business unit, due ${condition.dueOn}.`
-          : condition.kind === PRV_CONDITION_KINDS.VERDICT_PENDING
-            ? `Asked the joint apex above the owning line to verdict a reviewed unit, due ${condition.dueOn}.`
-            : `Asked the joint apex above the owning line to resolve verdict milestone slippage, due ${condition.dueOn}.`,
+        `${copy.summary}, due ${condition.dueOn}.`,
       );
     }
   }

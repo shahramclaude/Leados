@@ -531,7 +531,7 @@ test('the Settings page prints the register the record holds — figure for figu
   const limits = [...field('limits').querySelectorAll('li')].map((li) => li.textContent);
   assert.equal(limits.length,
     register.switchDefects.declaredButUnread.length + register.switchDefects.readButNotCarried.length + register.fallbackDisagreements.length);
-  assert.ok(limits.some((text) => text.startsWith('portfolioAutoPropagate is declared and stored but read by no rule')));
+  assert.ok(limits.some((text) => text.startsWith('fidelityAutoPropagate is read by a rule but cannot be stored in this version')));
 
   // The text brief opens from the card and carries the same figures.
   cardNode.querySelector('.card-actions button').click();

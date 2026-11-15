@@ -592,7 +592,9 @@ export const NAV = [
     // budget, and protected hours required to deliver it, and where a competing
     // matrix line holds those means locked.
     { route: 'means', label: 'Duty without means', icon: '⚷', badge: 'means' },
-    { route: 'portfolio', label: 'Portfolio review', icon: '◈', badge: 'portfolio' },
+    // ADR-0222: which business units the enterprise keeps, fixes, sells, or
+    // exits on dated evidence and right-capable accountability.
+    { route: 'portfolio-review', label: 'Portfolio review', icon: '◈', badge: 'portfolioReview' },
     // ADR-0121: who answers for each declared duty line when the holder is out.
     { route: 'duty-cover', label: 'Duty coverage', icon: '⛨', badge: 'dutyCoverage' },
     // ADR-0140: who is accountable to whom when one person has several managers.
@@ -761,7 +763,7 @@ const RENDERERS = {
   incentive: (ctx) => renderIncentive(ctx),
   // ADR-0221: the Duty-Without-Means Register.
   means: (ctx) => renderDutyMeans(ctx),
-  portfolio: (ctx) => renderPortfolioReview(ctx),
+  'portfolio-review': (ctx) => renderPortfolioReview(ctx),
   conflicts: (ctx) => renderConflicts(ctx),
   conflict: (ctx, segments) => renderConflictDetail(ctx, safeDecode(segments[1])),
   recognition: (ctx) => renderRecognition(ctx),
@@ -1637,7 +1639,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       // ADR-0221: unscoped duties, overdue means requests controlled by this
       // seat, and unbacked means gaps escalated to this seat as joint apex.
       means: dutyMeansAttentionCount(state, { now: at, settings: state.settings, seat: seatCtx?.seat || null }),
-      portfolio: portfolioReviewAttentionCount(state, { now: at, settings: state.settings, seat: seatCtx?.seat || null }),
+      portfolioReview: portfolioReviewAttentionCount(state, { now: at, settings: state.settings, seat: seatCtx?.seat || null }),
       // Schema v32: drafts written from case facts that still await a human.
       comms: (state.commsDrafts || []).filter((d) => d && d.status === 'draft').length,
       due: dueMeetings(state, at, state.settings).length,
@@ -2184,6 +2186,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       orgdesign: 'Structural design — span, coordination & decision latency',
       voi: 'Information value — what is worth finding out before deciding',
       portfolio: 'Decision portfolio — sequencing, coupling and bottleneck analysis',
+      'portfolio-review': 'Portfolio review — keep, fix, sell, or exit every declared business unit on dated evidence',
       performance: 'Performance recovery — due process, evidence and the cost of waiting',
       survival: 'Delivery survival — how long work actually takes, with censoring and competing risks',
       wait: 'Cost of waiting — what every open item costs per week of waiting, priced and scenario-simulated',
