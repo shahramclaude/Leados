@@ -3,7 +3,7 @@
  * window arithmetic for Skill-Constrained Simultaneous Station Coverage
  * (ADR-0201, Schema v157; extended by ADR-0204, Schema v159).
  *
- * FOUR append-only ledgers and nothing else:
+ * FOUR append-only ledgers, then a fifth for cross-window orders:
  *
  *   1. `stationWindows`     — one declared, contiguous, dated window that says
  *                             which stations must run within it;
@@ -21,11 +21,18 @@
  *                             be manned before A is manned"), with a written
  *                             reason, retirable by the same holder. It declares
  *                             an order; it never staffs either station.
+ *   5. `stationWindowEnables` — one dated declaration that a station in one
+ *                             window must come up before a station in ANOTHER
+ *                             window (ADR-0207, Schema v161), with a written
+ *                             reason and the seat that declared it. Whether it
+ *                             is an order is decided by the calendar on read,
+ *                             never stored: nothing derived lives in this row.
  *
  * NOTHING DERIVED IS STORED — no feasibility verdict, no matching, no deficient
- * set, no station state, no cycle. Every one of those is recomputed on read
- * from the ledgers plus the matrix DAG, so a replayed workspace cannot carry a
- * stale proof of feasibility.
+ * set, no station state, no cycle, no calendar relation, no feed status. Every
+ * one of those is recomputed on read from the ledgers plus the matrix DAG, so a
+ * replayed workspace cannot carry a stale proof of feasibility or a stale
+ * precedence claim.
  *
  * A row that cannot be read exactly is RETAINED and marked invalid, never
  * repaired. Repairing would turn a malformed declaration into a claim a human
@@ -41,6 +48,7 @@ import {
   STATION_COVERAGE_REQUIREMENT_KEYS,
   STATION_COVERAGE_AVAILABILITY_SOURCE_KEYS,
   STATION_COVERAGE_SETTING_KEYS,
+  STATION_COVERAGE_WINDOW_ENABLE_BASE_KEYS,
 } from './stationCoverageRegistry.js';
 
 const ID_RE = /^[A-Za-z0-9:_-]{1,120}$/;
@@ -229,6 +237,85 @@ export function stationEnableError(r, { windows = [], stations = [] } = {}) {
   return null;
 }
 
+/**
+ * A cross-window enabling declaration: the enabler and the dependent are live
+ * stations in two DIFFERENT declared windows. Same file discipline as every
+ * other ledger — dated, reasoned, append-only, retired by its own dated act with
+ * the original never edited — plus the one thing only this ledger carries: it is
+ * an order between two managers' windows, so it stores WHO declared it
+ * (`byId`, the seat that held both lines) and on what basis.
+ *
+ * A row that cannot be read exactly is retained and refused. This validator says
+ * nothing about whether the calendar supports the order: that is derived on
+ * every read by `stationWindowRelation`, so a re-dated or newly declared window
+ * cannot leave a stale verdict in storage.
+ */
+export function stationWindowEnableError(r, { windows = [], stations = [] } = {}) {
+  if (!r || typeof r !== 'object' || r.invalid) return 'Invalid cross-window declaration retained; repair the source register before any prerequisite is claimed.';
+  if (!id(r.id) || !id(r.fromWindowId) || !id(r.toWindowId) || !id(r.fromStationId) || !id(r.toStationId) || !id(r.byId)) {
+    return 'Cross-window declaration identity, both windows, both stations or declaring seat is invalid.';
+  }
+  if (r.fromWindowId === r.toWindowId) {
+    return 'Both stations sit in the same window; that order belongs to the in-window enabling register, so one order has exactly one home.';
+  }
+  const fromWindow = windows.find((w) => w && w.id === r.fromWindowId && !stationCoverageWindowError(w));
+  const toWindow = windows.find((w) => w && w.id === r.toWindowId && !stationCoverageWindowError(w));
+  if (!fromWindow || !toWindow) return 'Cross-window declaration names a window that is not a readable declaration.';
+  const from = stations.find((st) => st && st.id === r.fromStationId && st.windowId === r.fromWindowId && !stationCoverageStationError(st, windows));
+  const to = stations.find((st) => st && st.id === r.toStationId && st.windowId === r.toWindowId && !stationCoverageStationError(st, windows));
+  if (!from) return 'Cross-window declaration names an enabler that is not a readable station in the window it is filed against.';
+  if (!to) return 'Cross-window declaration names a dependent that is not a readable station in the window it is filed against.';
+  if (from.id === to.id) return 'A station cannot enable itself; the declaration is a contradiction, not an order.';
+  if (!STATION_COVERAGE_WINDOW_ENABLE_BASE_KEYS.includes(r.basis)) return 'A cross-window declaration must say whether a joint apex or the operator declared it.';
+  const reason = text(r.reason, STATION_COVERAGE_BOUNDS.enablingReason[1] + 1);
+  if (reason.length < STATION_COVERAGE_BOUNDS.enablingReason[0]) {
+    return `A cross-window declaration needs a written reason of at least ${STATION_COVERAGE_BOUNDS.enablingReason[0]} characters.`;
+  }
+  if (!stamp(r.declaredAt)) return 'Cross-window declaration timestamp is invalid.';
+  if (r.declaredAt < fromWindow.declaredAt || r.declaredAt < toWindow.declaredAt) {
+    return 'Cross-window declaration predates one of its windows; the declaration order is a contradiction.';
+  }
+  if (from.declaredAt && r.declaredAt < from.declaredAt) return 'Cross-window declaration predates its enabler station; the declaration order is a contradiction.';
+  if (to.declaredAt && r.declaredAt < to.declaredAt) return 'Cross-window declaration predates its dependent station; the declaration order is a contradiction.';
+  if (!(r.retiredOn === null || stationCoverageDay(r.retiredOn))) {
+    return 'Cross-window retirement day is unreadable; a retirement may be dated any real day.';
+  }
+  if (!(r.retiredBy === null || id(r.retiredBy))) return 'Cross-window retirement declarer is invalid.';
+  if (r.retiredOn && !r.retiredBy) return 'A retirement must name who retired the declaration.';
+  if (!r.retiredOn && r.retiredBy) return 'A retirement declarer exists with no retirement; the row is a contradiction.';
+  if (r.retiredOn) {
+    const retireReason = text(r.retireReason, 401);
+    if (retireReason.length < 5) return 'A retirement must carry a written reason of at least 5 characters; the original declaration is never edited.';
+  } else if (r.retireReason !== null && r.retireReason !== undefined && r.retireReason !== '') {
+    return 'A retirement reason exists with no retirement; the row is a contradiction.';
+  }
+  return null;
+}
+
+/**
+ * What the calendar proves about a declared cross-window order — computed from
+ * the two window ranges on every read and never stored. The whole vocabulary of
+ * the register below rests on one limit that is printed rather than papered
+ * over: there is NO clock below the day, so an order that would have to be
+ * decided inside one calendar day is not provable here.
+ *
+ *   strict         feeder closes before consumer opens  → an ORDER
+ *   same-day       they meet on exactly one day          → satisfiable, not proven
+ *   overlap        they share more than a boundary day   → satisfiable, not proven
+ *   contradiction  consumer is over before feeder opens  → cannot be met at all
+ */
+export function stationWindowRelation(fromWindow, toWindow) {
+  const from = stationCoverageDay(fromWindow?.fromDay);
+  const fromEnd = stationCoverageDay(fromWindow?.toDay);
+  const to = stationCoverageDay(toWindow?.fromDay);
+  const toEnd = stationCoverageDay(toWindow?.toDay);
+  if (!from || !fromEnd || !to || !toEnd) return null;
+  if (fromEnd < to) return 'strict';
+  if (fromEnd === to) return 'same-day';
+  if (from > toEnd) return 'contradiction';
+  return 'overlap';
+}
+
 /* -------------------------------------------------------------- normalizers */
 
 function normalizeLedger(raw, warnings, name, limit, validate) {
@@ -321,6 +408,47 @@ export function normalizeStationEnables(raw, { windows = [], stations = [] } = {
           row.invalid = true;
           row.error = `More than ${STATION_COVERAGE_LIMITS.enablesPerWindow} live enabling declarations in one window; the excess is retained and refused.`;
         }
+      }
+    }
+  }
+  return rows;
+}
+
+/**
+ * Cross-window declarations: one live row per ordered station pair across all
+ * windows (two live rows would leave the calendar to choose between them), and a
+ * per-window-pair cap beyond which no human can audit the order. Excess rows are
+ * RETAINED and refused, never dropped and never silently truncated.
+ */
+export function normalizeStationWindowEnables(raw, { windows = [], stations = [] } = {}, warnings = []) {
+  const rows = normalizeLedger(raw, warnings, 'stationWindowEnables', STATION_COVERAGE_LIMITS.windowEnables,
+    (r) => stationWindowEnableError(r, { windows, stations }));
+  const live = new Map();
+  const perPair = new Map();
+  for (const row of rows) {
+    if (row.invalid || row.retiredOn) continue;
+    const key = JSON.stringify([row.fromStationId, row.toStationId]);
+    if (live.has(key)) {
+      row.invalid = true;
+      row.error = 'Two live cross-window declarations for one ordered station pair; the register refused rather than picking one.';
+      warnings.push('stationWindowEnables: two live declarations for one ordered station pair. Prerequisites withheld.');
+      continue;
+    }
+    live.set(key, row);
+    const pairKey = JSON.stringify([row.fromWindowId, row.toWindowId]);
+    perPair.set(pairKey, (perPair.get(pairKey) || 0) + 1);
+  }
+  for (const [pairKey, count] of perPair) {
+    if (count <= STATION_COVERAGE_LIMITS.windowEnablesPerPair) continue;
+    const [fromWindowId, toWindowId] = JSON.parse(pairKey);
+    warnings.push(`stationWindowEnables: the window pair ${fromWindowId} → ${toWindowId} carries ${count} live declarations, over the ${STATION_COVERAGE_LIMITS.windowEnablesPerPair} bound; prerequisites withheld until the register is repaired.`);
+    let seen = 0;
+    for (const row of rows) {
+      if (row.invalid || row.retiredOn || row.fromWindowId !== fromWindowId || row.toWindowId !== toWindowId) continue;
+      seen += 1;
+      if (seen > STATION_COVERAGE_LIMITS.windowEnablesPerPair) {
+        row.invalid = true;
+        row.error = `More than ${STATION_COVERAGE_LIMITS.windowEnablesPerPair} live cross-window declarations between one pair of windows; the excess is retained and refused.`;
       }
     }
   }

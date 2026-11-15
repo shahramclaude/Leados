@@ -164,13 +164,13 @@ const pairOf = (report, key) => report.pairs.find((p) => p.pairKey === key);
 /* ---------------------------------------------------------- 1. registration */
 
 test('registration: schema v149 unchanged, the 34th matrix panel, CSV #142, one safe read, declared right and pause permit', () => {
-  assert.equal(SCHEMA_VERSION, 160, 'no schema bump — the register stores nothing');
+  assert.equal(SCHEMA_VERSION, 161, 'no schema bump — the register stores nothing');
   assert.ok(MATRIX_PANELS.some((panel) => panel.key === 'alignment'), 'the alignment panel is on the matrix tab bar');
   const scope = CSV_EXPORTS.find((entry) => entry.key === INTERFACE_ALIGNMENT_CSV_SCOPE);
   assert.ok(scope, 'CSV #142 is registered');
   assert.equal(scope.sensitive, false, 'the export is aggregate-only');
   assert.equal(scope.filenameSlug, INTERFACE_ALIGNMENT_CSV_DESCRIPTOR.filenameSlug);
-  assert.equal(CSV_EXPORTS.length, 148);
+  assert.equal(CSV_EXPORTS.length, 149);
   assert.ok(SAFE_READS.has('matrixInterfaceAlignmentReport'), 'the pure read is a declared safe read');
   assert.ok(!SAFE_READS.has('matrixInterfaceAlignmentScan'), 'the scan is NOT a safe read: it writes');
   assert.equal(ACTION_RIGHTS['govern-interface-alignment'].minRank, 3);

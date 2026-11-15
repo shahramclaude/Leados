@@ -119,11 +119,17 @@ import { normalizeSkillTasks, normalizeSkillActs } from './domain/skillCoverageS
 // declared station-to-station enabling declarations ("A must come up before B").
 // No cycle, order index, co-requisite loop or feasibility verdict is ever stored;
 // the precedence graph is recomputed on every read from the declarations.
+// ADR-0207 (Schema v161): one more append-only ledger — `stationWindowEnables` —
+// for declared CROSS-WINDOW prerequisites (a feeder station in one window, a
+// consumer in another). No calendar relation, feed status, blocked verdict or
+// propagated impossibility is ever stored; every one is derived on read from the
+// two dated window ranges and the feeder's own record.
 import {
   normalizeSkillStationRows,
   normalizeStationAvailability,
   normalizeStationCoverageSettings,
   normalizeStationEnables,
+  normalizeStationWindowEnables,
   normalizeStationWindows,
 } from './domain/stationCoverageSchema.js';
 import { normalizeInterfaceAlignmentSettings } from './domain/interfaceAlignmentSchema.js';
@@ -942,7 +948,16 @@ export {
 // and inventing a closure at upgrade would fabricate a report nobody made and
 // then grade the record against it. Nothing derived is stored either — every
 // bucket, delta, verdict, cause and fingerprint is recomputed on read.
-export const SCHEMA_VERSION = 160;
+// v161 adds the Cross-Window Prerequisite Declaration ledger (ADR-0207): one
+// append-only ledger — `stationWindowEnables` — carrying declared cross-window
+// prerequisites ("this station in Monday's window must come up before that
+// station in Tuesday's"). It starts EMPTY. No prerequisite, calendar relation,
+// order, ambiguity or contradiction is inferred from the windows and stations an
+// upgraded workspace already holds: two adjacent shifts say nothing about which
+// one waits for the other. Nothing derived is stored either — the relation, the
+// feed status and the propagated block are recomputed on every read, so a
+// replayed workspace cannot carry a stale order or a stale impossibility.
+export const SCHEMA_VERSION = 161;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -3162,6 +3177,10 @@ export const COLLECTIONS = [
   // ADR-0204 (Schema v159): declared station-to-station enabling declarations.
   // Nothing derived (no order, cycle or verdict) is stored.
   'stationEnables',
+  // ADR-0207 (Schema v161): declared CROSS-WINDOW prerequisites between a feeder
+  // station in one window and a consumer station in another. Nothing derived (no
+  // calendar relation, feed status, blocked verdict or order) is stored.
+  'stationWindowEnables',
   // ADR-0193 + ADR-0195 (Schema v153 → v155): the Cross-Line Goal Commitment
   // Conflict register. One append-only ledger of dated declarations plus the
   // rule's marker ledger. No overlap, verdict, peak day, capacity sum, target
@@ -7963,6 +7982,8 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
     { windows: state.stationWindows, stations: state.skillStations, people: null }, warnings);
   state.stationEnables = normalizeStationEnables(raw.stationEnables,
     { windows: state.stationWindows, stations: state.skillStations }, warnings);
+  state.stationWindowEnables = normalizeStationWindowEnables(raw.stationWindowEnables,
+    { windows: state.stationWindows, stations: state.skillStations }, warnings);
   state.standardWorkRoutines = normalizeStandardWorkRoutines(raw.standardWorkRoutines, warnings);
   state.standardWorkChecks = normalizeStandardWorkChecks(raw.standardWorkChecks, state.standardWorkRoutines, warnings);
   state.standardWorkTierActs = normalizeStandardWorkTierActs(raw.standardWorkTierActs, state.standardWorkChecks, warnings);
@@ -9368,6 +9389,18 @@ export const MIGRATIONS = {
     goalAttainmentNotes: Array.isArray(v159.goalAttainmentNotes) ? v159.goalAttainmentNotes : [],
     goalAttainmentMarkers: Array.isArray(v159.goalAttainmentMarkers) ? v159.goalAttainmentMarkers : [],
     settings: { ...(v159.settings || {}), ...normalizeGoalAttainmentSettings(v159.settings || {}) },
+  }),
+  // 160 → 161: ADR-0207 adds ONE EMPTY append-only ledger — `stationWindowEnables`
+  // — for declared cross-window prerequisites. No prerequisite, calendar
+  // relation, order, ambiguity or contradiction is inferred from the windows,
+  // stations, availability statements or enabling declarations an upgraded
+  // workspace already holds: two adjacent shifts say nothing about which one
+  // waits for the other, and inventing an order here would fabricate a claim
+  // nobody made — then print a window as blocked by it.
+  160: (v160) => ({
+    ...v160,
+    schemaVersion: 161,
+    stationWindowEnables: Array.isArray(v160.stationWindowEnables) ? v160.stationWindowEnables : [],
   }),
   // 155 → 156: ADR-0196 adds one EMPTY append-only ledger. No active
   // RULE-NPW-01 ask has a receiving-line answer, effort estimate or capacity

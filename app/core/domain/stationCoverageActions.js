@@ -4,7 +4,7 @@
  * never edits a reporting line and never issues a training plan.
  */
 import { activeSeat, buildSeats, canAct } from './seat.js';
-import { matrixLineScopeFor, buildMatrix } from './matrix.js';
+import { matrixLineScopeFor, buildMatrix, matrixJointApex } from './matrix.js';
 import { LEADER_ID } from './chain.js';
 import { buildStationCoverage, stationCoverageBriefText, stationCoverageCsvRows } from './stationCoverage.js';
 import {
@@ -16,13 +16,15 @@ import {
   normalizeStationCoverageSettings,
   stationCoverageAvailabilityError,
   stationEnableError,
+  stationWindowEnableError,
+  stationWindowRelation,
   stationCoverageStationError,
   stationCoverageWindowError,
   stationCoverageDay,
 } from './stationCoverageSchema.js';
 
 const text = (v, max = 400) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
-const LEDGERS = ['stationWindows', 'skillStations', 'stationAvailability', 'stationEnables'];
+const LEDGERS = ['stationWindows', 'skillStations', 'stationAvailability', 'stationEnables', 'stationWindowEnables'];
 
 export function createStationCoverageActions(store, { now, idFactory }) {
   const fail = (error) => ({ ok: false, error });
@@ -260,6 +262,101 @@ export function createStationCoverageActions(store, { now, idFactory }) {
         target.retireReason = note;
       }, { type: 'stations.enable.retired', entity: 'stationCoverage', entityId: enableId,
         summary: 'An enabling declaration was retired with a written reason; the order it imposed is gone, the declaration stays on record.' });
+      return { ok: true, saved: !store.persistError, warning: store.persistError || null };
+    },
+    /**
+     * A CROSS-WINDOW prerequisite (ADR-0207): a station in one window must come
+     * up before a station in another. Two managers' windows are not one holder's
+     * to order, so the declaring seat must hold BOTH lines — the lowest joint
+     * apex of the two window holders — or be the operator view, which is printed
+     * as scribery rather than as a leadership decision. The calendar is not
+     * checked here: whether the order is provable, ambiguous or impossible is
+     * derived on every read, so a record that cannot be read exactly is the only
+     * refusal. An impossible declaration IS recordable, and the register then
+     * prints the contradiction and asks its declarer to repair it.
+     */
+    stationCoverageDeclareWindowEnable(input = {}) {
+      const c = context('declare-station-coverage');
+      if (!c.ok) return c;
+      if (!c.report.clean) return fail(c.report.reasons.join(' '));
+      const fromWindowId = text(input.fromWindowId, 120);
+      const toWindowId = text(input.toWindowId, 120);
+      if (fromWindowId === toWindowId) {
+        return fail('Both stations sit in the same window; that order belongs to the in-window enabling register, so one order has exactly one home.');
+      }
+      const fromWindow = (store.state.stationWindows || []).find((r) => r.id === fromWindowId && !r.invalid && !r.retiredOn);
+      const toWindow = (store.state.stationWindows || []).find((r) => r.id === toWindowId && !r.invalid && !r.retiredOn);
+      if (!fromWindow || !toWindow) return fail('Name two live windows. A prerequisite against a retired window would order work nobody can run.');
+      const liveStations = (store.state.skillStations || []).filter((r) => !r.invalid && !r.retiredOn);
+      const from = liveStations.find((r) => r.id === text(input.fromStationId, 120) && r.windowId === fromWindow.id);
+      const to = liveStations.find((r) => r.id === text(input.toStationId, 120) && r.windowId === toWindow.id);
+      if (!from) return fail('Name a live station in the first window as the enabler — the one that must come up first.');
+      if (!to) return fail('Name a live station in the second window as the dependent — the one that waits.');
+      if (from.id === to.id) return fail('A station cannot enable itself; the declaration is a contradiction, not an order.');
+      const reason = text(input.reason, STATION_COVERAGE_BOUNDS.enablingReason[1]);
+      if (reason.length < STATION_COVERAGE_BOUNDS.enablingReason[0]) return fail(`A cross-window declaration needs a written reason of at least ${STATION_COVERAGE_BOUNDS.enablingReason[0]} characters.`);
+      if ((store.state.stationWindowEnables || []).length >= STATION_COVERAGE_LIMITS.windowEnables) return fail('Cross-window prerequisite register is full. Export the workspace before proceeding.');
+      const live = (store.state.stationWindowEnables || []).filter((r) => !r.invalid && !r.retiredOn);
+      if (live.some((r) => r.fromStationId === from.id && r.toStationId === to.id)) {
+        return fail('A live cross-window declaration for this ordered pair already stands. Retire it first if it is wrong; two live declarations would leave the calendar to choose between them.');
+      }
+      const pairN = live.filter((r) => r.fromWindowId === fromWindow.id && r.toWindowId === toWindow.id).length;
+      if (pairN >= STATION_COVERAGE_LIMITS.windowEnablesPerPair) return fail(`This pair of windows holds at most ${STATION_COVERAGE_LIMITS.windowEnablesPerPair} cross-window declarations.`);
+      const operator = c.seat.fullAccess === true;
+      const matrix = buildMatrix(store.state, { now: c.at, settings: store.state.settings });
+      let basis = 'operator';
+      if (!operator) {
+        const apex = matrixJointApex(matrix, [fromWindow.holderId, toWindow.holderId]);
+        if (!apex.unique || apex.apexId !== c.actorId) {
+          return fail('An order between two windows is not one holder’s to make. Only the seat that holds BOTH windows — their lowest joint apex — can declare it, and the register does not let one manager order another’s work.');
+        }
+        basis = 'joint-apex';
+      }
+      const row = {
+        id: idFactory('station-window-enable'),
+        fromWindowId: fromWindow.id,
+        fromStationId: from.id,
+        toWindowId: toWindow.id,
+        toStationId: to.id,
+        byId: c.actorId,
+        basis,
+        reason,
+        declaredAt: c.at.toISOString(),
+        retiredOn: null,
+        retiredBy: null,
+        retireReason: null,
+      };
+      const error = stationWindowEnableError(row, { windows: store.state.stationWindows || [], stations: store.state.skillStations || [] });
+      if (error) return fail(error);
+      const relation = stationWindowRelation(fromWindow, toWindow);
+      const result = save('stationWindowEnables', row, 'stations.window-enable.declared',
+        'A seat holding both windows declared that a station in one must come up before a station in the other.');
+      if (!result.ok) return result;
+      // The calendar verdict is derived on read; it is reported here only so the
+      // person who just pressed the button is told what the register now proves.
+      return { ...result, relation, warning: result.warning || (relation === 'contradiction'
+        ? 'Recorded. The calendar contradicts this order: the consumer window is over before the feeder window opens, so it can never be met. The register prints that and asks its declarer to repair it.'
+        : relation === 'same-day' || relation === 'overlap'
+          ? 'Recorded. These windows meet or overlap, so the register counts this prerequisite as not proven by the calendar — it supports no claim.'
+          : null) };
+    },
+    stationCoverageRetireWindowEnable(enableId, reason = '') {
+      const c = context('declare-station-coverage');
+      if (!c.ok) return c;
+      const row = (store.state.stationWindowEnables || []).find((r) => r.id === enableId && !r.invalid);
+      if (!row) return fail('That cross-window declaration is not on the register.');
+      const operator = c.seat.fullAccess === true;
+      if (!operator && row.byId !== c.actorId) return fail('Only the seat that declared this prerequisite (or the operator view) can retire it. No successor is inferred.');
+      if (row.retiredOn) return fail('This prerequisite was already retired. Its history remains on record.');
+      const note = text(reason, 400);
+      if (note.length < 5) return fail('Retiring a cross-window declaration needs a written reason of at least 5 characters.');
+      store.update((draft) => {
+        const target = draft.stationWindowEnables.find((r) => r.id === enableId);
+        target.retiredOn = c.report.today;
+        target.retiredBy = c.actorId;
+        target.retireReason = note;
+      }, { type: 'stations.window-enable.retired', entity: 'stationCoverage', entityId: enableId,
+        summary: 'A cross-window prerequisite was retired with a written reason; the order it imposed is gone, the declaration stays on record.' });
       return { ok: true, saved: !store.persistError, warning: store.persistError || null };
     },
     stationCoverageSetConventions(input = {}) {

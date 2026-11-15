@@ -68,7 +68,7 @@ const groups = [
   // availability statement is the person's own act or their line holder's,
   // printed as such. Governing the ask window and disclosure floor is rank 3–5.
   ['read-station-coverage', 'stationCoverageReport stationCoverageCsvRows stationCoverageBriefText'],
-  ['declare-station-coverage', 'stationCoverageDeclareWindow stationCoverageRetireWindow stationCoverageDeclareStation stationCoverageRetireStation stationCoverageDeclareEnable stationCoverageRetireEnable'],
+  ['declare-station-coverage', 'stationCoverageDeclareWindow stationCoverageRetireWindow stationCoverageDeclareStation stationCoverageRetireStation stationCoverageDeclareEnable stationCoverageRetireEnable stationCoverageDeclareWindowEnable stationCoverageRetireWindowEnable'],
   ['declare-station-availability', 'stationCoverageDeclareAvailability stationCoverageWithdrawAvailability'],
   ['govern-station-coverage', 'stationCoverageSetConventions'],
   [STANDARD_WORK_RIGHTS.READ, 'standardWorkReport standardWorkBriefText standardWorkCsvRows standardWorkAttentionCount'],
