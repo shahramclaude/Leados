@@ -347,17 +347,6 @@ function reviewsView(ctx, report, onDone) {
 function linesView(report) {
   const rows = report.lines.map((line) => {
     const attrs = { 'data-testid': `jc-line-${line.managerId}` };
-    if (line.withheld) {
-      // A withheld line prints its reason in the counts' place. Never a zero.
-      return {
-        managerName: line.managerName,
-        reviewsN: String(line.reviewsN),
-        states: h('span', { class: 'small muted' }, line.withheldReason),
-        responses: h('span', { class: 'small muted' }, 'withheld'),
-        departs: h('span', { class: 'small muted' }, 'withheld'),
-        attrs,
-      };
-    }
     return {
       managerName: line.managerName,
       reviewsN: String(line.reviewsN),
@@ -371,7 +360,7 @@ function linesView(report) {
     banner({
       tone: report.totals.withheldLines ? 'info' : 'neutral',
       title: report.totals.withheldLines ? `${report.totals.withheldLines} line(s) withheld below the floor` : 'Every line reaches the floor',
-      body: `A line with fewer than ${L.lineFloorN} reviews prints no state or response counts: a count of one would name a person. Withheld is not zero.`,
+      body: `Lines with fewer than ${L.lineFloorN} reviews are omitted without names or counts. The number of omitted lines is shown above. Aggregates and repeated snapshots can still allow inference; this is not a confidentiality guarantee.`,
     }),
     table({
       caption: 'Per deciding line',
@@ -383,7 +372,7 @@ function linesView(report) {
         { label: 'Departs from answers', key: 'departs' },
       ],
       rows,
-      emptyMessage: 'No line holds a review yet.',
+      emptyMessage: report.totals.withheldLines ? 'No line reaches the disclosure floor.' : 'No line holds a review yet.',
     }),
   );
 }

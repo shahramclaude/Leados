@@ -4306,3 +4306,14 @@ In a matrix it is worse than housekeeping. **Nine switches gate post-commit rule
 **Unverified / limits.** The full 263-suite `npm test` was **not** run this session — the focused pass covered the new suite and the directly adjacent ones only. Real-browser and assistive-technology walkthrough of the panel **[UNVERIFIED]**. A `no-ceiling` currency is *not* solved even when the treasury would want "what would we fund if you gave us X" — that what-if is deliberately absent, not missing by accident.
 
 **Next:** the three Session 274 one-line defects (including the `goalAttainmentRules.js` pause-switch omission that keeps `pause-permits.test.mjs:283` red), then Session 276's cross-window remainder, then heijunka levelling. Rotation after this session favours frontline / mid-manager × single-chain.
+
+
+## 2026-11-15 — Session 292: Just Culture small-line direct disclosure
+
+Doctrine and remote checks passed. Scoped to frontline/mid-manager and director/VP, matrix and single-chain: a withheld line previously exposed both its manager and exact number of reviews. The reader now omits small-line rows entirely and the panel reports the number withheld and warns about inference from aggregates and snapshots. The standalone was rebuilt with the Session 291 modules.
+
+New gap: the record tells users to reassign an orphaned review, but supplies no transfer operation or audit history. Logged as Planned, alongside cross-view complementary disclosure control. The planned RULE-JC spine remains In Progress.
+
+Benchmark [BENCHMARK-UNVERIFIED]: Power BI small-cell suppression and FCSM complementary suppression; this fix does not prevent differencing, so does not claim parity or confidentiality. No new visual or onboarding asset involved.
+
+Verification: `node --test tests/app/just-culture.test.mjs tests/app/standalone.test.mjs`: 15 Just Culture tests passed, standalone 6/7; failure was the outdated 16 MB ceiling after Session 291's previously unbuilt payload. One fix raised the limit to 16.2 MB, retaining the independent density guard; `node --test tests/app/standalone.test.mjs` then passed 7/7. The new test compares stored/derived eligible counts to rendered cells and verifies omitted rows. Full suite and real-browser/AT [UNVERIFIED].

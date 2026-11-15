@@ -365,3 +365,30 @@ test('ADR-0218 gateway: the decide right is refused to a seat below the manager 
   assert.equal(refused.ok, false);
   assert.match(refused.error, /rank window is 1–2; this seat is rank 3/);
 });
+
+
+test('line disclosure omits small groups from the reader and screen while preserving exact eligible counts', () => withDom(() => {
+  const env = withReview();
+  for (let i = 0; i < 2; i++) assert.ok(env.api.justCultureOpen({ ...OPEN, decidingManagerId: 'mia' }).ok);
+  env.sit('kai');
+  assert.ok(env.api.justCultureOpen({ ...OPEN, personId: 'lea', decidingManagerId: 'kai' }).ok);
+  env.sit('dan');
+  const report = env.api.justCultureReport();
+  assert.equal(report.totals.reviewsN, 4);
+  assert.equal(report.totals.withheldLines, 1);
+  assert.equal(report.lines.length, 1);
+  assert.equal(report.lines[0].managerId, 'mia');
+  assert.equal(report.lines[0].reviewsN, 3);
+  assert.equal(report.lines[0].byState['awaiting-decision'], 3);
+  assert.ok(!JSON.stringify(report.lines).includes('kai'));
+  const node = renderJustCulture({ api: env.api, navigate: () => {}, refresh: () => {}, query: new URLSearchParams('view=lines') });
+  const lines = node.querySelector('[data-testid="jc-lines"]');
+  assert.ok(lines.textContent.includes('1 line(s) withheld'));
+  assert.ok(lines.textContent.includes('not a confidentiality guarantee'));
+  assert.ok(!lines.querySelector('[data-testid="jc-line-kai"]'));
+  const row = lines.querySelector('[data-testid="jc-line-mia"]');
+  assert.ok(row);
+  const cells = [...row.querySelectorAll('td')].map((cell) => cell.textContent.trim());
+  assert.equal(cells[1], String(report.lines[0].reviewsN));
+  assert.ok(cells[2].startsWith(String(report.lines[0].byState['awaiting-decision'])));
+}));

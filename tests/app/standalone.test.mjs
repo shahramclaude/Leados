@@ -396,7 +396,9 @@ test('standalone artifact exists and is a single inline HTML document', () => {
   // modules = 17,162 bytes per module, still far below the unchanged 24,000
   // density guard. Ceiling moves 15,650,000 -> 16,000,000 only because real
   // capability was added; the density bound still catches a duplication.
-  assert.ok(bytes < 16_000_000, `standalone file is unexpectedly large (${bytes} bytes)`);
+  // ADR-0218 adds the Just Culture modules and its embedded method illustration.
+  // The rebuilt artifact is 16,047,132 bytes; retain the independent density guard.
+  assert.ok(bytes < 16_200_000, `standalone file is unexpectedly large (${bytes} bytes)`);
   // Derived from the folder, not from a list in this file: the day a panel adds
   // a diagram, an enumerator that names the old two would still pass. Same
   // lesson the build script learned in ADR-0186.
