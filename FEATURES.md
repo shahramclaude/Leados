@@ -1,3 +1,12 @@
+## 2026-11-15 · Session 282: Cross-window prerequisites on the screen — what the calendar proves, and what it refuses to claim (ADR-0207 · Schema v161 unchanged · `RULE-SSC-01` extended · CSV #148 extended)
+
+- **What it answers.** The enabling register (ADR-0204) could order two stations inside ONE window; real work crosses shifts. Can Monday's feeder in one manager's window be said to precede Tuesday's consumer in another's — and can the record prove it? Live at `#/standard-work?panel=stations`.
+- **The declaration.** One dated, written declaration between two DIFFERENT windows, made only by the seat that holds both — the lowest joint apex of the two window holders — or by the operator view, which is printed as scribery. A declaration the calendar contradicts is still recordable, then proved and sent back to its declarer.
+- **The decision procedure.** The record holds no clock below the day, so the calendar decides on read: `strict` (feeder closes before the consumer opens — the only relation that is an ORDER), `same-day` and `overlap` (satisfiable, not proven), `contradiction` (can never be met). A consumer whose proven feeder cannot be manned reads `blocked`, never `feasible`; its station reads `blocked-by-enabler` while still printing its own real counts; impossibility propagates through chains to a fixpoint.
+- **Two claims, never one word.** `figuresComplete` (the printed figures are the computed figures) and `ordersComplete` (every declared prerequisite is decided by the calendar) are printed separately, with every class counted and reconciled on read.
+- **Disclosure.** Only the two windows' holders and the operator read who must come up first and the declared reason. A feeder window outside the seat's reach reads `withheld` — the relation printed, the feeder's staffing counted, not guessed (a reader defect this session found and fixed).
+- **Not built.** No clock below the day, no sequential-window levelling, no rostering or assignment. Benchmark parity with APS/MES inter-shift sequencing is **[BENCHMARK-UNVERIFIED]**; real-browser/AT walkthrough is **[UNVERIFIED]**.
+
 ## 2026-11-15 · Session 278: Cross-line work/rest recovery ledger ([ADR-0209](./docs/adr/0209-cross-line-work-rest-recovery.md) · Schema v163 · `RULE-WRR-01` · CSV #151)
 
 - **What it answers.** How long a person was actually off between the end of one manager's shift and the start of another's. Live at `#/standard-work?panel=rest`. Frontline primary; a manager rosters above the line; a director declares the limits.

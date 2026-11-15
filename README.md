@@ -1,3 +1,11 @@
+## 2026-11-15 — Monday's feeder and Tuesday's consumer: the order a shift calendar can prove
+
+Open **Governance → Leader standard work → Simultaneous stations** (`#/standard-work?panel=stations`, [ADR-0207](./docs/adr/0207-cross-window-enabling-declarations.md), Schema v161, CSV #148). A window's holder can already order two stations **inside** one shift. Work crosses shifts: the feed line runs on Monday and the pack station on Tuesday. Select **Declare cross-shift prerequisite** on the window that waits, name the station in another window that must come up first, and write the reason. Only a seat that holds **both** windows is offered the control, and an operator view that scribes it says so.
+
+The register then decides the declaration from the calendar, at the only resolution the record holds — whole days. A feeder window that **closes before** the consumer opens is a proven order. Windows that meet on one day or overlap are **counted and named as unproven**: the record has no clock below the day, so no claim rests on them. A consumer window that is over before its feeder opens is **contradicted** — the order can never be met, and the register says exactly that, then asks its declarer to repair it. A window whose proven feeder cannot be manned is never printed feasible.
+
+Two claims are printed separately, because they are different facts: the figures are complete, and every declared order is proven by the calendar. Nothing on the screen schedules a person or moves a station.
+
 ## 2026-11-15 — Two managers, two fine rosters, one person with seven hours off
 
 Open **Leader standard work → Work & rest** (`#/standard-work?panel=rest`, [ADR-0209](./docs/adr/0209-cross-line-work-rest-recovery.md), Schema v163, CSV #151). A lead **records a shift** for a line they hold: who, which line, the time zone of the clock on the wall, start and end. Press **Check against the record** first: the ledger merges that person's shifts across every reporting line and says, for example, "7 h 10 min of rest … the declared minimum is 11 h — start no earlier than 09:50". A shift that creates a conflict which can still be prevented is saved only with the reason written down, and the seat above both lines is asked to decide which shift moves.
