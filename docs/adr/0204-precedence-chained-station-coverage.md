@@ -92,7 +92,14 @@ could drop a load-bearing station.
 `#/standard-work?panel=stations` prints the declarations with who must come up
 first and the declared reason, per-cycle banners (co-requisite loop vs
 unsatisfiable, in words), and a per-window precedence summary; the holder may
-declare and retire from the card. `RULE-SSC-01` gains a third condition:
+declare and retire from the card. The print is two-depth. The holder (or the
+operator) reads every row: the from/to station, the declared reason, the cycle
+membership, the record ids. Covered ancestors read counts only — live and
+retired tallies, cycle counts and whether each is unsatisfiable — never a
+station title, a reason, a member or a record id; the reasons fall back to a
+generic, title-free wording. (The disclosure floor itself governs people, not
+stations; the two-depth rule here guards declaration row detail.) The brief and
+CSV print the counts from the same reader and stay aggregate-only. `RULE-SSC-01` gains a third condition:
 `precedence-cycle` files ONE dated ask per unsatisfiable cycle to the **window
 own holder** (only the declarer may repair a declaration contradiction), it
 names the cycle and the three permissible answers — retire one enabling
@@ -104,8 +111,12 @@ Self-closing, idempotent per signature, bounded at 6 per commit, pause-governed
 on every path. CSV #148 extends with `unsatisfiable_windows_n`,
 `enabling_edges_n`, `precedence_cycles_n` (aggregate only, no station title,
 reason, person, manager or record id). The brief prints the same counts from
-the same reader; the enable rows narrow to what the seat's span may see and
-never cross the disclosure floor into names.
+the same reader. One further gate was landed with this ADR after verification
+caught it in the act: the seat engine keeps `scope`/`lineScope` as Sets, and a
+reachable check that trusted `Array.isArray` alone silently collapsed every
+ancestor's reach to themselves — every subordinate window was invisible to the
+roll-up. The reader now accepts Sets and arrays, and a regression test pins the
+ancestor view end to end (verdict visible, counts visible, declarations not).
 
 ### What is deliberately NOT claimed
 
@@ -135,7 +146,7 @@ never cross the disclosure floor into names.
 
 ## Verification
 
-`tests/app/station-coverage.test.mjs` — 26/26, including: migration 156→159 is
+`tests/app/station-coverage.test.mjs` — 27/27, including: migration 156→159 is
 additive and infers nothing; the normalizer refuses self-edges, ghosts, short
 reasons and duplicate ordered pairs; a mixed concurrent/sequential cycle reads
 `unsatisfiable` (no matching claimed, distinct from capacity infeasibility);
@@ -144,7 +155,13 @@ untouched; the witness prints its enabler-closure as found (one closed, one
 not); a dangling declaration induces no order; declarations through the real
 store are holder-only, duplicate-refused, retirable once, with the original
 reason preserved; RULE-SSC-01 asks the holder per unsatisfiable cycle, never
-for a co-requisite loop, closes itself, and stays idempotent. Adjacent suites
+for a co-requisite loop, closes itself, and stays idempotent; an ancestor below
+the disclosure floor reads counts only (proven over an end-to-end seat read); a
+proven unsatisfiable report no longer flips the figures-complete claim to false
+(any other printed reason still does). `figuresComplete` therefore separates a
+proven contradiction from a gap in the evidence, matching the two-facts doctrine.
+The same Set/Array reach fix was applied to the succession register's scope
+check. Adjacent suites
 (core 56/56 with csv; standalone 7/7 after rebuild at 13,393,040 bytes / 848
 modules), canonical boundary, docs links and a11y all pass. Store-level
 walkthrough: declare → verdict flips to `unsatisfiable` → panel/brief/CSV

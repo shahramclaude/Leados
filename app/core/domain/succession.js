@@ -990,7 +990,9 @@ export function successionView(report, { seat = null, nodeId = null } = {}) {
   const altitudeKey = seat?.altitudeKey || 'chief';
   const stance = stanceByKey(altitudeKey);
   const disclosure = disclosureFor(stance.disclosure);
-  const scopeIds = seat && Array.isArray(seat.scope) && seat.scope.length ? new Set(seat.scope) : null;
+  // The seat engine keeps `scope` as a Set (buildSeats); accept Sets and arrays.
+  const seatScope = Array.isArray(seat?.scope) ? seat.scope : seat?.scope instanceof Set ? [...seat.scope] : [];
+  const scopeIds = seat && seatScope.length ? new Set(seatScope) : null;
 
   const scopeOf = (span) => {
     if (!scopeIds) return 'all';

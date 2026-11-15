@@ -133,15 +133,20 @@ function witnessBlock(row) {
 function precedenceBanners(row) {
   const p = row.precedence;
   if (!p) return [];
+  const detailed = p.detail !== false;
   const out = [];
   for (const cycle of p.cycles) {
-    const chain = [...cycle.stationTitles, cycle.stationTitles[0]].map((t) => `“${t}”`).join(' → ');
+    const chain = detailed && cycle.stationTitles.length ? [...cycle.stationTitles, cycle.stationTitles[0]].map((t) => `“${t}”`).join(' → ') : null;
     out.push(banner({
       tone: cycle.unsatisfiable ? 'bad' : 'warn',
       title: cycle.unsatisfiable ? 'Unsatisfiable enabling cycle — no running order exists' : 'Co-requisite loop — all simultaneous',
       body: cycle.unsatisfiable
-        ? `${chain}. At least one member is sequential, so the cycle cannot collapse onto the shared instant: no station in it can come up first, whatever anyone is assigned. Retire one enabling declaration, or retire or re-declare one station. This is a contradiction in the declarations, not a shortage of people.`
-        : `${chain}. Every member is concurrent, so the declarations collapse onto the shared simultaneous instant and are satisfiable by it. No order claim is made or needed inside one instant, and nothing here is a defect.`,
+        ? (chain
+          ? `${chain}. At least one member is sequential, so the cycle cannot collapse onto the shared instant: no station in it can come up first, whatever anyone is assigned. Retire one enabling declaration, or retire or re-declare one station. This is a contradiction in the declarations, not a shortage of people.`
+          : 'At least one member of the cycle is sequential, so the cycle cannot collapse onto the shared instant: no running order exists, whatever anyone is assigned. The members and declarations are withheld — only the window’s holder or the local operator can read them. This is a contradiction in the declarations, not a shortage of people.')
+        : (chain
+          ? `${chain}. Every member is concurrent, so the declarations collapse onto the shared simultaneous instant and are satisfiable by it. No order claim is made or needed inside one instant, and nothing here is a defect.`
+          : 'Every member is concurrent, so the declarations collapse onto the shared instant and are satisfiable by it. The members are withheld — only the window’s holder or the local operator can read them. Nothing here is a defect.'),
     }));
   }
   if (p.danglingN) {
@@ -166,7 +171,7 @@ function enablingSection(ctx, row, report) {
     attrs: { 'data-testid': `station-precedence-${row.windowId}` },
     actions,
     body: h('div', { class: 'stack' },
-      p.liveN
+      (p.detail !== false) && p.liveN
         ? table({ caption: `Enabling declarations in ${row.label}`, columns: [
             { key: 'fromTitle', label: 'Must come up first' },
             { key: 'toTitle', label: 'Waits for it' },
@@ -174,7 +179,9 @@ function enablingSection(ctx, row, report) {
             ...(canRetire ? [{ key: 'retire', label: '', render: (e) => h('button', { type: 'button', class: 'btn btn-ghost btn-small', 'data-testid': `station-enable-retire-${e.id}`, onClick: () => retireEnable(ctx, e) }, 'Retire…') }] : []),
           ], rows: p.edges || [],
           emptyMessage: 'No live enabling declaration in this window.' })
-        : h('p', { class: 'muted small' }, 'Declared enabling declarations appear here with who must come up first. Nothing is inferred from the station register: an interlock nobody declared does not exist.'),
+        : p.detail === false
+          ? h('p', { class: 'muted small' }, 'Declaration rows are withheld: only the window’s holder or the local operator can read who-must-come-first, the declared reason or the members of any cycle. The counts above are the honest roll-up for a span.')
+          : h('p', { class: 'muted small' }, 'Declared enabling declarations appear here with who must come up first. Nothing is inferred from the station register: an interlock nobody declared does not exist.'),
       ...precedenceBanners(row),
     ),
   });

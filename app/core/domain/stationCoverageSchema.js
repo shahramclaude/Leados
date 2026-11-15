@@ -329,7 +329,10 @@ export function normalizeStationEnables(raw, { windows = [], stations = [] } = {
 
 /* -------------------------------------------------- condition signatures */
 
-/** A deterministic, opaque condition signature. No names, ids or free text. */
+/** A deterministic, opaque condition signature: kind + the record ids needed
+ * for idempotency, pipe-joined and pipe-escaped. It never carries a name, a
+ * reason or free text. Note: it DOES carry record ids (window id, station
+ * ids) by construction — it is opaque to a reader but not id-free. */
 export function stationCoverageSignature(kind, parts) {
   return `${STATION_COVERAGE_ASK_SUMMARY_PREFIX}${kind}:${parts.map((p) => String(p ?? '').replace(/\|/g, '/')).join('|')}`;
 }

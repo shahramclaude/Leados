@@ -82,7 +82,10 @@ import {
 const byKey = (rows) => new Map(rows.map((r) => [r.key, r]));
 const VERDICT = byKey(STATION_COVERAGE_VERDICTS);
 const STATE = byKey(STATION_COVERAGE_STATION_STATES);
-const list = (v) => (Array.isArray(v) ? v : []);
+// The seat engine keeps `scope`/`lineScope` as Sets; an Array.isArray check
+// alone would silently collapse every ancestor's reach to just the actor,
+// hiding every subordinate's windows from the roll-up. Accept both.
+const list = (v) => (Array.isArray(v) ? v : v instanceof Set ? [...v] : []);
 const round1 = (n) => Math.round(n * 10) / 10;
 
 /* ------------------------------------------------------- exact integer flow */
@@ -341,8 +344,12 @@ export function buildStationCoverage(state, { now = new Date(), seat = null } = 
     const unsatisfiableCycles = cycles.filter((c) => c.unsatisfiable);
     const coRequisiteLoopsN = cycles.length - unsatisfiableCycles.length;
     for (const cycle of unsatisfiableCycles) {
-      const chain = [...cycle.stationTitles, cycle.stationTitles[0]].map((t) => `“${String(t).slice(0, 60)}”`).join(' → ');
-      reasons.push(`The enabling declarations form a cycle: ${chain}. At least one station in it is sequential, so the cycle cannot collapse onto the shared simultaneous instant — no running order exists whatever anyone is assigned. Retire one enabling declaration or one station.`);
+      if (windowDetail) {
+        const chain = [...cycle.stationTitles, cycle.stationTitles[0]].map((t) => `“${String(t).slice(0, 60)}”`).join(' → ');
+        reasons.push(`The enabling declarations form a cycle: ${chain}. At least one station in it is sequential, so the cycle cannot collapse onto the shared simultaneous instant — no running order exists whatever anyone is assigned. Retire one enabling declaration or one station.`);
+      } else {
+        reasons.push('The enabling declarations form a cycle containing at least one sequential station: no running order exists whatever anyone is assigned. The declarations contradict each other, not the roster. The members are not named here — only the window’s holder or the local operator can read them; retire one enabling declaration, or retire or re-declare one station.');
+      }
     }
     if (!clean) reasons.push(...globalReasons);
     if (!holderOn) reasons.push('The window’s holder is no longer on the active roster; nobody is substituted.');
@@ -606,26 +613,34 @@ export function buildStationCoverage(state, { now = new Date(), seat = null } = 
         ? 'Sequential stations are counted against availability but excluded from the simultaneous proof: whether two of them collide inside the window is a levelling question, not a Hall question.'
         : null,
       // The declared enabling structure of this window, printed whether or not
-      // the verdict turned on it. Titles are printed only to the window's own
-      // holder (or the operator); an ancestor below the disclosure floor reads
-      // counts, never names.
+      // the verdict turned on it — but at two depths. The holder (or the local
+      // operator) reads the rows: station identity, the declared reason and any
+      // cycle membership. Anyone else reading through their reach reads counts
+      // only: how many declarations are live, how many cycles exist and whether
+      // they are unsatisfiable — never the station identity, the reason, or the
+      // record ids. The disclosure floor governs people, not stations, but
+      // declaration detail is row-level evidence a span should not quietly
+      // inherit.
       precedence: {
         declaredN: windowEnables.length,
         liveN: liveEnables.length,
         retiredN: windowEnables.length - liveEnables.length,
         danglingN: danglingEnablesN,
-        cycles: cycles.map((c) => ({ stationIds: c.stationIds, stationTitles: c.stationTitles, allConcurrent: c.allConcurrent, unsatisfiable: c.unsatisfiable })),
+        detail: windowDetail,
+        cycles: windowDetail
+          ? cycles.map((c) => ({ stationIds: c.stationIds, stationTitles: c.stationTitles, allConcurrent: c.allConcurrent, unsatisfiable: c.unsatisfiable }))
+          : cycles.map((c) => ({ stationIds: [], stationTitles: [], allConcurrent: c.allConcurrent, unsatisfiable: c.unsatisfiable })),
         unsatisfiableCyclesN: unsatisfiableCycles.length,
         coRequisiteLoopsN,
         enablerClosed: witness ? witness.enablerClosed : null,
-        edges: liveEnables.map((e) => ({
+        edges: windowDetail ? liveEnables.map((e) => ({
             id: e.id,
             fromStationId: e.fromStationId,
             toStationId: e.toStationId,
             fromTitle: stationById.get(e.fromStationId)?.title || 'Station off the register',
             toTitle: stationById.get(e.toStationId)?.title || 'Station off the register',
             reason: e.reason,
-        })),
+        })) : [],
       },
     });
   }
@@ -697,7 +712,11 @@ export function buildStationCoverage(state, { now = new Date(), seat = null } = 
     undeclaredN: windowRows.reduce((n, r) => n + r.undeclaredN, 0),
   };
 
-  const figuresComplete = clean && windowRows.every((r) => r.verdict !== 'unproven' && !r.reasons.length);
+  // Proven windows carry a reason by construction: the unsatisfiable-cycle
+  // report is a proof, not a gap in the figures. It therefore does not block
+  // "figures complete" — any OTHER printed reason does, exactly as before.
+  const PROVEN_REASON = /^The enabling declarations form a cycle/;
+  const figuresComplete = clean && windowRows.every((r) => r.verdict !== 'unproven' && r.reasons.every((reason) => PROVEN_REASON.test(reason)));
   const claims = {
     countsReconcile: STATION_COVERAGE_VERDICTS.reduce((n, v) => n + verdictCounts[v.key], 0) === windowRows.length
       && STATION_COVERAGE_STATION_STATES.reduce((n, s) => n + (stationStateCounts[s.key] || 0), 0) === totals.stationsN,
@@ -786,7 +805,11 @@ export function stationCoverageBriefText(report) {
     if (row.precedence.declaredN) {
       lines.push(`   enabling declarations: ${row.precedence.liveN} live${row.precedence.retiredN ? ` (${row.precedence.retiredN} retired, retained)` : ''} · cycles: ${row.precedence.cycles.length} (${row.precedence.unsatisfiableCyclesN} unsatisfiable, ${row.precedence.coRequisiteLoopsN} co-requisite)${row.precedence.danglingN ? ` · ${row.precedence.danglingN} pointing at a retired station (carried as order, no effect)` : ''}`);
       for (const cycle of row.precedence.cycles) {
-        lines.push(`   ${cycle.unsatisfiable ? 'UNSATISFIABLE' : 'co-requisite'} cycle: ${(cycle.stationTitles || cycle.stationIds).join(' → ')} → ${(cycle.stationTitles || cycle.stationIds)[0]}`);
+        if (!cycle.stationTitles.length) {
+          lines.push(`   ${cycle.unsatisfiable ? 'UNSATISFIABLE' : 'co-requisite'} cycle: members withheld — only the window’s holder or the local operator can read them`);
+          continue;
+        }
+        lines.push(`   ${cycle.unsatisfiable ? 'UNSATISFIABLE' : 'co-requisite'} cycle: ${cycle.stationTitles.join(' → ')} → ${cycle.stationTitles[0]}`);
       }
     }
     if (row.witness) {

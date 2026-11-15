@@ -670,3 +670,48 @@ test('RULE-SSC-01 asks the window holder to resolve an unsatisfiable enabling cy
   stationCoverageRule(draft2, { event: { type: 'stations.enable.declared' }, now: NOW, idFactory: (p) => `${p}-c5` });
   assert.equal(indexStationCoverageAsks(draft2).filter((a) => a.signature.startsWith('ssc1:precedence-cycle')).length, 0);
 });
+
+test('an ancestor reading a subordinate’s window sees the precedence counts, never the declarations themselves', () => {
+  const patch = {
+    ...HALL,
+    skillStations: [
+      station('S1', 'W1', 'ann', 'T1'),
+      station('S2', 'W1', 'ann', 'T2', { requirement: 'sequential' }),
+      station('S3', 'W1', 'ann', 'T3'),
+    ],
+    stationEnables: [enable('e1', 'W1', 'ann', 'S1', 'S2', { reason: 'The drill interlock is not to be bypassed by whoever draws the roster.' }),
+      enable('e2', 'W1', 'ann', 'S2', 'S1')],
+  };
+  const state = fixture(patch);
+  // Ann's own read sees the rows in full.
+  const own = buildSeats(state).byId.get('ann');
+  const mine = buildStationCoverage(state, { now: NOW, seat: own }).windows[0];
+  assert.equal(mine.precedence.detail, true);
+  assert.equal(mine.precedence.edges.length, 2);
+  assert.ok(mine.precedence.edges[0].reason.includes('drill interlock'));
+
+  // Ada, Ann's line holder, reads below the default floor for a four-person
+  // pool (her altitude floors at 6): counts only, never the declarations.
+  const ada = buildSeats(state).byId.get('ada');
+  assert.ok(ada, 'the VP seat exists');
+  const report = buildStationCoverage(state, { now: NOW, seat: ada });
+  const row = report.windows[0];
+  assert.equal(row.verdict, 'unsatisfiable', 'the declaration contradiction is proven, not hidden');
+  assert.equal(row.precedence.detail, false);
+  assert.equal(row.precedence.liveN, 2, 'counts still roll up');
+  assert.equal(row.precedence.cycles.length, 1);
+  assert.equal(row.precedence.unsatisfiableCyclesN, 1);
+  assert.deepEqual(row.precedence.cycles[0].stationTitles, [], 'cycle membership is withheld');
+  assert.deepEqual(row.precedence.cycles[0].stationIds, []);
+  assert.deepEqual(row.precedence.edges, [], 'no from/to titles, reasons or record ids escape reach');
+  assert.ok(row.reasons.some((r) => r.startsWith('The enabling declarations form a cycle')));
+  assert.ok(!row.reasons.some((r) => r.includes('Station S1') || r.includes('Station S2')), 'no station title in the reasons');
+  const brief = stationCoverageBriefText(report);
+  assert.ok(brief.includes('members withheld'));
+  assert.ok(!brief.includes('Station S1') && !brief.includes('drill interlock'), 'nothing row-level in the brief');
+  const csv = JSON.stringify(stationCoverageCsvRows(report));
+  assert.ok(!csv.includes('Station S1') && !csv.includes('drill interlock'), 'nothing row-level in the CSV');
+  // And the holder reads exactly what the ancestor could not.
+  const full = stationCoverageBriefText(buildStationCoverage(state, { now: NOW, seat: own }));
+  assert.ok(full.includes('Station S1'));
+});
