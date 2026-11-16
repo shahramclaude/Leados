@@ -253,6 +253,15 @@ export const RECORD_POLICIES = Object.freeze({
   riskAppetiteStatements: { classKey: 'portfolio', detailCeiling: 4, label: 'Declared appetite statements — one exact ceiling per domain, measure and currency (report only)', route: '#/risk-appetite' },
   riskDeclarations: { classKey: 'portfolio', detailCeiling: 4, label: 'Declared retained exposure per live risk, with its written basis (report only)', route: '#/risk-appetite' },
   riskAppetiteMarkers: { classKey: 'portfolio', detailCeiling: 4, label: 'Risk-appetite observation markers — no joint seat, declarer departed (identity-free)', route: '#/risk-appetite' },
+  // ADR-0229: a capability case, its priced options and its acts are PORTFOLIO
+  // material — the boundary of the firm is not a unit's own instrument. Each row
+  // is span-scoped by its owner and lines inside the register's reader, so a
+  // seat above the director altitude reads counts and the register narrows the
+  // detail itself. The markers carry no joint seat and no declarer at all.
+  sourcingCases: { classKey: 'portfolio', detailCeiling: 4, label: 'Declared capability cases — currency, horizon, discount rate and asset specificity (report only)', route: '#/sourcing' },
+  sourcingOptions: { classKey: 'portfolio', detailCeiling: 4, label: 'Priced sourcing options — a mode, its exact cost lines and its declared safeguards', route: '#/sourcing' },
+  sourcingActs: { classKey: 'portfolio', detailCeiling: 4, label: 'Boundary decisions and independent grades recorded against a frozen case', route: '#/sourcing' },
+  sourcingMarkers: { classKey: 'portfolio', detailCeiling: 4, label: 'Capability-sourcing observation markers — no joint seat, no chief apex (identity-free)', route: '#/sourcing' },
   // ADR-0220: the variable-pay register. A PLAN, its MEASURES and its READINGS
   // are unit material: the funding line and the line above read the envelope and
   // the evidence, and above the director altitude the register is counts and
@@ -906,6 +915,17 @@ export const ACTION_RIGHTS = Object.freeze({
   'read-risk-appetite': { minRank: 3, maxRank: 5, label: 'Read the enterprise risk-appetite register: every declared ceiling, its measured population and whether coverage is complete' },
   'declare-risk-appetite': { minRank: 4, maxRank: 5, label: 'Declare, retire or review an appetite statement for a risk domain, and scan the register for owed decisions' },
   'carry-risk-appetite': { minRank: 3, maxRank: 5, label: 'Declare or withdraw the retained exposure of one live risk whose owner you hold — never your own' },
+  // ADR-0229: the capability sourcing & firm-boundary register. Reading is
+  // portfolio material (rank 3+), matching the record class. Recording an option
+  // is a manager's act, narrowed inside the action to a line the case names and
+  // refused for the joint chief apex that will decide it. Deciding is the chief
+  // altitude alone — and where the graph holds no chief seat the register prints
+  // the decision as owed rather than promoting anybody into it. Grading is an
+  // independent review above the decision.
+  'read-capability-sourcing': { minRank: 3, maxRank: 5, label: 'Read the capability sourcing register: where each declared capability sits relative to the boundary of the firm, and whether its comparison is complete' },
+  'record-capability-sourcing': { minRank: 2, maxRank: 5, label: 'Declare a capability case, record a priced option on a line you hold, withdraw a case, or scan the register' },
+  'decide-capability-sourcing': { minRank: 5, maxRank: 5, label: 'Decide the boundary of the firm for a capability — make, buy, partner or hybrid — on one exact comparison' },
+  'grade-capability-sourcing': { minRank: 4, maxRank: 5, label: 'Grade a case’s frozen assumptions against the cost that actually landed — never your own decision or your own option' },
   // ADR-0220: the variable-pay design & incentive integrity register. Reading is
   // open to the manager altitude because a team envelope is a manager's own
   // instrument; the row class and the span filter decide what is printed. Every

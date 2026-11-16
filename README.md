@@ -1,3 +1,21 @@
+## 2026-11-16 — The firm never wrote down where its own boundary sits
+
+**CEO / C-suite → Capability sourcing** (`#/sourcing`) is the register where an enterprise records a capability it must either own or rent, prices the sides on **one** basis, and prints the hold-up exposure whether or not anybody decided.
+
+The question is not "build or buy" in the abstract. It is: **for this capability, over this horizon, at this discount rate, in this currency, what does each side actually cost — and what protects us at renewal?**
+
+So the register refuses, and says why. A **third decimal place** is refused. An option in **another currency** is refused — there is no exchange rate on this record, and the register will not invent one. A cost line that **does not belong to its mode** is refused, and so is a zero-cost or duplicated line. Two sides priced over **different horizons or discount rates** are kept as rows and read `not-comparable` with the exact field that differs — a five-year build set against a one-year licence is not a comparison, and the difference is printed rather than reconciled. **One side is not a comparison either**: four `make` options are still one side of the question, and the register reads `one-sided` and names the mode that is missing.
+
+That is why no `cheapest` figure exists until a second side does. A "cheapest" of one is a price wearing the costume of a decision.
+
+**The money is exact.** Every cost is an integer number of cents, capped, and the present value is computed in exact integer arithmetic — one-time outlay at stand-up, recurring cost as a mid-period annuity over the declared horizon, Actual/365 Fixed, rounded once at the end. A test proves the total is **identical however the cost lines were ordered**, which is the property a spreadsheet cannot promise and the reason a decided premium can be trusted three years later.
+
+**The hold-up is printed, not remembered.** Each option's declared safeguards are matched against the case's declared asset specificity, and a safeguard that cannot answer it is **not credited** — an exit plan cannot answer `site` specificity, an escrow cannot move a plant. The exposure appears on the row whether the case is decided, owed, or one-sided, because the risk does not wait for the paperwork.
+
+**Only the chief altitude moves the boundary of the firm.** The authority walk takes the union of the capability's owner and every line it touches, finds the joint apex of those managers, and walks **up** each branch to the nearest seat at rank 5 or above. A director is walked past, never promoted. The party that will decide **does not write the comparison it decides on**, and does not grade it afterwards — and that applies to the workspace apex as much as to anyone else. A second decision is refused: a reconsideration is a new case. A grade is recorded once, only after the declared review date, and the bias is computed from the record, never stored. Calibration is withheld below five graded cases, with the withholding printed.
+
+The CSV scope (`capability-sourcing`, #170) is identity-free — no title, no person, no id, no vendor, no note — and any figure it cannot compute is **blank with a stated reason**, never `0` and never `NaN`. The register never rates a supplier or a person; it counts capabilities and decisions. Limits: cost lines are typed, not imported, and corporate-level scenario modelling and supplier risk rating are **not** built — see the [roadmap](ROADMAP.md).
+
 ## 2026-11-15 — Keep, fix, sell, or exit: the enterprise portfolio review register
 
 **Governance → Portfolio review** (`#/portfolio-review`, [ADR-0222](./docs/adr/0222-enterprise-portfolio-review-register.md), Schema v177, CSV #164, `RULE-PRV-01`) records which business units the enterprise owns, the latest dated financial evidence per unit, and the CEO/chief judgement (`keep`, `fix`, `sell`, or `exit`), separated cleanly from `#/portfolio` (Decision Portfolio) and `state.portfolioMarkers` (Schema v55).

@@ -179,6 +179,10 @@ import { workStopAttentionCount } from './core/domain/workStop.js';
 // release, across single-chain and matrix.
 import { renderMgrHandover } from './views/mgrHandover.js';
 import { mgrHandoverAttentionCount } from './core/domain/mgrHandover.js';
+// ADR-0229: the Capability Sourcing & Firm-Boundary Register — what the company
+// does itself and what it buys, decided on specificity and safeguards.
+import { renderSourcing } from './views/sourcing.js';
+import { sourcingAttentionCount as sourcingAttentionCountFn } from './core/domain/sourcing.js';
 import { renderPortfolioReview } from './views/portfolioReview.js';
 import { portfolioReviewAttentionCount } from './core/domain/portfolioReview.js';
 import { dutyMeansAttentionCount } from './core/domain/dutyMeans.js';
@@ -617,6 +621,10 @@ export const NAV = [
     // holder; the portfolio moves only by the outgoing brief, the successor
     // acceptance and the governor release.
     { route: 'manager-handover', label: 'Manager handover', icon: '⇄', badge: 'mgrHandover' },
+    // ADR-0229: the boundary of the firm. Beside portfolio review on purpose:
+    // one decides which units the enterprise keeps, the other whether the
+    // enterprise owns the capability at all.
+    { route: 'sourcing', label: 'Capability sourcing', icon: '⧉', badge: 'sourcing' },
     // ADR-0121: who answers for each declared duty line when the holder is out.
     { route: 'duty-cover', label: 'Duty coverage', icon: '⛨', badge: 'dutyCoverage' },
     // ADR-0140: who is accountable to whom when one person has several managers.
@@ -792,6 +800,9 @@ const RENDERERS = {
   'work-stop': (ctx) => renderWorkStop(ctx),
   // ADR-0225: managerial portfolio handover and successor acceptance.
   'manager-handover': (ctx) => renderMgrHandover(ctx),
+  // ADR-0229: capability sourcing — make, buy, partner or hybrid, on one exact
+  // comparison over one declared horizon.
+  sourcing: (ctx) => renderSourcing(ctx),
   conflicts: (ctx) => renderConflicts(ctx),
   conflict: (ctx, segments) => renderConflictDetail(ctx, safeDecode(segments[1])),
   recognition: (ctx) => renderRecognition(ctx),
@@ -1678,6 +1689,9 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       // acceptance, governor release or joint-apex dispute review is owed to
       // this seat, all from the same reader.
       mgrHandover: mgrHandoverAttentionCount(state, { now: at, settings: state.settings, seat: seatCtx?.seat || null }),
+      // ADR-0229: cases that owe a human something — a boundary decision, an
+      // unanswered hold-up exposure, a passed review with no grade.
+      sourcing: sourcingAttentionCountFn(state, { now: at, settings: state.settings, seat: seatCtx?.seat || null }),
       // Schema v32: drafts written from case facts that still await a human.
       comms: (state.commsDrafts || []).filter((d) => d && d.status === 'draft').length,
       due: dueMeetings(state, at, state.settings).length,
@@ -2227,6 +2241,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       'portfolio-review': 'Portfolio review — keep, fix, sell, or exit every declared business unit on dated evidence',
       'work-stop': 'Stop-work & safe restart — an active hold, independent clearance, then the affected operator’s key',
       'manager-handover': 'Manager handover — a role does not expire with its holder: brief, successor acceptance, governor release',
+      sourcing: 'Capability sourcing — make, buy, partner or hybrid: the boundary of the firm, decided on asset specificity and the safeguards a contract can carry',
       performance: 'Performance recovery — due process, evidence and the cost of waiting',
       survival: 'Delivery survival — how long work actually takes, with censoring and competing risks',
       wait: 'Cost of waiting — what every open item costs per week of waiting, priced and scenario-simulated',
