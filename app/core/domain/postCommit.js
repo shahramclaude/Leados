@@ -203,6 +203,7 @@ import { speakUpRule } from './speakUpRules.js';
 import { synergyRule } from './synergyRules.js';
 import { earnedValueRule } from './earnedValueRules.js';
 import { riskAppetiteRule } from './riskAppetiteRules.js';
+import { sourcingRule } from './sourcingRules.js';
 import { shiftHandoverRule } from './shiftHandoverRules.js';
 import { workStopRule } from './workStopRules.js';
 import { mgrHandoverRule } from './mgrHandoverRules.js';
@@ -1263,6 +1264,18 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // retention, never converts a currency and never rates a person.
   // Registered immediately before `speakUpRule`, `seatRule` and `sealRule`.
   riskAppetiteRule,
+  // ADR-0229: the Capability Sourcing & Firm-Boundary Register. ONE rule reads
+  // the finished register and files at most one dated ask per condition: a
+  // boundary decision owed where both sides are priced on the case's own terms
+  // (to the joint CHIEF apex above every line the capability touches, never to
+  // one line on another's behalf, and never a promoted lower seat), a hold-up
+  // exposure no recorded safeguard answers (to the same joint apex or the
+  // decider who accepted it), a passed review date with no grade (to the case's
+  // owner, whose ordinary duty it is), or a decided premium that contradicts the
+  // record's own basis (to the decider). A branch whose graph holds no chief
+  // seat, a disconnected graph and a departed owner each write ONE identity-free
+  // `sourcingMarkers` observation and ask nobody.
+  sourcingRule,
   // ADR-0220: the Variable-Pay Design & Incentive Integrity Register. ONE rule
   // reads the finished register with the whole-workspace view and files at most
   // one dated ask per condition: an over-ceiling envelope (to the lowest seat

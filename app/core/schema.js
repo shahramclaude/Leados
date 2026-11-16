@@ -316,6 +316,17 @@ import {
   normalizeRiskAppetiteStatements,
   normalizeRiskDeclarations,
 } from './domain/riskAppetiteSchema.js';
+// ADR-0229 (Schema v182): the Capability Sourcing & Firm-Boundary Register. The
+// fail-closed normalizers live in the module's own schema so a malformed case,
+// option, cost line or act is DROPPED with a counted warning — never repaired,
+// never given an invented currency, horizon or discount rate.
+import {
+  normalizeSourcingCases,
+  normalizeSourcingOptions,
+  normalizeSourcingActs,
+  normalizeSrcMarkers,
+} from './domain/sourcingSchema.js';
+import { normalizeSourcingSettings } from './domain/sourcingRegistry.js';
 // ADR-0220 (Schema v174): the Variable-Pay Design & Incentive Integrity
 // Register. Plans, measures, verified readings, awards, recovery acts and
 // identity-free markers normalize fail-closed; a reading's figure is checked
@@ -1235,7 +1246,7 @@ export {
 // breaks, declared night policies (window + limits with a written source), and
 // the rule's bounded marker ledger. No night minute, share, streak or verdict
 // is stored; each is re-derived on read.
-export const SCHEMA_VERSION = 181;
+export const SCHEMA_VERSION = 182;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -3695,6 +3706,15 @@ export const COLLECTIONS = [
   'mgrHandovers',
   'mgrHandoverActs',
   'mgrHandoverMarkers',
+  // ADR-0229 (Schema v182): the Capability Sourcing & Firm-Boundary Register.
+  // Declared cases, priced options and the two dated acts (boundary decision,
+  // independent grade), plus identity-free rule markers. No total, discount,
+  // premium, verdict or hold-up exposure is stored: each is re-derived on read,
+  // so a hand-edited file cannot carry a comparison its own rows do not imply.
+  'sourcingCases',
+  'sourcingOptions',
+  'sourcingActs',
+  'sourcingMarkers',
 ];
 
 /** Stable empty state. `now` is an ISO string so the result is a pure value. */
@@ -3951,6 +3971,11 @@ export function normalizeSettings(raw) {
     // vocabulary so updateSettings can move it, and defaulted ON so a switch that
     // hides a breached ceiling is never the silent default.
     riskAppetiteAutoPropagate: s.riskAppetiteAutoPropagate !== false,
+    // ADR-0229: the capability-sourcing rule's switch. Declared in the
+    // persistence vocabulary so updateSettings can move it, and defaulted ON so
+    // a switch that hides a boundary decision owed or an unanswered hold-up
+    // exposure is never the silent default.
+    sourcingAutoPropagate: s.sourcingAutoPropagate !== false,
     // ADR-0220: the incentive-integrity rule's switch. Declared in the
     // persistence vocabulary so updateSettings can move it, and defaulted ON so a
     // switch that hides an over-ceiling envelope or an outstanding recovery is
@@ -9222,6 +9247,15 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.riskAppetiteStatements = normalizeRiskAppetiteStatements(raw.riskAppetiteStatements, warnings);
   state.riskDeclarations = normalizeRiskDeclarations(raw.riskDeclarations, warnings);
   state.riskAppetiteMarkers = normalizeRaMarkers(raw.riskAppetiteMarkers, warnings);
+  // ADR-0229 (Schema v182): a case, option, cost line or act that cannot be read
+  // exactly is DROPPED with a counted warning — never repaired, re-termed,
+  // re-priced or re-pointed at another case. A cost line that does not belong to
+  // its mode, and a duplicated line, are refused at this boundary too, so a
+  // hand-edited import cannot smuggle a total the record never computed.
+  state.sourcingCases = normalizeSourcingCases(raw.sourcingCases, warnings);
+  state.sourcingOptions = normalizeSourcingOptions(raw.sourcingOptions, state.sourcingCases, warnings);
+  state.sourcingActs = normalizeSourcingActs(raw.sourcingActs, state.sourcingCases, warnings);
+  state.sourcingMarkers = normalizeSrcMarkers(raw.sourcingMarkers, warnings);
   // ADR-0220: a plan, measure, award or recovery act that cannot be read exactly
   // is DROPPED with a counted warning. A reading is resolved AFTER its measures,
   // because the measure's unit decides which field the figure belongs in; a
@@ -10056,6 +10090,22 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  // 181 → 182: ADR-0229 adds FOUR EMPTY ledgers (`sourcingCases`,
+  // `sourcingOptions`, `sourcingActs`, `sourcingMarkers`) and the sourcing
+  // rule's pause. No capability is inferred from a budget envelope, an invoice,
+  // a vendor contract or a headcount; no option is priced from a licence fee;
+  // no specificity is guessed from a title. A boundary case is a human
+  // declaration with terms somebody chose, and manufacturing one at upgrade
+  // time would put a comparison on the record that nobody made.
+  181: (v181) => ({
+    ...v181,
+    schemaVersion: 182,
+    sourcingCases: Array.isArray(v181.sourcingCases) ? v181.sourcingCases : [],
+    sourcingOptions: Array.isArray(v181.sourcingOptions) ? v181.sourcingOptions : [],
+    sourcingActs: Array.isArray(v181.sourcingActs) ? v181.sourcingActs : [],
+    sourcingMarkers: Array.isArray(v181.sourcingMarkers) ? v181.sourcingMarkers : [],
+    settings: { ...(v181.settings || {}), ...normalizeSourcingSettings(v181.settings || {}) },
+  }),
   // 179 → 180: ADR-0225 adds THREE EMPTY ledgers (`mgrHandovers`,
   // `mgrHandoverActs`, `mgrHandoverMarkers`) and the handover-rule pause. A
   // managerial transition is never inferred from a reorganisation, a roster

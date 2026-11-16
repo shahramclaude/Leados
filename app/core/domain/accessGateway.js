@@ -25,6 +25,8 @@ import { SPEAK_UP_RIGHTS } from './speakUpRegistry.js';
 import { SYNERGY_RIGHTS } from './synergyRegistry.js';
 import { EV_RIGHTS } from './earnedValueRegistry.js';
 import { RA_RIGHTS } from './riskAppetiteRegistry.js';
+// ADR-0229: the capability sourcing register's four rights.
+import { SRC_RIGHTS } from './sourcingRegistry.js';
 import { INC_RIGHTS } from './incentiveRegistry.js';
 import { DWM_RIGHTS } from './dutyMeansRegistry.js';
 import { SHO_RIGHTS } from './shiftHandoverRegistry.js';
@@ -288,6 +290,17 @@ const groups = [
   [RA_RIGHTS.READ, 'riskAppetiteReport riskAppetiteAttentionCount riskAppetiteCandidates riskAppetiteConcentration'],
   [RA_RIGHTS.DECLARE, 'riskAppetiteDeclareStatement riskAppetiteRetireStatement riskAppetiteScan'],
   [RA_RIGHTS.CARRY, 'riskAppetiteDeclareRisk riskAppetiteWithdrawRisk'],
+  // ADR-0229: the capability sourcing & firm-boundary register. Reading is
+  // portfolio material (rank 3+). Recording an option is the leader who HOLDS
+  // the capability (rank 2+), narrowed inside the action to a line the case
+  // names and refused for the seat that will decide it. Deciding the boundary
+  // question is the chief altitude's own act (rank 5), proved against the joint
+  // apex the reporting graph computes. Grading the frozen assumptions is an
+  // independent review (rank 4+), refused for the decider and the recorder.
+  [SRC_RIGHTS.READ, 'sourcingReport sourcingAttentionCount sourcingCandidates sourcingReadModel'],
+  [SRC_RIGHTS.RECORD, 'sourcingDeclareCase sourcingWithdrawCase sourcingRecordOption sourcingScan'],
+  [SRC_RIGHTS.DECIDE, 'sourcingDecide'],
+  [SRC_RIGHTS.GRADE, 'sourcingGrade'],
   // ADR-0220: the variable-pay design & incentive integrity register. Reading it
   // is open at the manager altitude because a team envelope is a manager's own
   // instrument; the row class and the span filter decide what is printed.
@@ -665,6 +678,11 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // its writes are still gated — the register would vanish exactly when a real
 // organisation turned enforcement on.
 'riskAppetiteReport', 'riskAppetiteAttentionCount', 'riskAppetiteCandidates', 'riskAppetiteConcentration',
+// ADR-0229: the capability sourcing register's pure read surface. Every one of
+// these re-proves the read right inside the action, because a module whose
+// reads are absent from SAFE_READS is unreadable under enforcement while its
+// writes are still gated.
+'sourcingReport', 'sourcingAttentionCount', 'sourcingCandidates', 'sourcingReadModel', 'sourcingSeesCase', 'sourcingMarkers', 'sourcingReadCents',
 // ADR-0220: the variable-pay register's pure read surface. Every one of these
 // re-proves the read right inside the action. Registered here because a module
 // whose reads are absent from SAFE_READS is unreadable under enforcement while

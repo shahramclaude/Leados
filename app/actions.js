@@ -128,6 +128,10 @@ import { createRiskAppetiteActions } from './core/domain/riskAppetiteActions.js'
 import { createIncentiveActions } from './core/domain/incentiveActions.js';
 import { createDutyMeansActions } from './core/domain/dutyMeansActions.js';
 import { createPortfolioReviewActions } from './core/domain/portfolioReviewActions.js';
+// ADR-0229: the Capability Sourcing & Firm-Boundary Register's commands and
+// seat-checked reads. Declaring a case, recording a priced option, deciding the
+// boundary question and grading the frozen assumptions — nothing else.
+import { createSourcingActions } from './core/domain/sourcingActions.js';
 import { createWorkRestActions } from './core/domain/workRestActions.js';
 import { createWorkNightActions } from './core/domain/workNightActions.js';
 // ADR-0223: the Shift Handover & Two-Key Readback Ledger — the dated outgoing
@@ -20361,6 +20365,10 @@ export function createApi(store, options = {}) {
   // ADR-0221: the Duty-Without-Means Register's commands and seat-checked reads.
   Object.assign(api, createDutyMeansActions(store, { now: clock, idFactory: id }));
   Object.assign(api, createPortfolioReviewActions(store, { now: clock, idFactory: id }));
+  // ADR-0229: the capability sourcing register. Every command re-proves its
+  // right against the live seat and, for a decision, against the joint chief
+  // apex computed from the reporting graph — never an addressee the actor chose.
+  Object.assign(api, createSourcingActions(store, { now: clock, idFactory: id }));
   // ADR-0209: the Cross-Line Work/Rest Recovery Ledger — recording a shift for a
   // line the acting seat HOLDS, its actual times or cancellation, a line's
   // coverage attestation, and the declared policy. No act moves or cancels a

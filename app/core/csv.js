@@ -229,6 +229,10 @@ import { EV_CSV_COLUMNS, EV_CSV_DESCRIPTOR } from './domain/earnedValueRegistry.
 // ADR-0219: CSV #161 — the enterprise risk-appetite register, identity-free.
 import { buildRiskAppetite, riskAppetiteCsvRows } from './domain/riskAppetite.js';
 import { RA_CSV_COLUMNS, RA_CSV_DESCRIPTOR, RA_CSV_SCOPE } from './domain/riskAppetiteRegistry.js';
+// ADR-0229: CSV #170 — the capability sourcing & firm-boundary register.
+import { SRC_CSV_COLUMNS, SRC_CSV_DESCRIPTOR, SRC_CSV_SCOPE } from './domain/sourcingRegistry.js';
+import { buildSourcing } from './domain/sourcing.js';
+import { sourcingCsvRows } from './domain/sourcingCsv.js';
 // ADR-0220: CSV #162 — the variable-pay design & incentive integrity register,
 // aggregate per currency and identity-free.
 import { buildIncentiveIntegrity, incentiveCsvRows } from './domain/incentiveIntegrity.js';
@@ -1581,6 +1585,14 @@ export const CSV_EXPORTS = [
   // blank with their reason, never zero. (CSV #168 is night-work-breaks,
   // shipped in the same ADR-0226 session.)
   RC_CSV_DESCRIPTOR,
+  // #170 (ADR-0229): the capability sourcing register — aggregate and
+  // identity-free. One summary row, one row per state, one row per verdict and
+  // one row per currency: counts, states, the declared specificity and chosen
+  // mode, and per-currency money in whole cents with the exact premium. No
+  // capability, case, owner, manager, vendor, contract reference, rationale or
+  // cost line label crosses this boundary; an uncomputable figure is BLANK with
+  // its reason, never zero.
+  SRC_CSV_DESCRIPTOR,
 ];
 
 function personLookup(state) {
@@ -6917,6 +6929,17 @@ export function buildScopeTable(state, scope, now) {
       return {
         columns: RC_CSV_COLUMNS.map((key) => ({ key, header: key })),
         rows: riskConcentrationCsvRows(report),
+      };
+    }
+    case SRC_CSV_SCOPE: {
+      // CSV scope #170 (ADR-0229, Schema v182). Built from the SAME reader the
+      // `#/sourcing` panel renders, with no seat: every figure is an aggregate
+      // over the whole record, so no capability, owner, vendor or rationale is
+      // reachable from this export.
+      const report = buildSourcing(state, { now, settings: state.settings || {}, seat: null });
+      return {
+        columns: SRC_CSV_COLUMNS.map((key) => ({ key, header: key })),
+        rows: sourcingCsvRows(report),
       };
     }
     case 'earned-value-delivery': {
