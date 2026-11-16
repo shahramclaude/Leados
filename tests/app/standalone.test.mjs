@@ -413,7 +413,15 @@ test('standalone artifact exists and is a single inline HTML document', () => {
   // diagram (`app/assets/duty-without-means-method.jpg`, 55,890 bytes, inlined
   // as base64). Measured build: 16,506,727 bytes / 948 source modules = 17,412
   // bytes per module, well below the unchanged 24,000 bytes/module density guard.
-  assert.ok(bytes < 16_800_000, `standalone file is unexpectedly large (${bytes} bytes)`);
+  // ADR-0226 (Session 303, Schema v181 unchanged) adds the shared-dependency
+  // concentration reader, one view tab, one action and two generated diagrams
+  // (`risk-concentration-method.jpg`, `risk-appetite-tolerance.jpg`, which the
+  // register view referenced without the file existing). Measured build: 17,867,959
+  // bytes / 982 source modules = 18,196 bytes per module, under the unchanged
+  // 24,000 bytes/module density guard. NOTE: the artifact at base f0f0d3a was
+  // already 17,513,621 bytes, above the previous 16,800,000 ceiling, so that
+  // ceiling was failing before this session; it is moved here to the measured size.
+  assert.ok(bytes < 18_000_000, `standalone file is unexpectedly large (${bytes} bytes)`);
   // Derived from the folder, not from a list in this file: the day a panel adds
   // a diagram, an enumerator that names the old two would still pass. Same
   // lesson the build script learned in ADR-0186.

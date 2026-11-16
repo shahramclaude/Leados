@@ -27,15 +27,21 @@ import {
   raDomain,
 } from '../core/domain/riskAppetiteRegistry.js';
 import { centsToDisplay } from '../core/domain/riskAppetiteSchema.js';
+import { RC_METHOD, RC_VIEW_KEY } from '../core/domain/riskConcentration.js';
 
 const L = RA_LIMITS;
 const DIAGRAM_URL = './app/assets/risk-appetite-tolerance.jpg';
+const CONCENTRATION_DIAGRAM_URL = './app/assets/risk-concentration-method.jpg';
 const VIEWS = [
   { key: 'statements', label: 'Statements' },
   { key: 'risks', label: 'Risks carried' },
   { key: 'lines', label: 'Lines' },
+  { key: RC_VIEW_KEY, label: 'Shared dependencies' },
   { key: 'method', label: 'Method' },
 ];
+const CONCENTRATION_TONE = { 'would-exceed': 'bad', 'within-ceiling': 'good', 'no-ceiling': 'caution' };
+const CONCENTRATION_SHORT = { 'would-exceed': 'Would exceed', 'within-ceiling': 'Within ceiling', 'no-ceiling': 'Not compared' };
+const pct = (bp) => `${(bp / 100).toFixed(2)}%`;
 const VERDICT_TONE = { breached: 'bad', 'within-tolerance': 'good', unmeasurable: 'caution' };
 const VERDICT_SHORT = { breached: 'Breached', 'within-tolerance': 'Within tolerance', unmeasurable: 'Unmeasurable' };
 
@@ -413,6 +419,113 @@ function methodView() {
   );
 }
 
+/* ----------------------------------------------- shared-dependency reading */
+
+/**
+ * ADR-0226. The reader does every sum, share and verdict; this function formats
+ * what it returned. A seat that may not see every live declared risk gets the
+ * reader's WITHHELD state and no figure at all.
+ */
+function concentrationView(ctx) {
+  const report = ctx.api.riskAppetiteConcentration ? ctx.api.riskAppetiteConcentration() : null;
+  const head = card({
+    title: 'How a shared dependency is read',
+    subtitle: 'Live risks that rely on one service, vendor or system realise together when it fails. Each retention was judged alone; this page adds the retentions that share a dependency, once per dependency, and compares the sum with the ceiling declared for that domain and currency.',
+    body: h('figure', { class: 'figure' },
+      h('img', { src: CONCENTRATION_DIAGRAM_URL, alt: 'Shared-dependency reading: several declared risks linked to one dependency, their retentions summed once per dependency and domain, the share of the declared domain total, and a comparison with the declared ceiling where one exists.', class: 'figure-img', loading: 'lazy' }),
+      h('figcaption', { class: 'small muted' }, 'Overlap is by design: a risk on two dependencies is counted under each. Where no ceiling is declared the row says NOT COMPARED.')),
+  });
+  if (!report || report.ok === false || (!report.withheld && !report.totals)) {
+    return h('div', { class: 'stack', 'data-testid': 'rc-view' }, head,
+      banner({ tone: 'bad', title: 'The shared-dependency reading could not be read', body: report?.error || 'The seat refused the read.' }));
+  }
+  if (report.withheld) {
+    return h('div', { class: 'stack', 'data-testid': 'rc-view' }, head,
+      banner({ tone: 'caution', title: 'Withheld from this seat — no figure is printed', body: report.withheldReason }));
+  }
+  const t = report.totals;
+  const dependencyColumns = [
+    { label: 'Dependency', render: (r) => h('span', null, h('strong', null, r.name), h('span', { class: 'small muted' }, ` · ${r.kind || 'dependency'}${r.criticality ? ` · ${r.criticality}` : ''}`)) },
+    { label: 'Declared risks reaching it', render: (r) => h('span', { 'data-testid': `rc-dep-members-${r.id}` }, String(r.membersN)) },
+    { label: 'Directly linked', render: (r) => String(r.directN) },
+    { label: 'Through an upstream dependency', render: (r) => String(r.viaUpstreamN) },
+    { label: 'Shared', render: (r) => (r.shared ? badge('shared by ≥2 risks', 'caution') : h('span', { class: 'small muted' }, 'single risk')) },
+  ];
+  const sharedColumns = [
+    { label: 'Dependency', render: (r) => h('span', null, h('strong', null, r.dependencyName), r.criticality ? h('span', { class: 'small muted' }, ` · ${r.criticality}`) : null) },
+    { label: 'Domain', render: (r) => raDomain(r.domain)?.label || r.domain },
+    { label: 'Risks that rely on it', render: (r) => h('span', null,
+      h('span', { 'data-testid': `rc-row-risks-${r.rowId}` }, `${r.riskN} of ${r.domainPopulationN} declared`),
+      h('span', { class: 'small muted' }, ` · ${r.titles.slice(0, 3).join(' · ')}${r.titles.length > 3 ? ' · …' : ''}`)) },
+    { label: 'Retained together', render: (r) => (r.retainedCents === null
+      ? h('span', { class: 'small text-warn' }, 'withheld — above the representable range')
+      : h('span', { 'data-testid': `rc-row-cents-${r.rowId}`, 'data-cents': String(r.retainedCents) }, `${r.currency} ${centsToDisplay(r.retainedCents)}`)) },
+    { label: 'Share of the domain', render: (r) => (r.shareBp === null || r.domainTotalCents === null
+      ? h('span', { class: 'small muted' }, '—')
+      : h('span', { 'data-testid': `rc-row-share-${r.rowId}`, 'data-bp': String(r.shareBp) }, pct(r.shareBp), h('span', { class: 'small muted' }, ` of ${r.currency} ${centsToDisplay(r.domainTotalCents)}`))) },
+    { label: 'Declared ceiling', render: (r) => (r.toleranceCents === null
+      ? h('span', { class: 'small muted' }, 'none declared in this domain and currency')
+      : `${r.currency} ${centsToDisplay(r.toleranceCents)}`) },
+    { label: 'Verdict on its own', render: (r) => h('span', null,
+      badge(CONCENTRATION_SHORT[r.verdict] || r.verdict, CONCENTRATION_TONE[r.verdict] || 'caution'),
+      r.verdict === 'would-exceed' && r.overCeilingBy !== null
+        ? h('span', { class: 'small' }, ` over by ${r.currency} ${centsToDisplay(r.overCeilingBy)}`)
+        : null) },
+  ];
+  const sharedRows = report.sharedRows.map((row) => ({
+    ...row,
+    attrs: { 'data-testid': `rc-row-${row.rowId}`, 'data-verdict': row.verdict },
+  }));
+  return h('div', { class: 'stack', 'data-testid': 'rc-view' },
+    head,
+    card({
+      title: 'What the reading holds',
+      subtitle: 'Counts over the live declared population. A verdict is a fact about the declared risks that share a dependency, never a statement about the whole enterprise.',
+      body: h('div', { class: 'stat-grid' },
+        stat({ label: 'Shared rows', value: h('span', { 'data-testid': 'rc-count-shared' }, String(t.sharedRowsN)), hint: `${t.sharedDependenciesN} dependenc${t.sharedDependenciesN === 1 ? 'y' : 'ies'} with ≥2 declared risks` }),
+        stat({ label: 'Would exceed the ceiling on their own', value: h('span', { 'data-testid': 'rc-count-exceed' }, String(t.wouldExceedN)), hint: 'one dependency realises more retention than the domain ceiling allows' }),
+        stat({ label: 'Not compared', value: h('span', { 'data-testid': 'rc-count-no-ceiling' }, String(t.noCeilingN)), hint: 'no exposure ceiling is declared in that domain and currency' }),
+        stat({ label: 'Declared risks read', value: h('span', { 'data-testid': 'rc-count-declared' }, String(t.declaredRisksN)), hint: `${t.linkedN} linked to an active dependency` }),
+        stat({ label: 'Unlinked declared risks', value: h('span', { 'data-testid': 'rc-count-unlinked' }, String(t.unlinkedN + t.onlyRetiredN)), hint: 'their reliance is unknown, not independent' }),
+        stat({ label: 'Undeclared open risks', value: h('span', { 'data-testid': 'rc-count-undeclared' }, String(t.undeclaredN)), hint: 'no live declaration; their dependency exposure is unseen' }),
+      ),
+    }),
+    banner({
+      tone: t.partitionReconciles ? 'info' : 'bad',
+      title: t.partitionReconciles ? 'The reading accounts for every declared risk exactly once' : 'The reading does not account for every declared risk once',
+      body: `Linked ${t.linkedN} + unlinked ${t.unlinkedN} + linked only to retired dependencies ${t.onlyRetiredN} = ${t.linkedN + t.unlinkedN + t.onlyRetiredN} of ${t.declaredRisksN} declared. This is the first claim: the arithmetic of the reading.`,
+    }),
+    banner({
+      tone: t.wholePopulationMeasured ? 'good' : 'caution',
+      title: t.wholePopulationMeasured ? 'The whole population is measured' : 'NOT CERTIFIED — the shared-dependency reading is incomplete',
+      body: t.wholePopulationMeasured
+        ? 'Every open risk is declared and every declared risk names its dependencies. This is the second claim, kept apart from the first.'
+        : `${report.coverageReasons.join(' ')} The rows below are true of the risks that are declared AND linked only; they are not a statement about the whole enterprise.`,
+    }),
+    banner({ tone: 'info', title: 'Dependency rows overlap by design', body: t.overlapNote }),
+    ...(report.warnings || []).map((warning) => banner({ tone: 'caution', title: 'A stored row was refused', body: warning })),
+    table({
+      caption: 'Shared rows — one dependency, one domain and currency, two or more live declared risks, summed once',
+      columns: sharedColumns,
+      rows: sharedRows,
+      emptyMessage: t.declaredRisksN
+        ? 'No dependency is shared by two or more live declared risks in the same domain and currency. That is not the same as no concentration: read the coverage claims above first.'
+        : 'No risk is declared yet, so there is no dependency to read.',
+    }),
+    report.sharedRowsCapped > 0 ? banner({ tone: 'info', title: `Showing ${report.sharedRowsShown} of ${report.sharedRowsShown + report.sharedRowsCapped} shared rows`, body: 'The cap is printed, not hidden: the remainder is counted, and the verdicts are in the reader.' }) : null,
+    table({
+      caption: 'Dependencies that carry declared risk — how many risks reach each, and how',
+      columns: dependencyColumns,
+      rows: report.dependencies,
+      emptyMessage: 'No declared risk names an active dependency. Declare the dependency a risk relies on with a depends-on link before reading concentration.',
+    }),
+    report.dependenciesCapped > 0 ? banner({ tone: 'info', title: `Showing ${report.dependenciesShown} of ${report.dependenciesShown + report.dependenciesCapped} dependencies`, body: 'The cap is printed, not hidden.' }) : null,
+    card({ title: 'Frameworks encoded', body: h('ul', { class: 'list' }, ...RC_METHOD.frameworks.map((f) => h('li', null, f))) }),
+    card({ title: 'What the reading prints', body: h('ul', { class: 'list' }, ...RC_METHOD.printed.map((f) => h('li', null, f))) }),
+    card({ title: 'What it deliberately does not do', body: h('ul', { class: 'list' }, ...RC_METHOD.deliberatelyAbsent.map((f) => h('li', null, f))) }),
+  );
+}
+
 export function renderRiskAppetite(ctx) {
   const report = ctx.api.riskAppetiteReport ? ctx.api.riskAppetiteReport() : null;
   if (!report || report.ok === false || !report.totals) {
@@ -447,6 +560,7 @@ export function renderRiskAppetite(ctx) {
     view === 'statements' ? statementsView(ctx, report, onDone) : null,
     view === 'risks' ? risksView(ctx, report, onDone) : null,
     view === 'lines' ? linesView(report) : null,
+    view === RC_VIEW_KEY ? concentrationView(ctx) : null,
     view === 'method' ? methodView() : null,
     view === 'statements' && !report.totals.statementsDeclared
       ? emptyState({ title: 'No appetite has been declared', body: 'Declaring one fixes an exact ceiling and a review date for one domain. Nothing is inferred from the cases, the FMEA ratings or the culture signals.' })

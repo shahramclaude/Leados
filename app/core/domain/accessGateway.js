@@ -285,7 +285,7 @@ const groups = [
   // narrowed inside the action to a seat that HOLDS the case owner and refuses
   // the owner themselves — the hand that carries the consequence does not write
   // the number. The scan is the declarer's act because it files the asks.
-  [RA_RIGHTS.READ, 'riskAppetiteReport riskAppetiteAttentionCount riskAppetiteCandidates'],
+  [RA_RIGHTS.READ, 'riskAppetiteReport riskAppetiteAttentionCount riskAppetiteCandidates riskAppetiteConcentration'],
   [RA_RIGHTS.DECLARE, 'riskAppetiteDeclareStatement riskAppetiteRetireStatement riskAppetiteScan'],
   [RA_RIGHTS.CARRY, 'riskAppetiteDeclareRisk riskAppetiteWithdrawRisk'],
   // ADR-0220: the variable-pay design & incentive integrity register. Reading it
@@ -664,7 +664,7 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // whose reads are absent from SAFE_READS is unreadable under enforcement while
 // its writes are still gated — the register would vanish exactly when a real
 // organisation turned enforcement on.
-'riskAppetiteReport', 'riskAppetiteAttentionCount', 'riskAppetiteCandidates',
+'riskAppetiteReport', 'riskAppetiteAttentionCount', 'riskAppetiteCandidates', 'riskAppetiteConcentration',
 // ADR-0220: the variable-pay register's pure read surface. Every one of these
 // re-proves the read right inside the action. Registered here because a module
 // whose reads are absent from SAFE_READS is unreadable under enforcement while

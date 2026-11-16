@@ -1,3 +1,25 @@
+## 2026-11-16 — Session 303: Shared-dependency concentration of declared risk retention (Schema v181 unchanged, ADR-0226, `#/risk-appetite?view=shared`)
+
+Doctrine and remote checks passed: `NORTH_STAR.md` carries all four binding mandates; local `main` at `f0f0d3a` matches `origin/main`. Orientation: the neglected altitude by primary-slice rotation was **CEO / C-suite** (last primary 299; director/VP 302 and frontline 301 were the most recent), so this session served **CEO / C-suite × matrix and single-chain**.
+
+**Built.** A pure reader, `riskConcentration.js`, that joins the register's live declared retentions to the dependencies those risks rely on through recorded `depends-on` links and dependency upstream chains. Each shared (dependency, domain, currency) row sums its risks' exact cents once, takes the exact basis-point share of the declared domain total, and is compared with the live domain ceiling by the register's breach rule; no ceiling prints NOT COMPARED. Two coverage claims are reported apart (arithmetic partition; whole-population coverage). Any live declared risk hidden from the seat withholds the reading. Wiring: `riskAppetiteActions.js` (`riskAppetiteConcentration`, READ right), `accessGateway.js`, `riskAppetite.js` (exports `declarationGrant`), `app/views/riskAppetite.js` (Shared dependencies tab). Built on the existing schema, no migration.
+
+**Altitude / structure.** CEO / C-suite primary × matrix and single-chain. **Benchmark [BENCHMARK-UNVERIFIED].** The mapping bar is set by N-tier supply-chain platforms (Resilinc, Interos, Everstream, Prewave, Exiger); LeadOS does not match their mapping depth and says so. The claimed part is the join to declared retention against an appetite ceiling; no hands-on comparison was made.
+
+**Assets.** `app/assets/risk-concentration-method.jpg` (new) and `app/assets/risk-appetite-tolerance.jpg`, which the register view referenced without the file existing. Both generated with the image tool and checked against their specs; provenance in ADR-0226.
+
+**Defects found and fixed.** The reader keyed rows on a field the population rows do not carry, which silently dropped every shared row (caught by the suite). The missing register diagram. Two suites were red at the base commit from stale pins: `risk-appetite.test.mjs` (schema 179 against 181, three pins) and `standalone.test.mjs` (16.8 MB ceiling against a 17.5 MB base artifact). Both corrected; the standalone density guard is unchanged and the ceiling move is explained in the test.
+
+**Logged, not fixed.** `workNightPanel.js` references a missing `night-work-break-method.jpg`. Other suites pin schema 179 and appear red; not run.
+
+**Verified (one focused pass).** `risk-concentration.test.mjs` 12/12, including an independent recomputation of every printed figure from the raw record and an assertion that the rendered cells equal the reader's values. `risk-appetite.test.mjs` 22/22, `access-audit.test.mjs` 14/14, `standalone.test.mjs` 7/7, eslint clean on the changed files, `npm run build` succeeded. Full suite not run.
+
+**Unverified.** Full test suite. Real-browser and assistive-technology walkthrough of the new tab. The benchmark comparison, per `[BENCHMARK-UNVERIFIED]`. The stale-pin suites listed above.
+
+**Remainder (In Progress).** CSV scope for the reading, and an idempotent joint-apex ask when a shared row exceeds its ceiling. Logged in ROADMAP.md Session 303.
+
+**Step 3 gap logged.** Cross-domain common-cause retention: a dependency that realises across several domains is summed against no ceiling, because ceilings are per domain and currency. Logged under Planned.
+
 ## 2026-11-16 — Session 302: Managerial portfolio handover & successor-acceptance register (Schema v180, ADR-0225, CSV #167, `RULE-MHH-01`, `#/manager-handover`)
 
 Doctrine and remote checks passed (NORTH_STAR.md carries all four binding mandates; remote HEAD matches `ef0e0c1095ec16ef8e1545a1eba23fe13c6efdce`). Orientation: Session 301 shipped the stop-work ledger at frontline/mid-manager; the neglected altitude was **director / VP** (last primary slice 295, repair 296), so this session served **director / VP × single-chain and matrix**.

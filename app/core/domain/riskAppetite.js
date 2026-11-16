@@ -144,7 +144,7 @@ export function liveDeclarations(declarations, asOf) {
 }
 
 /** The seat's grant for one declaration row. Only `full` prints a row. */
-function declarationGrant(seat, declaration) {
+export function declarationGrant(seat, declaration) {
   if (!seat) return 'denied';
   if (seat.fullAccess) return 'full';
   return canSee({ id: declaration.id, personId: declaration.ownerId || null }, RA_DECLARATION_COLLECTION, seat, null).allow;
