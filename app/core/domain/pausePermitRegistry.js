@@ -275,6 +275,10 @@ export const PAUSE_PERMIT_MATRIX_REACH_SWITCHES = Object.freeze([
   // the outgoing manager, the successor and the governor, and a dispute ask
   // reaches the joint seat above EVERY line of both managers.
   'mgrHandoverAutoPropagate',
+  // ADR-0226: a night-work breach ask reaches the line holder, or the joint seat
+  // above BOTH lines of a cross-line breach, and a missing-break ask reaches
+  // the line holder — so silencing it reaches across reporting lines.
+  'workNightAutoPropagate',
 ]);
 
 export function pausePermitReachesMatrix(key) {
@@ -353,6 +357,10 @@ export const PAUSE_PERMIT_SWITCH_RULES = Object.freeze({
   // without its owed brief, acceptance, release or dispute review; the
   // transition remains open and visible, and nothing transfers.
   mgrHandoverAutoPropagate: 'mgrHandoverRules.js',
+  // ADR-0226: silencing this rule can leave a provable night-work breach or a
+  // missing required break record without its ask; the reading remains open and
+  // visible, and no break is invented.
+  workNightAutoPropagate: 'workNightRules.js',
 });
 
 /** Only graph-reading rules belong to the matrix census. Owner-directed rules

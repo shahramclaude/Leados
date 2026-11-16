@@ -196,6 +196,13 @@ export const RECORD_POLICIES = Object.freeze({
   workRestCoverage: { classKey: 'unit', detailCeiling: 0, label: 'Per-line coverage attestations of the work record (report only)', route: '#/standard-work?panel=rest' },
   workRestPolicies: { classKey: 'unit', detailCeiling: 0, label: 'Declared work/rest policies with their written source (report only)', route: '#/standard-work?panel=rest' },
   workRestMarkers: { classKey: 'unit', detailCeiling: 0, label: 'Work/rest conflict observation markers', route: '#/standard-work?panel=rest' },
+  // ADR-0226: report-only. A break names a person, a shift and an interval; the
+  // raw rows are never handed to the generic projection. The reading's own
+  // reader discloses a person to the seat whose tree or declared line holds
+  // them, and records a break only for a line the seat holds.
+  workBreaks: { classKey: 'unit', detailCeiling: 0, label: 'Declared in-shift breaks (report only; every continuous stretch re-derived on read)', route: '#/standard-work?panel=night' },
+  workNightPolicies: { classKey: 'unit', detailCeiling: 0, label: 'Declared night policies — the window and the limits, with their source (report only)', route: '#/standard-work?panel=night' },
+  workNightMarkers: { classKey: 'unit', detailCeiling: 0, label: 'Night-work breach observation markers', route: '#/standard-work?panel=night' },
   // ADR-0210: report-only, like every governance ledger above. An interest names
   // a person and a record; the raw rows are never handed to the generic
   // projection. The register's own reader discloses a person to the seat whose
@@ -987,6 +994,10 @@ export const ACTION_RIGHTS = Object.freeze({
   'roster-work-rest': { minRank: 1, maxRank: 5, label: 'Record a shift, its actual times or cancellation, or attest a line’s work record — only for a line you hold' },
   'declare-work-rest-policy': { minRank: 3, maxRank: 5, label: 'Declare or retire the work/rest limits that apply, with their written source' },
   'govern-work-rest': { minRank: 3, maxRank: 5, label: 'Scan work/rest conflicts and set the ledger’s reading horizon' },
+  'read-night-work': { minRank: 1, maxRank: 5, label: 'Read the night-work & in-shift break reading for your own span' },
+  'roster-night-work': { minRank: 1, maxRank: 5, label: 'Record an in-shift break — only for a line you hold' },
+  'declare-night-work-policy': { minRank: 3, maxRank: 5, label: 'Declare or retire the night window and the night limits that apply, with their written source' },
+  'govern-night-work': { minRank: 3, maxRank: 5, label: 'Scan night-work breaches and set the reading’s automation' },
   // ADR-0210: the conflict-of-interest & recusal register. A person declares their
   // OWN interest, or a seat that can reach them records a disclosure it received
   // — so the declaring right is open at every leadership rank and the ACTION

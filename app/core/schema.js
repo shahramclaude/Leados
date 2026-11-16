@@ -197,6 +197,19 @@ import {
   normalizeWorkRestSettings,
   normalizeWorkRestShifts,
 } from './domain/workRestSchema.js';
+// ADR-0226 (Schema v181): the Night-Work & In-Shift Break Reading — declared
+// breaks (one person × one shift × two wall-clock ends inside that shift),
+// declared night policies (the night window and the limits a human declares,
+// each with a written source), and the rule's bounded marker ledger. Nothing
+// derived — no night minute, share, streak, continuous stretch or verdict — is
+// stored; each is re-derived on read from these rows and the shift ledger
+// ADR-0209 already holds.
+import {
+  normalizeWorkNightBreaks,
+  normalizeWorkNightMarkers,
+  normalizeWorkNightPolicies,
+  normalizeWorkNightSettings,
+} from './domain/workNightSchema.js';
 // ADR-0210 (Schema v164): the Decision-Maker Conflict-of-Interest & Recusal
 // Ledger. Four collections, every one EMPTY at upgrade: declared interests,
 // dated standing responses, reportable-kind rules and the rule's bounded marker
@@ -1218,7 +1231,11 @@ export {
 // ADR-0225 (Schema v179 → v180): Managerial Portfolio Handover &
 // Successor-Acceptance — declared transitions, append-only brief / acceptance /
 // release / dispute acts, and identity-free rule markers.
-export const SCHEMA_VERSION = 180;
+// ADR-0226 (Schema v180 → v181): Night-Work & In-Shift Break Reading — declared
+// breaks, declared night policies (window + limits with a written source), and
+// the rule's bounded marker ledger. No night minute, share, streak or verdict
+// is stored; each is re-derived on read.
+export const SCHEMA_VERSION = 181;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -3541,6 +3558,15 @@ export const COLLECTIONS = [
   'workRestCoverage',
   'workRestPolicies',
   'workRestMarkers',
+  // ADR-0226 (Schema v181): the Night-Work & In-Shift Break Reading. Declared
+  // breaks (one person × one shift × two wall-clock ends inside that shift,
+  // immutable once declared), declared night policies (the night window and
+  // the limits a human declares, each with a written source), and the rule's
+  // bounded marker ledger. No night minute, share, streak, continuous stretch
+  // or verdict is stored; each is re-derived on read.
+  'workBreaks',
+  'workNightPolicies',
+  'workNightMarkers',
   // ADR-0210 (Schema v164): the Decision-Maker Conflict-of-Interest & Recusal
   // Ledger. Declared interests, dated standing responses, reportable-kind rules
   // and the rule's bounded marker ledger. No verdict, position, coverage claim,
@@ -9105,6 +9131,15 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.workRestCoverage = normalizeWorkRestCoverage(raw.workRestCoverage, warnings);
   state.workRestPolicies = normalizeWorkRestPolicies(raw.workRestPolicies, warnings);
   state.workRestMarkers = normalizeWorkRestMarkers(raw.workRestMarkers, warnings);
+  // ADR-0226 (Schema v181): the night-work ledgers. A break whose ends cannot
+  // be read exactly, that names no shift, that lies outside its shift, or that
+  // is shorter than the governing policy's declared minimum is DROPPED with a
+  // counted warning — never repaired. A night policy with no written source, a
+  // window that is not a range, or no limit at all is dropped and NO night
+  // window and NO limit is assumed in its place.
+  state.workBreaks = normalizeWorkNightBreaks(raw.workBreaks, state.workRestShifts, state.workNightPolicies, warnings);
+  state.workNightPolicies = normalizeWorkNightPolicies(raw.workNightPolicies, warnings);
+  state.workNightMarkers = normalizeWorkNightMarkers(raw.workNightMarkers, warnings);
   // ADR-0210 (Schema v164): an interest whose record kind or id cannot be read
   // exactly, or whose person is missing, is DROPPED with a counted warning —
   // never repaired into "probably a decision", because that would attach a
@@ -10024,6 +10059,19 @@ export const MIGRATIONS = {
     mgrHandoverActs: Array.isArray(v179.mgrHandoverActs) ? v179.mgrHandoverActs : [],
     mgrHandoverMarkers: Array.isArray(v179.mgrHandoverMarkers) ? v179.mgrHandoverMarkers : [],
     settings: { ...(v179.settings || {}), ...normalizeMgrHandoverSettings(v179.settings || {}) },
+  }),
+  // 180 → 181: ADR-0226 adds THREE EMPTY ledgers (`workBreaks`,
+  // `workNightPolicies`, `workNightMarkers`) and the night-rule pause. No break
+  // is inferred from a shift, a roster or a calendar: a break is a declared
+  // stretch inside a shift, and a night window or limit invented at upgrade
+  // time would test the record against a number nobody declared.
+  180: (v180) => ({
+    ...v180,
+    schemaVersion: 181,
+    workBreaks: Array.isArray(v180.workBreaks) ? v180.workBreaks : [],
+    workNightPolicies: Array.isArray(v180.workNightPolicies) ? v180.workNightPolicies : [],
+    workNightMarkers: Array.isArray(v180.workNightMarkers) ? v180.workNightMarkers : [],
+    settings: { ...(v180.settings || {}), ...normalizeWorkNightSettings(v180.settings || {}) },
   }),
   // 178 → 179: ADR-0224 adds THREE EMPTY ledgers (`workStops`, `workStopActs`,
   // `workStopMarkers`) and the review-rule pause. A work stop is never inferred

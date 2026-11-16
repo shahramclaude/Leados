@@ -153,6 +153,7 @@ import { portfolioReviewRule } from './portfolioReviewRules.js';
 import { shiftHandoverRule } from './shiftHandoverRules.js';
 import { workStopRule } from './workStopRules.js';
 import { mgrHandoverRule } from './mgrHandoverRules.js';
+import { workNightRule } from './workNightRules.js';
 import { sealRule } from './sealRules.js';
 // ADR-0092: the Differencing Defender declares its contract like every other rule.
 import { differencingRule } from './differencingRules.js';
@@ -1206,6 +1207,15 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     emits: [],
     scansWorkspace: true,
   },
+  {
+    rule: workNightRule,
+    module: 'workNightRules.js',
+    purpose: 'RULE-WNR-01: reads the Night-Work & In-Shift Break Reading (`buildWorkNight`, ADR-0226) and files at most one opaque `act-inform` delegation per (deterministic `wnw1:…` signature, addressee), bounded at 4 per commit with remainder counted. TWO conditions: `night-breach-ahead` (a shift whose stored coverage provably carries night work that exceeds the declared night share, or a night streak past the declared consecutive-nights limit, whose decisive minute is still ahead of `now` — a breach inside one line is asked of that line’s seat holder, one made by two lines is asked of the lowest seat above BOTH, and where the person is the workspace leader, the lines share no single apex, or the person left the roster, an identity-free `workNightMarkers` observation is written and nobody is asked) and `break-record-missing` (a shift that has ended whose break record a declared `breakAfterMin` or `breakMinMin` requires, but which holds none — asked of the line’s seat holder). It never moves a shift, never invents a break, never rates a person and never judges the person whose break record is missing. A person is never disclosed in an ask; the signature lives only in the typed `issues-obligation` link. Asks self-close when the condition clears or the addressee moves, and respect human closures/returns. The `workNightAutoPropagate` pause governs both commits and explicit scans.',
+    writes: ['delegations', 'links', 'workNightMarkers'],
+    emits: [],
+    scansWorkspace: true,
+  },
+
 
   {
     rule: dutyMeansRule,
