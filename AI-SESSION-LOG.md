@@ -1,3 +1,25 @@
+## 2026-11-16 — Session 305: Decision-domain sensing register — Cynefin kernel built; workspace wiring In Progress (ADR-0228, Schema v181 unchanged, `RULE-DSN-01`)
+
+**Status: Kernel built and tested on the active branch. Route, actions, schema collections and CSV are In Progress and are NOT claimed as shipped.**
+
+Doctrine and remote checks passed. `NORTH_STAR.md` exists and carries all four binding mandates (matrix, bulletproof reliability, visual/content integrity, competitive benchmark), so nothing was added. The local `origin` is `https://github.com/shahramclaude/Leados.git`. HEAD is `30141c8`, the branch base named in the note, and `origin/main` reads the same. Rotation: Session 304 was frontline, Session 303 CEO, and director / VP was last primary in Session 302, so the rotation named director / VP × matrix. The Session 304 kaizen wiring was the frontline fallback and was not picked.
+
+**Built.** `domainSenseRegistry.js`, `domainSenseSchema.js` and `domainSense.js`. These implement the Cynefin decision-domain reading (Snowden & Boone, HBR 2007). A panel sensing a decision must be drawn from at least two lines. Each reading must carry evidence that supports its domain, and a reading that doesn't is refused with a printed reason. A domain is stated only by unanimity. Where the panel splits, the register prints `domain-contested` and picks no one. The owner commits one mode, and the committed mode is read against the one mode that fits the agreed domain. A mismatch is printed and nothing is enforced.
+
+**Altitude / structure.** Director / VP primary × matrix and single-chain. The matrix case is the quorum rule and the line check. A single-line panel reads `panel-single-line` and never silently waits.
+
+**Benchmark [BENCHMARK-UNVERIFIED].** The bar is Cynefin's own sense-making practice. Published commercial tools in this space are mainly diagram tools that sort items into boxes. The kernel matches the framework's discipline and not its facilitated practice. Judged from web descriptions only; no product was run side by side. ADR-0228 §Benchmark.
+
+**Assets.** None. The UI is not built, so no visual, onboarding or communication piece is in this slice.
+
+**Verified (one focused pass).** `tests/app/domain-sense.test.mjs` 21/21. The printed counts were re-derived independently from six hand-built decisions. Mutation: removing the two-line quorum rule failed 2 tests, and the rule was restored (21/21). `eslint` clean on the four new files after `npm ci` from the lockfile. `npm run check:boundary` passed. `npm run check:links` passed (1,295 links, 346 files).
+
+**Unverified.** The full `npm test` suite was not run. Cited precedent, analysis and probe references are declared, not checked against the record (the reader prints that gap; it is Remainder item 2). The epistemic and diligence modules were grep-scanned, not read. No real-browser or assistive-technology walkthrough, because there is no UI. The benchmark is `[BENCHMARK-UNVERIFIED]`.
+
+**Blockers.** None for the kernel. Wiring needs a schema bump (v181 → v182) and a route, which are the first Remainder items.
+
+**New gaps logged.** Structured root-cause analysis (Ishikawa / 5 Whys) has zero hits in `app/` and is a frontline × single-chain candidate. Vroom–Yetton decision-method selection (director / VP × matrix) is already on the zero-hit list. **Next rotation:** CEO / C-suite × matrix.
+
 ## 2026-11-16 — Session 304: Frontline improvement-suggestion ledger, domain kernel (Schema v181 unchanged, ADR-0227, `RULE-KZT-01`; wiring In Progress)
 
 Doctrine and remote checks passed: `NORTH_STAR.md` exists and carries all four binding mandates (matrix, bulletproof reliability, visual/content integrity, competitive benchmark), so nothing was added. The local `origin` is `https://github.com/shahramclaude/Leados.git`; HEAD and `origin/main` both read `90c43a4`, the branch base. Orientation: the next rotation after Session 303 was frontline / mid-manager or director / VP × matrix, and the frontline item logged as kaizen *teian* (Session 242) had no implementation. The Session 303 remainder was CEO-altitude and was therefore not picked, by the rotation rule.
