@@ -1,3 +1,25 @@
+## 2026-11-16 — Session 304: Frontline improvement-suggestion ledger, domain kernel (Schema v181 unchanged, ADR-0227, `RULE-KZT-01`; wiring In Progress)
+
+Doctrine and remote checks passed: `NORTH_STAR.md` exists and carries all four binding mandates (matrix, bulletproof reliability, visual/content integrity, competitive benchmark), so nothing was added. The local `origin` is `https://github.com/shahramclaude/Leados.git`; HEAD and `origin/main` both read `90c43a4`, the branch base. Orientation: the next rotation after Session 303 was frontline / mid-manager or director / VP × matrix, and the frontline item logged as kaizen *teian* (Session 242) had no implementation. The Session 303 remainder was CEO-altitude and was therefore not picked, by the rotation rule.
+
+**Built.** `app/core/domain/suggestionRegistry.js`, `suggestionSchema.js` (fail-closed normalizers) and `suggestionLedger.js` (pure reader `buildSuggestionLedger(state, { now })`). Three keys in order: route triage, the named owner's effect claim after acceptance, and independent confirmation by the submitter or a route member, never the owner. A shared route answers only when every member decided the same way with the same owner and target day; disagreement prints `triage-split` and nobody is picked. Refused acts are counted, printed with a reason, and never applied. State is re-derived on every read; overdue flags sit beside the state and decide nothing.
+
+**Altitude / structure.** Frontline / mid-manager primary × matrix and single-chain. Director / VP read the route they are granted once wiring lands.
+
+**Benchmark [BENCHMARK-UNVERIFIED].** Judged from the published descriptions of KaiNexus, IdeaScale and Brightidea only; no product was run side by side. The kernel matches their governance layer (named owner, declared deadline, separate confirmation, append-only trail, visible refusals) and does not match their execution layer (submission UX, voting, automation, dashboards, notifications). Vendor implementation-rate claims were not used. Sources are listed in ADR-0227.
+
+**Assets.** None. No visual, onboarding or communication component is in this slice.
+
+**Verified (one focused pass).** `tests/app/suggestion-ledger.test.mjs` 22/22. This covers each state, every refusal code, the shared-route cases, input order independence, non-mutation, exact fail-closed drop counts, and an independent recomputation of the printed state counts from hand-built fixtures, checked per suggestion by id. A mutation check removed the owner self-confirmation guard: one test failed; restoring the guard passed all 22. `eslint` clean on the four new files, after `npm ci` from the lockfile. `npm run check:boundary` passed. `npm run check:links` passed (1,295 links, 346 files).
+
+**Unverified.** The full `npm test` suite was not run. The real-browser and assistive-technology walkthrough was not run, because there is no UI yet. The benchmark comparison is `[BENCHMARK-UNVERIFIED]`. The claim that no kaizen implementation exists is grep-level and covers the searched files only `[UNVERIFIED]`. The Imai (1986) and Toyota citations are from memory `[UNVERIFIED]`.
+
+**Remainder (In Progress).** Schema v181 → v182 (two EMPTY-at-upgrade collections, `suggestions` and `suggestionActs`); READ, DECLARE, TRIAGE, CLAIM and CONFIRM rights through `accessGateway.js` and `seatRegistry.js`, with the route computed from the matrix joint-apex set; read-side withholding; aggregate rates below a floor of three; a `merged` outcome; the CSV scope and `#/suggestions` view. Logged in ROADMAP.md Session 304.
+
+**Step 3 gap logged.** Standard-work revision control: an accepted improvement changes a standard, and nothing records a versioned revision, its approver, or the people re-briefed on it. Logged under Planned in ROADMAP.md.
+
+**Defects observed, not fixed.** None in the new code. The earlier missing-asset defect in `workNightPanel.js` (Session 303) is still open and is unchanged by this session.
+
 ## 2026-11-16 — Session 303: Shared-dependency concentration of declared risk retention (Schema v181 unchanged, ADR-0226, `#/risk-appetite?view=shared`)
 
 Doctrine and remote checks passed: `NORTH_STAR.md` carries all four binding mandates; local `main` at `f0f0d3a` matches `origin/main`. Orientation: the neglected altitude by primary-slice rotation was **CEO / C-suite** (last primary 299; director/VP 302 and frontline 301 were the most recent), so this session served **CEO / C-suite × matrix and single-chain**.
