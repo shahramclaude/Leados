@@ -18,7 +18,7 @@ export const dsnText = (value, max = L.textMax) => {
   return String(value).replace(/\s+/g, ' ').trim().slice(0, max);
 };
 
-const dsnId = (value) => {
+export const dsnId = (value) => {
   const candidate = dsnText(value, 120);
   return ID_RE.test(candidate) && candidate !== RESERVED_ID ? candidate : null;
 };
@@ -115,7 +115,9 @@ function normalizeAct(raw) {
   if (kind === 'assess') {
     const lineId = dsnId(raw.lineId);
     const domain = DSN_DOMAIN_KEYS.includes(raw.domain) ? raw.domain : null;
-    const assessedAt = dsnInstant(raw.assessedAt);
+    // The actions store the timestamp under `at`; stored fixtures and the
+    // kernel tests use `assessedAt`. Accept either, never invent one.
+    const assessedAt = dsnInstant(raw.at ?? raw.assessedAt);
     if (!lineId || !domain || !assessedAt) return null;
     const basis = normalizeBasis(raw.basis, assessedAt);
     if (!basis) return null;
@@ -123,7 +125,7 @@ function normalizeAct(raw) {
   }
   const mode = DSN_MODE_KEYS.includes(raw.mode) ? raw.mode : null;
   const rationale = dsnText(raw.rationale, L.textMax);
-  const committedAt = dsnInstant(raw.committedAt);
+  const committedAt = dsnInstant(raw.at ?? raw.committedAt);
   if (!mode || rationale.length < L.textMin || !committedAt) return null;
   return { id, decisionId, actorId, kind, mode, rationale, at: committedAt };
 }

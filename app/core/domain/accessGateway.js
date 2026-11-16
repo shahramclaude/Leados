@@ -33,6 +33,8 @@ import { INC_RIGHTS } from './incentiveRegistry.js';
 import { DWM_RIGHTS } from './dutyMeansRegistry.js';
 import { SHO_RIGHTS } from './shiftHandoverRegistry.js';
 import { KZT_RIGHTS } from './suggestionRegistry.js';
+// ADR-0228: the decision-domain sensing register's four rights.
+import { DSN_RIGHTS } from './domainSenseRegistry.js';
 import { PRV_RIGHTS } from './portfolioReviewRegistry.js';
 import { SWP_RIGHTS } from './workStopRegistry.js';
 import { MHH_RIGHTS } from './mgrHandoverRegistry.js';
@@ -312,6 +314,15 @@ const groups = [
   [VY_RIGHTS.DECLARE, 'declareVyDecision withdrawVyDecision'],
   [VY_RIGHTS.ANSWER, 'recordVyAnswers'],
   [VY_RIGHTS.SELECT, 'selectVyStyle recordVyCommitmentOutcome'],
+  // ADR-0228: the decision-domain sensing register (Cynefin). Reading a sensed
+  // domain is manager-grade material (rank 2+). Declaring a decision is a
+  // director-and-above act; assessing is a declared panel member's act on
+  // their declared line, narrowed inside the action; committing a mode is the
+  // owner's act, likewise narrowed inside the action.
+  [DSN_RIGHTS.READ, 'domainSenseReport domainSenseAttentionCount domainSenseCandidates'],
+  [DSN_RIGHTS.DECLARE, 'domainDeclare domainScan'],
+  [DSN_RIGHTS.ASSESS, 'domainAssess'],
+  [DSN_RIGHTS.COMMIT, 'domainCommit'],
   // ADR-0231: the integrated business plan / S&OP cycle register. Reading a plan
   // of record is portfolio material (rank 3+). Recording demand and capacity is
   // the line holder's act (rank 2+), narrowed INSIDE the action to a cycle whose
@@ -740,6 +751,9 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // ADR-0227: the improvement-suggestion ledger's pure read surface. Every one
 // of these re-proves the read right inside the action.
 'suggestionReport', 'suggestionAttentionCount', 'suggestionCandidates',
+// ADR-0228: the decision-domain sensing reader re-proves the right inside the
+// action; the report never exposes raw collections to the generic projection.
+'domainSenseReport', 'domainSenseAttentionCount', 'domainSenseCandidates',
 // ADR-0224: the stop-work reader re-proves the right inside the action; the
 // report never exposes raw collections to the generic projection.
 'workStopReport', 'workStopAttentionCount', 'workStopCandidates',
