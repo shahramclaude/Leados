@@ -204,6 +204,7 @@ import { synergyRule } from './synergyRules.js';
 import { earnedValueRule } from './earnedValueRules.js';
 import { riskAppetiteRule } from './riskAppetiteRules.js';
 import { sourcingRule } from './sourcingRules.js';
+import { vyRule } from './vyRules.js';
 import { shiftHandoverRule } from './shiftHandoverRules.js';
 import { workStopRule } from './workStopRules.js';
 import { mgrHandoverRule } from './mgrHandoverRules.js';
@@ -1276,6 +1277,11 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // seat, a disconnected graph and a departed owner each write ONE identity-free
   // `sourcingMarkers` observation and ask nobody.
   sourcingRule,
+  // ADR-0230: Vroom–Yetton–Jago Decision-Participation Selector. ONE rule reads
+  // the finished register with the whole-workspace view and files at most one
+  // dated ask per condition: diagnostics owed (to the declaring seat) and style
+  // owed (to the lowest director-or-above seat holding a touched line).
+  vyRule,
   // ADR-0220: the Variable-Pay Design & Incentive Integrity Register. ONE rule
   // reads the finished register with the whole-workspace view and files at most
   // one dated ask per condition: an over-ceiling envelope (to the lowest seat

@@ -148,6 +148,7 @@ import { synergyRule } from './synergyRules.js';
 import { earnedValueRule } from './earnedValueRules.js';
 import { riskAppetiteRule } from './riskAppetiteRules.js';
 import { sourcingRule } from './sourcingRules.js';
+import { vyRule } from './vyRules.js';
 import { incentiveRule } from './incentiveRules.js';
 import { dutyMeansRule } from './dutyMeansRules.js';
 import { portfolioReviewRule } from './portfolioReviewRules.js';
@@ -1174,6 +1175,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'sourcingRules.js',
     purpose: 'RULE-SRC-01: reads the Capability Sourcing & Firm-Boundary Register (`buildSourcing`, ADR-0229) with the whole-workspace view on case declarations and withdrawals, recorded options, boundary decisions, grades, convention changes and explicit `sourcing.scan` scans — and on any other commit, because a review date passes and a hold-up exposure outlives a quiet quarter as much as a write. FOUR conditions, filed at most once per (deterministic `src1:…` signature, addressee) and bounded at 4 per commit with the remainder counted: `decision-owed` where both sides are priced on the case’s own currency, horizon and discount rate with no boundary decision on the record; `safeguard-missing` where the declared asset specificity is answered by no recorded safeguard; `grade-owed` where a live case has passed its own review date with no recorded outcome; and `mismatch` where a decided option does not follow the basis the record itself holds. Decision and hold-up asks go to the lowest seat above EVERY line the capability touches (`matrixJointApex` over the owner and lines), filtered to the chief altitude — never to one line on another’s behalf and never to the seat that recorded the option, with `no-authority-at-rank` printed for a branch whose graph holds no chief seat rather than promoting a lower one; a genuine diamond tie files one ask per joint apex; a disconnected graph, a chief queue that names no roster seat, or a departed owner writes ONE identity-free `sourcingMarkers` observation and substitutes nobody. The ask text is deliberately opaque — no capability, no currency, no amount, no vendor — because a delegation is readable above the addressee; the opaque signature lives only in the typed `issues-obligation` link. Asks carry typed `issues-obligation` provenance and close themselves when the condition clears or the addressee moves. It never declares, amends or withdraws a case, never records or re-prices an option, never decides a mode, never converts or pools a currency, never grades its own decision and never rates a supplier or a person; pause-governed on every path (`sourcingAutoPropagate`), including the explicit scan.',
     writes: ['delegations', 'links', 'sourcingMarkers'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: vyRule,
+    module: 'vyRules.js',
+    purpose: 'RULE-VY-01: reads the Vroom–Yetton–Jago Decision-Participation Register (`buildVroomYetton`, ADR-0230) with the whole-workspace view on decision declarations and withdrawals, recorded diagnostic answers and selected participation styles — and on any other commit, because a review date passes and an uncommitted style outlives a quiet quarter as much as a write. TWO conditions, filed at most once per (deterministic `vy1:…` signature, addressee) and bounded at 4 per commit with the remainder counted: `decision.owed` where a decision is declared and no diagnostic answers exist yet, addressed to the declaring seat; and `selection.owed` where answers exist but no style has been selected, addressed to the lowest director-or-above seat that holds a line the decision touches (falling back to the workspace apex `leader`). The ask text is deliberately opaque — no decision title, no person, no line — because a delegation is readable above the addressee; the opaque signature lives only in the typed `issues-obligation` link. Asks carry typed `issues-obligation` provenance and close themselves when the condition clears or the addressee moves. It never declares, amends or withdraws a decision, never records or amends diagnostic answers, never selects or overrides a style, never grades an outcome and never rates a person; pause-governed on every path (`vyAutoPropagate`), including the explicit scan.',
+    writes: ['delegations', 'links', 'vyMarkers'],
     emits: [],
     scansWorkspace: true,
   },

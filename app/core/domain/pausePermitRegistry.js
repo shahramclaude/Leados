@@ -284,6 +284,7 @@ export const PAUSE_PERMIT_MATRIX_REACH_SWITCHES = Object.freeze([
   // the same apex or the decider — so silencing it reaches across reporting
   // lines, and those lines' managers are not told.
   'sourcingAutoPropagate',
+  'vyAutoPropagate',
   // ADR-0226: silencing this rule can leave a shared dependency whose combined
   // declared retention would exceed its ceiling without the ask that names the
   // seat above every carrying line; the reading remains open and visible, and
@@ -375,6 +376,7 @@ export const PAUSE_PERMIT_SWITCH_RULES = Object.freeze({
   // hold-up exposure unanswered across every line a capability touches; the
   // register stays open and visible, and nothing is decided in its place.
   sourcingAutoPropagate: 'sourcingRules.js',
+  vyAutoPropagate: 'vyRules.js',
   // ADR-0226: silencing this rule can leave a would-exceed shared dependency
   // without its ceiling ask; the reading remains open and visible.
   riskConcentrationAutoPropagate: 'riskConcentrationRules.js',

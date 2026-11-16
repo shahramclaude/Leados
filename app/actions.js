@@ -132,6 +132,7 @@ import { createPortfolioReviewActions } from './core/domain/portfolioReviewActio
 // seat-checked reads. Declaring a case, recording a priced option, deciding the
 // boundary question and grading the frozen assumptions — nothing else.
 import { createSourcingActions } from './core/domain/sourcingActions.js';
+import { createVyActions } from './core/domain/vyActions.js';
 import { createWorkRestActions } from './core/domain/workRestActions.js';
 import { createWorkNightActions } from './core/domain/workNightActions.js';
 // ADR-0223: the Shift Handover & Two-Key Readback Ledger — the dated outgoing
@@ -20369,6 +20370,11 @@ export function createApi(store, options = {}) {
   // right against the live seat and, for a decision, against the joint chief
   // apex computed from the reporting graph — never an addressee the actor chose.
   Object.assign(api, createSourcingActions(store, { now: clock, idFactory: id }));
+  // ADR-0230: Vroom–Yetton–Jago Decision-Participation Selector — declare a
+  // participation question, record diagnostic answers on a line, select a style
+  // (accept or override the recommendation), and grade whether the predicted
+  // commitment materialised.
+  Object.assign(api, createVyActions(store, { now: clock, idFactory: id }));
   // ADR-0209: the Cross-Line Work/Rest Recovery Ledger — recording a shift for a
   // line the acting seat HOLDS, its actual times or cancellation, a line's
   // coverage attestation, and the declared policy. No act moves or cancels a

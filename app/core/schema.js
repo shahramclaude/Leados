@@ -327,6 +327,13 @@ import {
   normalizeSrcMarkers,
 } from './domain/sourcingSchema.js';
 import { normalizeSourcingSettings } from './domain/sourcingRegistry.js';
+import { normalizeVySettings } from './domain/vyRegistry.js';
+import {
+  normalizeVyDecisions,
+  normalizeVyAnswers,
+  normalizeVyStyleRecords,
+  normalizeVyMarkers,
+} from './domain/vySchema.js';
 // ADR-0220 (Schema v174): the Variable-Pay Design & Incentive Integrity
 // Register. Plans, measures, verified readings, awards, recovery acts and
 // identity-free markers normalize fail-closed; a reading's figure is checked
@@ -1246,7 +1253,7 @@ export {
 // breaks, declared night policies (window + limits with a written source), and
 // the rule's bounded marker ledger. No night minute, share, streak or verdict
 // is stored; each is re-derived on read.
-export const SCHEMA_VERSION = 182;
+export const SCHEMA_VERSION = 183;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -3715,6 +3722,14 @@ export const COLLECTIONS = [
   'sourcingOptions',
   'sourcingActs',
   'sourcingMarkers',
+  // Schema v183: ADR-0230 — Vroom–Yetton–Jago Decision-Participation Selector.
+  // Declared participation questions, per-line diagnostic answers, style
+  // selections and identity-free rule markers. No recommendation is stored:
+  // each is re-derived on read from the declared diagnostics and the chosen tree.
+  'vyDecisions',
+  'vyAnswers',
+  'vyStyleRecords',
+  'vyMarkers',
 ];
 
 /** Stable empty state. `now` is an ISO string so the result is a pure value. */
@@ -4574,6 +4589,7 @@ export function normalizeSettings(raw) {
     // here would be silently DROPPED on every load, and the pause switch the
     // census reads would be a switch the record does not hold.
     ...normalizeMgrHandoverSettings(s),
+    ...normalizeVySettings(s),
     ...normalizeStructureHistorySettings(s),
     ...normalizeDifferencesSettings(s),
     ...normalizeFitSettings(s),
@@ -9256,6 +9272,14 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.sourcingOptions = normalizeSourcingOptions(raw.sourcingOptions, state.sourcingCases, warnings);
   state.sourcingActs = normalizeSourcingActs(raw.sourcingActs, state.sourcingCases, warnings);
   state.sourcingMarkers = normalizeSrcMarkers(raw.sourcingMarkers, warnings);
+  // ADR-0230: Vroom–Yetton–Jago Decision-Participation Selector. Declared
+  // participation questions, per-line diagnostic answers, style selections and
+  // identity-free rule markers. No recommendation is stored — each is re-derived
+  // on read from the declared diagnostics and the chosen tree.
+  state.vyDecisions = normalizeVyDecisions(raw.vyDecisions, warnings);
+  state.vyAnswers = normalizeVyAnswers(raw.vyAnswers, state.vyDecisions, warnings);
+  state.vyStyleRecords = normalizeVyStyleRecords(raw.vyStyleRecords, state.vyDecisions, warnings);
+  state.vyMarkers = normalizeVyMarkers(raw.vyMarkers, warnings);
   // ADR-0220: a plan, measure, award or recovery act that cannot be read exactly
   // is DROPPED with a counted warning. A reading is resolved AFTER its measures,
   // because the measure's unit decides which field the figure belongs in; a
@@ -10105,6 +10129,19 @@ export const MIGRATIONS = {
     sourcingActs: Array.isArray(v181.sourcingActs) ? v181.sourcingActs : [],
     sourcingMarkers: Array.isArray(v181.sourcingMarkers) ? v181.sourcingMarkers : [],
     settings: { ...(v181.settings || {}), ...normalizeSourcingSettings(v181.settings || {}) },
+  }),
+  // 182 → 183: ADR-0230 adds FOUR EMPTY ledgers (`vyDecisions`,
+  // `vyAnswers`, `vyStyleRecords`, `vyMarkers`) and the Vroom–Yetton pause
+  // switch. No participation style is inferred from a role, a title or a
+  // reporting line — every diagnostic answer is a dated, named declaration.
+  182: (v182) => ({
+    ...v182,
+    schemaVersion: 183,
+    vyDecisions: Array.isArray(v182.vyDecisions) ? v182.vyDecisions : [],
+    vyAnswers: Array.isArray(v182.vyAnswers) ? v182.vyAnswers : [],
+    vyStyleRecords: Array.isArray(v182.vyStyleRecords) ? v182.vyStyleRecords : [],
+    vyMarkers: Array.isArray(v182.vyMarkers) ? v182.vyMarkers : [],
+    settings: { ...(v182.settings || {}), ...normalizeVySettings(v182.settings || {}) },
   }),
   // 179 → 180: ADR-0225 adds THREE EMPTY ledgers (`mgrHandovers`,
   // `mgrHandoverActs`, `mgrHandoverMarkers`) and the handover-rule pause. A

@@ -27,6 +27,7 @@ import { EV_RIGHTS } from './earnedValueRegistry.js';
 import { RA_RIGHTS } from './riskAppetiteRegistry.js';
 // ADR-0229: the capability sourcing register's four rights.
 import { SRC_RIGHTS } from './sourcingRegistry.js';
+import { VY_RIGHTS } from './vyRegistry.js';
 import { INC_RIGHTS } from './incentiveRegistry.js';
 import { DWM_RIGHTS } from './dutyMeansRegistry.js';
 import { SHO_RIGHTS } from './shiftHandoverRegistry.js';
@@ -301,6 +302,14 @@ const groups = [
   [SRC_RIGHTS.RECORD, 'sourcingDeclareCase sourcingWithdrawCase sourcingRecordOption sourcingScan'],
   [SRC_RIGHTS.DECIDE, 'sourcingDecide'],
   [SRC_RIGHTS.GRADE, 'sourcingGrade'],
+  // ADR-0230: Vroom–Yetton–Jago Decision-Participation Selector. Reading is
+  // open at manager altitude; declaring is open at every altitude; answering
+  // the diagnostics narrows to a seat holding a touched line; selecting the
+  // style is director-and-above.
+  [VY_RIGHTS.READ, 'vyReport sourcingVyScan'],
+  [VY_RIGHTS.DECLARE, 'declareVyDecision withdrawVyDecision'],
+  [VY_RIGHTS.ANSWER, 'recordVyAnswers'],
+  [VY_RIGHTS.SELECT, 'selectVyStyle recordVyCommitmentOutcome'],
   // ADR-0220: the variable-pay design & incentive integrity register. Reading it
   // is open at the manager altitude because a team envelope is a manager's own
   // instrument; the row class and the span filter decide what is printed.
@@ -683,6 +692,9 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // reads are absent from SAFE_READS is unreadable under enforcement while its
 // writes are still gated.
 'sourcingReport', 'sourcingAttentionCount', 'sourcingCandidates', 'sourcingReadModel', 'sourcingSeesCase', 'sourcingMarkers', 'sourcingReadCents',
+// ADR-0230: the Vroom–Yetton–Jago decision-participation register's pure read
+// surface. Every one of these re-proves the read right inside the action.
+'vyReport', 'sourcingVyScan',
 // ADR-0220: the variable-pay register's pure read surface. Every one of these
 // re-proves the read right inside the action. Registered here because a module
 // whose reads are absent from SAFE_READS is unreadable under enforcement while

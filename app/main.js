@@ -183,6 +183,8 @@ import { mgrHandoverAttentionCount } from './core/domain/mgrHandover.js';
 // does itself and what it buys, decided on specificity and safeguards.
 import { renderSourcing } from './views/sourcing.js';
 import { sourcingAttentionCount as sourcingAttentionCountFn } from './core/domain/sourcing.js';
+import { renderVroomYetton } from './views/vroom-yetton.js';
+import { vyAttentionCount as vyAttentionCountFn } from './core/domain/vy.js';
 import { renderPortfolioReview } from './views/portfolioReview.js';
 import { portfolioReviewAttentionCount } from './core/domain/portfolioReview.js';
 import { dutyMeansAttentionCount } from './core/domain/dutyMeans.js';
@@ -625,6 +627,10 @@ export const NAV = [
     // one decides which units the enterprise keeps, the other whether the
     // enterprise owns the capability at all.
     { route: 'sourcing', label: 'Capability sourcing', icon: '⧉', badge: 'sourcing' },
+    // ADR-0230: Vroom–Yetton–Jago Decision-Participation Selector — how much
+    // to involve others in a decision: autocratic I/II, consultative I/II,
+    // group II, on seven situational diagnostics.
+    { route: 'vroom-yetton', label: 'Decision participation', icon: '⑃', badge: 'vroom-yetton' },
     // ADR-0121: who answers for each declared duty line when the holder is out.
     { route: 'duty-cover', label: 'Duty coverage', icon: '⛨', badge: 'dutyCoverage' },
     // ADR-0140: who is accountable to whom when one person has several managers.
@@ -803,6 +809,9 @@ const RENDERERS = {
   // ADR-0229: capability sourcing — make, buy, partner or hybrid, on one exact
   // comparison over one declared horizon.
   sourcing: (ctx) => renderSourcing(ctx),
+  // ADR-0230: Vroom–Yetton–Jago Decision-Participation Selector — how much to
+  // involve others in a decision, on seven situational diagnostics.
+  'vroom-yetton': (ctx) => renderVroomYetton(ctx),
   conflicts: (ctx) => renderConflicts(ctx),
   conflict: (ctx, segments) => renderConflictDetail(ctx, safeDecode(segments[1])),
   recognition: (ctx) => renderRecognition(ctx),
@@ -1692,6 +1701,9 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       // ADR-0229: cases that owe a human something — a boundary decision, an
       // unanswered hold-up exposure, a passed review with no grade.
       sourcing: sourcingAttentionCountFn(state, { now: at, settings: state.settings, seat: seatCtx?.seat || null }),
+      // ADR-0230: decisions that owe a style selection — diagnostics unanswered
+      // or a recommended style not yet recorded.
+      'vroom-yetton': vyAttentionCountFn(state, { now: at, settings: state.settings, seat: seatCtx?.seat || null }),
       // Schema v32: drafts written from case facts that still await a human.
       comms: (state.commsDrafts || []).filter((d) => d && d.status === 'draft').length,
       due: dueMeetings(state, at, state.settings).length,
@@ -2242,6 +2254,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       'work-stop': 'Stop-work & safe restart — an active hold, independent clearance, then the affected operator’s key',
       'manager-handover': 'Manager handover — a role does not expire with its holder: brief, successor acceptance, governor release',
       sourcing: 'Capability sourcing — make, buy, partner or hybrid: the boundary of the firm, decided on asset specificity and the safeguards a contract can carry',
+      'vroom-yetton': 'Decision participation — how much to involve others in a decision: autocratic I/II, consultative I/II, group II, on seven Vroom–Yetton–Jago diagnostics',
       performance: 'Performance recovery — due process, evidence and the cost of waiting',
       survival: 'Delivery survival — how long work actually takes, with censoring and competing risks',
       wait: 'Cost of waiting — what every open item costs per week of waiting, priced and scenario-simulated',

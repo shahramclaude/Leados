@@ -1,3 +1,20 @@
+## 2026-11-16 — Session 307: Vroom–Yetton Decision-Participation Selector — shipped (ADR-0230, Schema v183, `RULE-VY-01`, CSV #171, `#/vroom-yetton`)
+
+**Status: shipped and verified on the active branch. 20/20 Vroom–Yetton tests pass; 18/18 sourcing tests still pass (38 total, 0 fail).**
+
+Doctrine and remote checks passed. `NORTH_STAR.md` exists and carries all four binding mandates (matrix, bulletproof reliability, visual/content integrity, competitive benchmark), so nothing was added. The remote is `https://github.com/shahramclaude/Leados`, HEAD `da195ef5` — matching the branch base. Rotation: Session 305 director / VP, 304 frontline, 303 CEO, so this session was **CEO / C-suite × matrix**.
+
+**Built.** `vyRegistry.js` (closed vocabulary: 5 styles A1/A2/C1/C2/G2, 2 trees time-driven/development-driven, 7 diagnostics q1–q7 with per-line q2/q5/q6/q7 and solo q1/q3/q4, 6 verdicts, 4 rights READ/DECLARE/ANSWER/SELECT, limits), `vySchema.js` (fail-closed normalizers: decisions, answers, style records, markers, no inference), `vy.js` (pure reader `buildVroomYetton` — re-derives verdicts/recommendations/counts on read; `vyAttentionCount`; `vyCsvRows`), `vyActions.js` (five acts: declare, withdraw, record answers, select style with override, grade commitment outcome — every write through the loader), `vyRules.js` (`RULE-VY-01` post-commit rule, marker-idempotent per `vy1:<kind>:<decisionId>` signature, pause switch `vyAutoPropagate`, files `decision.owed` / `selection.owed` asks, closes on answers/selection), schema v182 → v183 additive migration with four empty ledgers, four seat rights (READ rank 2–5, DECLARE rank 1–5, ANSWER rank 2–5 with held-line check, SELECT rank 3–5), `accessGateway.js` mappings + SAFE_READS for `vyReport`/`sourcingVyScan`, `postCommit.js` registration, `propagationContracts.js` entry, `pausePermitRegistry.js` switch, `app/main.js` route + nav entry (icon `⑃`) + badge counter + documentTitle, `app/views/vroom-yetton.js`, CSV #171.
+
+**Matrix behavior verified by test:** decide-alone (A1/A2) refused where another line has answered on a touched line; consultative (C1/C2/G2) remains available; same-seat answer+select separation (via decide-alone cross-line rule); selector cannot self-grade; frontline rank 1–5 cannot select; one style record per decision; override requires ≥24-char reason; lesson ≥24-char for grading.
+
+**Three test fixes this session (all real, no test weakening):**
+1. Test 13 (self-grade refusal): lesson was too short (<24 chars) so field returned `lesson` not `seatId` — made lesson long enough so the real guard fires.
+2. Test 15 (decide-alone cross-line): `recommended` is `A2` (time-driven tree with q3=true), so C1 is also an override needing a reason — added override reason; removed over-broad self-select check that blocked C1 when another seat answered on a held line (that case is already handled by the decide-alone rule).
+3. Test 19 (rule idempotence): SCANNED branch didn't persist filed asks to `draft.delegations`, so a second scan on the same draft re-filed — asks are now pushed to `draft.delegations` after the scan loop.
+
+**Verification:** `node --test tests/app/capability-sourcing.test.mjs tests/app/vroom-yetton.test.mjs` → 38 pass, 0 fail. `node --check` passes on all modified JS files.
+
 ## 2026-11-16 — Session 306: Capability Sourcing & Firm-Boundary Register — shipped (ADR-0229, Schema v182, `RULE-SRC-01`, CSV #170, `#/sourcing`)
 
 **Status: shipped and verified on the active branch. 18/18 tests pass; lint, a11y, boundary and links all clean.**
