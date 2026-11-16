@@ -328,6 +328,16 @@ export const RECORD_POLICIES = Object.freeze({
   assuranceFindings: { classKey: 'unit', detailCeiling: 0, reportOnly: true, label: 'Assurance findings — control, scope, criteria, accountable lines (report only; state and recurrence re-derived on read)', route: '#/findings' },
   assuranceFindingActs: { classKey: 'unit', detailCeiling: 0, reportOnly: true, label: 'Append-only assignments, assertions, independent verifications and residual-risk acceptances (report only)', route: '#/findings' },
   assuranceFindingMarkers: { classKey: 'unit', detailCeiling: 0, reportOnly: true, label: 'Assurance-finding no-ask observations — an owner, holder or joint apex the graph cannot name (identity-free)', route: '#/findings' },
+  // ADR-0233: a gate names a joiner, their declared terms, the lines asked for
+  // evidence and the people who submit, extend, decide and notify, so ALL rows
+  // are report-only (`detailCeiling: 0`); `buildProbationReport` discloses rows
+  // to parties (the joiner included — a fair process is one the person it is
+  // about can see) and to the span that holds the named people, and withholds
+  // the register-wide rate whole whenever any row is hidden. The rule's markers
+  // are identity-free by construction.
+  probationGates: { classKey: 'unit', detailCeiling: 0, reportOnly: true, label: 'Probation gates — joiner, declared window, instrument terms, lines (report only; state and lapse re-derived on read)', route: '#/probation' },
+  probationActs: { classKey: 'unit', detailCeiling: 0, reportOnly: true, label: 'Append-only evidence asks, submissions, extensions, decisions and notifications (report only)', route: '#/probation' },
+  probationMarkers: { classKey: 'unit', detailCeiling: 0, reportOnly: true, label: 'Probation no-ask observations — a confirming manager or line holder the graph cannot name (identity-free)', route: '#/probation' },
   // ADR-0216: a deal thesis, its promises, their readings and one-off costs are
   // ENTERPRISE material — a synergy belongs to the whole deal, not to one line's
   // reading of it, and below the executive altitude there is no honest per-line
@@ -1282,6 +1292,17 @@ export const ACTION_RIGHTS = Object.freeze({
   'remediate-assurance-finding': { minRank: 1, maxRank: 5, label: 'Name the owner and the day on an accountable line you hold (assign), or assert the fix you own (assert)' },
   'verify-assurance-remediation': { minRank: 1, maxRank: 5, label: 'Independently confirm or reject a fix — only from a seat strictly above the remediation owner, never as the owner' },
   'accept-assurance-finding-risk': { minRank: 4, maxRank: 5, label: 'Accept a finding’s residual risk in your own name, with a reason and a review date — never on a finding you remediate' },
+  // ADR-0233: the Probation Confirmation Gate Register. Reading includes the
+  // joiner (a fair process is one the person it is about can see); the gate is
+  // opened, asked, decided and notified by the joiner's HOME manager in their
+  // own name, and a line's evidence is that line's own holder's act. Every one
+  // of those is narrowed inside the action to the named person, so the right
+  // window is any people manager (rank 1–5) and the joiner.
+  'read-probation-gates': { minRank: 1, maxRank: 5, label: 'Read the probation gate register within your grant — your own gate, the gates you confirm, the lines you have been asked on, and the span that holds them' },
+  'declare-probation-gate': { minRank: 1, maxRank: 5, label: 'Open a probation gate on one of your direct reports in your own name, or scan the register — the window and instrument terms are declared, never inferred' },
+  'ask-probation-evidence': { minRank: 1, maxRank: 5, label: 'Put the evidence duty to the holder of a declared line of your joiner, by a day' },
+  'submit-probation-evidence': { minRank: 1, maxRank: 5, label: 'Record dated evidence on a line of the joiner — the home line’s is the confirming manager’s own act, and a matrix line’s is its own holder’s' },
+  'decide-probation-gate': { minRank: 1, maxRank: 5, label: 'Record the final decision (confirm or end) on a gate you opened, extend the window where the instrument allows it, and record the written notification — nobody else decides a joiner’s gate' },
 });
 
 export function actionVerdict(action, seat) {

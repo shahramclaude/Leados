@@ -121,7 +121,7 @@ function parseCsv(csv) {
 // workspace at the current version, rather than pinning the whole suite to the
 // version ADR-0228 happened to ship at.
 test('domain sense: the v186 step adds two empty ledgers, the spine carries ADR-0232 as well, and CSV #174 is registered', () => {
-  assert.equal(SCHEMA_VERSION, 187);
+  assert.equal(SCHEMA_VERSION, 188);
   for (const key of ['domainDecisions', 'domainSenseActs']) {
     assert.ok(COLLECTIONS.includes(key), `${key} is declared`);
   }
@@ -137,9 +137,9 @@ test('domain sense: the v186 step adds two empty ledgers, the spine carries ADR-
 
   // RULE-DSN-01 is enforced in the reader, not by a post-commit rule: ADR-0228
   // added no spine rule and every rule keeps exactly one contract. The spine
-  // stands at 148 because ADR-0232 (Session 311) added `assuranceFindingRule`
-  // to it — one contract per rule, unchanged discipline.
-  assert.equal(DEFAULT_POST_COMMIT_RULES.length, 148, 'the spine carries ADR-0232 alongside ADR-0228');
+  // stands at 149 because ADR-0233 (Session 312) added `probationRule` to it —
+  // one contract per rule, unchanged discipline.
+  assert.equal(DEFAULT_POST_COMMIT_RULES.length, 149, 'the spine carries ADR-0233 alongside ADR-0232');
   assert.equal(DEFAULT_POST_COMMIT_RULES.some((rule) => rule && rule.id === 'domainSenseRule'), false, 'no new spine rule; refusals are reader refusals');
   assert.equal(PROPAGATION_CONTRACTS.length, DEFAULT_POST_COMMIT_RULES.length, 'one contract per spine rule');
 

@@ -253,8 +253,10 @@ import { SHO_CSV_COLUMNS, SHO_CSV_DESCRIPTOR, SHO_CSV_SCOPE } from './domain/shi
 import { buildShiftHandover, shiftHandoverCsvRows } from './domain/shiftHandover.js';
 import { KZT_CSV_COLUMNS, KZT_CSV_DESCRIPTOR, KZT_CSV_SCOPE } from './domain/suggestionRegistry.js';
 import { AFR_CSV_COLUMNS, AFR_CSV_DESCRIPTOR, AFR_CSV_SCOPE } from './domain/assuranceRegistry.js';
+import { PBG_CSV_COLUMNS, PBG_CSV_DESCRIPTOR, PBG_CSV_SCOPE } from './domain/probationRegistry.js';
 import { buildSuggestionReport, suggestionCsvRows } from './domain/suggestionReport.js';
 import { buildAssuranceReport, assuranceFindingCsvRows } from './domain/assuranceFindingReport.js';
+import { buildProbationReport, probationGateCsvRows } from './domain/probationGateReport.js';
 // ADR-0228: aggregate, identity-free decision-domain sensing aggregates from the panel reader.
 import { DSN_CSV_COLUMNS, DSN_CSV_DESCRIPTOR, DSN_CSV_SCOPE } from './domain/domainSenseRegistry.js';
 import { domainSenseReport, domainSenseCsvRows } from './domain/domainSenseReport.js';
@@ -1645,6 +1647,14 @@ export const CSV_EXPORTS = [
   // boundary; a cell below the privacy floor of three exports BLANK with its
   // reason, never zero.
   AFR_CSV_DESCRIPTOR,
+  // #176 (ADR-0233): the probation confirmation gate register — aggregate and
+  // identity-free. One summary row, one coverage row, one row per derived
+  // state, per decision outcome and per decision-window bucket, plus the
+  // notification and on-time rows. No joiner, manager, line, role label,
+  // expectation, instrument reference, evidence text or letter reference
+  // crosses this boundary; a rate whose denominator is not published exports
+  // BLANK with its reason, never zero.
+  PBG_CSV_DESCRIPTOR,
 ];
 
 function personLookup(state) {
@@ -7026,6 +7036,18 @@ export function buildScopeTable(state, scope, now) {
       return {
         columns: KZT_CSV_COLUMNS.map((key) => ({ key, header: key })),
         rows: suggestionCsvRows(report),
+      };
+    }
+    case PBG_CSV_SCOPE: {
+      // CSV scope #176 (ADR-0233, Schema v188). Built from the SAME reader the
+      // `#/probation` panel renders, with no seat: every figure is an exact
+      // integer count over the whole register, so no joiner, manager, line,
+      // role label, expectation, evidence text or letter reference is
+      // reachable from this export.
+      const report = buildProbationReport(state, { now, seat: null });
+      return {
+        columns: PBG_CSV_COLUMNS.map((key) => ({ key, header: key })),
+        rows: probationGateCsvRows(report),
       };
     }
     case AFR_CSV_SCOPE: {

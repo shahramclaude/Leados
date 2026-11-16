@@ -185,6 +185,10 @@ export const PAUSE_PERMIT_SCOPE_REASONS = Object.freeze({
  * other manager is never told by any other route.
  */
 export const PAUSE_PERMIT_MATRIX_REACH_SWITCHES = Object.freeze([
+  // ADR-0233: the probation evidence-ask rule addresses the holder of a
+  // joiner's declared matrix line directly, so silencing it leaves a line's
+  // evidence duty unasked — and that line's manager is not told.
+  'probationAutoPropagate',
   'cadenceAutoPropagate',
   'ctrAutoPropagate',
   'matrixInterfaceAutoPropagate',
@@ -399,6 +403,10 @@ export const PAUSE_PERMIT_SWITCH_RULES = Object.freeze({
   // two lines at once; the register stays open and visible, and no plan is
   // approved in its place.
   ibpAutoPropagate: 'ibpRules.js',
+  // ADR-0233: silencing this rule can leave a window closing or lapsed without
+  // its decision ask and a line without its evidence ask; the reading remains
+  // open and visible.
+  probationAutoPropagate: 'probationGateRules.js',
   // ADR-0226: silencing this rule can leave a would-exceed shared dependency
   // without its ceiling ask; the reading remains open and visible.
   riskConcentrationAutoPropagate: 'riskConcentrationRules.js',

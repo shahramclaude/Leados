@@ -34,6 +34,7 @@ import { DWM_RIGHTS } from './dutyMeansRegistry.js';
 import { SHO_RIGHTS } from './shiftHandoverRegistry.js';
 import { KZT_RIGHTS } from './suggestionRegistry.js';
 import { AFR_RIGHTS } from './assuranceRegistry.js';
+import { PBG_RIGHTS } from './probationRegistry.js';
 // ADR-0228: the decision-domain sensing register's four rights.
 import { DSN_RIGHTS } from './domainSenseRegistry.js';
 import { PRV_RIGHTS } from './portfolioReviewRegistry.js';
@@ -387,6 +388,16 @@ const groups = [
   [AFR_RIGHTS.REMEDIATE, 'assuranceFindingAssign assuranceFindingAssert'],
   [AFR_RIGHTS.VERIFY, 'assuranceFindingVerify'],
   [AFR_RIGHTS.ACCEPT, 'assuranceFindingAccept'],
+  // ADR-0233: the Probation Confirmation Gate Register. Every act is
+  // first-person and re-proved inside the action: the joiner's HOME manager
+  // opens, asks, extends, decides and notifies the gate, and a declared
+  // line's evidence is that line's own holder's act. The joiner reads their
+  // own gate. Reads are open from the frontline upward, narrowed to the grant.
+  [PBG_RIGHTS.READ, 'probationGateReport probationGateAttentionCount probationGateCandidates'],
+  [PBG_RIGHTS.DECLARE, 'probationGateDeclare probationGateScan'],
+  [PBG_RIGHTS.ASK, 'probationGateAsk'],
+  [PBG_RIGHTS.SUBMIT, 'probationGateSubmit'],
+  [PBG_RIGHTS.DECIDE, 'probationGateExtend probationGateDecide probationGateNotify'],
   // ADR-0224: stop-work holds may be raised at frontline rank; mitigation is
   // work-lead-controlled, assessment is Director+ and tied to every frozen
   // joint apex, and restart is only an affected operator's second key.
@@ -765,6 +776,9 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // ADR-0232: the assurance finding reader re-proves the right inside the action;
 // the report never exposes raw collections to the generic projection.
 'assuranceFindingReport', 'assuranceFindingAttentionCount', 'assuranceFindingCandidates',
+// ADR-0233: the probation gate reader re-proves the right inside the action;
+// the report never exposes raw collections to the generic projection.
+'probationGateReport', 'probationGateAttentionCount', 'probationGateCandidates',
 // ADR-0228: the decision-domain sensing reader re-proves the right inside the
 // action; the report never exposes raw collections to the generic projection.
 'domainSenseReport', 'domainSenseAttentionCount', 'domainSenseCandidates',
@@ -1141,6 +1155,12 @@ const MATRIX_LINE_SCOPED = new Set([
   // only on declared Matrix lines; the action re-proves every person and the
   // frozen joint seat before a transition is accepted.
   'mgrHandoverDeclare',
+  // ADR-0233: a probation ask is addressed to the holder of the joiner's
+  // declared Matrix line, and that holder's evidence is recorded on the very
+  // line the ask was made on; either party may be reachable only through the
+  // declared line. Both actions re-prove the joiner, the line and the holder
+  // before they write.
+  'probationGateAsk', 'probationGateSubmit',
   // ADR-0232: an assurance finding is the matrix case in its purest form. The
   // accountable holders it names (assign), the owner an assignment names
   // (assign), the owner whose fix a verifier tests (verify) and the finding an
@@ -1150,6 +1170,12 @@ const MATRIX_LINE_SCOPED = new Set([
   // from naming somebody it cannot reach at all.
   'assuranceFindingDeclare', 'assuranceFindingAssign', 'assuranceFindingAssert',
   'assuranceFindingVerify', 'assuranceFindingAccept',
+  // ADR-0233: a probation gate's declared lines may be reachable only through
+  // declared Matrix lines. The ask names a line holder and the submit comes
+  // from that holder — both re-prove the line, the joiner and the holder's own
+  // identity before anything is written; the gate only stops a seat from
+  // naming somebody it cannot reach at all.
+  'probationGateAsk', 'probationGateSubmit',
 ]);
 
 /** Exact method allowlist + rank + record/person scope. No arbitrary API names. */

@@ -439,7 +439,15 @@ test('standalone artifact exists and is a single inline HTML document', () => {
   // module, still under the unchanged 24,000 bytes/module density guard, which
   // is the bound that catches a module or asset inlined twice. This absolute
   // ceiling moves only because real capability was added.
-  assert.ok(bytes < 19_050_000, `standalone file is unexpectedly large (${bytes} bytes)`);
+  // ADR-0233 (Session 312, Schema v188) completes the Probation Confirmation
+  // Gate: seven probation modules, the `#/probation` view, CSV #176 and the
+  // generated method diagram (`probation-gate-method.jpg`, 199,153 bytes,
+  // embedded with the rest of app/assets). Measured build: 19,353,333 bytes /
+  // 1,035 source modules = 18,699 bytes per module, still under the unchanged
+  // 24,000 bytes/module density guard, which is the bound that catches a
+  // module or asset inlined twice. The ceiling is moved to the measured size
+  // plus headroom per this file's documented convention.
+  assert.ok(bytes < 19_400_000, `standalone file is unexpectedly large (${bytes} bytes)`);
   // Derived from the folder, not from a list in this file: the day a panel adds
   // a diagram, an enumerator that names the old two would still pass. Same
   // lesson the build script learned in ADR-0186.

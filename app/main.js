@@ -174,6 +174,10 @@ import { renderSuggestions } from './views/suggestions.js';
 import { renderAssuranceFindings } from './views/assurance-findings.js';
 import { suggestionAttentionCount } from './core/domain/suggestionReport.js';
 import { assuranceFindingAttentionCount } from './core/domain/assuranceFindingReport.js';
+// ADR-0233: the Probation Confirmation Gate Register — the dated decision and
+// the per-line evidence duty a probation window owes, before the window closes.
+import { renderProbationGates } from './views/probation-gates.js';
+import { probationGateAttentionCount } from './core/domain/probationGateReport.js';
 // ADR-0224: Stop-Work Authority & Safe Restart — frontline hold, Director+
 // matrix clearance, and a separate affected-operator restart key.
 import { renderWorkStop } from './views/workStop.js';
@@ -638,6 +642,13 @@ export const NAV = [
     // suggestions on purpose: a suggestion improves the work, a finding repairs
     // a control that did not hold.
     { route: 'findings', label: 'Assurance findings', icon: '⚠', badge: 'assuranceFindings' },
+    // ADR-0233: the dated decision and the per-line evidence duty a probation
+    // window owes — confirm, extend or end before the window closes, on
+    // evidence from every declared line, communicated to the joiner in
+    // writing. Beside assurance findings on purpose: one register holds the
+    // decision a control failure owes, the other the decision a joiner's
+    // first window owes.
+    { route: 'probation', label: 'Probation gates', icon: '⏳', badge: 'probationGates' },
     // ADR-0224: stop-work authority — no restart without all independent joint
     // apex reviews and an affected operator's own key.
     { route: 'work-stop', label: 'Stop-work & restart', icon: '⛔', badge: 'workStop' },
@@ -840,6 +851,8 @@ const RENDERERS = {
   'suggestions': (ctx) => renderSuggestions(ctx),
   // ADR-0232: the assurance finding & remediation register.
   findings: (ctx) => renderAssuranceFindings(ctx),
+  // ADR-0233: the probation confirmation gate register.
+  probation: (ctx) => renderProbationGates(ctx),
   // ADR-0224: stop-work declaration, independent review and affected-operator key.
   'work-stop': (ctx) => renderWorkStop(ctx),
   // ADR-0225: managerial portfolio handover and successor acceptance.
@@ -954,6 +967,7 @@ export function parseRoute(hash) {
     // neither may be stolen here (the docs say so explicitly).
     'seal': 'seal', 'seals': 'seal', 'audit-chain': 'seal', 'attestation': 'seal',
     'identity': 'identity', 'attested-commits': 'identity', 'seat-identity': 'identity',
+    'probation': 'probation', 'probation-gates': 'probation', 'probation-gate': 'probation', 'confirmation': 'probation', 'new-hire-decision': 'probation',
     'credential': 'identity', 'authorship': 'identity', 'assurance-ladder': 'identity',
     // ADR-0121: the Duty Coverage Register. Not 'handover' (Leader Continuity)
     // and not 'seat' (the Altitude Lens) — this is its own question.
@@ -1739,6 +1753,10 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       // holds, an assertion on a remediation it owns, or an independent
       // verification of a fix it stands strictly above.
       assuranceFindings: assuranceFindingAttentionCount(state, { now: at, seat: seatCtx?.seat || null }),
+      // ADR-0233: gates this seat owes an act on — the decision or written
+      // notification a gate it confirms is owed, or an overdue evidence ask
+      // addressed to a line it holds.
+      probationGates: probationGateAttentionCount(state, { now: at, seat: seatCtx?.seat || null }),
       // ADR-0224: holds requiring work-lead controls, overdue joint-apex review,
       // or the affected operator's second key, all from the same reader.
       workStop: workStopAttentionCount(state, { now: at, settings: state.settings, seat: seatCtx?.seat || null }),
@@ -2305,6 +2323,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       'portfolio-review': 'Portfolio review — keep, fix, sell, or exit every declared business unit on dated evidence',
       'work-stop': 'Stop-work & safe restart — an active hold, independent clearance, then the affected operator’s key',
       'manager-handover': 'Manager handover — a role does not expire with its holder: brief, successor acceptance, governor release',
+      probation: 'Probation gates — the decision a joiner’s first window owes: confirm, extend or end, on evidence from every declared line, communicated in writing',
       sourcing: 'Capability sourcing — make, buy, partner or hybrid: the boundary of the firm, decided on asset specificity and the safeguards a contract can carry',
       'vroom-yetton': 'Decision participation — how much to involve others in a decision: autocratic I/II, consultative I/II, group II, on seven Vroom–Yetton–Jago diagnostics',
       ibp: 'Integrated business plan — the five-step S&OP cycle: unconstrained demand, demonstrated capacity, the counted gap, costed options and one approved operating plan whose residual is owned',
