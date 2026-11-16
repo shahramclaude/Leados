@@ -33,6 +33,7 @@ import { INC_RIGHTS } from './incentiveRegistry.js';
 import { DWM_RIGHTS } from './dutyMeansRegistry.js';
 import { SHO_RIGHTS } from './shiftHandoverRegistry.js';
 import { KZT_RIGHTS } from './suggestionRegistry.js';
+import { AFR_RIGHTS } from './assuranceRegistry.js';
 // ADR-0228: the decision-domain sensing register's four rights.
 import { DSN_RIGHTS } from './domainSenseRegistry.js';
 import { PRV_RIGHTS } from './portfolioReviewRegistry.js';
@@ -376,6 +377,16 @@ const groups = [
   [KZT_RIGHTS.TRIAGE, 'suggestionTriage'],
   [KZT_RIGHTS.CLAIM, 'suggestionClaim'],
   [KZT_RIGHTS.CONFIRM, 'suggestionConfirm'],
+  // ADR-0232: the Assurance Finding & Remediation Register. Every act is
+  // first-person and re-proved inside the action: the holder assigns on their
+  // own accountable line, the named owner asserts, a seat strictly above the
+  // owner verifies, and an executive who does not own the remediation accepts
+  // the residual risk. Reads are open from the frontline upward.
+  [AFR_RIGHTS.READ, 'assuranceFindingReport assuranceFindingAttentionCount assuranceFindingCandidates'],
+  [AFR_RIGHTS.DECLARE, 'assuranceFindingDeclare assuranceFindingScan'],
+  [AFR_RIGHTS.REMEDIATE, 'assuranceFindingAssign assuranceFindingAssert'],
+  [AFR_RIGHTS.VERIFY, 'assuranceFindingVerify'],
+  [AFR_RIGHTS.ACCEPT, 'assuranceFindingAccept'],
   // ADR-0224: stop-work holds may be raised at frontline rank; mitigation is
   // work-lead-controlled, assessment is Director+ and tied to every frozen
   // joint apex, and restart is only an affected operator's second key.
@@ -751,6 +762,9 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // ADR-0227: the improvement-suggestion ledger's pure read surface. Every one
 // of these re-proves the read right inside the action.
 'suggestionReport', 'suggestionAttentionCount', 'suggestionCandidates',
+// ADR-0232: the assurance finding reader re-proves the right inside the action;
+// the report never exposes raw collections to the generic projection.
+'assuranceFindingReport', 'assuranceFindingAttentionCount', 'assuranceFindingCandidates',
 // ADR-0228: the decision-domain sensing reader re-proves the right inside the
 // action; the report never exposes raw collections to the generic projection.
 'domainSenseReport', 'domainSenseAttentionCount', 'domainSenseCandidates',
@@ -1127,6 +1141,15 @@ const MATRIX_LINE_SCOPED = new Set([
   // only on declared Matrix lines; the action re-proves every person and the
   // frozen joint seat before a transition is accepted.
   'mgrHandoverDeclare',
+  // ADR-0232: an assurance finding is the matrix case in its purest form. The
+  // accountable holders it names (assign), the owner an assignment names
+  // (assign), the owner whose fix a verifier tests (verify) and the finding an
+  // acceptance closes (accept) may each be reachable only through a declared
+  // Matrix line. Every one of those actions re-proves the reach, the line and
+  // the independence rule itself before it writes; the gate only stops a seat
+  // from naming somebody it cannot reach at all.
+  'assuranceFindingDeclare', 'assuranceFindingAssign', 'assuranceFindingAssert',
+  'assuranceFindingVerify', 'assuranceFindingAccept',
 ]);
 
 /** Exact method allowlist + rank + record/person scope. No arbitrary API names. */

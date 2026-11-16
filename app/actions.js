@@ -144,6 +144,7 @@ import { createWorkNightActions } from './core/domain/workNightActions.js';
 // line of both operators; a clock-in is never a key.
 import { createShiftHandoverActions } from './core/domain/shiftHandoverActions.js';
 import { createSuggestionActions } from './core/domain/suggestionActions.js';
+import { createAssuranceFindingActions } from './core/domain/assuranceFindingActions.js';
 import { createDomainSenseActions } from './core/domain/domainSenseActions.js';
 // ADR-0224: a human-declared stop, a work-lead mitigation, every frozen
 // Director+ joint-apex assessment, and a separate affected-operator key. This
@@ -20402,6 +20403,13 @@ export function createApi(store, options = {}) {
   // owner claims the effect, and the submitter or a route member — never the
   // owner — confirms it. Every state, rate and overdue flag is derived on read.
   Object.assign(api, createSuggestionActions(store, { now: clock, idFactory: id }));
+  // ADR-0232: the Assurance Finding & Remediation Register — a control failure
+  // is declared against criteria on every accountable line; each line names its
+  // own owner and day; the owner asserts the fix; a seat strictly above the
+  // owner independently verifies it; and an executive who does not own the
+  // remediation may accept the residual risk. Every state, flag, recurrence and
+  // rate is derived on read.
+  Object.assign(api, createAssuranceFindingActions(store, { now: clock, idFactory: id }));
   // ADR-0228: the Decision-Domain Sensing Register — declare a cross-line
   // panel's sensed domain, commit the owner's mode, read the fit.
   Object.assign(api, createDomainSenseActions(store, { now: clock, idFactory: id }));

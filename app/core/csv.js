@@ -252,7 +252,9 @@ import { DWM_CSV_COLUMNS, DWM_CSV_DESCRIPTOR, DWM_CSV_SCOPE } from './domain/dut
 import { SHO_CSV_COLUMNS, SHO_CSV_DESCRIPTOR, SHO_CSV_SCOPE } from './domain/shiftHandoverRegistry.js';
 import { buildShiftHandover, shiftHandoverCsvRows } from './domain/shiftHandover.js';
 import { KZT_CSV_COLUMNS, KZT_CSV_DESCRIPTOR, KZT_CSV_SCOPE } from './domain/suggestionRegistry.js';
+import { AFR_CSV_COLUMNS, AFR_CSV_DESCRIPTOR, AFR_CSV_SCOPE } from './domain/assuranceRegistry.js';
 import { buildSuggestionReport, suggestionCsvRows } from './domain/suggestionReport.js';
+import { buildAssuranceReport, assuranceFindingCsvRows } from './domain/assuranceFindingReport.js';
 // ADR-0228: aggregate, identity-free decision-domain sensing aggregates from the panel reader.
 import { DSN_CSV_COLUMNS, DSN_CSV_DESCRIPTOR, DSN_CSV_SCOPE } from './domain/domainSenseRegistry.js';
 import { domainSenseReport, domainSenseCsvRows } from './domain/domainSenseReport.js';
@@ -1635,6 +1637,14 @@ export const CSV_EXPORTS = [
   // committed fit and one row per agreed domain; no decision title, id, owner,
   // panel member, line name, rationale or evidence text crosses this boundary.
   DSN_CSV_DESCRIPTOR,
+  // #175 (ADR-0232): the assurance finding & remediation register — aggregate
+  // and identity-free. One summary row, one coverage row, one row per derived
+  // state, severity, source and aging bucket, two on-time rate rows and one row
+  // per accountable line under an opaque code. No finding id, control, scope,
+  // criteria, statement, owner, verifier, acceptor or line name crosses this
+  // boundary; a cell below the privacy floor of three exports BLANK with its
+  // reason, never zero.
+  AFR_CSV_DESCRIPTOR,
 ];
 
 function personLookup(state) {
@@ -7016,6 +7026,18 @@ export function buildScopeTable(state, scope, now) {
       return {
         columns: KZT_CSV_COLUMNS.map((key) => ({ key, header: key })),
         rows: suggestionCsvRows(report),
+      };
+    }
+    case AFR_CSV_SCOPE: {
+      // CSV scope #175 (ADR-0232, Schema v187). Built from the SAME reader the
+      // `#/findings` panel renders, with no seat: every figure is an exact
+      // integer count over the whole register, so no finding id, control, scope,
+      // criteria, statement, owner, verifier or line name is reachable from this
+      // export.
+      const report = buildAssuranceReport(state, { now, seat: null });
+      return {
+        columns: AFR_CSV_COLUMNS.map((key) => ({ key, header: key })),
+        rows: assuranceFindingCsvRows(report),
       };
     }
     case DSN_CSV_SCOPE: {

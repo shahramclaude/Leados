@@ -115,8 +115,13 @@ function parseCsv(csv) {
 
 /* ---------------------------------------------------------------- schema + registration */
 
-test('domain sense: schema v186 adds two empty ledgers, keeps the spine at 140, and registers CSV #174', () => {
-  assert.equal(SCHEMA_VERSION, 186);
+// Session 311 (Schema v187, ADR-0232) moved the version on by one and added a
+// single spine rule. The ADR-0228 migration step under test is unchanged — it
+// still takes 185 → 186 — so the step is asserted at 186 and the normalized
+// workspace at the current version, rather than pinning the whole suite to the
+// version ADR-0228 happened to ship at.
+test('domain sense: the v186 step adds two empty ledgers, the spine carries ADR-0232 as well, and CSV #174 is registered', () => {
+  assert.equal(SCHEMA_VERSION, 187);
   for (const key of ['domainDecisions', 'domainSenseActs']) {
     assert.ok(COLLECTIONS.includes(key), `${key} is declared`);
   }
@@ -125,14 +130,16 @@ test('domain sense: schema v186 adds two empty ledgers, keeps the spine at 140, 
   assert.deepEqual(step.domainDecisions, []);
   assert.deepEqual(step.domainSenseActs, []);
   const loaded = normalizeState(step, { now: at('2026-11-16') });
-  assert.equal(loaded.state.schemaVersion, 186);
+  assert.equal(loaded.state.schemaVersion, SCHEMA_VERSION, 'the migration chain carries the workspace to the current version');
   assert.deepEqual(loaded.state.domainDecisions, []);
   assert.deepEqual(loaded.state.domainSenseActs, []);
-  assert.equal(normalizeState(createEmptyState(), { now: at('2026-11-16') }).state.schemaVersion, 186);
+  assert.equal(normalizeState(createEmptyState(), { now: at('2026-11-16') }).state.schemaVersion, SCHEMA_VERSION);
 
-  // RULE-DSN-01 is enforced in the reader, not by a new post-commit rule: the
-  // shared spine is unchanged, and every rule keeps exactly one contract.
-  assert.equal(DEFAULT_POST_COMMIT_RULES.length, 147, 'the shared spine is unchanged by this register');
+  // RULE-DSN-01 is enforced in the reader, not by a post-commit rule: ADR-0228
+  // added no spine rule and every rule keeps exactly one contract. The spine
+  // stands at 148 because ADR-0232 (Session 311) added `assuranceFindingRule`
+  // to it — one contract per rule, unchanged discipline.
+  assert.equal(DEFAULT_POST_COMMIT_RULES.length, 148, 'the spine carries ADR-0232 alongside ADR-0228');
   assert.equal(DEFAULT_POST_COMMIT_RULES.some((rule) => rule && rule.id === 'domainSenseRule'), false, 'no new spine rule; refusals are reader refusals');
   assert.equal(PROPAGATION_CONTRACTS.length, DEFAULT_POST_COMMIT_RULES.length, 'one contract per spine rule');
 
