@@ -35,6 +35,7 @@ import { SHO_RIGHTS } from './shiftHandoverRegistry.js';
 import { KZT_RIGHTS } from './suggestionRegistry.js';
 import { AFR_RIGHTS } from './assuranceRegistry.js';
 import { PBG_RIGHTS } from './probationRegistry.js';
+import { UDT_RIGHTS } from './undertakingRegistry.js';
 // ADR-0228: the decision-domain sensing register's four rights.
 import { DSN_RIGHTS } from './domainSenseRegistry.js';
 import { PRV_RIGHTS } from './portfolioReviewRegistry.js';
@@ -398,6 +399,16 @@ const groups = [
   [PBG_RIGHTS.ASK, 'probationGateAsk'],
   [PBG_RIGHTS.SUBMIT, 'probationGateSubmit'],
   [PBG_RIGHTS.DECIDE, 'probationGateExtend probationGateDecide probationGateNotify'],
+  // ADR-0234: the Undertaking & Outward-Commitment Closure Register. Every act
+  // is first-person and re-proved inside the action: an executive declares and
+  // reports, a line's holder delivers, a seat strictly above the holder tests,
+  // and a due day moves only where the instrument and the counterparty allow.
+  [UDT_RIGHTS.READ, 'undertakingReport undertakingAttentionCount undertakingCandidates'],
+  [UDT_RIGHTS.DECLARE, 'undertakingDeclare undertakingScan'],
+  [UDT_RIGHTS.ASSIGN, 'undertakingAssign'],
+  [UDT_RIGHTS.DELIVER, 'undertakingDeliver'],
+  [UDT_RIGHTS.VERIFY, 'undertakingVerify'],
+  [UDT_RIGHTS.REPORT, 'undertakingReportClosure undertakingNotify undertakingExtend'],
   // ADR-0224: stop-work holds may be raised at frontline rank; mitigation is
   // work-lead-controlled, assessment is Director+ and tied to every frozen
   // joint apex, and restart is only an affected operator's second key.
@@ -779,6 +790,9 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // ADR-0233: the probation gate reader re-proves the right inside the action;
 // the report never exposes raw collections to the generic projection.
 'probationGateReport', 'probationGateAttentionCount', 'probationGateCandidates',
+// ADR-0234: the undertaking reader re-proves the read right inside the action;
+// the report never exposes raw collections to the generic projection.
+'undertakingReport', 'undertakingAttentionCount', 'undertakingCandidates',
 // ADR-0228: the decision-domain sensing reader re-proves the right inside the
 // action; the report never exposes raw collections to the generic projection.
 'domainSenseReport', 'domainSenseAttentionCount', 'domainSenseCandidates',
@@ -1176,6 +1190,13 @@ const MATRIX_LINE_SCOPED = new Set([
   // identity before anything is written; the gate only stops a seat from
   // naming somebody it cannot reach at all.
   'probationGateAsk', 'probationGateSubmit',
+  // ADR-0234: an undertaking names holders, testers and a counterparty, and
+  // every one of those people may be reachable only through a declared Matrix
+  // line. Each action re-proves the holder, the line and the independence rule
+  // itself before it writes; the gate only stops a seat from naming somebody it
+  // cannot reach at all.
+  'undertakingDeclare', 'undertakingAssign', 'undertakingDeliver',
+  'undertakingVerify', 'undertakingReportClosure', 'undertakingNotify', 'undertakingExtend',
 ]);
 
 /** Exact method allowlist + rank + record/person scope. No arbitrary API names. */

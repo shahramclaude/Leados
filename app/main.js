@@ -178,6 +178,10 @@ import { assuranceFindingAttentionCount } from './core/domain/assuranceFindingRe
 // the per-line evidence duty a probation window owes, before the window closes.
 import { renderProbationGates } from './views/probation-gates.js';
 import { probationGateAttentionCount } from './core/domain/probationGateReport.js';
+// ADR-0234: the promise made outward — the counterparty report every confirmed
+// obligation line owes, and the due day nobody has been told about.
+import { renderUndertakings } from './views/undertakings.js';
+import { undertakingAttentionCount } from './core/domain/undertakingReport.js';
 // ADR-0224: Stop-Work Authority & Safe Restart — frontline hold, Director+
 // matrix clearance, and a separate affected-operator restart key.
 import { renderWorkStop } from './views/workStop.js';
@@ -649,6 +653,12 @@ export const NAV = [
     // decision a control failure owes, the other the decision a joiner's
     // first window owes.
     { route: 'probation', label: 'Probation gates', icon: '⏳', badge: 'probationGates' },
+    // ADR-0234: the promise the enterprise made OUTWARD — to a regulator, a
+    // board, a lender, a customer — and whether the counterparty was ever told it
+    // was met. Beside the assurance findings and probation gates on purpose: one
+    // register holds a control failure's fix, one a joiner's first window, and
+    // this one the promise somebody outside is holding the enterprise to.
+    { route: 'undertakings', label: 'Undertakings', icon: '§', badge: 'undertakings' },
     // ADR-0224: stop-work authority — no restart without all independent joint
     // apex reviews and an affected operator's own key.
     { route: 'work-stop', label: 'Stop-work & restart', icon: '⛔', badge: 'workStop' },
@@ -853,6 +863,8 @@ const RENDERERS = {
   findings: (ctx) => renderAssuranceFindings(ctx),
   // ADR-0233: the probation confirmation gate register.
   probation: (ctx) => renderProbationGates(ctx),
+  // ADR-0234: the regulatory undertaking & outward-commitment closure register.
+  undertakings: (ctx) => renderUndertakings(ctx),
   // ADR-0224: stop-work declaration, independent review and affected-operator key.
   'work-stop': (ctx) => renderWorkStop(ctx),
   // ADR-0225: managerial portfolio handover and successor acceptance.
@@ -968,6 +980,12 @@ export function parseRoute(hash) {
     'seal': 'seal', 'seals': 'seal', 'audit-chain': 'seal', 'attestation': 'seal',
     'identity': 'identity', 'attested-commits': 'identity', 'seat-identity': 'identity',
     'probation': 'probation', 'probation-gates': 'probation', 'probation-gate': 'probation', 'confirmation': 'probation', 'new-hire-decision': 'probation',
+    // ADR-0234: the promise made outward. `commitments` and `promise` already
+    // belong to Promise solvency, and `covenant` to finance, so nothing here may
+    // shadow an existing route.
+    'undertakings': 'undertakings', 'undertaking': 'undertakings', 'regulatory-commitment': 'undertakings',
+    'consent-order': 'undertakings', 'licence-condition': 'undertakings', 'board-commitment': 'undertakings',
+    'representation': 'undertakings', 'sub-certification': 'undertakings', 'outward-promise': 'undertakings',
     'credential': 'identity', 'authorship': 'identity', 'assurance-ladder': 'identity',
     // ADR-0121: the Duty Coverage Register. Not 'handover' (Leader Continuity)
     // and not 'seat' (the Altitude Lens) — this is its own question.
@@ -1757,6 +1775,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       // notification a gate it confirms is owed, or an overdue evidence ask
       // addressed to a line it holds.
       probationGates: probationGateAttentionCount(state, { now: at, seat: seatCtx?.seat || null }),
+      undertakings: undertakingAttentionCount(state, { now: at, seat: seatCtx?.seat || null }),
       // ADR-0224: holds requiring work-lead controls, overdue joint-apex review,
       // or the affected operator's second key, all from the same reader.
       workStop: workStopAttentionCount(state, { now: at, settings: state.settings, seat: seatCtx?.seat || null }),
@@ -2324,6 +2343,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       'work-stop': 'Stop-work & safe restart — an active hold, independent clearance, then the affected operator’s key',
       'manager-handover': 'Manager handover — a role does not expire with its holder: brief, successor acceptance, governor release',
       probation: 'Probation gates — the decision a joiner’s first window owes: confirm, extend or end, on evidence from every declared line, communicated in writing',
+      undertakings: 'Undertakings — the promise the enterprise made to a regulator, a board, a lender or a customer: its obligation lines, each independently tested, and the written report that discharges it to the counterparty',
       sourcing: 'Capability sourcing — make, buy, partner or hybrid: the boundary of the firm, decided on asset specificity and the safeguards a contract can carry',
       'vroom-yetton': 'Decision participation — how much to involve others in a decision: autocratic I/II, consultative I/II, group II, on seven Vroom–Yetton–Jago diagnostics',
       ibp: 'Integrated business plan — the five-step S&OP cycle: unconstrained demand, demonstrated capacity, the counted gap, costed options and one approved operating plan whose residual is owned',

@@ -447,7 +447,15 @@ test('standalone artifact exists and is a single inline HTML document', () => {
   // 24,000 bytes/module density guard, which is the bound that catches a
   // module or asset inlined twice. The ceiling is moved to the measured size
   // plus headroom per this file's documented convention.
-  assert.ok(bytes < 19_400_000, `standalone file is unexpectedly large (${bytes} bytes)`);
+  // ADR-0234 (Session 313, Schema v189) completes the Regulatory Undertaking &
+  // Outward-Commitment Closure Register: seven undertaking modules, the
+  // `#/undertakings` view, CSV #177 and the generated method diagram
+  // (`undertaking-closure-method.jpg`, 178,509 bytes, embedded with the rest of
+  // app/assets). Measured build: 19,863,274 bytes / 1,043 source modules =
+  // 19,045 bytes per module, still well under the unchanged 24,000
+  // bytes/module density guard. Ceiling moved to the measured size plus
+  // headroom per the convention above.
+  assert.ok(bytes < 19_950_000, `standalone file is unexpectedly large (${bytes} bytes)`);
   // Derived from the folder, not from a list in this file: the day a panel adds
   // a diagram, an enumerator that names the old two would still pass. Same
   // lesson the build script learned in ADR-0186.

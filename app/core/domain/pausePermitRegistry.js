@@ -189,6 +189,10 @@ export const PAUSE_PERMIT_MATRIX_REACH_SWITCHES = Object.freeze([
   // joiner's declared matrix line directly, so silencing it leaves a line's
   // evidence duty unasked — and that line's manager is not told.
   'probationAutoPropagate',
+  // ADR-0234: the delivery-test ask is computed through the reporting graph to
+  // the joint apex above the line holder, so silencing it leaves the independent
+  // test unasked and nobody told.
+  'undertakingAutoPropagate',
   'cadenceAutoPropagate',
   'ctrAutoPropagate',
   'matrixInterfaceAutoPropagate',
@@ -407,6 +411,11 @@ export const PAUSE_PERMIT_SWITCH_RULES = Object.freeze({
   // its decision ask and a line without its evidence ask; the reading remains
   // open and visible.
   probationAutoPropagate: 'probationGateRules.js',
+  // ADR-0234: silencing this rule can leave an asserted deliverable untested, a
+  // fully confirmed promise unreported to its counterparty, and a lapsed due day
+  // unrecorded. The counterparty outside the organisation is told nothing, which
+  // is the failure the register exists for; the reading stays open and visible.
+  undertakingAutoPropagate: 'undertakingRules.js',
   // ADR-0226: silencing this rule can leave a would-exceed shared dependency
   // without its ceiling ask; the reading remains open and visible.
   riskConcentrationAutoPropagate: 'riskConcentrationRules.js',

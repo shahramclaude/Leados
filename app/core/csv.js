@@ -254,9 +254,11 @@ import { buildShiftHandover, shiftHandoverCsvRows } from './domain/shiftHandover
 import { KZT_CSV_COLUMNS, KZT_CSV_DESCRIPTOR, KZT_CSV_SCOPE } from './domain/suggestionRegistry.js';
 import { AFR_CSV_COLUMNS, AFR_CSV_DESCRIPTOR, AFR_CSV_SCOPE } from './domain/assuranceRegistry.js';
 import { PBG_CSV_COLUMNS, PBG_CSV_DESCRIPTOR, PBG_CSV_SCOPE } from './domain/probationRegistry.js';
+import { UDT_CSV_COLUMNS, UDT_CSV_DESCRIPTOR, UDT_CSV_SCOPE } from './domain/undertakingRegistry.js';
 import { buildSuggestionReport, suggestionCsvRows } from './domain/suggestionReport.js';
 import { buildAssuranceReport, assuranceFindingCsvRows } from './domain/assuranceFindingReport.js';
 import { buildProbationReport, probationGateCsvRows } from './domain/probationGateReport.js';
+import { buildUndertakingReport, undertakingCsvRows } from './domain/undertakingReport.js';
 // ADR-0228: aggregate, identity-free decision-domain sensing aggregates from the panel reader.
 import { DSN_CSV_COLUMNS, DSN_CSV_DESCRIPTOR, DSN_CSV_SCOPE } from './domain/domainSenseRegistry.js';
 import { domainSenseReport, domainSenseCsvRows } from './domain/domainSenseReport.js';
@@ -1655,6 +1657,15 @@ export const CSV_EXPORTS = [
   // crosses this boundary; a rate whose denominator is not published exports
   // BLANK with its reason, never zero.
   PBG_CSV_DESCRIPTOR,
+  // #177 (ADR-0234): the regulatory undertaking & outward-commitment closure
+  // register — aggregate and identity-free. One summary row, one coverage row,
+  // one row per derived state, per counterparty kind, per instrument and per
+  // due-window bucket, plus the closure-rate and report rows. No undertaking id,
+  // counterparty name, scope, deliverable, instrument reference or person name
+  // crosses this boundary; a counterparty-kind count below the privacy floor of
+  // three exports BLANK with its reason, never a small number, and a rate whose
+  // denominator is not published exports blank, never zero.
+  UDT_CSV_DESCRIPTOR,
 ];
 
 function personLookup(state) {
@@ -7036,6 +7047,18 @@ export function buildScopeTable(state, scope, now) {
       return {
         columns: KZT_CSV_COLUMNS.map((key) => ({ key, header: key })),
         rows: suggestionCsvRows(report),
+      };
+    }
+    case UDT_CSV_SCOPE: {
+      // CSV scope #177 (ADR-0234, Schema v189). Built from the SAME reader the
+      // `#/undertakings` panel renders, with no seat: every figure is an exact
+      // integer count over the whole register, so no undertaking id,
+      // counterparty name, scope, deliverable, instrument reference, holder,
+      // verifier or reporter name is reachable from this export.
+      const report = buildUndertakingReport(state, { now, seat: null });
+      return {
+        columns: UDT_CSV_COLUMNS.map((key) => ({ key, header: key })),
+        rows: undertakingCsvRows(report),
       };
     }
     case PBG_CSV_SCOPE: {
