@@ -1,3 +1,11 @@
+## 2026-11-16 — The second demand follows the insufficiency; it does not reopen the first
+
+**Director / VP → Information requests** (`#/information-requests`, [ADR-0236](./docs/adr/0236-information-request-follow-up-demand-lineage.md), Schema v191, CSV #178) now records a follow-up demand as a human-selected `followsUpOn` link to one earlier request. The link is offered only when the prior request is readable from the acting seat and has a recorded requester verdict of `insufficient`; the child record must be made after that verdict instant, and its declared receipt day cannot precede the verdict day.
+
+The follow-up remains its own request: it has its own scope, reply clock, production lines, independent reviews, release and requester verdict. The first demand stays insufficient. No relationship is inferred from similar wording, requester, instrument or date. The lineage view reports supported and unsubstantiated links, roots and supported depth; aggregate CSV columns carry no request ids, names or free text. If any request is hidden from a seat, whole-register lineage totals are withheld, and a link never grants access to its parent or child.
+
+Schema v190 requests migrate as standalone roots — `followsUpOn: null` — with no guessed history. The focused lineage suite passes 6/6; the separate lifecycle-verification claims deferred in Session 314 remain open, and browser/assistive-technology behaviour is not claimed here.
+
 ## 2026-11-16 — Did the fix hold, or is this the third time?
 
 **Director / VP → Assurance findings** (`#/findings`) is the register where a control failure is declared, owned, fixed, independently tested and closed — and where a repeat is printed as a repeat rather than as a new number.

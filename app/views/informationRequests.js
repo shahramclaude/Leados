@@ -1,6 +1,6 @@
 /**
  * app/views/informationRequests.js — `#/information-requests`, the Regulator
- * Information-Request & Examination Response Register (ADR-0235, Schema v190).
+ * Information-Request & Examination Response Register (ADR-0235/0236, Schema v191).
  *
  * ONE reader (`buildInformationRequestReport`, standing on the
  * `buildInformationRequests` kernel) behind every state, flag, count and rate
@@ -29,6 +29,7 @@ import { pageHeader, card, stat, badge, banner, tabs, table } from '../ui/compon
 import {
   RQR_HREF,
   RQR_INSTRUMENTS,
+  RQR_LINEAGE_ADR,
   RQR_LIMITS,
   RQR_METHOD,
   RQR_STATES,
@@ -41,6 +42,7 @@ const DIAGRAM_URL = './app/assets/information-request-response-method.jpg';
 const VIEWS = [
   { key: 'rows', label: 'Requests' },
   { key: 'lines', label: 'Production lines' },
+  { key: 'lineage', label: 'Follow-up lineage' },
   { key: 'counts', label: 'Counts, clocks & coverage' },
   { key: 'refusals', label: 'Refused acts' },
   { key: 'method', label: 'Method' },
@@ -74,6 +76,11 @@ function button(label, onClick, { primary = false, testid = null } = {}) {
 const options = (rows, { blank = null } = {}) => [
   ...(blank ? [{ value: '', label: blank }] : []),
   ...rows.map((row) => ({ value: row.value, label: row.label })),
+];
+
+const modalFooter = (label, submit) => [
+  h('button', { type: 'button', class: 'btn btn-ghost', onClick: () => closeAllModals() }, 'Cancel'),
+  h('button', { type: 'button', class: 'btn btn-primary', onClick: submit }, label),
 ];
 
 const when = (day) => (day ? String(day) : '—');
@@ -115,6 +122,16 @@ function receiveDialog(ctx, candidates, onDone) {
     { name: 'scope', label: 'What was asked for', type: 'textarea', required: true, help: `At least ${L.textMin} characters — the material, the period, the units, and what it does NOT cover. A production built on an undeclared scope cannot be certified complete.` },
     { name: 'receivedOn', label: 'The day it arrived', type: 'date', required: true, help: 'The day on the letter. The reply clock runs from it, so it is not assumed and not defaulted.' },
     { name: 'replyClockDays', label: 'The reply clock, in days, as the instrument states it', type: 'text', required: true, help: `A whole number between ${L.clockMinDays} and ${L.clockMaxDays}, read off the demand. This workspace has no jurisdiction table and no default window — a typed-in guess would be an invented deadline, and the register would then print a lapse nobody set.` },
+    ...((candidates?.followUpParents || []).length ? [{
+      name: 'followsUpOn',
+      label: 'If this is a follow-up, which earlier insufficient demand does it answer?',
+      type: 'select',
+      options: options((candidates.followUpParents || []).map((row) => ({
+        value: row.id,
+        label: `${row.requester} · ${row.instrumentRef} · insufficient ${row.respondedOn}`,
+      })), { blank: 'No prior request — record this as an original demand' }),
+      help: 'Optional, and never inferred. Only earlier requests readable from this seat with a recorded insufficient verdict appear. The new demand keeps its own scope, lines, clock, review and release; its receipt day must be on or after the prior verdict.',
+    }] : []),
   ]);
   const lineFields = [
     { name: 'roleLabel_0', label: 'Line 1 — which part of the demand this line carries', type: 'text', help: 'A short label — “operations”, “legal”, “finance”, “IT”. Optional.' },
@@ -157,7 +174,7 @@ function receiveDialog(ctx, candidates, onDone) {
       form.node,
       banner({ tone: 'caution', title: 'More than one line?', body: 'A production usually lands on operations, legal, finance and IT at once. Record this request with its first line, then add further lines from the request row — each names its own producer and its own day.' }),
       form2.node),
-    actions: [{ label: 'Cancel', onClick: () => closeAllModals() }, { label: 'Record the request', onClick: submit }],
+    footer: modalFooter('Record the request', submit),
   });
 }
 
@@ -182,7 +199,7 @@ function assignDialog(ctx, row, candidates, onDone) {
     body: h('div', { class: 'stack' },
       banner({ tone: 'info', title: 'A duty is placed, not assumed', body: 'The register never infers a producer from position, tenure or the reporting graph. Naming one is a human act, and the person named is the only one who can certify that line — and is thereby barred from reviewing it.' }),
       form.node),
-    actions: [{ label: 'Cancel', onClick: () => closeAllModals() }, { label: 'Name the producer', onClick: submit }],
+    footer: modalFooter('Name the producer', submit),
   });
 }
 
@@ -236,7 +253,7 @@ function produceDialog(ctx, row, line, onDone) {
     body: h('div', { class: 'stack' },
       banner({ tone: 'info', title: 'Your line, your name, your count', body: `This line is held by you and owed ${line.dueOn}. Your certification opens the independent review; it does not close the request, and it is not a grade of anyone. You will not be allowed to review it yourself.` }),
       form.node),
-    actions: [{ label: 'Cancel', onClick: () => closeAllModals() }, { label: 'Certify the production', onClick: submit }],
+    footer: modalFooter('Certify the production', submit),
   });
 }
 
@@ -271,7 +288,7 @@ function reviewDialog(ctx, row, line, onDone) {
     body: h('div', { class: 'stack' },
       banner({ tone: 'info', title: 'An independent key, defined by conflict — not by rank', body: 'Only a seat that recorded nothing, produces nothing and holds no act on this request may review it, and it must hold standing over at least one producer. That is the separation that makes a completeness certificate and a privilege log worth anything to the requester.' }),
       form.node),
-    actions: [{ label: 'Cancel', onClick: () => closeAllModals() }, { label: 'Record the review', onClick: submit }],
+    footer: modalFooter('Record the review', submit),
   });
 }
 
@@ -288,7 +305,7 @@ function releaseDialog(ctx, row, onDone) {
     body: h('div', { class: 'stack' },
       banner({ tone: 'caution', title: 'Searching is not answering', body: 'A demand is discharged by producing to the requester and having them say what they got. Every production line is independently reviewed, so this release is supported.' }),
       form.node),
-    actions: [{ label: 'Cancel', onClick: () => closeAllModals() }, { label: 'Record the release', onClick: submit }],
+    footer: modalFooter('Record the release', submit),
   });
 }
 
@@ -311,7 +328,7 @@ function respondDialog(ctx, row, onDone) {
     body: h('div', { class: 'stack' },
       banner({ tone: 'info', title: 'Sent is not the same as accepted', body: 'A production the requester does not accept has not answered the ask. The register prints it as insufficient and never as answered.' }),
       form.node),
-    actions: [{ label: 'Cancel', onClick: () => closeAllModals() }, { label: 'Record the verdict', onClick: submit }],
+    footer: modalFooter('Record the verdict', submit),
   });
 }
 
@@ -336,7 +353,7 @@ function extendDialog(ctx, row, onDone) {
         ? banner({ tone: 'bad', title: 'This demand is compelled', body: 'An order, a notice or a subpoena carries a date the requester holds you to. The register refuses an extension of it outright — a moved day must arrive as the requester’s own restated clock, cited to their letter.' })
         : banner({ tone: 'caution', title: 'The day belongs to the requester', body: 'A supervisor’s information request may be varied by agreement. Moving it without their own recorded agreement is refused; the register will not record a unilateral postponement of a deadline an authority set.' }),
       form.node),
-    actions: [{ label: 'Cancel', onClick: () => closeAllModals() }, { label: 'Move the reply day', onClick: submit }],
+    footer: modalFooter('Move the reply day', submit),
   });
 }
 
@@ -353,7 +370,7 @@ function restateClockDialog(ctx, row, onDone) {
     body: h('div', { class: 'stack' },
       banner({ tone: 'info', title: 'Their figure, cited', body: 'This is the only path on which a deadline moves that the entity did not ask for — a granted extension or a moved date in a follow-up letter. The register stores their day and their reference; it computes nothing about their jurisdiction.' }),
       form.node),
-    actions: [{ label: 'Cancel', onClick: () => closeAllModals() }, { label: 'Record their restatement', onClick: submit }],
+    footer: modalFooter('Record their restatement', submit),
   });
 }
 
@@ -553,6 +570,109 @@ function linesView(ctx, report, candidates, onDone) {
   );
 }
 
+const FOLLOW_UP_LABEL = Object.freeze({
+  original: 'Original demand',
+  'follows-up-after-insufficient': 'Follow-up after an insufficient verdict',
+  'parent-withheld': 'Declared follow-up · prior demand withheld',
+  'parent-not-insufficient': 'Unsubstantiated · no prior insufficient verdict',
+  'recorded-before-parent-verdict': 'Unsubstantiated · recorded before prior verdict',
+  'received-before-parent-verdict': 'Unsubstantiated · received before prior verdict',
+  'parent-unavailable': 'Unsubstantiated · prior demand unavailable',
+});
+
+function lineageView(ctx, report) {
+  const lineageCounts = report.lineageCounts || null;
+  const rows = report.rows.map((row) => ({
+    ...row,
+    attrs: {
+      'data-testid': `rq-lineage-${row.id}`,
+      'data-follow-up-status': row.followUp?.status || 'original',
+      'data-follow-up-depth': row.followUp?.depth ?? '',
+    },
+  }));
+  const columns = [
+    {
+      label: 'Demand',
+      render: (row) => h('div', { class: 'stack-tight' },
+        h('strong', null, `${row.requester} · ${row.id}`),
+        h('span', { class: 'small muted' }, `${INSTRUMENT_SHORT[row.instrument] || row.instrument} · ${row.instrumentRef}`),
+        h('span', { class: 'small muted' }, `received ${row.receivedOn}`)),
+    },
+    {
+      label: 'Declared relationship',
+      render: (row) => {
+        const status = row.followUp?.status || 'original';
+        const tone = status === 'original' ? 'neutral'
+          : status === 'follows-up-after-insufficient' ? 'info'
+            : status === 'parent-withheld' ? 'caution' : 'bad';
+        return h('div', { class: 'stack-tight' },
+          badge(FOLLOW_UP_LABEL[status] || status, tone),
+          row.followUp?.parentWithheld ? h('span', { class: 'small muted' }, 'The declared link does not grant access to the prior demand.') : null,
+          row.flags?.includes('follow-up-not-supported-by-prior-insufficient-verdict')
+            ? h('span', { class: 'small text-warn' }, 'Lineage is not substantiated; the prior demand remains unchanged.')
+            : null);
+      },
+    },
+    {
+      label: 'Prior demand',
+      render: (row) => {
+        const parent = row.followUp?.parent;
+        if (!parent) return row.followUp?.parentWithheld ? 'Withheld from this seat' : '—';
+        return h('div', { class: 'stack-tight' },
+          h('strong', null, `${parent.requester} · ${parent.id}`),
+          h('span', { class: 'small muted' }, `${parent.instrumentRef} · received ${parent.receivedOn}`),
+          h('span', { class: 'small' }, `${RESPONSE_SHORT[parent.response] || parent.response || 'no recorded verdict'}${parent.respondedOn ? ` · ${parent.respondedOn}` : ''}`));
+      },
+    },
+    {
+      label: 'Direct follow-ups',
+      render: (row) => {
+        const children = row.followUp?.children || [];
+        const parts = children.map((child) => h('div', { class: 'stack-tight' },
+          h('strong', null, `${child.requester} · ${child.id}`),
+          h('span', { class: 'small muted' }, `${child.instrumentRef} · received ${child.receivedOn}`),
+          h('span', { class: 'small' }, FOLLOW_UP_LABEL[child.relationshipState] || child.relationshipState)));
+        if (row.followUp?.childrenWithheld) {
+          parts.push(h('span', { class: 'small muted' }, 'Additional linked demand(s) are withheld from this seat.'));
+        }
+        return parts.length ? h('div', { class: 'stack-tight' }, ...parts) : '—';
+      },
+    },
+    {
+      label: 'Supported depth',
+      render: (row) => {
+        const depth = row.followUp?.depth;
+        if (depth === null || depth === undefined) return 'Not shown — unsubstantiated or an ancestor is withheld';
+        return depth === 0 ? 'Root demand' : String(depth);
+      },
+    },
+  ];
+  return h('div', { class: 'stack', 'data-testid': 'rq-lineage' },
+    banner({
+      tone: 'info',
+      title: `${RQR_LINEAGE_ADR} · a follow-up is a new demand, never a reopened answer`,
+      body: 'A director records the relationship only after the actual requester verdict is insufficient; the child’s declared receipt day may not precede that verdict’s date. Each follow-up keeps its own scope, clock, production lines, independent review and release. The link is human-declared; matching words, requester names or instruments never create it, and it never widens seat access.',
+    }),
+    report.lineageCountsWithheld
+      ? banner({ tone: 'caution', title: 'Whole-register lineage counts are withheld', body: report.lineageCountsWithheldReason || 'Some requests are outside this seat’s visibility, so no partial relationship count is shown.' })
+      : (lineageCounts ? card({
+        title: 'Whole-register lineage',
+        subtitle: 'Counts describe the declared graph, not the semantic similarity of free-text scopes.',
+        body: h('div', { class: 'stat-row' },
+          stat({ label: 'Follow-up demands', value: String(lineageCounts.followUpRequests) }),
+          stat({ label: 'After an insufficient verdict', value: String(lineageCounts.followUpsAfterInsufficient) }),
+          stat({ label: 'Unsubstantiated links', value: String(lineageCounts.followUpsUnsubstantiated), tone: lineageCounts.followUpsUnsubstantiated ? 'bad' : undefined }),
+          stat({ label: 'Maximum supported depth', value: lineageCounts.maxFollowUpDepth === null ? '—' : String(lineageCounts.maxFollowUpDepth) })),
+      }) : null),
+    table({
+      caption: 'Declared follow-up lineage — each demand stays a separate record and obligation',
+      columns,
+      rows,
+      emptyMessage: 'No information request is readable from this seat.',
+    }),
+  );
+}
+
 function countsView(report) {
   const c = report.counts;
   const rates = report.rates || {};
@@ -665,7 +785,7 @@ export function renderInformationRequests(ctx) {
     pageHeader({
       eyebrow: 'director / VP × general counsel’s office · single-chain and matrix',
       title: 'The demand that came in — and whether it was ever answered',
-      subtitle: 'A supervisor’s information request, an examination scope letter, a production notice or a privacy query is discharged by producing to the requester on THEIR day — after a seat that produced nothing has reviewed every line and ruled on every privilege claim. This register records the demand and its declared clock, separately records each line’s certification and its independent review, and refuses a release until every line is reviewed. A reply day that passes unreleased is printed `lapsed` — the register never converts a passed day into an answered request.',
+      subtitle: 'A supervisor’s information request, an examination scope letter, a production notice or a privacy query is discharged by producing to the requester on THEIR day — after a seat that produced nothing has reviewed every line and ruled on every privilege claim. Each follow-up demand links only to a recorded insufficient verdict and keeps its own scope, clock, production, review and release. A reply day that passes unreleased is printed `lapsed` — the register never converts a passed day into an answered request.',
     }),
     ctx.persistError ? card({ body: h('p', { class: 'text-warn small' }, `Changes are not being saved: ${ctx.persistError}`) }) : null,
     ...(report.warnings || []).map((warning) => banner({ tone: 'caution', title: 'A stored row was refused', body: warning })),
@@ -675,7 +795,9 @@ export function renderInformationRequests(ctx) {
       items: VIEWS.map((row) => ({
         key: row.key,
         label: row.label,
-        count: row.key === 'rows' ? report.rows.length : row.key === 'lines' ? report.rows.reduce((sum, r) => sum + r.lines.length, 0) : undefined,
+        count: row.key === 'rows' ? report.rows.length
+          : row.key === 'lines' ? report.rows.reduce((sum, r) => sum + r.lines.length, 0)
+            : row.key === 'lineage' && report.lineageCounts ? report.lineageCounts.followUpRequests : undefined,
       })),
       active: view,
       ariaLabel: 'Information-request register views',
@@ -683,6 +805,7 @@ export function renderInformationRequests(ctx) {
     }),
     view === 'rows' ? rowsView(ctx, report, candidates, onDone) : null,
     view === 'lines' ? linesView(ctx, report, candidates, onDone) : null,
+    view === 'lineage' ? lineageView(ctx, report) : null,
     view === 'counts' ? countsView(report) : null,
     view === 'refusals' ? refusalsView(report) : null,
     view === 'method' ? methodView() : null,

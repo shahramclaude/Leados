@@ -1,6 +1,6 @@
 /**
  * app/core/domain/rqRules.js — `RULE-RQR-01` on the shared post-commit spine
- * (ADR-0235, Schema v190).
+ * (ADR-0235/0236, Schema v191).
  *
  * FOUR CONDITIONS, all read from the ONE kernel (`buildInformationRequests`) and
  * the live reporting graph, never re-derived here:

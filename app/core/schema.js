@@ -77,14 +77,16 @@ import {
   normalizeUndertakings,
 } from './domain/undertakingSchema.js';
 import { normalizeUndertakingSettings } from './domain/undertakingRegistry.js';
-// ADR-0235 (Schema v190): the Regulator Information-Request & Examination
+// ADR-0235/0236 (Schema v191): the Regulator Information-Request & Examination
 // Response Register. Fail-closed normalizers for recorded demands — a requester,
 // an instrument, a requested scope, a receipt day and the requester's own
 // declared reply clock — the seven append-only acts (assign, produce, review,
 // release, respond, restate-clock, extend) and the identity-free observations
-// RULE-RQR-01 writes when no seat outside the parties can be named. No state,
-// review verdict, privilege position, release or lapse is stored: each is
-// re-derived on read from the dated acts and the live reporting graph.
+// RULE-RQR-01 writes when no seat outside the parties can be named. ADR-0236 adds
+// an optional immutable `followsUpOn` link between requests; it does not infer
+// the link or alter the original request. No state, review verdict, privilege
+// position, release, lapse or lineage verdict is stored: each is re-derived on
+// read from the dated acts and the live reporting graph.
 import {
   normalizeRequestActs,
   normalizeRequestMarkers,
@@ -1345,7 +1347,7 @@ export {
 // notification is stored; each is re-derived on read, so a hand-edited file
 // cannot carry a decision nobody made, an extension the instrument did not
 // allow, or a window that defaulted itself.
-export const SCHEMA_VERSION = 190;
+export const SCHEMA_VERSION = 191;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -3879,13 +3881,14 @@ export const COLLECTIONS = [
   'undertakings',
   'undertakingActs',
   'undertakingMarkers',
-  // ADR-0235 (Schema v190): the Regulator Information-Request & Examination
-  // Response Register. The demands an authority has made on this entity, the
-  // append-only acts that answer them line by line, and the identity-free
-  // observations RULE-RQR-01 writes when nobody outside the parties can be named.
-  // No state, lapse, review verdict, privilege position or release is stored:
-  // each is re-derived on read, so a hand-edited file cannot carry a production
-  // nobody reviewed or a release no requester ever accepted.
+  // ADR-0235/0236 (Schema v191): the Regulator Information-Request & Examination
+  // Response Register. The demands an authority has made on this entity, their
+  // optional immutable follow-up links, the append-only acts that answer them line
+  // by line, and the identity-free observations RULE-RQR-01 writes when nobody
+  // outside the parties can be named. No state, lapse, review verdict, privilege
+  // position, release or lineage verdict is stored: each is re-derived on read,
+  // so a hand-edited file cannot carry a production nobody reviewed or a release
+  // no requester ever accepted.
   'informationRequests',
   'informationRequestActs',
   'informationRequestMarkers',
@@ -9487,10 +9490,12 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.undertakings = normalizeUndertakings(raw.undertakings, warnings);
   state.undertakingActs = normalizeUndertakingActs(raw.undertakingActs, state.undertakings, warnings);
   state.undertakingMarkers = normalizeUndertakingMarkers(raw.undertakingMarkers, warnings);
-  // ADR-0235 (Schema v190): fail-closed requests and acts. A demand closes only
-  // by a release that every line's independent review supports and a recorded
-  // requester verdict; no act is repaired into one it is not, and no requester,
-  // scope, clock, producer, reviewer, privilege count or release is invented.
+  // ADR-0235/0236 (Schema v190/v191): fail-closed requests and acts. A demand
+  // closes only by a release that every line's independent review supports and
+  // a recorded requester verdict; an optional follow-up pointer is immutable,
+  // resolves only to an earlier request, and never backfills a missing verdict.
+  // No requester, scope, clock, producer, reviewer, privilege count, release or
+  // lineage is invented.
   state.informationRequests = normalizeRequests(raw.informationRequests, warnings);
   state.informationRequestActs = normalizeRequestActs(raw.informationRequestActs, state.informationRequests, warnings);
   state.informationRequestMarkers = normalizeRequestMarkers(raw.informationRequestMarkers, warnings);
@@ -10423,6 +10428,17 @@ export const MIGRATIONS = {
     informationRequestActs: Array.isArray(v189.informationRequestActs) ? v189.informationRequestActs : [],
     informationRequestMarkers: Array.isArray(v189.informationRequestMarkers) ? v189.informationRequestMarkers : [],
     settings: { ...(v189.settings || {}), ...normalizeInformationRequestSettings(v189.settings || {}) },
+  }),
+  // 190 → 191: ADR-0236 adds an optional, immutable `followsUpOn` pointer to
+  // information requests. Older demands remain standalone roots; the migration
+  // adds only an explicit null and never infers a relationship from matching
+  // scopes, requesters, instruments or dates.
+  190: (v190) => ({
+    ...v190,
+    schemaVersion: 191,
+    informationRequests: Array.isArray(v190.informationRequests)
+      ? v190.informationRequests.map((request) => ({ ...request, followsUpOn: request?.followsUpOn ?? null }))
+      : [],
   }),
   // 183 → 184: ADR-0231 adds SEVEN EMPTY ledgers (`ibpCycles`, `ibpDemandRows`,
   // `ibpCapacityRows`, `ibpOptions`, `ibpDecisions`, `ibpGrades`, `ibpMarkers`)

@@ -1,6 +1,6 @@
 /**
  * app/core/domain/rqRegistry.js — closed vocabulary for the Regulator
- * Information-Request & Examination Response Register (ADR-0235,
+ * Information-Request & Examination Response Register (ADR-0235 + ADR-0236,
  * `RULE-RQR-01`, `#/information-requests`).
  *
  * THE DUTY, IN THE OPERATOR'S WORDS. Somebody with authority over the entity
@@ -25,6 +25,11 @@
  *   3. THE REPLY DAY PASSES QUIETLY. The clock the supervisor set runs out and
  *      the organisation finds out from the follow-up letter. The register prints
  *      `reply-lapsed` and never converts a passed day into an answered request.
+ *   4. AN INSUFFICIENT VERDICT ARRIVES, THEN THE NEXT DEMAND IS TREATED AS A
+ *      NEW ISLAND. Without a dated link, leadership cannot see which demand
+ *      follows which finding of insufficiency, or keep the second demand's work
+ *      distinct from the first. ADR-0236 records the human-declared parent while
+ *      preserving both request identities and their independent clocks and acts.
  *
  * THREE FACTS, KEPT APART FOREVER. Every read carries three distinct booleans
  * and never collapses them into one reassuring word:
@@ -70,8 +75,9 @@
  * volume, no rate over people, no ranking.
  */
 
-export const RQR_ENGINE_VERSION = 'information-request-production-2026.11-v1';
+export const RQR_ENGINE_VERSION = 'information-request-production-2026.11-v2';
 export const RQR_ADR = 'ADR-0235';
+export const RQR_LINEAGE_ADR = 'ADR-0236';
 export const RQR_RULE_ID = 'RULE-RQR-01';
 export const RQR_ROUTE = 'information-requests';
 export const RQR_HREF = '#/information-requests';
@@ -298,6 +304,9 @@ export const RQR_FLAGS = Object.freeze({
   /** A compelled instrument's day was moved without the requester's agreement
    * on the record. Printed, never repaired. */
   unilateralExtension: 'compelled-instrument-extended-unilaterally',
+  /** A declared follow-up link does not reconcile to the earlier insufficient
+   * verdict instant, child record time or receipt day. The link is unsubstantiated. */
+  followUpUnsubstantiated: 'follow-up-not-supported-by-prior-insufficient-verdict',
 });
 
 /**
@@ -314,6 +323,10 @@ export const RQR_REFUSALS = Object.freeze({
   requesterUnreadable: 'requester-unreadable',
   instrumentUnreadable: 'instrument-unreadable',
   scopeUnreadable: 'requested-scope-unreadable',
+  followUpParentUnknown: 'follow-up-parent-not-readable',
+  followUpRequiresInsufficient: 'follow-up-parent-has-no-insufficient-verdict',
+  followUpBeforeVerdict: 'follow-up-received-before-prior-verdict',
+  followUpRecordedBeforeVerdict: 'follow-up-recorded-before-prior-insufficient-verdict',
   clockUnreadable: 'reply-clock-unreadable',
   clockOutOfRange: 'reply-clock-out-of-range',
   replyDayUnreadable: 'reply-day-unreadable',
@@ -396,6 +409,7 @@ export const RQR_RIGHTS = Object.freeze({
 export const RQR_SECTION_TITLES = Object.freeze({
   rows: 'Information requests',
   lines: 'Production lines',
+  lineage: 'Follow-up lineage',
   counts: 'Counts, clocks and coverage',
   refusals: 'Refused acts',
   method: 'Method & limits',
@@ -428,6 +442,7 @@ export const RQR_METHOD = Object.freeze({
   ]),
   invariants: Object.freeze([
     'A request is recorded once, by a director seat (rank 3+) in their own name, with a named requester, a closed-list requester kind, a closed-list instrument, a declared scope of what was asked, and a reply clock in whole days that is DECLARED from the instrument. The recorded identity is never edited; a correction is a new request.',
+    'A follow-up demand may name exactly one earlier, readable request as `followsUpOn` only when that request has a recorded `insufficient` requester verdict, the child record is created on or after the verdict instant, and the declared child receipt day is on or after the verdict day. The original stays insufficient; the follow-up is a separate request with its own scope, lines, clock, review and release. No relationship is inferred from similar text, dates, requester names or instruments.',
     'The reply day is derived once, from the day the ask was received plus the declared clock, and never re-guessed on read. The register knows no jurisdiction and supplies no deadline of its own.',
     'Every production line names its producer at recording or by a later assign act. A producer is named by a human, never inferred from org position, tenure or the reporting graph.',
     'A line’s production is asserted by that line’s producer in their own name, with a dated method, an item count that must be a real non-negative integer, and an explicit statement of whether the line is complete. A count of zero is allowed and reads as zero.',
@@ -436,12 +451,13 @@ export const RQR_METHOD = Object.freeze({
     'A release to the requester is refused until EVERY line has been reviewed. Releasing a production while one line is unreviewed is the exact substitution this register exists to prevent, and a release may not predate the last review.',
     'A compelled instrument’s day may not be moved at all by the entity alone; any other instrument may be moved only with the requester’s own recorded written agreement, never forward-only past the declared horizon, and never after the reply day has passed — a lapsed request is not un-lapsed by moving the date.',
     'A requester’s restatement of the clock (a granted extension, a moved date in a follow-up letter) is recorded only with the requester’s own dated reference, and only on the day they gave it. The register never converts a silent extension into a new deadline.',
-    'Counts are re-derived from stored records on every read. `partitionReconciles` (the printed state counts add to the request total) and `figuresComplete` (no refused act, no dropped row, no unstaffed line, no unreviewed privilege claim) are reported apart — neither implies the other.',
+    'Request states and follow-up lineage are re-derived from stored records on every read. `partitionReconciles` (the printed state counts add to the request total), `figuresComplete` (no dropped request or act and no unassigned production line) and lineage completeness (every declared edge is supported by its parent verdict instant, child record time and receipt day) are separate results. The seat-scoped reader withholds whole-register lineage counts whenever any demand is hidden.',
     'This register does not verify that a cited requester, instrument, transmission or privilege basis exists outside the workspace, and it produces no documents. References are declared, not checked, and the method note says so.',
   ]),
   deliberatelyAbsent: Object.freeze([
     'No cooperation score, no responsiveness rating, no league table, no “percentage of requests answered on time” per team, per line or per person. The register counts requests, lines, acts, items and days.',
     'No inference of a request from a case, an assurance finding, a risk statement, a board minute, a contract or a calendar. An inbound demand is a dated human declaration naming the requester, the instrument and the clock.',
+    'No semantic matching of request scopes, no inferred follow-up relationship and no automatic deduplication. A lineage edge is a human declaration backed by a prior insufficient-verdict instant, child-record time and receipt day; similar text or a common requester is not proof.',
     'No jurisdiction table, no statutory deadline, no legal advice. The reply clock is typed from the instrument and bounded only as a declaration; nothing here looks up what a regulator’s deadline actually is.',
     'No document generation, no collection, no search, no technology-assisted review. The register records that a line searched, what it found and what it withheld; it never touches the material.',
     'No automatic release, no automatic extension, no automatic privilege clearance. The rule asks; it never sends anything to a regulator on anybody’s behalf.',
@@ -452,12 +468,13 @@ export const RQR_METHOD = Object.freeze({
 /* ------------------------------------------------------------------- CSV */
 
 /**
- * CSV scope #178 (ADR-0235, Schema v190). Aggregate and identity-free: one
- * summary row, one coverage row, one row per derived state, per requester kind,
- * per instrument, per reply-window bucket, one rate row, one privilege-position
- * row and one release-position row. No request id, requester name, scope,
- * method, transmission reference, producer, reviewer or receiver name crosses
- * this boundary; a cell below the privacy floor exports BLANK with its reason,
+ * CSV scope #178 (ADR-0235 + ADR-0236, Schema v191). Aggregate and identity-free:
+ * one summary row, one coverage row, one row per derived state, per requester
+ * kind, per instrument, per reply-window bucket, one rate row, one privilege-
+ * position row, one release-position row and exact whole-register follow-up
+ * lineage counts. No request id, parent id, requester name, scope, method,
+ * transmission reference, producer, reviewer or receiver name crosses this
+ * boundary; a cell below the privacy floor exports BLANK with its reason,
  * never zero.
  */
 export const RQR_CSV_SCOPE = 'information-requests';
@@ -466,6 +483,8 @@ export const RQR_CSV_COLUMNS = Object.freeze([
   'as_of', 'row_kind', 'key', 'state', 'requester_kind',
   'requests', 'open', 'released', 'lapsed',
   'closing', 'unreleased', 'refused', 'insufficient',
+  'follow_up_requests', 'follow_ups_after_insufficient', 'follow_ups_unsubstantiated',
+  'roots_with_follow_ups', 'max_follow_up_depth',
   'owed', 'on_time', 'on_time_rate_bp', 'blank_reason',
 ]);
 
@@ -475,5 +494,5 @@ export const RQR_CSV_DESCRIPTOR = Object.freeze({
   group: 'governance',
   sensitive: true,
   filenameSlug: 'information-requests',
-  description: 'One summary row, one coverage row, one row per derived state, per requester kind, per instrument and per reply-window bucket, plus the on-time-release rate and the privilege and release position rows, all as exact integer counts over the whole register. No request id, requester name, requested scope, search method, transmission reference, privilege basis or person name is exported; a rate whose denominator is not published exports blank with its reason, never zero.',
+  description: 'One summary row, one coverage row, one row per derived state, per requester kind, per instrument and per reply-window bucket, plus the on-time-release rate, privilege and release position, and exact whole-register follow-up lineage counts. No request id, parent id, requester name, requested scope, search method, transmission reference, privilege basis or person name is exported; a rate whose denominator is not published exports blank with its reason, never zero.',
 });

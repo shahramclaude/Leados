@@ -7062,11 +7062,12 @@ export function buildScopeTable(state, scope, now) {
       };
     }
     case RQR_CSV_SCOPE: {
-      // CSV scope #178 (ADR-0235, Schema v190). Built from the SAME reader the
-      // `#/information-requests` panel renders, with no seat: every figure is an
-      // exact integer count over the whole register, so no request id, requester
-      // name, requested scope, search method, transmission reference, privilege
-      // basis, producer, reviewer or receiver name is reachable from this export.
+      // CSV scope #178 (ADR-0235/0236, Schema v191). Built from the SAME reader
+      // the `#/information-requests` panel renders, with no seat: every figure is
+      // an exact integer count over the whole register, so no request id, parent
+      // id, requester name, requested scope, search method, transmission reference,
+      // privilege basis, producer, reviewer or receiver name is reachable from
+      // this export.
       const report = buildInformationRequestReport(state, { now, seat: null });
       return {
         columns: RQR_CSV_COLUMNS.map((key) => ({ key, header: key })),
