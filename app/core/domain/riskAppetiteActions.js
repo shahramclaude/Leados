@@ -34,6 +34,7 @@
 import { dayKey } from '../time.js';
 import { buildSeats, activeSeat, canAct, canSee } from './seat.js';
 import { matrixLineScopeFor } from './matrix.js';
+import { buildRiskConcentration } from './riskConcentration.js';
 import {
   buildRiskAppetite,
   liveDeclarations,
@@ -399,6 +400,17 @@ export function createRiskAppetiteActions(store, { now, idFactory }) {
       const check = readCheck();
       if (!check.ok) return check;
       return riskAppetiteCandidates(store.state, { now: check.at, settings: check.cfg, seat: check.seat });
+    },
+
+    /**
+     * ADR-0226: the shared-dependency concentration reading. Re-proves the read
+     * right (the reader withholds every figure when any live declared risk is
+     * hidden from the seat, so the seat's grant decides what is summed).
+     */
+    riskAppetiteConcentration() {
+      const check = readCheck();
+      if (!check.ok) return check;
+      return buildRiskConcentration(store.state, { now: check.at, seat: check.seat });
     },
   };
 }
