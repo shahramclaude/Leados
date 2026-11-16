@@ -205,6 +205,7 @@ import { earnedValueRule } from './earnedValueRules.js';
 import { riskAppetiteRule } from './riskAppetiteRules.js';
 import { shiftHandoverRule } from './shiftHandoverRules.js';
 import { workStopRule } from './workStopRules.js';
+import { mgrHandoverRule } from './mgrHandoverRules.js';
 import { incentiveRule } from './incentiveRules.js';
 import { dutyMeansRule } from './dutyMeansRules.js';
 import { portfolioReviewRule } from './portfolioReviewRules.js';
@@ -1294,6 +1295,12 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // for EVERY frozen right-capable joint apex. It never clears or restarts work;
   // unresolved or drifted authority writes an identity-free marker and asks none.
   workStopRule,
+  // ADR-0225: open managerial transitions receive opaque asks for the owed
+  // human keys — the outgoing portfolio brief, the successor acceptance, the
+  // governor release, and the frozen joint-apex review of a dispute. It never
+  // records a key or transfers an obligation; unresolvable routes write an
+  // identity-free marker and ask none.
+  mgrHandoverRule,
   // Registered immediately before `seatRule` and `sealRule`.
   speakUpRule,
   // ADR-0076: the Operating Seat (vertical roll-up + enforced boundaries).

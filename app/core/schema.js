@@ -359,6 +359,14 @@ import {
   normalizeWorkStops,
   normalizeWorkStopSettings,
 } from './domain/workStopSchema.js';
+// ADR-0225 (Schema v180): managerial portfolio handovers, append-only
+// brief / acceptance / release / dispute acts, and identity-free markers.
+import {
+  normalizeMgrHandoverActs,
+  normalizeMgrHandoverMarkers,
+  normalizeMgrHandovers,
+  normalizeMgrHandoverSettings,
+} from './domain/mgrHandoverSchema.js';
 // ADR-0185 (Schema v147): dated Matrix change-impact requests and first-person
 // line responses. Request snapshots normalize before their responses resolve.
 import {
@@ -1207,7 +1215,10 @@ export {
 // ADR-0224 (Schema v178 → v179): Stop-Work Authority & Safe Restart — human
 // holds, append-only mitigation / independent assessment / operator decisions,
 // frozen right-capable joint-apex IDs, and identity-free no-authority markers.
-export const SCHEMA_VERSION = 179;
+// ADR-0225 (Schema v179 → v180): Managerial Portfolio Handover &
+// Successor-Acceptance — declared transitions, append-only brief / acceptance /
+// release / dispute acts, and identity-free rule markers.
+export const SCHEMA_VERSION = 180;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -2719,6 +2730,10 @@ export const DEFAULT_SETTINGS = Object.freeze({
   // ADR-0224: the stop-work review pause. It can silence escalation only; it
   // cannot clear or restart a hold.
   ...normalizeWorkStopSettings({}),
+  // ADR-0225: the managerial-handover pause. It can silence the asks for an
+  // owed brief, acceptance, release or dispute review; it never records a key
+  // or transfers an obligation.
+  ...normalizeMgrHandoverSettings({}),
 });
 
 export const COLLECTIONS = [
@@ -3645,6 +3660,11 @@ export const COLLECTIONS = [
   'workStops',
   'workStopActs',
   'workStopMarkers',
+  // ADR-0225 (Schema v180): managerial portfolio handovers, append-only
+  // brief / acceptance / release / dispute acts, identity-free markers.
+  'mgrHandovers',
+  'mgrHandoverActs',
+  'mgrHandoverMarkers',
 ];
 
 /** Stable empty state. `now` is an ISO string so the result is a pure value. */
@@ -4490,6 +4510,11 @@ export function normalizeSettings(raw) {
     ...normalizePortfolioSettings(s),
     ...normalizeShiftHandoverSettings(s),
     ...normalizeWorkStopSettings(s),
+    // ADR-0225: named here because `normalizeSettings` rebuilds the settings
+    // object field by field — a key spread into DEFAULT_SETTINGS but not named
+    // here would be silently DROPPED on every load, and the pause switch the
+    // census reads would be a switch the record does not hold.
+    ...normalizeMgrHandoverSettings(s),
     ...normalizeStructureHistorySettings(s),
     ...normalizeDifferencesSettings(s),
     ...normalizeFitSettings(s),
@@ -9194,6 +9219,12 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.workStops = normalizeWorkStops(raw.workStops, warnings);
   state.workStopActs = normalizeWorkStopActs(raw.workStopActs, state.workStops, warnings);
   state.workStopMarkers = normalizeWorkStopMarkers(raw.workStopMarkers, warnings);
+  // ADR-0225 (Schema v180): additive transitions and append-only acts. No
+  // handover is inferred from a reorganisation, a roster edit or a line-exit
+  // record; a handover is a declared transition with dated human keys.
+  state.mgrHandovers = normalizeMgrHandovers(raw.mgrHandovers, warnings);
+  state.mgrHandoverActs = normalizeMgrHandoverActs(raw.mgrHandoverActs, state.mgrHandovers, warnings);
+  state.mgrHandoverMarkers = normalizeMgrHandoverMarkers(raw.mgrHandoverMarkers, warnings);
   state.conflictInterests = normalizeConflictInterests(raw.conflictInterests, warnings);
   state.conflictNoneDeclarations = normalizeConflictNoneDeclarations(raw.conflictNoneDeclarations, warnings);
   state.conflictStandings = normalizeConflictStandings(raw.conflictStandings, state.conflictInterests, warnings);
@@ -9982,6 +10013,18 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  // 179 → 180: ADR-0225 adds THREE EMPTY ledgers (`mgrHandovers`,
+  // `mgrHandoverActs`, `mgrHandoverMarkers`) and the handover-rule pause. A
+  // managerial transition is never inferred from a reorganisation, a roster
+  // edit or a line-exit record; it is a declared transition with dated keys.
+  179: (v179) => ({
+    ...v179,
+    schemaVersion: 180,
+    mgrHandovers: Array.isArray(v179.mgrHandovers) ? v179.mgrHandovers : [],
+    mgrHandoverActs: Array.isArray(v179.mgrHandoverActs) ? v179.mgrHandoverActs : [],
+    mgrHandoverMarkers: Array.isArray(v179.mgrHandoverMarkers) ? v179.mgrHandoverMarkers : [],
+    settings: { ...(v179.settings || {}), ...normalizeMgrHandoverSettings(v179.settings || {}) },
+  }),
   // 178 → 179: ADR-0224 adds THREE EMPTY ledgers (`workStops`, `workStopActs`,
   // `workStopMarkers`) and the review-rule pause. A work stop is never inferred
   // from an incident, station, waiver or handover; a hold is a human act.

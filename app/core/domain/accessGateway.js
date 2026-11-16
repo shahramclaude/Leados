@@ -29,6 +29,7 @@ import { DWM_RIGHTS } from './dutyMeansRegistry.js';
 import { SHO_RIGHTS } from './shiftHandoverRegistry.js';
 import { PRV_RIGHTS } from './portfolioReviewRegistry.js';
 import { SWP_RIGHTS } from './workStopRegistry.js';
+import { MHH_RIGHTS } from './mgrHandoverRegistry.js';
 import { JUST_CULTURE_RIGHTS } from './justCultureRegistry.js';
 import { routeVerdict } from './seatRegistry.js';
 import { validateMissionCommands } from './mission.js';
@@ -321,6 +322,16 @@ const groups = [
   [SWP_RIGHTS.MITIGATE, 'workStopMitigate'],
   [SWP_RIGHTS.ASSESS, 'workStopAssess'],
   [SWP_RIGHTS.OPERATOR, 'workStopOperatorDecision'],
+  // ADR-0225: managerial transitions are declared at director rank; the brief
+  // is the outgoing manager's own act (or a manager above them); the
+  // acceptance and the dispute are the successor's own keys; the release is
+  // the governor's act.
+  [MHH_RIGHTS.READ, 'mgrHandoverReport mgrHandoverAttentionCount mgrHandoverCandidates'],
+  [MHH_RIGHTS.DECLARE, 'mgrHandoverDeclare mgrHandoverScan'],
+  [MHH_RIGHTS.BRIEF, 'mgrHandoverBrief'],
+  [MHH_RIGHTS.ACCEPT, 'mgrHandoverAccept'],
+  [MHH_RIGHTS.RELEASE, 'mgrHandoverRelease'],
+  [MHH_RIGHTS.DISPUTE, 'mgrHandoverDispute'],
   // ADR-0148: answering a declared share is TWO first-person acts, split on the
   // spine rather than in prose. `accept-matrix-line` is the manager's own
   // answer (accept or decline the line they were given); it is open at every
@@ -664,6 +675,9 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // ADR-0224: the stop-work reader re-proves the right inside the action; the
 // report never exposes raw collections to the generic projection.
 'workStopReport', 'workStopAttentionCount', 'workStopCandidates',
+// ADR-0225: the managerial-handover reader re-proves the right inside the
+// action; the report never exposes raw collections to the generic projection.
+'mgrHandoverReport', 'mgrHandoverAttentionCount', 'mgrHandoverCandidates',
 'portfolioReport', 'portfolioAttentionCount', 'portfolioCandidates',
 'standardWaiverAttentionCount', 'standardWaiverBriefText', 'standardWaiverCandidates', 'standardWaiverCsvRows', 'standardWaiverReport', 'concordanceAttentionCount', 'concordanceBriefText', 'concordanceCsvRows', 'concordanceRead', 'concordanceStats', 'disclosureAttentionCount', 'disclosureBriefText', 'disclosureCsvRows', 'disclosureGrantRead', 'disclosureGrants', 'disclosureRead', 'envoyAttentionCount', 'envoyBriefText', 'envoyCsvRows', 'envoyIdentity', 'envoyPacketText', 'envoyPreview', 'envoyRead', 'escalationBriefText', 'escalationCsvRows', 'escalationRead', 'escalationStats', 'differencesAttentionCount', 'differencesBriefText', 'differencesCsvRows', 'differencesRead', 'federationAttentionCount', 'federationBriefText', 'federationCsvRows', 'federationRead',
 'freezeLineAttentionCount', 'freezeLineBriefText', 'freezeLineConventions', 'freezeLineCsvRows', 'freezeLineReport',
@@ -1015,6 +1029,10 @@ const MATRIX_LINE_SCOPED = new Set([
   // declared Matrix line; the action re-proves every person and snapshots every
   // right-capable joint apex before the stop is accepted.
   'workStopDeclare',
+  // ADR-0225: the outgoing manager, successor and governor may be reachable
+  // only on declared Matrix lines; the action re-proves every person and the
+  // frozen joint seat before a transition is accepted.
+  'mgrHandoverDeclare',
 ]);
 
 /** Exact method allowlist + rank + record/person scope. No arbitrary API names. */

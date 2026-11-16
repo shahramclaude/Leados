@@ -271,6 +271,10 @@ export const PAUSE_PERMIT_MATRIX_REACH_SWITCHES = Object.freeze([
   // ADR-0224: a stop-work hold's overdue independent-review ask follows every
   // active reporting line of the reporter, work lead and affected operators.
   'workStopAutoPropagate',
+  // ADR-0225: a managerial-handover ask follows every active reporting line of
+  // the outgoing manager, the successor and the governor, and a dispute ask
+  // reaches the joint seat above EVERY line of both managers.
+  'mgrHandoverAutoPropagate',
 ]);
 
 export function pausePermitReachesMatrix(key) {
@@ -345,6 +349,10 @@ export const PAUSE_PERMIT_SWITCH_RULES = Object.freeze({
   // ADR-0224: silencing this rule can leave an overdue work-stop hold without
   // an independent Director+ review; the record remains held and visible.
   workStopAutoPropagate: 'workStopRules.js',
+  // ADR-0225: silencing this rule can leave an open managerial transition
+  // without its owed brief, acceptance, release or dispute review; the
+  // transition remains open and visible, and nothing transfers.
+  mgrHandoverAutoPropagate: 'mgrHandoverRules.js',
 });
 
 /** Only graph-reading rules belong to the matrix census. Owner-directed rules
