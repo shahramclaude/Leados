@@ -204,6 +204,7 @@ import { synergyRule } from './synergyRules.js';
 import { earnedValueRule } from './earnedValueRules.js';
 import { riskAppetiteRule } from './riskAppetiteRules.js';
 import { shiftHandoverRule } from './shiftHandoverRules.js';
+import { workStopRule } from './workStopRules.js';
 import { incentiveRule } from './incentiveRules.js';
 import { dutyMeansRule } from './dutyMeansRules.js';
 import { portfolioReviewRule } from './portfolioReviewRules.js';
@@ -1289,6 +1290,10 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // ONE identity-free `shiftHandoverMarkers` observation. Registered
   // immediately before `speakUpRule`, `seatRule` and `sealRule`.
   shiftHandoverRule,
+  // ADR-0224: overdue stop-work holds receive an opaque independent-review ask
+  // for EVERY frozen right-capable joint apex. It never clears or restarts work;
+  // unresolved or drifted authority writes an identity-free marker and asks none.
+  workStopRule,
   // Registered immediately before `seatRule` and `sealRule`.
   speakUpRule,
   // ADR-0076: the Operating Seat (vertical roll-up + enforced boundaries).

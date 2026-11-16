@@ -350,6 +350,15 @@ import {
   normalizeShiftHandoverSettings,
   normalizeShoMarkers,
 } from './domain/shiftHandoverSchema.js';
+// ADR-0224 (Schema v179): the Stop-Work Authority & Safe Restart Ledger.
+// Human-declared holds, append-only mitigation/independent-review/operator acts
+// and identity-free no-authority observations. No saved clearance or restart.
+import {
+  normalizeWorkStopActs,
+  normalizeWorkStopMarkers,
+  normalizeWorkStops,
+  normalizeWorkStopSettings,
+} from './domain/workStopSchema.js';
 // ADR-0185 (Schema v147): dated Matrix change-impact requests and first-person
 // line responses. Request snapshots normalize before their responses resolve.
 import {
@@ -1195,7 +1204,10 @@ export {
 // ADR-0223 (Schema v177 → v178): the Shift Handover & Two-Key Readback Ledger —
 // dated outgoing changeover briefs, the incoming operator's two-key readback
 // acts (synthesis or dispute), and identity-free rule markers.
-export const SCHEMA_VERSION = 178;
+// ADR-0224 (Schema v178 → v179): Stop-Work Authority & Safe Restart — human
+// holds, append-only mitigation / independent assessment / operator decisions,
+// frozen right-capable joint-apex IDs, and identity-free no-authority markers.
+export const SCHEMA_VERSION = 179;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -2704,6 +2716,9 @@ export const DEFAULT_SETTINGS = Object.freeze({
   // ADR-0223: the shift-handover ledger's conventions — the pause switch for
   // RULE-SHO-01. Printed, never fitted.
   ...normalizeShiftHandoverSettings({}),
+  // ADR-0224: the stop-work review pause. It can silence escalation only; it
+  // cannot clear or restart a hold.
+  ...normalizeWorkStopSettings({}),
 });
 
 export const COLLECTIONS = [
@@ -3625,6 +3640,11 @@ export const COLLECTIONS = [
   'shiftHandovers',
   'shiftHandoverReadbacks',
   'shiftHandoverMarkers',
+  // ADR-0224 (Schema v179): stop-work records, append-only acts and
+  // identity-free no-authority observations. No clearance state is stored.
+  'workStops',
+  'workStopActs',
+  'workStopMarkers',
 ];
 
 /** Stable empty state. `now` is an ISO string so the result is a pure value. */
@@ -4469,6 +4489,7 @@ export function normalizeSettings(raw) {
     ...normalizeDutyMeansSettings(s),
     ...normalizePortfolioSettings(s),
     ...normalizeShiftHandoverSettings(s),
+    ...normalizeWorkStopSettings(s),
     ...normalizeStructureHistorySettings(s),
     ...normalizeDifferencesSettings(s),
     ...normalizeFitSettings(s),
@@ -9167,6 +9188,12 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.shiftHandovers = normalizeShiftHandovers(raw.shiftHandovers, warnings);
   state.shiftHandoverReadbacks = normalizeShiftHandoverReadbacks(raw.shiftHandoverReadbacks, warnings);
   state.shiftHandoverMarkers = normalizeShoMarkers(raw.shiftHandoverMarkers, warnings);
+  // ADR-0224 (Schema v179): additive holds and append-only acts. First-person
+  // holds survive even when no joint authority can resolve; the reader prints
+  // that reason and no reviewer is inferred. No clearance or restart is stored.
+  state.workStops = normalizeWorkStops(raw.workStops, warnings);
+  state.workStopActs = normalizeWorkStopActs(raw.workStopActs, state.workStops, warnings);
+  state.workStopMarkers = normalizeWorkStopMarkers(raw.workStopMarkers, warnings);
   state.conflictInterests = normalizeConflictInterests(raw.conflictInterests, warnings);
   state.conflictNoneDeclarations = normalizeConflictNoneDeclarations(raw.conflictNoneDeclarations, warnings);
   state.conflictStandings = normalizeConflictStandings(raw.conflictStandings, state.conflictInterests, warnings);
@@ -9955,6 +9982,17 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  // 178 → 179: ADR-0224 adds THREE EMPTY ledgers (`workStops`, `workStopActs`,
+  // `workStopMarkers`) and the review-rule pause. A work stop is never inferred
+  // from an incident, station, waiver or handover; a hold is a human act.
+  178: (v178) => ({
+    ...v178,
+    schemaVersion: 179,
+    workStops: Array.isArray(v178.workStops) ? v178.workStops : [],
+    workStopActs: Array.isArray(v178.workStopActs) ? v178.workStopActs : [],
+    workStopMarkers: Array.isArray(v178.workStopMarkers) ? v178.workStopMarkers : [],
+    settings: { ...(v178.settings || {}), ...normalizeWorkStopSettings(v178.settings || {}) },
+  }),
   // 177 → 178: ADR-0223 adds THREE EMPTY ledgers (`shiftHandovers`,
   // `shiftHandoverReadbacks`, `shiftHandoverMarkers`) and one declared
   // convention (`shiftHandoverAutoPropagate`). No brief is inferred from the

@@ -209,16 +209,16 @@ function withDom(run) {
 /* ---------------------------------------------------------- 1. registration */
 
 test('registration: schema v150, three ledgers, CSV #143, RULE-LSW-01 as spine rule 120, rights and pause switch', () => {
-  assert.equal(SCHEMA_VERSION, 178);
+  assert.equal(SCHEMA_VERSION, 179);
   for (const key of ['standardWorkRoutines', 'standardWorkChecks', 'standardWorkTierActs']) assert.ok(COLLECTIONS.includes(key), `${key} is a declared collection`);
   const scope = CSV_EXPORTS.find((entry) => entry.key === STANDARD_WORK_CSV_SCOPE);
   assert.ok(scope, 'CSV #143 is registered');
   assert.equal(scope.sensitive, false, 'the export is aggregate-only');
-  assert.equal(CSV_EXPORTS.length, 165);
+  assert.equal(CSV_EXPORTS.length, 166);
   const contract = PROPAGATION_CONTRACTS.find((c) => c.rule?.id === 'standardWorkRule');
   assert.ok(contract, 'RULE-LSW-01 declares its propagation contract');
   assert.deepEqual(contract.writes, ['delegations', 'links', 'matrixMarkers']);
-  assert.equal(DEFAULT_POST_COMMIT_RULES.length, 139);
+  assert.equal(DEFAULT_POST_COMMIT_RULES.length, 140);
   assert.equal(PROPAGATION_CONTRACTS.length, DEFAULT_POST_COMMIT_RULES.length, 'one contract per spine rule');
   // This pin was STALE before Session 282: it still expected the tail as it stood
   // at ADR-0193, although ADR-0208/0210/0211 registered rules after it. A pin that

@@ -184,7 +184,7 @@ function verdict(env, unitId, extra = {}) {
 }
 
 test('portfolio: additive migration, v176→v177 marker separation, settings and integer cents are stable over reload', () => {
-  assert.equal(SCHEMA_VERSION, 178);
+  assert.equal(SCHEMA_VERSION, 179);
   assert.ok(COLLECTIONS.includes('portfolioExits'));
   assert.ok(COLLECTIONS.includes('portfolioReviewMarkers'));
   assert.equal(COLLECTIONS.filter((c) => c === 'portfolioMarkers').length, 1, 'portfolioMarkers belongs solely to Schema v55 Decision Portfolio');
@@ -208,7 +208,7 @@ test('portfolio: additive migration, v176→v177 marker separation, settings and
   assert.equal(step177.portfolioReviewMarkers.length, 1);
   assert.deepEqual(step177.portfolioExits, []);
   const fullChain = migrate({ schemaVersion: 175, appId: 'leados', settings: {}, portfolioMarkers: ['dpf:legacy'] });
-  assert.deepEqual(fullChain.applied, ['175 → 176', '176 → 177', '177 → 178']);
+  assert.deepEqual(fullChain.applied, ['175 → 176', '176 → 177', '177 → 178', '178 → 179']);
   assert.deepEqual(fullChain.raw.portfolioMarkers, ['dpf:legacy']);
   assert.deepEqual(fullChain.raw.portfolioReviewMarkers, []);
   assert.deepEqual(fullChain.raw.portfolioExits, []);

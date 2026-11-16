@@ -135,6 +135,10 @@ import { createWorkRestActions } from './core/domain/workRestActions.js';
 // handover past its readback instant escalates to the joint seat above EVERY
 // line of both operators; a clock-in is never a key.
 import { createShiftHandoverActions } from './core/domain/shiftHandoverActions.js';
+// ADR-0224: a human-declared stop, a work-lead mitigation, every frozen
+// Director+ joint-apex assessment, and a separate affected-operator key. This
+// ledger never physically isolates equipment or independently restarts work.
+import { createWorkStopActions } from './core/domain/workStopActions.js';
 import { createConflictRecusalActions } from './core/domain/conflictRecusalActions.js';
 // ADR-0148: Matrix Line Consent. A declared share is an ask until the line's
 // manager accepts or declines it AND the person acknowledges it. Two
@@ -20362,6 +20366,7 @@ export function createApi(store, options = {}) {
   // shift on anyone's behalf; every spell, rest and verdict is derived on read.
   Object.assign(api, createWorkRestActions(store, { now: clock, idFactory: id }));
   Object.assign(api, createShiftHandoverActions(store, { now: clock, idFactory: id }));
+  Object.assign(api, createWorkStopActions(store, { now: clock, idFactory: id }));
   // ADR-0210: the Decision-Maker Conflict-of-Interest & Recusal Ledger — a person
   // declares their own stake (or a seat records a disclosure it received), a seat
   // above them records one dated response, and a director+ declares which

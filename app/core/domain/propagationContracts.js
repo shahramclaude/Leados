@@ -151,6 +151,7 @@ import { incentiveRule } from './incentiveRules.js';
 import { dutyMeansRule } from './dutyMeansRules.js';
 import { portfolioReviewRule } from './portfolioReviewRules.js';
 import { shiftHandoverRule } from './shiftHandoverRules.js';
+import { workStopRule } from './workStopRules.js';
 import { sealRule } from './sealRules.js';
 // ADR-0092: the Differencing Defender declares its contract like every other rule.
 import { differencingRule } from './differencingRules.js';
@@ -1188,6 +1189,15 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     emits: [],
     scansWorkspace: true,
   },
+  {
+    rule: workStopRule,
+    module: 'workStopRules.js',
+    purpose: 'RULE-SWP-01: reads the complete Stop-Work Authority & Safe Restart Ledger (`buildWorkStop`, ADR-0224) and, after the declared review deadline, asks every frozen Director+ right-capable joint apex to assess the latest mitigation. The action is opaque, idempotent per (stop, mitigation round, addressee), bounded at four per commit, linked only by typed `issues-obligation` provenance, and self-closing when the hold restarts or the authority changes. A matrix tie requires every minimal apex; a no-authority, matrix-drift or record-integrity-defect case writes one identity-free `workStopMarkers` observation and asks nobody. It never clears a hold, never performs a site inspection, never authorizes a physical isolation or restarts work; only independent assessment plus an affected operator’s separate key can close the record. The `workStopAutoPropagate` pause governs both commits and explicit scans.',
+    writes: ['delegations', 'links', 'workStopMarkers'],
+    emits: [],
+    scansWorkspace: true,
+  },
+
   {
     rule: dutyMeansRule,
     module: 'dutyMeansRules.js',

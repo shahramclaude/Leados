@@ -241,6 +241,9 @@ import { DWM_CSV_COLUMNS, DWM_CSV_DESCRIPTOR, DWM_CSV_SCOPE } from './domain/dut
 // ADR-0223: the Shift Handover & Two-Key Readback Ledger — aggregate only.
 import { SHO_CSV_COLUMNS, SHO_CSV_DESCRIPTOR, SHO_CSV_SCOPE } from './domain/shiftHandoverRegistry.js';
 import { buildShiftHandover, shiftHandoverCsvRows } from './domain/shiftHandover.js';
+// ADR-0224: identity-free Stop-Work & Safe Restart aggregates from the panel reader.
+import { SWP_CSV_COLUMNS, SWP_CSV_DESCRIPTOR, SWP_CSV_SCOPE } from './domain/workStopRegistry.js';
+import { buildWorkStop, workStopCsvRows } from './domain/workStop.js';
 import {
   CAPITAL_RATIONING_CSV_COLUMNS,
   CAPITAL_RATIONING_CSV_DESCRIPTOR,
@@ -1552,6 +1555,9 @@ export const CSV_EXPORTS = [
   // action, synthesis or dispute reason crosses this boundary; an uncomputable
   // figure exports BLANK with its reason rather than a zero.
   SHO_CSV_DESCRIPTOR,
+  // #166 (ADR-0224): aggregate stop states and review stages only. No person,
+  // work area, hazard text, control or evidence note crosses this boundary.
+  SWP_CSV_DESCRIPTOR,
 ];
 
 function personLookup(state) {
@@ -6846,6 +6852,15 @@ export function buildScopeTable(state, scope, now) {
       return {
         columns: SHO_CSV_COLUMNS.map((key) => ({ key, header: key })),
         rows: shiftHandoverCsvRows(report),
+      };
+    }
+    case SWP_CSV_SCOPE: {
+      // CSV scope #166 (ADR-0224, Schema v179). Same reader as `#/work-stop`;
+      // aggregate only. No area, person, hazard narrative, control or evidence.
+      const report = buildWorkStop(state, { now, settings: state.settings || {}, seat: null });
+      return {
+        columns: SWP_CSV_COLUMNS.map((key) => ({ key, header: key })),
+        rows: workStopCsvRows(report),
       };
     }
     case 'earned-value-delivery': {

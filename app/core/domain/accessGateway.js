@@ -28,6 +28,7 @@ import { INC_RIGHTS } from './incentiveRegistry.js';
 import { DWM_RIGHTS } from './dutyMeansRegistry.js';
 import { SHO_RIGHTS } from './shiftHandoverRegistry.js';
 import { PRV_RIGHTS } from './portfolioReviewRegistry.js';
+import { SWP_RIGHTS } from './workStopRegistry.js';
 import { JUST_CULTURE_RIGHTS } from './justCultureRegistry.js';
 import { routeVerdict } from './seatRegistry.js';
 import { validateMissionCommands } from './mission.js';
@@ -312,6 +313,14 @@ const groups = [
   [SHO_RIGHTS.READ, 'shiftHandoverReport shiftHandoverAttentionCount shiftHandoverBriefGrant'],
   [SHO_RIGHTS.DECLARE, 'shiftHandoverDeclare shiftHandoverCancel shiftHandoverScan'],
   [SHO_RIGHTS.READBACK, 'shiftHandoverReadback'],
+  // ADR-0224: stop-work holds may be raised at frontline rank; mitigation is
+  // work-lead-controlled, assessment is Director+ and tied to every frozen
+  // joint apex, and restart is only an affected operator's second key.
+  [SWP_RIGHTS.READ, 'workStopReport workStopAttentionCount workStopCandidates'],
+  [SWP_RIGHTS.DECLARE, 'workStopDeclare workStopScan'],
+  [SWP_RIGHTS.MITIGATE, 'workStopMitigate'],
+  [SWP_RIGHTS.ASSESS, 'workStopAssess'],
+  [SWP_RIGHTS.OPERATOR, 'workStopOperatorDecision'],
   // ADR-0148: answering a declared share is TWO first-person acts, split on the
   // spine rather than in prose. `accept-matrix-line` is the manager's own
   // answer (accept or decline the line they were given); it is open at every
@@ -652,6 +661,9 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // whose reads are absent from SAFE_READS is unreadable under enforcement while
 // its writes are still gated.
 'shiftHandoverReport', 'shiftHandoverAttentionCount', 'shiftHandoverBriefGrant',
+// ADR-0224: the stop-work reader re-proves the right inside the action; the
+// report never exposes raw collections to the generic projection.
+'workStopReport', 'workStopAttentionCount', 'workStopCandidates',
 'portfolioReport', 'portfolioAttentionCount', 'portfolioCandidates',
 'standardWaiverAttentionCount', 'standardWaiverBriefText', 'standardWaiverCandidates', 'standardWaiverCsvRows', 'standardWaiverReport', 'concordanceAttentionCount', 'concordanceBriefText', 'concordanceCsvRows', 'concordanceRead', 'concordanceStats', 'disclosureAttentionCount', 'disclosureBriefText', 'disclosureCsvRows', 'disclosureGrantRead', 'disclosureGrants', 'disclosureRead', 'envoyAttentionCount', 'envoyBriefText', 'envoyCsvRows', 'envoyIdentity', 'envoyPacketText', 'envoyPreview', 'envoyRead', 'escalationBriefText', 'escalationCsvRows', 'escalationRead', 'escalationStats', 'differencesAttentionCount', 'differencesBriefText', 'differencesCsvRows', 'differencesRead', 'federationAttentionCount', 'federationBriefText', 'federationCsvRows', 'federationRead',
 'freezeLineAttentionCount', 'freezeLineBriefText', 'freezeLineConventions', 'freezeLineCsvRows', 'freezeLineReport',
@@ -999,6 +1011,10 @@ const MATRIX_LINE_SCOPED = new Set([
   // on a shared-services line). The action re-proves both the reach and the
   // roster band before it records anything.
   'shiftHandoverDeclare',
+  // ADR-0224: the affected work lead and operators may be reachable only on a
+  // declared Matrix line; the action re-proves every person and snapshots every
+  // right-capable joint apex before the stop is accepted.
+  'workStopDeclare',
 ]);
 
 /** Exact method allowlist + rank + record/person scope. No arbitrary API names. */

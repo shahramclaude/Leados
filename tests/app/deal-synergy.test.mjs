@@ -220,7 +220,7 @@ function withDom(run) {
  */
 
 test('ADR-0216 migration 169 → 170 adds five EMPTY ledgers and three conventions, and infers no deal', () => {
-  assert.equal(SCHEMA_VERSION, 178);
+  assert.equal(SCHEMA_VERSION, 179);
   for (const key of ['dealTheses', 'synergyClaims', 'synergyReadings', 'synergyCosts', 'synergyMarkers']) {
     assert.ok(COLLECTIONS.includes(key), `${key} is a declared collection`);
   }

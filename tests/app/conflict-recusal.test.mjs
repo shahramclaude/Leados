@@ -129,7 +129,7 @@ const DECLARE_RICH = {
 /* ----------------------------------------------------- schema & registration */
 
 test('schema v164: the register is additive, EMPTY at upgrade and stores no verdict', () => {
-  assert.equal(SCHEMA_VERSION, 178);
+  assert.equal(SCHEMA_VERSION, 179);
   for (const key of ['conflictInterests', 'conflictNoneDeclarations', 'conflictStandings', 'conflictRules', 'conflictRecusalMarkers']) {
     assert.ok(COLLECTIONS.includes(key), `${key} is a declared collection`);
   }

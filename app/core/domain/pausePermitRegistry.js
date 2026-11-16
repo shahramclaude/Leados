@@ -268,6 +268,9 @@ export const PAUSE_PERMIT_MATRIX_REACH_SWITCHES = Object.freeze([
   // joint seat above EVERY line of both operators when a handover is overdue or
   // disputed, so silencing it reaches across reporting lines.
   'shiftHandoverAutoPropagate',
+  // ADR-0224: a stop-work hold's overdue independent-review ask follows every
+  // active reporting line of the reporter, work lead and affected operators.
+  'workStopAutoPropagate',
 ]);
 
 export function pausePermitReachesMatrix(key) {
@@ -339,6 +342,9 @@ export const PAUSE_PERMIT_SWITCH_RULES = Object.freeze({
   // disputed handover. A switch that hides an uncontained boundary must not
   // itself be hidden.
   shiftHandoverAutoPropagate: 'shiftHandoverRules.js',
+  // ADR-0224: silencing this rule can leave an overdue work-stop hold without
+  // an independent Director+ review; the record remains held and visible.
+  workStopAutoPropagate: 'workStopRules.js',
 });
 
 /** Only graph-reading rules belong to the matrix census. Owner-directed rules
