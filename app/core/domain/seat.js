@@ -36,6 +36,11 @@ const PEOPLE_KEYS = Object.freeze([
   'personId', 'ownerId', 'involvedPersonIds', 'partyIds', 'partyA', 'partyB',
   'memberIds', 'peopleIds', 'subjectIds', 'candidateId', 'stewardId',
   'managerId', 'interviewers', 'holderId', 'leaderId',
+  // ADR-0224: action payloads name these people so the generic matrix-line
+  // boundary can check every affected operator and work lead. Do NOT add
+  // reporterId here: the Speak-Up register deliberately keeps its reporter
+  // behind its own scoped reader.
+  'workLeadId', 'affectedPersonIds',
 ]);
 
 /** Every person id a record names, from a declared key set. Unknown keys are ignored. */
@@ -374,8 +379,9 @@ export function projectForSeat(state, seat, built, { cap = SEAT_LIMITS.ledgerCap
   const ledger = [];
   const counts = { full: 0, aggregate: 0, denied: 0, byClass: {}, byReason: {} };
   for (const collection of GOVERNED_COLLECTIONS) {
-    const rows = Array.isArray(state?.[collection]) ? state[collection] : [];
     visible[collection] = [];
+    if (recordPolicy(collection).reportOnly) continue;
+    const rows = Array.isArray(state?.[collection]) ? state[collection] : [];
     for (const record of rows) {
       if (!record || !record.id) continue;
       const verdict = canSee(record, collection, seat, built);

@@ -148,15 +148,15 @@ function read(store, now = T0) {
  */
 
 test('registration: schema v166, four ledgers, CSV #154, RULE-TSW-01 as spine rule 131, rights, pause and contract', () => {
-  assert.equal(SCHEMA_VERSION, 178);
+  assert.equal(SCHEMA_VERSION, 179);
   for (const key of ['standardWaiverRequests', 'standardWaiverGrants', 'standardWaiverDecisions', 'standardWaiverMarkers']) {
     assert.ok(COLLECTIONS.includes(key), `${key} is a declared collection`);
   }
   const scope = CSV_EXPORTS.find((entry) => entry.key === STANDARD_WAIVER_CSV_SCOPE);
   assert.ok(scope, 'CSV #154 is registered');
   assert.equal(scope.sensitive, false, 'the export is aggregate-only');
-  assert.equal(CSV_EXPORTS.length, 165);
-  assert.equal(DEFAULT_POST_COMMIT_RULES.length, 139);
+  assert.equal(CSV_EXPORTS.length, 166);
+  assert.equal(DEFAULT_POST_COMMIT_RULES.length, 140);
   assert.equal(PROPAGATION_CONTRACTS.length, DEFAULT_POST_COMMIT_RULES.length, 'one contract per spine rule');
   const ids = DEFAULT_POST_COMMIT_RULES.map((rule) => rule.id);
   assert.equal(ids.at(-1), 'sealRule', 'the seal is absolutely last');

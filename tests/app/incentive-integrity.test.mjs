@@ -224,7 +224,7 @@ function planById(report, id) {
 /* ------------------------------------------------------------- 1. schema */
 
 test('ADR-0220 schema: the bump is additive — six empty ledgers, one declared convention, nothing inferred', () => {
-  assert.equal(SCHEMA_VERSION, 178);
+  assert.equal(SCHEMA_VERSION, 179);
   for (const key of ['incentivePlans', 'incentiveMeasures', 'incentiveReadings', 'incentiveAwards', 'incentiveRecoveries', 'incentiveMarkers']) {
     assert.ok(COLLECTIONS.includes(key), `${key} is a declared collection`);
   }
@@ -237,8 +237,8 @@ test('ADR-0220 schema: the bump is additive — six empty ledgers, one declared 
   const old = createEmptyState(T0);
   old.schemaVersion = 173;
   const migrated = migrate(old);
-  assert.deepEqual(migrated.applied, ['173 → 174', '174 → 175', '175 → 176', '176 → 177', '177 → 178']);
-  assert.equal(migrated.raw.schemaVersion, 178);
+  assert.deepEqual(migrated.applied, ['173 → 174', '174 → 175', '175 → 176', '176 → 177', '177 → 178', '178 → 179']);
+  assert.equal(migrated.raw.schemaVersion, 179);
   for (const key of ['incentivePlans', 'incentiveMeasures', 'incentiveReadings', 'incentiveAwards', 'incentiveRecoveries', 'incentiveMarkers']) {
     assert.deepEqual(migrated.raw[key], [], `${key} is added empty rather than inferred`);
   }

@@ -283,6 +283,12 @@ export const RECORD_POLICIES = Object.freeze({
   shiftHandovers: { classKey: 'unit', detailCeiling: 0, label: 'Shift handover changeover briefs — severity, station summary, open actions with owners, contingency (report only; state re-derived on read)', route: '#/shift-handover' },
   shiftHandoverReadbacks: { classKey: 'unit', detailCeiling: 0, label: 'The incoming operator’s two-key acts — synthesis or dispute, dated and immutable (report only)', route: '#/shift-handover' },
   shiftHandoverMarkers: { classKey: 'unit', detailCeiling: 0, label: 'Shift-handover observation markers — no joint seat above both lines (identity-free)', route: '#/shift-handover' },
+  // ADR-0224: one immutable stop is counted once for its work area; its
+  // participants, hazard narrative and control evidence are report-only and
+  // disclosed by the single stop-work reader, never the generic seat projection.
+  workStops: { classKey: 'unit', detailCeiling: 0, reportOnly: true, label: 'Human-declared stop-work holds, hazard and work-control evidence (report only; status re-derived on read)', route: '#/work-stop' },
+  workStopActs: { classKey: 'unit', detailCeiling: 0, reportOnly: true, label: 'Append-only mitigation, independent assessment and affected-operator decisions (report only)', route: '#/work-stop' },
+  workStopMarkers: { classKey: 'unit', detailCeiling: 0, reportOnly: true, label: 'Stop-work no-authority / matrix-drift observations — identity-free', route: '#/work-stop' },
   // ADR-0216: a deal thesis, its promises, their readings and one-off costs are
   // ENTERPRISE material — a synergy belongs to the whole deal, not to one line's
   // reading of it, and below the executive altitude there is no honest per-line
@@ -474,6 +480,9 @@ export function recordPolicy(collection) {
     minRank: cls.minRank,
     maxRank: cls.maxRank,
     detailCeiling: Number.isInteger(declared?.detailCeiling) ? declared.detailCeiling : cls.detailCeiling,
+    // A report-only collection is never enumerated by the generic projection,
+    // even as opaque per-row IDs; its module reader owns scope and aggregation.
+    reportOnly: declared?.reportOnly === true,
     classLabel: cls.label,
     reason: cls.reason,
   });
@@ -916,6 +925,14 @@ export const ACTION_RIGHTS = Object.freeze({
   'read-shift-handover': { minRank: 1, maxRank: 5, label: 'Read the shift-handover & two-key readback ledger: what was handed over, what was synthesized, what was disputed and what is overdue' },
   'declare-shift-handover': { minRank: 1, maxRank: 5, label: 'Declare the outgoing changeover brief for the station you hand over, cancel it before any key turns, or scan the register' },
   'readback-shift-handover': { minRank: 1, maxRank: 5, label: 'Turn the incoming key: synthesize the handover you accepted, or dispute it with its named reason' },
+  // ADR-0224: the stop-work ledger. Any frontline seat may raise a hold; the
+  // work lead records controls; Director+ joint apexes independently assess;
+  // only an affected operator may provide the second restart/continue-hold key.
+  'read-work-stop': { minRank: 1, maxRank: 5, label: 'Read the stop-work and safe-restart ledger within your span or as a joint reviewer' },
+  'declare-work-stop': { minRank: 1, maxRank: 5, label: 'Declare a first-person stop-work hold, name the affected operators and work lead, or scan the review queue' },
+  'mitigate-work-stop': { minRank: 1, maxRank: 5, label: 'Record a work control as the named work lead or a manager above that lead; never clear or restart work' },
+  'assess-work-stop': { minRank: 3, maxRank: 5, label: 'Independently assess the latest mitigation as one of every frozen Director+ joint apex; hold or clear only your own key' },
+  'decide-work-restart': { minRank: 1, maxRank: 5, label: 'As a named affected operator, personally confirm restart or keep the hold in force after independent clearance' },
   // ADR-0216: the deal synergy register. Reading is enterprise material and
   // matches the record-class floor (rank 4) rather than letting a director read a
   // number the class would deny. Declaring a promise is an executive act, and the

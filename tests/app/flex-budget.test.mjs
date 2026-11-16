@@ -747,13 +747,13 @@ test('ADR-0213 panel and CSV: every printed cell is the reader’s integer, and 
  */
 
 test('ADR-0213 registration: schema v167, two empty ledgers, CSV scope #155, rights and gateway rows — and no new spine rule', () => {
-  assert.equal(SCHEMA_VERSION, 178);
+  assert.equal(SCHEMA_VERSION, 179);
   assert.ok(COLLECTIONS.includes('flexBudgetPlans') && COLLECTIONS.includes('flexBudgetActuals'));
   const empty = createEmptyState(T0);
   assert.deepEqual([empty.flexBudgetPlans, empty.flexBudgetActuals], [[], []]);
   assert.equal(empty.settings[FLEX_BUDGET_SETTING_KEYS.actualsDueDays], 15);
 
-  assert.equal(CSV_EXPORTS.length, 165);
+  assert.equal(CSV_EXPORTS.length, 166);
   assert.ok(CSV_EXPORTS.includes(FLEX_BUDGET_CSV_DESCRIPTOR), 'the flex-budget export is registered');
   assert.equal(CSV_EXPORTS.at(-2), FLEX_BUDGET_CSV_DESCRIPTOR, 'ADR-0214’s value-bridge export is registered after it');
   assert.equal(FLEX_BUDGET_CSV_DESCRIPTOR.sensitive, false);
@@ -768,16 +768,16 @@ test('ADR-0213 registration: schema v167, two empty ledgers, CSV scope #155, rig
   );
   assert.equal(RECORD_POLICIES.flexBudgetPlans.detailCeiling, 0);
   assert.equal(RECORD_POLICIES.flexBudgetActuals.detailCeiling, 0);
-  assert.equal(DEFAULT_POST_COMMIT_RULES.length, 139, 'this slice adds no rule to the shared spine');
+  assert.equal(DEFAULT_POST_COMMIT_RULES.length, 140, 'this slice adds no rule to the shared spine');
 
   // 166 → 167 adds two EMPTY ledgers and infers nothing from the envelopes already held.
   const old = { ...createEmptyState(T0), schemaVersion: 166, budgets: [{ id: 'b1', currency: 'DKK' }] };
   delete old.flexBudgetPlans;
   delete old.flexBudgetActuals;
   const migrated = migrate(old);
-  assert.equal(migrated.applied.at(-1), '177 → 178');
+  assert.equal(migrated.applied.at(-1), '178 → 179');
   assert.deepEqual([migrated.raw.flexBudgetPlans, migrated.raw.flexBudgetActuals], [[], []], 'no standard is invented from an envelope');
-  assert.equal(migrated.raw.schemaVersion, 178);
+  assert.equal(migrated.raw.schemaVersion, 179);
 
   // Every exported surface the wiring names really exists on the assembled API.
   const { api } = seed();

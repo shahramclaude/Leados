@@ -136,7 +136,7 @@ function withDom(fn) {
 }
 
 test('ADR-0177 registration: Schema v142, empty migration, spine parity, gateway, seat policy, panel, CSV #132, exact-integer helpers', () => {
-  assert.equal(SCHEMA_VERSION, 178);
+  assert.equal(SCHEMA_VERSION, 179);
   const empty = createEmptyState(ISO);
   assert.deepEqual(empty.transferPriceActs, []);
   assert.deepEqual(empty.transferPriceMarkers, []);
@@ -144,7 +144,7 @@ test('ADR-0177 registration: Schema v142, empty migration, spine parity, gateway
   assert.equal(empty.settings.transferPriceAutoPropagate, true);
 
   const { raw, applied } = migrate({ schemaVersion: 141, appId: 'leados', meta: {}, settings: {}, reportingLines: [{ id: 'l1', personId: 'a', managerId: 'b' }] });
-  assert.deepEqual(applied, ['141 → 142', '142 → 143', '143 → 144', '144 → 145', '145 → 146', '146 → 147', '147 → 148', '148 → 149', '149 → 150', '150 → 151', '151 → 152', '152 → 153', '153 → 154', '154 → 155', '155 → 156', '156 → 157', '157 → 158', '158 → 159', '159 → 160', '160 → 161', '161 → 162', '162 → 163', '163 → 164', '164 → 165', '165 → 166', '166 → 167', '167 → 168', '168 → 169', '169 → 170', '170 → 171', '171 → 172', '172 → 173', '173 → 174', '174 → 175', '175 → 176', '176 → 177', '177 → 178']);
+  assert.deepEqual(applied, ['141 → 142', '142 → 143', '143 → 144', '144 → 145', '145 → 146', '146 → 147', '147 → 148', '148 → 149', '149 → 150', '150 → 151', '151 → 152', '152 → 153', '153 → 154', '154 → 155', '155 → 156', '156 → 157', '157 → 158', '158 → 159', '159 → 160', '160 → 161', '161 → 162', '162 → 163', '163 → 164', '164 → 165', '165 → 166', '166 → 167', '167 → 168', '168 → 169', '169 → 170', '170 → 171', '171 → 172', '172 → 173', '173 → 174', '174 → 175', '175 → 176', '176 → 177', '177 → 178', '178 → 179']);
   assert.deepEqual(raw.transferPriceActs, [], 'no price is fabricated on upgrade');
   assert.deepEqual(raw.transferPriceMarkers, []);
 
@@ -163,7 +163,7 @@ test('ADR-0177 registration: Schema v142, empty migration, spine parity, gateway
   assert.equal(RECORD_POLICIES.transferPriceActs.detailCeiling, 0);
   assert.equal(RECORD_POLICIES.transferPriceMarkers.detailCeiling, 0);
   assert.ok(MATRIX_PANELS.some((p) => p.key === 'chargeback'));
-  assert.equal(CSV_EXPORTS.length, 165);
+  assert.equal(CSV_EXPORTS.length, 166);
   assert.equal(CSV_EXPORTS[131].key, 'line-chargeback');
 
   // Exact integers only: nothing rounds, and a refused figure never prints as 0.00.

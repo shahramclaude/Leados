@@ -50,8 +50,8 @@ test('v152 migration is additive, empty and never infers skills from roles', () 
   delete old.skillTasks; delete old.skillActs;
   old.people = [person('kim', null)];
   const next = migrate(old);
-  assert.equal(SCHEMA_VERSION, 178);
-  assert.deepEqual(next.applied, ['151 → 152', '152 → 153', '153 → 154', '154 → 155', '155 → 156', '156 → 157', '157 → 158', '158 → 159', '159 → 160', '160 → 161', '161 → 162', '162 → 163', '163 → 164', '164 → 165', '165 → 166', '166 → 167', '167 → 168', '168 → 169', '169 → 170', '170 → 171', '171 → 172', '172 → 173', '173 → 174', '174 → 175', '175 → 176', '176 → 177', '177 → 178']);
+  assert.equal(SCHEMA_VERSION, 179);
+  assert.deepEqual(next.applied, ['151 → 152', '152 → 153', '153 → 154', '154 → 155', '155 → 156', '156 → 157', '157 → 158', '158 → 159', '159 → 160', '160 → 161', '161 → 162', '162 → 163', '163 → 164', '164 → 165', '165 → 166', '166 → 167', '167 → 168', '168 → 169', '169 → 170', '170 → 171', '171 → 172', '172 → 173', '173 → 174', '174 → 175', '175 → 176', '176 → 177', '177 → 178', '178 → 179']);
   assert.deepEqual(next.raw.skillTasks, []);
   assert.deepEqual(next.raw.skillActs, []);
   assert.ok(COLLECTIONS.includes('skillTasks') && COLLECTIONS.includes('skillActs'));

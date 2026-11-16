@@ -201,7 +201,7 @@ function seed(nowDay = '2026-11-15') {
 /* ------------------------------------------- 1. Schema, migration & parsers */
 
 test('ADR-0221 Schema v175: additive migration, persisted conventions, exact integer parsers and zero ×100 reload inflation', () => {
-  assert.equal(SCHEMA_VERSION, 178);
+  assert.equal(SCHEMA_VERSION, 179);
   for (const col of ['dutyMeansDuties', 'dutyMeansRequirements', 'dutyMeansActs', 'dutyMeansMarkers']) {
     assert.ok(COLLECTIONS.includes(col), `${col} registered in COLLECTIONS`);
   }
@@ -219,8 +219,8 @@ test('ADR-0221 Schema v175: additive migration, persisted conventions, exact int
   const v174 = { schemaVersion: 174, people: [], settings: {} };
   assert.equal(typeof MIGRATIONS[174], 'function');
   const migrated = migrate(v174);
-  assert.equal(migrated.raw.schemaVersion, 178);
-  assert.equal(migrated.applied.at(-1), '177 → 178');
+  assert.equal(migrated.raw.schemaVersion, 179);
+  assert.equal(migrated.applied.at(-1), '178 → 179');
   assert.deepEqual(migrated.raw.dutyMeansDuties, []);
   assert.deepEqual(migrated.raw.dutyMeansRequirements, []);
   assert.deepEqual(migrated.raw.dutyMeansActs, []);
@@ -562,7 +562,7 @@ test('ADR-0221 Simons entrepreneurial gap: only a seat strictly above BOTH deman
 /* ---------------- 5. RULE-DWM-01 spine, pause permits & opaque asks */
 
 test('ADR-0221 RULE-DWM-01: spine registration (#137), pause-permit census, joint-apex routing, opaque asks, idempotency, self-close, and top-of-house markers', () => {
-  assert.equal(DEFAULT_POST_COMMIT_RULES.length, 139);
+  assert.equal(DEFAULT_POST_COMMIT_RULES.length, 140);
   assert.equal(PROPAGATION_CONTRACTS.length, DEFAULT_POST_COMMIT_RULES.length);
   assert.ok(DEFAULT_POST_COMMIT_RULES.includes(dutyMeansRule));
   assert.equal(DEFAULT_POST_COMMIT_RULES.at(-2)?.id, 'seatRule');
@@ -659,7 +659,7 @@ test('ADR-0221 RULE-DWM-01: spine registration (#137), pause-permit census, join
 /* ---------------- 6. Scoping, executive redaction, CSV #163 & DOM parity */
 
 test('ADR-0221 scoping, executive carrier redaction, CSV #163 identity-free export, and cell-by-cell DOM parity', () => withDom(() => {
-  assert.equal(CSV_EXPORTS.length, 165);
+  assert.equal(CSV_EXPORTS.length, 166);
   const env = seed();
   env.sit('kai');
   const d = env.api.dutyMeansDeclareDuty({

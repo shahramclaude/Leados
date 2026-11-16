@@ -210,7 +210,7 @@ function declareStandard(env, overrides = {}) {
 /* ------------------------------------------- 1. Schema, migration & loaders */
 
 test('ADR-0223 Schema v178: additive migration, persisted convention, registered collections and fail-closed loaders', () => {
-  assert.equal(SCHEMA_VERSION, 178);
+  assert.equal(SCHEMA_VERSION, 179);
   for (const col of ['shiftHandovers', 'shiftHandoverReadbacks', 'shiftHandoverMarkers']) {
     assert.ok(COLLECTIONS.includes(col), `${col} registered in COLLECTIONS`);
   }
@@ -221,8 +221,8 @@ test('ADR-0223 Schema v178: additive migration, persisted convention, registered
   const v177 = { schemaVersion: 177, people: [], settings: {} };
   assert.equal(typeof MIGRATIONS[177], 'function');
   const migrated = migrate(v177);
-  assert.equal(migrated.raw.schemaVersion, 178);
-  assert.equal(migrated.applied.at(-1), '177 → 178');
+  assert.equal(migrated.raw.schemaVersion, 179);
+  assert.equal(migrated.applied.at(-1), '178 → 179');
   assert.deepEqual(migrated.raw.shiftHandovers, []);
   assert.deepEqual(migrated.raw.shiftHandoverReadbacks, []);
   assert.deepEqual(migrated.raw.shiftHandoverMarkers, []);
@@ -455,12 +455,12 @@ test('ADR-0223 attention counts the incoming operator’s owed key; redaction wi
 /* --------------------------------------------- 6. CSV, wiring pins & the view */
 
 test('ADR-0223 wiring: CSV #165 is identity-free, the rule is on the spine and pause-registered, and rights are declared for every altitude', () => {
-  assert.equal(CSV_EXPORTS.length, 165);
+  assert.equal(CSV_EXPORTS.length, 166);
   const scope = CSV_EXPORTS.find((entry) => entry.key === SHO_CSV_SCOPE);
   assert.ok(scope, 'shift-handover scope registered');
   assert.equal(scope.sensitive, true);
   const ids = DEFAULT_POST_COMMIT_RULES.map((rule) => rule.id);
-  assert.equal(ids.length, 139);
+  assert.equal(ids.length, 140);
   assert.ok(ids.includes('shiftHandoverRule'));
   assert.equal(ids.lastIndexOf('shiftHandoverRule'), ids.indexOf('shiftHandoverRule'));
   assert.ok(ids.indexOf('shiftHandoverRule') < ids.indexOf('seatRule'));
