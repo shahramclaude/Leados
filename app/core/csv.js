@@ -238,7 +238,7 @@ import { VY_CSV_COLUMNS, VY_CSV_DESCRIPTOR, VY_CSV_SCOPE } from './domain/vyRegi
 import { IBP_CSV_COLUMNS, IBP_CSV_DESCRIPTOR, IBP_CSV_SCOPE } from './domain/ibpRegistry.js';
 import { buildIbp } from './domain/ibp.js';
 import { ibpCsvRows } from './domain/ibpCsv.js';
-import { buildVroomYetton } from './domain/vy.js';
+import { buildVroomYetton, vyCsvRows } from './domain/vy.js';
 // ADR-0220: CSV #162 — the variable-pay design & incentive integrity register,
 // aggregate per currency and identity-free.
 import { buildIncentiveIntegrity, incentiveCsvRows } from './domain/incentiveIntegrity.js';
