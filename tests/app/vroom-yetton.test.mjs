@@ -136,9 +136,10 @@ const DECL = (over = {}) => ({
  */
 
 test('vy: schema v184 with four EMPTY vy ledgers and nothing inferred', () => {
-  // Session ADR-0231 raised the schema to v184; the vy ledgers are still the
-  // collections THIS ADR added, and the 182→183 step is still where they appear.
-  assert.equal(SCHEMA_VERSION, 184);
+  // The vy ledgers are still the collections THIS ADR added, and the 182→183
+  // step is still where they appear. The head pin follows the schema (v186 as
+  // of Session 311's repair of this stale pin; ADR-0231 shipped at v184).
+  assert.equal(SCHEMA_VERSION, 186);
   for (const key of ['vyDecisions', 'vyAnswers', 'vyStyleRecords', 'vyMarkers']) {
     assert.ok(COLLECTIONS.includes(key), `${key} is a declared collection`);
   }
