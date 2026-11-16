@@ -1,13 +1,15 @@
 /**
- * app/core/domain/rqSchema.js — fail-closed normalizers for ADR-0235
+ * app/core/domain/rqSchema.js — fail-closed normalizers for ADR-0235/0236
  * (Regulator Information-Request & Examination Response Register,
- * `RULE-RQR-01`).
+ * `RULE-RQR-01`, Schema v191).
  *
  * A malformed request or act is DROPPED with a counted warning, and nothing is
  * repaired: no requester, instrument, scope, receipt day, reply clock, producer,
  * method, item count, privilege claim, review verdict, transmission reference or
- * response is invented. An act resolves only through a request that survived
- * normalization, so no act can outlive the demand it answers.
+ * response or follow-up parent is invented. An act resolves only through a
+ * request that survived normalization, so no act can outlive the demand it
+ * answers; a lineage edge resolves only to an earlier stored request and is
+ * never inferred from similar wording.
  *
  * THE RAW PER-KIND TIMESTAMP KEY IS CARRIED THROUGH the loader's output beside
  * the uniform `at` read timestamp (`assignedAt`/`producedAt`/`reviewedAt`/
@@ -96,7 +98,9 @@ function normalizePrivilege(raw) {
   if (raw === undefined || raw === null) return { claimed: false, withheldCount: 0, basis: '' };
   if (!isPlainObject(raw)) return null;
   if (raw.claimed !== true) {
-    if (raw.claimed === false && (raw.withheldCount === undefined || raw.withheldCount === null)) {
+    const noCount = raw.withheldCount === undefined || raw.withheldCount === null
+      || raw.withheldCount === 0 || raw.withheldCount === '0';
+    if (raw.claimed === false && noCount && !rqrText(raw.basis, L.textMax)) {
       return { claimed: false, withheldCount: 0, basis: '' };
     }
     return null;
@@ -136,11 +140,12 @@ function normalizeLine(raw) {
  */
 export function normalizeRequests(value, warnings = []) {
   const list = Array.isArray(value) ? value : [];
-  const kept = [];
+  const candidates = [];
   const seenIds = new Set();
   let dropped = 0;
+  let badLineage = 0;
   for (const raw of list) {
-    if (kept.length >= L.requests || !isPlainObject(raw)) { dropped += 1; continue; }
+    if (candidates.length >= L.requests || !isPlainObject(raw)) { dropped += 1; continue; }
     const id = rqrId(raw.id);
     const requester = rqrText(raw.requester, L.requesterMax);
     const requesterKind = RQR_REQUESTER_KEYS.includes(raw.requesterKind) ? raw.requesterKind : null;
@@ -151,10 +156,13 @@ export function normalizeRequests(value, warnings = []) {
     const replyClockDays = rqrClock(raw.replyClockDays);
     const receivedById = rqrId(raw.receivedById);
     const createdAt = rqrInstant(raw.createdAt);
+    const hasFollowUp = raw.followsUpOn !== undefined && raw.followsUpOn !== null && raw.followsUpOn !== '';
+    const followsUpOn = hasFollowUp ? rqrId(raw.followsUpOn) : null;
     if (!id || seenIds.has(id) || requester.length < L.requesterMin || !requesterKind
       || !instrument || !instrumentRef || scope.length < L.textMin || !receivedOn
-      || replyClockDays === null || !receivedById || !createdAt) {
+      || replyClockDays === null || !receivedById || !createdAt || (hasFollowUp && !followsUpOn)) {
       dropped += 1;
+      if (hasFollowUp && !followsUpOn) badLineage += 1;
       continue;
     }
     const replyDay = rqReplyDay(receivedOn, replyClockDays);
@@ -171,7 +179,7 @@ export function normalizeRequests(value, warnings = []) {
     }
     if (!lines.length || lines.length > L.linesMax) { dropped += 1; continue; }
     seenIds.add(id);
-    kept.push({
+    candidates.push({
       id,
       requester,
       requesterKind,
@@ -183,14 +191,44 @@ export function normalizeRequests(value, warnings = []) {
       replyDay,
       receivedById,
       createdAt,
+      followsUpOn,
       lines,
     });
     if (lineDropped) {
       warnings.push(`Information requests: refused ${lineDropped} unreadable or duplicate production line(s) on ${id}; no producer, subject or day was repaired.`);
     }
   }
+
+  // Resolve links only after the full request set is normalized, so a missing
+  // parent is not confused with a later array position. The request ledger is
+  // append-only: a parent must precede its child in stored order and cannot have
+  // a later creation instant. That ordering makes a cycle impossible; a child of
+  // a refused parent is refused on the next pass rather than left dangling.
+  const byId = new Map(candidates.map((row) => [row.id, row]));
+  const orderById = new Map(candidates.map((row, index) => [row.id, index]));
+  const survivingIds = new Set(candidates.map((row) => row.id));
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const row of candidates) {
+      if (!survivingIds.has(row.id) || !row.followsUpOn) continue;
+      const parent = byId.get(row.followsUpOn);
+      if (!parent || !survivingIds.has(parent.id) || parent.id === row.id
+        || orderById.get(parent.id) >= orderById.get(row.id)
+        || Date.parse(parent.createdAt) > Date.parse(row.createdAt)) {
+        survivingIds.delete(row.id);
+        dropped += 1;
+        badLineage += 1;
+        changed = true;
+      }
+    }
+  }
+  const kept = candidates.filter((row) => survivingIds.has(row.id));
+  if (badLineage) {
+    warnings.push(`Information requests: refused ${badLineage} malformed, orphaned, self-referential or non-prior follow-up request row(s); no lineage was inferred.`);
+  }
   if (dropped) {
-    warnings.push(`Information requests: refused ${dropped} unreadable, duplicate or out-of-range row(s); no requester, instrument, scope, receipt day, reply clock, producer or line was repaired.`);
+    warnings.push(`Information requests: refused ${dropped} unreadable, duplicate or out-of-range row(s); no requester, instrument, scope, receipt day, reply clock, producer, line or lineage was repaired.`);
   }
   return kept;
 }

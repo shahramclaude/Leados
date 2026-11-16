@@ -1,6 +1,6 @@
 /**
  * app/core/domain/rqActions.js — the seat-checked commands of the Regulator
- * Information-Request & Examination Response Register (ADR-0235).
+ * Information-Request & Examination Response Register (ADR-0235/0236, Schema v191).
  *
  * ONE recording, six human acts and a scan, and nothing else: RECORD an inbound
  * demand from an authority, ASSIGN a producer to a line, PRODUCE on a line you
@@ -17,6 +17,11 @@
  *    receipt day and reply clock are read from the record for its whole life. A
  *    correction is a new record, never an edit that would let a demand quietly
  *    become a different demand.
+ *  - FOLLOW-UP IS A SEPARATE DEMAND WITH A DECLARED PARENT. It is accepted only
+  *    against a readable prior request with an already-recorded insufficient
+  *    verdict, a child record time on or after its instant and a receipt day on
+  *    or after its date. The original is never reopened, and no relationship is
+  *    inferred from text, date, requester or instrument.
  *  - THE CLOCK IS NEVER GUESSED. `replyClockDays` must be typed from the
  *    instrument. There is no default, no jurisdiction table and no "usual"
  *    window in this workspace, so a missing clock is a refusal, not a 30.
@@ -265,6 +270,33 @@ export function createInformationRequestActions(store, { now, idFactory }) {
       if (!lineResult.ok) return lineResult;
 
       const existing = loadedRequests();
+      const followsUpRaw = input.followsUpOn;
+      const followsUpOn = followsUpRaw === undefined || followsUpRaw === null || followsUpRaw === ''
+        ? null
+        : rqrText(followsUpRaw, 120);
+      if (followsUpRaw !== undefined && followsUpRaw !== null && followsUpRaw !== '' && !followsUpOn) {
+        return fail('Choose a readable earlier request, or leave the follow-up link blank. Nothing was inferred from the scope or requester name.', 'followsUpOn', REFUSAL(R.followUpParentUnknown));
+      }
+      if (followsUpOn) {
+        const readable = buildInformationRequestReport(store.state, { now: check.at, seat: check.seat });
+        const parent = readable.rows.find((row) => row.id === followsUpOn) || null;
+        if (!parent) {
+          return fail('That prior request is not readable from this seat. A lineage link never widens access to another request.', 'followsUpOn', REFUSAL(R.followUpParentUnknown));
+        }
+        if (parent.response !== 'insufficient' || !parent.respondedOn) {
+          return fail('A follow-up link is allowed only when the earlier request has a recorded requester verdict of insufficient. Similar scope, requester or date is not enough.', 'followsUpOn', REFUSAL(R.followUpRequiresInsufficient));
+        }
+        const verdict = loadedActs(existing)
+          .filter((act) => act.requestId === parent.id && act.kind === 'respond')
+          .sort((a, b) => String(a.at).localeCompare(String(b.at)))[0] || null;
+        if (!verdict || verdict.response !== 'insufficient' || check.at.getTime() < Date.parse(verdict.at)) {
+          return fail('The prior insufficient verdict must already be on the record before this follow-up demand is recorded. A same-day receipt is allowed only when the verdict came first.', 'followsUpOn', REFUSAL(R.followUpRecordedBeforeVerdict));
+        }
+        const verdictDay = dayOfIso(verdict.at);
+        if (receivedOn < verdictDay) {
+          return fail(`The follow-up receipt day (${receivedOn}) predates the earlier insufficient verdict (${verdictDay}). Record the day this demand actually arrived.`, 'followsUpOn', REFUSAL(R.followUpBeforeVerdict));
+        }
+      }
       if (existing.length >= L.requests) return fail('The information-request register is full. Nothing was saved.', null, REFUSAL(R.ledgerFull));
       const id = idFactory('rq');
       const createdAt = check.at.toISOString();
@@ -279,6 +311,7 @@ export function createInformationRequestActions(store, { now, idFactory }) {
         replyClockDays,
         receivedById: check.actorId,
         createdAt,
+        followsUpOn,
         lines: lineResult.lines,
       };
       const loaded = normalizeRequests([...existing, candidate], []);
@@ -757,7 +790,7 @@ export function createInformationRequestActions(store, { now, idFactory }) {
         .map((row) => ({ id: row.id, name: row.name || row.id, role: row.role || row.level || '' }))
         .sort((a, b) => String(a.name).localeCompare(String(b.name)));
       const graph = matrix(check.at, check.cfg);
-      const report = buildInformationRequests(store.state, { now: check.at });
+      const report = buildInformationRequestReport(store.state, { now: check.at, seat: check.seat });
       const seat = check.seat;
       return {
         ok: true,
@@ -768,6 +801,18 @@ export function createInformationRequestActions(store, { now, idFactory }) {
         privilegeOutcomes: [...RQR_PRIVILEGE_OUTCOMES],
         responses: [...RQR_RESPONSE_KEYS],
         limits: { clockMinDays: L.clockMinDays, clockMaxDays: L.clockMaxDays, linesMax: L.linesMax },
+        followUpParents: report.rows
+          .filter((row) => row.response === 'insufficient' && row.respondedOn)
+          .map((row) => ({
+            id: row.id,
+            requester: row.requester,
+            requesterKind: row.requesterKind,
+            instrumentRef: row.instrumentRef,
+            scope: row.scope,
+            receivedOn: row.receivedOn,
+            respondedOn: row.respondedOn,
+          }))
+          .sort((a, b) => String(b.respondedOn).localeCompare(String(a.respondedOn)) || String(a.id).localeCompare(String(b.id))),
         reviewable: report.rows
           .filter((row) => row.lines.some((line) => line.lineState === 'produced'))
           .map((row) => ({

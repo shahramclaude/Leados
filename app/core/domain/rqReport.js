@@ -1,11 +1,11 @@
 /**
  * app/core/domain/rqReport.js — the seat-scoped read surface of the Regulator
- * Information-Request & Examination Response Register (ADR-0235,
- * `RULE-RQR-01`, CSV #178).
+ * Information-Request & Examination Response Register (ADR-0235/0236, Schema
+ * v191, `RULE-RQR-01`, CSV #178).
  *
  * ONE kernel (`buildInformationRequests`) stands behind every state, flag,
- * count and rate this module returns. This layer adds exactly three things and
- * invents none of them:
+ * count, rate and lineage edge this module returns. This layer adds exactly four
+ * things and invents none of them:
  *
  *   1. SEAT VISIBILITY. A request names a requester outside the entity, the seat
  *      that recorded it, the producer of every line, the seat that reviewed each
@@ -29,6 +29,11 @@
  *      producer slot on a line of a request it recorded. Never a volume about a
  *      person.
  *
+ *   4. FOLLOW-UP LINEAGE — a human-declared edge to one earlier demand. It is
+ *      shown only when both linked rows are visible; otherwise the missing side,
+ *      supported depth, verdict-dependent flag and whole-register counts are
+ *      withheld. The edge never grants access to its parent or child.
+ *
  * WHAT THIS MODULE NEVER DOES. It never rates a person, a team, a function or a
  * requester; never computes a cooperation score or a league table; never infers
  * a producer, a privilege basis or a statutory deadline; and never converts a
@@ -38,6 +43,7 @@
 import { buildInformationRequests } from './rqProduction.js';
 import {
   RQR_STATE_KEYS,
+  RQR_FLAGS,
   RQR_REQUESTER_KINDS,
   RQR_INSTRUMENTS,
   RQR_RIGHTS,
@@ -135,17 +141,59 @@ export function buildInformationRequestReport(state, { now, seat = null } = {}) 
   }
   const hiddenN = seat ? hidden.length : 0;
   const wholePopulation = hiddenN === 0;
+  const visibleIds = new Set(visible.map((row) => row.id));
+  const visibleRows = visible.map((row) => {
+    const lineage = row.followUp || { status: 'original', parent: null, children: [], childCount: 0, depth: 0, rootRequestId: row.id, ancestorIds: [] };
+    const parentVisible = !lineage.parent || visibleIds.has(lineage.parent.id);
+    const parentRow = lineage.parent ? kernel.rows.find((candidate) => candidate.id === lineage.parent.id) : null;
+    const parentAncestor = parentRow?.followUp?.parent || null;
+    const parentRelationshipWithheld = Boolean(parentAncestor && !visibleIds.has(parentAncestor.id));
+    const visibleChildren = (lineage.children || []).filter((child) => visibleIds.has(child.id));
+    const childrenWithheld = visibleChildren.length !== (lineage.children || []).length;
+    const ancestryVisible = (lineage.ancestorIds || []).every((id) => visibleIds.has(id));
+    return {
+      ...row,
+      // An unsubstantiated flag depends on the hidden parent's verdict. Keep the
+      // child read honest without disclosing that parent's state to this seat.
+      flags: lineage.parent && !parentVisible
+        ? row.flags.filter((flag) => flag !== RQR_FLAGS.followUpUnsubstantiated)
+        : row.flags,
+      followUp: {
+        status: lineage.parent && !parentVisible ? 'parent-withheld' : lineage.status,
+        parent: parentVisible && lineage.parent
+          ? {
+            ...lineage.parent,
+            relationshipState: parentRelationshipWithheld ? 'parent-withheld' : lineage.parent.relationshipState,
+          }
+          : null,
+        parentWithheld: Boolean(lineage.parent && !parentVisible),
+        children: visibleChildren,
+        childCount: visibleChildren.length,
+        childrenWithheld,
+        depth: ancestryVisible ? lineage.depth : null,
+        rootRequestId: ancestryVisible ? lineage.rootRequestId : null,
+      },
+    };
+  });
 
   const rates = wholePopulation
     ? kernel.counts.rates
     : { releasedInsideWindow: { owed: null, onTime: null, onTimeBp: null } };
+  const lineageCounts = wholePopulation ? kernel.lineageCounts : null;
+  const lineageCountsWithheldReason = wholePopulation
+    ? null
+    : `${hiddenN} information request(s) are not visible from this seat. Follow-up counts and lineage depth are withheld whole rather than describing a partial relationship graph.`;
 
   return {
     engine: kernel.engine,
     adr: kernel.adr,
+    lineageAdr: kernel.lineageAdr,
     rule: kernel.rule,
     asOf: kernel.asOf,
-    rows: visible,
+    rows: visibleRows,
+    lineageCounts,
+    lineageCountsWithheld: !wholePopulation,
+    lineageCountsWithheldReason,
     counts: {
       ...kernel.counts,
       visible: visible.length,
@@ -240,10 +288,21 @@ export function informationRequestCsvRows(report) {
   const counts = report.counts || {};
   const rates = report.rates || { releasedInsideWindow: {} };
   const rateWithheld = Boolean(report.ratesWithheld);
+  const lineage = report.lineageCounts || null;
+  const lineageWithheld = Boolean(report.lineageCountsWithheld) || !lineage;
+  const lineageReason = lineageWithheld
+    ? (report.lineageCountsWithheldReason || 'Follow-up lineage is unavailable; no partial count is exported.')
+    : '';
+  const withheldReasons = [
+    rateWithheld ? (report.ratesWithheldReason || 'the register-wide rate is withheld') : '',
+    lineageWithheld ? lineageReason : '',
+  ].filter(Boolean);
 
   const blank = (reason) => ({
     requests: '', open: '', released: '', lapsed: '',
     closing: '', unreleased: '', refused: '', insufficient: '',
+    follow_up_requests: '', follow_ups_after_insufficient: '', follow_ups_unsubstantiated: '',
+    roots_with_follow_ups: '', max_follow_up_depth: '',
     owed: '', on_time: '', on_time_rate_bp: '', blank_reason: reason,
   });
 
@@ -253,15 +312,20 @@ export function informationRequestCsvRows(report) {
     lapsed: num(counts.lapsed),
     closing: num(counts.closing), unreleased: num(counts.unreleased),
     refused: num(counts.refused), insufficient: num(counts.insufficient),
+    follow_up_requests: lineage ? num(lineage.followUpRequests) : '',
+    follow_ups_after_insufficient: lineage ? num(lineage.followUpsAfterInsufficient) : '',
+    follow_ups_unsubstantiated: lineage ? num(lineage.followUpsUnsubstantiated) : '',
+    roots_with_follow_ups: lineage ? num(lineage.rootsWithDirectFollowUps) : '',
+    max_follow_up_depth: lineage ? num(lineage.maxFollowUpDepth) : '',
     owed: '', on_time: '', on_time_rate_bp: '',
-    blank_reason: rateWithheld ? (report.ratesWithheldReason || 'withheld') : '',
+    blank_reason: withheldReasons.join('; '),
   });
 
   rows.push({
     as_of: asOf, row_kind: 'coverage', key: 'claims', state: '', requester_kind: '',
     ...blank(''),
     requests: num(counts.requests),
-    blank_reason: `partitionReconciles=${report.partitionReconciles ? 'true' : 'false'}; figuresComplete=${report.figuresComplete ? 'true' : 'false'}; dropped-rows=${counts.droppedRows || 0}; unassigned-lines=${counts.unassignedLines || 0}; no-authority=${counts.noAuthority || 0}; no-independent-reviewer=${counts.noReviewer || 0}; clock-moves-recorded=${counts.clockMoves || 0}`,
+    blank_reason: `partitionReconciles=${report.partitionReconciles ? 'true' : 'false'}; figuresComplete=${report.figuresComplete ? 'true' : 'false'}; dropped-rows=${counts.droppedRows || 0}; unassigned-lines=${counts.unassignedLines || 0}; no-authority=${counts.noAuthority || 0}; no-independent-reviewer=${counts.noReviewer || 0}; clock-moves-recorded=${counts.clockMoves || 0}; all-declared-follow-up-links-supported=${lineage ? String(lineage.declaredLinksSupported) : 'withheld'}; follow-up-requests=${lineage ? lineage.followUpRequests : 'withheld'}; follow-ups-after-insufficient=${lineage ? lineage.followUpsAfterInsufficient : 'withheld'}; follow-ups-unsubstantiated=${lineage ? lineage.followUpsUnsubstantiated : 'withheld'}; ${lineageReason || 'lineage-counts=whole-register'}`,
   });
 
   for (const key of RQR_STATE_KEYS) {

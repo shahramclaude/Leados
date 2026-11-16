@@ -1,6 +1,7 @@
 /**
  * app/core/domain/rqProduction.js — the pure kernel of the Regulator
- * Information-Request & Examination Response Register (ADR-0235, `RULE-RQR-01`).
+ * Information-Request & Examination Response Register (ADR-0235/0236,
+ * `RULE-RQR-01`, Schema v191).
  *
  * A demand is RECORDED once by a director seat in their own name and never
  * edited. Seven append-only act kinds move it:
@@ -60,6 +61,7 @@ import { buildMatrix, matrixJointApex } from './matrix.js';
 import { LEADER_ID } from './chain.js';
 import {
   RQR_ADR,
+  RQR_LINEAGE_ADR,
   RQR_ENGINE_VERSION,
   RQR_FLAGS,
   RQR_LIMITS as L,
@@ -406,6 +408,106 @@ function deriveRow(state, request, acts, peopleIndex, matrix, today) {
   };
 }
 
+const followUpSummary = (row, status) => ({
+  id: row.id,
+  requester: row.requester,
+  requesterKind: row.requesterKind,
+  instrument: row.instrument,
+  instrumentRef: row.instrumentRef,
+  scope: row.scope,
+  receivedOn: row.receivedOn,
+  respondedOn: row.respondedOn,
+  response: row.response,
+  state: row.state,
+  relationshipState: status,
+});
+
+/**
+ * Attach request lineage from the immutable `followsUpOn` declaration. The
+ * lineage edge is supported only by a real, earlier insufficient response, a
+ * child record created on or after that verdict, and a child receipt day on or
+ * after it. This is a record-integrity claim,
+ * not a semantic claim that two free-text scopes are identical.
+ */
+function applyFollowUpLineage(rows, requests, acts) {
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  const childrenByParent = new Map(rows.map((row) => [row.id, []]));
+  const responseAtByRequest = new Map();
+  for (const row of rows) {
+    const requestActs = list(acts).filter((act) => act && act.requestId === row.id);
+    const ord = actOrder(requestActs);
+    const response = requestActs.filter((act) => act.kind === 'respond')
+      .sort((a, b) => compareActs(a, b, ord))[0] || null;
+    if (response?.response === 'insufficient') responseAtByRequest.set(row.id, response.at);
+  }
+  for (const row of rows) {
+    row.followUp = {
+      status: 'original',
+      parent: null,
+      children: [],
+      childCount: 0,
+      depth: 0,
+      rootRequestId: row.id,
+      ancestorIds: [],
+    };
+  }
+
+  for (const request of requests) {
+    if (!request.followsUpOn) continue;
+    const child = byId.get(request.id);
+    const parent = byId.get(request.followsUpOn);
+    if (!child) continue;
+    let status = 'parent-unavailable';
+    if (parent) {
+      const verdictAt = responseAtByRequest.get(parent.id) || null;
+      if (parent.response !== 'insufficient' || !parent.respondedOn || !verdictAt) status = 'parent-not-insufficient';
+      else if (Date.parse(request.createdAt) < Date.parse(verdictAt)) status = 'recorded-before-parent-verdict';
+      else if (child.receivedOn < dayOf(verdictAt)) status = 'received-before-parent-verdict';
+      else status = 'follows-up-after-insufficient';
+    }
+    const parentFollowUp = parent?.followUp || null;
+    const ancestorIds = parent
+      ? [parent.id, ...(parentFollowUp?.ancestorIds || [])]
+      : [];
+    const supported = status === 'follows-up-after-insufficient';
+    const depth = supported && parentFollowUp?.depth !== null && parentFollowUp?.depth !== undefined
+      ? parentFollowUp.depth + 1
+      : null;
+    child.followUp = {
+      status,
+      parent: parent ? followUpSummary(parent, parentFollowUp?.status || 'original') : null,
+      children: [],
+      childCount: 0,
+      depth,
+      rootRequestId: depth !== null ? (parentFollowUp?.rootRequestId || parent.id) : null,
+      ancestorIds,
+    };
+    if (!supported) child.flags.push(RQR_FLAGS.followUpUnsubstantiated);
+    if (parent) childrenByParent.get(parent.id)?.push(child);
+  }
+
+  for (const row of rows) {
+    const children = childrenByParent.get(row.id) || [];
+    row.followUp.children = children.map((child) => followUpSummary(child, child.followUp.status));
+    row.followUp.childCount = children.length;
+  }
+
+  const followUpRows = rows.filter((row) => row.followUp.status !== 'original');
+  const supportedRows = followUpRows.filter((row) => row.followUp.status === 'follows-up-after-insufficient');
+  const unsubstantiatedRows = followUpRows.length - supportedRows.length;
+  const rootsWithDirectFollowUps = rows.filter((row) => row.followUp.status === 'original' && row.followUp.childCount > 0).length;
+  const depths = supportedRows.map((row) => row.followUp.depth).filter((value) => Number.isInteger(value));
+  return {
+    originalRequests: rows.length - followUpRows.length,
+    followUpRequests: followUpRows.length,
+    followUpsAfterInsufficient: supportedRows.length,
+    followUpsUnsubstantiated: unsubstantiatedRows,
+    rootsWithDirectFollowUps,
+    maxFollowUpDepth: depths.length ? Math.max(...depths) : (followUpRows.length ? null : 0),
+    declaredLinksSupported: unsubstantiatedRows === 0,
+  };
+}
+
 /**
  * The kernel. `state` is the whole workspace; `now` is injected. Nothing
  * derived is stored and the input is never mutated.
@@ -429,11 +531,11 @@ export function buildInformationRequests(state, { now = new Date() } = {}) {
     matrix = { nodes: new Map(), chain: { nodes: new Map() } };
   }
 
-  const rows = requests
-    .map((request) => deriveRow(state, request, acts, peopleIndex, matrix, today))
-    .sort((a, b) => String(a.effectiveReplyDay).localeCompare(String(b.effectiveReplyDay))
-      || String(b.createdAt).localeCompare(String(a.createdAt))
-      || String(a.id).localeCompare(String(b.id)));
+  const rows = requests.map((request) => deriveRow(state, request, acts, peopleIndex, matrix, today));
+  const lineageCounts = applyFollowUpLineage(rows, requests, acts);
+  rows.sort((a, b) => String(a.effectiveReplyDay).localeCompare(String(b.effectiveReplyDay))
+    || String(b.createdAt).localeCompare(String(a.createdAt))
+    || String(a.id).localeCompare(String(b.id)));
 
   const byState = Object.fromEntries(RQR_STATE_KEYS.map((key) => [key, 0]));
   const byRequester = {};
@@ -531,17 +633,20 @@ export function buildInformationRequests(state, { now = new Date() } = {}) {
   return {
     engine: RQR_ENGINE_VERSION,
     adr: RQR_ADR,
+    lineageAdr: RQR_LINEAGE_ADR,
     rule: RQR_RULE_ID,
     asOf: today,
     rows,
     counts,
+    lineageCounts,
     markers,
     warnings,
     /** The printed state counts add to the request total. */
     partitionReconciles: partitioned === rows.length,
     /** No act, request or line was refused or dropped by the loader, and every
      * line that carries a duty names a producer. Reported APART from
-     * `partitionReconciles`: neither implies the other. */
+     * `partitionReconciles`: neither implies the other. Follow-up lineage has its
+     * own whole-register completeness result and withholding boundary. */
     figuresComplete: counts.droppedRows === 0 && unassignedLinesN === 0,
     method: RQR_METHOD,
   };
