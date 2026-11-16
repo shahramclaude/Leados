@@ -4726,3 +4726,19 @@ Benchmark **[BENCHMARK-UNVERIFIED]**: COSO ERM 2017 Principle 3 and ISO 31000:20
 Verification: `node --test tests/app/risk-appetite.test.mjs` **22/22**; `csv` 5/5; `action-bundles` 19/19 after rebuilding the standalone (16,116,714 bytes, 936 modules, schema v173); `standalone` 7/7; `pause-permits` 12/13. The one red is pre-existing and reported, not worked around: `PAUSE_PERMIT_MATRIX_REACH_SWITCHES` lists 24 switches for 26 mapped rule modules (`synergyAutoPropagate`, `earnedValueAutoPropagate` are mapped but not carried in settings) — verified at base HEAD as the same two-short delta (23 vs 25). `npm run lint`, `check:boundary` (939 app modules, 272 suites, 23 doc checks) and `check:links` (1,267 links) PASS. **The full suite was not run to completion — [UNVERIFIED].** Real-browser/AT behaviour remains [UNVERIFIED].
 
 New gaps logged as Planned: cross-entity/cross-currency appetite under a declared FX policy; risk-appetite vintages (the ceiling beside what was carried, period by period); and an appetite declared for a domain that carries nothing. In Progress: as-of line reading for which line carried a risk on a past date, authenticated identity/tenant isolation, and the real-browser walkthrough.
+
+## 2026-11-16 — Session 313: repair the night-work method-figure reference
+
+**Doctrine and sync.** `NORTH_STAR.md` exists and contains the Matrix Leadership, Bulletproof Reliability, Visual/Content Integrity and Competitive Benchmark mandates. `origin` is `https://github.com/shahramclaude/Leados.git`; HEAD is the branch point `d5b880f` (= `origin/main`). No doctrine amendment needed.
+
+**Built.** Added `app/assets/night-work-break-method.jpg`, an explanatory method diagram for the existing `workNightPanel.js` reference. Updated the planned-gap status in ROADMAP and recorded asset provenance and limits in ADR-0209. This is a frontline / mid-manager visual defect repair; the underlying night-work capability and remainder are not implemented. The figure represents declared limits, evidence-required refusal and matrix deduplication; it is not operational evidence or a data view.
+
+**Gap hunt.** Found the already-roadmapped missing referenced asset (Session 303), and closed only that specific defect. No new feature gap is claimed from this bounded asset repair. Broader implementation gap remains the night-work and in-shift break reading listed in ROADMAP.
+
+**Benchmark `[BENCHMARK-UNVERIFIED]`.** Higgsfield was not connected/available in this conversation. Used Arena's built-in image generator to satisfy the broken-asset repair; did not claim parity with Higgsfield or specialized diagram-generation tools. Altitude/structure: frontline / mid-manager × matrix and single-chain, as the owning work/rest panel declares.
+
+**Verification.** Static reference-and-bytes check passed: the referenced path exists, is non-empty, JPEG signature `ffd8ff`, 129,960 bytes, and the view points to that exact relative path. The focused `node --test tests/app/night-work-breaks.test.mjs` could not start because dependencies are not installed (`ERR_MODULE_NOT_FOUND: jsdom`). No display-versus-stored data claim applies; this is a static asset-only change. Browser rendering **[UNVERIFIED]**. No adjacent logic changed.
+
+**Flagged.** Test execution blocked by missing `jsdom`; browser/AT rendering and specialized-tool benchmark **[UNVERIFIED]**. No user-facing application logic changed; README not changed.
+
+**Next:** Work/rest recovery ledger remainder — particularly the worker's own view (frontline × matrix and single-chain), then night-work and in-shift break reading.
