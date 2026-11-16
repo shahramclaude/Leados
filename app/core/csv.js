@@ -253,6 +253,9 @@ import { SHO_CSV_COLUMNS, SHO_CSV_DESCRIPTOR, SHO_CSV_SCOPE } from './domain/shi
 import { buildShiftHandover, shiftHandoverCsvRows } from './domain/shiftHandover.js';
 import { KZT_CSV_COLUMNS, KZT_CSV_DESCRIPTOR, KZT_CSV_SCOPE } from './domain/suggestionRegistry.js';
 import { buildSuggestionReport, suggestionCsvRows } from './domain/suggestionReport.js';
+// ADR-0228: aggregate, identity-free decision-domain sensing aggregates from the panel reader.
+import { DSN_CSV_COLUMNS, DSN_CSV_DESCRIPTOR, DSN_CSV_SCOPE } from './domain/domainSenseRegistry.js';
+import { domainSenseReport, domainSenseCsvRows } from './domain/domainSenseReport.js';
 // ADR-0224: identity-free Stop-Work & Safe Restart aggregates from the panel reader.
 import { SWP_CSV_COLUMNS, SWP_CSV_DESCRIPTOR, SWP_CSV_SCOPE } from './domain/workStopRegistry.js';
 import { buildWorkStop, workStopCsvRows } from './domain/workStop.js';
@@ -1627,6 +1630,11 @@ export const CSV_EXPORTS = [
   // problem or proposal text crosses this boundary; a cell below the privacy
   // floor of three exports BLANK with its reason, never zero.
   KZT_CSV_DESCRIPTOR,
+  // #174 (ADR-0228): the decision-domain sensing register — aggregate and
+  // identity-free. One summary row, one row per derived state, one row per
+  // committed fit and one row per agreed domain; no decision title, id, owner,
+  // panel member, line name, rationale or evidence text crosses this boundary.
+  DSN_CSV_DESCRIPTOR,
 ];
 
 function personLookup(state) {
@@ -7008,6 +7016,17 @@ export function buildScopeTable(state, scope, now) {
       return {
         columns: KZT_CSV_COLUMNS.map((key) => ({ key, header: key })),
         rows: suggestionCsvRows(report),
+      };
+    }
+    case DSN_CSV_SCOPE: {
+      // CSV scope #174 (ADR-0228, Schema v186). Built from the SAME reader the
+      // `#/domain-sense` panel renders, with no seat: every figure is an exact
+      // integer count over the whole register, so no decision title, owner,
+      // panel member, line name or evidence text is reachable from this export.
+      const report = domainSenseReport(state, { now, seat: null });
+      return {
+        columns: DSN_CSV_COLUMNS.map((key) => ({ key, header: key })),
+        rows: domainSenseCsvRows(report),
       };
     }
     case 'earned-value-delivery': {

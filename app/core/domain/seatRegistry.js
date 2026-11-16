@@ -1252,6 +1252,16 @@ export const ACTION_RIGHTS = Object.freeze({
   // revoking a credential) is director-and-above: it is a claim the whole
   // workspace makes about itself (cf. 'set-disclosure-floor').
   'govern-attestation': { minRank: 3, maxRank: 5, label: 'Govern the attestation boundary (enforcement, revocation)' },
+  // ADR-0228: the decision-domain sensing register (Cynefin). Declaring a
+  // decision is a director-and-above act; a panel member states the domain on
+  // their declared line, and the owner commits a mode — both are narrowed
+  // inside the action to the named person, so the right window is manager and
+  // above; the reader refuses anything it cannot verify.
+  'read-domain-sense': { minRank: 2, maxRank: 5, label: 'Read the decision-domain sensing register' },
+  'declare-domain-sense': { minRank: 3, maxRank: 5, label: 'Declare a decision for the panel to sense' },
+  'scan-domain-sense': { minRank: 3, maxRank: 5, label: 'Scan the decision-domain sensing register' },
+  'assess-domain-sense': { minRank: 2, maxRank: 5, label: 'State the domain for a decision on a declared line' },
+  'commit-domain-sense': { minRank: 2, maxRank: 5, label: 'Commit the mode for a decision the seat owns' },
 });
 
 export function actionVerdict(action, seat) {

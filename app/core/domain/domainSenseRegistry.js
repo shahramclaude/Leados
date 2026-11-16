@@ -34,6 +34,7 @@ export const DSN_LIMITS = Object.freeze({
   precedentMax: 500,
   probeMin: 1,
   probeMax: 500,
+  privacyFloor: 3,
   dayMin: '2000-01-01',
   dayMax: '2100-12-31',
 });
@@ -155,4 +156,64 @@ export const DSN_SECTION_TITLES = Object.freeze({
   counts: 'State and fit counts',
   refusals: 'Refused acts',
   method: 'Method & limits',
+});
+
+/**
+ * Four rights, each re-proved inside the action when a record is named:
+ *   READ   — the register is readable from manager altitude up; figures describe
+ *            decisions and readings, never persons.
+ *   DECLARE — a director-or-above act: name the matter, its owner, its panel
+ *             and its sensing window. The owner and panel are human
+ *             declarations; nothing is inferred from the reporting graph.
+ *   ASSESS   — a declared panel member's act, on the line declared for them,
+ *             never the owner's. Narrowed inside the action to the panel this
+ *             seat sits on.
+ *   COMMIT   — the owner's act, once. Narrowed inside the action to the named
+ *             owner. Fit is read against the committed mode; nothing blocks it.
+ */
+export const DSN_RIGHTS = Object.freeze({
+  READ: 'read-domain-sense',
+  DECLARE: 'declare-domain-sense',
+  ASSESS: 'assess-domain-sense',
+  COMMIT: 'commit-domain-sense',
+});
+
+/**
+ * Append-only event types for the post-commit spine; the derived state
+ * (domain, fit, flags) is never stored, so these events are history only.
+ */
+export const DSN_EVENTS = Object.freeze({
+  DECLARED: 'domain.declared',
+  ASSESSED: 'domain.assessed',
+  COMMITTED: 'domain.committed',
+  SCANNED: 'domain.scanned',
+});
+
+export const DSN_HREF = '#/domain-sense';
+
+/* ------------------------------------------------------------------- CSV */
+
+/**
+ * CSV scope #174 (ADR-0228, Schema v186). Aggregate and identity-free: one
+ * summary row, one row per derived state, one row per fit verdict and one row
+ * per agreed domain — anonymous counts over the whole register. No decision
+ * title, id, owner, panel member, line name, rationale or evidence text
+ * crosses this boundary; a count below the privacy floor of three exports
+ * BLANK with its reason, never zero. The panel's domain statement is a matter
+ * of record for the room, not a comparison unit for export.
+ */
+export const DSN_CSV_SCOPE = 'decision-domain-sensing';
+
+export const DSN_CSV_COLUMNS = Object.freeze([
+  'as_of', 'row_kind', 'key', 'state', 'domain', 'fit',
+  'decisions', 'readings', 'commitments', 'overdue', 'stale', 'blank_reason',
+]);
+
+export const DSN_CSV_DESCRIPTOR = Object.freeze({
+  key: DSN_CSV_SCOPE,
+  label: 'Decision-domain sensing register (aggregate)',
+  group: 'leadership',
+  sensitive: true,
+  filenameSlug: 'decision-domain-sensing',
+  description: 'One summary row, one row per derived state, one row per committed fit and one row per agreed domain, all as exact integer counts over the whole register. No decision title, id, owner, panel member, line name, rationale or evidence text is exported; a cell below the privacy floor of three is blank with its reason, never zero.',
 });

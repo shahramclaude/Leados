@@ -38,6 +38,11 @@ import { normalizeWorkTurnActs, normalizeWorkTurnMarkers, normalizeWorkTurnSetti
 // answer are the only stored facts of a work-turn transfer; readiness and
 // capacity are re-derived on read.
 import { normalizeWorkReassignmentActs } from './domain/workReassignmentSchema.js';
+// ADR-0228 (Schema v186): the Decision-Domain Sensing Register. Fail-closed
+// normalizers for dated declared decisions and panel acts; every domain, fit
+// state and count is re-derived on read, nothing is stored that is not a
+// human act.
+import { normalizeDecisions, normalizeDecisionActs } from './domain/domainSenseSchema.js';
 // ADR-0182 (Schema v145): the Automation Pause Permit Register. Fail-closed
 // normalizers for dated permits and RULE-PMP-01's marker ledger.
 import { normalizePausePermitMarkers, normalizePausePermits, normalizePausePermitSettings } from './domain/pausePermitSchema.js';
@@ -1280,7 +1285,7 @@ export {
 // (kaizen teian) — declared suggestions with their COMPUTED route, append-only
 // triage / claim / confirm acts, and identity-free rule markers. No state,
 // overdue flag, rate or verdict is stored; each is re-derived on read.
-export const SCHEMA_VERSION = 185;
+export const SCHEMA_VERSION = 186;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -3778,6 +3783,13 @@ export const COLLECTIONS = [
   'ibpDecisions',
   'ibpGrades',
   'ibpMarkers',
+  // ADR-0228 (Schema v186): the Decision-Domain Sensing Register (Cynefin).
+  // Declared decisions and the panel's append-only readings and commitments.
+  // No domain, fit or mode is stored: each is re-derived on read from the
+  // declared panel's stated evidence, so a hand-edited file cannot carry a
+  // domain nobody stated, a fit nobody agreed or a mode nobody committed.
+  'domainDecisions',
+  'domainSenseActs',
 ];
 
 /** Stable empty state. `now` is an ISO string so the result is a pure value. */
@@ -9346,6 +9358,12 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.ibpDecisions = normalizeIbpDecisions(raw.ibpDecisions, state.ibpCycles, warnings);
   state.ibpGrades = normalizeIbpGrades(raw.ibpGrades, state.ibpCycles, warnings);
   state.ibpMarkers = normalizeIbpMarkers(raw.ibpMarkers, warnings);
+  // ADR-0228 (Schema v186): fail-closed declared decisions and acts. A domain
+  // is stated only by a quorate, unanimous panel on evidence matched to it;
+  // no reading is repaired into evidence it does not carry, and no commitment
+  // is inferred from a role or a title.
+  state.domainDecisions = normalizeDecisions(raw.domainDecisions, warnings);
+  state.domainSenseActs = normalizeDecisionActs(raw.domainSenseActs, state.domainDecisions, warnings);
   // ADR-0220: a plan, measure, award or recovery act that cannot be read exactly
   // is DROPPED with a counted warning. A reading is resolved AFTER its measures,
   // because the measure's unit decides which field the figure belongs in; a
@@ -10200,6 +10218,18 @@ export const MIGRATIONS = {
     suggestionActs: Array.isArray(v184.suggestionActs) ? v184.suggestionActs : [],
     suggestionMarkers: Array.isArray(v184.suggestionMarkers) ? v184.suggestionMarkers : [],
     settings: { ...(v184.settings || {}), ...normalizeSuggestionSettings(v184.settings || {}) },
+  }),
+  // 185 → 186: ADR-0228 adds TWO EMPTY ledgers (`domainDecisions`,
+  // `domainSenseActs`). No panel, domain, reading or commitment is inferred
+  // from a case, a strategy cycle, a risk statement or the reporting graph:
+  // every domain on the register is a dated human declaration with named
+  // evidence, and manufacturing one at upgrade time would state a domain
+  // nobody sensed.
+  185: (v185) => ({
+    ...v185,
+    schemaVersion: 186,
+    domainDecisions: Array.isArray(v185.domainDecisions) ? v185.domainDecisions : [],
+    domainSenseActs: Array.isArray(v185.domainSenseActs) ? v185.domainSenseActs : [],
   }),
   // 183 → 184: ADR-0231 adds SEVEN EMPTY ledgers (`ibpCycles`, `ibpDemandRows`,
   // `ibpCapacityRows`, `ibpOptions`, `ibpDecisions`, `ibpGrades`, `ibpMarkers`)

@@ -190,6 +190,11 @@ import { sourcingAttentionCount as sourcingAttentionCountFn } from './core/domai
 import { ibpAttentionCount as ibpAttentionCountFn } from './core/domain/ibp.js';
 import { renderVroomYetton } from './views/vroom-yetton.js';
 import { vyAttentionCount as vyAttentionCountFn } from './core/domain/vy.js';
+// ADR-0228: the Decision-Domain Sensing Register (Cynefin) — a cross-line
+// panel states a decision's domain on evidence, and the owner commits a mode
+// that is read for fit against it, never enforced.
+import { renderDomainSense } from './views/domain-sense.js';
+import { domainSenseAttentionCount as domainSenseAttentionCountFn } from './core/domain/domainSenseReport.js';
 import { renderPortfolioReview } from './views/portfolioReview.js';
 import { portfolioReviewAttentionCount } from './core/domain/portfolioReview.js';
 import { dutyMeansAttentionCount } from './core/domain/dutyMeans.js';
@@ -641,6 +646,11 @@ export const NAV = [
     // to involve others in a decision: autocratic I/II, consultative I/II,
     // group II, on seven situational diagnostics.
     { route: 'vroom-yetton', label: 'Decision participation', icon: '⑃', badge: 'vroom-yetton' },
+    // ADR-0228: what kind of decision is this — and does the panel agree on
+    // the evidence? Beside decision participation on purpose: participation
+    // chooses how much the group is involved; domain sensing decides what kind
+    // of problem the group is solving.
+    { route: 'domain-sense', label: 'Decision-domain sensing', icon: '⊛', badge: 'domainSense' },
     // ADR-0231: the five-step S&OP cycle — one operating plan the whole
     // business works from, with the gap counted and the residual owned. Sits
     // beside portfolio review and capability sourcing on purpose: portfolio
@@ -831,6 +841,8 @@ const RENDERERS = {
   // ADR-0230: Vroom–Yetton–Jago Decision-Participation Selector — how much to
   // involve others in a decision, on seven situational diagnostics.
   'vroom-yetton': (ctx) => renderVroomYetton(ctx),
+  // ADR-0228: the decision-domain sensing register (Cynefin).
+  'domain-sense': (ctx) => renderDomainSense(ctx),
   // ADR-0231: integrated business planning — demand, demonstrated capacity, the
   // counted gap and the residual an executive actually accepted.
   ibp: (ctx) => renderIbp(ctx),
@@ -1727,6 +1739,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       // ADR-0230: decisions that owe a style selection — diagnostics unanswered
       // or a recommended style not yet recorded.
       'vroom-yetton': vyAttentionCountFn(state, { now: at, settings: state.settings, seat: seatCtx?.seat || null }),
+      'domain-sense': domainSenseAttentionCountFn(state, { now: at, settings: state.settings, seat: seatCtx?.seat || null }),
       // ADR-0231: cycles that owe a human something — an untested supply review,
       // an unreconciled gap, an executive step, or a passed review date.
       ibp: ibpAttentionCountFn(state, { now: at, settings: state.settings, seat: seatCtx?.seat || null }),
