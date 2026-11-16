@@ -935,6 +935,27 @@ export const ACTION_RIGHTS = Object.freeze({
   'declare-vroom-yetton': { minRank: 1, maxRank: 5, label: 'Declare a decision-participation question — how much should the team be involved in this decision?' },
   'answer-vroom-yetton': { minRank: 2, maxRank: 5, label: 'Answer the seven Vroom–Yetton diagnostics for a decision on a line you hold' },
   'select-vroom-yetton': { minRank: 3, maxRank: 5, label: 'Select a participation style for a decision — accept the recommendation or override it with a written reason' },
+  // ADR-0231: the Integrated Business Plan / S&OP Cycle Register. Reading a plan
+  // of record is portfolio material (rank 3+), exactly as the record-class engine
+  // already classifies it: it carries commercial volume, capacity commitments and
+  // indirectly named customers. Declaring the cycle is the process owner's act
+  // (rank 3+). Recording the demand plan and demonstrated capacity is the manager
+  // who HOLDS the line (rank 2+), narrowed inside the action to a line the cycle
+  // names. Framing a costed option is a director's act (rank 3+) because it
+  // commits analysis and often cash. Approving the plan is the executive step
+  // (rank 4+) and is refused for the seat that framed the options. Grading the
+  // forecast against actuals is the process owner's ordinary duty (rank 3+).
+  // READ opens at rank 2 deliberately. A supply manager at rank 2 must be able to
+  // READ the demand plan they are asked to demonstrate capacity against; gating
+  // the read above the record right would let a manager record a feasibility
+  // verdict on a plan they are not allowed to see. Disclosure is not lost,
+  // because the reader narrows every row to a line the seat holds.
+  'read-integrated-business-plan': { minRank: 2, maxRank: 5, label: 'Read the integrated business plan for the cycles your lines carry: unconstrained demand, demonstrated capacity, the exact gap and the residual an executive actually accepted' },
+  'declare-integrated-business-plan': { minRank: 3, maxRank: 5, label: 'Open or withdraw an S&OP cycle — the five-step monthly process that ends in one approved operating plan' },
+  'record-integrated-business-plan': { minRank: 2, maxRank: 5, label: 'Record the consensus demand plan, the statistical baseline and target, or demonstrated capacity on a line you hold' },
+  'frame-integrated-business-plan': { minRank: 3, maxRank: 5, label: 'Frame a costed pre-S&OP option against a quantified gap — a lever, a plan-unit effect and an exact cost' },
+  'decide-integrated-business-plan': { minRank: 4, maxRank: 5, label: 'Approve the operating plan at the executive step, stating the residual you are accepting — never a plan whose options you framed' },
+  'grade-integrated-business-plan': { minRank: 3, maxRank: 5, label: 'Grade the demand plan against what actually sold, once per cycle-month, against the consensus that was frozen' },
   // ADR-0220: the variable-pay design & incentive integrity register. Reading is
   // open to the manager altitude because a team envelope is a manager's own
   // instrument; the row class and the span filter decide what is printed. Every

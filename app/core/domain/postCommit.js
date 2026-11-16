@@ -204,6 +204,7 @@ import { synergyRule } from './synergyRules.js';
 import { earnedValueRule } from './earnedValueRules.js';
 import { riskAppetiteRule } from './riskAppetiteRules.js';
 import { sourcingRule } from './sourcingRules.js';
+import { ibpRule } from './ibpRules.js';
 import { vyRule } from './vyRules.js';
 import { shiftHandoverRule } from './shiftHandoverRules.js';
 import { workStopRule } from './workStopRules.js';
@@ -1282,6 +1283,18 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // dated ask per condition: diagnostics owed (to the declaring seat) and style
   // owed (to the lowest director-or-above seat holding a touched line).
   vyRule,
+  // ADR-0231: the Integrated Business Plan / S&OP Cycle Register. ONE rule reads
+  // the finished register and files at most one dated ask per condition: the
+  // supply review owed where demand exists and feasibility was never tested (to
+  // the supply line's own manager), the reconciliation owed where a gap is
+  // quantified with no costed option (to the process owner), the executive step
+  // owed where options are framed with no approved plan (to the lowest seat above
+  // BOTH lines at VP altitude or higher, never a promoted director), an approved
+  // residual that disagrees with the one the record computes (to the approver),
+  // and a review date passed with no plan. A branch whose graph holds no VP seat,
+  // a disconnected graph and a departed owner each write ONE identity-free
+  // `ibpMarkers` observation and ask nobody.
+  ibpRule,
   // ADR-0220: the Variable-Pay Design & Incentive Integrity Register. ONE rule
   // reads the finished register with the whole-workspace view and files at most
   // one dated ask per condition: an over-ceiling envelope (to the lowest seat

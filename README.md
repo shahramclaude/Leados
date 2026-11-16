@@ -1,3 +1,19 @@
+## 2026-11-16 — A plan of record that cannot be approved against a number nobody observed
+
+**Director / VP → Integrated plan** (`#/ibp`) is the register where a business runs the five-step S&OP cycle — portfolio, demand, supply, reconciliation, executive — and ends with **one approved operating plan whose residual is owned**.
+
+The question is not "what is our forecast". It is: **what will this business commit to sell and make, what has our own line demonstrated it can produce, what is the gap, what does closing it cost, and who has accepted what is left unserved?**
+
+So the register keeps four things apart that are always collapsed, and will not let any of them stand in for another. **Baseline, target and consensus** are three separately stored figures, printed side by side — because a target is a wish with a bonus attached, and a consensus that quietly equals the target is now printed as `target-substituted` rather than believed. **Demonstrated capacity is not theoretical capacity**: a proven figure names a real observation window of at least 28 days, and a nameplate number is carried, printed and marked as an assertion. **The gap is not the residual**: the gap is what the unconstrained plan exceeds demonstrated capacity by; the residual is what is still unserved after the costed options are applied. **"The figures add up" is not "the printed figures are the computed figures"** — two separate claims, printed as two separate sentences.
+
+**The refusal that matters most:** the register will not compute a gap against a theoretical capacity figure. The figure is recorded; the arithmetic is withheld; the cycle reads `theoretical-capacity`. The most plausible way to approve a plan that cannot be delivered is to compare demand against nameplate, and that is now structurally impossible.
+
+**The gap has no single manager, and the register says so.** Demand sits on one line and supply on another, so the executive step belongs to the **lowest seat above both** — computed from the reporting graph, never chosen by the actor. A director is walked past, not promoted; a branch with no such seat prints `no-authority-at-rank` and the step reads as owed. The seat that framed the options cannot approve them, and the approver's stated residual is compared with the one the record computes — a difference is **printed as a disagreement**, never reconciled.
+
+**Shared capacity is summed, not assumed.** Two cycles drawing on the same supply line in the same month consume the same capacity, so the register groups every live cycle by line and month and prints the contention against the line. Two plans that each fit can no longer both be approved against a line that serves neither.
+
+**Exact by construction.** Plan units are whole units — a fractional unit is refused, because a rounded plan is a different plan and its residual is a different residual. Costs are whole cents parsed in `BigInt`, with a third decimal place refused. Forecast bias is signed and reported **apart** from mean absolute percentage error, and both are withheld below five graded months, because a forecast that runs high every month has a fatal bias and near-zero pure error and one number would hide which is failing.
+
 ## 2026-11-16 — The firm never wrote down where its own boundary sits
 
 **CEO / C-suite → Capability sourcing** (`#/sourcing`) is the register where an enterprise records a capability it must either own or rent, prices the sides on **one** basis, and prints the hold-up exposure whether or not anybody decided.

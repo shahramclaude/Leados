@@ -234,6 +234,10 @@ import { SRC_CSV_COLUMNS, SRC_CSV_DESCRIPTOR, SRC_CSV_SCOPE } from './domain/sou
 import { buildSourcing } from './domain/sourcing.js';
 import { sourcingCsvRows } from './domain/sourcingCsv.js';
 import { VY_CSV_COLUMNS, VY_CSV_DESCRIPTOR, VY_CSV_SCOPE } from './domain/vyRegistry.js';
+// ADR-0231: CSV #172 — the integrated business plan / S&OP cycle register.
+import { IBP_CSV_COLUMNS, IBP_CSV_DESCRIPTOR, IBP_CSV_SCOPE } from './domain/ibpRegistry.js';
+import { buildIbp } from './domain/ibp.js';
+import { ibpCsvRows } from './domain/ibpCsv.js';
 import { buildVroomYetton } from './domain/vy.js';
 // ADR-0220: CSV #162 — the variable-pay design & incentive integrity register,
 // aggregate per currency and identity-free.
@@ -1604,6 +1608,16 @@ export const CSV_EXPORTS = [
   // or reason crosses this boundary; an uncomputable figure exports BLANK with
   // its reason, never zero.
   VY_CSV_DESCRIPTOR,
+  // #172 (ADR-0231): the integrated business plan / S&OP cycle register —
+  // aggregate and identity-free. One summary row, one row per cycle state, one
+  // row per verdict, one row per step and one row per currency: cycle counts,
+  // unconstrained demand, demonstrated capacity, the exact signed gap, the
+  // option effects, the exact residual, per-currency option cost in whole cents,
+  // and the signed forecast bias with mean absolute percentage error in basis
+  // points. No cycle title, id, product family, owner, manager, supply line
+  // name, basis, note or reason crosses this boundary; an uncomputable figure
+  // exports BLANK with its reason, never zero.
+  IBP_CSV_DESCRIPTOR,
 ];
 
 function personLookup(state) {
@@ -6962,6 +6976,17 @@ export function buildScopeTable(state, scope, now) {
       return {
         columns: VY_CSV_COLUMNS.map((key) => ({ key, header: key })),
         rows: vyCsvRows(report),
+      };
+    }
+    case IBP_CSV_SCOPE: {
+      // CSV scope #172 (ADR-0231, Schema v184). Built from the SAME reader the
+      // `#/ibp` panel renders, with no seat: every figure is an aggregate over
+      // the whole record, so no cycle, product family, owner, line or basis is
+      // reachable from this export.
+      const report = buildIbp(state, { now, settings: state.settings || {}, seat: null });
+      return {
+        columns: IBP_CSV_COLUMNS.map((key) => ({ key, header: key })),
+        rows: ibpCsvRows(report),
       };
     }
     case 'earned-value-delivery': {

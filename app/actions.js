@@ -133,6 +133,8 @@ import { createPortfolioReviewActions } from './core/domain/portfolioReviewActio
 // boundary question and grading the frozen assumptions — nothing else.
 import { createSourcingActions } from './core/domain/sourcingActions.js';
 import { createVyActions } from './core/domain/vyActions.js';
+// ADR-0231: the Integrated Business Plan / S&OP Cycle Register.
+import { createIbpActions } from './core/domain/ibpActions.js';
 import { createWorkRestActions } from './core/domain/workRestActions.js';
 import { createWorkNightActions } from './core/domain/workNightActions.js';
 // ADR-0223: the Shift Handover & Two-Key Readback Ledger — the dated outgoing
@@ -20375,6 +20377,11 @@ export function createApi(store, options = {}) {
   // (accept or override the recommendation), and grade whether the predicted
   // commitment materialised.
   Object.assign(api, createVyActions(store, { now: clock, idFactory: id }));
+  // ADR-0231: the integrated business plan. Every command re-proves its right
+  // against the live seat, and the executive step is re-proved against the seat
+  // above BOTH lines computed from the reporting graph — never an approver the
+  // actor chose, and never a seat that framed the options being approved.
+  Object.assign(api, createIbpActions(store, { now: clock, idFactory: id }));
   // ADR-0209: the Cross-Line Work/Rest Recovery Ledger — recording a shift for a
   // line the acting seat HOLDS, its actual times or cancellation, a line's
   // coverage attestation, and the declared policy. No act moves or cancels a
