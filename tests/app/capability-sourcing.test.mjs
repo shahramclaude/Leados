@@ -204,27 +204,39 @@ function declareCase(env, over = {}) {
  * 1. SCHEMA — additive, empty, and stable across a reload
  */
 
-test('sourcing: v181→v182 is additive with four EMPTY ledgers and nothing inferred', () => {
-  assert.equal(SCHEMA_VERSION, 182);
-  for (const key of ['sourcingCases', 'sourcingOptions', 'sourcingActs', 'sourcingMarkers']) {
+test('sourcing: schema v183 with four EMPTY sourcing ledgers plus four EMPTY vy ledgers', () => {
+  assert.equal(SCHEMA_VERSION, 183);
+  for (const key of ['sourcingCases', 'sourcingOptions', 'sourcingActs', 'sourcingMarkers', 'vyDecisions', 'vyAnswers', 'vyStyleRecords', 'vyMarkers']) {
     assert.ok(COLLECTIONS.includes(key), `${key} is a declared collection`);
   }
   const v181 = { schemaVersion: 181, settings: {}, people: [], cases: [], riskAppetiteStatements: [{ id: 'keep-me' }] };
-  const step = MIGRATIONS[181](v181);
-  assert.equal(step.schemaVersion, 182);
-  assert.deepEqual(step.sourcingCases, [], 'no case is inferred from a budget, contract or headcount');
-  assert.deepEqual(step.sourcingOptions, [], 'no option is priced at upgrade time');
-  assert.deepEqual(step.sourcingActs, [], 'no decision and no grade is invented');
-  assert.deepEqual(step.sourcingMarkers, [], 'no observation is manufactured');
-  assert.deepEqual(step.riskAppetiteStatements, [{ id: 'keep-me' }], 'nothing adjacent is touched');
-  assert.equal(step.settings.sourcingAutoPropagate, true, 'the pause switch defaults ON');
+  const step182 = MIGRATIONS[181](v181);
+  assert.equal(step182.schemaVersion, 182, '181→182 lands at 182');
+  assert.deepEqual(step182.sourcingCases, [], 'no case is inferred from a budget, contract or headcount');
+  assert.deepEqual(step182.sourcingOptions, [], 'no option is priced at upgrade time');
+  assert.deepEqual(step182.sourcingActs, [], 'no decision and no grade is invented');
+  assert.deepEqual(step182.sourcingMarkers, [], 'no observation is manufactured');
+  assert.deepEqual(step182.riskAppetiteStatements, [{ id: 'keep-me' }], 'nothing adjacent is touched');
+  assert.equal(step182.settings.sourcingAutoPropagate, true, 'the sourcing pause switch defaults ON');
 
-  // A workspace that already moved past 182 must not have its rows replaced.
-  const v182 = { ...step, sourcingCases: [{ id: 'src-1' }], sourcingOptions: [{ id: 'srco-1' }], sourcingActs: [{ id: 'a1' }], sourcingMarkers: [{ key: 'm' }] };
-  const again = MIGRATIONS[181](v182);
-  assert.deepEqual(again.sourcingCases, [{ id: 'src-1' }]);
-  assert.deepEqual(again.sourcingOptions, [{ id: 'srco-1' }]);
-  assert.deepEqual(again.sourcingActs, [{ id: 'a1' }]);
+  // 182→183: four new empty ledgers, pause switch defaults ON.
+  const v182 = { ...step182, sourcingCases: [{ id: 'src-1' }], sourcingOptions: [{ id: 'srco-1' }], sourcingActs: [{ id: 'a1' }], sourcingMarkers: [{ key: 'm' }] };
+  const step183 = MIGRATIONS[182](v182);
+  assert.equal(step183.schemaVersion, 183, '182→183 lands at 183');
+  assert.deepEqual(step183.vyDecisions, [], 'no decision is inferred on upgrade');
+  assert.deepEqual(step183.vyAnswers, [], 'no diagnostic answer is inferred on upgrade');
+  assert.deepEqual(step183.vyStyleRecords, [], 'no style is inferred on upgrade');
+  assert.deepEqual(step183.vyMarkers, [], 'no observation is manufactured');
+  assert.deepEqual(step183.sourcingCases, [{ id: 'src-1' }], 'existing sourcing rows survive');
+  assert.equal(step183.settings.vyAutoPropagate, true, 'the vy pause switch defaults ON');
+
+  // A workspace already past 183 must not have its rows replaced.
+  const v183 = { ...step183, vyDecisions: [{ id: 'vy-1' }], vyAnswers: [{ id: 'vya-1' }], vyStyleRecords: [{ id: 'vys-1' }], vyMarkers: [{ key: 'm' }] };
+  const again = MIGRATIONS[182](v183);
+  assert.deepEqual(again.vyDecisions, [{ id: 'vy-1' }]);
+  assert.deepEqual(again.vyAnswers, [{ id: 'vya-1' }]);
+  assert.deepEqual(again.vyStyleRecords, [{ id: 'vys-1' }]);
+  assert.deepEqual(again.vyMarkers, [{ key: 'm' }]);
 });
 
 /* =====================================================================

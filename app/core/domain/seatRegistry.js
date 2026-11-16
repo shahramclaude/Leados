@@ -926,6 +926,15 @@ export const ACTION_RIGHTS = Object.freeze({
   'record-capability-sourcing': { minRank: 2, maxRank: 5, label: 'Declare a capability case, record a priced option on a line you hold, withdraw a case, or scan the register' },
   'decide-capability-sourcing': { minRank: 5, maxRank: 5, label: 'Decide the boundary of the firm for a capability — make, buy, partner or hybrid — on one exact comparison' },
   'grade-capability-sourcing': { minRank: 4, maxRank: 5, label: 'Grade a case’s frozen assumptions against the cost that actually landed — never your own decision or your own option' },
+  // ADR-0230: Vroom–Yetton–Jago Decision-Participation Selector — choose how
+  // much to involve others in a decision: autocratic I/II, consultative I/II,
+  // or group II. Reading is open to any leadership seat; declaring a question is
+  // open at every altitude; answering the diagnostics narrows to a seat holding
+  // a line the decision touches; selecting the style is director-and-above.
+  'read-vroom-yetton': { minRank: 2, maxRank: 5, label: 'Read the Vroom–Yetton decision-participation register: the declared diagnostics, the recommended style and the style selected for each decision' },
+  'declare-vroom-yetton': { minRank: 1, maxRank: 5, label: 'Declare a decision-participation question — how much should the team be involved in this decision?' },
+  'answer-vroom-yetton': { minRank: 2, maxRank: 5, label: 'Answer the seven Vroom–Yetton diagnostics for a decision on a line you hold' },
+  'select-vroom-yetton': { minRank: 3, maxRank: 5, label: 'Select a participation style for a decision — accept the recommendation or override it with a written reason' },
   // ADR-0220: the variable-pay design & incentive integrity register. Reading is
   // open to the manager altitude because a team envelope is a manager's own
   // instrument; the row class and the span filter decide what is printed. Every

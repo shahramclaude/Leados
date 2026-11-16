@@ -233,6 +233,8 @@ import { RA_CSV_COLUMNS, RA_CSV_DESCRIPTOR, RA_CSV_SCOPE } from './domain/riskAp
 import { SRC_CSV_COLUMNS, SRC_CSV_DESCRIPTOR, SRC_CSV_SCOPE } from './domain/sourcingRegistry.js';
 import { buildSourcing } from './domain/sourcing.js';
 import { sourcingCsvRows } from './domain/sourcingCsv.js';
+import { VY_CSV_COLUMNS, VY_CSV_DESCRIPTOR, VY_CSV_SCOPE } from './domain/vyRegistry.js';
+import { buildVroomYetton } from './domain/vy.js';
 // ADR-0220: CSV #162 — the variable-pay design & incentive integrity register,
 // aggregate per currency and identity-free.
 import { buildIncentiveIntegrity, incentiveCsvRows } from './domain/incentiveIntegrity.js';
@@ -1593,6 +1595,15 @@ export const CSV_EXPORTS = [
   // cost line label crosses this boundary; an uncomputable figure is BLANK with
   // its reason, never zero.
   SRC_CSV_DESCRIPTOR,
+  // #171 (ADR-0230): the Vroom–Yetton–Jago decision-participation register —
+  // aggregate and identity-free. One summary row, one row per tree variant,
+  // one row per selected style and one row per verdict: decision counts,
+  // answered and selected counts, override counts, per-style counts, and the
+  // count of decisions where decide-alone is unavailable because another line
+  // holds a right. No decision title, id, person, manager, line name, rationale
+  // or reason crosses this boundary; an uncomputable figure exports BLANK with
+  // its reason, never zero.
+  VY_CSV_DESCRIPTOR,
 ];
 
 function personLookup(state) {
@@ -6940,6 +6951,17 @@ export function buildScopeTable(state, scope, now) {
       return {
         columns: SRC_CSV_COLUMNS.map((key) => ({ key, header: key })),
         rows: sourcingCsvRows(report),
+      };
+    }
+    case VY_CSV_SCOPE: {
+      // CSV scope #171 (ADR-0230, Schema v183). Built from the SAME reader the
+      // `#/vroom-yetton` panel renders, with no seat: every figure is an
+      // aggregate over the whole record, so no decision, person, manager, line
+      // name or reason is reachable from this export.
+      const report = buildVroomYetton(state, { now, settings: state.settings || {}, seat: null });
+      return {
+        columns: VY_CSV_COLUMNS.map((key) => ({ key, header: key })),
+        rows: vyCsvRows(report),
       };
     }
     case 'earned-value-delivery': {
