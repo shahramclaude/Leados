@@ -147,6 +147,7 @@ import { createSuggestionActions } from './core/domain/suggestionActions.js';
 import { createAssuranceFindingActions } from './core/domain/assuranceFindingActions.js';
 import { createProbationGateActions } from './core/domain/probationGateActions.js';
 import { createUndertakingActions } from './core/domain/undertakingActions.js';
+import { createInformationRequestActions } from './core/domain/rqActions.js';
 import { createDomainSenseActions } from './core/domain/domainSenseActions.js';
 // ADR-0224: a human-declared stop, a work-lead mitigation, every frozen
 // Director+ joint-apex assessment, and a separate affected-operator key. This
@@ -20423,6 +20424,11 @@ export function createApi(store, options = {}) {
   // counterparty has been told in writing. Every state, flag, rate and lapse is
   // derived on read.
   Object.assign(api, createUndertakingActions(store, { now: clock, idFactory: id }));
+  // ADR-0235: the Regulator Information-Request & Examination Response Register —
+  // record a demand and its declared clock, staff its production lines, certify a
+  // line and its privilege claim, review from outside the parties, release, and
+  // record the requester's verdict.
+  Object.assign(api, createInformationRequestActions(store, { now: clock, idFactory: id }));
   // ADR-0228: the Decision-Domain Sensing Register — declare a cross-line
   // panel's sensed domain, commit the owner's mode, read the fit.
   Object.assign(api, createDomainSenseActions(store, { now: clock, idFactory: id }));

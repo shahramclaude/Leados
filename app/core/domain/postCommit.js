@@ -211,6 +211,7 @@ import { suggestionRule } from './suggestionRules.js';
 import { assuranceFindingRule } from './assuranceFindingRules.js';
 import { probationGateRule } from './probationGateRules.js';
 import { undertakingRule } from './undertakingRules.js';
+import { informationRequestRule } from './rqRules.js';
 import { workStopRule } from './workStopRules.js';
 import { mgrHandoverRule } from './mgrHandoverRules.js';
 import { workNightRule } from './workNightRules.js';
@@ -1443,6 +1444,18 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // Pause-governed on every path (`undertakingAutoPropagate`), including an
   // explicit scan.
   undertakingRule,
+  // ADR-0235 (Schema v190): the Regulator Information-Request & Examination
+  // Response Register. FOUR conditions — a certified production no seat outside
+  // the parties has reviewed, a fully reviewed production the requester has never
+  // been sent, a reply day that has passed with nothing released, and a release
+  // with no verdict (or a verdict of insufficient) — each asked of the seat the
+  // record actually permits: a NON-PARTY with standing over at least one producer
+  // for the review, and the receiving seat for everything that goes to the
+  // authority. Where the graph names no such seat, ONE identity-free
+  // `informationRequestMarkers` observation is written and nothing is substituted.
+  // Pause-governed on every path (`informationRequestAutoPropagate`), including an
+  // explicit scan.
+  informationRequestRule,
   // ADR-0232: the Assurance Finding & Remediation Register (`RULE-AFR-01`).
   // Reads the finished register (`buildAssuranceFindings`) with the
   // whole-workspace view — and on any commit, because a remediation day and a

@@ -36,6 +36,7 @@ import { KZT_RIGHTS } from './suggestionRegistry.js';
 import { AFR_RIGHTS } from './assuranceRegistry.js';
 import { PBG_RIGHTS } from './probationRegistry.js';
 import { UDT_RIGHTS } from './undertakingRegistry.js';
+import { RQR_RIGHTS } from './rqRegistry.js';
 // ADR-0228: the decision-domain sensing register's four rights.
 import { DSN_RIGHTS } from './domainSenseRegistry.js';
 import { PRV_RIGHTS } from './portfolioReviewRegistry.js';
@@ -409,6 +410,17 @@ const groups = [
   [UDT_RIGHTS.DELIVER, 'undertakingDeliver'],
   [UDT_RIGHTS.VERIFY, 'undertakingVerify'],
   [UDT_RIGHTS.REPORT, 'undertakingReportClosure undertakingNotify undertakingExtend'],
+  // ADR-0235: the Information-Request & Examination Response Register. Every act
+  // is first-person and re-proved inside the action: a manager records the demand,
+  // a named producer certifies their own line, a seat that is party to NOTHING on
+  // the request reviews it and rules on its privilege claim, and only the
+  // receiving executive releases — while a compelled instrument's day never moves.
+  [RQR_RIGHTS.READ, 'informationRequestReport informationRequestAttentionCount informationRequestCandidates'],
+  [RQR_RIGHTS.RECEIVE, 'informationRequestReceive informationRequestScan'],
+  [RQR_RIGHTS.ASSIGN, 'informationRequestAssign'],
+  [RQR_RIGHTS.PRODUCE, 'informationRequestProduce'],
+  [RQR_RIGHTS.REVIEW, 'informationRequestReview'],
+  [RQR_RIGHTS.RELEASE, 'informationRequestRelease informationRequestRespond informationRequestExtend informationRequestRestateClock'],
   // ADR-0224: stop-work holds may be raised at frontline rank; mitigation is
   // work-lead-controlled, assessment is Director+ and tied to every frozen
   // joint apex, and restart is only an affected operator's second key.
@@ -793,6 +805,9 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // ADR-0234: the undertaking reader re-proves the read right inside the action;
 // the report never exposes raw collections to the generic projection.
 'undertakingReport', 'undertakingAttentionCount', 'undertakingCandidates',
+// ADR-0235: the information-request reader re-proves the read right inside the
+// action; the report never exposes raw collections to the generic projection.
+'informationRequestReport', 'informationRequestAttentionCount', 'informationRequestCandidates',
 // ADR-0228: the decision-domain sensing reader re-proves the right inside the
 // action; the report never exposes raw collections to the generic projection.
 'domainSenseReport', 'domainSenseAttentionCount', 'domainSenseCandidates',
@@ -1197,6 +1212,15 @@ const MATRIX_LINE_SCOPED = new Set([
   // cannot reach at all.
   'undertakingDeclare', 'undertakingAssign', 'undertakingDeliver',
   'undertakingVerify', 'undertakingReportClosure', 'undertakingNotify', 'undertakingExtend',
+  // ADR-0235: an information request names producers, reviewers and a receiving
+  // seat, and in a matrix each may be reachable only through a declared line — the
+  // production usually lands on operations, legal, finance and IT under different
+  // managers. Every action re-proves the line, the producer and the independence
+  // rule itself before it writes; the gate only stops a seat from naming somebody
+  // it cannot reach at all.
+  'informationRequestReceive', 'informationRequestAssign', 'informationRequestProduce',
+  'informationRequestReview', 'informationRequestRelease', 'informationRequestRespond',
+  'informationRequestExtend', 'informationRequestRestateClock',
 ]);
 
 /** Exact method allowlist + rank + record/person scope. No arbitrary API names. */

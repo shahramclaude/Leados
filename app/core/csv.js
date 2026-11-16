@@ -255,10 +255,12 @@ import { KZT_CSV_COLUMNS, KZT_CSV_DESCRIPTOR, KZT_CSV_SCOPE } from './domain/sug
 import { AFR_CSV_COLUMNS, AFR_CSV_DESCRIPTOR, AFR_CSV_SCOPE } from './domain/assuranceRegistry.js';
 import { PBG_CSV_COLUMNS, PBG_CSV_DESCRIPTOR, PBG_CSV_SCOPE } from './domain/probationRegistry.js';
 import { UDT_CSV_COLUMNS, UDT_CSV_DESCRIPTOR, UDT_CSV_SCOPE } from './domain/undertakingRegistry.js';
+import { RQR_CSV_COLUMNS, RQR_CSV_DESCRIPTOR, RQR_CSV_SCOPE } from './domain/rqRegistry.js';
 import { buildSuggestionReport, suggestionCsvRows } from './domain/suggestionReport.js';
 import { buildAssuranceReport, assuranceFindingCsvRows } from './domain/assuranceFindingReport.js';
 import { buildProbationReport, probationGateCsvRows } from './domain/probationGateReport.js';
 import { buildUndertakingReport, undertakingCsvRows } from './domain/undertakingReport.js';
+import { buildInformationRequestReport, informationRequestCsvRows } from './domain/rqReport.js';
 // ADR-0228: aggregate, identity-free decision-domain sensing aggregates from the panel reader.
 import { DSN_CSV_COLUMNS, DSN_CSV_DESCRIPTOR, DSN_CSV_SCOPE } from './domain/domainSenseRegistry.js';
 import { domainSenseReport, domainSenseCsvRows } from './domain/domainSenseReport.js';
@@ -1666,6 +1668,16 @@ export const CSV_EXPORTS = [
   // three exports BLANK with its reason, never a small number, and a rate whose
   // denominator is not published exports blank, never zero.
   UDT_CSV_DESCRIPTOR,
+  // #178 (ADR-0235): the regulator information-request & examination response
+  // register — aggregate and identity-free. One summary row, one coverage row,
+  // one row per derived state, per requester kind, per instrument and per
+  // reply-window bucket, plus the on-time-release rate and the privilege and
+  // release position rows. No request id, requester name, requested scope, search
+  // method, transmission reference, privilege basis or person name crosses this
+  // boundary; a requester-kind count below the privacy floor of three exports
+  // BLANK with its reason, and a rate whose denominator is not published exports
+  // blank, never zero.
+  RQR_CSV_DESCRIPTOR,
 ];
 
 function personLookup(state) {
@@ -7047,6 +7059,18 @@ export function buildScopeTable(state, scope, now) {
       return {
         columns: KZT_CSV_COLUMNS.map((key) => ({ key, header: key })),
         rows: suggestionCsvRows(report),
+      };
+    }
+    case RQR_CSV_SCOPE: {
+      // CSV scope #178 (ADR-0235, Schema v190). Built from the SAME reader the
+      // `#/information-requests` panel renders, with no seat: every figure is an
+      // exact integer count over the whole register, so no request id, requester
+      // name, requested scope, search method, transmission reference, privilege
+      // basis, producer, reviewer or receiver name is reachable from this export.
+      const report = buildInformationRequestReport(state, { now, seat: null });
+      return {
+        columns: RQR_CSV_COLUMNS.map((key) => ({ key, header: key })),
+        rows: informationRequestCsvRows(report),
       };
     }
     case UDT_CSV_SCOPE: {

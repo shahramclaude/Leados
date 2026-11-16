@@ -193,6 +193,11 @@ export const PAUSE_PERMIT_MATRIX_REACH_SWITCHES = Object.freeze([
   // the joint apex above the line holder, so silencing it leaves the independent
   // test unasked and nobody told.
   'undertakingAutoPropagate',
+  // ADR-0235: the review ask and the release ask are both computed through the
+  // reporting graph to a seat chosen by non-participation, so silencing this rule
+  // leaves a certified production unreviewed and a requester's day unasked — and
+  // the authority is told nothing.
+  'informationRequestAutoPropagate',
   'cadenceAutoPropagate',
   'ctrAutoPropagate',
   'matrixInterfaceAutoPropagate',
@@ -416,6 +421,12 @@ export const PAUSE_PERMIT_SWITCH_RULES = Object.freeze({
   // unrecorded. The counterparty outside the organisation is told nothing, which
   // is the failure the register exists for; the reading stays open and visible.
   undertakingAutoPropagate: 'undertakingRules.js',
+  // ADR-0235: silencing this rule can leave a certified production with no
+  // independent review, a fully reviewed production unreleased, and a requester's
+  // reply day lapsed with nobody asked. The demand stays open and visible on
+  // #/information-requests, which is the whole point — but nothing reaches the
+  // authority, and an unreviewed privilege claim stays untested.
+  informationRequestAutoPropagate: 'rqRules.js',
   // ADR-0226: silencing this rule can leave a would-exceed shared dependency
   // without its ceiling ask; the reading remains open and visible.
   riskConcentrationAutoPropagate: 'riskConcentrationRules.js',
