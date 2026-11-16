@@ -206,6 +206,7 @@ import { riskAppetiteRule } from './riskAppetiteRules.js';
 import { shiftHandoverRule } from './shiftHandoverRules.js';
 import { workStopRule } from './workStopRules.js';
 import { mgrHandoverRule } from './mgrHandoverRules.js';
+import { workNightRule } from './workNightRules.js';
 import { incentiveRule } from './incentiveRules.js';
 import { dutyMeansRule } from './dutyMeansRules.js';
 import { portfolioReviewRule } from './portfolioReviewRules.js';
@@ -1301,6 +1302,18 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // records a key or transfers an obligation; unresolvable routes write an
   // identity-free marker and ask none.
   mgrHandoverRule,
+  // ADR-0226: the Night-Work & In-Shift Break Reading (RULE-WNR-01). TWO
+  // conditions: a provable night-share or night-streak breach whose decisive
+  // minute is still ahead, and a break record a declared limit requires that
+  // is missing from an ended shift. A breach inside one line is asked of that
+  // line’s holder; one made by two lines is asked of the lowest seat above
+  // BOTH. Where that is the workspace leader, the lines share no single apex,
+  // or the person left the roster, it records an identity-free
+  // `workNightMarkers` observation and asks nobody. It never moves a shift,
+  // never invents a break, never rates a person and never judges the person
+  // whose break record is missing. Registered immediately before `seatRule`
+  // and `sealRule`.
+  workNightRule,
   // Registered immediately before `seatRule` and `sealRule`.
   speakUpRule,
   // ADR-0076: the Operating Seat (vertical roll-up + enforced boundaries).

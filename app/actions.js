@@ -129,6 +129,7 @@ import { createIncentiveActions } from './core/domain/incentiveActions.js';
 import { createDutyMeansActions } from './core/domain/dutyMeansActions.js';
 import { createPortfolioReviewActions } from './core/domain/portfolioReviewActions.js';
 import { createWorkRestActions } from './core/domain/workRestActions.js';
+import { createWorkNightActions } from './core/domain/workNightActions.js';
 // ADR-0223: the Shift Handover & Two-Key Readback Ledger — the dated outgoing
 // changeover brief (severity, station summary, open actions, contingency) and the
 // declared incoming operator's two-key act (synthesis or dispute). An uncontained
@@ -20365,6 +20366,12 @@ export function createApi(store, options = {}) {
   // coverage attestation, and the declared policy. No act moves or cancels a
   // shift on anyone's behalf; every spell, rest and verdict is derived on read.
   Object.assign(api, createWorkRestActions(store, { now: clock, idFactory: id }));
+  // ADR-0226: the Night-Work & In-Shift Break Reading — recording an in-shift
+  // break for a line the acting seat HOLDS, declaring or retiring a night
+  // policy with its written source, scanning the reading and setting its
+  // automation. No act moves a shift or invents a break; every night minute,
+  // share, streak, continuous stretch and verdict is derived on read.
+  Object.assign(api, createWorkNightActions(store, { now: clock, idFactory: id }));
   Object.assign(api, createShiftHandoverActions(store, { now: clock, idFactory: id }));
   Object.assign(api, createWorkStopActions(store, { now: clock, idFactory: id }));
   // ADR-0210: the Decision-Maker Conflict-of-Interest & Recusal Ledger — a person

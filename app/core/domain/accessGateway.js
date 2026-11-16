@@ -16,6 +16,7 @@ import { GOAL_ATTAINMENT_RIGHTS } from './goalAttainmentRegistry.js';
 import { INVESTMENT_CASE_RIGHTS } from './investmentCaseRegistry.js';
 import { CAPITAL_RATIONING_RIGHTS } from './capitalRationingRegistry.js';
 import { WORK_REST_RIGHTS } from './workRestRegistry.js';
+import { WORK_NIGHT_RIGHTS } from './workNightRegistry.js';
 import { CONFLICT_RECUSAL_RIGHTS } from './conflictRecusalRegistry.js';
 import { STANDARD_WAIVER_RIGHTS } from './standardWaiverRegistry.js';
 import { FLEX_BUDGET_RIGHTS } from './flexBudgetRegistry.js';
@@ -184,6 +185,10 @@ const groups = [
   [WORK_REST_RIGHTS.ROSTER, 'workRestCandidates workRestPreviewShift workRestDeclareShift workRestAmendShift workRestAttestCoverage workRestWithdrawCoverage'],
   [WORK_REST_RIGHTS.POLICY, 'workRestDeclarePolicy workRestRetirePolicy'],
   [WORK_REST_RIGHTS.GOVERN, 'workRestScan workRestSetConventions'],
+  [WORK_NIGHT_RIGHTS.READ, 'workNightReport workNightBriefText workNightCsvRows workNightAttentionCount'],
+  [WORK_NIGHT_RIGHTS.ROSTER, 'workNightCandidates workNightPreviewBreak workNightRecordBreak'],
+  [WORK_NIGHT_RIGHTS.POLICY, 'workNightDeclarePolicy workNightRetirePolicy'],
+  [WORK_NIGHT_RIGHTS.GOVERN, 'workNightScan workNightSetConventions'],
   // ADR-0210: declaring an interest is the person's own first-person act (or a
   // seat recording a disclosure it received, printed as such); deciding how it
   // is handled is a director+ act the ACTION refuses to the holder themselves.
@@ -903,6 +908,10 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // receives the people in its reporting tree or on a line it holds; everyone else
 // is a count. Shift notes are disclosed only to a seat that holds the shift's line.
 'workRestReport', 'workRestBriefText', 'workRestCsvRows', 'workRestAttentionCount',
+// ADR-0226: the night-work reading is scoped INSIDE the read model — a seat
+// receives the people in its reporting tree or on a line it holds; everyone
+// else is a count. Breaks are disclosed only to a seat that holds the line.
+'workNightReport', 'workNightBriefText', 'workNightCsvRows', 'workNightAttentionCount',
 'standardWorkReport', 'standardWorkBriefText', 'standardWorkAttentionCount', 'standardWorkCandidates']);
 const refusal = (reason) => ({ ok: false, code: 'scope-refusal', error: reason, field: 'scope' });
 
@@ -1020,6 +1029,10 @@ const MATRIX_LINE_SCOPED = new Set([
   // is exactly the case the ledger exists for. The action re-proves that the
   // seat holds the very line the shift is worked for.
   'workRestDeclareShift', 'workRestPreviewShift', 'workRestAttestCoverage',
+  // ADR-0226: a break names a person and a shift of a line the acting seat may
+  // hold only through a declared Matrix line. The action re-proves that the
+  // seat holds the very line the shift is worked for.
+  'workNightRecordBreak', 'workNightPreviewBreak',
   // ADR-0223: declaring the outgoing brief names an incoming operator who may
   // be reachable only through a declared Matrix line (night and weekend cover
   // on a shared-services line). The action re-proves both the reach and the

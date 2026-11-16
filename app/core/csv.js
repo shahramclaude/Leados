@@ -257,7 +257,9 @@ import { INVESTMENT_CASE_CSV_COLUMNS, INVESTMENT_CASE_CSV_DESCRIPTOR } from './d
 // opaque positional code — no person, manager, shift id, clock time, label or
 // note. A figure that cannot be claimed exports BLANK with its reason.
 import { buildWorkRest, workRestCsvRows } from './domain/workRest.js';
+import { buildWorkNight, workNightCsvRows } from './domain/workNight.js';
 import { WORK_REST_CSV_COLUMNS, WORK_REST_CSV_DESCRIPTOR } from './domain/workRestRegistry.js';
+import { WORK_NIGHT_CSV_COLUMNS, WORK_NIGHT_CSV_DESCRIPTOR } from './domain/workNightRegistry.js';
 import { buildConflictRecusal, conflictRecusalCsvRows } from './domain/conflictRecusal.js';
 import { CONFLICT_RECUSAL_CSV_COLUMNS, CONFLICT_RECUSAL_CSV_DESCRIPTOR } from './domain/conflictRecusalRegistry.js';
 import { buildPausePermits, pausePermitCsvRows } from './domain/pausePermits.js';
@@ -1488,6 +1490,11 @@ export const CSV_EXPORTS = [
   // exports as `W01`, a policy as `P01`, durations are whole minutes, and a
   // figure that cannot be claimed exports BLANK with its reason, never zero.
   WORK_REST_CSV_DESCRIPTOR,
+  // #168 (ADR-0226): the night-work & in-shift break reading — identity-free.
+  // No person, manager, shift id, clock time, policy label or note; a person
+  // exports as `W01`, a policy as `P01`, durations are whole minutes, and a
+  // figure that cannot be claimed exports BLANK with its reason, never zero.
+  WORK_NIGHT_CSV_DESCRIPTOR,
   // #152 (ADR-0210): the decision-maker conflict-of-interest & recusal register
   // — identity-free. No person, manager, record id, title, reason or control
   // text; a person exports as `person-001`, the seven verdicts are never
@@ -6771,6 +6778,17 @@ export function buildScopeTable(state, scope, now) {
       return {
         columns: WORK_REST_CSV_COLUMNS.map((key) => ({ key, header: key })),
         rows: workRestCsvRows(report),
+      };
+    }
+    case 'night-work-breaks': {
+      // CSV scope #168 (ADR-0226, Schema v181). Built from the SAME reader the
+      // panel renders, so an exported share, streak and index are provably the
+      // figures that were printed. A person is exported under a positional code;
+      // no person, manager, shift id, clock time, label or note reaches the file.
+      const report = buildWorkNight(state, { now, settings: state.settings || {}, seat: null });
+      return {
+        columns: WORK_NIGHT_CSV_COLUMNS.map((key) => ({ key, header: key })),
+        rows: workNightCsvRows(report),
       };
     }
     case 'conflict-recusal': {

@@ -23,6 +23,7 @@
 import { renderSkillCoveragePanel } from './skillCoveragePanel.js';
 import { renderStationCoveragePanel } from './stationCoveragePanel.js';
 import { renderWorkRestPanel } from './workRestPanel.js';
+import { renderWorkNightPanel } from './workNightPanel.js';
 import { renderStandardWaiverPanel } from './standardWaiverPanel.js';
 import { h, toast, openModal, closeAllModals, buildForm } from '../ui/dom.js';
 import { downloadText } from '../ui/download.js';
@@ -53,6 +54,9 @@ const PANELS = Object.freeze([
   Object.freeze({ key: 'stations', label: 'Simultaneous stations' }),
   // ADR-0209: the cross-line work/rest recovery ledger.
   Object.freeze({ key: 'rest', label: 'Work & rest' }),
+  // ADR-0226: the night-work & in-shift break reading, built on the work/rest
+  // ledger's declared shifts.
+  Object.freeze({ key: 'night', label: 'Night work' }),
   // ADR-0212: the temporary standard waiver register — a dated, authorised
   // departure from one written standard, and the day it ended.
   Object.freeze({ key: 'waivers', label: 'Waivers' }),
@@ -467,6 +471,6 @@ export function renderStandardWork(ctx) {
     ]),
     tabs({ items: PANELS.map((p) => ({ key: p.key, label: p.label })), active: panel, ariaLabel: 'Standard work panels',
       onSelect: (key) => ctx.navigate(`#/standard-work?panel=${encodeURIComponent(key)}`) }),
-    panel === 'rest' ? renderWorkRestPanel(ctx) : panel === 'waivers' ? renderStandardWaiverPanel(ctx) : panel === 'skills' ? renderSkillCoveragePanel(ctx) : panel === 'stations' ? renderStationCoveragePanel(ctx) : panel === 'spans' ? spansPanel(report) : panel === 'method' ? methodPanel(ctx, report) : boardPanel(ctx, report),
+    panel === 'rest' ? renderWorkRestPanel(ctx) : panel === 'night' ? renderWorkNightPanel(ctx) : panel === 'waivers' ? renderStandardWaiverPanel(ctx) : panel === 'skills' ? renderSkillCoveragePanel(ctx) : panel === 'stations' ? renderStationCoveragePanel(ctx) : panel === 'spans' ? spansPanel(report) : panel === 'method' ? methodPanel(ctx, report) : boardPanel(ctx, report),
   );
 }
