@@ -144,8 +144,12 @@ test('every CSV scope round-trips cleanly and preserves unknown values as blank 
 // alignment matrix, aggregate only). ADR-0190 adds #143 (leader standard work
 // & tiered daily management, aggregate only).
 // The pin states the total deliberately so the next session cannot drift the
-// catalog count silently.
-assert.equal(CSV_EXPORTS.length, 166);
+// catalog count silently. Session 311 repairs a stale pin left by PR #353:
+// scopes #167..#174 (manager handover, shared dependency, sourcing, Vroom–Yetton,
+// integrated business plan, improvement suggestions, decision-domain sensing)
+// registered 166 → 174 without this count moving; the pin is back on the real
+// catalog total.
+assert.equal(CSV_EXPORTS.length, 174);
   for (const spec of CSV_EXPORTS) {
     const res = exportWorkspaceCsv(state, spec.key, { now: NOW });
     assert.equal(res.ok, true, `${spec.key} export succeeds`);

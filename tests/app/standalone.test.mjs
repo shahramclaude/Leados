@@ -434,7 +434,8 @@ test('standalone artifact exists and is a single inline HTML document', () => {
   // Remediation Closure Register: seven assurance modules, the `#/findings`
   // view, CSV #175 and the generated method diagram
   // (`assurance-finding-method.jpg`, embedded with the rest of app/assets).
-  // Measured build: 18,999,920 bytes / 1,027 source modules = 18,500 bytes per
+  // Measured build after merging `origin/main`: 19,001,526 bytes / 1,027
+  // source modules = 18,502 bytes per
   // module, still under the unchanged 24,000 bytes/module density guard, which
   // is the bound that catches a module or asset inlined twice. This absolute
   // ceiling moves only because real capability was added.
