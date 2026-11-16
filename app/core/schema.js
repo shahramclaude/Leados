@@ -53,6 +53,17 @@ import {
   normalizeFindings,
 } from './domain/assuranceSchema.js';
 import { normalizeAssuranceSettings } from './domain/assuranceRegistry.js';
+// ADR-0233 (Schema v188): the Probation Confirmation Gate Register. Fail-closed
+// normalizers for dated gates, the five append-only acts (ask, submit, extend,
+// decide, notify) and the identity-free observations RULE-PBG-01 writes when
+// nobody can be asked. No state, evidence reading, extension, decision or
+// notification is stored: each is re-derived on read.
+import {
+  normalizeProbationActs,
+  normalizeProbationGates,
+  normalizeProbationMarkers,
+} from './domain/probationGateSchema.js';
+import { normalizeProbationSettings } from './domain/probationRegistry.js';
 // ADR-0182 (Schema v145): the Automation Pause Permit Register. Fail-closed
 // normalizers for dated permits and RULE-PMP-01's marker ledger.
 import { normalizePausePermitMarkers, normalizePausePermits, normalizePausePermitSettings } from './domain/pausePermitSchema.js';
@@ -1300,7 +1311,14 @@ export {
 // verify / accept acts, and identity-free rule markers. No state, severity,
 // recurrence or closure is stored; each is re-derived on read, so a hand-edited
 // file cannot carry a closure nobody verified.
-export const SCHEMA_VERSION = 187;
+// ADR-0233 (Schema v187 → v188): the Probation Confirmation Gate Register —
+// declared gates on a joiner with their declared instrument terms, the
+// append-only ask / submit / extend / decide / notify acts, and identity-free
+// rule markers. No state, evidence reading, extension, decision or
+// notification is stored; each is re-derived on read, so a hand-edited file
+// cannot carry a decision nobody made, an extension the instrument did not
+// allow, or a window that defaulted itself.
+export const SCHEMA_VERSION = 188;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -3813,6 +3831,17 @@ export const COLLECTIONS = [
   'assuranceFindings',
   'assuranceFindingActs',
   'assuranceFindingMarkers',
+  // ADR-0233 (Schema v188): the Probation Confirmation Gate Register.
+  // Declared gates and the append-only acts that move them, plus the
+  // identity-free observations RULE-PBG-01 writes. No state, evidence reading,
+  // extension, decision, notification or lapse verdict is stored: each is
+  // re-derived on read from the dated acts and the live declared lines, so a
+  // hand-edited file cannot carry a decision nobody made. A window whose day
+  // passes with no decision reads `lapsed` on every read — the register never
+  // substitutes the instrument's default outcome for a decision nobody made.
+  'probationGates',
+  'probationActs',
+  'probationMarkers',
 ];
 
 /** Stable empty state. `now` is an ISO string so the result is a pure value. */
@@ -9397,6 +9426,13 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.assuranceFindings = normalizeFindings(raw.assuranceFindings, warnings);
   state.assuranceFindingActs = normalizeFindingActs(raw.assuranceFindingActs, state.assuranceFindings, warnings);
   state.assuranceFindingMarkers = normalizeFindingMarkers(raw.assuranceFindingMarkers, warnings);
+  // ADR-0233 (Schema v188): fail-closed gates and acts. A gate is closed only
+  // by the confirming manager's one final decision; no act is repaired into
+  // one it is not, and no window, cap, evidence reading, decision or
+  // notification is invented.
+  state.probationGates = normalizeProbationGates(raw.probationGates, warnings);
+  state.probationActs = normalizeProbationActs(raw.probationActs, state.probationGates, warnings);
+  state.probationMarkers = normalizeProbationMarkers(raw.probationMarkers, warnings);
   // ADR-0220: a plan, measure, award or recovery act that cannot be read exactly
   // is DROPPED with a counted warning. A reading is resolved AFTER its measures,
   // because the measure's unit decides which field the figure belongs in; a
@@ -10278,6 +10314,22 @@ export const MIGRATIONS = {
     assuranceFindingActs: Array.isArray(v186.assuranceFindingActs) ? v186.assuranceFindingActs : [],
     assuranceFindingMarkers: Array.isArray(v186.assuranceFindingMarkers) ? v186.assuranceFindingMarkers : [],
     settings: { ...(v186.settings || {}), ...normalizeAssuranceSettings(v186.settings || {}) },
+  }),
+  // 187 → 188: ADR-0233 adds THREE EMPTY ledgers (`probationGates`,
+  // `probationActs`, `probationMarkers`) and the gate rule's pause. No gate,
+  // window, cap, evidence, decision or notification is inferred from a person's
+  // start date, a contract record, an onboard plan or a jurisdiction database:
+  // a probation window is a declared term of a relationship, and manufacturing
+  // one at upgrade time would put a duty on the record that nobody opened —
+  // and a default outcome on windows nobody decided, which is exactly the
+  // failure the register exists to prevent.
+  187: (v187) => ({
+    ...v187,
+    schemaVersion: 188,
+    probationGates: Array.isArray(v187.probationGates) ? v187.probationGates : [],
+    probationActs: Array.isArray(v187.probationActs) ? v187.probationActs : [],
+    probationMarkers: Array.isArray(v187.probationMarkers) ? v187.probationMarkers : [],
+    settings: { ...(v187.settings || {}), ...normalizeProbationSettings(v187.settings || {}) },
   }),
   // 183 → 184: ADR-0231 adds SEVEN EMPTY ledgers (`ibpCycles`, `ibpDemandRows`,
   // `ibpCapacityRows`, `ibpOptions`, `ibpDecisions`, `ibpGrades`, `ibpMarkers`)

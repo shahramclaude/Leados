@@ -145,6 +145,7 @@ import { createWorkNightActions } from './core/domain/workNightActions.js';
 import { createShiftHandoverActions } from './core/domain/shiftHandoverActions.js';
 import { createSuggestionActions } from './core/domain/suggestionActions.js';
 import { createAssuranceFindingActions } from './core/domain/assuranceFindingActions.js';
+import { createProbationGateActions } from './core/domain/probationGateActions.js';
 import { createDomainSenseActions } from './core/domain/domainSenseActions.js';
 // ADR-0224: a human-declared stop, a work-lead mitigation, every frozen
 // Director+ joint-apex assessment, and a separate affected-operator key. This
@@ -20410,6 +20411,9 @@ export function createApi(store, options = {}) {
   // remediation may accept the residual risk. Every state, flag, recurrence and
   // rate is derived on read.
   Object.assign(api, createAssuranceFindingActions(store, { now: clock, idFactory: id }));
+  // ADR-0233: the Probation Confirmation Gate Register — the dated, evidence
+  // duty and the decision a probation window owes, on every declared line.
+  Object.assign(api, createProbationGateActions(store, { now: clock, idFactory: id }));
   // ADR-0228: the Decision-Domain Sensing Register — declare a cross-line
   // panel's sensed domain, commit the owner's mode, read the fit.
   Object.assign(api, createDomainSenseActions(store, { now: clock, idFactory: id }));

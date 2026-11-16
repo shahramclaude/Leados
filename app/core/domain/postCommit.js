@@ -209,6 +209,7 @@ import { vyRule } from './vyRules.js';
 import { shiftHandoverRule } from './shiftHandoverRules.js';
 import { suggestionRule } from './suggestionRules.js';
 import { assuranceFindingRule } from './assuranceFindingRules.js';
+import { probationGateRule } from './probationGateRules.js';
 import { workStopRule } from './workStopRules.js';
 import { mgrHandoverRule } from './mgrHandoverRules.js';
 import { workNightRule } from './workNightRules.js';
@@ -1402,6 +1403,34 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // (`suggestionAutoPropagate`), including the explicit scan. Registered
   // immediately before `speakUpRule`, `seatRule` and `sealRule`.
   suggestionRule,
+  // ADR-0233: the Probation Confirmation Gate Register (`RULE-PBG-01`).
+  // Reads the finished register (`buildProbationGates`) with the
+  // whole-workspace view — and on any commit, because a window day and an ask
+  // day pass with the calendar — and files at most one opaque `act-inform`
+  // delegation per (deterministic `pbg1:…` signature, addressee), bounded at 4
+  // per commit with the remainder counted. FOUR conditions:
+  // `evidence-overdue` — an asked declared line past its ask day with no
+  // answer, asked of the LINE HOLDER the ask itself names; `decision-closing`
+  // — no final decision and the effective window day inside the closing
+  // window, asked of the CONFIRMING MANAGER; `gate-lapsed` — the window day
+  // passed with no decision, asked ONCE per gate of the confirming manager,
+  // because the register never substitutes the instrument's default outcome
+  // for the decision nobody made; and `decision-unnotified` — a decision with
+  // no recorded written notification to the joiner, asked of the confirming
+  // manager, because decided is not told. Where the reporting graph names
+  // nobody who can be asked, ONE identity-free `probationMarkers` observation
+  // is written and nothing is substituted. The ask text is deliberately
+  // opaque — no joiner, no line, no instrument, no evidence, no date — because
+  // a delegation is readable above the addressee; the signature lives only in
+  // the typed `issues-obligation` link. Asks self-close when the condition
+  // clears or the addressee moves, and respect human closures/returns. It
+  // never asks, submits, extends, decides or notifies, never edits a gate or
+  // an act, never derives a window, cap or statutory limit, never rates a
+  // joiner or a manager, and never lets the passage of time decide anything;
+  // pause-governed on every path (`probationAutoPropagate`), including the
+  // explicit scan. Registered immediately before `speakUpRule`, `seatRule`
+  // and `sealRule`.
+  probationGateRule,
   // ADR-0232: the Assurance Finding & Remediation Register (`RULE-AFR-01`).
   // Reads the finished register (`buildAssuranceFindings`) with the
   // whole-workspace view — and on any commit, because a remediation day and a
