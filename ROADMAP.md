@@ -1,3 +1,32 @@
+## 2026-11-16 — Session 305: Decision-domain sensing register — Cynefin domain, panel evidence and mode fit (ADR-0228, Schema v181 unchanged, `RULE-DSN-01`; wiring In Progress)
+
+**Status: Domain kernel built and tested on the active branch. The declared-decision and act surfaces, the `#/` route, the CSV scope and the schema collections are In Progress and are NOT claimed as shipped.** Primary altitude **director / VP** × **matrix and single-chain** (a cross-line matter is sensed by a panel drawn from more than one line; a single-line workspace reads `panel-single-line` honestly). Frontline and CEO altitudes read the same reader once wiring lands.
+
+**Gap found (Step 3, grep-level, not previously built).** Cynefin (Snowden & Boone, HBR 2007) is named in ROADMAP line 3285 as a framework with no trace in `app/`. The repository had no domain classification of a decision, no record of whether a panel agreed on the kind of problem, and no check of whether the committed method fitted that kind. Decision-fit and decision-tempo weigh *who decides* and *how a call is held*; neither records the panel's domain reading. **[UNVERIFIED beyond the searched files]** for the epistemic and diligence modules, which were scanned, not read.
+
+**Built.** `domainSenseRegistry.js` (five domains, closed mode vocabulary, one-to-one domain→mode fit map, domain→evidence map), `domainSenseSchema.js` (fail-closed normalizers), `domainSense.js` (pure reader `buildDomainSense`). The rules: a reading counts only from a declared panel member on their declared line, never from the owner; a reading is refused unless its evidence basis supports its domain (complex needs dated probes, clear needs three precedent cases, chaotic needs an onset not later than the reading); quorum is two readings from two distinct lines; a domain is stated only by unanimity (a 2-of-3 majority is printed as contested, nobody is picked); fit is read only against an agreed domain, a mismatch is printed with the mode that fits, nothing is enforced; the owner commits one mode, once; overdue and stale flags decide nothing.
+
+**Benchmark (Step 3.5) — `[BENCHMARK-UNVERIFIED]`.** The bar is Cynefin's own sense-making practice (Snowden: a framework for diagnosing before choosing a method, not a categorisation scheme). The commercial tools surveyed are mostly diagram tools that let a team drop items into a box. The kernel matches the framework's discipline (evidence before domain, panel not single voice, dynamic reading, fit not prescription). It does not match the facilitated session, probe design, narrative capture or weak-signal reading. No product was run side by side; web descriptions only. ADR-0228 §Benchmark.
+
+**Assets.** None. No visual, onboarding or communication piece is in this slice; the UI is not built.
+
+**Verified (one focused pass).** `tests/app/domain-sense.test.mjs` 21/21. The printed state, fit and domain counts were re-derived independently from hand-built fixtures whose outcomes are known by construction (six decisions covering agreed, contested, quorum-short, no-reading and mismatch cases). A mutation that removed the two-line quorum rule failed 2 tests; the rule was restored and all 21 pass. `eslint` clean on the four new files after `npm ci` from the lockfile. `npm run check:boundary` passed (995 app ES modules, 280 test suites). `npm run check:links` passed (1,295 links, 346 files).
+
+**Unverified / flagged.**
+- The full `npm test` suite was not run; this pass covered the new suite and the repository-level gates only.
+- Cited evidence (precedent cases, analyses, probes) is **declared, not verified against the record**. The kernel cannot tell whether a cited precedent exists. This is printed in the method note and is the first Remainder item.
+- No real-browser or assistive-technology walkthrough, because there is no UI.
+- The benchmark is `[BENCHMARK-UNVERIFIED]`.
+
+**Remainder (In Progress).** (1) Schema: declare `domainDecisions` and `domainSenseActs` as versioned, empty-at-upgrade collections (v181 → v182). (2) Verify each cited basis against the workspace record, or print that it does not. (3) `#/` route, actions (declare, read, commit), seat rights and CSV scope. (4) Facilitated sense-making walkthrough and probe-design aid, compared with a practitioner workflow, before the Step 3.5 bar is claimed.
+
+**New gaps logged (Step 3, not built).**
+- **Structured root-cause analysis (Ishikawa / 5 Whys, engineering).** Zero hits in `app/` for `Ishikawa`, `fishbone` or `5 whys`. NORTH_STAR names root-cause analysis as a required framework. Altitude: frontline × single-chain. Not built this session.
+- **Decision-method selection (Vroom–Yetton).** Already on the zero-hit list at line 3285. Director / VP × matrix. Its relation to Cynefin is that Cynefin says *what kind* of problem, and Vroom–Yetton says *who should decide it*. A future slice would read the two together. Not built.
+- **Evidence-existence verification.** The Session 305 gap in itself: declared evidence is not checked against the record. Affects this register and any future register that cites precedent. Planned as Remainder (2).
+
+**Coverage map:** director / VP primary **305**; frontline / mid-manager 304; CEO / C-suite 303; matrix correctness on this slice is covered by the two-line quorum rule and its mutation test, not by an end-to-end matrix roll-up. **Next rotation:** CEO / C-suite × matrix (oldest primary, Session 303). The Session 304 kaizen wiring and the Session 305 wiring remain In Progress; the first is the frontline candidate and the second is the director / VP candidate.
+
 ## 2026-11-16 — Session 304: Frontline improvement-suggestion ledger — domain kernel built; workspace wiring In Progress (ADR-0227, Schema v181 unchanged, `RULE-KZT-01`)
 
 **Status: Kernel built and tested on the active branch. The route, action, rights, schema, CSV and view are In Progress and are NOT claimed as shipped.** Primary altitude **frontline / mid-manager** (the people who submit and the route members who must answer) × **matrix and single-chain** (a suggestion from a person with two managers has two candidate deciders). Director / VP read the route they are granted once wiring lands. `npm run check:boundary` passed; `npm run check:links` passed (1,295 links, 346 files).
