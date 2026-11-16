@@ -2,6 +2,8 @@
 
 Date: 2026-11-15 · Session 278 · Schema v163 (additive: `workRestShifts`, `workRestActs`, `workRestCoverage`, `workRestPolicies`, `workRestMarkers`) · Status: Accepted
 
+**Method asset (Session 313, 2026-11-16):** `app/assets/night-work-break-method.jpg` was generated for the night-work panel with Arena's built-in image generator; it illustrates the declared-limit-only, evidence-required boundary and matrix deduplication. Higgsfield was not available in this conversation, so specialized-tool parity is **[BENCHMARK-UNVERIFIED]**. The asset is explanatory only and does not imply that the night-work remainder is implemented.
+
 ## Context
 
 A shift lead rosters Sam 06:00–14:00 on Tuesday. It is an ordinary shift. What
