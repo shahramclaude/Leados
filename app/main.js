@@ -170,6 +170,8 @@ import { renderDutyMeans } from './views/dutyMeans.js';
 // ADR-0223: the Shift Handover & Two-Key Readback Ledger — the boundary transfer between shifts, two keys or an escalation.
 import { renderShiftHandover } from './views/shiftHandover.js';
 import { shiftHandoverAttentionCount } from './core/domain/shiftHandover.js';
+import { renderSuggestions } from './views/suggestions.js';
+import { suggestionAttentionCount } from './core/domain/suggestionReport.js';
 // ADR-0224: Stop-Work Authority & Safe Restart — frontline hold, Director+
 // matrix clearance, and a separate affected-operator restart key.
 import { renderWorkStop } from './views/workStop.js';
@@ -619,6 +621,11 @@ export const NAV = [
     // ADR-0223: the boundary transfer between shifts — two keys (outgoing brief,
     // incoming synthesis or dispute), or the joint seat above both lines is asked.
     { route: 'shift-handover', label: 'Shift handover', icon: '⇔', badge: 'shiftHandover' },
+    // ADR-0227: the small wastes the people doing the work see first — filed,
+    // answered by the computed route, owned to a target day, and independently
+    // confirmed. Beside shift handover on purpose: one moves the station
+    // between shifts, the other improves the station itself.
+    { route: 'suggestions', label: 'Improvement suggestions', icon: '✦', badge: 'suggestions' },
     // ADR-0224: stop-work authority — no restart without all independent joint
     // apex reviews and an affected operator's own key.
     { route: 'work-stop', label: 'Stop-work & restart', icon: '⛔', badge: 'workStop' },
@@ -812,6 +819,8 @@ const RENDERERS = {
   'portfolio-review': (ctx) => renderPortfolioReview(ctx),
   // ADR-0223: the shift-handover & two-key readback ledger.
   'shift-handover': (ctx) => renderShiftHandover(ctx),
+  // ADR-0227: the frontline improvement-suggestion ledger (kaizen teian).
+  'suggestions': (ctx) => renderSuggestions(ctx),
   // ADR-0224: stop-work declaration, independent review and affected-operator key.
   'work-stop': (ctx) => renderWorkStop(ctx),
   // ADR-0225: managerial portfolio handover and successor acceptance.
@@ -1704,6 +1713,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       // ADR-0223: readbacks owed by this seat as the declared incoming operator,
       // plus overdue uncontained handovers it holds the joint seat above.
       shiftHandover: shiftHandoverAttentionCount(state, { now: at, settings: state.settings, seat: seatCtx?.seat || null }),
+      suggestions: suggestionAttentionCount(state, { now: at, seat: seatCtx?.seat || null }),
       // ADR-0224: holds requiring work-lead controls, overdue joint-apex review,
       // or the affected operator's second key, all from the same reader.
       workStop: workStopAttentionCount(state, { now: at, settings: state.settings, seat: seatCtx?.seat || null }),

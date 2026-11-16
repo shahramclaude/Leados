@@ -97,6 +97,8 @@ function evaluateSuggestion(suggestion, acts, asOfMs, refusals) {
   return {
     id: suggestion.id,
     areaRef: suggestion.areaRef,
+    problemText: suggestion.problemText,
+    proposalText: suggestion.proposalText,
     submitterId: suggestion.submitterId,
     routeIds: route,
     submittedAt: suggestion.submittedAt,
@@ -105,6 +107,7 @@ function evaluateSuggestion(suggestion, acts, asOfMs, refusals) {
     stateLabel: STATE_LABEL[state],
     decision: settled ? settled.decision : null,
     decisionReason: settled ? settled.reason : null,
+    decidedAt: settled ? settled.at : null,
     ownerId: settled && settled.decision === 'accept' ? settled.ownerId : null,
     targetDay: settled && settled.decision === 'accept' ? settled.targetDay : null,
     triageRecorded: triageByActor.size,

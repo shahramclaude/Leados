@@ -345,6 +345,18 @@ import {
   normalizeIbpGrades,
   normalizeIbpMarkers,
 } from './domain/ibpSchema.js';
+// ADR-0227 (Schema v185): the Frontline Improvement-Suggestion Ledger
+// (kaizen teian). Declared suggestions, append-only triage / claim / confirm
+// acts and identity-free rule markers normalize fail-closed; no status, state,
+// rate or verdict is stored — each is re-derived on read. The route is stored
+// because it was COMPUTED from the reporting graph at filing time and is the
+// record of who owed the answer.
+import { normalizeSuggestionSettings } from './domain/suggestionRegistry.js';
+import {
+  normalizeSuggestionActs,
+  normalizeSuggestionMarkers,
+  normalizeSuggestions,
+} from './domain/suggestionSchema.js';
 // ADR-0220 (Schema v174): the Variable-Pay Design & Incentive Integrity
 // Register. Plans, measures, verified readings, awards, recovery acts and
 // identity-free markers normalize fail-closed; a reading's figure is checked
@@ -1264,7 +1276,11 @@ export {
 // breaks, declared night policies (window + limits with a written source), and
 // the rule's bounded marker ledger. No night minute, share, streak or verdict
 // is stored; each is re-derived on read.
-export const SCHEMA_VERSION = 184;
+// ADR-0227 (Schema v184 → v185): the Frontline Improvement-Suggestion Ledger
+// (kaizen teian) — declared suggestions with their COMPUTED route, append-only
+// triage / claim / confirm acts, and identity-free rule markers. No state,
+// overdue flag, rate or verdict is stored; each is re-derived on read.
+export const SCHEMA_VERSION = 185;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -3714,6 +3730,13 @@ export const COLLECTIONS = [
   'shiftHandovers',
   'shiftHandoverReadbacks',
   'shiftHandoverMarkers',
+  // ADR-0227 (Schema v185): improvement suggestions with the route COMPUTED
+  // from the reporting graph at filing time, append-only triage / claim /
+  // confirm acts, and identity-free rule markers. No state, overdue flag, rate
+  // or verdict is stored; each is re-derived on read.
+  'suggestions',
+  'suggestionActs',
+  'suggestionMarkers',
   // ADR-0224 (Schema v179): stop-work records, append-only acts and
   // identity-free no-authority observations. No clearance state is stored.
   'workStops',
@@ -4615,6 +4638,10 @@ export function normalizeSettings(raw) {
     // census reads would be a switch the record does not hold.
     ...normalizeMgrHandoverSettings(s),
     ...normalizeVySettings(s),
+    // ADR-0227: named here because `normalizeSettings` rebuilds the settings
+    // object field by field — the pause switch that silences RULE-KZT-01 would
+    // vanish on every load if it were spread anywhere else.
+    ...normalizeSuggestionSettings(s),
     ...normalizeStructureHistorySettings(s),
     ...normalizeDifferencesSettings(s),
     ...normalizeFitSettings(s),
@@ -9353,6 +9380,13 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.shiftHandovers = normalizeShiftHandovers(raw.shiftHandovers, warnings);
   state.shiftHandoverReadbacks = normalizeShiftHandoverReadbacks(raw.shiftHandoverReadbacks, warnings);
   state.shiftHandoverMarkers = normalizeShoMarkers(raw.shiftHandoverMarkers, warnings);
+  // ADR-0227 (Schema v185): fail-closed improvement suggestions, append-only
+  // triage / claim / confirm acts and identity-free markers. A suggestion's
+  // computed route is stored as filed; every state, rate and overdue flag is
+  // re-derived on read, never stored.
+  state.suggestions = normalizeSuggestions(raw.suggestions, warnings);
+  state.suggestionActs = normalizeSuggestionActs(raw.suggestionActs, state.suggestions, warnings);
+  state.suggestionMarkers = normalizeSuggestionMarkers(raw.suggestionMarkers, warnings);
   // ADR-0224 (Schema v179): additive holds and append-only acts. First-person
   // holds survive even when no joint authority can resolve; the reader prints
   // that reason and no reviewer is inferred. No clearance or restart is stored.
@@ -10153,6 +10187,20 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  // 184 → 185: ADR-0227 adds THREE EMPTY ledgers (`suggestions`,
+  // `suggestionActs`, `suggestionMarkers`) and the suggestion rule's pause. No
+  // suggestion is inferred from a case, an incident, an after-action review or
+  // a work-turn record; an improvement proposal is a dated human declaration
+  // with a route COMPUTED from the reporting graph, and manufacturing one at
+  // upgrade time would put words in a worker's mouth that nobody wrote.
+  184: (v184) => ({
+    ...v184,
+    schemaVersion: 185,
+    suggestions: Array.isArray(v184.suggestions) ? v184.suggestions : [],
+    suggestionActs: Array.isArray(v184.suggestionActs) ? v184.suggestionActs : [],
+    suggestionMarkers: Array.isArray(v184.suggestionMarkers) ? v184.suggestionMarkers : [],
+    settings: { ...(v184.settings || {}), ...normalizeSuggestionSettings(v184.settings || {}) },
+  }),
   // 183 → 184: ADR-0231 adds SEVEN EMPTY ledgers (`ibpCycles`, `ibpDemandRows`,
   // `ibpCapacityRows`, `ibpOptions`, `ibpDecisions`, `ibpGrades`, `ibpMarkers`)
   // and the plan rule's pause. No cycle, demand figure, capacity figure, option

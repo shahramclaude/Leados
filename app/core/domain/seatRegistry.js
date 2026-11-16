@@ -311,6 +311,14 @@ export const RECORD_POLICIES = Object.freeze({
   mgrHandovers: { classKey: 'unit', detailCeiling: 0, reportOnly: true, label: 'Declared managerial portfolio transitions (report only; state re-derived on read)', route: '#/manager-handover' },
   mgrHandoverActs: { classKey: 'unit', detailCeiling: 0, reportOnly: true, label: 'Append-only outgoing brief, successor acceptance, governor release and dispute acts (report only)', route: '#/manager-handover' },
   mgrHandoverMarkers: { classKey: 'unit', detailCeiling: 0, reportOnly: true, label: 'Managerial-handover no-authority / dispute observations — identity-free', route: '#/manager-handover' },
+  // ADR-0227: an improvement suggestion names its author, its COMPUTED route
+  // and maybe an owner, so ALL rows are report-only (`detailCeiling: 0`);
+  // `buildSuggestionReport` discloses rows to parties and to the span that
+  // holds the named people, and withholds the rates whole whenever any row is
+  // hidden. The rule's markers are identity-free by construction.
+  suggestions: { classKey: 'unit', detailCeiling: 0, reportOnly: true, label: 'Frontline improvement suggestions — area, problem, proposal, computed route (report only; state re-derived on read)', route: '#/suggestions' },
+  suggestionActs: { classKey: 'unit', detailCeiling: 0, reportOnly: true, label: 'Append-only triage decisions, effect claims and independent confirmations (report only)', route: '#/suggestions' },
+  suggestionMarkers: { classKey: 'unit', detailCeiling: 0, reportOnly: true, label: 'Improvement-suggestion no-ask observations — a route member or owner the graph cannot name (identity-free)', route: '#/suggestions' },
   // ADR-0216: a deal thesis, its promises, their readings and one-off costs are
   // ENTERPRISE material — a synergy belongs to the whole deal, not to one line's
   // reading of it, and below the executive altitude there is no honest per-line
@@ -988,6 +996,18 @@ export const ACTION_RIGHTS = Object.freeze({
   'read-shift-handover': { minRank: 1, maxRank: 5, label: 'Read the shift-handover & two-key readback ledger: what was handed over, what was synthesized, what was disputed and what is overdue' },
   'declare-shift-handover': { minRank: 1, maxRank: 5, label: 'Declare the outgoing changeover brief for the station you hand over, cancel it before any key turns, or scan the register' },
   'readback-shift-handover': { minRank: 1, maxRank: 5, label: 'Turn the incoming key: synthesize the handover you accepted, or dispute it with its named reason' },
+  // ADR-0227: the Frontline Improvement-Suggestion Ledger (kaizen teian).
+  // Every act is first-person at every altitude: a person files their own
+  // suggestion; the COMPUTED route (the joint-apex seat(s) above every line the
+  // submitter holds) records the triage; the named owner claims the effect; the
+  // submitter or a route member — never the owner — confirms it. Reading is
+  // open from the frontline upward, narrowed to the rows the seat is a party
+  // to or whose people it holds.
+  'read-suggestions': { minRank: 1, maxRank: 5, label: 'Read the improvement-suggestion ledger within your grant: what was proposed, who owes the answer, what is overdue' },
+  'declare-suggestion': { minRank: 1, maxRank: 5, label: 'File your own improvement suggestion, or scan the register — the route is computed from the reporting graph and is never chosen' },
+  'triage-suggestion': { minRank: 1, maxRank: 5, label: 'Record the accept-or-decline decision your seat owes as a member of a suggestion’s computed route — once, with a stated reason' },
+  'claim-suggestion': { minRank: 1, maxRank: 5, label: 'Claim the effect of an accepted change you own — and nobody else’s' },
+  'confirm-suggestion': { minRank: 1, maxRank: 5, label: 'Independently confirm the effect you saw working, as the submitter or a route member — never as the owner' },
   // ADR-0224: the stop-work ledger. Any frontline seat may raise a hold; the
   // work lead records controls; Director+ joint apexes independently assess;
   // only an affected operator may provide the second restart/continue-hold key.

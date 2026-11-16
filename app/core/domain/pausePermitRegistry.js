@@ -275,6 +275,11 @@ export const PAUSE_PERMIT_MATRIX_REACH_SWITCHES = Object.freeze([
   // the outgoing manager, the successor and the governor, and a dispute ask
   // reaches the joint seat above EVERY line of both managers.
   'mgrHandoverAutoPropagate',
+  // ADR-0227: a suggestion's response ask goes to the joint-apex route
+  // member(s) computed above EVERY line of the submitter, and the effect ask to
+  // a named owner who may sit on any line — so silencing it reaches across
+  // reporting lines, and those lines' managers are not told.
+  'suggestionAutoPropagate',
   // ADR-0226: a night-work breach ask reaches the line holder, or the joint seat
   // above BOTH lines of a cross-line breach, and a missing-break ask reaches
   // the line holder — so silencing it reaches across reporting lines.
@@ -375,6 +380,11 @@ export const PAUSE_PERMIT_SWITCH_RULES = Object.freeze({
   // without its owed brief, acceptance, release or dispute review; the
   // transition remains open and visible, and nothing transfers.
   mgrHandoverAutoPropagate: 'mgrHandoverRules.js',
+  // ADR-0227: silencing this rule can leave a suggestion past its declared
+  // response window with no ask on the route that owes the answer, and an
+  // accepted change past its target with none on its owner; the ledger stays
+  // open and visible, and nothing is decided or claimed in its place.
+  suggestionAutoPropagate: 'suggestionRules.js',
   // ADR-0226: silencing this rule can leave a provable night-work breach or a
   // missing required break record without its ask; the reading remains open and
   // visible, and no break is invented.

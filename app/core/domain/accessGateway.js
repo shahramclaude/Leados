@@ -32,6 +32,7 @@ import { IBP_RIGHTS } from './ibpRegistry.js';
 import { INC_RIGHTS } from './incentiveRegistry.js';
 import { DWM_RIGHTS } from './dutyMeansRegistry.js';
 import { SHO_RIGHTS } from './shiftHandoverRegistry.js';
+import { KZT_RIGHTS } from './suggestionRegistry.js';
 import { PRV_RIGHTS } from './portfolioReviewRegistry.js';
 import { SWP_RIGHTS } from './workStopRegistry.js';
 import { MHH_RIGHTS } from './mgrHandoverRegistry.js';
@@ -354,6 +355,16 @@ const groups = [
   [SHO_RIGHTS.READ, 'shiftHandoverReport shiftHandoverAttentionCount shiftHandoverBriefGrant'],
   [SHO_RIGHTS.DECLARE, 'shiftHandoverDeclare shiftHandoverCancel shiftHandoverScan'],
   [SHO_RIGHTS.READBACK, 'shiftHandoverReadback'],
+  // ADR-0227: the Frontline Improvement-Suggestion Ledger. Every act is
+  // first-person: the action refuses any seat that is not the named person for
+  // the act — the submitter (declare), a route member (triage), the owner
+  // (claim), the submitter or a route member and never the owner (confirm).
+  // Reads are open from the frontline upward and re-proved inside the action.
+  [KZT_RIGHTS.READ, 'suggestionReport suggestionAttentionCount suggestionCandidates'],
+  [KZT_RIGHTS.DECLARE, 'suggestionDeclare suggestionScan'],
+  [KZT_RIGHTS.TRIAGE, 'suggestionTriage'],
+  [KZT_RIGHTS.CLAIM, 'suggestionClaim'],
+  [KZT_RIGHTS.CONFIRM, 'suggestionConfirm'],
   // ADR-0224: stop-work holds may be raised at frontline rank; mitigation is
   // work-lead-controlled, assessment is Director+ and tied to every frozen
   // joint apex, and restart is only an affected operator's second key.
@@ -726,6 +737,9 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // whose reads are absent from SAFE_READS is unreadable under enforcement while
 // its writes are still gated.
 'shiftHandoverReport', 'shiftHandoverAttentionCount', 'shiftHandoverBriefGrant',
+// ADR-0227: the improvement-suggestion ledger's pure read surface. Every one
+// of these re-proves the read right inside the action.
+'suggestionReport', 'suggestionAttentionCount', 'suggestionCandidates',
 // ADR-0224: the stop-work reader re-proves the right inside the action; the
 // report never exposes raw collections to the generic projection.
 'workStopReport', 'workStopAttentionCount', 'workStopCandidates',
@@ -1087,6 +1101,10 @@ const MATRIX_LINE_SCOPED = new Set([
   // on a shared-services line). The action re-proves both the reach and the
   // roster band before it records anything.
   'shiftHandoverDeclare',
+  // ADR-0227: an acceptance names an owner who may be reachable only through a
+  // declared Matrix line. The action re-proves that reach before it records a
+  // decision that names them.
+  'suggestionTriage',
   // ADR-0224: the affected work lead and operators may be reachable only on a
   // declared Matrix line; the action re-proves every person and snapshots every
   // right-capable joint apex before the stop is accepted.

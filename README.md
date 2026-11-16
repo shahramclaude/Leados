@@ -1,3 +1,7 @@
+## 2026-11-16 — Improvement-suggestion ledger wiring is in progress — not shipped
+
+This branch contains an incomplete continuation of [ADR-0227](docs/adr/0227-frontline-improvement-suggestion-ledger.md): schema v185, the computed matrix route, action and post-commit wiring, `#/suggestions`, CSV #173 and a generated method diagram. It is **not a shipped feature**. The focused end-to-end test still fails at triage because the writer's raw timestamp key does not match the fail-closed act normalizer; confirmation has the same unresolved key mismatch. The required display == stored == computed check was not reached. See [ROADMAP.md](ROADMAP.md) and [AI-SESSION-LOG.md](AI-SESSION-LOG.md) for the exact stop point and next step.
+
 ## 2026-11-16 — A plan of record that cannot be approved against a number nobody observed
 
 **Director / VP → Integrated plan** (`#/ibp`) is the register where a business runs the five-step S&OP cycle — portfolio, demand, supply, reconciliation, executive — and ends with **one approved operating plan whose residual is owned**.

@@ -251,6 +251,8 @@ import { DWM_CSV_COLUMNS, DWM_CSV_DESCRIPTOR, DWM_CSV_SCOPE } from './domain/dut
 // ADR-0223: the Shift Handover & Two-Key Readback Ledger — aggregate only.
 import { SHO_CSV_COLUMNS, SHO_CSV_DESCRIPTOR, SHO_CSV_SCOPE } from './domain/shiftHandoverRegistry.js';
 import { buildShiftHandover, shiftHandoverCsvRows } from './domain/shiftHandover.js';
+import { KZT_CSV_COLUMNS, KZT_CSV_DESCRIPTOR, KZT_CSV_SCOPE } from './domain/suggestionRegistry.js';
+import { buildSuggestionReport, suggestionCsvRows } from './domain/suggestionReport.js';
 // ADR-0224: identity-free Stop-Work & Safe Restart aggregates from the panel reader.
 import { SWP_CSV_COLUMNS, SWP_CSV_DESCRIPTOR, SWP_CSV_SCOPE } from './domain/workStopRegistry.js';
 import { buildWorkStop, workStopCsvRows } from './domain/workStop.js';
@@ -1618,6 +1620,13 @@ export const CSV_EXPORTS = [
   // name, basis, note or reason crosses this boundary; an uncomputable figure
   // exports BLANK with its reason, never zero.
   IBP_CSV_DESCRIPTOR,
+  // #173 (ADR-0227): the frontline improvement-suggestion ledger — aggregate
+  // and identity-free. One summary row, one coverage row, one row per derived
+  // state and one row per declared area under an opaque code with the two rates
+  // in exact floor basis points. No submitter, owner, route member, area name,
+  // problem or proposal text crosses this boundary; a cell below the privacy
+  // floor of three exports BLANK with its reason, never zero.
+  KZT_CSV_DESCRIPTOR,
 ];
 
 function personLookup(state) {
@@ -6987,6 +6996,18 @@ export function buildScopeTable(state, scope, now) {
       return {
         columns: IBP_CSV_COLUMNS.map((key) => ({ key, header: key })),
         rows: ibpCsvRows(report),
+      };
+    }
+    case KZT_CSV_SCOPE: {
+      // CSV scope #173 (ADR-0227, Schema v185). Built from the SAME reader the
+      // `#/suggestions` panel renders, with no seat: every figure is an exact
+      // integer over the whole record, and areas appear only under opaque
+      // codes, so no submitter, owner, route member, area name or wording is
+      // reachable from this export.
+      const report = buildSuggestionReport(state, { now, seat: null });
+      return {
+        columns: KZT_CSV_COLUMNS.map((key) => ({ key, header: key })),
+        rows: suggestionCsvRows(report),
       };
     }
     case 'earned-value-delivery': {

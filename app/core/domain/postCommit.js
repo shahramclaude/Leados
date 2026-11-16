@@ -207,6 +207,7 @@ import { sourcingRule } from './sourcingRules.js';
 import { ibpRule } from './ibpRules.js';
 import { vyRule } from './vyRules.js';
 import { shiftHandoverRule } from './shiftHandoverRules.js';
+import { suggestionRule } from './suggestionRules.js';
 import { workStopRule } from './workStopRules.js';
 import { mgrHandoverRule } from './mgrHandoverRules.js';
 import { workNightRule } from './workNightRules.js';
@@ -1377,6 +1378,29 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // path (`riskConcentrationAutoPropagate`), including the explicit scan.
   // Registered immediately before `seatRule` and `sealRule`.
   riskConcentrationRule,
+  // ADR-0227: the Frontline Improvement-Suggestion Ledger (`RULE-KZT-01`).
+  // Reads the finished register (`buildSuggestionLedger`) with the
+  // whole-workspace view — and on any commit, because a response window and a
+  // target day pass with the calendar — and files at most one opaque
+  // `act-inform` delegation per (deterministic `kzt1:…` signature, addressee),
+  // bounded at 4 per commit with the remainder counted. TWO conditions:
+  // `response-overdue` — a suggestion past its declared response-by instant
+  // that the route has not settled, asked of each UNDECIDED member of the
+  // COMPUTED route (the joint-apex seat(s) above every line of the submitter)
+  // — and `target-overdue` — an accepted suggestion past its target day with no
+  // effect claim, asked of the named owner alone. A route member or owner the
+  // reporting graph cannot name writes ONE identity-free `suggestionMarkers`
+  // observation and substitutes nobody. The ask text is deliberately opaque —
+  // no area, no problem text, no proposal, no submitter — because a delegation
+  // is readable above the addressee; the signature lives only in the typed
+  // `issues-obligation` link. Asks self-close when the condition clears or the
+  // addressee moves, and respect human closures/returns. It never triages,
+  // claims or confirms anything, never edits a suggestion or an act, never
+  // declines on overdue, never closes by the passage of time and never rates a
+  // person from backlog; pause-governed on every path
+  // (`suggestionAutoPropagate`), including the explicit scan. Registered
+  // immediately before `speakUpRule`, `seatRule` and `sealRule`.
+  suggestionRule,
   // Registered immediately before `seatRule` and `sealRule`.
   speakUpRule,
   // ADR-0076: the Operating Seat (vertical roll-up + enforced boundaries).

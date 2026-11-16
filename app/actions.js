@@ -143,6 +143,7 @@ import { createWorkNightActions } from './core/domain/workNightActions.js';
 // handover past its readback instant escalates to the joint seat above EVERY
 // line of both operators; a clock-in is never a key.
 import { createShiftHandoverActions } from './core/domain/shiftHandoverActions.js';
+import { createSuggestionActions } from './core/domain/suggestionActions.js';
 // ADR-0224: a human-declared stop, a work-lead mitigation, every frozen
 // Director+ joint-apex assessment, and a separate affected-operator key. This
 // ledger never physically isolates equipment or independently restarts work.
@@ -20394,6 +20395,12 @@ export function createApi(store, options = {}) {
   // share, streak, continuous stretch and verdict is derived on read.
   Object.assign(api, createWorkNightActions(store, { now: clock, idFactory: id }));
   Object.assign(api, createShiftHandoverActions(store, { now: clock, idFactory: id }));
+  // ADR-0227: the Frontline Improvement-Suggestion Ledger (kaizen teian) — a
+  // person files their own suggestion (the route is computed from the reporting
+  // graph and never chosen), the computed route records the triage, the named
+  // owner claims the effect, and the submitter or a route member — never the
+  // owner — confirms it. Every state, rate and overdue flag is derived on read.
+  Object.assign(api, createSuggestionActions(store, { now: clock, idFactory: id }));
   Object.assign(api, createWorkStopActions(store, { now: clock, idFactory: id }));
   // ADR-0210: the Decision-Maker Conflict-of-Interest & Recusal Ledger — a person
   // declares their own stake (or a seat records a disclosure it received), a seat
