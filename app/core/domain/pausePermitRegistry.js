@@ -284,6 +284,13 @@ export const PAUSE_PERMIT_MATRIX_REACH_SWITCHES = Object.freeze([
   // the same apex or the decider — so silencing it reaches across reporting
   // lines, and those lines' managers are not told.
   'sourcingAutoPropagate',
+  // ADR-0231: the plan switch. The executive-step ask is computed from the
+  // lowest seat above BOTH the demand line and the supply line — two lines that
+  // are almost never the same chain — and the contention it reports is summed
+  // across every cycle drawing on one supply line, so silencing it reaches a
+  // second line and that line's manager is not told that a plan is waiting on a
+  // decision only they can take.
+  'ibpAutoPropagate',
   'vyAutoPropagate',
   // ADR-0226: silencing this rule can leave a shared dependency whose combined
   // declared retention would exceed its ceiling without the ask that names the
@@ -377,6 +384,11 @@ export const PAUSE_PERMIT_SWITCH_RULES = Object.freeze({
   // register stays open and visible, and nothing is decided in its place.
   sourcingAutoPropagate: 'sourcingRules.js',
   vyAutoPropagate: 'vyRules.js',
+  // ADR-0231: silencing this rule can leave a supply review untested, a
+  // quantified gap without a costed option, and an executive step owed across
+  // two lines at once; the register stays open and visible, and no plan is
+  // approved in its place.
+  ibpAutoPropagate: 'ibpRules.js',
   // ADR-0226: silencing this rule can leave a would-exceed shared dependency
   // without its ceiling ask; the reading remains open and visible.
   riskConcentrationAutoPropagate: 'riskConcentrationRules.js',

@@ -334,6 +334,17 @@ import {
   normalizeVyStyleRecords,
   normalizeVyMarkers,
 } from './domain/vySchema.js';
+// ADR-0231 (Schema v184): the Integrated Business Plan / S&OP Cycle Register.
+import { normalizeIbpSettings } from './domain/ibpRegistry.js';
+import {
+  normalizeIbpCycles,
+  normalizeIbpDemandRows,
+  normalizeIbpCapacityRows,
+  normalizeIbpOptions,
+  normalizeIbpDecisions,
+  normalizeIbpGrades,
+  normalizeIbpMarkers,
+} from './domain/ibpSchema.js';
 // ADR-0220 (Schema v174): the Variable-Pay Design & Incentive Integrity
 // Register. Plans, measures, verified readings, awards, recovery acts and
 // identity-free markers normalize fail-closed; a reading's figure is checked
@@ -1253,7 +1264,7 @@ export {
 // breaks, declared night policies (window + limits with a written source), and
 // the rule's bounded marker ledger. No night minute, share, streak or verdict
 // is stored; each is re-derived on read.
-export const SCHEMA_VERSION = 183;
+export const SCHEMA_VERSION = 184;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -3730,6 +3741,20 @@ export const COLLECTIONS = [
   'vyAnswers',
   'vyStyleRecords',
   'vyMarkers',
+  // ADR-0231 (Schema v184): the Integrated Business Plan / S&OP Cycle Register.
+  // Declared cycles, per-month demand plans (baseline, target and consensus as
+  // three separate figures), per-month capacity with its declared provenance,
+  // costed pre-S&OP options, the one executive decision per cycle, demand grades
+  // and identity-free rule markers. No gap, residual, verdict or contention is
+  // stored: each is re-derived on read, so a hand-edited file cannot carry a
+  // reconciliation its own rows do not imply.
+  'ibpCycles',
+  'ibpDemandRows',
+  'ibpCapacityRows',
+  'ibpOptions',
+  'ibpDecisions',
+  'ibpGrades',
+  'ibpMarkers',
 ];
 
 /** Stable empty state. `now` is an ISO string so the result is a pure value. */
@@ -9280,6 +9305,20 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.vyAnswers = normalizeVyAnswers(raw.vyAnswers, state.vyDecisions, warnings);
   state.vyStyleRecords = normalizeVyStyleRecords(raw.vyStyleRecords, state.vyDecisions, warnings);
   state.vyMarkers = normalizeVyMarkers(raw.vyMarkers, warnings);
+  // ADR-0231 (Schema v184): a cycle, demand row, capacity row, option, decision
+  // or grade that cannot be read exactly is DROPPED with a counted warning.
+  // Capacity is resolved AFTER the cycles because a month index is only valid
+  // against the cycle's own declared horizon, and demand AFTER the cycles for the
+  // same reason. A `demonstrated` capacity claim with no real 28-day window is
+  // refused here too, so a hand-edited import cannot smuggle an observation that
+  // never happened into a plan that is then approved against it.
+  state.ibpCycles = normalizeIbpCycles(raw.ibpCycles, warnings);
+  state.ibpDemandRows = normalizeIbpDemandRows(raw.ibpDemandRows, state.ibpCycles, warnings);
+  state.ibpCapacityRows = normalizeIbpCapacityRows(raw.ibpCapacityRows, state.ibpCycles, warnings);
+  state.ibpOptions = normalizeIbpOptions(raw.ibpOptions, state.ibpCycles, warnings);
+  state.ibpDecisions = normalizeIbpDecisions(raw.ibpDecisions, state.ibpCycles, warnings);
+  state.ibpGrades = normalizeIbpGrades(raw.ibpGrades, state.ibpCycles, warnings);
+  state.ibpMarkers = normalizeIbpMarkers(raw.ibpMarkers, warnings);
   // ADR-0220: a plan, measure, award or recovery act that cannot be read exactly
   // is DROPPED with a counted warning. A reading is resolved AFTER its measures,
   // because the measure's unit decides which field the figure belongs in; a
@@ -10114,6 +10153,25 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  // 183 → 184: ADR-0231 adds SEVEN EMPTY ledgers (`ibpCycles`, `ibpDemandRows`,
+  // `ibpCapacityRows`, `ibpOptions`, `ibpDecisions`, `ibpGrades`, `ibpMarkers`)
+  // and the plan rule's pause. No cycle, demand figure, capacity figure, option
+  // or approval is inferred from a budget, a target, a headcount, a rota or a
+  // sales plan kept elsewhere. A consolidated demand plan is a human declaration
+  // about a period nobody has lived through, and manufacturing one at upgrade
+  // time would put a forecast on the record that no human agreed to.
+  183: (v183) => ({
+    ...v183,
+    schemaVersion: 184,
+    ibpCycles: Array.isArray(v183.ibpCycles) ? v183.ibpCycles : [],
+    ibpDemandRows: Array.isArray(v183.ibpDemandRows) ? v183.ibpDemandRows : [],
+    ibpCapacityRows: Array.isArray(v183.ibpCapacityRows) ? v183.ibpCapacityRows : [],
+    ibpOptions: Array.isArray(v183.ibpOptions) ? v183.ibpOptions : [],
+    ibpDecisions: Array.isArray(v183.ibpDecisions) ? v183.ibpDecisions : [],
+    ibpGrades: Array.isArray(v183.ibpGrades) ? v183.ibpGrades : [],
+    ibpMarkers: Array.isArray(v183.ibpMarkers) ? v183.ibpMarkers : [],
+    settings: { ...(v183.settings || {}), ...normalizeIbpSettings(v183.settings || {}) },
+  }),
   // 181 → 182: ADR-0229 adds FOUR EMPTY ledgers (`sourcingCases`,
   // `sourcingOptions`, `sourcingActs`, `sourcingMarkers`) and the sourcing
   // rule's pause. No capability is inferred from a budget envelope, an invoice,

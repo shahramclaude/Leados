@@ -135,8 +135,10 @@ const DECL = (over = {}) => ({
  * 1. SCHEMA — additive, empty, stable across a reload
  */
 
-test('vy: schema v183 with four EMPTY vy ledgers and nothing inferred', () => {
-  assert.equal(SCHEMA_VERSION, 183);
+test('vy: schema v184 with four EMPTY vy ledgers and nothing inferred', () => {
+  // Session ADR-0231 raised the schema to v184; the vy ledgers are still the
+  // collections THIS ADR added, and the 182→183 step is still where they appear.
+  assert.equal(SCHEMA_VERSION, 184);
   for (const key of ['vyDecisions', 'vyAnswers', 'vyStyleRecords', 'vyMarkers']) {
     assert.ok(COLLECTIONS.includes(key), `${key} is a declared collection`);
   }

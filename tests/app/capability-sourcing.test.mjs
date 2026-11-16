@@ -204,8 +204,11 @@ function declareCase(env, over = {}) {
  * 1. SCHEMA — additive, empty, and stable across a reload
  */
 
-test('sourcing: schema v183 with four EMPTY sourcing ledgers plus four EMPTY vy ledgers', () => {
-  assert.equal(SCHEMA_VERSION, 183);
+test('sourcing: schema v184 with four EMPTY sourcing ledgers plus four EMPTY vy ledgers', () => {
+  // Session ADR-0231 raised the schema to v184. The sourcing and vy ledgers are
+  // still the collections THESE ADRs added, and their migration steps are
+  // unchanged — only the current-version pin moves.
+  assert.equal(SCHEMA_VERSION, 184);
   for (const key of ['sourcingCases', 'sourcingOptions', 'sourcingActs', 'sourcingMarkers', 'vyDecisions', 'vyAnswers', 'vyStyleRecords', 'vyMarkers']) {
     assert.ok(COLLECTIONS.includes(key), `${key} is a declared collection`);
   }

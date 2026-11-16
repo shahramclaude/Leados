@@ -148,6 +148,7 @@ import { synergyRule } from './synergyRules.js';
 import { earnedValueRule } from './earnedValueRules.js';
 import { riskAppetiteRule } from './riskAppetiteRules.js';
 import { sourcingRule } from './sourcingRules.js';
+import { ibpRule } from './ibpRules.js';
 import { vyRule } from './vyRules.js';
 import { incentiveRule } from './incentiveRules.js';
 import { dutyMeansRule } from './dutyMeansRules.js';
@@ -1183,6 +1184,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'vyRules.js',
     purpose: 'RULE-VY-01: reads the Vroom–Yetton–Jago Decision-Participation Register (`buildVroomYetton`, ADR-0230) with the whole-workspace view on decision declarations and withdrawals, recorded diagnostic answers and selected participation styles — and on any other commit, because a review date passes and an uncommitted style outlives a quiet quarter as much as a write. TWO conditions, filed at most once per (deterministic `vy1:…` signature, addressee) and bounded at 4 per commit with the remainder counted: `decision.owed` where a decision is declared and no diagnostic answers exist yet, addressed to the declaring seat; and `selection.owed` where answers exist but no style has been selected, addressed to the lowest director-or-above seat that holds a line the decision touches (falling back to the workspace apex `leader`). The ask text is deliberately opaque — no decision title, no person, no line — because a delegation is readable above the addressee; the opaque signature lives only in the typed `issues-obligation` link. Asks carry typed `issues-obligation` provenance and close themselves when the condition clears or the addressee moves. It never declares, amends or withdraws a decision, never records or amends diagnostic answers, never selects or overrides a style, never grades an outcome and never rates a person; pause-governed on every path (`vyAutoPropagate`), including the explicit scan.',
     writes: ['delegations', 'links', 'vyMarkers'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: ibpRule,
+    module: 'ibpRules.js',
+    purpose: 'RULE-IBP-01: reads the Integrated Business Plan / S&OP Cycle Register (`buildIbp`, ADR-0231) with the whole-workspace view on cycle declarations and withdrawals, demand and capacity rows, framed options, executive decisions, demand grades, convention changes and explicit `ibp.scan` scans — and on any other commit, because a review date passes and a planning month arrives whether or not anybody writes. FIVE conditions, filed at most once per (deterministic `ibp1:…` signature, addressee) and bounded at 4 per commit with the remainder counted: `supply.owed` where demand is on the record and feasibility was never tested, addressed to the SUPPLY line’s own manager; `reconcile.owed` where a gap between unconstrained demand and demonstrated capacity is quantified and no costed option is framed, addressed to the cycle’s process owner; `executive.owed` where options are framed and no plan is approved, addressed to the lowest seat above EVERY line the cycle touches at VP altitude or higher — never one line on the other’s behalf, never a promoted director, with `no-authority-at-rank` printed and nobody asked where the branch holds no such seat; `residual.unowned` where an approved residual does not equal the residual the record computes, addressed to the approver who signed it; and `review.overdue` where a live cycle passed its own review date with no approved plan, addressed to its owner. The ask text is deliberately opaque — no product family, no customer, no volume, no currency — because a delegation is readable above the addressee; the opaque signature lives only in the typed `issues-obligation` link. Asks carry typed `issues-obligation` provenance and close themselves when the condition clears or the addressee moves. It never declares or withdraws a cycle, never records, revises or re-prices demand, capacity or an option, never approves a plan, never converts a unit or a currency, and never rates a planner, a manager or a salesperson; pause-governed on every path (`ibpAutoPropagate`), including the explicit scan.',
+    writes: ['delegations', 'links', 'ibpMarkers'],
     emits: [],
     scansWorkspace: true,
   },

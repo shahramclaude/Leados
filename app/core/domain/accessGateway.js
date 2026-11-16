@@ -28,6 +28,7 @@ import { RA_RIGHTS } from './riskAppetiteRegistry.js';
 // ADR-0229: the capability sourcing register's four rights.
 import { SRC_RIGHTS } from './sourcingRegistry.js';
 import { VY_RIGHTS } from './vyRegistry.js';
+import { IBP_RIGHTS } from './ibpRegistry.js';
 import { INC_RIGHTS } from './incentiveRegistry.js';
 import { DWM_RIGHTS } from './dutyMeansRegistry.js';
 import { SHO_RIGHTS } from './shiftHandoverRegistry.js';
@@ -310,6 +311,18 @@ const groups = [
   [VY_RIGHTS.DECLARE, 'declareVyDecision withdrawVyDecision'],
   [VY_RIGHTS.ANSWER, 'recordVyAnswers'],
   [VY_RIGHTS.SELECT, 'selectVyStyle recordVyCommitmentOutcome'],
+  // ADR-0231: the integrated business plan / S&OP cycle register. Reading a plan
+  // of record is portfolio material (rank 3+). Recording demand and capacity is
+  // the line holder's act (rank 2+), narrowed INSIDE the action to a cycle whose
+  // line they hold — the gateway cannot narrow it, the action must. Framing an
+  // option is director+; approving is the executive step at rank 4+ and is
+  // refused for the seat that framed the options; grading is the process owner's.
+  [IBP_RIGHTS.READ, 'ibpReport ibpAttentionCount ibpCandidates ibpReadModel'],
+  [IBP_RIGHTS.DECLARE, 'ibpDeclareCycle ibpWithdrawCycle ibpScan'],
+  [IBP_RIGHTS.RECORD, 'ibpRecordDemand ibpRecordCapacity'],
+  [IBP_RIGHTS.FRAME, 'ibpFrameOption'],
+  [IBP_RIGHTS.DECIDE, 'ibpApprovePlan'],
+  [IBP_RIGHTS.GRADE, 'ibpGradeDemand'],
   // ADR-0220: the variable-pay design & incentive integrity register. Reading it
   // is open at the manager altitude because a team envelope is a manager's own
   // instrument; the row class and the span filter decide what is printed.
@@ -695,6 +708,12 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // ADR-0230: the Vroom–Yetton–Jago decision-participation register's pure read
 // surface. Every one of these re-proves the read right inside the action.
 'vyReport', 'sourcingVyScan',
+// ADR-0231: the integrated business plan's pure read surface. Every one of
+// these re-proves the read right INSIDE the action, because a module whose reads
+// are absent from SAFE_READS is unreadable under enforcement while its writes
+// are still gated — the plan of record would vanish exactly when a real
+// organisation turned enforcement on.
+'ibpReport', 'ibpAttentionCount', 'ibpCandidates', 'ibpReadModel', 'ibpSeesCycle', 'ibpMarkers', 'ibpReadUnits', 'ibpReadCents',
 // ADR-0220: the variable-pay register's pure read surface. Every one of these
 // re-proves the read right inside the action. Registered here because a module
 // whose reads are absent from SAFE_READS is unreadable under enforcement while
