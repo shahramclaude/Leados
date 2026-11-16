@@ -13,10 +13,46 @@
 export const KZT_ENGINE_VERSION = 'kaizen-teian-2026.11-v1';
 export const KZT_ADR = 'ADR-0227';
 export const KZT_RULE_ID = 'RULE-KZT-01';
+export const KZT_ROUTE = 'suggestions';
+export const KZT_HREF = '#/suggestions';
+export const KZT_CSV_SCOPE = 'improvement-suggestions';
+export const KZT_MARKER_KIND = 'suggestion';
+
+export const KZT_EVENTS = Object.freeze({
+  DECLARED: 'suggestion.declared',
+  TRIAGE: 'suggestion.triage.recorded',
+  CLAIM: 'suggestion.claim.recorded',
+  CONFIRM: 'suggestion.confirm.recorded',
+  SCANNED: 'suggestion.scan',
+});
+export const KZT_EVENT_PREFIX = 'suggestion.';
+
+/**
+ * Five rights. Every act is FIRST-PERSON and the doors are re-proved inside the
+ * actions: a suggestion is submitted by the acting seat's own identity (the
+ * synthetic workspace leader may never speak for a person); a triage counts only
+ * from a member of the computed route; a claim only from the named owner; a
+ * confirmation from the submitter or a route member and never the owner. The
+ * route itself is COMPUTED from the matrix joint-apex set over the submitter's
+ * active lines and is never accepted from the caller.
+ */
+export const KZT_RIGHTS = Object.freeze({
+  READ: 'read-suggestions',
+  DECLARE: 'declare-suggestion',
+  TRIAGE: 'triage-suggestion',
+  CLAIM: 'claim-suggestion',
+  CONFIRM: 'confirm-suggestion',
+});
+
+export const KZT_SETTING_KEYS = Object.freeze({
+  autoPropagate: 'suggestionAutoPropagate',
+});
+export const KZT_DEFAULTS = Object.freeze({ autoPropagate: true });
 
 export const KZT_LIMITS = Object.freeze({
   suggestions: 400,
   acts: 2400,
+  markers: 400,
   routeMin: 1,
   routeMax: 6,
   areaMin: 3,
@@ -100,4 +136,44 @@ export const KZT_SECTION_TITLES = Object.freeze({
   counts: 'State counts',
   refusals: 'Refused acts',
   method: 'Method & limits',
+});
+
+/* -------------------------------------------------------------- settings */
+
+/**
+ * Settings normalizer, declared in the leaf so `schema.js` can normalize the
+ * register's switch without importing the read model, and so the rule reads
+ * exactly the normalization the writer wrote.
+ */
+export function normalizeSuggestionSettings(raw) {
+  const s = raw && typeof raw === 'object' ? raw : {};
+  return {
+    suggestionAutoPropagate: s.suggestionAutoPropagate !== false,
+  };
+}
+
+/* ------------------------------------------------------------------- CSV */
+
+/**
+ * CSV scope #173 (ADR-0227). Aggregate and identity-free: one summary row, one
+ * coverage row, one row per derived state and one row per declared area with
+ * the two rates. No submitter, owner, route member, area text, problem or
+ * proposal wording crosses this boundary; cells below the privacy floor export
+ * BLANK with their reason, never zero. The area is exported under an opaque
+ * code, so the column carries no work-area name either.
+ */
+export const KZT_CSV_COLUMNS = Object.freeze([
+  'as_of', 'row_kind', 'key', 'state', 'suggestions',
+  'answered_within_window', 'implemented', 'answered_rate_bp', 'implemented_rate_bp',
+  'response_overdue', 'target_overdue', 'refused_acts', 'dropped_rows',
+  'blank_reason',
+]);
+
+export const KZT_CSV_DESCRIPTOR = Object.freeze({
+  key: KZT_CSV_SCOPE,
+  label: 'Improvement-suggestion ledger (aggregate)',
+  group: 'operations',
+  sensitive: true,
+  filenameSlug: 'improvement-suggestions',
+  description: 'One summary row, one coverage row, one row per derived state and one row per declared area (under an opaque code) with the answered-within-window and implemented rates in exact basis points. Every figure is an exact integer count over the whole record. No submitter, owner, route member, area name, problem or proposal text is exported; a cell below the privacy floor of three is blank with its reason, never zero.',
 });

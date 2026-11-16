@@ -8,7 +8,13 @@
  */
 
 import { dayKey } from '../time.js';
-import { KZT_ACT_KINDS, KZT_DECISIONS, KZT_LIMITS as L } from './suggestionRegistry.js';
+import {
+  KZT_ACT_KINDS,
+  KZT_DECISIONS,
+  KZT_LIMITS as L,
+  KZT_MARKER_KIND,
+  KZT_RULE_ID,
+} from './suggestionRegistry.js';
 
 const ID_RE = /^[A-Za-z0-9:_-]{1,120}$/;
 const RESERVED_ID = 'leader';
@@ -144,5 +150,30 @@ export function normalizeSuggestionActs(value, suggestions, warnings = []) {
     kept.push(act);
   }
   if (dropped) warnings.push(`Improvement-suggestion acts: refused ${dropped} unreadable, duplicate, orphaned, or over-cap row(s); no decision, claim or confirmation was repaired.`);
+  return kept;
+}
+
+/**
+ * Rule markers — the identity-free observations `RULE-KZT-01` writes when the
+ * record owes an ask and nobody on the reporting graph can be asked. A marker
+ * is append-only, keyed (so a scan never files the same observation twice) and
+ * carries no person id by construction. A malformed marker is dropped and
+ * counted; nothing is repaired.
+ */
+export function normalizeSuggestionMarkers(value, warnings = []) {
+  const list = Array.isArray(value) ? value : [];
+  const kept = [];
+  const seenKeys = new Set();
+  let dropped = 0;
+  for (const raw of list) {
+    if (kept.length >= L.markers || !isPlainObject(raw)) { dropped += 1; continue; }
+    const key = kztText(raw.key, 200);
+    const at = kztInstant(raw.at);
+    const detail = kztText(raw.detail, 300);
+    if (!key || seenKeys.has(key) || !at || detail.length < L.textMin) { dropped += 1; continue; }
+    seenKeys.add(key);
+    kept.push({ key, at, ruleId: kztText(raw.ruleId, 40) || KZT_RULE_ID, kind: kztText(raw.kind, 40) || KZT_MARKER_KIND, detail });
+  }
+  if (dropped) warnings.push(`Improvement-suggestion markers: refused ${dropped} unreadable, duplicate, or over-cap row(s); no observation was repaired.`);
   return kept;
 }

@@ -138,7 +138,9 @@ const GOOD_PERMIT = (key, over = {}) => ({
  */
 
 test('the register is registered end to end: schema v145, two collections, the spine, the gateway and CSV #136', () => {
-  assert.equal(SCHEMA_VERSION, 179);
+  // The pin is DERIVED, not a head count: the contract is that the pause-permit
+  // register survives in the CURRENT schema, not that the schema stands still.
+  assert.ok(SCHEMA_VERSION >= 179, `the pause-permit register (schema v179) is part of the current schema v${SCHEMA_VERSION}`);
   assert.equal(COLLECTIONS.includes('pausePermits'), true);
   assert.equal(COLLECTIONS.includes('pausePermitMarkers'), true);
 
@@ -159,7 +161,9 @@ test('the register is registered end to end: schema v145, two collections, the s
   assert.ok(SAFE_READS.has('pausePermitReport'));
   assert.equal(ACTION_RIGHTS['permit-automation-pause'].minRank, 4, 'director+ may silence a workspace-wide control');
 
-  assert.equal(CSV_EXPORTS.length, 166);
+  // Derived, not a head count: new registers add scopes (this suite once pinned
+  // 166 and every CSV addition broke a contract that was never this register's).
+  assert.ok(CSV_EXPORTS.length >= 166, `${CSV_EXPORTS.length} CSV scopes are registered`);
   const scope = CSV_EXPORTS.find((e) => e.key === 'automation-pause-permits');
   assert.ok(scope, 'CSV #136 is registered');
   assert.equal(scope.sensitive, false);
@@ -528,8 +532,13 @@ test('migration 144 → 145 adds two empty collections and four conventions, and
     delegations: [],
   };
   const { raw: migrated, applied } = migrate(raw);
-  assert.deepEqual(applied, ['144 → 145', '145 → 146', '146 → 147', '147 → 148', '148 → 149', '149 → 150', '150 → 151', '151 → 152', '152 → 153', '153 → 154', '154 → 155', '155 → 156', '156 → 157', '157 → 158', '158 → 159', '159 → 160', '160 → 161', '161 → 162', '162 → 163', '163 → 164', '164 → 165', '165 → 166', '166 → 167', '167 → 168', '168 → 169', '169 → 170', '170 → 171', '171 → 172', '172 → 173', '173 → 174', '174 → 175', '175 → 176', '176 → 177', '177 → 178', '178 → 179']);
-  assert.equal(migrated.schemaVersion, 179);
+  // The label list is DERIVED from the current head, not pinned at a head count:
+  // the contract is that the chain runs 144 → the current schema, one label per
+  // step, with no gap and no skip — not that the schema stands still forever.
+  assert.equal(applied[0], '144 → 145');
+  assert.equal(applied.length, SCHEMA_VERSION - 144, `every migration from 144 to v${SCHEMA_VERSION} applies, one per step`);
+  for (let i = 0; i < applied.length; i += 1) assert.equal(applied[i], `${144 + i} → ${145 + i}`);
+  assert.equal(migrated.schemaVersion, SCHEMA_VERSION);
   assert.deepEqual(migrated.pausePermits, []);
   assert.deepEqual(migrated.pausePermitMarkers, []);
   // A workspace already running with a control off keeps it off: the pause now
@@ -542,7 +551,7 @@ test('migration 144 → 145 adds two empty collections and four conventions, and
   assert.equal(migrated.settings.pausePermitDefaultDays, 365);
 
   const loaded = normalizeState(migrated, { now: NOW });
-  assert.equal(loaded.state.schemaVersion, 179);
+  assert.equal(loaded.state.schemaVersion, SCHEMA_VERSION);
   assert.deepEqual(loaded.state.pausePermits, []);
   assert.equal(loaded.state.settings.loadAutoPropagate, false);
 });

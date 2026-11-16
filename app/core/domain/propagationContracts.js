@@ -158,6 +158,7 @@ import { workStopRule } from './workStopRules.js';
 import { mgrHandoverRule } from './mgrHandoverRules.js';
 import { workNightRule } from './workNightRules.js';
 import { riskConcentrationRule } from './riskConcentrationRules.js';
+import { suggestionRule } from './suggestionRules.js';
 import { sealRule } from './sealRules.js';
 // ADR-0092: the Differencing Defender declares its contract like every other rule.
 import { differencingRule } from './differencingRules.js';
@@ -1273,6 +1274,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'synergyRules.js',
     purpose: 'RULE-SYN-01: reads the Deal Thesis & Synergy Realization Register (`buildDealSynergy`, ADR-0216) with the whole-workspace view on deal declarations, promise declarations and withdrawals, readings and their withdrawals, one-off costs, convention changes and explicit `synergy.scan` scans — and on any other commit, because a phase comes due and a verification goes stale with the calendar. TWO conditions, filed at most once per deterministic `syn1:…` signature and bounded at 4 per commit with the remainder counted: `unverified` — a phase of a promise’s ladder has come due and no VERIFIED reading exists — and `verified-stale` — the newest verified reading is older than the declared staleness window. Both asks go to the promise’s OWNER: not to their manager (who was not given the promise), not to a verifier (there may be none) and never to a deal team. A promise whose owner has left the roster, and a reading whose verifier is no longer above the owner on any line, write ONE identity-free `synergyMarkers` observation and ask nobody. The ask text is deliberately opaque — no deal, no lever, no amount, no date — because a delegation is readable above the owner; the opaque signature lives only in the typed `issues-obligation` link. Asks self-close when the condition clears or the owner moves. It never records a reading, verifies anything itself, changes a promise or a ladder, withdraws a row, judges whether a deal was worth doing or rates a person; pause-governed on every path (`synergyAutoPropagate`), including the explicit scan.',
     writes: ['delegations', 'links', 'synergyMarkers'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: suggestionRule,
+    module: 'suggestionRules.js',
+    purpose: 'RULE-KZT-01: reads the Frontline Improvement-Suggestion Ledger (`buildSuggestionLedger`, ADR-0227) with the whole-workspace view — and on any commit, because a response window and a target day pass with the calendar — and files at most one opaque `act-inform` delegation per (deterministic `kzt1:…` signature, addressee), bounded at 4 per commit with the remainder counted. TWO conditions: `response-overdue` — a suggestion past its declared response-by instant that the route has not settled — asked of each UNDECIDED member of the COMPUTED route (the joint-apex seat(s) above every line of the submitter, resolved from the reporting graph at filing time and re-read here only to decide who can still be asked) — and `target-overdue` — an accepted suggestion past its target day with no effect claim — asked of the named owner alone. A route member or owner the reporting graph cannot name writes ONE identity-free `suggestionMarkers` observation and substitutes nobody. The ask text is deliberately opaque — no area, no problem text, no proposal, no submitter — because a delegation is readable above the addressee; the signature lives only in the typed `issues-obligation` link. Asks self-close when the condition clears or the addressee moves, and respect human closures/returns. It never triages, claims or confirms anything, never edits a suggestion or an act, never declines on overdue, never closes by the passage of time, never asks the owner to confirm their own effect and never rates a person from backlog or age; pause-governed on every path (`suggestionAutoPropagate`), including the explicit scan.',
+    writes: ['delegations', 'links', 'suggestionMarkers'],
     emits: [],
     scansWorkspace: true,
   },
