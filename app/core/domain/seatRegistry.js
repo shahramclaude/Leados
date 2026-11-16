@@ -346,6 +346,19 @@ export const RECORD_POLICIES = Object.freeze({
   // holds the named people, and withholds the register-wide rate whole whenever
   // any row is hidden. The rule's markers are identity-free by construction.
   undertakings: { classKey: 'enterprise', detailCeiling: 0, reportOnly: true, label: 'Undertakings — counterparty, instrument, scope, due day, obligation lines (report only; state, closure and lapse re-derived on read)', route: '#/undertakings' },
+  // ADR-0235 (Schema v190): an information request names a REQUESTER OUTSIDE the
+  // organisation, the instrument they asked under, the material they demanded and
+  // the day they set. Which lines produced what, who reviewed it, what was
+  // withheld under privilege and what was released are the entity's own records
+  // about its response work — the material's contents are not held here, so a
+  // `full` read releases no document. But a named requester, a named scope and a
+  // named review of one line tells a reader which relationship is under examination
+  // and which people are carrying it, which is the same exposure ADR-0234 closed,
+  // one level earlier in the life of a demand. `reportOnly` is therefore the whole
+  // class ceiling, at every altitude.
+  informationRequests: { classKey: 'enterprise', detailCeiling: 0, reportOnly: true, label: 'Information requests — requester, instrument, requested scope, receipt day, declared clock (report only; state, lapse, review coverage and privilege position re-derived on read)', route: '#/information-requests' },
+  informationRequestActs: { classKey: 'enterprise', detailCeiling: 0, reportOnly: true, label: 'Append-only line assignments, productions, independent reviews, privilege rulings, releases, requester verdicts and clock moves (report only)', route: '#/information-requests' },
+  informationRequestMarkers: { classKey: 'unit', detailCeiling: 0, reportOnly: true, label: 'Information-request no-ask observations — a reviewer or answerer the graph cannot name (identity-free)', route: '#/information-requests' },
   undertakingActs: { classKey: 'enterprise', detailCeiling: 0, reportOnly: true, label: 'Append-only assignments, deliveries, independent tests, counterparty reports, acknowledgements and extensions (report only)', route: '#/undertakings' },
   undertakingMarkers: { classKey: 'unit', detailCeiling: 0, reportOnly: true, label: 'Undertaking no-ask observations — an executive or line holder the graph cannot name (identity-free)', route: '#/undertakings' },
   // ADR-0216: a deal thesis, its promises, their readings and one-off costs are
@@ -1325,6 +1338,21 @@ export const ACTION_RIGHTS = Object.freeze({
   'deliver-undertaking-line': { minRank: 1, maxRank: 5, label: 'Assert the deliverable on a line you hold, in your own name, with dated evidence — nobody asserts on somebody else’s line' },
   'verify-undertaking-line': { minRank: 1, maxRank: 5, label: 'Independently confirm or reject a line’s deliverable — only from a seat strictly above the line’s holder, never as the holder and never below them' },
   'report-undertaking-closure': { minRank: 4, maxRank: 5, label: 'Record that the counterparty was told in writing that the promise is met, record their acknowledgement, and move a due day — only once every line is independently confirmed' },
+  // ADR-0235 (Schema v190). Six rights, and the shape is the point: RECORDING a
+  // demand, STAFFING its lines and RELEASING to the authority are rank 3+ acts —
+  // the director who signs the covering letter commits the enterprise's time to an
+  // outside party; PRODUCING and REVIEWING are open to rank 1+, because the
+  // reviewer of a production is chosen by CONFLICT, not by rank — a floor of
+  // standing over the least senior producer is enforced in the action, and an
+  // independent review from a seat that happens to be junior to a producer's own
+  // manager is worth having, not worth forbidding. RELEASE is rank 4+ again: it is
+  // the act that puts a document in a supervisor's hands.
+  'read-information-requests': { minRank: 1, maxRank: 5, label: 'Read the information-request register within your grant — the demands you recorded, the lines you produce, the productions you reviewed, and the span that holds them' },
+  'receive-information-request': { minRank: 3, maxRank: 5, label: 'Record that an authority has demanded records, and scan the register — the requester, instrument, scope and reply clock are declared, never inferred' },
+  'assign-information-request-line': { minRank: 3, maxRank: 5, label: 'Name a producer, a subject and a day on one production line of a demand you recorded — the producer is named, never inferred' },
+  'produce-information-request-line': { minRank: 1, maxRank: 5, label: 'Certify your line’s production and any privilege claim, in your own name, with a counted basis — nobody certifies a line they do not hold' },
+  'review-information-request-production': { minRank: 1, maxRank: 5, label: 'Independently review a line’s production and rule on its privilege claim — only from a seat that is party to nothing on the request and holds standing over at least one producer' },
+  'release-information-request-production': { minRank: 3, maxRank: 5, label: 'Release the production to the requester, record their verdict, and move a reply day — only once every line is independently reviewed' },
 });
 
 export function actionVerdict(action, seat) {
