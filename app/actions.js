@@ -146,6 +146,7 @@ import { createShiftHandoverActions } from './core/domain/shiftHandoverActions.j
 import { createSuggestionActions } from './core/domain/suggestionActions.js';
 import { createAssuranceFindingActions } from './core/domain/assuranceFindingActions.js';
 import { createProbationGateActions } from './core/domain/probationGateActions.js';
+import { createUndertakingActions } from './core/domain/undertakingActions.js';
 import { createDomainSenseActions } from './core/domain/domainSenseActions.js';
 // ADR-0224: a human-declared stop, a work-lead mitigation, every frozen
 // Director+ joint-apex assessment, and a separate affected-operator key. This
@@ -20414,6 +20415,14 @@ export function createApi(store, options = {}) {
   // ADR-0233: the Probation Confirmation Gate Register — the dated, evidence
   // duty and the decision a probation window owes, on every declared line.
   Object.assign(api, createProbationGateActions(store, { now: clock, idFactory: id }));
+  // ADR-0234: the Regulatory Undertaking & Outward-Commitment Closure Register —
+  // a promise to an outside party is declared by the executive whose name the
+  // counterparty holds, its obligation lines are held and delivered by named
+  // people, each deliverable is independently tested from strictly above its
+  // holder, and the promise closes only when every line is confirmed AND the
+  // counterparty has been told in writing. Every state, flag, rate and lapse is
+  // derived on read.
+  Object.assign(api, createUndertakingActions(store, { now: clock, idFactory: id }));
   // ADR-0228: the Decision-Domain Sensing Register — declare a cross-line
   // panel's sensed domain, commit the owner's mode, read the fit.
   Object.assign(api, createDomainSenseActions(store, { now: clock, idFactory: id }));

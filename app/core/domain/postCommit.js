@@ -210,6 +210,7 @@ import { shiftHandoverRule } from './shiftHandoverRules.js';
 import { suggestionRule } from './suggestionRules.js';
 import { assuranceFindingRule } from './assuranceFindingRules.js';
 import { probationGateRule } from './probationGateRules.js';
+import { undertakingRule } from './undertakingRules.js';
 import { workStopRule } from './workStopRules.js';
 import { mgrHandoverRule } from './mgrHandoverRules.js';
 import { workNightRule } from './workNightRules.js';
@@ -1431,6 +1432,17 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // explicit scan. Registered immediately before `speakUpRule`, `seatRule`
   // and `sealRule`.
   probationGateRule,
+  // ADR-0234 (Schema v189): the Regulatory Undertaking & Outward-Commitment
+  // Closure Register. FOUR conditions — an asserted deliverable nobody above
+  // the holder has tested, a fully confirmed promise the counterparty has not
+  // been told about, a due day that has passed with no report, and a report with
+  // no counterparty reply — each asked of the seat independence permits: the
+  // joint apex above the holder for a test, and the accountable executive for a
+  // report. Where the graph names nobody who can be asked, ONE identity-free
+  // `undertakingMarkers` observation is written and nothing is substituted.
+  // Pause-governed on every path (`undertakingAutoPropagate`), including an
+  // explicit scan.
+  undertakingRule,
   // ADR-0232: the Assurance Finding & Remediation Register (`RULE-AFR-01`).
   // Reads the finished register (`buildAssuranceFindings`) with the
   // whole-workspace view — and on any commit, because a remediation day and a

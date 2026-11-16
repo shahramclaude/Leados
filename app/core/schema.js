@@ -64,6 +64,19 @@ import {
   normalizeProbationMarkers,
 } from './domain/probationGateSchema.js';
 import { normalizeProbationSettings } from './domain/probationRegistry.js';
+// ADR-0234 (Schema v189): the Regulatory Undertaking & Outward-Commitment
+// Closure Register. Fail-closed normalizers for declared undertakings — a
+// counterparty, instrument, scope, due day and every obligation line's
+// deliverable and holder — the six append-only acts (assign, deliver, verify,
+// report, notify, extend) and the identity-free observations RULE-UDT-01
+// writes when nobody can be asked. No state, verdict, report or acknowledgement
+// is stored: each is re-derived on read.
+import {
+  normalizeUndertakingActs,
+  normalizeUndertakingMarkers,
+  normalizeUndertakings,
+} from './domain/undertakingSchema.js';
+import { normalizeUndertakingSettings } from './domain/undertakingRegistry.js';
 // ADR-0182 (Schema v145): the Automation Pause Permit Register. Fail-closed
 // normalizers for dated permits and RULE-PMP-01's marker ledger.
 import { normalizePausePermitMarkers, normalizePausePermits, normalizePausePermitSettings } from './domain/pausePermitSchema.js';
@@ -1318,7 +1331,7 @@ export {
 // notification is stored; each is re-derived on read, so a hand-edited file
 // cannot carry a decision nobody made, an extension the instrument did not
 // allow, or a window that defaulted itself.
-export const SCHEMA_VERSION = 188;
+export const SCHEMA_VERSION = 189;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -3842,6 +3855,16 @@ export const COLLECTIONS = [
   'probationGates',
   'probationActs',
   'probationMarkers',
+  // ADR-0234 (Schema v189): the Regulatory Undertaking & Outward-Commitment
+  // Closure Register. Declared promises to an outside party, the append-only
+  // acts that move them, and the identity-free observations RULE-UDT-01 writes.
+  // No state, verdict, counterparty report or acknowledgement is stored: each is
+  // re-derived on read from the dated acts and the live reporting graph, so a
+  // hand-edited file cannot carry a promise the counterparty accepted or a
+  // deliverable nobody tested.
+  'undertakings',
+  'undertakingActs',
+  'undertakingMarkers',
 ];
 
 /** Stable empty state. `now` is an ISO string so the result is a pure value. */
@@ -9433,6 +9456,13 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.probationGates = normalizeProbationGates(raw.probationGates, warnings);
   state.probationActs = normalizeProbationActs(raw.probationActs, state.probationGates, warnings);
   state.probationMarkers = normalizeProbationMarkers(raw.probationMarkers, warnings);
+  // ADR-0234 (Schema v189): fail-closed undertakings and acts. A promise is
+  // closed only by a report that every line's independent test supports; no act
+  // is repaired into one it is not, and no holder, deliverable, verdict, report
+  // or acknowledgement is invented.
+  state.undertakings = normalizeUndertakings(raw.undertakings, warnings);
+  state.undertakingActs = normalizeUndertakingActs(raw.undertakingActs, state.undertakings, warnings);
+  state.undertakingMarkers = normalizeUndertakingMarkers(raw.undertakingMarkers, warnings);
   // ADR-0220: a plan, measure, award or recovery act that cannot be read exactly
   // is DROPPED with a counted warning. A reading is resolved AFTER its measures,
   // because the measure's unit decides which field the figure belongs in; a
@@ -10330,6 +10360,21 @@ export const MIGRATIONS = {
     probationActs: Array.isArray(v187.probationActs) ? v187.probationActs : [],
     probationMarkers: Array.isArray(v187.probationMarkers) ? v187.probationMarkers : [],
     settings: { ...(v187.settings || {}), ...normalizeProbationSettings(v187.settings || {}) },
+  }),
+  // 188 → 189: ADR-0234 adds THREE EMPTY ledgers (`undertakings`,
+  // `undertakingActs`, `undertakingMarkers`) and the undertaking rule's pause.
+  // No undertaking, counterparty, instrument, scope, holder, deliverable or due
+  // day is inferred from an assurance finding, a risk statement, a board memo, a
+  // contract record or a jurisdiction database: a promise to an outside party is
+  // a dated human declaration, and manufacturing one at upgrade time would put a
+  // duty on the record that nobody gave.
+  188: (v188) => ({
+    ...v188,
+    schemaVersion: 189,
+    undertakings: Array.isArray(v188.undertakings) ? v188.undertakings : [],
+    undertakingActs: Array.isArray(v188.undertakingActs) ? v188.undertakingActs : [],
+    undertakingMarkers: Array.isArray(v188.undertakingMarkers) ? v188.undertakingMarkers : [],
+    settings: { ...(v188.settings || {}), ...normalizeUndertakingSettings(v188.settings || {}) },
   }),
   // 183 → 184: ADR-0231 adds SEVEN EMPTY ledgers (`ibpCycles`, `ibpDemandRows`,
   // `ibpCapacityRows`, `ibpOptions`, `ibpDecisions`, `ibpGrades`, `ibpMarkers`)

@@ -338,6 +338,16 @@ export const RECORD_POLICIES = Object.freeze({
   probationGates: { classKey: 'unit', detailCeiling: 0, reportOnly: true, label: 'Probation gates — joiner, declared window, instrument terms, lines (report only; state and lapse re-derived on read)', route: '#/probation' },
   probationActs: { classKey: 'unit', detailCeiling: 0, reportOnly: true, label: 'Append-only evidence asks, submissions, extensions, decisions and notifications (report only)', route: '#/probation' },
   probationMarkers: { classKey: 'unit', detailCeiling: 0, reportOnly: true, label: 'Probation no-ask observations — a confirming manager or line holder the graph cannot name (identity-free)', route: '#/probation' },
+  // ADR-0234: an undertaking names a COUNTERPARTY OUTSIDE the organisation, a
+  // declared executive, the holders of every obligation line and the seats that
+  // tested and reported it, so ALL rows are report-only (`detailCeiling: 0`) —
+  // a promise to a regulator is never handed to the generic projection.
+  // `buildUndertakingReport` discloses rows to parties and to the span that
+  // holds the named people, and withholds the register-wide rate whole whenever
+  // any row is hidden. The rule's markers are identity-free by construction.
+  undertakings: { classKey: 'enterprise', detailCeiling: 0, reportOnly: true, label: 'Undertakings — counterparty, instrument, scope, due day, obligation lines (report only; state, closure and lapse re-derived on read)', route: '#/undertakings' },
+  undertakingActs: { classKey: 'enterprise', detailCeiling: 0, reportOnly: true, label: 'Append-only assignments, deliveries, independent tests, counterparty reports, acknowledgements and extensions (report only)', route: '#/undertakings' },
+  undertakingMarkers: { classKey: 'unit', detailCeiling: 0, reportOnly: true, label: 'Undertaking no-ask observations — an executive or line holder the graph cannot name (identity-free)', route: '#/undertakings' },
   // ADR-0216: a deal thesis, its promises, their readings and one-off costs are
   // ENTERPRISE material — a synergy belongs to the whole deal, not to one line's
   // reading of it, and below the executive altitude there is no honest per-line
@@ -1303,6 +1313,18 @@ export const ACTION_RIGHTS = Object.freeze({
   'ask-probation-evidence': { minRank: 1, maxRank: 5, label: 'Put the evidence duty to the holder of a declared line of your joiner, by a day' },
   'submit-probation-evidence': { minRank: 1, maxRank: 5, label: 'Record dated evidence on a line of the joiner — the home line’s is the confirming manager’s own act, and a matrix line’s is its own holder’s' },
   'decide-probation-gate': { minRank: 1, maxRank: 5, label: 'Record the final decision (confirm or end) on a gate you opened, extend the window where the instrument allows it, and record the written notification — nobody else decides a joiner’s gate' },
+  // ADR-0234: the Undertaking & Outward-Commitment Closure Register. A promise
+  // to an outside party is declared and reported by an executive seat, because
+  // that is the seat whose name the counterparty holds. The line acts are
+  // narrowed inside the action to the named holder (deliver) and to a seat
+  // strictly above that holder (verify), so the right window is wide and the
+  // action is the door.
+  'read-undertakings': { minRank: 1, maxRank: 5, label: 'Read the undertaking register within your grant — the promises you declared, the lines you hold, the deliveries you tested, and the span that holds them' },
+  'declare-undertaking': { minRank: 4, maxRank: 5, label: 'Record a promise the entity has given to an outside party, or scan the register — the counterparty, instrument, scope and due day are declared, never inferred' },
+  'assign-undertaking-line': { minRank: 4, maxRank: 5, label: 'Name a holder, a deliverable and a day on one obligation line of an undertaking you declared — the holder is named, never inferred' },
+  'deliver-undertaking-line': { minRank: 1, maxRank: 5, label: 'Assert the deliverable on a line you hold, in your own name, with dated evidence — nobody asserts on somebody else’s line' },
+  'verify-undertaking-line': { minRank: 1, maxRank: 5, label: 'Independently confirm or reject a line’s deliverable — only from a seat strictly above the line’s holder, never as the holder and never below them' },
+  'report-undertaking-closure': { minRank: 4, maxRank: 5, label: 'Record that the counterparty was told in writing that the promise is met, record their acknowledgement, and move a due day — only once every line is independently confirmed' },
 });
 
 export function actionVerdict(action, seat) {
