@@ -96,6 +96,14 @@ export function normalizeSuggestions(value, warnings = []) {
   return kept;
 }
 
+/**
+ * An act resolves only through its own kind's raw timestamp key — `decidedAt`,
+ * `claimedAt` or `confirmedAt`, never a bare `at`. The stored row is the row
+ * this loader returns, so the returned row CARRIES that key through beside the
+ * uniform `at` read timestamp: loading a stored row again must keep it, not
+ * drop it. A loader that refused its own output would silently erase a real
+ * triage, claim or confirmation on the next reload.
+ */
 function normalizeAct(raw) {
   const id = kztId(raw.id);
   const suggestionId = kztId(raw.suggestionId);
@@ -113,22 +121,22 @@ function normalizeAct(raw) {
       if (!ownerId || !targetDay) return null;
       const spanDays = (Date.parse(targetDay) - Date.parse(decidedAt.slice(0, 10))) / DAY_MS;
       if (!(spanDays >= 0 && spanDays <= L.targetMaxDays)) return null;
-      return { id, suggestionId, actorId, kind, decision, reason, ownerId, targetDay, at: decidedAt };
+      return { id, suggestionId, actorId, kind, decision, reason, ownerId, targetDay, decidedAt, at: decidedAt };
     }
     if (raw.ownerId !== undefined && raw.ownerId !== null) return null;
     if (raw.targetDay !== undefined && raw.targetDay !== null) return null;
-    return { id, suggestionId, actorId, kind, decision, reason, ownerId: null, targetDay: null, at: decidedAt };
+    return { id, suggestionId, actorId, kind, decision, reason, ownerId: null, targetDay: null, decidedAt, at: decidedAt };
   }
   if (kind === 'claim') {
     const effectText = kztText(raw.effectText, L.textMax);
     const claimedAt = kztInstant(raw.claimedAt);
     if (effectText.length < L.textMin || !claimedAt) return null;
-    return { id, suggestionId, actorId, kind, effectText, at: claimedAt };
+    return { id, suggestionId, actorId, kind, effectText, claimedAt, at: claimedAt };
   }
   const note = kztText(raw.note, L.textMax);
   const confirmedAt = kztInstant(raw.confirmedAt);
   if (note.length < L.textMin || !confirmedAt) return null;
-  return { id, suggestionId, actorId, kind, note, at: confirmedAt };
+  return { id, suggestionId, actorId, kind, note, confirmedAt, at: confirmedAt };
 }
 
 /**
