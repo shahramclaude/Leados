@@ -51,6 +51,7 @@
 
 import { dayKey } from '../time.js';
 import { RA_LIMITS as L, raStatementKey } from './riskAppetiteRegistry.js';
+import { RC_CSV_COLUMNS, RC_CSV_FLOOR } from './riskConcentrationRegistry.js';
 import { normalizeRiskAppetiteStatements, normalizeRiskDeclarations } from './riskAppetiteSchema.js';
 import { RA_MAX_CENTS } from './riskAppetiteMath.js';
 import {
@@ -196,7 +197,10 @@ export function buildRiskConcentration(state, { now = new Date(), seat = null } 
   const undeclaredN = openCases.filter((row) => !declarationState.live.has(row.id)).length;
 
   const hiddenN = population.filter((row) => declarationGrant(seat, row) !== 'full').length;
-  if (hiddenN > 0) return withheld({ asOf, seat, hiddenN, warnings });
+  // A null seat is the enterprise read: every figure is computed over the
+  // whole population and nothing is withheld — a real seat that cannot see
+  // every live declared risk gets the withholding branch below.
+  if (seat && hiddenN > 0) return withheld({ asOf, seat, hiddenN, warnings });
 
   /* ------------------------------------------------------- the dependencies */
   const allDeps = Array.isArray(state?.dependencies)
@@ -394,4 +398,81 @@ export function buildRiskConcentration(state, { now = new Date(), seat = null } 
     warnings,
     method: RC_METHOD,
   };
+}
+
+/**
+ * CSV scope #169: aggregate, identity-free rows from ONE reader report. Every
+ * figure here is the report's own figure — the export cannot print anything
+ * the reading itself would not print. A dependency exports under an opaque
+ * sequential code, and counts below the floor of three export blank.
+ */
+export function riskConcentrationCsvRows(report) {
+  if (!report || !report.totals) return [];
+  const t = report.totals;
+  const asOf = report.asOf || '';
+  const rows = [];
+
+  const summary = {
+    as_of: asOf,
+    row_kind: 'summary',
+    key: 'all',
+    open_risk_cases_n: String(t.openRiskCasesN),
+    declared_risks_n: String(t.declaredRisksN),
+    undeclared_n: String(t.undeclaredN),
+    shared_dependencies_n: String(t.sharedDependenciesN),
+    shared_rows_n: String(t.sharedRowsN),
+    would_exceed_n: String(t.wouldExceedN),
+    within_ceiling_n: String(t.withinCeilingN),
+    no_ceiling_n: String(t.noCeilingN),
+    partition_reconciles: String(Boolean(t.partitionReconciles)),
+    whole_population_measured: String(Boolean(t.wholePopulationMeasured)),
+    blank_reason: '',
+  };
+  rows.push(summary);
+
+  const coverage = {
+    as_of: asOf,
+    row_kind: 'coverage',
+    key: 'claims',
+    undeclared_n: String(t.undeclaredN),
+    unlinked_n: String(t.unlinkedN),
+    only_retired_n: String(t.onlyRetiredN),
+    unresolved_links_n: String(t.unresolvedLinkN),
+    truncated_n: String(t.truncatedN),
+    partition_reconciles: String(Boolean(t.partitionReconciles)),
+    whole_population_measured: String(Boolean(t.wholePopulationMeasured)),
+    blank_reason: '',
+  };
+  rows.push(coverage);
+
+  let suppressedN = 0;
+  for (const [index, row] of report.sharedRows.entries()) {
+    const risksBelowFloor = Number.isInteger(row.riskN) && row.riskN > 0 && row.riskN < RC_CSV_FLOOR;
+    const populationBelowFloor = Number.isInteger(row.domainPopulationN) && row.domainPopulationN > 0 && row.domainPopulationN < RC_CSV_FLOOR;
+    const reasons = [];
+    if (risksBelowFloor || populationBelowFloor) suppressedN += 1;
+    if (risksBelowFloor || populationBelowFloor) reasons.push('small_cell_suppressed');
+    if (row.retainedCents === null) reasons.push('retained_above_representable_range');
+    if (row.shareBp === null) reasons.push('share_of_undefined_population');
+    if (row.toleranceCents === null) reasons.push('no_ceiling_declared');
+    rows.push({
+      as_of: asOf,
+      row_kind: 'shared-row',
+      key: `D${String(index + 1).padStart(2, '0')}`,
+      domain: row.domain,
+      currency: row.currency,
+      dependency_code: `D${String(index + 1).padStart(2, '0')}`,
+      risks_n: risksBelowFloor ? '' : String(row.riskN),
+      domain_population_n: populationBelowFloor ? '' : String(row.domainPopulationN),
+      retained_together_cents: row.retainedCents === null ? '' : String(row.retainedCents),
+      share_of_domain_bp: row.shareBp === null ? '' : String(row.shareBp),
+      declared_ceiling_cents: row.toleranceCents === null ? '' : String(row.toleranceCents),
+      verdict: row.verdict,
+      blank_reason: reasons.join('; '),
+    });
+  }
+
+  if (suppressedN) summary.blank_reason = `small_cell_suppressed(${suppressedN})`;
+
+  return rows.map((row) => Object.fromEntries(RC_CSV_COLUMNS.map((key) => [key, row[key] ?? ''])));
 }

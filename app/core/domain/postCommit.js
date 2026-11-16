@@ -207,6 +207,11 @@ import { shiftHandoverRule } from './shiftHandoverRules.js';
 import { workStopRule } from './workStopRules.js';
 import { mgrHandoverRule } from './mgrHandoverRules.js';
 import { workNightRule } from './workNightRules.js';
+// ADR-0226: the shared-dependency concentration reading's automation rule
+// (RULE-RCC-01): one ask per shared dependency whose combined declared
+// retention would exceed the domain and currency ceiling, to the joint seat
+// above every carrying line.
+import { riskConcentrationRule } from './riskConcentrationRules.js';
 import { incentiveRule } from './incentiveRules.js';
 import { dutyMeansRule } from './dutyMeansRules.js';
 import { portfolioReviewRule } from './portfolioReviewRules.js';
@@ -1314,6 +1319,32 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // whose break record is missing. Registered immediately before `seatRule`
   // and `sealRule`.
   workNightRule,
+  // ADR-0226: RULE-RCC-01 — shared-dependency concentration ceiling. Reads the
+  // finished concentration reading (`buildRiskConcentration`, ADR-0226) with
+  // the whole-workspace view on declaration and link changes, dependency
+  // retirement and reactivation, statement and ceiling changes and explicit
+  // `riskConcentration.scan` scans — and on any other commit, because a ceiling
+  // is crossed or withdrawn by the calendar as much as by a write. ONE
+  // condition, filed at most once per deterministic `rcc1:…` signature per
+  // addressee and bounded at 4 per commit with the remainder counted:
+  // `concentration-would-exceed` — a shared dependency row whose exact
+  // combined retention is over its declared ceiling. The ask goes to the
+  // lowest seat above EVERY line carrying the risks in the row
+  // (`matrixJointApex` over the managers of every carrying line), never to one
+  // line's manager on another's behalf and never to a risk owner; a genuine
+  // diamond tie files one ask per joint apex, and a graph that cannot name such
+  // a seat writes ONE identity-free `riskConcentrationMarkers` observation and
+  // asks nobody. The ask text is deliberately opaque — no dependency, no
+  // domain, no amount, no verdict — because a delegation is readable above the
+  // addressee; the opaque signature lives only in the typed
+  // `issues-obligation` link. Asks carry typed `issues-obligation` provenance
+  // and close themselves when the condition clears or the addressee moves. It
+  // never declares, amends or retires a statement or declaration, never
+  // converts or pools a currency, never estimates a correlation, never moves a
+  // risk or a dependency and never rates a person; pause-governed on every
+  // path (`riskConcentrationAutoPropagate`), including the explicit scan.
+  // Registered immediately before `seatRule` and `sealRule`.
+  riskConcentrationRule,
   // Registered immediately before `seatRule` and `sealRule`.
   speakUpRule,
   // ADR-0076: the Operating Seat (vertical roll-up + enforced boundaries).

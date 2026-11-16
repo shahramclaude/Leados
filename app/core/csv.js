@@ -258,6 +258,8 @@ import { INVESTMENT_CASE_CSV_COLUMNS, INVESTMENT_CASE_CSV_DESCRIPTOR } from './d
 // note. A figure that cannot be claimed exports BLANK with its reason.
 import { buildWorkRest, workRestCsvRows } from './domain/workRest.js';
 import { buildWorkNight, workNightCsvRows } from './domain/workNight.js';
+import { buildRiskConcentration, riskConcentrationCsvRows } from './domain/riskConcentration.js';
+import { RC_CSV_COLUMNS, RC_CSV_DESCRIPTOR, RC_CSV_SCOPE } from './domain/riskConcentrationRegistry.js';
 import { WORK_REST_CSV_COLUMNS, WORK_REST_CSV_DESCRIPTOR } from './domain/workRestRegistry.js';
 import { WORK_NIGHT_CSV_COLUMNS, WORK_NIGHT_CSV_DESCRIPTOR } from './domain/workNightRegistry.js';
 import { buildConflictRecusal, conflictRecusalCsvRows } from './domain/conflictRecusal.js';
@@ -1572,6 +1574,13 @@ export const CSV_EXPORTS = [
   // No manager, successor, governor, role reference or act text crosses this
   // boundary.
   MHH_CSV_DESCRIPTOR,
+  // #169 (ADR-0226): shared-dependency risk concentration — aggregate and
+  // identity-free. One summary row, one coverage-claims row and one row per
+  // shared dependency under an opaque code; no person, case, dependency name
+  // or note crosses this boundary; counts below the floor of three export
+  // blank with their reason, never zero. (CSV #168 is night-work-breaks,
+  // shipped in the same ADR-0226 session.)
+  RC_CSV_DESCRIPTOR,
 ];
 
 function personLookup(state) {
@@ -6896,6 +6905,18 @@ export function buildScopeTable(state, scope, now) {
       return {
         columns: MHH_CSV_COLUMNS.map((key) => ({ key, header: key })),
         rows: mgrHandoverCsvRows(report),
+      };
+    }
+    case RC_CSV_SCOPE: {
+      // CSV scope #169 (ADR-0226, Schema v181 unchanged). Built from the SAME
+      // reader the `#/risk-appetite?view=shared` panel renders, with no seat:
+      // every figure is an aggregate over the whole record, so no identity is
+      // reachable from this export. CSV #168 is night-work-breaks, shipped in
+      // the same ADR-0226 session.
+      const report = buildRiskConcentration(state, { now, settings: state.settings || {}, seat: null });
+      return {
+        columns: RC_CSV_COLUMNS.map((key) => ({ key, header: key })),
+        rows: riskConcentrationCsvRows(report),
       };
     }
     case 'earned-value-delivery': {

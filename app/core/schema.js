@@ -1924,6 +1924,10 @@ export const DEFAULT_SETTINGS = Object.freeze({
   portfolioReviewIntervalDays: 14,
   portfolioCarryCostThreshold: 0,
   portfolioAutoPropagate: true,
+  // ADR-0226: the shared-dependency concentration rule's switch. Declared in
+  // the persistence vocabulary so updateSettings can move it, and defaulted ON
+  // so a switch that hides a would-exceed verdict is never the silent default.
+  riskConcentrationAutoPropagate: true,
   // Schema v56: Leader Probability Calibration conventions. `lcalMinSamples`
   // is the count below which only counts are shown; `lcalVerdictSamples` is
   // the floor for a verdict (over/under/miscalibrated); `lcalOverconfidencePp`
@@ -3952,6 +3956,10 @@ export function normalizeSettings(raw) {
     // switch that hides an over-ceiling envelope or an outstanding recovery is
     // never the silent default.
     incentiveAutoPropagate: s.incentiveAutoPropagate !== false,
+    // ADR-0226: the shared-dependency concentration rule's switch. Declared in
+    // the persistence vocabulary so updateSettings can move it, and defaulted ON
+    // so a switch that hides a would-exceed verdict is never the silent default.
+    riskConcentrationAutoPropagate: s.riskConcentrationAutoPropagate !== false,
     forecastCoveragePct: clampInt(s.forecastCoveragePct, 50, 95, d.forecastCoveragePct),
     tempoDelegatedMaxDays: clampInt(s.tempoDelegatedMaxDays, 1, 90, d.tempoDelegatedMaxDays),
     tempoCrossCuttingMaxDays: clampInt(s.tempoCrossCuttingMaxDays, 1, 180, d.tempoCrossCuttingMaxDays),

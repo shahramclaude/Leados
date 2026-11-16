@@ -40,9 +40,14 @@ import {
   RC_METHOD,
   buildRiskConcentration,
   reachDependencies,
+  riskConcentrationCsvRows,
 } from '../../app/core/domain/riskConcentration.js';
+import { riskConcentrationConditions, riskConcentrationRule, indexRiskConcentrationAsks } from '../../app/core/domain/riskConcentrationRules.js';
+import { RC_CSV_SCOPE, RC_LIMITS as RC_LIMITS_REGISTRY, RC_RULE_ID } from '../../app/core/domain/riskConcentrationRegistry.js';
+import { exportWorkspaceCsv } from '../../app/core/csv.js';
 import { renderRiskAppetite } from '../../app/views/riskAppetite.js';
 import { activeSeat, buildSeats } from '../../app/core/domain/seat.js';
+import { buildMatrix } from '../../app/core/domain/matrix.js';
 
 const T0 = '2026-11-15T12:00:00.000Z';
 const TODAY = new Date(T0);
@@ -448,3 +453,258 @@ test('ADR-0226 contract: the reader is read-only, the cap is printed, and the re
   assert.equal(a.dependenciesCapped, Math.max(0, a.dependencies.length - RC_DEPENDENCY_ROW_CAP));
   assert.equal(a.dependenciesShown + a.dependenciesCapped, 2);
 });
+
+/* ------------------------------------------------------------------ 9. rule */
+
+/** One shared dependency whose combined retention would exceed its ceiling. */
+function concentrationFixture() {
+  const raw = base();
+  raw.dependencies = [dep('D1')];
+  raw.links = [link('c1', 'D1'), link('c2', 'D1')];
+  raw.riskDeclarations = [
+    decl('rd1', 'c1', 125000000),
+    decl('rd2', 'c2', 50000000, { declaredById: 'dan' }),
+  ];
+  raw.riskAppetiteStatements = [statement('ras1', 'DKK', 170000000)];
+  return raw;
+}
+
+function rccAsks(state) {
+  return indexRiskConcentrationAsks(state).filter((ask) => ask.task && ask.task.status === 'active');
+}
+
+test('RULE-RCC-01 conditions: one ask to the seat above every carrying line', () => {
+  const state = norm(concentrationFixture());
+  const matrix = buildMatrix(state, { now: TODAY, settings: {} });
+  const { conditions, observations } = riskConcentrationConditions(state, buildRiskConcentration(state, { now: TODAY, seat: null }), { today: '2026-11-15', matrix });
+  assert.equal(observations.length, 0, 'no unaddressable observation');
+  assert.equal(conditions.length, 1, 'exactly one condition');
+  assert.equal(conditions[0].kind, 'concentration-would-exceed');
+  assert.deepEqual(conditions[0].seatIds, ['dan'], 'the joint seat above mia and kai, both carrying lines');
+  assert.equal(conditions[0].signature, 'rcc1:D1|operational|DKK');
+  assert.equal(new Date(conditions[0].dueOn).toISOString().slice(0, 10), '2026-11-18');
+});
+
+test('RULE-RCC-01 conditions: a diamond tie files one condition per joint apex', () => {
+  const state = norm(concentrationFixture());
+  // Two minimal common seats above the carrying lines, neither above the other.
+  const matrix = {
+    nodes: new Map([
+      ['mia', { id: 'mia', ancestors: new Set(['alfa', 'beta']) }],
+      ['kai', { id: 'kai', ancestors: new Set(['alfa', 'beta']) }],
+      ['alfa', { id: 'alfa', ancestors: new Set() }],
+      ['beta', { id: 'beta', ancestors: new Set() }],
+    ]),
+    linesByPerson: new Map([
+      ['ivo', [{ id: 'l1', personId: 'ivo', managerId: 'mia', active: true }]],
+      ['lea', [{ id: 'l2', personId: 'lea', managerId: 'kai', active: true }]],
+    ]),
+  };
+  const { conditions, observations } = riskConcentrationConditions(state, buildRiskConcentration(state, { now: TODAY, seat: null }), { today: '2026-11-15', matrix });
+  assert.equal(observations.length, 0);
+  assert.equal(conditions.length, 1);
+  assert.deepEqual(conditions[0].seatIds.sort(), ['alfa', 'beta'], 'one seat per minimal joint apex');
+});
+
+test('RULE-RCC-01 conditions: no joint seat and no carrying line are observations, not asks', () => {
+  const state = norm(concentrationFixture());
+  const disconnected = {
+    nodes: new Map([['mia', { id: 'mia', ancestors: new Set() }], ['kai', { id: 'kai', ancestors: new Set() }]]),
+    linesByPerson: new Map([
+      ['ivo', [{ id: 'l1', personId: 'ivo', managerId: 'mia', active: true }]],
+      ['lea', [{ id: 'l2', personId: 'lea', managerId: 'kai', active: true }]],
+    ]),
+  };
+  const away = riskConcentrationConditions(state, buildRiskConcentration(state, { now: TODAY, seat: null }), { today: '2026-11-15', matrix: disconnected });
+  assert.equal(away.conditions.length, 0);
+  assert.equal(away.observations.length, 1);
+  assert.equal(away.observations[0].reason, 'no-joint-apex');
+
+  // Owners that resolve to no active line at all.
+  const raw = concentrationFixture();
+  raw.cases = raw.cases.map((c) => (c.id === 'c1' || c.id === 'c2') ? { ...c, ownerId: 'nobody' } : c);
+  const stateless = riskConcentrationConditions(norm(raw), buildRiskConcentration(norm(raw), { now: TODAY, seat: null }), { today: '2026-11-15', matrix: buildMatrix(norm(raw), { now: TODAY, settings: {} }) });
+  assert.equal(stateless.conditions.length, 0);
+  assert.equal(stateless.observations.length, 1);
+  assert.equal(stateless.observations[0].reason, 'no-carrying-line');
+
+  // A sum inside the ceiling files nothing at all.
+  const inside = norm(concentrationFixture());
+  inside.riskAppetiteStatements = [statement('ras1', 'DKK', 500000000)];
+  const clear = riskConcentrationConditions(inside, buildRiskConcentration(inside, { now: TODAY, seat: null }), { today: '2026-11-15', matrix: buildMatrix(inside, { now: TODAY, settings: {} }).matrix });
+  assert.equal(clear.conditions.length, 0);
+  assert.equal(clear.observations.length, 0);
+});
+
+/** The shared fixture minus declarations and appetite — everything is filed through the API. */
+function cleanFixture() {
+  const raw = base();
+  raw.dependencies = [dep('D1')];
+  raw.links = [link('c1', 'D1'), link('c2', 'D1')];
+  return raw;
+}
+
+test('RULE-RCC-01: one opaque ask per shared row, idempotent, closed when the ceiling rises', () => {
+  const raw = norm(cleanFixture());
+  const values = new Map([[STORAGE_KEY, JSON.stringify(raw)]]);
+  const storage = {
+    getItem: (key) => values.get(key) ?? null,
+    setItem: (key, value) => values.set(key, String(value)),
+    removeItem: (key) => values.delete(key),
+  };
+  let sequence = 0;
+  const idFactory = (prefix) => `${prefix}-${++sequence}`;
+  const store = createStore({ storage, now: () => TODAY, idFactory });
+  store.load();
+  const api = guardApi(createApi(store, { now: () => TODAY, idFactory }), store, { now: () => TODAY.getTime() });
+  const sit = (id) => store.update((draft) => { draft.settings = { ...draft.settings, activeSeatId: id }; }, { type: 'seat.declared', entity: 'settings', entityId: 'seat', summary: 'seat' });
+
+  // The declaration commits run the rule; the condition exists once the ceiling is declared.
+  sit('dan');
+  const carried = [
+    ['c1', '1250000.00'], ['c2', '500000.00'],
+  ].map(([caseId, retained]) => api.riskAppetiteDeclareRisk({ caseId, domain: 'operational', currency: 'DKK', retained, declaredOn: '2026-11-02', basis: BASIS }));
+  assert.ok(carried.every((result) => result.ok), 'declarations accepted');
+  sit('ceo');
+  const ceiling = api.riskAppetiteDeclareStatement({ domain: 'operational', measure: 'retained-exposure', currency: 'DKK', tolerance: '1700000.00', appetite: 'open', declaredOn: '2026-11-01', reviewOn: '2027-02-01', basis: BASIS });
+  assert.ok(ceiling.ok, 'ceiling accepted');
+
+  let asks = rccAsks(store.state);
+  assert.equal(asks.length, 1, 'the over-ceiling shared row files exactly one ask');
+  assert.equal(asks[0].seatId, 'dan', 'to the joint seat above both carrying lines');
+  const text = `${asks[0].task.title} ${asks[0].task.expectedOutcome} ${asks[0].task.support}`;
+  for (const leak of ['D1', 'Dependency', 'operational', 'DKK', '1,750,000', '175000000', '1,700,000', 'c1', 'c2', 'would-exceed', 'rd1', 'rd2']) {
+    assert.ok(!text.includes(leak), `the ask does not leak “${leak}”`);
+  }
+  const link = store.state.links.find((row) => row.ruleId === RC_RULE_ID && row.relation === 'issues-obligation');
+  assert.ok(link, 'the typed issues-obligation link carries the signature');
+  assert.ok(link.summary.includes('rcc1:D1|operational|DKK'));
+
+  // A second commit for the same standing condition files nothing new.
+  sit('ceo');
+  assert.equal(rccAsks(store.state).length, 1, 'idempotent per (signature, addressee)');
+
+  // A human's answer is respected and not filed again.
+  const ask = asks[0].task;
+  store.update((draft) => {
+    const row = (draft.delegations || []).find((task) => task.id === ask.id);
+    row.status = 'done';
+    row.completedOn = '2026-11-15';
+    row.completionNote = 'Tolerance raised by the board; see the minutes.';
+  }, { type: 'delegation.done', entity: 'delegation', entityId: ask.id, summary: 'done by hand' });
+  sit('ceo');
+  assert.equal(rccAsks(store.state).length, 0, 'the answer stands');
+});
+
+test('RULE-RCC-01: a ceiling that rises above the exposure clears the condition and closes the ask', () => {
+  const raw = norm(cleanFixture());
+  const values = new Map([[STORAGE_KEY, JSON.stringify(raw)]]);
+  const storage = {
+    getItem: (key) => values.get(key) ?? null,
+    setItem: (key, value) => values.set(key, String(value)),
+    removeItem: (key) => values.delete(key),
+  };
+  let sequence = 0;
+  const idFactory = (prefix) => `${prefix}-${++sequence}`;
+  const store = createStore({ storage, now: () => TODAY, idFactory });
+  store.load();
+  const api = guardApi(createApi(store, { now: () => TODAY, idFactory }), store, { now: () => TODAY.getTime() });
+  const sit = (id) => store.update((draft) => { draft.settings = { ...draft.settings, activeSeatId: id }; }, { type: 'seat.declared', entity: 'settings', entityId: 'seat', summary: 'seat' });
+  sit('dan');
+  assert.ok(api.riskAppetiteDeclareRisk({ caseId: 'c1', domain: 'operational', currency: 'DKK', retained: '1250000.00', declaredOn: '2026-11-02', basis: BASIS }).ok);
+  assert.ok(api.riskAppetiteDeclareRisk({ caseId: 'c2', domain: 'operational', currency: 'DKK', retained: '500000.00', declaredOn: '2026-11-02', basis: BASIS }).ok);
+  sit('ceo');
+  const tight = api.riskAppetiteDeclareStatement({ domain: 'operational', measure: 'retained-exposure', currency: 'DKK', tolerance: '1700000.00', appetite: 'open', declaredOn: '2026-11-01', reviewOn: '2027-02-01', basis: BASIS });
+  assert.ok(tight.ok, 'the tight ceiling is accepted');
+  assert.equal(rccAsks(store.state).length, 1, 'the over-ceiling shared row files exactly one ask');
+  const firstAsk = rccAsks(store.state)[0].task;
+  const raised = api.riskAppetiteDeclareStatement({ domain: 'operational', measure: 'retained-exposure', currency: 'DKK', tolerance: '500000000.00', appetite: 'open', declaredOn: '2026-11-03', reviewOn: '2027-02-01', basis: BASIS });
+  assert.ok(raised.ok, 'the higher ceiling is accepted');
+  sit('ceo');
+  const asksAfter = rccAsks(store.state);
+  assert.equal(asksAfter.length, 0, 'the cleared condition files no ask');
+  const closed = store.state.delegations.find((row) => row.id === firstAsk.id);
+  assert.ok(closed && String(closed.completionNote || '').startsWith(RC_RULE_ID), 'the rule closed its own ask when the condition cleared');
+});
+
+test('RULE-RCC-01: the pause governs every path, and the switch survives reload', () => {
+  const env = seed(norm(concentrationFixture()));
+  env.sit('dan');
+  apiDeclare(env, 'c1', '1250000.00');
+  apiDeclare(env, 'c2', '500000.00');
+  env.sit('ceo');
+  env.api.riskAppetiteDeclareStatement({ domain: 'operational', measure: 'retained-exposure', currency: 'DKK', tolerance: '1700000.00', appetite: 'open', declaredOn: '2026-11-01', reviewOn: '2027-02-01', basis: BASIS });
+  assert.equal(rccAsks(env.store.state).length, 1, 'a condition on the record files its ask');
+
+  env.sit('ceo');
+  assert.ok(env.api.updateSettings({ riskConcentrationAutoPropagate: false }).ok, 'the pause is granted');
+  env.sit('ceo');
+  assert.equal(rccAsks(env.store.state).length, 1, 'the pause stops new asks; the standing ask is left in place, not silently closed');
+
+  env.sit('ceo');
+  assert.ok(env.api.updateSettings({ riskConcentrationAutoPropagate: true }).ok, 'resuming');
+  env.sit('ceo');
+  assert.equal(rccAsks(env.store.state).length, 1, 'resuming files the standing condition');
+
+  // Reload keeps the switch: it is declared in the persistence vocabulary.
+  const reloaded = normalizeState(env.store.state, { now: TODAY }).state;
+  assert.equal(reloaded.settings.riskConcentrationAutoPropagate, true, 'the switch survives normalization');
+});
+
+test('RULE-RCC-01: no ceiling, no condition — the row is printed but never asked about', () => {
+  const env = seed(norm(cleanFixture()));
+  env.sit('dan');
+  apiDeclare(env, 'c1', '1250000.00');
+  apiDeclare(env, 'c2', '500000.00');
+  // No statement: the shared row reads no-ceiling / NOT COMPARED.
+  env.sit('ceo');
+  assert.equal(rccAsks(env.store.state).length, 0, 'no ceiling means nothing is owed');
+});
+
+test('RULE-RCC-01: CSV scope #169 is aggregate, identity-free, and floor-of-three suppressed', () => {
+  const raw = norm(concentrationFixture());
+  const csv = exportWorkspaceCsv(raw, RC_CSV_SCOPE, { now: TODAY });
+  assert.equal(csv.ok, true, 'the scope is declared');
+  const text = csv.csv;
+  assert.ok(csv.filename.includes('risk-concentration'), 'the filename carries the scope');
+  // Identity-free: no person, case title, declaration id or dependency name reaches the file.
+  // Domain, currency, amounts and the verdict are aggregate figures — they are the point of the report.
+  for (const leak of ['dan', 'ceo', 'ivo', 'lea', 'Furnace', 'Supplier', 'Dependency', 'rd1', 'rd2', 'c1', 'c2']) {
+    assert.ok(!text.includes(leak), `the export does not leak “${leak}”`);
+  }
+  const lines = text.trim().replace(/\r/g, '').split('\n');
+  const header = lines[0].split(',');
+  assert.ok(header.includes('dependency_code') && header.includes('verdict') && header.includes('blank_reason'), 'the expected columns');
+  assert.equal(header.indexOf('dependency_code'), 5, 'dependency_code is the opaque identity column');
+  const summary = lines.find((line) => line.startsWith('2026-11-15,summary,all,'));
+  assert.ok(summary && summary.includes('small_cell_suppressed(1)'), 'a summary row with the reader’s own counts');
+  const shared = lines.filter((line) => line.includes(',shared-row,'));
+  assert.equal(shared.length, 1, 'one shared row');
+  const cells = shared[0].split(',');
+  const row = Object.fromEntries(header.map((key, i) => [key, cells[i]]));
+  assert.equal(row.dependency_code, 'D01', 'the dependency exports under an opaque code');
+  assert.equal(row.domain, 'operational');
+  assert.equal(row.currency, 'DKK');
+  assert.equal(row.risks_n, '', 'floor of three: two risks suppress the count cell');
+  assert.equal(row.domain_population_n, '', 'floor of three: a population of two suppresses its count cell too');
+  assert.equal(row.retained_together_cents, '175000000');
+  assert.equal(row.share_of_domain_bp, '10000');
+  assert.equal(row.declared_ceiling_cents, '170000000');
+  assert.equal(row.verdict, 'would-exceed');
+  assert.equal(row.blank_reason, 'small_cell_suppressed');
+
+  // Three risks on the dependency: the count cell prints above the floor.
+  const bigger = norm(concentrationFixture());
+  bigger.riskDeclarations.push(decl('rd3', 'c3', 30000000, { currency: 'DKK' }));
+  bigger.links.push(link('c3', 'D1'));
+  const bigCsv = exportWorkspaceCsv(bigger, RC_CSV_SCOPE, { now: TODAY }).csv.replace(/\r/g, '');
+  const bigShared = bigCsv.split('\n').filter((line) => line.includes(',shared-row,'))[0].split(',');
+  const bigHeader = bigCsv.split('\n')[0].split(',');
+  const bigRow = Object.fromEntries(bigHeader.map((key, i) => [key, bigShared[i]]));
+  assert.equal(bigRow.risks_n, '3', 'three shared risks print above the floor of three');
+  assert.equal(bigRow.retained_together_cents, '205000000');
+});
+
+function apiDeclare(env, caseId, retained) {
+  return env.api.riskAppetiteDeclareRisk({ caseId, domain: 'operational', currency: 'DKK', retained, declaredOn: '2026-11-02', basis: BASIS });
+}

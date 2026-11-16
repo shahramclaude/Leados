@@ -154,6 +154,7 @@ import { shiftHandoverRule } from './shiftHandoverRules.js';
 import { workStopRule } from './workStopRules.js';
 import { mgrHandoverRule } from './mgrHandoverRules.js';
 import { workNightRule } from './workNightRules.js';
+import { riskConcentrationRule } from './riskConcentrationRules.js';
 import { sealRule } from './sealRules.js';
 // ADR-0092: the Differencing Defender declares its contract like every other rule.
 import { differencingRule } from './differencingRules.js';
@@ -1215,7 +1216,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     emits: [],
     scansWorkspace: true,
   },
-
+  {
+    rule: riskConcentrationRule,
+    module: 'riskConcentrationRules.js',
+    purpose: 'RULE-RCC-01: reads the shared-dependency concentration reading (`buildRiskConcentration`, ADR-0226) with the whole-workspace view on risk declaration and withdrawal, depends-on link and dependency changes, appetite statement and ceiling changes and explicit `riskConcentration.scan` scans — and on any other commit, because a ceiling is crossed or withdrawn by the calendar as much as by a write. ONE condition, filed at most once per deterministic `rcc1:…` signature per addressee and bounded at 4 per commit with the remainder counted: `concentration-would-exceed` — a shared dependency row whose exact combined declared retention is over the ceiling declared for that domain and currency. The ask goes to the lowest seat above EVERY line carrying the risks in the row (`matrixJointApex` over the managers of every active carrying line of every risk owner in the row), never to one line’s manager on another’s behalf and never to a risk owner; a genuine diamond tie files one ask per joint apex, and a graph that cannot name such a seat writes ONE identity-free `riskConcentrationMarkers` observation and substitutes nobody. The ask text is deliberately opaque — no dependency, no domain, no amount, no verdict — because a delegation is readable above the addressee; the opaque signature lives only in the typed `issues-obligation` link. Asks carry typed `issues-obligation` provenance and close themselves when the condition clears or the addressee moves. It never declares, amends or retires a statement or declaration, never converts or pools a currency, never estimates a correlation or applies a probability, never moves a risk or dependency, never invents an allocation and never rates a person; pause-governed on every path (`riskConcentrationAutoPropagate`), including the explicit scan.',
+    writes: ['delegations', 'links', 'riskConcentrationMarkers'],
+    emits: [],
+    scansWorkspace: true,
+  },
 
   {
     rule: dutyMeansRule,

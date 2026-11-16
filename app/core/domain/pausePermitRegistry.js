@@ -279,6 +279,11 @@ export const PAUSE_PERMIT_MATRIX_REACH_SWITCHES = Object.freeze([
   // above BOTH lines of a cross-line breach, and a missing-break ask reaches
   // the line holder — so silencing it reaches across reporting lines.
   'workNightAutoPropagate',
+  // ADR-0226: silencing this rule can leave a shared dependency whose combined
+  // declared retention would exceed its ceiling without the ask that names the
+  // seat above every carrying line; the reading remains open and visible, and
+  // no verdict is hidden.
+  'riskConcentrationAutoPropagate',
 ]);
 
 export function pausePermitReachesMatrix(key) {
@@ -361,6 +366,9 @@ export const PAUSE_PERMIT_SWITCH_RULES = Object.freeze({
   // missing required break record without its ask; the reading remains open and
   // visible, and no break is invented.
   workNightAutoPropagate: 'workNightRules.js',
+  // ADR-0226: silencing this rule can leave a would-exceed shared dependency
+  // without its ceiling ask; the reading remains open and visible.
+  riskConcentrationAutoPropagate: 'riskConcentrationRules.js',
 });
 
 /** Only graph-reading rules belong to the matrix census. Owner-directed rules
