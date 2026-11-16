@@ -203,6 +203,7 @@ import { speakUpRule } from './speakUpRules.js';
 import { synergyRule } from './synergyRules.js';
 import { earnedValueRule } from './earnedValueRules.js';
 import { riskAppetiteRule } from './riskAppetiteRules.js';
+import { shiftHandoverRule } from './shiftHandoverRules.js';
 import { incentiveRule } from './incentiveRules.js';
 import { dutyMeansRule } from './dutyMeansRules.js';
 import { portfolioReviewRule } from './portfolioReviewRules.js';
@@ -1279,6 +1280,15 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // Registered immediately before `speakUpRule`, `seatRule` and `sealRule`.
   dutyMeansRule,
   portfolioReviewRule,
+  // ADR-0223: the Shift Handover & Two-Key Readback Ledger (`RULE-SHO-01`).
+  // Reads the finished register (`buildShiftHandover`) and files at most one
+  // opaque ask per condition: a brief past its readback instant with no
+  // synthesis (to the lowest joint seat above EVERY line of both operators),
+  // or a disputed handover past its readback instant (same seat — the station
+  // is not safely manned by assumption). Where no joint seat exists, writes
+  // ONE identity-free `shiftHandoverMarkers` observation. Registered
+  // immediately before `speakUpRule`, `seatRule` and `sealRule`.
+  shiftHandoverRule,
   // Registered immediately before `seatRule` and `sealRule`.
   speakUpRule,
   // ADR-0076: the Operating Seat (vertical roll-up + enforced boundaries).

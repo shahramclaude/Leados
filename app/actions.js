@@ -129,6 +129,12 @@ import { createIncentiveActions } from './core/domain/incentiveActions.js';
 import { createDutyMeansActions } from './core/domain/dutyMeansActions.js';
 import { createPortfolioReviewActions } from './core/domain/portfolioReviewActions.js';
 import { createWorkRestActions } from './core/domain/workRestActions.js';
+// ADR-0223: the Shift Handover & Two-Key Readback Ledger — the dated outgoing
+// changeover brief (severity, station summary, open actions, contingency) and the
+// declared incoming operator's two-key act (synthesis or dispute). An uncontained
+// handover past its readback instant escalates to the joint seat above EVERY
+// line of both operators; a clock-in is never a key.
+import { createShiftHandoverActions } from './core/domain/shiftHandoverActions.js';
 import { createConflictRecusalActions } from './core/domain/conflictRecusalActions.js';
 // ADR-0148: Matrix Line Consent. A declared share is an ask until the line's
 // manager accepts or declines it AND the person acknowledges it. Two
@@ -20355,6 +20361,7 @@ export function createApi(store, options = {}) {
   // coverage attestation, and the declared policy. No act moves or cancels a
   // shift on anyone's behalf; every spell, rest and verdict is derived on read.
   Object.assign(api, createWorkRestActions(store, { now: clock, idFactory: id }));
+  Object.assign(api, createShiftHandoverActions(store, { now: clock, idFactory: id }));
   // ADR-0210: the Decision-Maker Conflict-of-Interest & Recusal Ledger — a person
   // declares their own stake (or a seat records a disclosure it received), a seat
   // above them records one dated response, and a director+ declares which

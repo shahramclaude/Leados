@@ -569,12 +569,12 @@ test('every currency is solved on its own: no ceiling, no set and no shadow pric
  */
 
 test('RULE-CRS-01 is registered end to end: schema v165, three collections, the spine, the gateway and CSV #153', () => {
-  assert.equal(SCHEMA_VERSION, 177);
+  assert.equal(SCHEMA_VERSION, 178);
   for (const key of ['capitalCeilings', 'capitalRelations', 'capitalRationingMarkers']) {
     assert.ok(COLLECTIONS.includes(key), `${key} is a declared collection`);
   }
   assert.ok(CSV_EXPORTS.some((row) => row.key === CAPITAL_RATIONING_CSV_SCOPE), 'CSV #153 is registered');
-  assert.equal(CSV_EXPORTS.length, 164);
+  assert.equal(CSV_EXPORTS.length, 165);
   assert.ok(DEFAULT_POST_COMMIT_RULES.some((rule) => rule.id === 'capitalRationingRule'), 'the rule is on the spine');
   assert.equal(DEFAULT_POST_COMMIT_RULES.length, PROPAGATION_CONTRACTS.length, 'one rule, one contract');
   assert.ok(PROPAGATION_CONTRACTS.some((row) => row.rule === capitalRationingRule), 'the contract is registered');
@@ -776,7 +776,7 @@ test('migration 164 → 165 adds three EMPTY collections and two conventions, an
   delete raw.capitalRelations;
   delete raw.capitalRationingMarkers;
   const { state } = normalizeState({ ...raw, schemaVersion: 164 }, { now: new Date(T0) });
-  assert.equal(state.schemaVersion, 177);
+  assert.equal(state.schemaVersion, 178);
   assert.deepEqual(state.capitalCeilings, [], 'no ceiling is inferred from the budget envelopes an upgraded workspace already holds');
   assert.deepEqual(state.capitalRelations, [], 'no relation is inferred between existing cases');
   assert.deepEqual(state.capitalRationingMarkers, []);

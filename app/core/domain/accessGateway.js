@@ -26,6 +26,7 @@ import { EV_RIGHTS } from './earnedValueRegistry.js';
 import { RA_RIGHTS } from './riskAppetiteRegistry.js';
 import { INC_RIGHTS } from './incentiveRegistry.js';
 import { DWM_RIGHTS } from './dutyMeansRegistry.js';
+import { SHO_RIGHTS } from './shiftHandoverRegistry.js';
 import { PRV_RIGHTS } from './portfolioReviewRegistry.js';
 import { JUST_CULTURE_RIGHTS } from './justCultureRegistry.js';
 import { routeVerdict } from './seatRegistry.js';
@@ -303,6 +304,14 @@ const groups = [
   [DWM_RIGHTS.DECLARE, 'dutyMeansDeclareDuty dutyMeansRetireDuty dutyMeansAddRequirement dutyMeansScan'],
   [DWM_RIGHTS.SUPPLY, 'dutyMeansRecordAct'],
   [DWM_RIGHTS.GOVERN, 'dutyMeansGovernGap'],
+  // ADR-0223: the Shift Handover & Two-Key Readback Ledger. Both the brief and
+  // the readback are FIRST-PERSON acts at every altitude; the action refuses any
+  // seat that is not the outgoing operator (declare/cancel) or the declared
+  // incoming operator (readback) — nobody turns a key for somebody else. Reads
+  // are open from the frontline upward and re-proved inside the action.
+  [SHO_RIGHTS.READ, 'shiftHandoverReport shiftHandoverAttentionCount shiftHandoverBriefGrant'],
+  [SHO_RIGHTS.DECLARE, 'shiftHandoverDeclare shiftHandoverCancel shiftHandoverScan'],
+  [SHO_RIGHTS.READBACK, 'shiftHandoverReadback'],
   // ADR-0148: answering a declared share is TWO first-person acts, split on the
   // spine rather than in prose. `accept-matrix-line` is the manager's own
   // answer (accept or decline the line they were given); it is open at every
@@ -638,6 +647,11 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // organisation turned enforcement on.
 'incentiveReport', 'incentiveAttentionCount', 'incentiveCandidates',
 'dutyMeansReport', 'dutyMeansAttentionCount', 'dutyMeansCandidates',
+// ADR-0223: the shift-handover ledger's pure read surface. Every one of these
+// re-proves the read right inside the action. Registered here because a module
+// whose reads are absent from SAFE_READS is unreadable under enforcement while
+// its writes are still gated.
+'shiftHandoverReport', 'shiftHandoverAttentionCount', 'shiftHandoverBriefGrant',
 'portfolioReport', 'portfolioAttentionCount', 'portfolioCandidates',
 'standardWaiverAttentionCount', 'standardWaiverBriefText', 'standardWaiverCandidates', 'standardWaiverCsvRows', 'standardWaiverReport', 'concordanceAttentionCount', 'concordanceBriefText', 'concordanceCsvRows', 'concordanceRead', 'concordanceStats', 'disclosureAttentionCount', 'disclosureBriefText', 'disclosureCsvRows', 'disclosureGrantRead', 'disclosureGrants', 'disclosureRead', 'envoyAttentionCount', 'envoyBriefText', 'envoyCsvRows', 'envoyIdentity', 'envoyPacketText', 'envoyPreview', 'envoyRead', 'escalationBriefText', 'escalationCsvRows', 'escalationRead', 'escalationStats', 'differencesAttentionCount', 'differencesBriefText', 'differencesCsvRows', 'differencesRead', 'federationAttentionCount', 'federationBriefText', 'federationCsvRows', 'federationRead',
 'freezeLineAttentionCount', 'freezeLineBriefText', 'freezeLineConventions', 'freezeLineCsvRows', 'freezeLineReport',
@@ -980,6 +994,11 @@ const MATRIX_LINE_SCOPED = new Set([
   // is exactly the case the ledger exists for. The action re-proves that the
   // seat holds the very line the shift is worked for.
   'workRestDeclareShift', 'workRestPreviewShift', 'workRestAttestCoverage',
+  // ADR-0223: declaring the outgoing brief names an incoming operator who may
+  // be reachable only through a declared Matrix line (night and weekend cover
+  // on a shared-services line). The action re-proves both the reach and the
+  // roster band before it records anything.
+  'shiftHandoverDeclare',
 ]);
 
 /** Exact method allowlist + rank + record/person scope. No arbitrary API names. */

@@ -167,6 +167,9 @@ import { renderIncentive } from './views/incentive.js';
 import { incentiveAttentionCount } from './core/domain/incentiveIntegrity.js';
 // ADR-0221: the Duty-Without-Means Register.
 import { renderDutyMeans } from './views/dutyMeans.js';
+// ADR-0223: the Shift Handover & Two-Key Readback Ledger — the boundary transfer between shifts, two keys or an escalation.
+import { renderShiftHandover } from './views/shiftHandover.js';
+import { shiftHandoverAttentionCount } from './core/domain/shiftHandover.js';
 import { renderPortfolioReview } from './views/portfolioReview.js';
 import { portfolioReviewAttentionCount } from './core/domain/portfolioReview.js';
 import { dutyMeansAttentionCount } from './core/domain/dutyMeans.js';
@@ -595,6 +598,9 @@ export const NAV = [
     // ADR-0222: which business units the enterprise keeps, fixes, sells, or
     // exits on dated evidence and right-capable accountability.
     { route: 'portfolio-review', label: 'Portfolio review', icon: '◈', badge: 'portfolioReview' },
+    // ADR-0223: the boundary transfer between shifts — two keys (outgoing brief,
+    // incoming synthesis or dispute), or the joint seat above both lines is asked.
+    { route: 'shift-handover', label: 'Shift handover', icon: '⇔', badge: 'shiftHandover' },
     // ADR-0121: who answers for each declared duty line when the holder is out.
     { route: 'duty-cover', label: 'Duty coverage', icon: '⛨', badge: 'dutyCoverage' },
     // ADR-0140: who is accountable to whom when one person has several managers.
@@ -764,6 +770,8 @@ const RENDERERS = {
   // ADR-0221: the Duty-Without-Means Register.
   means: (ctx) => renderDutyMeans(ctx),
   'portfolio-review': (ctx) => renderPortfolioReview(ctx),
+  // ADR-0223: the shift-handover & two-key readback ledger.
+  'shift-handover': (ctx) => renderShiftHandover(ctx),
   conflicts: (ctx) => renderConflicts(ctx),
   conflict: (ctx, segments) => renderConflictDetail(ctx, safeDecode(segments[1])),
   recognition: (ctx) => renderRecognition(ctx),
@@ -1640,6 +1648,9 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       // seat, and unbacked means gaps escalated to this seat as joint apex.
       means: dutyMeansAttentionCount(state, { now: at, settings: state.settings, seat: seatCtx?.seat || null }),
       portfolioReview: portfolioReviewAttentionCount(state, { now: at, settings: state.settings, seat: seatCtx?.seat || null }),
+      // ADR-0223: readbacks owed by this seat as the declared incoming operator,
+      // plus overdue uncontained handovers it holds the joint seat above.
+      shiftHandover: shiftHandoverAttentionCount(state, { now: at, settings: state.settings, seat: seatCtx?.seat || null }),
       // Schema v32: drafts written from case facts that still await a human.
       comms: (state.commsDrafts || []).filter((d) => d && d.status === 'draft').length,
       due: dueMeetings(state, at, state.settings).length,

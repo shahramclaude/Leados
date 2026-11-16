@@ -340,6 +340,16 @@ import {
   normalizePortfolioUnits,
   normalizePortfolioVerdicts,
 } from './domain/portfolioReviewSchema.js';
+// ADR-0223 (Schema v178): the Shift Handover & Two-Key Readback Ledger.
+// Fail-closed changeover briefs, two-key readback acts and identity-free rule
+// markers. Nothing derived — no state, overdue flag, escalation or figure — is
+// stored; every one is re-derived on read.
+import {
+  normalizeShiftHandoverReadbacks,
+  normalizeShiftHandovers,
+  normalizeShiftHandoverSettings,
+  normalizeShoMarkers,
+} from './domain/shiftHandoverSchema.js';
 // ADR-0185 (Schema v147): dated Matrix change-impact requests and first-person
 // line responses. Request snapshots normalize before their responses resolve.
 import {
@@ -1182,7 +1192,10 @@ export {
 // business units, dated reviews, CEO verdicts, verdict milestones, dated
 // sell/exit settlement ledger (`portfolioExits`), and identity-free rule markers
 // (`portfolioReviewMarkers`, leaving `portfolioMarkers` to Schema v55).
-export const SCHEMA_VERSION = 177;
+// ADR-0223 (Schema v177 → v178): the Shift Handover & Two-Key Readback Ledger —
+// dated outgoing changeover briefs, the incoming operator's two-key readback
+// acts (synthesis or dispute), and identity-free rule markers.
+export const SCHEMA_VERSION = 178;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -2688,6 +2701,9 @@ export const DEFAULT_SETTINGS = Object.freeze({
   ...normalizeDutyMeansSettings({}),
   // ADR-0222: carry portfolio review cadence and automation pause.
   ...normalizePortfolioSettings({}),
+  // ADR-0223: the shift-handover ledger's conventions — the pause switch for
+  // RULE-SHO-01. Printed, never fitted.
+  ...normalizeShiftHandoverSettings({}),
 });
 
 export const COLLECTIONS = [
@@ -3599,6 +3615,16 @@ export const COLLECTIONS = [
   'portfolioMilestones',
   'portfolioExits',
   'portfolioReviewMarkers',
+  // ADR-0223 (Schema v178): the Shift Handover & Two-Key Readback Ledger.
+  // Declared briefs (severity, station summary, open actions, contingency),
+  // the incoming operator's append-only two-key acts (synthesis or dispute)
+  // and the rule's bounded identity-free marker ledger. No state, overdue
+  // flag, escalation, verdict or per-person count is stored; each is
+  // re-derived on read, so a hand-edited file cannot carry a containment no
+  // human produced.
+  'shiftHandovers',
+  'shiftHandoverReadbacks',
+  'shiftHandoverMarkers',
 ];
 
 /** Stable empty state. `now` is an ISO string so the result is a pure value. */
@@ -4442,6 +4468,7 @@ export function normalizeSettings(raw) {
     ...normalizeEvSettings(s),
     ...normalizeDutyMeansSettings(s),
     ...normalizePortfolioSettings(s),
+    ...normalizeShiftHandoverSettings(s),
     ...normalizeStructureHistorySettings(s),
     ...normalizeDifferencesSettings(s),
     ...normalizeFitSettings(s),
@@ -9134,6 +9161,12 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.portfolioMilestones = normalizePortfolioMilestones(raw.portfolioMilestones, warnings);
   state.portfolioExits = normalizePortfolioExits(raw.portfolioExits, warnings);
   state.portfolioReviewMarkers = normalizePortfolioMarkers(raw.portfolioReviewMarkers, warnings);
+  // ADR-0223 (Schema v178): fail-closed changeover briefs, two-key readback
+  // acts and identity-free markers. State, overdue flags, escalations and
+  // coverage figures are re-derived on read, never stored.
+  state.shiftHandovers = normalizeShiftHandovers(raw.shiftHandovers, warnings);
+  state.shiftHandoverReadbacks = normalizeShiftHandoverReadbacks(raw.shiftHandoverReadbacks, warnings);
+  state.shiftHandoverMarkers = normalizeShoMarkers(raw.shiftHandoverMarkers, warnings);
   state.conflictInterests = normalizeConflictInterests(raw.conflictInterests, warnings);
   state.conflictNoneDeclarations = normalizeConflictNoneDeclarations(raw.conflictNoneDeclarations, warnings);
   state.conflictStandings = normalizeConflictStandings(raw.conflictStandings, state.conflictInterests, warnings);
@@ -9922,6 +9955,21 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  // 177 → 178: ADR-0223 adds THREE EMPTY ledgers (`shiftHandovers`,
+  // `shiftHandoverReadbacks`, `shiftHandoverMarkers`) and one declared
+  // convention (`shiftHandoverAutoPropagate`). No brief is inferred from the
+  // roster, the station windows, the duty roster, the standard-work tiers or
+  // the work/rest ledger: nothing in those records says that a station changed
+  // hands, and a brief invented here would fabricate a boundary transfer — and
+  // its missing readback — that no human declared.
+  177: (v177) => ({
+    ...v177,
+    schemaVersion: 178,
+    shiftHandovers: Array.isArray(v177.shiftHandovers) ? v177.shiftHandovers : [],
+    shiftHandoverReadbacks: Array.isArray(v177.shiftHandoverReadbacks) ? v177.shiftHandoverReadbacks : [],
+    shiftHandoverMarkers: Array.isArray(v177.shiftHandoverMarkers) ? v177.shiftHandoverMarkers : [],
+    settings: { ...(v177.settings || {}), ...normalizeShiftHandoverSettings(v177.settings || {}) },
+  }),
   // 176 → 177: ADR-0222 completion. Separates PRV's object markers from
   // Schema v55's string `portfolioMarkers` into `portfolioReviewMarkers`, and
   // adds the empty `portfolioExits` disposal-settlement ledger.
