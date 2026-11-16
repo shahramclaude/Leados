@@ -171,7 +171,9 @@ import { renderDutyMeans } from './views/dutyMeans.js';
 import { renderShiftHandover } from './views/shiftHandover.js';
 import { shiftHandoverAttentionCount } from './core/domain/shiftHandover.js';
 import { renderSuggestions } from './views/suggestions.js';
+import { renderAssuranceFindings } from './views/assurance-findings.js';
 import { suggestionAttentionCount } from './core/domain/suggestionReport.js';
+import { assuranceFindingAttentionCount } from './core/domain/assuranceFindingReport.js';
 // ADR-0224: Stop-Work Authority & Safe Restart — frontline hold, Director+
 // matrix clearance, and a separate affected-operator restart key.
 import { renderWorkStop } from './views/workStop.js';
@@ -631,6 +633,11 @@ export const NAV = [
     // confirmed. Beside shift handover on purpose: one moves the station
     // between shifts, the other improves the station itself.
     { route: 'suggestions', label: 'Improvement suggestions', icon: '✦', badge: 'suggestions' },
+    // ADR-0232: what failed, who owns the fix, whether an independent hand
+    // tested it, and whether the same control is back. Beside improvement
+    // suggestions on purpose: a suggestion improves the work, a finding repairs
+    // a control that did not hold.
+    { route: 'findings', label: 'Assurance findings', icon: '⚠', badge: 'assuranceFindings' },
     // ADR-0224: stop-work authority — no restart without all independent joint
     // apex reviews and an affected operator's own key.
     { route: 'work-stop', label: 'Stop-work & restart', icon: '⛔', badge: 'workStop' },
@@ -831,6 +838,8 @@ const RENDERERS = {
   'shift-handover': (ctx) => renderShiftHandover(ctx),
   // ADR-0227: the frontline improvement-suggestion ledger (kaizen teian).
   'suggestions': (ctx) => renderSuggestions(ctx),
+  // ADR-0232: the assurance finding & remediation register.
+  findings: (ctx) => renderAssuranceFindings(ctx),
   // ADR-0224: stop-work declaration, independent review and affected-operator key.
   'work-stop': (ctx) => renderWorkStop(ctx),
   // ADR-0225: managerial portfolio handover and successor acceptance.
@@ -1726,6 +1735,10 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       // plus overdue uncontained handovers it holds the joint seat above.
       shiftHandover: shiftHandoverAttentionCount(state, { now: at, settings: state.settings, seat: seatCtx?.seat || null }),
       suggestions: suggestionAttentionCount(state, { now: at, seat: seatCtx?.seat || null }),
+      // ADR-0232: findings this seat owes an act on — an assignment on a line it
+      // holds, an assertion on a remediation it owns, or an independent
+      // verification of a fix it stands strictly above.
+      assuranceFindings: assuranceFindingAttentionCount(state, { now: at, seat: seatCtx?.seat || null }),
       // ADR-0224: holds requiring work-lead controls, overdue joint-apex review,
       // or the affected operator's second key, all from the same reader.
       workStop: workStopAttentionCount(state, { now: at, settings: state.settings, seat: seatCtx?.seat || null }),

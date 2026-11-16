@@ -43,6 +43,16 @@ import { normalizeWorkReassignmentActs } from './domain/workReassignmentSchema.j
 // state and count is re-derived on read, nothing is stored that is not a
 // human act.
 import { normalizeDecisions, normalizeDecisionActs } from './domain/domainSenseSchema.js';
+// ADR-0232 (Schema v187): the Assurance Finding & Remediation Register. Fail-closed
+// normalizers for dated findings, the four append-only remediation acts and the
+// identity-free observations RULE-AFR-01 writes when nobody can be asked. No
+// severity, state, recurrence or closure is stored: each is re-derived on read.
+import {
+  normalizeFindingActs,
+  normalizeFindingMarkers,
+  normalizeFindings,
+} from './domain/assuranceSchema.js';
+import { normalizeAssuranceSettings } from './domain/assuranceRegistry.js';
 // ADR-0182 (Schema v145): the Automation Pause Permit Register. Fail-closed
 // normalizers for dated permits and RULE-PMP-01's marker ledger.
 import { normalizePausePermitMarkers, normalizePausePermits, normalizePausePermitSettings } from './domain/pausePermitSchema.js';
@@ -1285,7 +1295,12 @@ export {
 // (kaizen teian) — declared suggestions with their COMPUTED route, append-only
 // triage / claim / confirm acts, and identity-free rule markers. No state,
 // overdue flag, rate or verdict is stored; each is re-derived on read.
-export const SCHEMA_VERSION = 186;
+// ADR-0232 (Schema v186 → v187): the Assurance Finding & Remediation Register —
+// declared findings with their accountable lines, append-only assign / assert /
+// verify / accept acts, and identity-free rule markers. No state, severity,
+// recurrence or closure is stored; each is re-derived on read, so a hand-edited
+// file cannot carry a closure nobody verified.
+export const SCHEMA_VERSION = 187;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -3790,6 +3805,14 @@ export const COLLECTIONS = [
   // domain nobody stated, a fit nobody agreed or a mode nobody committed.
   'domainDecisions',
   'domainSenseActs',
+  // ADR-0232 (Schema v187): the Assurance Finding & Remediation Register.
+  // Declared findings and the append-only acts that move them, plus the
+  // identity-free observations RULE-AFR-01 writes. No state, severity,
+  // recurrence verdict or closure is stored: each is re-derived on read from
+  // the dated acts, so a hand-edited file cannot carry a fix nobody verified.
+  'assuranceFindings',
+  'assuranceFindingActs',
+  'assuranceFindingMarkers',
 ];
 
 /** Stable empty state. `now` is an ISO string so the result is a pure value. */
@@ -4650,10 +4673,13 @@ export function normalizeSettings(raw) {
     // census reads would be a switch the record does not hold.
     ...normalizeMgrHandoverSettings(s),
     ...normalizeVySettings(s),
-    // ADR-0227: named here because `normalizeSettings` rebuilds the settings
-    // object field by field — the pause switch that silences RULE-KZT-01 would
-    // vanish on every load if it were spread anywhere else.
-    ...normalizeSuggestionSettings(s),
+  // ADR-0227: named here because `normalizeSettings` rebuilds the settings
+  // object field by field — the pause switch that silences RULE-KZT-01 would
+  // vanish on every load if it were spread anywhere else.
+  ...normalizeSuggestionSettings(s),
+  // ADR-0232: same reason — the pause switch that silences RULE-AFR-01 must
+  // survive a reload, or a paused rule would come back on after a refresh.
+  ...normalizeAssuranceSettings(s),
     ...normalizeStructureHistorySettings(s),
     ...normalizeDifferencesSettings(s),
     ...normalizeFitSettings(s),
@@ -9364,6 +9390,13 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // is inferred from a role or a title.
   state.domainDecisions = normalizeDecisions(raw.domainDecisions, warnings);
   state.domainSenseActs = normalizeDecisionActs(raw.domainSenseActs, state.domainDecisions, warnings);
+  // ADR-0232 (Schema v187): fail-closed findings and acts. A finding is closed
+  // only by an independent verification on EVERY accountable line or by a named
+  // acceptance of the residual risk; no act is repaired into one it is not, and
+  // no severity, owner or date is invented.
+  state.assuranceFindings = normalizeFindings(raw.assuranceFindings, warnings);
+  state.assuranceFindingActs = normalizeFindingActs(raw.assuranceFindingActs, state.assuranceFindings, warnings);
+  state.assuranceFindingMarkers = normalizeFindingMarkers(raw.assuranceFindingMarkers, warnings);
   // ADR-0220: a plan, measure, award or recovery act that cannot be read exactly
   // is DROPPED with a counted warning. A reading is resolved AFTER its measures,
   // because the measure's unit decides which field the figure belongs in; a
@@ -10230,6 +10263,21 @@ export const MIGRATIONS = {
     schemaVersion: 186,
     domainDecisions: Array.isArray(v185.domainDecisions) ? v185.domainDecisions : [],
     domainSenseActs: Array.isArray(v185.domainSenseActs) ? v185.domainSenseActs : [],
+  }),
+  // 186 → 187: ADR-0232 adds THREE EMPTY ledgers (`assuranceFindings`,
+  // `assuranceFindingActs`, `assuranceFindingMarkers`) and the finding rule's
+  // pause. No finding is inferred from a case, an incident, an after-action
+  // review, a risk statement or the reporting graph: a control failure is a
+  // dated human declaration naming the control, the criteria it departed from
+  // and the lines accountable for it, and manufacturing one at upgrade time
+  // would put a finding on the record that nobody made.
+  186: (v186) => ({
+    ...v186,
+    schemaVersion: 187,
+    assuranceFindings: Array.isArray(v186.assuranceFindings) ? v186.assuranceFindings : [],
+    assuranceFindingActs: Array.isArray(v186.assuranceFindingActs) ? v186.assuranceFindingActs : [],
+    assuranceFindingMarkers: Array.isArray(v186.assuranceFindingMarkers) ? v186.assuranceFindingMarkers : [],
+    settings: { ...(v186.settings || {}), ...normalizeAssuranceSettings(v186.settings || {}) },
   }),
   // 183 → 184: ADR-0231 adds SEVEN EMPTY ledgers (`ibpCycles`, `ibpDemandRows`,
   // `ibpCapacityRows`, `ibpOptions`, `ibpDecisions`, `ibpGrades`, `ibpMarkers`)

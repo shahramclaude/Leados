@@ -319,6 +319,15 @@ export const RECORD_POLICIES = Object.freeze({
   suggestions: { classKey: 'unit', detailCeiling: 0, reportOnly: true, label: 'Frontline improvement suggestions — area, problem, proposal, computed route (report only; state re-derived on read)', route: '#/suggestions' },
   suggestionActs: { classKey: 'unit', detailCeiling: 0, reportOnly: true, label: 'Append-only triage decisions, effect claims and independent confirmations (report only)', route: '#/suggestions' },
   suggestionMarkers: { classKey: 'unit', detailCeiling: 0, reportOnly: true, label: 'Improvement-suggestion no-ask observations — a route member or owner the graph cannot name (identity-free)', route: '#/suggestions' },
+  // ADR-0232: a finding names a control, a criteria it departed from, the lines
+  // accountable for it and the people who own and test the fix, so ALL rows are
+  // report-only (`detailCeiling: 0`); `buildAssuranceReport` discloses rows to
+  // parties and to the span that holds the named people, and withholds the line
+  // table and the rates whole whenever any row is hidden. The rule's markers
+  // are identity-free by construction.
+  assuranceFindings: { classKey: 'unit', detailCeiling: 0, reportOnly: true, label: 'Assurance findings — control, scope, criteria, accountable lines (report only; state and recurrence re-derived on read)', route: '#/findings' },
+  assuranceFindingActs: { classKey: 'unit', detailCeiling: 0, reportOnly: true, label: 'Append-only assignments, assertions, independent verifications and residual-risk acceptances (report only)', route: '#/findings' },
+  assuranceFindingMarkers: { classKey: 'unit', detailCeiling: 0, reportOnly: true, label: 'Assurance-finding no-ask observations — an owner, holder or joint apex the graph cannot name (identity-free)', route: '#/findings' },
   // ADR-0216: a deal thesis, its promises, their readings and one-off costs are
   // ENTERPRISE material — a synergy belongs to the whole deal, not to one line's
   // reading of it, and below the executive altitude there is no honest per-line
@@ -1262,6 +1271,17 @@ export const ACTION_RIGHTS = Object.freeze({
   'scan-domain-sense': { minRank: 3, maxRank: 5, label: 'Scan the decision-domain sensing register' },
   'assess-domain-sense': { minRank: 2, maxRank: 5, label: 'State the domain for a decision on a declared line' },
   'commit-domain-sense': { minRank: 2, maxRank: 5, label: 'Commit the mode for a decision the seat owns' },
+  // ADR-0232: the Assurance Finding & Remediation Register. Reading is open from
+  // the frontline upward and narrowed to the findings this seat is a party to or
+  // holds; anybody may DECLARE a finding (a self-identified control failure from
+  // the person doing the work is the cheapest one an enterprise ever gets) and
+  // anybody may be named to REMEDIATE or to VERIFY. Only an executive ACCEPTS a
+  // residual risk, and never a person who owns the remediation on that finding.
+  'read-assurance-findings': { minRank: 1, maxRank: 5, label: 'Read the assurance finding register within your grant: what failed, who owns the fix, what is overdue and what came back' },
+  'declare-assurance-finding': { minRank: 1, maxRank: 5, label: 'Declare a finding on the register in your own name, or scan it — the accountable lines are declared, never inferred' },
+  'remediate-assurance-finding': { minRank: 1, maxRank: 5, label: 'Name the owner and the day on an accountable line you hold (assign), or assert the fix you own (assert)' },
+  'verify-assurance-remediation': { minRank: 1, maxRank: 5, label: 'Independently confirm or reject a fix — only from a seat strictly above the remediation owner, never as the owner' },
+  'accept-assurance-finding-risk': { minRank: 4, maxRank: 5, label: 'Accept a finding’s residual risk in your own name, with a reason and a review date — never on a finding you remediate' },
 });
 
 export function actionVerdict(action, seat) {

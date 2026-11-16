@@ -208,6 +208,7 @@ import { ibpRule } from './ibpRules.js';
 import { vyRule } from './vyRules.js';
 import { shiftHandoverRule } from './shiftHandoverRules.js';
 import { suggestionRule } from './suggestionRules.js';
+import { assuranceFindingRule } from './assuranceFindingRules.js';
 import { workStopRule } from './workStopRules.js';
 import { mgrHandoverRule } from './mgrHandoverRules.js';
 import { workNightRule } from './workNightRules.js';
@@ -1401,6 +1402,35 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // (`suggestionAutoPropagate`), including the explicit scan. Registered
   // immediately before `speakUpRule`, `seatRule` and `sealRule`.
   suggestionRule,
+  // ADR-0232: the Assurance Finding & Remediation Register (`RULE-AFR-01`).
+  // Reads the finished register (`buildAssuranceFindings`) with the
+  // whole-workspace view — and on any commit, because a remediation day and a
+  // verification day pass with the calendar — and files at most one opaque
+  // `act-inform` delegation per (deterministic `afr1:…` signature, addressee),
+  // bounded at 4 per commit with the remainder counted. THREE conditions:
+  // `remediation-overdue` — a finding past its declared remediation day, asked
+  // of the accountable HOLDER where the line has named no owner (naming one is
+  // the holder's act) and of the NAMED OWNER where it has; `verification-overdue`
+  // — a fix asserted and still untested past the finding's verification day,
+  // asked of the JOINT APEX ABOVE THE OWNER'S OWN LINES (the lowest seat
+  // independence actually permits — the owner is never asked to grade their own
+  // fix and no unrelated seat is asked); and `recurrence` — the same control and
+  // scope on the record again after a predecessor CLOSED AS VERIFIED, asked once
+  // per finding of the joint apex above EVERY accountable line. Where the
+  // reporting graph names nobody who can be asked, ONE identity-free
+  // `assuranceFindingMarkers` observation is written and nothing is substituted.
+  // The ask text is deliberately opaque — no control, scope, criteria, statement
+  // or name — because a delegation is readable above the addressee; the
+  // signature lives only in the typed `issues-obligation` link. Asks self-close
+  // when the condition clears or the addressee moves, and respect human
+  // closures/returns. It never assigns, asserts, verifies or accepts; never
+  // edits a finding or an act; never derives a severity; never closes anything
+  // by the passage of time; reads recurrence from two dated records rather than
+  // inferring it from wording; and never rates a person from backlog or age;
+  // pause-governed on every path (`assuranceAutoPropagate`), including the
+  // explicit scan. Registered immediately before `speakUpRule`, `seatRule` and
+  // `sealRule`.
+  assuranceFindingRule,
   // Registered immediately before `seatRule` and `sealRule`.
   speakUpRule,
   // ADR-0076: the Operating Seat (vertical roll-up + enforced boundaries).

@@ -1,3 +1,25 @@
+## 2026-11-16 — Did the fix hold, or is this the third time?
+
+**Director / VP → Assurance findings** (`#/findings`) is the register where a control failure is declared, owned, fixed, independently tested and closed — and where a repeat is printed as a repeat rather than as a new number.
+
+**A finding is declared against the criteria it departed from.** The control, the scope and the criteria are all required: a finding with no criteria is an opinion. The source is a closed list — internal audit, external audit, regulator, second line, incident review, management review, self-identified — because who found it changes who may grade the fix. **Severity is declared by a named human and derived from nothing**: observation, deficiency, significant deficiency or material weakness. No count, figure, keyword or date produces a severity here.
+
+**The hand that tests is never the hand that fixed.** This is the rule the register exists to enforce, and it is structural rather than a permission: verification requires a seat **strictly above the remediation owner on the reporting graph** — never the owner, never a subordinate, never an unrelated branch. A fix that closes on its owner's word is printed as `asserted-awaiting-verification` and never as a closure. A **rejection** is held to exactly the same reach: refusing a fix is also an independent act, and it returns the line to remediation owed.
+
+**Every accountable line carries its own owner and its own day.** A control failure usually crosses functions — the process owner, the system owner and the policy owner sit on different lines — so each line names one remediation owner and one target day, and the finding cannot close until **every** line has carried an assignment, an assertion and an independent test. No line can be dropped for being inconvenient. The first assignment on a line governs; a second is refused and never overwrites it.
+
+**Two ways close a finding, and only two.** Every line independently verified, or the residual risk **accepted** by a named executive at rank 4 or above — with a written reason and a review date — who does not remediate the finding. The party who failed to fix it does not decide that the enterprise can live with it. **Nothing closes by the passage of time**: overdue is a printed flag beside the state, and it decides nothing.
+
+**A repeat is two different facts, never added together.** `recurrent` is a finding on the same control and scope whose predecessor was closed as **verified** — a tested fix that did not hold. `reobserved` is one whose predecessor was closed by **acceptance** — a risk somebody agreed to carry and then saw again. Two failed fixes and one carried risk are not three of anything.
+
+**What it refuses, and prints.** An assertion with no assignment behind it. A second assignment on a line. A line promising later than the finding does. The owner verifying their own fix. A verifier on an unrelated branch. A second verification of an already-verified assertion. An acceptance from the person who owns the remediation. And every write runs through the fail-closed loader before it is stored, so a row the register could not read back is refused now with nothing saved.
+
+**The rule asks, and never closes.** `RULE-AFR-01` files one dated, opaque ask per condition — a remediation day that passed, a fix asserted and still untested, or a repeat after a verified closure — addressed to the seat independence actually permits (the joint apex above the owner, never the owner). Where the reporting graph names nobody who can be asked, it writes one identity-free observation and substitutes nothing. The pause switch governs every path.
+
+**The numbers reconcile in public.** State counts are printed so they can be added up against the finding total, and refused acts and dropped rows are counted beside them as a separate claim. The accountable-line roll-up is **non-additive and says so** — a finding naming two lines is counted under both. Per-line cells are withheld below a floor of three with complementary suppression, and the aggregate CSV (#175) carries no finding id, control, scope, criteria, statement, owner, verifier, acceptor or line name; a below-floor cell exports blank with its reason, never zero.
+
+**What it does not check.** A cited control, criteria reference or evidence record is **declared, not verified** — the register does not look them up elsewhere in the workspace, and the method tab says so in plain words. Nothing here rates a person on how many findings they carry.
+
 ## 2026-11-16 — The idea was filed, answered, claimed and confirmed — and the record proves all four keys
 
 **Frontline / mid-manager → Improvement suggestions** (`#/suggestions`) is the register where an ordinary improvement proposal is *answered*, not merely collected: a person files the waste they see and the change they propose, and the register owes them a dated response from a route the reporting graph computes — never a queue somebody may quietly ignore.

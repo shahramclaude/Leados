@@ -430,7 +430,16 @@ test('standalone artifact exists and is a single inline HTML document', () => {
   // artifact at base b3b814c was a stale Session 308 build already above the
   // previous 18,000,000 ceiling, so that ceiling was failing before this
   // session; it is moved here to the measured size of the rebuilt artifact.
-  assert.ok(bytes < 18_750_000, `standalone file is unexpectedly large (${bytes} bytes)`);
+  // ADR-0232 (Session 311, Schema v187) completes the Assurance Finding &
+  // Remediation Closure Register: seven assurance modules, the `#/findings`
+  // view, CSV #175 and the generated method diagram
+  // (`assurance-finding-method.jpg`, embedded with the rest of app/assets).
+  // Measured build after merging `origin/main`: 19,001,526 bytes / 1,027
+  // source modules = 18,502 bytes per
+  // module, still under the unchanged 24,000 bytes/module density guard, which
+  // is the bound that catches a module or asset inlined twice. This absolute
+  // ceiling moves only because real capability was added.
+  assert.ok(bytes < 19_050_000, `standalone file is unexpectedly large (${bytes} bytes)`);
   // Derived from the folder, not from a list in this file: the day a panel adds
   // a diagram, an enumerator that names the old two would still pass. Same
   // lesson the build script learned in ADR-0186.
