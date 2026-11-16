@@ -289,6 +289,12 @@ export const RECORD_POLICIES = Object.freeze({
   workStops: { classKey: 'unit', detailCeiling: 0, reportOnly: true, label: 'Human-declared stop-work holds, hazard and work-control evidence (report only; status re-derived on read)', route: '#/work-stop' },
   workStopActs: { classKey: 'unit', detailCeiling: 0, reportOnly: true, label: 'Append-only mitigation, independent assessment and affected-operator decisions (report only)', route: '#/work-stop' },
   workStopMarkers: { classKey: 'unit', detailCeiling: 0, reportOnly: true, label: 'Stop-work no-authority / matrix-drift observations — identity-free', route: '#/work-stop' },
+  // ADR-0225: a managerial transition is counted once for its role; the
+  // portfolio contents and the act stream are report-only and disclosed by the
+  // single managerial-handover reader, never the generic seat projection.
+  mgrHandovers: { classKey: 'unit', detailCeiling: 0, reportOnly: true, label: 'Declared managerial portfolio transitions (report only; state re-derived on read)', route: '#/manager-handover' },
+  mgrHandoverActs: { classKey: 'unit', detailCeiling: 0, reportOnly: true, label: 'Append-only outgoing brief, successor acceptance, governor release and dispute acts (report only)', route: '#/manager-handover' },
+  mgrHandoverMarkers: { classKey: 'unit', detailCeiling: 0, reportOnly: true, label: 'Managerial-handover no-authority / dispute observations — identity-free', route: '#/manager-handover' },
   // ADR-0216: a deal thesis, its promises, their readings and one-off costs are
   // ENTERPRISE material — a synergy belongs to the whole deal, not to one line's
   // reading of it, and below the executive altitude there is no honest per-line
@@ -933,6 +939,16 @@ export const ACTION_RIGHTS = Object.freeze({
   'mitigate-work-stop': { minRank: 1, maxRank: 5, label: 'Record a work control as the named work lead or a manager above that lead; never clear or restart work' },
   'assess-work-stop': { minRank: 3, maxRank: 5, label: 'Independently assess the latest mitigation as one of every frozen Director+ joint apex; hold or clear only your own key' },
   'decide-work-restart': { minRank: 1, maxRank: 5, label: 'As a named affected operator, personally confirm restart or keep the hold in force after independent clearance' },
+  // ADR-0225: the managerial portfolio handover. A director or above declares
+  // a transition and releases the outgoing authority; the outgoing manager
+  // records the portfolio brief; the successor records the acceptance or the
+  // dispute as their own first-person key.
+  'read-mgr-handover': { minRank: 1, maxRank: 5, label: 'Read the managerial portfolio handover register within your span or as a frozen joint reviewer' },
+  'declare-mgr-handover': { minRank: 3, maxRank: 5, label: 'Declare a managerial transition — outgoing manager, successor, governor, scope and dates' },
+  'brief-mgr-handover': { minRank: 1, maxRank: 5, label: 'Record the outgoing portfolio brief as the outgoing manager, or as a manager strictly above them' },
+  'accept-mgr-handover': { minRank: 1, maxRank: 5, label: 'As the named successor, personally accept the transferred portfolio' },
+  'release-mgr-handover': { minRank: 3, maxRank: 5, label: 'As the declaring governor, or above them, release the outgoing manager’s authority after the successor acceptance' },
+  'dispute-mgr-handover': { minRank: 1, maxRank: 5, label: 'As the named successor, personally dispute the handover with a stated ground' },
   // ADR-0216: the deal synergy register. Reading is enterprise material and
   // matches the record-class floor (rank 4) rather than letting a director read a
   // number the class would deny. Declaring a promise is an executive act, and the

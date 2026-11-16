@@ -152,6 +152,7 @@ import { dutyMeansRule } from './dutyMeansRules.js';
 import { portfolioReviewRule } from './portfolioReviewRules.js';
 import { shiftHandoverRule } from './shiftHandoverRules.js';
 import { workStopRule } from './workStopRules.js';
+import { mgrHandoverRule } from './mgrHandoverRules.js';
 import { sealRule } from './sealRules.js';
 // ADR-0092: the Differencing Defender declares its contract like every other rule.
 import { differencingRule } from './differencingRules.js';
@@ -1194,6 +1195,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'workStopRules.js',
     purpose: 'RULE-SWP-01: reads the complete Stop-Work Authority & Safe Restart Ledger (`buildWorkStop`, ADR-0224) and, after the declared review deadline, asks every frozen Director+ right-capable joint apex to assess the latest mitigation. The action is opaque, idempotent per (stop, mitigation round, addressee), bounded at four per commit, linked only by typed `issues-obligation` provenance, and self-closing when the hold restarts or the authority changes. A matrix tie requires every minimal apex; a no-authority, matrix-drift or record-integrity-defect case writes one identity-free `workStopMarkers` observation and asks nobody. It never clears a hold, never performs a site inspection, never authorizes a physical isolation or restarts work; only independent assessment plus an affected operator’s separate key can close the record. The `workStopAutoPropagate` pause governs both commits and explicit scans.',
     writes: ['delegations', 'links', 'workStopMarkers'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: mgrHandoverRule,
+    module: 'mgrHandoverRules.js',
+    purpose: 'RULE-MHH-01: reads the Managerial Portfolio Handover & Successor-Acceptance Register (`buildMgrHandover`, ADR-0225) with the whole-workspace view and files at most one opaque `act-inform` delegation per (deterministic `mhh1:…` signature, addressee), bounded at 4 per commit with remainder counted. FOUR conditions: `handover-brief-overdue` (a declared transition past its planned effective date without the outgoing manager’s portfolio brief — asked of the departing manager only while they hold a live line), `handover-acceptance-overdue` (a briefed transition past its planned effective date without the successor acceptance), `handover-release-overdue` (an accepted transition past its planned effective date without the governor release), and `handover-dispute-overdue` (a disputed transition past the declared containment window — one ask per minimal Director+ joint apex above EVERY reporting line of both managers, never a winner and never either participant). A person who is no longer on a live line, or a graph that cannot name a joint seat, writes ONE identity-free `mgrHandoverMarkers` observation and substitutes nobody. Asks are opaque — no role, portfolio or act text — because a delegation is readable above the addressee; the signature lives only in the typed `issues-obligation` link. Asks self-close when the condition clears or the addressee moves, and respect human closures/returns. It never records a key, never transfers an obligation and never inherits authority by date; the `mgrHandoverAutoPropagate` pause governs both commits and explicit scans.',
+    writes: ['delegations', 'links', 'mgrHandoverMarkers'],
     emits: [],
     scansWorkspace: true,
   },

@@ -174,6 +174,11 @@ import { shiftHandoverAttentionCount } from './core/domain/shiftHandover.js';
 // matrix clearance, and a separate affected-operator restart key.
 import { renderWorkStop } from './views/workStop.js';
 import { workStopAttentionCount } from './core/domain/workStop.js';
+// ADR-0225: Managerial Portfolio Handover & Successor-Acceptance — a declared
+// transition with an outgoing brief, a successor acceptance and a governor
+// release, across single-chain and matrix.
+import { renderMgrHandover } from './views/mgrHandover.js';
+import { mgrHandoverAttentionCount } from './core/domain/mgrHandover.js';
 import { renderPortfolioReview } from './views/portfolioReview.js';
 import { portfolioReviewAttentionCount } from './core/domain/portfolioReview.js';
 import { dutyMeansAttentionCount } from './core/domain/dutyMeans.js';
@@ -608,6 +613,10 @@ export const NAV = [
     // ADR-0224: stop-work authority — no restart without all independent joint
     // apex reviews and an affected operator's own key.
     { route: 'work-stop', label: 'Stop-work & restart', icon: '⛔', badge: 'workStop' },
+    // ADR-0225: managerial portfolio handover — a role does not expire with its
+    // holder; the portfolio moves only by the outgoing brief, the successor
+    // acceptance and the governor release.
+    { route: 'manager-handover', label: 'Manager handover', icon: '⇄', badge: 'mgrHandover' },
     // ADR-0121: who answers for each declared duty line when the holder is out.
     { route: 'duty-cover', label: 'Duty coverage', icon: '⛨', badge: 'dutyCoverage' },
     // ADR-0140: who is accountable to whom when one person has several managers.
@@ -781,6 +790,8 @@ const RENDERERS = {
   'shift-handover': (ctx) => renderShiftHandover(ctx),
   // ADR-0224: stop-work declaration, independent review and affected-operator key.
   'work-stop': (ctx) => renderWorkStop(ctx),
+  // ADR-0225: managerial portfolio handover and successor acceptance.
+  'manager-handover': (ctx) => renderMgrHandover(ctx),
   conflicts: (ctx) => renderConflicts(ctx),
   conflict: (ctx, segments) => renderConflictDetail(ctx, safeDecode(segments[1])),
   recognition: (ctx) => renderRecognition(ctx),
@@ -1663,6 +1674,10 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       // ADR-0224: holds requiring work-lead controls, overdue joint-apex review,
       // or the affected operator's second key, all from the same reader.
       workStop: workStopAttentionCount(state, { now: at, settings: state.settings, seat: seatCtx?.seat || null }),
+      // ADR-0225: managerial transitions whose outgoing brief, successor
+      // acceptance, governor release or joint-apex dispute review is owed to
+      // this seat, all from the same reader.
+      mgrHandover: mgrHandoverAttentionCount(state, { now: at, settings: state.settings, seat: seatCtx?.seat || null }),
       // Schema v32: drafts written from case facts that still await a human.
       comms: (state.commsDrafts || []).filter((d) => d && d.status === 'draft').length,
       due: dueMeetings(state, at, state.settings).length,
@@ -2211,6 +2226,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       portfolio: 'Decision portfolio — sequencing, coupling and bottleneck analysis',
       'portfolio-review': 'Portfolio review — keep, fix, sell, or exit every declared business unit on dated evidence',
       'work-stop': 'Stop-work & safe restart — an active hold, independent clearance, then the affected operator’s key',
+      'manager-handover': 'Manager handover — a role does not expire with its holder: brief, successor acceptance, governor release',
       performance: 'Performance recovery — due process, evidence and the cost of waiting',
       survival: 'Delivery survival — how long work actually takes, with censoring and competing risks',
       wait: 'Cost of waiting — what every open item costs per week of waiting, priced and scenario-simulated',

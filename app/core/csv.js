@@ -244,6 +244,9 @@ import { buildShiftHandover, shiftHandoverCsvRows } from './domain/shiftHandover
 // ADR-0224: identity-free Stop-Work & Safe Restart aggregates from the panel reader.
 import { SWP_CSV_COLUMNS, SWP_CSV_DESCRIPTOR, SWP_CSV_SCOPE } from './domain/workStopRegistry.js';
 import { buildWorkStop, workStopCsvRows } from './domain/workStop.js';
+// ADR-0225: identity-free Managerial Portfolio Handover aggregates.
+import { MHH_CSV_COLUMNS, MHH_CSV_DESCRIPTOR, MHH_CSV_SCOPE } from './domain/mgrHandoverRegistry.js';
+import { buildMgrHandover, mgrHandoverCsvRows } from './domain/mgrHandover.js';
 import {
   CAPITAL_RATIONING_CSV_COLUMNS,
   CAPITAL_RATIONING_CSV_DESCRIPTOR,
@@ -1558,6 +1561,10 @@ export const CSV_EXPORTS = [
   // #166 (ADR-0224): aggregate stop states and review stages only. No person,
   // work area, hazard text, control or evidence note crosses this boundary.
   SWP_CSV_DESCRIPTOR,
+  // #167 (ADR-0225): aggregate transition states and portfolio categories only.
+  // No manager, successor, governor, role reference or act text crosses this
+  // boundary.
+  MHH_CSV_DESCRIPTOR,
 ];
 
 function personLookup(state) {
@@ -6861,6 +6868,16 @@ export function buildScopeTable(state, scope, now) {
       return {
         columns: SWP_CSV_COLUMNS.map((key) => ({ key, header: key })),
         rows: workStopCsvRows(report),
+      };
+    }
+    case MHH_CSV_SCOPE: {
+      // CSV scope #167 (ADR-0225, Schema v180). Same reader as
+      // `#/manager-handover`; aggregate only. No manager, successor, governor,
+      // role reference, portfolio item or act text crosses this boundary.
+      const report = buildMgrHandover(state, { now, settings: state.settings || {}, seat: null });
+      return {
+        columns: MHH_CSV_COLUMNS.map((key) => ({ key, header: key })),
+        rows: mgrHandoverCsvRows(report),
       };
     }
     case 'earned-value-delivery': {
