@@ -276,6 +276,13 @@ export const RECORD_POLICIES = Object.freeze({
   dutyMeansRequirements: { classKey: 'unit', detailCeiling: 0, label: 'Required authority, budget and protected-time pillars per duty (report only)', route: '#/means' },
   dutyMeansActs: { classKey: 'unit', detailCeiling: 0, label: 'Controlling-line supply, refusal, withdrawal and joint-apex entrepreneurial-gap acts (report only)', route: '#/means' },
   dutyMeansMarkers: { classKey: 'unit', detailCeiling: 0, label: 'Duty-without-means observation markers — no joint apex, holder off roster (identity-free)', route: '#/means' },
+  // ADR-0223: a changeover brief names two operators and the station they stood
+  // at, so ALL rows are report-only (`detailCeiling: 0`); `buildShiftHandover`
+  // discloses briefs at the manager altitude and redacts identities above the
+  // director altitude, and the rule's markers are identity-free by construction.
+  shiftHandovers: { classKey: 'unit', detailCeiling: 0, label: 'Shift handover changeover briefs — severity, station summary, open actions with owners, contingency (report only; state re-derived on read)', route: '#/shift-handover' },
+  shiftHandoverReadbacks: { classKey: 'unit', detailCeiling: 0, label: 'The incoming operator’s two-key acts — synthesis or dispute, dated and immutable (report only)', route: '#/shift-handover' },
+  shiftHandoverMarkers: { classKey: 'unit', detailCeiling: 0, label: 'Shift-handover observation markers — no joint seat above both lines (identity-free)', route: '#/shift-handover' },
   // ADR-0216: a deal thesis, its promises, their readings and one-off costs are
   // ENTERPRISE material — a synergy belongs to the whole deal, not to one line's
   // reading of it, and below the executive altitude there is no honest per-line
@@ -901,6 +908,14 @@ export const ACTION_RIGHTS = Object.freeze({
   'declare-duty-means': { minRank: 1, maxRank: 5, label: 'Declare an accountable duty or required means pillar, retire a duty as demanding line, or scan parity' },
   'supply-duty-means': { minRank: 2, maxRank: 5, label: 'Record supplied, declined or revoked means on a requirement controlled by your line — never self-certified' },
   'govern-duty-means': { minRank: 3, maxRank: 5, label: 'Accept a bounded Simons entrepreneurial gap strictly above both the demanding line and the controlling line' },
+  // ADR-0223: the Shift Handover & Two-Key Readback Ledger. Both the brief and
+  // the readback are FIRST-PERSON acts at every altitude — the outgoing
+  // operator declares their own boundary transfer; only the declared incoming
+  // operator turns the second key. Reading is open from the frontline upward,
+  // with identities redacted above the director altitude.
+  'read-shift-handover': { minRank: 1, maxRank: 5, label: 'Read the shift-handover & two-key readback ledger: what was handed over, what was synthesized, what was disputed and what is overdue' },
+  'declare-shift-handover': { minRank: 1, maxRank: 5, label: 'Declare the outgoing changeover brief for the station you hand over, cancel it before any key turns, or scan the register' },
+  'readback-shift-handover': { minRank: 1, maxRank: 5, label: 'Turn the incoming key: synthesize the handover you accepted, or dispute it with its named reason' },
   // ADR-0216: the deal synergy register. Reading is enterprise material and
   // matches the record-class floor (rank 4) rather than letting a director read a
   // number the class would deny. Declaring a promise is an executive act, and the

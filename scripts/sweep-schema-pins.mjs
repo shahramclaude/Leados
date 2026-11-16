@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * scripts/sweep-schema-pins.mjs — mechanical release-pin sweep, re-pointed at
- * every schema bump. Current target: v170 → v171 (ADR-0217, Session 290).
+ * every schema bump. Current target: v177 → v178 (ADR-0223, Session 300).
  * ADR-0217 adds CSV scope #159 and one rule on the shared spine, so
  * `spineRules` moves the default post-commit count pin 133 → 134.
  *
@@ -54,9 +54,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const SWEEP = {
-  schema: { from: 176, to: 177 },
-  csvExports: null,
-  spineRules: null,
+  schema: { from: 177, to: 178 },
+  csvExports: { from: [164], to: 165 },
+  spineRules: { from: [138], to: 139 },
 };
 
 const ROOT = path.resolve(import.meta.dirname, '..');

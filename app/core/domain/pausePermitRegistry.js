@@ -264,6 +264,10 @@ export const PAUSE_PERMIT_MATRIX_REACH_SWITCHES = Object.freeze([
   // reporting lines.
   'dutyMeansAutoPropagate',
   'portfolioAutoPropagate',
+  // ADR-0223: the shift-handover switch. The rule reads the live matrix for the
+  // joint seat above EVERY line of both operators when a handover is overdue or
+  // disputed, so silencing it reaches across reporting lines.
+  'shiftHandoverAutoPropagate',
 ]);
 
 export function pausePermitReachesMatrix(key) {
@@ -331,6 +335,10 @@ export const PAUSE_PERMIT_SWITCH_RULES = Object.freeze({
   // the joint apex.
   dutyMeansAutoPropagate: 'dutyMeansRules.js',
   portfolioAutoPropagate: 'portfolioReviewRules.js',
+  // ADR-0223: silencing the ask that requests confirmation of an overdue or
+  // disputed handover. A switch that hides an uncontained boundary must not
+  // itself be hidden.
+  shiftHandoverAutoPropagate: 'shiftHandoverRules.js',
 });
 
 /** Only graph-reading rules belong to the matrix census. Owner-directed rules

@@ -238,6 +238,9 @@ import { buildDutyMeans, dutyMeansCsvRows } from './domain/dutyMeans.js';
 import { buildPortfolioReview, portfolioReviewCsvRows } from './domain/portfolioReview.js';
 import { PRV_CSV_COLUMNS, PRV_CSV_DESCRIPTOR, PRV_CSV_SCOPE } from './domain/portfolioReviewRegistry.js';
 import { DWM_CSV_COLUMNS, DWM_CSV_DESCRIPTOR, DWM_CSV_SCOPE } from './domain/dutyMeansRegistry.js';
+// ADR-0223: the Shift Handover & Two-Key Readback Ledger — aggregate only.
+import { SHO_CSV_COLUMNS, SHO_CSV_DESCRIPTOR, SHO_CSV_SCOPE } from './domain/shiftHandoverRegistry.js';
+import { buildShiftHandover, shiftHandoverCsvRows } from './domain/shiftHandover.js';
 import {
   CAPITAL_RATIONING_CSV_COLUMNS,
   CAPITAL_RATIONING_CSV_DESCRIPTOR,
@@ -1544,6 +1547,11 @@ export const CSV_EXPORTS = [
   // one currency row per declared currency, aggregate and identity-free.
   DWM_CSV_DESCRIPTOR,
   PRV_CSV_DESCRIPTOR,
+  // #165 (ADR-0223): the shift-handover & two-key readback ledger — one summary
+  // row, one row per severity and one row per state. No operator, station,
+  // action, synthesis or dispute reason crosses this boundary; an uncomputable
+  // figure exports BLANK with its reason rather than a zero.
+  SHO_CSV_DESCRIPTOR,
 ];
 
 function personLookup(state) {
@@ -6827,6 +6835,17 @@ export function buildScopeTable(state, scope, now) {
       return {
         columns: DWM_CSV_COLUMNS.map((key) => ({ key, header: key })),
         rows: dutyMeansCsvRows(report),
+      };
+    }
+    case SHO_CSV_SCOPE: {
+      // CSV scope #165 (ADR-0223, Schema v178). Built from the SAME reader the
+      // `#/shift-handover` panel renders, with no seat: every figure is an exact
+      // integer over the whole record, so no operator, station, action or dispute
+      // note is reachable from this export.
+      const report = buildShiftHandover(state, { now, settings: state.settings || {}, seat: null });
+      return {
+        columns: SHO_CSV_COLUMNS.map((key) => ({ key, header: key })),
+        rows: shiftHandoverCsvRows(report),
       };
     }
     case 'earned-value-delivery': {

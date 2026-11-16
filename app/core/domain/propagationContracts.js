@@ -150,6 +150,7 @@ import { riskAppetiteRule } from './riskAppetiteRules.js';
 import { incentiveRule } from './incentiveRules.js';
 import { dutyMeansRule } from './dutyMeansRules.js';
 import { portfolioReviewRule } from './portfolioReviewRules.js';
+import { shiftHandoverRule } from './shiftHandoverRules.js';
 import { sealRule } from './sealRules.js';
 // ADR-0092: the Differencing Defender declares its contract like every other rule.
 import { differencingRule } from './differencingRules.js';
@@ -1176,6 +1177,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'portfolioReviewRules.js',
     purpose: 'RULE-PRV-01: right-capable opaque review (`review-portfolio` >= rank 4), verdict (`verdict-portfolio` rank 5 -> chief queue + `chief-decision-owed` marker), milestone slippage (`track-portfolio` >= rank 3 -> milestone update only), and past-due sell/exit (`verdict-portfolio` rank 5) obligations from `buildPortfolioReview`. Never asks a lower apex to perform an act its rights refuse, never names `LEADER_ID` as a person delegation addressee, writes identity-free `portfolioReviewMarkers`, self-closes, bounds to 4 per commit, and respects `portfolioAutoPropagate`.',
     writes: ['delegations', 'links', 'portfolioReviewMarkers'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: shiftHandoverRule,
+    module: 'shiftHandoverRules.js',
+    purpose: 'RULE-SHO-01: reads the Shift Handover & Two-Key Readback Ledger (`buildShiftHandover`, ADR-0223) with the whole-workspace view — and on any commit, because a readback instant passes with the calendar — and files at most one opaque `act-inform` delegation per (deterministic `sho1:…` signature, addressee), bounded at 4 per commit with remainder counted. TWO conditions: `readback-overdue` — a brief past its declared readback instant whose incoming operator has not synthesized — and `readback-disputed` — a disputed handover still uncontained past its readback instant. Both asks go to the lowest joint seat above EVERY line of BOTH operators (`matrixJointApex` over the union of the outgoing and incoming operators’ active manager lines), never to one peer line over the other, and never to either operator. A genuine diamond tie files one ask per joint apex; a graph that cannot name such a seat writes ONE identity-free `shiftHandoverMarkers` observation and substitutes nobody. The ask text is deliberately opaque — no station, no name, no abnormality — because a delegation is readable above the addressee; the signature lives only in the typed `issues-obligation` link. Asks self-close when the condition clears or the addressee moves. It never clocks anyone in or out, never records or edits a readback, never cancels a brief, never assigns an action owner, never converts a dispute into a containment and never rates a person; pause-governed on every path (`shiftHandoverAutoPropagate`), including the explicit scan.',
+    writes: ['delegations', 'links', 'shiftHandoverMarkers'],
     emits: [],
     scansWorkspace: true,
   },
