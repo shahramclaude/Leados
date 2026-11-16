@@ -1,6 +1,18 @@
-## 2026-11-16 — Improvement-suggestion ledger wiring is in progress — not shipped
+## 2026-11-16 — The idea was filed, answered, claimed and confirmed — and the record proves all four keys
 
-This branch contains an incomplete continuation of [ADR-0227](docs/adr/0227-frontline-improvement-suggestion-ledger.md): schema v185, the computed matrix route, action and post-commit wiring, `#/suggestions`, CSV #173 and a generated method diagram. It is **not a shipped feature**. The focused end-to-end test still fails at triage because the writer's raw timestamp key does not match the fail-closed act normalizer; confirmation has the same unresolved key mismatch. The required display == stored == computed check was not reached. See [ROADMAP.md](ROADMAP.md) and [AI-SESSION-LOG.md](AI-SESSION-LOG.md) for the exact stop point and next step.
+**Frontline / mid-manager → Improvement suggestions** (`#/suggestions`) is the register where an ordinary improvement proposal is *answered*, not merely collected: a person files the waste they see and the change they propose, and the register owes them a dated response from a route the reporting graph computes — never a queue somebody may quietly ignore.
+
+**The route is computed, never chosen.** A submitter with two managers has two candidate deciders, so the register routes the decision to the **joint apex above every active line** — the lowest seat(s) above both — instead of silently picking one of two managers. A single-chain submitter routes to their manager and nothing about the matrixed case leaks in.
+
+**Three human keys close one suggestion, and no shortcut exists.** The route triages — every member records `accept` or `decline`, and a split is printed rather than averaged. An acceptance names a reachable owner and a target day. The owner claims the effect. And the confirmation is an **independent key**: the submitter or a route member, never the owner confirming their own work. Only that second key closes the record — the passage of time never does.
+
+**What it refuses, and prints.** A suggestion filed in someone else's name (it is a first-person act). A decision after the route settled. An owner outside the seat's reach. A decline that names an owner. And every write is run through the fail-closed loader before it is stored — a row the register could not read back is refused now, with nothing saved, rather than silently erased on the next reload.
+
+**The rule asks, and never decides.** `RULE-KZT-01` files one dated, opaque ask to the route when a response or target goes overdue — with no problem text, no proposal text and no submitter name in the ask — and closes its own ask when a human answers. It never triages, never claims, never confirms. The pause switch governs every path.
+
+**The numbers reconcile in public.** Per-area answered-in-window and implemented rates are withheld below a floor of three and carry complementary suppression; refused acts and dropped rows are counted beside the totals, and the panel prints whether the rows add up and whether anything was refused — two different claims, printed as two sentences. The aggregate CSV (#173) carries no name, no person id and no free text.
+
+The record ends at `closed-confirmed` — nothing re-reads the station later to ask whether the gain held; that follow-up duty is logged as Planned in [ROADMAP.md](ROADMAP.md).
 
 ## 2026-11-16 — A plan of record that cannot be approved against a number nobody observed
 

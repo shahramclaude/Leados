@@ -273,8 +273,8 @@ export function createSuggestionActions(store, { now, idFactory }) {
       if (existingActs.length >= L.acts) return fail('The act ledger is full. Nothing was saved.', null, REFUSAL('ledger-full'));
       const id = idFactory('sua');
       const act = decision === 'accept'
-        ? { id, suggestionId: suggestion.id, actorId: check.actorId, kind: 'triage', decision, reason, ownerId, targetDay, at: decidedAt }
-        : { id, suggestionId: suggestion.id, actorId: check.actorId, kind: 'triage', decision, reason, ownerId: null, targetDay: null, at: decidedAt };
+        ? { id, suggestionId: suggestion.id, actorId: check.actorId, kind: 'triage', decision, reason, ownerId, targetDay, decidedAt }
+        : { id, suggestionId: suggestion.id, actorId: check.actorId, kind: 'triage', decision, reason, ownerId: null, targetDay: null, decidedAt };
       const loaded = normalizeSuggestionActs([...existingActs, act], normalizeSuggestions(rows('suggestions'), []), []);
       const stored = loaded.find((candidate) => candidate.id === id) || null;
       if (!stored) return fail('The decision could not be stored as an act this register can read back. Nothing was saved.', 'reason', REFUSAL('unreadable'));
@@ -365,7 +365,7 @@ export function createSuggestionActions(store, { now, idFactory }) {
       const existingActs = normalizeSuggestionActs(rows('suggestionActs'), normalizeSuggestions(rows('suggestions'), []), []);
       if (existingActs.length >= L.acts) return fail('The act ledger is full. Nothing was saved.', null, REFUSAL('ledger-full'));
       const id = idFactory('sua');
-      const act = { id, suggestionId: suggestion.id, actorId: check.actorId, kind: 'confirm', note, at: confirmedAt };
+      const act = { id, suggestionId: suggestion.id, actorId: check.actorId, kind: 'confirm', note, confirmedAt };
       const loaded = normalizeSuggestionActs([...existingActs, act], normalizeSuggestions(rows('suggestions'), []), []);
       const stored = loaded.find((candidate) => candidate.id === id) || null;
       if (!stored) return fail('The confirmation could not be stored as an act this register can read back. Nothing was saved.', 'note', REFUSAL('unreadable'));
