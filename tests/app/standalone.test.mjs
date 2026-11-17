@@ -457,11 +457,12 @@ test('standalone artifact exists and is a single inline HTML document', () => {
   // headroom per the convention above.
   // ADR-0235/0236 (Sessions 314/315, Schema v191) adds the information-request
   // register and follow-up lineage. The v190 source was not in the prior artifact,
-  // so this build incorporates both the seven request modules and the v191
-  // lineage view/selector: 20,352,701 bytes / 1,051 source modules = 19,365 bytes
-  // per module, still below the unchanged density guard. Move the absolute
-  // ceiling to measured size plus headroom; this is not a relaxation of density.
-  assert.ok(bytes < 20_450_000, `standalone file is unexpectedly large (${bytes} bytes)`);
+  // so this build incorporates the seven distributed-equity modules and the
+  // ADR-0238 method diagram: 20,645,547 bytes / 1,063 source modules = 19,422
+  // bytes per module, still below the unchanged density guard. Move the
+  // absolute ceiling to measured size plus headroom; this is not a relaxation
+  // of density.
+  assert.ok(bytes < 20_750_000, `standalone file is unexpectedly large (${bytes} bytes)`);
   // Derived from the folder, not from a list in this file: the day a panel adds
   // a diagram, an enumerator that names the old two would still pass. Same
   // lesson the build script learned in ADR-0186.

@@ -397,6 +397,8 @@ import {
 } from './domain/vySchema.js';
 // ADR-0231 (Schema v184): the Integrated Business Plan / S&OP Cycle Register.
 import { normalizeIbpSettings } from './domain/ibpRegistry.js';
+// ADR-0238: the Distributed-Work Equity Register's conventions, clamped on load.
+import { normalizeDweSettings, normalizeDweWindows, normalizeDweSittings, normalizeDweMarkers } from './domain/distributedEquitySchema.js';
 import {
   normalizeIbpCycles,
   normalizeIbpDemandRows,
@@ -1353,7 +1355,7 @@ export {
 // notification is stored; each is re-derived on read, so a hand-edited file
 // cannot carry a decision nobody made, an extension the instrument did not
 // allow, or a window that defaulted itself.
-export const SCHEMA_VERSION = 192;
+export const SCHEMA_VERSION = 193;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -2795,6 +2797,11 @@ export const DEFAULT_SETTINGS = Object.freeze({
   // ADR-0201: station-coverage conventions (ask window, disclosure floor and the
   // automation switch). Distributed as one declared capability, not two halves.
   ...normalizeStationCoverageSettings({}),
+  // ADR-0238: the distributed-work equity conventions — the unsociable-hour
+  // ceiling, the trailing window and the three evidence floors below which no
+  // equity verdict is claimed. Clamped on load, refused (never clamped) by the
+  // setter, and printed on the Method card. None is fitted from the record.
+  ...normalizeDweSettings({}),
   // ADR-0191: the cross-line priority ballot conventions — the ballot deadline,
   // the follow-up ask window and the ballot floor below which no aggregate is
   // claimed. Clamped on load, refused (never clamped) by the setter, and printed
@@ -3904,6 +3911,14 @@ export const COLLECTIONS = [
   'informationRequests',
   'informationRequestActs',
   'informationRequestMarkers',
+  // ADR-0238 (Schema v193): the Distributed-Work Equity Register. Sourced
+  // working windows, declared unsociable-hour sittings and identity-free rule
+  // markers. No burden figure, share, verdict, coverage claim or escalation is
+  // stored: each is re-derived on read, so a hand-edited file cannot carry an
+  // equity verdict its own rows do not imply.
+  'dweWindows',
+  'dweSittings',
+  'dweMarkers',
 ];
 
 /** Stable empty state. `now` is an ISO string so the result is a pure value. */
@@ -4173,6 +4188,16 @@ export function normalizeSettings(raw) {
     // ADR-0226: the shared-dependency concentration rule's switch. Declared in
     // the persistence vocabulary so updateSettings can move it, and defaulted ON
     // so a switch that hides a would-exceed verdict is never the silent default.
+    // ADR-0238: the distributed-work equity rule's switch. Declared in the
+    // persistence vocabulary so updateSettings can move it, and defaulted ON so
+    // a switch that hides an over-ceiling burden is never the silent default.
+    dweAutoPropagate: s.dweAutoPropagate !== false,
+    // Repair of a standing red reported at base HEAD: two rule switches the
+    // pause census maps were not carried in settings, so the only writes that
+    // can silence those rules were refused as unknown keys. Declared here with
+    // the same defaulted-ON shape as every switch above.
+    synergyAutoPropagate: s.synergyAutoPropagate !== false,
+    earnedValueAutoPropagate: s.earnedValueAutoPropagate !== false,
     riskConcentrationAutoPropagate: s.riskConcentrationAutoPropagate !== false,
     forecastCoveragePct: clampInt(s.forecastCoveragePct, 50, 95, d.forecastCoveragePct),
     tempoDelegatedMaxDays: clampInt(s.tempoDelegatedMaxDays, 1, 90, d.tempoDelegatedMaxDays),
@@ -4764,6 +4789,11 @@ export function normalizeSettings(raw) {
     // census reads would be a switch the record does not hold.
     ...normalizeMgrHandoverSettings(s),
     ...normalizeVySettings(s),
+    // ADR-0238: named here because `normalizeSettings` rebuilds the settings
+    // object field by field — a convention spread into DEFAULT_SETTINGS but
+    // not named here would be silently DROPPED on every load, and the ceiling
+    // the rule reads would be a number the record does not hold.
+    ...normalizeDweSettings(s),
   // ADR-0227: named here because `normalizeSettings` rebuilds the settings
   // object field by field — the pause switch that silences RULE-KZT-01 would
   // vanish on every load if it were spread anywhere else.
@@ -9447,6 +9477,15 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.riskAppetiteStatements = normalizeRiskAppetiteStatements(raw.riskAppetiteStatements, warnings);
   state.riskDeclarations = normalizeRiskDeclarations(raw.riskDeclarations, warnings);
   state.riskAppetiteMarkers = normalizeRaMarkers(raw.riskAppetiteMarkers, warnings);
+  // ADR-0238: a window, sitting or marker that cannot be read exactly is
+  // DROPPED with a counted warning — never repaired, re-timed, re-zoned or
+  // re-pointed at another person. A window with no written source is dropped
+  // at this boundary too: a claim about a human being's daily life with no
+  // source is exactly the plausible default the mandate forbids. No burden
+  // figure is stored.
+  state.dweWindows = normalizeDweWindows(raw.dweWindows, warnings);
+  state.dweSittings = normalizeDweSittings(raw.dweSittings, warnings);
+  state.dweMarkers = normalizeDweMarkers(raw.dweMarkers, warnings);
   // ADR-0229 (Schema v182): a case, option, cost line or act that cannot be read
   // exactly is DROPPED with a counted warning — never repaired, re-termed,
   // re-priced or re-pointed at another case. A cost line that does not belong to
@@ -10465,6 +10504,21 @@ export const MIGRATIONS = {
     schemaVersion: 192,
     standardRevisions: Array.isArray(v191.standardRevisions) ? v191.standardRevisions : [],
     standardRevisionBriefs: Array.isArray(v191.standardRevisionBriefs) ? v191.standardRevisionBriefs : [],
+  }),
+  // 192 → 193: ADR-0238 adds THREE EMPTY ledgers (`dweWindows`, `dweSittings`,
+  // `dweMarkers`) and the register rule's pause plus its five conventions. No
+  // working window, sitting, burden figure, share or verdict is inferred from a
+  // calendar, a meeting load, a roster or this device's time zone: a person's
+  // daily working hours are a sourced human declaration, and manufacturing one
+  // at upgrade time would put a claim about somebody's life on the record that
+  // nobody made — and a ceiling on minutes nobody declared.
+  192: (v192) => ({
+    ...v192,
+    schemaVersion: 193,
+    dweWindows: Array.isArray(v192.dweWindows) ? v192.dweWindows : [],
+    dweSittings: Array.isArray(v192.dweSittings) ? v192.dweSittings : [],
+    dweMarkers: Array.isArray(v192.dweMarkers) ? v192.dweMarkers : [],
+    settings: { ...(v192.settings || {}), ...normalizeDweSettings(v192.settings || {}) },
   }),
   // 183 → 184: ADR-0231 adds SEVEN EMPTY ledgers (`ibpCycles`, `ibpDemandRows`,
   // `ibpCapacityRows`, `ibpOptions`, `ibpDecisions`, `ibpGrades`, `ibpMarkers`)

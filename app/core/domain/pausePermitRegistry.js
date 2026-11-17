@@ -315,6 +315,12 @@ export const PAUSE_PERMIT_MATRIX_REACH_SWITCHES = Object.freeze([
   // seat above every carrying line; the reading remains open and visible, and
   // no verdict is hidden.
   'riskConcentrationAutoPropagate',
+  // ADR-0238: an over-ceiling unsociable-hour ask follows the joint apex above
+  // EVERY line that convenes or holds the burden — the person's own lines and
+  // the chair lines of their over-ceiling sittings — so silencing it reaches
+  // across reporting lines, and those lines' managers are not told that
+  // somebody is carrying the unsociable hour over the declared ceiling.
+  'dweAutoPropagate',
 ]);
 
 export function pausePermitReachesMatrix(key) {

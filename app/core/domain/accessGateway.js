@@ -26,6 +26,8 @@ import { SPEAK_UP_RIGHTS } from './speakUpRegistry.js';
 import { SYNERGY_RIGHTS } from './synergyRegistry.js';
 import { EV_RIGHTS } from './earnedValueRegistry.js';
 import { RA_RIGHTS } from './riskAppetiteRegistry.js';
+// ADR-0238: the distributed-work equity register's two rights.
+import { DWE_RIGHTS } from './distributedEquityRegistry.js';
 // ADR-0229: the capability sourcing register's four rights.
 import { SRC_RIGHTS } from './sourcingRegistry.js';
 import { VY_RIGHTS } from './vyRegistry.js';
@@ -307,6 +309,14 @@ const groups = [
   [RA_RIGHTS.READ, 'riskAppetiteReport riskAppetiteAttentionCount riskAppetiteCandidates riskAppetiteConcentration'],
   [RA_RIGHTS.DECLARE, 'riskAppetiteDeclareStatement riskAppetiteRetireStatement riskAppetiteScan'],
   [RA_RIGHTS.CARRY, 'riskAppetiteDeclareRisk riskAppetiteWithdrawRisk'],
+  // ADR-0238: the distributed-work equity register. Reading is individual
+  // material, open at every rank — the READER discloses per-person rows only
+  // below the executive altitude and counts above it. Declaring a window for
+  // another person or a sitting is a leader's act narrowed inside the action to
+  // a seat that HOLDS the person (or the chair); the conventions and the scan
+  // are the declarer's acts because the conventions bound every verdict.
+  [DWE_RIGHTS.READ, 'distributedEquityReport distributedEquityAttentionCount'],
+  [DWE_RIGHTS.DECLARE, 'distributedEquityDeclareWindow distributedEquityWithdrawWindow distributedEquityDeclareSitting distributedEquityRetractSitting distributedEquitySetConventions distributedEquityScan'],
   // ADR-0229: the capability sourcing & firm-boundary register. Reading is
   // portfolio material (rank 3+). Recording an option is the leader who HOLDS
   // the capability (rank 2+), narrowed inside the action to a line the case
@@ -775,6 +785,10 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // its writes are still gated — the register would vanish exactly when a real
 // organisation turned enforcement on.
 'riskAppetiteReport', 'riskAppetiteAttentionCount', 'riskAppetiteCandidates', 'riskAppetiteConcentration',
+// ADR-0238: the distributed-work equity register's pure read surface. Both
+// re-prove the read right inside the action, exactly as the risk-appetite
+// register re-proves it.
+'distributedEquityReport', 'distributedEquityAttentionCount',
 // ADR-0229: the capability sourcing register's pure read surface. Every one of
 // these re-proves the read right inside the action, because a module whose
 // reads are absent from SAFE_READS is unreadable under enforcement while its

@@ -229,6 +229,9 @@ import { EV_CSV_COLUMNS, EV_CSV_DESCRIPTOR } from './domain/earnedValueRegistry.
 // ADR-0219: CSV #161 — the enterprise risk-appetite register, identity-free.
 import { buildRiskAppetite, riskAppetiteCsvRows } from './domain/riskAppetite.js';
 import { RA_CSV_COLUMNS, RA_CSV_DESCRIPTOR, RA_CSV_SCOPE } from './domain/riskAppetiteRegistry.js';
+// ADR-0238: identity-free Distributed-Work Equity aggregates (CSV scope #179).
+import { DWE_CSV_COLUMNS, DWE_CSV_DESCRIPTOR, DWE_CSV_SCOPE } from './domain/distributedEquityRegistry.js';
+import { buildDistributedEquity, distributedEquityCsvRows } from './domain/distributedEquity.js';
 // ADR-0229: CSV #170 — the capability sourcing & firm-boundary register.
 import { SRC_CSV_COLUMNS, SRC_CSV_DESCRIPTOR, SRC_CSV_SCOPE } from './domain/sourcingRegistry.js';
 import { buildSourcing } from './domain/sourcing.js';
@@ -1678,6 +1681,13 @@ export const CSV_EXPORTS = [
   // BLANK with its reason, and a rate whose denominator is not published exports
   // blank, never zero.
   RQR_CSV_DESCRIPTOR,
+  // #179 (ADR-0238): the distributed-work equity register — aggregate and
+  // identity-free. One summary row and one row per convening line as a stable
+  // L-code. No person id, person name, window, wall time, zone, source or note
+  // crosses this boundary: the person rows exist only on the screen, below the
+  // executive altitude. An uncomputable figure exports BLANK with its reason,
+  // never a zero.
+  DWE_CSV_DESCRIPTOR,
 ];
 
 function personLookup(state) {
@@ -6949,6 +6959,16 @@ export function buildScopeTable(state, scope, now) {
       return {
         columns: RA_CSV_COLUMNS.map((key) => ({ key, header: key })),
         rows: riskAppetiteCsvRows(report),
+      };
+    }
+    case DWE_CSV_SCOPE: {
+      // CSV scope #179 (ADR-0238, Schema v193). Built from the SAME reader the
+      // panel renders, with no seat: every figure is an aggregate over the whole
+      // record, so no identity is reachable from this export.
+      const report = buildDistributedEquity(state, { now, settings: state.settings || {}, seat: null });
+      return {
+        columns: DWE_CSV_COLUMNS.map((key) => ({ key, header: key })),
+        rows: distributedEquityCsvRows(report),
       };
     }
     case INC_CSV_SCOPE: {
