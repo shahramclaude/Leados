@@ -210,6 +210,7 @@ import { voiceRule } from './voiceRules.js';
 import { mutualAidRule } from './mutualAidRules.js';
 import { personalDealingRule } from './personalDealingRules.js';
 import { permitToWorkRule } from './permitToWorkRules.js';
+import { authorisationRule } from './authorisationRules.js';
 import { incidentCommandRule } from './incidentCommandRules.js';
 import { sourcingRule } from './sourcingRules.js';
 import { ibpRule } from './ibpRules.js';
@@ -1316,6 +1317,12 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // its atmosphere is outside its own declared limits, or that two permitted
   // activities contradict each other on the same plant.
   permitToWorkRule,
+  // ADR-0247: the statutory-authorisation rule reads the live matrix for the joint
+  // apex above every line holding ANY accountable hand, so silencing it reaches
+  // across reporting lines — and nobody is told that a consent lapsed, that a
+  // prohibition notice stands, that an improvement notice is past its day, that a
+  // condition is unevidenced, or that a renewal window opened with nothing filed.
+  authorisationRule,
   workplaceAdjustmentRule,
   // ADR-0229: the Capability Sourcing & Firm-Boundary Register. ONE rule reads
   // the finished register and files at most one dated ask per condition: a

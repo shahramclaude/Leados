@@ -474,6 +474,26 @@ import {
   normalizePtwSettings,
   normalizePtwSuspensions,
 } from './domain/permitToWorkSchema.js';
+// ADR-0247 (Schema v201): the Statutory Authorisation & Licence-to-Operate
+// Register. Declared authorities on their written instruments, the conditions the
+// instruments carry, dated evidence against each condition, regulator actions with
+// their close-outs, renewals as submissions and decisions, and identity-free rule
+// markers. Every loader is fail-closed: a row that cannot be read exactly is
+// DROPPED with a counted warning, never repaired into a plausible default — an
+// authority with no instrument is dropped at this boundary too, as is a holder list
+// read partially, because an authority whose second line is invisible is exactly
+// the matrix failure the mandate names. A closure recorded against a revocation is
+// KEPT and printed as having no effect: deleting the row would erase the
+// revocation, and deleting the fields would erase the belief that it was lifted.
+import {
+  normalizeLtoActions,
+  normalizeLtoAuthorisations,
+  normalizeLtoConditions,
+  normalizeLtoEvidence,
+  normalizeLtoMarkers,
+  normalizeLtoRenewals,
+  normalizeLtoSettings,
+} from './domain/authorisationSchema.js';
 import {
   normalizeDwlClearances,
   normalizeDwlDealings,
@@ -1447,7 +1467,18 @@ export {
 // re-derived on read, so a hand-edited file cannot carry a commander nobody
 // designated, a notification nobody made, or a deadline the record does not
 // compute.
-export const SCHEMA_VERSION = 200;
+// ADR-0247 (Schema v201): the Statutory Authorisation & Licence-to-Operate
+// Register — the written instruments a site needs in order to be allowed to
+// operate, the conditions each instrument imposes with the dated evidence behind
+// each one, and the regulator's own acts (suspension, revocation, prohibition and
+// improvement notices) with their written basis, compliance day and close. Six
+// additive ledgers, EMPTY at upgrade. No authority, condition, evidence row,
+// regulator action or renewal is inferred from a permit to work, an incident, a
+// stop-work hold, a sourcing case or a regulatory undertaking: an authorisation is
+// granted by an external body on a written instrument, and nothing the workspace
+// already holds is one. Every state, window, day count and minute count is derived
+// on read.
+export const SCHEMA_VERSION = 201;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -2922,6 +2953,13 @@ export const DEFAULT_SETTINGS = Object.freeze({
   // a particular plant, declared on the permit, so the workspace has no default that
   // could one day authorise work in an atmosphere nobody measured.
   ...normalizePtwSettings({}),
+  // ADR-0247: the statutory-authorisation conventions — the privacy floor below
+  // which a per-state export is withheld, the planning horizon beyond which a
+  // declared grant is a plan, and the rule switch. Note what is NOT here: a renewal
+  // window, a validity and a condition re-evidence window. Each is a fact about a
+  // particular instrument, declared on the authority or the condition, so the
+  // workspace has no default that could one day decide a consent was still good.
+  ...normalizeLtoSettings({}),
   // ADR-0243: the employee-voice conventions — the reply window, the minutes
   // window, the privacy floor below which a per-state export is withheld, and the
   // rule switch. Note what is NOT here: a consultation period. The period a body
@@ -4132,6 +4170,19 @@ export const COLLECTIONS = [
   'ptwSuspensions',
   'ptwClosures',
   'ptwMarkers',
+  // ADR-0247 (Schema v201): the Statutory Authorisation & Licence-to-Operate
+  // Register. Declared authorities with their written instruments, their
+  // conditions, dated evidence per condition, regulator actions with close-outs,
+  // renewals as submissions and decisions, and identity-free rule markers. No
+  // state, effective expiry, lapsed minute, condition verdict or renewal verdict is
+  // stored: every one is re-derived on read, so a hand-edited file cannot carry a
+  // green authority over a consent that lapsed at nine this morning.
+  'ltoAuthorisations',
+  'ltoConditions',
+  'ltoEvidence',
+  'ltoActions',
+  'ltoRenewals',
+  'ltoMarkers',
 ];
 
 /** Stable empty state. `now` is an ISO string so the result is a pure value. */
@@ -4439,6 +4490,11 @@ export function normalizeSettings(raw) {
     // of zero energy, a permit whose atmosphere is outside its own declared limits,
     // or a permit that lapsed with nobody closing it is never the silent default.
     ...normalizePtwSettings(s),
+    // ADR-0247: the statutory-authorisation register's conventions, clamped on
+    // load. The rule switch is defaulted ON so a pause that hides a lapsed consent,
+    // a standing prohibition, an unevidenced condition or a renewal window nobody
+    // acted on is never the silent default.
+    ...normalizeLtoSettings(s),
     // Repair of a standing red reported at base HEAD: two rule switches the
     // pause census maps were not carried in settings, so the only writes that
     // can silence those rules were refused as unknown keys. Declared here with
@@ -9814,6 +9870,18 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.ptwSuspensions = normalizePtwSuspensions(raw.ptwSuspensions, state.ptwPermits, warnings);
   state.ptwClosures = normalizePtwClosures(raw.ptwClosures, state.ptwPermits, warnings);
   state.ptwMarkers = normalizePtwMarkers(raw.ptwMarkers, warnings);
+  // ADR-0247 (Schema v201): an authority, condition, evidence row, regulator action
+  // or renewal that cannot be read exactly is DROPPED with a counted warning —
+  // never repaired, re-dated, re-pointed at another authority or rescued from a
+  // partially readable holder list. An authority with no written instrument is
+  // dropped at this boundary too. No state, effective expiry, lapse or verdict is
+  // stored.
+  state.ltoAuthorisations = normalizeLtoAuthorisations(raw.ltoAuthorisations, warnings);
+  state.ltoConditions = normalizeLtoConditions(raw.ltoConditions, state.ltoAuthorisations, warnings);
+  state.ltoEvidence = normalizeLtoEvidence(raw.ltoEvidence, state.ltoConditions, warnings);
+  state.ltoActions = normalizeLtoActions(raw.ltoActions, state.ltoAuthorisations, warnings);
+  state.ltoRenewals = normalizeLtoRenewals(raw.ltoRenewals, state.ltoAuthorisations, warnings);
+  state.ltoMarkers = normalizeLtoMarkers(raw.ltoMarkers, warnings);
   // ADR-0229 (Schema v182): a case, option, cost line or act that cannot be read
   // exactly is DROPPED with a counted warning — never repaired, re-termed,
   // re-priced or re-pointed at another case. A cost line that does not belong to
@@ -10969,6 +11037,25 @@ export const MIGRATIONS = {
     ptwClosures: Array.isArray(v199.ptwClosures) ? v199.ptwClosures : [],
     ptwMarkers: Array.isArray(v199.ptwMarkers) ? v199.ptwMarkers : [],
     settings: { ...(v199.settings || {}), ...normalizePtwSettings(v199.settings || {}) },
+  }),
+  // 200 → 201: ADR-0247 adds SIX EMPTY ledgers (`ltoAuthorisations`,
+  // `ltoConditions`, `ltoEvidence`, `ltoActions`, `ltoRenewals`, `ltoMarkers`) and
+  // the register's conventions. Nothing is inferred from a permit to work, a site
+  // reference, an incident, a regulatory undertaking, an information request or a
+  // sourcing case: an authority is a grant on a written instrument by an issuing
+  // body. Manufacturing one at upgrade time would put a power to operate on the
+  // record that nobody was granted, and would silently decide that its conditions
+  // were met.
+  200: (v200) => ({
+    ...v200,
+    schemaVersion: 201,
+    ltoAuthorisations: Array.isArray(v200.ltoAuthorisations) ? v200.ltoAuthorisations : [],
+    ltoConditions: Array.isArray(v200.ltoConditions) ? v200.ltoConditions : [],
+    ltoEvidence: Array.isArray(v200.ltoEvidence) ? v200.ltoEvidence : [],
+    ltoActions: Array.isArray(v200.ltoActions) ? v200.ltoActions : [],
+    ltoRenewals: Array.isArray(v200.ltoRenewals) ? v200.ltoRenewals : [],
+    ltoMarkers: Array.isArray(v200.ltoMarkers) ? v200.ltoMarkers : [],
+    settings: { ...(v200.settings || {}), ...normalizeLtoSettings(v200.settings || {}) },
   }),
   // 183 → 184: ADR-0231 adds SEVEN EMPTY ledgers (`ibpCycles`, `ibpDemandRows`,
   // `ibpCapacityRows`, `ibpOptions`, `ibpDecisions`, `ibpGrades`, `ibpMarkers`)

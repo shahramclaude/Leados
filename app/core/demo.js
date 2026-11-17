@@ -2154,6 +2154,114 @@ function seedLoneWorking(state, now, { priya, mei, jordan, samuel, freya }) {
  * Permit 3 is issued by Mei and held by Jordan, and permit 1 by Priya and held by
  * Samuel — so the joint apex above the pair is computed, not chosen.
  */
+/**
+ * ADR-0247: a statutory-authorisation record placed relative to the injected
+ * clock, so every state on `#/authorisations` is derived live rather than stored
+ * stale.
+ *
+ * Nine authorities, one for each printed state, plus the facts that make the
+ * register worth reading:
+ *
+ *   1. TANK FARM environmental permit — in force and INSIDE its 90-day renewal
+ *      window (expires in 45 days) with no renewal filed, three conditions of which
+ *      one is STALE against its own 30-day window, and an improvement notice PAST
+ *      the compliance day it set.
+ *   2. HAZARDOUS SUBSTANCES consent — in force, with one condition declared and
+ *      NEVER EVIDENCED, and a renewal refused thirty days ago.
+ *   3. TANKER LOADING authorisation — LAPSED three days ago with a renewal
+ *      submitted yesterday and undecided: `lapsed-awaiting-decision`. A submission
+ *      is not a grant.
+ *   4. WAREHOUSE operating licence — in force, but a PROHIBITION NOTICE stands
+ *      against the night-loading activity. The licence state and the prohibition
+ *      are printed apart.
+ *   5. COMPRESSOR STATION consent — SUSPENDED ten days ago, never lifted.
+ *   6. COLD STORE licence — REVOKED two hundred days ago, with a closure recorded
+ *      against the revocation: the closure has NO EFFECT and the screen says so.
+ *   7. WATER ABSTRACTION licence — LAPSED forty-five days ago with no renewal and
+ *      no suspension or revocation: the record proves the lapse and cannot prove
+ *      the abstraction stopped.
+ *   8. INCINERATOR permit — granted five days from now: `not-yet-granted`.
+ *   9. FLEET operating licence — in force with a renewal submitted three days ago
+ *      and undecided: `renewal-in-flight`.
+ *
+ * Authority 1 is accountable to Samuel (through Mei) and Freya (through Priya), so
+ * the joint apex above the pair is computed, never chosen.
+ */
+function seedAuthorisations(state, now, { priya, mei, jordan, samuel, freya }) {
+  const instant = (days) => new Date(now.getTime() + days * 86_400_000).toISOString();
+  const day = (days) => instant(days).slice(0, 10);
+  const authority = (seq, siteRef, activityRef, issuingAuthority, instrumentRef, grantedDays, expiresDays, renewalLeadDays, accountableIds) => ({
+    id: `lto-aut-demo-${seq}`,
+    siteRef,
+    activityRef,
+    issuingAuthority,
+    instrumentRef,
+    grantedAt: instant(grantedDays),
+    expiresAt: instant(expiresDays),
+    renewalLeadDays,
+    accountableIds,
+    declaredById: mei,
+    createdAt: instant(grantedDays),
+    updatedAt: instant(grantedDays),
+  });
+
+  state.ltoAuthorisations = [
+    authority(1, 'Tank farm — north', 'Bulk fuel storage and transfer', 'Environment Agency',
+      'EPR/AB1234CD — permit ref. EPR-2024-0117 rev 3', -680, 45, 90, [samuel, freya]),
+    authority(2, 'Tank farm — north', 'Hazardous substances storage', 'Health and Safety Executive',
+      'HSC-2025-0042 — consent ref. HS/7741 rev 1', -500, 300, 60, [samuel]),
+    authority(3, 'Tanker loading bay', 'Road tanker loading of Class 3 fuels', 'Local Authority Trading Standards',
+      'TL-2023-8891 — licence ref. LA/TL/8891 rev 2', -400, -3, 30, [samuel]),
+    authority(4, 'Warehouse — east', 'Night loading and dispatch', 'Local Authority Licensing',
+      'WL-2024-3310 — premises licence ref. LAP/3310', -520, 150, 45, [jordan]),
+    authority(5, 'Compressor station 2', 'Gas compression and export', 'Health and Safety Executive',
+      'COMAH-2022-0091 — consent ref. CH/0091 rev 4', -600, 200, 120, [mei]),
+    authority(6, 'Cold store — bay 4', 'Refrigerated storage of foodstuffs', 'Food Standards Agency',
+      'FS-2019-4477 — approval ref. FSA/4477', -900, -100, 60, [freya]),
+    authority(7, 'River abstraction point', 'Water abstraction up to 4,000 m³/day', 'Environment Agency',
+      'WA-2021-6620 — abstraction licence ref. EA/WA/6620', -750, -45, 90, [priya]),
+    authority(8, 'Incinerator — unit 1', 'Thermal treatment of non-hazardous waste', 'Environment Agency',
+      'EPR/XX7788YY — permit ref. EPR-2026-0331 rev 1', 5, 370, 120, [samuel, mei]),
+    authority(9, 'Fleet depot — yard 3', 'Operation of goods vehicles over 7.5 tonnes', 'Traffic Commissioner',
+      'OL-2024-1188 — operator licence ref. TC/OL/1188', -300, 200, 60, [jordan, freya]),
+  ];
+
+  state.ltoConditions = [
+    { id: 'lto-con-demo-1', authorisationId: 'lto-aut-demo-1', conditionKey: 'bund-inspection', conditionRef: 'Secondary containment bunding inspected and recorded monthly, with defects remediated before further transfer.', maxAgeDays: 30, declaredById: mei, createdAt: instant(-680) },
+    { id: 'lto-con-demo-2', authorisationId: 'lto-aut-demo-1', conditionKey: 'leak-detection', conditionRef: 'Leak detection on the transfer lines tested every quarter against the manufacturer’s procedure.', maxAgeDays: 90, declaredById: mei, createdAt: instant(-680) },
+    { id: 'lto-con-demo-3', authorisationId: 'lto-aut-demo-1', conditionKey: 'throughput-return', conditionRef: 'Quarterly throughput return submitted to the regulator within twenty-eight days of the quarter end.', maxAgeDays: 30, declaredById: mei, createdAt: instant(-680) },
+    { id: 'lto-con-demo-4', authorisationId: 'lto-aut-demo-2', conditionKey: 'fire-water-test', conditionRef: 'Fire-water deluge system tested annually and the certificate held with the consent.', maxAgeDays: 365, declaredById: mei, createdAt: instant(-500) },
+    { id: 'lto-con-demo-5', authorisationId: 'lto-aut-demo-3', conditionKey: 'driver-competence', conditionRef: 'Every loading operative holds current ADR driver competence and the certificate is on file.', maxAgeDays: 365, declaredById: mei, createdAt: instant(-400) },
+    { id: 'lto-con-demo-6', authorisationId: 'lto-aut-demo-4', conditionKey: 'noise-curfew', conditionRef: 'No loading between 23:00 and 06:00 measured at the nearest residential boundary.', maxAgeDays: 30, declaredById: mei, createdAt: instant(-520) },
+    { id: 'lto-con-demo-7', authorisationId: 'lto-aut-demo-9', conditionKey: 'vehicle-maintenance', conditionRef: 'Every vehicle on the licence inspected at the declared maintenance interval and the records kept.', maxAgeDays: 90, declaredById: mei, createdAt: instant(-300) },
+  ];
+
+  state.ltoEvidence = [
+    { id: 'lto-evd-demo-1', conditionId: 'lto-con-demo-1', evidenceRef: 'BUND-2026-084 — bund inspection, bay 1–4', at: instant(-10), byId: mei, note: 'All four bays sound; one minor spall in bay 3 made good the same day.', createdAt: instant(-10) },
+    { id: 'lto-evd-demo-2', conditionId: 'lto-con-demo-2', evidenceRef: 'LD-2026-031 — quarterly leak detection', at: instant(-5), byId: mei, note: '', createdAt: instant(-5) },
+    { id: 'lto-evd-demo-3', conditionId: 'lto-con-demo-3', evidenceRef: 'TR-2025-Q4 — throughput return receipt', at: instant(-60), byId: mei, note: 'The quarter before last; the most recent return has not been recorded here.', createdAt: instant(-60) },
+    { id: 'lto-evd-demo-5', conditionId: 'lto-con-demo-5', evidenceRef: 'ADR-REG-2026-11 — driver competence register', at: instant(-30), byId: mei, note: '', createdAt: instant(-30) },
+    { id: 'lto-evd-demo-6', conditionId: 'lto-con-demo-6', evidenceRef: 'NOISE-2026-004 — boundary noise survey', at: instant(-20), byId: mei, note: '', createdAt: instant(-20) },
+    { id: 'lto-evd-demo-7', conditionId: 'lto-con-demo-7', evidenceRef: 'PMI-2026-118 — maintenance interval audit', at: instant(-15), byId: mei, note: '', createdAt: instant(-15) },
+  ];
+
+  state.ltoActions = [
+    { id: 'lto-act-demo-1', authorisationId: 'lto-aut-demo-1', kind: 'improvement-notice', servedAt: instant(-20), effectiveFrom: instant(-20), basisRef: 'Improvement notice IN/2026/041: bund inspection records were not available for two bays at the last inspection.', noticeRef: 'IN/2026/041', scopeRef: '', dueOn: day(-5), recordedById: mei, closedAt: null, closeKind: null, closeBasisRef: null, closedById: null, createdAt: instant(-20) },
+    { id: 'lto-act-demo-2', authorisationId: 'lto-aut-demo-4', kind: 'prohibition-notice', servedAt: instant(-2), effectiveFrom: instant(-2), basisRef: 'Prohibition notice PN/2026/019: night loading prohibited pending a noise assessment at the residential boundary.', noticeRef: 'PN/2026/019', scopeRef: 'Night loading, 23:00–06:00', dueOn: null, recordedById: mei, closedAt: null, closeKind: null, closeBasisRef: null, closedById: null, createdAt: instant(-2) },
+    { id: 'lto-act-demo-3', authorisationId: 'lto-aut-demo-5', kind: 'suspension', servedAt: instant(-10), effectiveFrom: instant(-10), basisRef: 'Suspension order SUS/2026/007: pressure relief valve certification could not be produced at inspection.', noticeRef: 'SUS/2026/007', scopeRef: '', dueOn: null, recordedById: mei, closedAt: null, closeKind: null, closeBasisRef: null, closedById: null, createdAt: instant(-10) },
+    { id: 'lto-act-demo-4', authorisationId: 'lto-aut-demo-6', kind: 'revocation', servedAt: instant(-200), effectiveFrom: instant(-200), basisRef: 'Revocation notice REV/2026/002: the cold store failed the temperature-control standard on two consecutive visits.', noticeRef: 'REV/2026/002', scopeRef: '', dueOn: null, recordedById: mei, closedAt: instant(-180), closeKind: 'lifted', closeBasisRef: 'Somebody recorded a lifting act against this revocation; a revocation is terminal and the close has no effect.', closedById: mei, createdAt: instant(-200) },
+  ];
+
+  state.ltoRenewals = [
+    { id: 'lto-ren-demo-1', authorisationId: 'lto-aut-demo-3', submittedAt: instant(-1), basisRef: 'Renewal application LA/TL/8891/R2 filed with Trading Standards; acknowledgement reference TS-ACK-2026-331.', submittedById: mei, decision: null, decidedAt: null, grantedExpiresAt: null, decidedById: null, note: '', createdAt: instant(-1) },
+    { id: 'lto-ren-demo-2', authorisationId: 'lto-aut-demo-9', submittedAt: instant(-3), basisRef: 'Operator licence renewal filed with the Traffic Commissioner; application reference TC/OL/1188/R1.', submittedById: mei, decision: null, decidedAt: null, grantedExpiresAt: null, decidedById: null, note: '', createdAt: instant(-3) },
+    { id: 'lto-ren-demo-3', authorisationId: 'lto-aut-demo-2', submittedAt: instant(-40), basisRef: 'Consent renewal application HS/7741/R1 filed with the Executive.', submittedById: mei, decision: 'refused', decidedAt: instant(-30), grantedExpiresAt: null, decidedById: mei, note: 'Refused pending the fire-water test certificate, which has never been recorded against the condition.', createdAt: instant(-40) },
+  ];
+
+  // The rule's markers are empty at seed time; RULE-LTO-01 writes its own.
+  state.ltoMarkers = Array.isArray(state.ltoMarkers) ? state.ltoMarkers : [];
+}
+
 function seedPermitToWork(state, now, { priya, mei, jordan, samuel, freya }) {
   const hours = (value) => new Date(now.getTime() + value * 60 * 60_000).toISOString();
   const iso = (hoursFromNow) => hours(hoursFromNow);
@@ -6900,6 +7008,7 @@ export function buildDemoState(now = new Date()) {
   // line isolated — so the register derives live conflicts rather than showing an
   // honest empty state on first load.
   seedPermitToWork(state, now, { priya, mei, jordan, samuel, freya });
+  seedAuthorisations(state, now, { priya, mei, jordan, samuel, freya });
   // ADR-0240: one declared incident with a running external clock, an accepted
   // line, an unaccepted line and a recorded severity raise — so the register
   // shows a real bridge rather than an honest empty state on first load.

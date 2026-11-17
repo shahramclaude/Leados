@@ -244,6 +244,10 @@ import { LWK_CSV_COLUMNS, LWK_CSV_DESCRIPTOR, LWK_CSV_SCOPE } from './domain/lon
 import { PTW_CSV_COLUMNS, PTW_CSV_DESCRIPTOR, PTW_CSV_SCOPE } from './domain/permitToWorkRegistry.js';
 import { permitToWorkCsvRows } from './domain/permitToWorkReport.js';
 import { buildPermitToWork } from './domain/permitToWork.js';
+// ADR-0247: identity-free statutory-authorisation aggregates (CSV scope #188).
+import { LTO_CSV_COLUMNS, LTO_CSV_DESCRIPTOR, LTO_CSV_SCOPE } from './domain/authorisationRegistry.js';
+import { authorisationCsvRows } from './domain/authorisationReport.js';
+import { buildAuthorisations } from './domain/authorisation.js';
 import { loneWorkingCsvRows } from './domain/loneWorkingReport.js';
 import { buildLoneWorking } from './domain/loneWorking.js';
 // ADR-0243: identity-free employee-voice and consultation aggregates (CSV #184).
@@ -1767,6 +1771,13 @@ export const CSV_EXPORTS = [
   // would be the one thing this category must never do. A per-state or per-conflict
   // count below the declared floor exports BLANK with its reason, never as a number.
   PTW_CSV_DESCRIPTOR,
+  // #188 (ADR-0247): statutory authorisations and licence conditions. One summary
+  // row, one row per printed authority state and one row per printed condition
+  // state. No site, activity, issuing body, instrument reference, notice, person,
+  // manager or instant crosses this boundary: which site has lost which consent is
+  // exactly the disclosure that makes an export dangerous. A per-state count below
+  // the declared floor exports BLANK with its reason, never as a small number.
+  LTO_CSV_DESCRIPTOR,
 ];
 
 function personLookup(state) {
@@ -7068,6 +7079,17 @@ export function buildScopeTable(state, scope, now) {
       return {
         columns: PTW_CSV_COLUMNS.map((key) => ({ key, header: key })),
         rows: permitToWorkCsvRows(report),
+      };
+    }
+    case LTO_CSV_SCOPE: {
+      // CSV scope #188 (ADR-0247, Schema v201). Built from the SAME reader the
+      // `#/authorisations` panel renders, with no seat: every figure is a count or
+      // an exact whole-minute total over the whole register, so no site, activity,
+      // issuer, instrument, notice, person, manager or instant is reachable.
+      const report = buildAuthorisations(state, { now, settings: state.settings || {}, seat: null });
+      return {
+        columns: LTO_CSV_COLUMNS.map((key) => ({ key, header: key })),
+        rows: authorisationCsvRows(report),
       };
     }
     case LWK_CSV_SCOPE: {

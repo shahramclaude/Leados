@@ -135,6 +135,8 @@ import { workplaceAdjustmentSignals } from './workplaceAdjustment.js';
 import { loneWorkingSignals } from './loneWorking.js';
 // ADR-0246: the permit-to-work register contributes PTW-01..04.
 import { permitToWorkSignals } from './permitToWork.js';
+// ADR-0247: the statutory authorisation register contributes LTO-01..05.
+import { authorisationSignals } from './authorisation.js';
 // ADR-0243: the employee-voice and collective-consultation register contributes
 // VOI-01..04 — a window that closed with no advice, advice nobody answered, a
 // decision out of order, and sittings with no minutes or below quorum.
@@ -362,6 +364,21 @@ export const DOMAIN_ORDER = [
   // contributes VOI-01..04. Listed for the same reason as every other bucket: a
   // signal whose domain is missing here is counted and then silently dropped.
   'Employee voice',
+  // ADR-0240 (Schema v194): Incident Command contributes MIC-01..04.
+  'Incident command',
+  // ADR-0245 (Schema v199): Personal Dealing contributes DWL-01..04.
+  'Personal dealing',
+  // ADR-0246 (Schema v200): Permit to Work contributes PTW-01..03; Mutual Aid
+  // contributes MAA-01..03. BOTH were being counted in `findings` and then
+  // silently dropped from `byDomain` because their bucket was never added — the
+  // exact failure this array exists to prevent, repaired here rather than only
+  // reported.
+  'Permit to work',
+  'Mutual aid',
+  // ADR-0247 (Schema v201): the Statutory Authorisation & Licence-to-Operate
+  // Register contributes LTO-01..05. Without this bucket the signals would be
+  // counted in `findings` and silently dropped from `byDomain`.
+  'Statutory authorisations',
 ];
 
 export function severityLabel(n) {
@@ -2637,6 +2654,11 @@ export function buildInsights(state, now) {
   // a closure that left a line isolated. Listed for the same reason as every other
   // bucket: a signal nobody can find is a signal nobody acted on.
   for (const signal of permitToWorkSignals(state, now, settings)) add(signal);
+  // LTO-01..05 — a lapsed authority, a suspension or revocation, a standing
+  // prohibition, a renewal window with nothing filed, and a condition with no
+  // evidence or stale evidence. Listed for the same reason as every other bucket:
+  // a signal nobody can find is a signal nobody acted on.
+  for (const signal of authorisationSignals(state, now, settings)) add(signal);
   // ADR-0243 (read-side): the Employee Voice register contributes VOI-01..04. It
   // reads its own ledgers and the live matrix, so it cannot recurse into the
   // engine that is running it.

@@ -216,4 +216,12 @@ export function workStopRule(draft, ctx = {}) {
   return effects;
 }
 
-export const WORK_STOP_PAUSE_SWITCH = SWP_SETTING_KEYS.autoPropagate;
+/**
+ * The literal key this rule reads, named here so the pause-permit census can grep
+ * it. It must stay equal to `SWP_SETTING_KEYS.autoPropagate`; asserting the literal
+ * is what lets the census prove the reach claim from source rather than a table.
+ */
+export const WORK_STOP_PAUSE_SWITCH = 'workStopAutoPropagate';
+if (WORK_STOP_PAUSE_SWITCH !== SWP_SETTING_KEYS.autoPropagate) {
+  throw new Error('WORK_STOP_PAUSE_SWITCH drifted from the registry key');
+}
