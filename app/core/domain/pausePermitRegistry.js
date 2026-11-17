@@ -328,6 +328,12 @@ export const PAUSE_PERMIT_MATRIX_REACH_SWITCHES = Object.freeze([
   // other cross-line switch.
   'micAutoPropagate',
   'wpaAutoPropagate',
+  // ADR-0242: the lone-working rule. Silencing it stops the asks for an
+  // unconfirmed welfare check, a concern nobody answered and a deployment left
+  // open past its declared end — and the reporting lines that hold those people
+  // are not told. It reaches across reporting lines, so it carries a permit like
+  // every other cross-line switch.
+  'lwkAutoPropagate',
 ]);
 
 export function pausePermitReachesMatrix(key) {

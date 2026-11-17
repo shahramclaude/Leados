@@ -205,6 +205,7 @@ import { earnedValueRule } from './earnedValueRules.js';
 import { riskAppetiteRule } from './riskAppetiteRules.js';
 import { distributedEquityRule } from './distributedEquityRules.js';
 import { workplaceAdjustmentRule } from './workplaceAdjustmentRules.js';
+import { loneWorkingRule } from './loneWorkingRules.js';
 import { incidentCommandRule } from './incidentCommandRules.js';
 import { sourcingRule } from './sourcingRules.js';
 import { ibpRule } from './ibpRules.js';
@@ -1284,6 +1285,11 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // apex above every line that holds a restricted person, so silencing it
   // reaches across reporting lines — and those lines' managers are not told that
   // somebody is rostered onto work their own record forbids.
+  // ADR-0242: the lone-working rule reads the live matrix for the joint apex
+  // above every line holding a person who is alone, so silencing it reaches
+  // across reporting lines — and those lines' managers are not told that nobody
+  // has confirmed the person is safe.
+  loneWorkingRule,
   workplaceAdjustmentRule,
   // ADR-0229: the Capability Sourcing & Firm-Boundary Register. ONE rule reads
   // the finished register and files at most one dated ask per condition: a

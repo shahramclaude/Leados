@@ -2037,6 +2037,97 @@ function seedIncidentCommand(state, now, { priya, mei, jordan, at, ts }) {
   ];
 }
 
+
+/**
+ * ADR-0242: a small, REAL-SHAPED lone-working record.
+ *
+ * Five deployments placed RELATIVE TO THE INJECTED CLOCK, so the register shows
+ * live states rather than a set of rows that were only true on the day the demo
+ * was written. NOTHING here states a state, a deadline or a lateness — every one
+ * of those is derived by the reader from the instants below:
+ *
+ *   1. Samuel is at the substation, due to radio in every hour with ten minutes
+ *      of grace, and his last contact was ninety-five minutes ago. Twenty-five
+ *      minutes past the declared deadline, with no escalation on the record: the
+ *      register prints `welfare-unconfirmed`, which is the state it exists for.
+ *   2. Mei is on the commissioning call-out declared by FREYA's project line —
+ *      the cross-line case, where the line that sent her out is not the line that
+ *      owns her. She is thirty minutes past the end she was declared to and still
+ *      open: `overran`.
+ *   3. Jordan radioed in eight minutes ago and said he was not right. The clock
+ *      reset, correctly; nobody has recorded a response: `concern-unanswered`.
+ *      Contact is not an answer, and this is the pair the register keeps apart.
+ *   4. Freya's earlier deployment was closed out four hours ago with NO contact at
+ *      any point: `closed-without-contact`. The register cannot prove welfare was
+ *      ever confirmed, and says so rather than treating the close as assurance.
+ *   5. A clean closed deployment with two contacts, so the register also shows
+ *      what ordinary compliance looks like rather than only its failures.
+ */
+function seedLoneWorking(state, now, { priya, mei, jordan, samuel, freya }) {
+  const instant = (minutesFromNow) => new Date(now.getTime() + minutesFromNow * 60_000).toISOString();
+  const deployment = (seq, personId, lineManagerId, siteRef, task, protocolRef, intervalMinutes, graceMinutes, startMinutes, endMinutes, close) => ({
+    id: `lwk-dep-demo-${seq}`,
+    personId,
+    lineManagerId,
+    siteRef,
+    task,
+    protocolRef,
+    intervalMinutes,
+    graceMinutes,
+    startAt: instant(startMinutes),
+    expectedEndAt: instant(endMinutes),
+    declaredById: lineManagerId,
+    closedAt: close ? instant(close.atMinutes) : null,
+    closeOutcome: close ? close.outcome : null,
+    closedById: close ? (close.byId || lineManagerId) : null,
+    closeNote: close ? close.note : '',
+    createdAt: instant(startMinutes),
+    updatedAt: instant(close ? close.atMinutes : startMinutes),
+  });
+
+  state.lwkDeployments = [
+    // 1. Ninety-five minutes since the last contact on a sixty-minute interval
+    //    with ten minutes of grace: twenty-five whole minutes past the deadline.
+    deployment(1, samuel, priya, 'Substation 4 — Bay 2', 'Annual relay calibration, isolation locked off',
+      'LWA-2026-114 rev 2 — substation isolation and lone working', 60, 10, -180, 60, null),
+    // 2. Declared by the PROJECT line (Freya), thirty minutes past its declared end
+    //    with contact current. The cross-line case: the line that sent her out is
+    //    not the line that owns her site.
+    deployment(2, mei, priya, 'Commissioning yard — unit 3', 'Cold commissioning checks on the new compressor',
+      'LWA-2026-121 rev 1 — commissioning yard lone working', 45, 10, -300, -30, null),
+    // 3. Contact made eight minutes ago WITH a concern, and no response recorded:
+    //    the clock reset, which is correct, and the concern did not close itself.
+    deployment(3, jordan, mei, 'Tank room — north', 'Valve inspection and gland packing',
+      'LWA-2026-108 rev 3 — tank room entry, lone working', 30, 5, -120, 90, null),
+    // 4. Closed out with NO contact at any point: the register cannot prove
+    //    welfare was ever confirmed during it.
+    deployment(4, freya, samuel, 'Roof plant room', 'Filter change on the rooftop AHU',
+      'LWA-2026-097 rev 1 — roof access lone working', 45, 10, -360, -240,
+      { atMinutes: -240, outcome: 'returned', note: 'Came back in at the gate and signed the log; no radio check was recorded during the job, which is exactly what this state prints.' }),
+    // 5. An ordinary compliant deployment: two contacts and a clean close-out.
+    deployment(5, jordan, mei, 'Warehouse — aisle 9', 'Cycle count on the high-bay racking',
+      'LWA-2026-101 rev 2 — warehouse aisle 9 lone working', 60, 15, -420, -300,
+      { atMinutes: -300, outcome: 'returned', byId: jordan, note: 'Finished early and closed the deployment out from the app at the aisle; both hourly radios were answered.' }),
+  ];
+
+  state.lwkCheckins = [
+    { id: 'lwk-chk-demo-1', deploymentId: 'lwk-dep-demo-1', at: instant(-95), channel: 'radio', outcome: 'ok', recordedById: priya, note: 'First hourly radio answered on the site channel.', createdAt: instant(-95) },
+    { id: 'lwk-chk-demo-2', deploymentId: 'lwk-dep-demo-2', at: instant(-20), channel: 'phone', outcome: 'ok', recordedById: freya, note: '', createdAt: instant(-20) },
+    { id: 'lwk-chk-demo-3', deploymentId: 'lwk-dep-demo-3', at: instant(-38), channel: 'radio', outcome: 'ok', recordedById: priya, note: '', createdAt: instant(-38) },
+    { id: 'lwk-chk-demo-4', deploymentId: 'lwk-dep-demo-3', at: instant(-8), channel: 'radio', outcome: 'concern', recordedById: jordan, note: 'Said he had a headache and the tank room was hot. Nobody has recorded what was done about it.', createdAt: instant(-8) },
+    { id: 'lwk-chk-demo-5', deploymentId: 'lwk-dep-demo-5', at: instant(-400), channel: 'radio', outcome: 'ok', recordedById: priya, note: '', createdAt: instant(-400) },
+    { id: 'lwk-chk-demo-6', deploymentId: 'lwk-dep-demo-5', at: instant(-340), channel: 'app', outcome: 'ok', recordedById: jordan, note: '', createdAt: instant(-340) },
+  ];
+
+  // No escalation on any live deployment, deliberately: the demo's live states are
+  // the ones nobody has responded to yet, and inventing a response would hide the
+  // exact failure the register exists to print.
+  state.lwkEscalations = [];
+
+  // The rule's markers are empty at seed time; RULE-LWK-01 writes its own.
+  state.lwkMarkers = Array.isArray(state.lwkMarkers) ? state.lwkMarkers : [];
+}
+
 /**
  * ADR-0241: a small, REAL-SHAPED workplace-adjustment record.
  *
@@ -5891,6 +5982,11 @@ export function buildDemoState(now = new Date()) {
   // an adjustment agreed and never made operational, and a recorded refusal —
   // declared through the same ledgers the fail-closed loaders read.
   seedWorkplaceAdjustment(state, now, { priya, mei, jordan, samuel, freya, at, ts });
+  // ADR-0242: five lone deployments placed relative to the injected clock — an
+  // unconfirmed welfare check, a cross-line overrun, an unanswered concern and a
+  // close-out with no contact — so the register shows live duties rather than an
+  // honest empty state on first load.
+  seedLoneWorking(state, now, { priya, mei, jordan, samuel, freya });
   // ADR-0240: one declared incident with a running external clock, an accepted
   // line, an unaccepted line and a recorded severity raise — so the register
   // shows a real bridge rather than an honest empty state on first load.

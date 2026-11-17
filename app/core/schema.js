@@ -421,6 +421,19 @@ import {
   normalizeWpaMarkers,
   normalizeWpaSettings,
 } from './domain/workplaceAdjustmentSchema.js';
+// ADR-0242 (Schema v196): the Lone-Working Welfare Check Register. Declared lone
+// deployments with their written protocol, the contacts somebody actually made,
+// the escalations that answered a failure, and identity-free rule markers. Every
+// loader is fail-closed: a row that cannot be read exactly is DROPPED with a
+// counted warning, never repaired into a plausible default — and a deployment
+// with no written protocol reference is dropped at this boundary too.
+import {
+  normalizeLwkDeployments,
+  normalizeLwkCheckins,
+  normalizeLwkEscalations,
+  normalizeLwkMarkers,
+  normalizeLwkSettings,
+} from './domain/loneWorkingSchema.js';
 import {
   normalizeIbpCycles,
   normalizeIbpDemandRows,
@@ -1385,7 +1398,7 @@ export {
 // re-derived on read, so a hand-edited file cannot carry a commander nobody
 // designated, a notification nobody made, or a deadline the record does not
 // compute.
-export const SCHEMA_VERSION = 195;
+export const SCHEMA_VERSION = 196;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -2832,6 +2845,11 @@ export const DEFAULT_SETTINGS = Object.freeze({
   // equity verdict is claimed. Clamped on load, refused (never clamped) by the
   // setter, and printed on the Method card. None is fitted from the record.
   ...normalizeDweSettings({}),
+  // ADR-0242: the lone-working conventions — the planning horizon, the privacy
+  // floor below which a per-state export is withheld, and the rule switch.
+  // Clamped on load, refused (never clamped) by the setter, and printed on the
+  // screen. None is fitted from the record.
+  ...normalizeLwkSettings({}),
   // ADR-0191: the cross-line priority ballot conventions — the ballot deadline,
   // the follow-up ask window and the ballot floor below which no aggregate is
   // claimed. Clamped on load, refused (never clamped) by the setter, and printed
@@ -3971,6 +3989,17 @@ export const COLLECTIONS = [
   'wpaAcknowledgements',
   'wpaReviews',
   'wpaMarkers',
+  // ADR-0242 (Schema v196): the Lone-Working Welfare Check Register. Declared
+  // lone deployments with the written assessment they rest on, the contacts
+  // somebody actually recorded, the escalations that answered a failed or
+  // concerning contact, and identity-free rule markers. No state, deadline,
+  // lateness, overrun or confirmation verdict is stored: each is re-derived on
+  // read, so a hand-edited file cannot carry a deadline that disagrees with the
+  // interval beside it or a confirmation nobody recorded.
+  'lwkDeployments',
+  'lwkCheckins',
+  'lwkEscalations',
+  'lwkMarkers',
 ];
 
 /** Stable empty state. `now` is an ISO string so the result is a pure value. */
@@ -4253,6 +4282,11 @@ export function normalizeSettings(raw) {
     // conflict with declared work, a review nobody held, or a line that was
     // never shown the restriction is never the silent default.
     ...normalizeWpaSettings(s),
+    // ADR-0242: the lone-working register's conventions, clamped on load. The
+    // rule switch is defaulted ON so a pause that hides an unconfirmed welfare
+    // check, an unanswered concern or a deployment left open past its declared
+    // end is never the silent default.
+    ...normalizeLwkSettings(s),
     // Repair of a standing red reported at base HEAD: two rule switches the
     // pause census maps were not carried in settings, so the only writes that
     // can silence those rules were refused as unknown keys. Declared here with
@@ -9569,6 +9603,16 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.wpaAcknowledgements = normalizeWpaAcknowledgements(raw.wpaAcknowledgements, state.wpaRestrictions, warnings);
   state.wpaReviews = normalizeWpaReviews(raw.wpaReviews, state.wpaRestrictions, warnings);
   state.wpaMarkers = normalizeWpaMarkers(raw.wpaMarkers, warnings);
+  // ADR-0242 (Schema v196): a deployment, contact or escalation that cannot be
+  // read exactly is DROPPED with a counted warning — never repaired, re-dated,
+  // re-intervalled or re-pointed at another deployment. A deployment with no
+  // written protocol reference is dropped at this boundary too: sending a human
+  // being out alone with no assessment on file is exactly the plausible default
+  // the mandate forbids. No deadline, lateness or verdict is stored.
+  state.lwkDeployments = normalizeLwkDeployments(raw.lwkDeployments, warnings);
+  state.lwkCheckins = normalizeLwkCheckins(raw.lwkCheckins, state.lwkDeployments, warnings);
+  state.lwkEscalations = normalizeLwkEscalations(raw.lwkEscalations, state.lwkDeployments, warnings);
+  state.lwkMarkers = normalizeLwkMarkers(raw.lwkMarkers, warnings);
   // ADR-0229 (Schema v182): a case, option, cost line or act that cannot be read
   // exactly is DROPPED with a counted warning — never repaired, re-termed,
   // re-priced or re-pointed at another case. A cost line that does not belong to
@@ -10632,6 +10676,21 @@ export const MIGRATIONS = {
     wpaReviews: Array.isArray(v194.wpaReviews) ? v194.wpaReviews : [],
     wpaMarkers: Array.isArray(v194.wpaMarkers) ? v194.wpaMarkers : [],
     settings: { ...(v194.settings || {}), ...normalizeWpaSettings(v194.settings || {}) },
+  }),
+  // 195 → 196: ADR-0242 adds FOUR EMPTY ledgers (`lwkDeployments`, `lwkCheckins`,
+  // `lwkEscalations`, `lwkMarkers`) and the register's conventions. Nothing is
+  // inferred from a shift, a rota, a station roster, a functional `lone-work`
+  // restriction or an existing incident: a lone deployment is a dated decision
+  // somebody took about one named human being, and manufacturing one at upgrade
+  // time would put a person on a monitored welfare clock who never went out alone.
+  195: (v195) => ({
+    ...v195,
+    schemaVersion: 196,
+    lwkDeployments: Array.isArray(v195.lwkDeployments) ? v195.lwkDeployments : [],
+    lwkCheckins: Array.isArray(v195.lwkCheckins) ? v195.lwkCheckins : [],
+    lwkEscalations: Array.isArray(v195.lwkEscalations) ? v195.lwkEscalations : [],
+    lwkMarkers: Array.isArray(v195.lwkMarkers) ? v195.lwkMarkers : [],
+    settings: { ...(v195.settings || {}), ...normalizeLwkSettings(v195.settings || {}) },
   }),
   // 183 → 184: ADR-0231 adds SEVEN EMPTY ledgers (`ibpCycles`, `ibpDemandRows`,
   // `ibpCapacityRows`, `ibpOptions`, `ibpDecisions`, `ibpGrades`, `ibpMarkers`)

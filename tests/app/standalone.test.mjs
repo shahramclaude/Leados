@@ -467,6 +467,11 @@ test('standalone artifact exists and is a single inline HTML document', () => {
   // 21,389,249 bytes / 1,080 source modules = 19,805 bytes per module, still
   // below the unchanged 24,000 density guard. The ceiling moves with the module
   // count; the density bound is what still catches a module inlined twice.
+  // ADR-0242 (Session 320, Schema v196) adds the lone-working welfare register:
+  // eight domain modules plus its view, on top of the v195 build. Measured at
+  // 21,469,844 bytes / 1,088 source modules = 19,733 bytes per module — under
+  // the previous ceiling, so no relaxation was needed. The density guard stays
+  // the bound that catches a module inlined twice.
   assert.ok(bytes < 21_500_000, `standalone file is unexpectedly large (${bytes} bytes)`);
   // Derived from the folder, not from a list in this file: the day a panel adds
   // a diagram, an enumerator that names the old two would still pass. Same

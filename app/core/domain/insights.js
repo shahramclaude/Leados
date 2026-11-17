@@ -131,6 +131,8 @@ import { chainSignals } from './chain.js';
 // ADR-0238: the distributed-work equity register contributes DWE-01..03.
 import { distributedEquitySignals } from './distributedEquity.js';
 import { workplaceAdjustmentSignals } from './workplaceAdjustment.js';
+// ADR-0242: the lone-working welfare check register contributes LWK-01..04.
+import { loneWorkingSignals } from './loneWorking.js';
 import { incidentCommandSignals } from './incidentCommand.js';
 import { autopilotSignals } from './autopilot.js';
 
@@ -339,6 +341,15 @@ export const DOMAIN_ORDER = [
   // `byDomain` filters on this array, so an unlisted domain is counted in
   // `findings` and silently dropped from the roll-up.
   'Distributed work',
+  // ADR-0241 (Schema v195): the Workplace Adjustment register's signals were
+  // being counted in `findings` and then silently dropped from the roll-up
+  // because their domain was missing from this array. Found and fixed while
+  // adding the bucket below; the omission is the exact failure this array exists
+  // to prevent, so it is repaired rather than only reported.
+  'Workplace adjustments',
+  // ADR-0242 (Schema v196): the Lone-Working Welfare Check Register contributes
+  // LWK-01..04. Listed for the same reason as every other bucket.
+  'Lone working',
 ];
 
 export function severityLabel(n) {
@@ -2602,6 +2613,12 @@ export function buildInsights(state, now) {
   // into the engine that is running it.
   for (const signal of distributedEquitySignals(state, now, settings)) add(signal);
   for (const signal of workplaceAdjustmentSignals(state, now, settings)) add(signal);
+  // ADR-0242 (read-side): the Lone-Working Welfare Check Register contributes
+  // LWK-01..04 — welfare unconfirmed, a concern nobody answered, a deployment
+  // past its declared end and a close-out with no contact ever recorded. It reads
+  // its own ledgers and the live matrix, so it cannot recurse into the engine
+  // that is running it.
+  for (const signal of loneWorkingSignals(state, now, settings)) add(signal);
   // ADR-0240 (read-side): the Incident Command register contributes MIC-01..03 —
   // a passed notification deadline, a live major incident with no commander (or a
   // closed one still holding command), and a response line nobody accepted. It

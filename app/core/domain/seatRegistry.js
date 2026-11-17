@@ -275,6 +275,10 @@ export const RECORD_POLICIES = Object.freeze({
   wpaAcknowledgements: { classKey: 'individual', label: 'Per-line acknowledgements that a manager has been shown a restriction they hold', route: '#/adjustments' },
   wpaReviews: { classKey: 'individual', label: 'Recorded reviews of a restriction — the decision, its basis and the day', route: '#/adjustments' },
   wpaMarkers: { classKey: 'unit', detailCeiling: 3, label: 'Workplace-adjustment observation markers — no joint seat, no line to ask (identity-free)', route: '#/adjustments' },
+  lwkDeployments: { classKey: 'individual', label: 'Declared lone deployments — who is alone, where, against which written assessment, checked how often and until when', route: '#/lone-working' },
+  lwkCheckins: { classKey: 'individual', label: 'Recorded contacts on a lone deployment — the channel, the outcome and the exact instant', route: '#/lone-working' },
+  lwkEscalations: { classKey: 'individual', label: 'Welfare escalations raised when a contact lapsed or a concern was raised — the basis, the outcome and what was actually done', route: '#/lone-working' },
+  lwkMarkers: { classKey: 'unit', detailCeiling: 3, label: 'Lone-working observation markers — no joint seat, no line to ask (identity-free)', route: '#/lone-working' },
   // ADR-0240 (Schema v194): the incident command register. An incident record
   // names the people on the bridge, the instrument it was declared under and the
   // external parties it owes — individual detail that is not handed upward, so
@@ -1401,6 +1405,8 @@ export const ACTION_RIGHTS = Object.freeze({
   // that HOLDS the person through the span or a declared line.
   'read-workplace-adjustments': { minRank: 1, maxRank: 5, label: 'Read the workplace adjustment register within your grant — your own restriction and whether it was put in place, and the restrictions of the people you hold' },
   'declare-workplace-adjustments': { minRank: 2, maxRank: 5, label: 'Declare a functional restriction on a written instrument, record an adjustment and the day it became operational, acknowledge a restriction on a line you hold, record a review, and set the register’s conventions' },
+  'read-lone-working': { minRank: 1, maxRank: 5, label: 'Read the lone-working register within your grant — your own deployment and when you are next due to be heard from, and the deployments of the people you hold' },
+  'declare-lone-working': { minRank: 1, maxRank: 5, label: 'Declare a lone deployment on a written assessment, record a contact, answer a lapsed check with an escalation, close a deployment out, and set the register’s conventions' },
   // ADR-0235/0236 (Schema v191). Six rights, and the shape is the point: RECORDING
   // a demand (with a follow-up link only to a readable insufficient parent),
   // STAFFING its lines and RELEASING to the authority are rank 3+ acts —

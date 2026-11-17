@@ -238,6 +238,10 @@ import { MIC_CSV_COLUMNS, MIC_CSV_DESCRIPTOR, MIC_CSV_SCOPE } from './domain/inc
 import { WPA_CSV_COLUMNS, WPA_CSV_DESCRIPTOR, WPA_CSV_SCOPE } from './domain/workplaceAdjustmentRegistry.js';
 import { workplaceAdjustmentCsvRows } from './domain/workplaceAdjustmentReport.js';
 import { buildWorkplaceAdjustment } from './domain/workplaceAdjustment.js';
+// ADR-0242: identity-free lone-working welfare aggregates (CSV scope #183).
+import { LWK_CSV_COLUMNS, LWK_CSV_DESCRIPTOR, LWK_CSV_SCOPE } from './domain/loneWorkingRegistry.js';
+import { loneWorkingCsvRows } from './domain/loneWorkingReport.js';
+import { buildLoneWorking } from './domain/loneWorking.js';
 import { incidentCsvRows, incidentReport } from './domain/incidentCommandReport.js';
 // ADR-0229: CSV #170 — the capability sourcing & firm-boundary register.
 import { SRC_CSV_COLUMNS, SRC_CSV_DESCRIPTOR, SRC_CSV_SCOPE } from './domain/sourcingRegistry.js';
@@ -1709,6 +1713,13 @@ export const CSV_EXPORTS = [
   // reference, source text or date crosses this boundary: a restriction is a
   // claim about a person's body, and the export is a distribution.
   WPA_CSV_DESCRIPTOR,
+  // #183 (ADR-0242): lone-working welfare checks. One summary row and one row per
+  // printed state. No person id, name, manager, site, task, protocol reference or
+  // instant crosses this boundary: a deployment says where a named human being
+  // was, alone, at a given minute, and the export is a count plus exact minute
+  // totals. A per-state count below the declared floor exports BLANK with its
+  // reason, never as a small number.
+  LWK_CSV_DESCRIPTOR,
 ];
 
 function personLookup(state) {
@@ -6998,6 +7009,17 @@ export function buildScopeTable(state, scope, now) {
       return {
         columns: MIC_CSV_COLUMNS.map((key) => ({ key, header: key })),
         rows: incidentCsvRows(report),
+      };
+    }
+    case LWK_CSV_SCOPE: {
+      // CSV scope #183 (ADR-0242, Schema v196). Built from the SAME reader the
+      // `#/lone-working` panel renders, with no seat: every figure is a count or
+      // an exact whole-minute total over the whole register, so no person,
+      // manager, site, task, reference or instant is reachable from this export.
+      const report = buildLoneWorking(state, { now, settings: state.settings || {}, seat: null });
+      return {
+        columns: LWK_CSV_COLUMNS.map((key) => ({ key, header: key })),
+        rows: loneWorkingCsvRows(report),
       };
     }
     case WPA_CSV_SCOPE: {

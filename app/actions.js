@@ -128,6 +128,7 @@ import { createEarnedValueActions } from './core/domain/earnedValueActions.js';
 import { createRiskAppetiteActions } from './core/domain/riskAppetiteActions.js';
 import { createDistributedEquityActions } from './core/domain/distributedEquityActions.js';
 import { createWorkplaceAdjustmentActions } from './core/domain/workplaceAdjustmentActions.js';
+import { createLoneWorkingActions } from './core/domain/loneWorkingActions.js';
 // ADR-0240: the Major-Incident Command & Notification-Clock Register's commands
 // and seat-checked reads. Declaring, staffing, commanding, notifying, resolving
 // and standing down — nothing else.
@@ -20386,6 +20387,7 @@ export function createApi(store, options = {}) {
   // read is a seat-scoped SAFE_READ. Lifting a restriction requires a recorded
   // review, which is enforced inside the action and not by a dialog.
   Object.assign(api, createWorkplaceAdjustmentActions(store, { now: clock, idFactory: id }));
+  Object.assign(api, createLoneWorkingActions(store, { now: clock, idFactory: id }));
   // ADR-0240: the incident command register's commands.
   Object.assign(api, createIncidentCommandActions(store, { now: clock, idFactory: id }));
   // ADR-0220: the variable-pay design & incentive integrity register's commands.
