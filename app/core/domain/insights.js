@@ -133,6 +133,10 @@ import { distributedEquitySignals } from './distributedEquity.js';
 import { workplaceAdjustmentSignals } from './workplaceAdjustment.js';
 // ADR-0242: the lone-working welfare check register contributes LWK-01..04.
 import { loneWorkingSignals } from './loneWorking.js';
+// ADR-0243: the employee-voice and collective-consultation register contributes
+// VOI-01..04 — a window that closed with no advice, advice nobody answered, a
+// decision out of order, and sittings with no minutes or below quorum.
+import { voiceSignals } from './voice.js';
 import { incidentCommandSignals } from './incidentCommand.js';
 import { autopilotSignals } from './autopilot.js';
 
@@ -350,6 +354,10 @@ export const DOMAIN_ORDER = [
   // ADR-0242 (Schema v196): the Lone-Working Welfare Check Register contributes
   // LWK-01..04. Listed for the same reason as every other bucket.
   'Lone working',
+  // ADR-0243 (Schema v197): the Employee Voice & Collective Consultation Register
+  // contributes VOI-01..04. Listed for the same reason as every other bucket: a
+  // signal whose domain is missing here is counted and then silently dropped.
+  'Employee voice',
 ];
 
 export function severityLabel(n) {
@@ -2619,6 +2627,10 @@ export function buildInsights(state, now) {
   // its own ledgers and the live matrix, so it cannot recurse into the engine
   // that is running it.
   for (const signal of loneWorkingSignals(state, now, settings)) add(signal);
+  // ADR-0243 (read-side): the Employee Voice register contributes VOI-01..04. It
+  // reads its own ledgers and the live matrix, so it cannot recurse into the
+  // engine that is running it.
+  for (const signal of voiceSignals(state, now, settings)) add(signal);
   // ADR-0240 (read-side): the Incident Command register contributes MIC-01..03 —
   // a passed notification deadline, a live major incident with no commander (or a
   // closed one still holding command), and a response line nobody accepted. It

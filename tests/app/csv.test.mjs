@@ -148,8 +148,9 @@ test('every CSV scope round-trips cleanly and preserves unknown values as blank 
 // scopes #167..#174 (manager handover, shared dependency, sourcing, Vroom–Yetton,
 // integrated business plan, improvement suggestions, decision-domain sensing)
 // registered 166 → 174 without this count moving; the pin was then repaired.
-// Session 318 adds the aggregate commitment-maturity scope #180.
-assert.equal(CSV_EXPORTS.length, 183);
+// Session 318 adds the aggregate commitment-maturity scope #180; Session 321
+// adds the identity-free employee-voice scope #184.
+assert.equal(CSV_EXPORTS.length, 184);
   for (const spec of CSV_EXPORTS) {
     const res = exportWorkspaceCsv(state, spec.key, { now: NOW });
     assert.equal(res.ok, true, `${spec.key} export succeeds`);

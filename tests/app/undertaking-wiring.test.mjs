@@ -144,7 +144,7 @@ function lifecycle(env) {
 }
 
 test('schema v189 carries the three ADR-0234 collections as empty arrays', () => {
-  assert.equal(SCHEMA_VERSION, 196, 'ADR-0242 (lone-working welfare checks) is the current head');
+  assert.equal(SCHEMA_VERSION, 197, 'ADR-0243 (employee voice and collective consultation) is the current head');
   const state = normalizeState(createEmptyState(at('2026-02-01').toISOString()), { now: at('2026-02-01') }).state;
   for (const key of ['undertakings', 'undertakingActs', 'undertakingMarkers']) {
     assert.ok(COLLECTIONS.includes(key), `${key} is not a declared collection`);

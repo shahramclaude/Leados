@@ -176,16 +176,16 @@ const readOne = (envRef, now = T0) => incidentReport(envRef.store.state, { now: 
 /* --------------------------------------------------- 1. the schema bump */
 
 test('ADR-0240 schema: the bump is additive — three empty ledgers and five conventions', () => {
-  assert.equal(SCHEMA_VERSION, 196);
+  assert.equal(SCHEMA_VERSION, 197);
   for (const key of ['micIncidents', 'micActs', 'micMarkers']) {
     assert.ok(COLLECTIONS.includes(key), `${key} is a declared collection`);
   }
   const upgraded = migrate({ schemaVersion: 193, settings: {} });
-  // Later bumps (v195 ADR-0241, v196 ADR-0242) append, so ADR-0240's own step is asserted by
+  // Later bumps (v195 ADR-0241, v196 ADR-0242, v197 ADR-0243) append, so ADR-0240's own step is asserted by
   // position rather than by being the last one in the chain.
   assert.ok(upgraded.applied.includes('193 → 194'), 'ADR-0240’s own step still runs, in order');
-  assert.equal(upgraded.applied.at(-3), '193 → 194');
-  assert.equal(upgraded.raw.schemaVersion, 196);
+  assert.equal(upgraded.applied.at(-4), '193 → 194');
+  assert.equal(upgraded.raw.schemaVersion, 197);
   const { state } = normalizeState(upgraded.raw, { now: new Date(T0) });
   assert.deepEqual(state.micIncidents, []);
   assert.deepEqual(state.micActs, []);

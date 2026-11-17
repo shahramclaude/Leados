@@ -119,7 +119,7 @@ const revisionOf = (report, no, title = 'Tom’s morning walk') => report.revisi
  * 1. REGISTRATION
  */
 test('registration: schema v192, two ledgers, migration from v191, rights, gateway, record classes', () => {
-  assert.equal(SCHEMA_VERSION, 196, 'ADR-0242 (lone-working welfare checks) is the current head');
+  assert.equal(SCHEMA_VERSION, 197, 'ADR-0243 (employee voice and collective consultation) is the current head');
   for (const key of ['standardRevisions', 'standardRevisionBriefs']) {
     assert.ok(COLLECTIONS.includes(key), `${key} is a declared collection`);
   }

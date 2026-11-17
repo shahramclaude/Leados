@@ -129,6 +129,11 @@ import { createRiskAppetiteActions } from './core/domain/riskAppetiteActions.js'
 import { createDistributedEquityActions } from './core/domain/distributedEquityActions.js';
 import { createWorkplaceAdjustmentActions } from './core/domain/workplaceAdjustmentActions.js';
 import { createLoneWorkingActions } from './core/domain/loneWorkingActions.js';
+// ADR-0243: the Employee Voice & Collective Consultation Register's commands and
+// seat-checked reads. Declaring a body, a member, an item, a sitting, advice, a
+// reply and a decision — nothing else. The door refuses a decision before the
+// declared window closes and refuses one recorded by a single affected line.
+import { createVoiceActions } from './core/domain/voiceActions.js';
 // ADR-0240: the Major-Incident Command & Notification-Clock Register's commands
 // and seat-checked reads. Declaring, staffing, commanding, notifying, resolving
 // and standing down — nothing else.
@@ -20388,6 +20393,11 @@ export function createApi(store, options = {}) {
   // review, which is enforced inside the action and not by a dialog.
   Object.assign(api, createWorkplaceAdjustmentActions(store, { now: clock, idFactory: id }));
   Object.assign(api, createLoneWorkingActions(store, { now: clock, idFactory: id }));
+  // ADR-0243: the employee-voice register's commands. Opening an item, holding a
+  // sitting, recording advice and taking a decision are declared commands, each
+  // re-proved against the live reporting graph inside the action; every read is a
+  // seat-scoped SAFE_READ.
+  Object.assign(api, createVoiceActions(store, { now: clock, idFactory: id }));
   // ADR-0240: the incident command register's commands.
   Object.assign(api, createIncidentCommandActions(store, { now: clock, idFactory: id }));
   // ADR-0220: the variable-pay design & incentive integrity register's commands.

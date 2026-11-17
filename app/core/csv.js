@@ -242,6 +242,10 @@ import { buildWorkplaceAdjustment } from './domain/workplaceAdjustment.js';
 import { LWK_CSV_COLUMNS, LWK_CSV_DESCRIPTOR, LWK_CSV_SCOPE } from './domain/loneWorkingRegistry.js';
 import { loneWorkingCsvRows } from './domain/loneWorkingReport.js';
 import { buildLoneWorking } from './domain/loneWorking.js';
+// ADR-0243: identity-free employee-voice and consultation aggregates (CSV #184).
+import { VOI_CSV_COLUMNS, VOI_CSV_DESCRIPTOR, VOI_CSV_SCOPE } from './domain/voiceRegistry.js';
+import { voiceCsvRows } from './domain/voiceReport.js';
+import { buildVoice } from './domain/voice.js';
 import { incidentCsvRows, incidentReport } from './domain/incidentCommandReport.js';
 // ADR-0229: CSV #170 — the capability sourcing & firm-boundary register.
 import { SRC_CSV_COLUMNS, SRC_CSV_DESCRIPTOR, SRC_CSV_SCOPE } from './domain/sourcingRegistry.js';
@@ -1720,6 +1724,12 @@ export const CSV_EXPORTS = [
   // totals. A per-state count below the declared floor exports BLANK with its
   // reason, never as a small number.
   LWK_CSV_DESCRIPTOR,
+  // #184 (ADR-0243): employee voice and collective consultation. One summary row,
+  // one row per printed item state and one per printed sitting state. No person,
+  // body name, subject, instrument, advice note, reply note or day crosses this
+  // boundary. A per-state count below the declared floor exports BLANK with its
+  // reason, never as a small number.
+  VOI_CSV_DESCRIPTOR,
 ];
 
 function personLookup(state) {
@@ -7020,6 +7030,17 @@ export function buildScopeTable(state, scope, now) {
       return {
         columns: LWK_CSV_COLUMNS.map((key) => ({ key, header: key })),
         rows: loneWorkingCsvRows(report),
+      };
+    }
+    case VOI_CSV_SCOPE: {
+      // CSV scope #184 (ADR-0243, Schema v197). Built from the SAME reader the
+      // `#/voice` panel renders, with no seat: every figure is an exact integer
+      // count over the whole register, so no person, body name, subject,
+      // instrument, advice note, reply note or day is reachable from this export.
+      const report = buildVoice(state, { now, settings: state.settings || {}, seat: null });
+      return {
+        columns: VOI_CSV_COLUMNS.map((key) => ({ key, header: key })),
+        rows: voiceCsvRows(report),
       };
     }
     case WPA_CSV_SCOPE: {

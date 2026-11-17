@@ -334,6 +334,12 @@ export const PAUSE_PERMIT_MATRIX_REACH_SWITCHES = Object.freeze([
   // are not told. It reaches across reporting lines, so it carries a permit like
   // every other cross-line switch.
   'lwkAutoPropagate',
+  // ADR-0243: the employee-voice rule. Silencing it stops the asks for a
+  // consultation window that closed with no advice, advice the organisation never
+  // answered, minutes past their day and a decision recorded out of order — and the
+  // affected reporting lines are not told. It reaches across reporting lines through
+  // `matrixJointApex`, so it carries a permit like every other cross-line switch.
+  'voiceAutoPropagate',
 ]);
 
 export function pausePermitReachesMatrix(key) {
@@ -449,6 +455,9 @@ export const PAUSE_PERMIT_SWITCH_RULES = Object.freeze({
   // ADR-0226: silencing this rule can leave a would-exceed shared dependency
   // without its ceiling ask; the reading remains open and visible.
   riskConcentrationAutoPropagate: 'riskConcentrationRules.js',
+  // ADR-0243: the employee-voice rule reads the live matrix for the joint apex
+  // above an item's affected lines, so silencing it really can reach a second line.
+  voiceAutoPropagate: 'voiceRules.js',
 });
 
 /** Only graph-reading rules belong to the matrix census. Owner-directed rules

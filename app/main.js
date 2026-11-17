@@ -166,9 +166,12 @@ import { riskAppetiteAttentionCount } from './core/domain/riskAppetite.js';
 import { renderDistributedEquity } from './views/distributedEquity.js';
 import { renderAdjustments } from './views/adjustments.js';
 import { renderLoneWorking } from './views/loneWorking.js';
+// ADR-0243: the employee-voice and collective-consultation register.
+import { renderVoice } from './views/voice.js';
 import { distributedEquityAttentionCount } from './core/domain/distributedEquity.js';
 import { workplaceAdjustmentAttentionCount } from './core/domain/workplaceAdjustment.js';
 import { loneWorkingAttentionCount } from './core/domain/loneWorking.js';
+import { voiceAttentionCount } from './core/domain/voice.js';
 // ADR-0220: the variable-pay design & incentive integrity register.
 import { renderIncentive } from './views/incentive.js';
 import { incentiveAttentionCount } from './core/domain/incentiveIntegrity.js';
@@ -643,6 +646,11 @@ export const NAV = [
     // first frontline-first register in the operations group; above rank 3 the
     // reader prints counts and withholds names.
     { route: 'lone-working', label: 'Lone working', icon: '☍', badge: 'loneWorking' },
+    // ADR-0243: what was put to a staff body, the period its own instrument gave
+    // it, what it advised, whether the organisation answered, and whether the
+    // decision preceded the close of the window. Director/VP primary; above rank 3
+    // the reader prints counts and withholds subjects, names and written advice.
+    { route: 'voice', label: 'Employee voice', icon: '☱', badge: 'voice' },
     // ADR-0220: what the variable pay in a leader's remit actually pays for, who
     // verifies the number, what the record can prove, and where the same outcome
     // is paid twice because a person sits on two lines. Beside risk appetite on
@@ -887,6 +895,8 @@ const RENDERERS = {
   adjustments: (ctx) => renderAdjustments(ctx),
   // ADR-0242: the lone-working welfare check register.
   'lone-working': (ctx) => renderLoneWorking(ctx),
+  // ADR-0243: the employee-voice and collective-consultation register.
+  voice: (ctx) => renderVoice(ctx),
   // ADR-0220: the variable-pay design & incentive integrity register.
   incentive: (ctx) => renderIncentive(ctx),
   // ADR-0221: the Duty-Without-Means Register.
@@ -1063,6 +1073,11 @@ export function parseRoute(hash) {
     // "who is out on their own" / "has anyone heard from him". None shadows a
     // shipped route.
     'lone-working': 'lone-working', 'lone-worker': 'lone-working', 'lone-working-check': 'lone-working',
+    // ADR-0243: employee voice. Aliases are the words a leader actually uses for
+    // the duty, and never shadow an existing route.
+    voice: 'voice', 'employee-voice': 'voice', 'works-council': 'voice', 'staff-council': 'voice',
+    'cooperation-committee': 'voice', 'employee-forum': 'voice', 'consultation': 'voice',
+    'collective-consultation': 'voice', 'union-recognition': 'voice', 'staff-reps': 'voice',
     'welfare-check': 'lone-working', 'check-in-timer': 'lone-working', 'working-alone': 'lone-working',
     'lone-deployment': 'lone-working', 'man-down': 'lone-working', 'roll-call': 'lone-working',
     // ADR-0148: the names a person types looking for "did anyone actually agree
@@ -1826,6 +1841,10 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       // their declared end and checks owed inside their grace — the same
       // conditions RULE-LWK-01 files. A COUNT, never a name.
       loneWorking: loneWorkingAttentionCount(state, { now: at, settings: state.settings, seat: seatCtx?.seat || null }),
+      // ADR-0243: windows that closed with no advice, advice nobody answered,
+      // sittings past their minutes day and decisions recorded out of order — the
+      // same conditions RULE-VOI-01 files. A COUNT, never a name.
+      voice: voiceAttentionCount(state, { now: at, settings: state.settings, seat: seatCtx?.seat || null }),
       // ADR-0220: over-ceiling envelopes, contested outcomes and outstanding
       // recoveries this seat holds the joint apex above, plus live plans of its
       // own with no verified reading. The same conditions RULE-INC-01 files.
@@ -2421,6 +2440,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       probation: 'Probation gates — the decision a joiner’s first window owes: confirm, extend or end, on evidence from every declared line, communicated in writing',
   incidents: 'Major incidents — the command record while it runs: who declared it and against what written criterion, who took command and when they handed it over, every declared notification clock with its exact deadline, whether each party was actually told, and whether command was ever released',
       adjustments: 'Workplace adjustments — what work a person must not do and what was actually done about it: the functional limitation and its written instrument, the day an adjustment was agreed against the day it took effect, whether declared work on ANY reporting line breaks a limit the record can test exactly, and whether every line that hands the person work has been told',
+      voice: 'Employee voice — what was put to a staff body and what it said back: the written instrument that set the period, the documents supplied, the day the window closed against the day advice arrived, the body’s own words and whether the organisation answered, the decision’s day against the window, each sitting’s attendance against the body’s own quorum, and the joint reporting seat above the affected lines',
       'lone-working': 'Lone working — who is alone right now, where, against which written assessment: the declared check-in interval and grace running from the last contact, the exact deadline, whether the record holds contact, a concern nobody answered, an escalation, or nothing at all, whether it ran past its declared end unclosed, and the joint reporting seat that owes the response',
       undertakings: 'Undertakings — the promise the enterprise made to a regulator, a board, a lender or a customer: its obligation lines, each independently tested, and the written report that discharges it to the counterparty',
       'information-requests': 'Information requests — what an authority demanded, on the day they set: every production line certified, every claim of privilege ruled on by a seat outside the parties, and the release that answers them',

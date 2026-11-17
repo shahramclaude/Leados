@@ -157,7 +157,7 @@ function harness(raw) {
 
 test('schema v196 is additive: four empty ledgers, three conventions, nothing inferred', () => {
   const empty = createEmptyState(T0);
-  assert.equal(SCHEMA_VERSION, 196);
+  assert.equal(SCHEMA_VERSION, 197);
   for (const key of ['lwkDeployments', 'lwkCheckins', 'lwkEscalations', 'lwkMarkers']) {
     assert.ok(COLLECTIONS.includes(key), `${key} is a declared collection`);
     assert.deepEqual(empty[key], [], `${key} starts empty`);
@@ -171,8 +171,8 @@ test('schema v196 is additive: four empty ledgers, three conventions, nothing in
   delete previous.lwkDeployments; delete previous.lwkCheckins;
   delete previous.lwkEscalations; delete previous.lwkMarkers;
   const { raw, applied } = migrate(previous);
-  assert.deepEqual(applied, ['195 → 196']);
-  assert.equal(raw.schemaVersion, 196);
+  assert.deepEqual(applied, ['195 → 196', '196 → 197'], 'ADR-0242’s own step still runs first, in order');
+  assert.equal(raw.schemaVersion, 197);
   // NOTHING IS INFERRED. A workspace with shifts, stations or a `lone-work`
   // restriction on file does not thereby have a person monitored for welfare.
   for (const key of ['lwkDeployments', 'lwkCheckins', 'lwkEscalations', 'lwkMarkers']) {
