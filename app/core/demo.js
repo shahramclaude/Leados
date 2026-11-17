@@ -2383,6 +2383,234 @@ function seedDistributedEquity(state, now, { priya, mei, jordan, samuel, freya, 
   ];
 }
 
+/**
+ * ADR-0243: a small, REAL-SHAPED employee-voice record.
+ *
+ * Five items and two sittings placed RELATIVE TO THE INJECTED CLOCK, so the
+ * register shows live states rather than rows that were only true on the day the
+ * demo was written. NOTHING here states a state, a close day or a lateness — every
+ * one of those is derived by the reader from the days below:
+ *
+ *   1. The on-call rota change, put to the council on a written instrument with a
+ *      ten-day window that closed four days ago with nothing back: `advice-lapsed`.
+ *      Silence is not consent, and no decision has been invented to sit on top.
+ *   2. The billing release freeze: the council advised "amend" TWO DAYS AFTER its
+ *      window closed, and the organisation has still not replied: `reply-overdue`
+ *      with the exact days late printed beside the advice.
+ *   3. The evening-cover shift change: the council OPPOSED it, the joint seat above
+ *      both affected lines departed from that advice with a written reason, and the
+ *      change is in place: `implemented`, with the departure printed beside it.
+ *   4. A Q4 headcount briefing, which is information and owes nothing back:
+ *      `notified`.
+ *   5. The incident-review template: advice inside the window, a written reply and
+ *      a decision that followed it: `decided`.
+ *
+ *   6. A sitting the council held on the rota item, minuted two days later.
+ *   7. A sitting only the chair attended — below the council's own declared quorum
+ *      of two — minuted inside its day, so `below-quorum` prints rather than the
+ *      minute standing in for a body.
+ *   8. A sitting on the billing item with NO minutes, twenty days ago: the declared
+ *      minutes day has passed, so `minutes-lapsed` prints and RULE-VOI-01 asks.
+ */
+function seedEmployeeVoice(state, now, { priya, mei, jordan, samuel, freya, at, ts }) {
+  state.voiceBodies = [
+    {
+      id: 'voi-bdy-demo-1',
+      name: 'Platform Staff Council',
+      kind: 'works-council',
+      instrumentRef: 'Staff Council Constitution 2026, clause 4 — information and consultation on changes to working arrangements',
+      constitutedOn: at(400),
+      termEndsOn: at(-200),
+      quorumWhole: 2,
+      createdAt: ts(400),
+      updatedAt: ts(400),
+    },
+  ];
+
+  state.voiceMembers = [
+    { id: 'voi-mbr-demo-1', bodyId: 'voi-bdy-demo-1', personId: jordan, role: 'chair', basis: 'appointed', termStart: at(300), termEnd: at(-170), electedOn: null, declaredById: 'leader', createdAt: ts(300) },
+    { id: 'voi-mbr-demo-2', bodyId: 'voi-bdy-demo-1', personId: mei, role: 'member', basis: 'elected', termStart: at(300), termEnd: at(-170), electedOn: at(320), declaredById: 'leader', createdAt: ts(300) },
+    { id: 'voi-mbr-demo-3', bodyId: 'voi-bdy-demo-1', personId: freya, role: 'member', basis: 'elected', termStart: at(300), termEnd: at(-170), electedOn: at(320), declaredById: 'leader', createdAt: ts(300) },
+    { id: 'voi-mbr-demo-4', bodyId: 'voi-bdy-demo-1', personId: samuel, role: 'observer', basis: 'appointed', termStart: at(300), termEnd: at(-170), electedOn: null, declaredById: 'leader', createdAt: ts(300) },
+  ];
+
+  state.voiceItems = [
+    {
+      id: 'voi-itm-demo-1',
+      bodyId: 'voi-bdy-demo-1',
+      subject: 'Move the on-call rota to a two-week rotation from January',
+      kind: 'consultation',
+      ownerIds: [priya, mei],
+      instrumentRef: 'Staff Council Constitution 2026, clause 4.2 — ten working days on changes to working arrangements',
+      windowDays: 10,
+      openedOn: at(14),
+      documents: [{ label: 'Rota proposal v2 with the on-call load figures', on: at(14) }],
+      declaredById: priya,
+      createdAt: ts(14),
+      updatedAt: ts(14),
+    },
+    {
+      id: 'voi-itm-demo-2',
+      bodyId: 'voi-bdy-demo-1',
+      subject: 'Introduce a Friday release freeze for the billing migration',
+      kind: 'consultation',
+      ownerIds: [mei],
+      instrumentRef: 'Staff Council Constitution 2026, clause 4.2 — ten working days on changes to working arrangements',
+      windowDays: 7,
+      openedOn: at(20),
+      documents: [{ label: 'Billing migration cutover plan, revision 4', on: at(20) }],
+      declaredById: mei,
+      createdAt: ts(20),
+      updatedAt: ts(20),
+    },
+    {
+      id: 'voi-itm-demo-3',
+      bodyId: 'voi-bdy-demo-1',
+      subject: 'Evening support cover: the shift start moves from 08:00 to 07:30',
+      kind: 'negotiation',
+      ownerIds: [priya, samuel],
+      instrumentRef: 'Staff Council Constitution 2026, clause 5.1 — negotiation on shift patterns affecting the support rota',
+      windowDays: 10,
+      openedOn: at(60),
+      documents: [{ label: 'Cover model and the handover risk it removes', on: at(60) }],
+      declaredById: samuel,
+      createdAt: ts(60),
+      updatedAt: ts(60),
+    },
+    {
+      id: 'voi-itm-demo-4',
+      bodyId: 'voi-bdy-demo-1',
+      subject: 'Q4 headcount plan briefing',
+      kind: 'information',
+      ownerIds: [priya],
+      instrumentRef: 'Staff Council Constitution 2026, clause 3 — the council is informed of the quarterly headcount plan',
+      windowDays: 0,
+      openedOn: at(7),
+      documents: [
+        { label: 'Q4 headcount plan, approved', on: at(7) },
+        { label: 'Attrition assumptions behind the plan', on: at(7) },
+      ],
+      declaredById: priya,
+      createdAt: ts(7),
+      updatedAt: ts(7),
+    },
+    {
+      id: 'voi-itm-demo-5',
+      bodyId: 'voi-bdy-demo-1',
+      subject: 'Adopt the new incident review template for the support rota',
+      kind: 'consultation',
+      ownerIds: [mei],
+      instrumentRef: 'Staff Council Constitution 2026, clause 4.2 — ten working days on changes to working arrangements',
+      windowDays: 5,
+      openedOn: at(35),
+      documents: [{ label: 'Incident review template, draft C', on: at(35) }],
+      declaredById: mei,
+      createdAt: ts(35),
+      updatedAt: ts(35),
+    },
+  ];
+
+  state.voiceSittings = [
+    {
+      id: 'voi-sit-demo-1',
+      bodyId: 'voi-bdy-demo-1',
+      on: at(14),
+      presentIds: ['voi-mbr-demo-1', 'voi-mbr-demo-2', 'voi-mbr-demo-3'],
+      itemIds: ['voi-itm-demo-1'],
+      minutesOn: at(12),
+      minutesRef: 'Staff council minutes 2026/C-14, held by the chair',
+      recordedById: jordan,
+      createdAt: ts(14),
+    },
+    {
+      id: 'voi-sit-demo-2',
+      bodyId: 'voi-bdy-demo-1',
+      on: at(55),
+      presentIds: ['voi-mbr-demo-1'],
+      itemIds: ['voi-itm-demo-3'],
+      minutesOn: at(53),
+      minutesRef: 'Staff council minutes 2026/C-09, held by the chair',
+      recordedById: jordan,
+      createdAt: ts(55),
+    },
+    {
+      id: 'voi-sit-demo-3',
+      bodyId: 'voi-bdy-demo-1',
+      on: at(20),
+      presentIds: ['voi-mbr-demo-2', 'voi-mbr-demo-3'],
+      itemIds: ['voi-itm-demo-2'],
+      minutesOn: null,
+      minutesRef: null,
+      recordedById: mei,
+      createdAt: ts(20),
+    },
+  ];
+
+  state.voiceResponses = [
+    {
+      id: 'voi-adv-demo-1',
+      itemId: 'voi-itm-demo-2',
+      receivedOn: at(11),
+      advice: 'amend',
+      note: 'The council asked for the freeze to exclude the payments batch and for the on-call engineer to be named in the plan. The reply to this advice is still owed.',
+      recordedById: mei,
+      replyOn: null,
+      replyNote: null,
+      replyById: null,
+      createdAt: ts(11),
+    },
+    {
+      id: 'voi-adv-demo-2',
+      itemId: 'voi-itm-demo-3',
+      receivedOn: at(55),
+      advice: 'oppose',
+      note: 'The council opposed moving the start to 07:30, on the ground that the school run makes the earlier start impossible for two of the four evening-cover staff.',
+      recordedById: samuel,
+      replyOn: at(53),
+      replyNote: 'The objection was acknowledged. Cover was re-modelled so the two affected staff keep the 08:00 start and the earlier start falls to the volunteers.',
+      replyById: priya,
+      createdAt: ts(55),
+    },
+    {
+      id: 'voi-adv-demo-3',
+      itemId: 'voi-itm-demo-5',
+      receivedOn: at(31),
+      advice: 'support',
+      note: 'The council supported the template and asked for the review owner to be named on the first page.',
+      recordedById: mei,
+      replyOn: at(28),
+      replyNote: 'Accepted, and the owner field was added to page one before the template was approved.',
+      replyById: mei,
+      createdAt: ts(31),
+    },
+  ];
+
+  state.voiceDecisions = [
+    {
+      id: 'voi-dec-demo-1',
+      itemId: 'voi-itm-demo-3',
+      decidedOn: at(45),
+      decidedById: 'leader',
+      course: 'departed',
+      note: 'The change proceeded with the 07:30 start for volunteers only. The joint seat above both affected lines accepted the departure because the earlier start closes a two-hour cover gap that the council’s own minutes record.',
+      implementedOn: at(40),
+      createdAt: ts(45),
+    },
+    {
+      id: 'voi-dec-demo-2',
+      itemId: 'voi-itm-demo-5',
+      decidedOn: at(25),
+      decidedById: mei,
+      course: 'followed-advice',
+      note: 'The template was adopted as advised, with the owner field added.',
+      implementedOn: null,
+      createdAt: ts(25),
+    },
+  ];
+
+  state.voiceMarkers = Array.isArray(state.voiceMarkers) ? state.voiceMarkers : [];
+}
+
 export function buildDemoState(now = new Date()) {
   const today = dayKey(now);
   const at = (daysAgo) => addDays(today, -daysAgo);
@@ -5987,6 +6215,11 @@ export function buildDemoState(now = new Date()) {
   // close-out with no contact — so the register shows live duties rather than an
   // honest empty state on first load.
   seedLoneWorking(state, now, { priya, mei, jordan, samuel, freya });
+  // ADR-0243: one constituted staff council, five items — a lapsed window, an
+  // advice nobody answered, a departure that is in place, a briefing and a decision
+  // that followed advice — and two sittings, one of them below the council's own
+  // quorum. Real-shaped, dated relative to the injected clock.
+  seedEmployeeVoice(state, now, { priya, mei, jordan, samuel, freya, at, ts });
   // ADR-0240: one declared incident with a running external clock, an accepted
   // line, an unaccepted line and a recorded severity raise — so the register
   // shows a real bridge rather than an honest empty state on first load.

@@ -30,6 +30,7 @@ import { RA_RIGHTS } from './riskAppetiteRegistry.js';
 import { DWE_RIGHTS } from './distributedEquityRegistry.js';
 import { WPA_RIGHTS } from './workplaceAdjustmentRegistry.js';
 import { LWK_RIGHTS } from './loneWorkingRegistry.js';
+import { VOI_RIGHTS } from './voiceRegistry.js';
 import { MIC_RIGHTS } from './incidentCommandRegistry.js';
 // ADR-0229: the capability sourcing register's four rights.
 import { SRC_RIGHTS } from './sourcingRegistry.js';
@@ -336,6 +337,14 @@ const groups = [
   // declare themselves alone.
   [LWK_RIGHTS.READ, 'loneWorkingReport loneWorkingAttention loneWorkingCandidates'],
   [LWK_RIGHTS.DECLARE, 'loneWorkingDeclareDeployment loneWorkingCheckIn loneWorkingEscalate loneWorkingCloseDeployment loneWorkingSetConventions loneWorkingScan'],
+  // ADR-0243: the employee-voice register. Reading is open at rank 1 — every
+  // person the body represents may see what was put to it and what it advised —
+  // while the READER withholds subjects, names and written advice above rank 3.
+  // Every write is a leader act narrowed inside the action: an item is opened only
+  // against a line this seat holds, and a decision only by the JOINT APEX above the
+  // affected lines, never by one of them.
+  [VOI_RIGHTS.READ, 'voiceReport voiceAttention voiceCandidates'],
+  [VOI_RIGHTS.DECLARE, 'voiceDeclareBody voiceDeclareMember voiceOpenItem voiceSupplyDocument voiceHoldSitting voiceRecordMinutes voiceRecordAdvice voiceReplyToAdvice voiceRecordDecision voiceSetConventions voiceScan'],
   [DWE_RIGHTS.DECLARE, 'distributedEquityDeclareWindow distributedEquityWithdrawWindow distributedEquityDeclareSitting distributedEquityRetractSitting distributedEquitySetConventions distributedEquityScan'],
   // ADR-0240: the incident command register. Reading is registered as safe and
   // therefore bypasses the gateway's rank check — so the read right is re-proved
@@ -834,6 +843,12 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // still gated — and where a named human being is alone at this minute would
 // vanish the moment enforcement was turned on.
 'loneWorkingReport', 'loneWorkingAttention', 'loneWorkingCandidates',
+// ADR-0243: the employee-voice register's pure read surface. Every one of these
+// re-proves the read right inside the action, because a module whose reads are
+// absent from SAFE_READS is unreadable under enforcement while its writes are
+// still gated — and what a named body advised would vanish the moment enforcement
+// was turned on.
+'voiceReport', 'voiceAttention', 'voiceCandidates',
 // ADR-0229: the capability sourcing register's pure read surface. Every one of
 // these re-proves the read right inside the action, because a module whose
 // reads are absent from SAFE_READS is unreadable under enforcement while its

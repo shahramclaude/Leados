@@ -434,6 +434,26 @@ import {
   normalizeLwkMarkers,
   normalizeLwkSettings,
 } from './domain/loneWorkingSchema.js';
+// ADR-0243 (Schema v197): the Employee Voice & Collective Consultation Register.
+// Declared bodies with the written instrument that constitutes them, dated
+// memberships, items with the window their instrument sets, sittings, advice,
+// decisions and identity-free rule markers. Every loader is fail-closed: a row
+// that cannot be read exactly is DROPPED with a counted warning, never repaired
+// into a plausible default — and an item with no written instrument, no affected
+// line or no declared window is dropped at this boundary too. Ordering breaches
+// (a decision before its window closed, an implementation before its decision) are
+// KEPT here rather than repaired, because the commands cannot create them but a
+// record that carries one is carrying the exact fact the register exists to show.
+import {
+  normalizeVoiceBodies,
+  normalizeVoiceMembers,
+  normalizeVoiceItems,
+  normalizeVoiceSittings,
+  normalizeVoiceResponses,
+  normalizeVoiceDecisions,
+  normalizeVoiceMarkers,
+  normalizeVoiceSettings,
+} from './domain/voiceSchema.js';
 import {
   normalizeIbpCycles,
   normalizeIbpDemandRows,
@@ -1398,7 +1418,7 @@ export {
 // re-derived on read, so a hand-edited file cannot carry a commander nobody
 // designated, a notification nobody made, or a deadline the record does not
 // compute.
-export const SCHEMA_VERSION = 196;
+export const SCHEMA_VERSION = 197;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -2850,6 +2870,13 @@ export const DEFAULT_SETTINGS = Object.freeze({
   // Clamped on load, refused (never clamped) by the setter, and printed on the
   // screen. None is fitted from the record.
   ...normalizeLwkSettings({}),
+  ...normalizeVoiceSettings({}),
+  // ADR-0243: the employee-voice conventions — the reply window, the minutes
+  // window, the privacy floor below which a per-state export is withheld, and the
+  // rule switch. Note what is NOT here: a consultation period. The period a body
+  // is given is a fact about each item's instrument, declared per item, so there
+  // is no workspace default to drift into a jurisdiction table.
+  ...normalizeVoiceSettings({}),
   // ADR-0191: the cross-line priority ballot conventions — the ballot deadline,
   // the follow-up ask window and the ballot floor below which no aggregate is
   // claimed. Clamped on load, refused (never clamped) by the setter, and printed
@@ -4000,6 +4027,19 @@ export const COLLECTIONS = [
   'lwkCheckins',
   'lwkEscalations',
   'lwkMarkers',
+  // ADR-0243 (Schema v197): the Employee Voice & Collective Consultation Register.
+  // Declared bodies, dated memberships, items with their declared window, sittings,
+  // the body's advice with the organisation's reply, the decisions taken and
+  // identity-free rule markers. No state, close day, days-early figure, days-late
+  // figure or quorum verdict is stored: each is re-derived on read, so a hand-edited
+  // file cannot carry a window that disagrees with the period beside it.
+  'voiceBodies',
+  'voiceMembers',
+  'voiceItems',
+  'voiceSittings',
+  'voiceResponses',
+  'voiceDecisions',
+  'voiceMarkers',
 ];
 
 /** Stable empty state. `now` is an ISO string so the result is a pure value. */
@@ -4287,6 +4327,11 @@ export function normalizeSettings(raw) {
     // check, an unanswered concern or a deployment left open past its declared
     // end is never the silent default.
     ...normalizeLwkSettings(s),
+    // ADR-0243: the employee-voice register's conventions, clamped on load. The
+    // rule switch is defaulted ON so a pause that hides a lapsed consultation
+    // window, an advice nobody answered or a sitting with no minutes is never
+    // the silent default.
+    ...normalizeVoiceSettings(s),
     // Repair of a standing red reported at base HEAD: two rule switches the
     // pause census maps were not carried in settings, so the only writes that
     // can silence those rules were refused as unknown keys. Declared here with
@@ -9613,6 +9658,21 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.lwkCheckins = normalizeLwkCheckins(raw.lwkCheckins, state.lwkDeployments, warnings);
   state.lwkEscalations = normalizeLwkEscalations(raw.lwkEscalations, state.lwkDeployments, warnings);
   state.lwkMarkers = normalizeLwkMarkers(raw.lwkMarkers, warnings);
+  // ADR-0243 (Schema v197): a body, membership, item, sitting, advice or decision
+  // that cannot be read exactly is DROPPED with a counted warning — never
+  // repaired, re-dated, re-windowed or re-pointed at another item. An item with no
+  // written instrument, no affected line or no declared window is dropped at this
+  // boundary too. An ORDERING breach is deliberately NOT dropped: a decision dated
+  // before its window closed, and an implementation dated before its decision, are
+  // kept so the reader can print them, because deleting the row would erase the
+  // one fact the register exists to surface.
+  state.voiceBodies = normalizeVoiceBodies(raw.voiceBodies, warnings);
+  state.voiceMembers = normalizeVoiceMembers(raw.voiceMembers, state.voiceBodies, warnings);
+  state.voiceItems = normalizeVoiceItems(raw.voiceItems, state.voiceBodies, warnings);
+  state.voiceSittings = normalizeVoiceSittings(raw.voiceSittings, state.voiceBodies, state.voiceMembers, state.voiceItems, warnings);
+  state.voiceResponses = normalizeVoiceResponses(raw.voiceResponses, state.voiceItems, warnings);
+  state.voiceDecisions = normalizeVoiceDecisions(raw.voiceDecisions, state.voiceItems, warnings);
+  state.voiceMarkers = normalizeVoiceMarkers(raw.voiceMarkers, warnings);
   // ADR-0229 (Schema v182): a case, option, cost line or act that cannot be read
   // exactly is DROPPED with a counted warning — never repaired, re-termed,
   // re-priced or re-pointed at another case. A cost line that does not belong to
@@ -10691,6 +10751,25 @@ export const MIGRATIONS = {
     lwkEscalations: Array.isArray(v195.lwkEscalations) ? v195.lwkEscalations : [],
     lwkMarkers: Array.isArray(v195.lwkMarkers) ? v195.lwkMarkers : [],
     settings: { ...(v195.settings || {}), ...normalizeLwkSettings(v195.settings || {}) },
+  }),
+  // 196 → 197: ADR-0243 adds SEVEN EMPTY ledgers (`voiceBodies`, `voiceMembers`,
+  // `voiceItems`, `voiceSittings`, `voiceResponses`, `voiceDecisions`,
+  // `voiceMarkers`) and the register's conventions. Nothing is inferred from a
+  // change, a workforce transition's "consultation" checklist row, a decision, a
+  // meeting or a stakeholder record: a consultation item is a dated human act
+  // somebody put to a constituted body, and manufacturing one at upgrade time
+  // would put an opinion on the record that no body gave.
+  196: (v196) => ({
+    ...v196,
+    schemaVersion: 197,
+    voiceBodies: Array.isArray(v196.voiceBodies) ? v196.voiceBodies : [],
+    voiceMembers: Array.isArray(v196.voiceMembers) ? v196.voiceMembers : [],
+    voiceItems: Array.isArray(v196.voiceItems) ? v196.voiceItems : [],
+    voiceSittings: Array.isArray(v196.voiceSittings) ? v196.voiceSittings : [],
+    voiceResponses: Array.isArray(v196.voiceResponses) ? v196.voiceResponses : [],
+    voiceDecisions: Array.isArray(v196.voiceDecisions) ? v196.voiceDecisions : [],
+    voiceMarkers: Array.isArray(v196.voiceMarkers) ? v196.voiceMarkers : [],
+    settings: { ...(v196.settings || {}), ...normalizeVoiceSettings(v196.settings || {}) },
   }),
   // 183 → 184: ADR-0231 adds SEVEN EMPTY ledgers (`ibpCycles`, `ibpDemandRows`,
   // `ibpCapacityRows`, `ibpOptions`, `ibpDecisions`, `ibpGrades`, `ibpMarkers`)

@@ -167,7 +167,7 @@ function harness(raw) {
 
 test('schema v195 is additive: five empty ledgers, four conventions, nothing inferred', () => {
   const empty = createEmptyState(T0);
-  assert.equal(SCHEMA_VERSION, 196);
+  assert.equal(SCHEMA_VERSION, 197);
   for (const key of ['wpaRestrictions', 'wpaAdjustments', 'wpaAcknowledgements', 'wpaReviews', 'wpaMarkers']) {
     assert.ok(COLLECTIONS.includes(key), `${key} is a declared collection`);
     assert.deepEqual(empty[key], [], `${key} starts empty`);
@@ -186,8 +186,8 @@ test('schema v195 is additive: five empty ledgers, four conventions, nothing inf
   delete previous.wpaRestrictions; delete previous.wpaAdjustments; delete previous.wpaAcknowledgements;
   delete previous.wpaReviews; delete previous.wpaMarkers;
   const { raw, applied } = migrate(previous);
-  assert.deepEqual(applied, ['194 → 195', '195 → 196'], 'ADR-0241’s own step still runs first, in order');
-  assert.equal(raw.schemaVersion, 196);
+  assert.deepEqual(applied, ['194 → 195', '195 → 196', '196 → 197'], 'ADR-0241’s own step still runs first, in order');
+  assert.equal(raw.schemaVersion, 197);
   // NOTHING IS INFERRED. The upgrade invents no restriction from the absence of a
   // plan, the roster, or a return-to-work record — and a workspace with a
   // reboarding plan on file does not thereby carry a limitation.

@@ -206,6 +206,7 @@ import { riskAppetiteRule } from './riskAppetiteRules.js';
 import { distributedEquityRule } from './distributedEquityRules.js';
 import { workplaceAdjustmentRule } from './workplaceAdjustmentRules.js';
 import { loneWorkingRule } from './loneWorkingRules.js';
+import { voiceRule } from './voiceRules.js';
 import { incidentCommandRule } from './incidentCommandRules.js';
 import { sourcingRule } from './sourcingRules.js';
 import { ibpRule } from './ibpRules.js';
@@ -1290,6 +1291,11 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // across reporting lines — and those lines' managers are not told that nobody
   // has confirmed the person is safe.
   loneWorkingRule,
+  // ADR-0243: the employee-voice rule reads the live matrix for the joint apex
+  // above an item's affected reporting lines, so silencing it reaches across
+  // reporting lines — and nobody is told that a consultation window closed with no
+  // advice or that a decision was recorded out of order.
+  voiceRule,
   workplaceAdjustmentRule,
   // ADR-0229: the Capability Sourcing & Firm-Boundary Register. ONE rule reads
   // the finished register and files at most one dated ask per condition: a

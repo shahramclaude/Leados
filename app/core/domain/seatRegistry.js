@@ -279,6 +279,13 @@ export const RECORD_POLICIES = Object.freeze({
   lwkCheckins: { classKey: 'individual', label: 'Recorded contacts on a lone deployment — the channel, the outcome and the exact instant', route: '#/lone-working' },
   lwkEscalations: { classKey: 'individual', label: 'Welfare escalations raised when a contact lapsed or a concern was raised — the basis, the outcome and what was actually done', route: '#/lone-working' },
   lwkMarkers: { classKey: 'unit', detailCeiling: 3, label: 'Lone-working observation markers — no joint seat, no line to ask (identity-free)', route: '#/lone-working' },
+  voiceBodies: { classKey: 'unit', label: 'Consultation bodies — the written instrument that constitutes each one, its quorum and its declared term', route: '#/voice' },
+  voiceMembers: { classKey: 'individual', label: 'Dated representatives of each consultation body — the seat they hold, how they came by it and the term that entitled them to advise', route: '#/voice' },
+  voiceItems: { classKey: 'unit', label: 'Items put to a consultation body — the subject, the instrument that set the period, the affected reporting lines and the documents supplied', route: '#/voice' },
+  voiceSittings: { classKey: 'unit', label: 'Dated sittings of a consultation body — attendance against the body’s own quorum, the items heard and the minutes with their reference', route: '#/voice' },
+  voiceResponses: { classKey: 'unit', label: 'The body’s advice and the organisation’s written reply — the day each arrived and the course the body took', route: '#/voice' },
+  voiceDecisions: { classKey: 'unit', label: 'Decisions taken after consultation — the day, the deciding joint seat, the course against the advice and the day the change took effect', route: '#/voice' },
+  voiceMarkers: { classKey: 'unit', detailCeiling: 3, label: 'Employee-voice observation markers — no joint seat, no affected line to ask (identity-free)', route: '#/voice' },
   // ADR-0240 (Schema v194): the incident command register. An incident record
   // names the people on the bridge, the instrument it was declared under and the
   // external parties it owes — individual detail that is not handed upward, so
@@ -1407,6 +1414,15 @@ export const ACTION_RIGHTS = Object.freeze({
   'declare-workplace-adjustments': { minRank: 2, maxRank: 5, label: 'Declare a functional restriction on a written instrument, record an adjustment and the day it became operational, acknowledge a restriction on a line you hold, record a review, and set the register’s conventions' },
   'read-lone-working': { minRank: 1, maxRank: 5, label: 'Read the lone-working register within your grant — your own deployment and when you are next due to be heard from, and the deployments of the people you hold' },
   'declare-lone-working': { minRank: 1, maxRank: 5, label: 'Declare a lone deployment on a written assessment, record a contact, answer a lapsed check with an escalation, close a deployment out, and set the register’s conventions' },
+  // ADR-0243 (Schema v197). Two rights. READING is open at rank 1 — every person a
+  // staff body represents may see what was put to it, the period it was given, what
+  // it advised and whether it was answered — while the READER narrows what any seat
+  // sees (names, subjects and written advice below rank 3; counts above). DECLARING
+  // is rank 2+ because putting a change to a body is a line-holder's act, and the
+  // door narrows it further to a seat that holds one of the item's affected lines;
+  // a decision is narrowed to the JOINT APEX above those lines.
+  'read-employee-voice': { minRank: 1, maxRank: 5, label: 'Read the employee-voice and consultation register within your grant — what was put to each body, the period its instrument gave, what it advised, whether it was answered, and whether the decision followed' },
+  'declare-employee-voice': { minRank: 2, maxRank: 5, label: 'Declare a consultation body and its members, open an item on a written instrument, supply documents, hold a sitting and record its minutes, record the body’s advice and answer it, record the decision at the joint seat above the affected lines, and set the register’s conventions' },
   // ADR-0235/0236 (Schema v191). Six rights, and the shape is the point: RECORDING
   // a demand (with a follow-up link only to a readable insufficient parent),
   // STAFFING its lines and RELEASING to the authority are rank 3+ acts —
