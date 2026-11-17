@@ -1428,6 +1428,21 @@ export const ACTION_RIGHTS = Object.freeze({
   // agreement references, subjects, confirmations and external hands); DECLARE
   // is rank 2 and every act on a request is narrowed further to a seat that
   // holds one of the requesting lines.
+  // ADR-0245 (Schema v199). Four rights, and the split is the control. READING is
+  // open at rank 1 because a designated person must be able to see whether a
+  // window is closed and what their own record holds — a control that hides the
+  // closed period from the person it binds is not a control — while the READER
+  // narrows hard: personal-account dealing is INDIVIDUAL detail, so above rank 2 it
+  // prints counts and withholds every name, security and broker reference.
+  // DECLARING a designation, a window and the conventions is a control-room act.
+  // REQUESTING is the person's own clearance and their own executed dealing.
+  // DECIDING is rank 2+ AND narrowed inside the action to a hand strictly above
+  // the requester across every line they hold: rank alone never makes anybody an
+  // independent decider.
+  'read-personal-dealing': { minRank: 1, maxRank: 5, label: 'Read the personal-account dealing and insider-list register within your grant — whether a declared closed period is open, your own clearance and what it was decided, and the dealings of the hands you hold. Above rank 2 the reader prints counts and withholds every name' },
+  'declare-personal-dealing': { minRank: 3, maxRank: 5, label: 'Declare who is on the insider list and on what written instrument and basis, declare a closed period with its anchor disclosure day and exact whole-day bounds before and after it, end a designation, and set the register’s conventions' },
+  'request-personal-dealing': { minRank: 1, maxRank: 5, label: 'Request a clearance for your own trade or for a hand you hold, and record an executed dealing against the broker’s own contract note — including a trade that breached a window, because a bad trade is a fact, not something to hide' },
+  'decide-personal-dealing': { minRank: 2, maxRank: 5, label: 'Decide a clearance you did not request, from a seat strictly above the requester on the reporting graph through every line they hold — never a peer, never a subordinate, never the requester' },
   'read-mutual-aid': { minRank: 1, maxRank: 5, label: 'Read the mutual-aid activation and resource-commitment register within your grant — the agreement a request is made under, the request and its validity, the partner’s acceptance with its written confirmation and promise, the arrival compared against the promise, and the withdrawal and release that close the commitment' },
   'declare-mutual-aid': { minRank: 2, maxRank: 5, label: 'Declare a bilateral agreement, request help under it, record the partner’s acceptance with its written confirmation and promise, record the arrival, the withdrawal and the release of the commitment, cancel a request that was never accepted, and set the register’s conventions' },
   // ADR-0235/0236 (Schema v191). Six rights, and the shape is the point: RECORDING

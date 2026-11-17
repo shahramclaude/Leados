@@ -33,6 +33,7 @@ import { LWK_RIGHTS } from './loneWorkingRegistry.js';
 import { VOI_RIGHTS } from './voiceRegistry.js';
 import { MIC_RIGHTS } from './incidentCommandRegistry.js';
 import { MAA_RIGHTS } from './mutualAidRegistry.js';
+import { DWL_RIGHTS } from './personalDealingRegistry.js';
 // ADR-0229: the capability sourcing register's four rights.
 import { SRC_RIGHTS } from './sourcingRegistry.js';
 import { VY_RIGHTS } from './vyRegistry.js';
@@ -365,6 +366,18 @@ const groups = [
   // that HOLDS one of the requesting lines (the joint apex above two or more).
   [MAA_RIGHTS.READ, 'maaReport maaAttention maaCandidates'],
   [MAA_RIGHTS.DECLARE, 'maaDeclareAgreement maaOpenRequest maaRecordAcceptance maaRecordArrival maaRecordWithdrawal maaRecordRelease maaCancelRequest maaSetConventions maaScan'],
+  // ADR-0245: the personal-account dealing and insider-list register. Reading is
+  // open at rank 1 — a designated person must see whether the window is closed —
+  // while the READER narrows to counts above rank 2, because this is individual
+  // detail. Declaring a designation, a window and the conventions is a
+  // control-room act at rank 3. Requesting and recording are the person's own acts
+  // on hands this seat holds. DECIDING is rank 2+ and narrowed inside the action to
+  // a hand STRICTLY ABOVE the requester, proved against the live graph: rank alone
+  // never makes an independent decider.
+  [DWL_RIGHTS.READ, 'dwlReport dwlAttention dwlCandidates'],
+  [DWL_RIGHTS.DECLARE, 'dwlDeclareDesignation dwlEndDesignation dwlDeclareEvent dwlSetConventions dwlScan'],
+  [DWL_RIGHTS.REQUEST, 'dwlRequestClearance dwlRecordDealing'],
+  [DWL_RIGHTS.DECIDE, 'dwlDecideClearance'],
   // ADR-0229: the capability sourcing & firm-boundary register. Reading is
   // portfolio material (rank 3+). Recording an option is the leader who HOLDS
   // the capability (rank 2+), narrowed inside the action to a line the case
@@ -849,6 +862,12 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // owed help that never arrived, would vanish the moment enforcement was turned
 // on.
 'maaReport', 'maaAttention', 'maaCandidates',
+// ADR-0245: the personal-dealing register's pure read surface. Every one of these
+// re-proves the read right inside the action, because a module whose reads are
+// absent from SAFE_READS is unreadable under enforcement while its writes are
+// still gated — and whether a closed period is open, or whether your own trade was
+// cleared, would vanish the moment enforcement was turned on.
+'dwlReport', 'dwlAttention', 'dwlCandidates',
 // ADR-0241: the workplace adjustment register's pure read surface. Every one of
 // these re-proves the read right inside the action, exactly as the distributed-
 // work and incident registers do — a module whose reads are absent from

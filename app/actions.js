@@ -135,6 +135,12 @@ import { createLoneWorkingActions } from './core/domain/loneWorkingActions.js';
 // declared window closes and refuses one recorded by a single affected line.
 import { createVoiceActions } from './core/domain/voiceActions.js';
 import { createMutualAidActions } from './core/domain/mutualAidActions.js';
+// ADR-0245: the Personal-Account Dealing & Insider-List Register's commands and
+// seat-checked reads. Declaring a designation, a closed period, a clearance
+// request, an independent decision and an executed dealing — nothing else. The
+// door refuses a decision by the requester or by any hand not strictly above them
+// on the reporting graph.
+import { createPersonalDealingActions } from './core/domain/personalDealingActions.js';
 // ADR-0240: the Major-Incident Command & Notification-Clock Register's commands
 // and seat-checked reads. Declaring, staffing, commanding, notifying, resolving
 // and standing down — nothing else.
@@ -20406,6 +20412,12 @@ export function createApi(store, options = {}) {
   // the live reporting graph inside the action; every read is a seat-scoped
   // SAFE_READ.
   Object.assign(api, createMutualAidActions(store, { now: clock, idFactory: id }));
+  // ADR-0245: the personal-account dealing and insider-list register's commands.
+  // Declaring a designation, a closed period, a clearance request, an independent
+  // decision and an executed dealing are declared commands, each re-proved
+  // against the live reporting graph inside the action — decision control is
+  // never the decision manager's — and every read is a seat-scoped SAFE_READ.
+  Object.assign(api, createPersonalDealingActions(store, { now: clock, idFactory: id }));
   // ADR-0240: the incident command register's commands.
   Object.assign(api, createIncidentCommandActions(store, { now: clock, idFactory: id }));
   // ADR-0220: the variable-pay design & incentive integrity register's commands.

@@ -465,6 +465,15 @@ import {
   normalizeMutualAidWithdrawals,
 } from './domain/mutualAidSchema.js';
 import {
+  normalizeDwlClearances,
+  normalizeDwlDealings,
+  normalizeDwlDecisions,
+  normalizeDwlDesignations,
+  normalizeDwlEvents,
+  normalizeDwlMarkers,
+  normalizeDwlSettings,
+} from './domain/personalDealingSchema.js';
+import {
   normalizeIbpCycles,
   normalizeIbpDemandRows,
   normalizeIbpCapacityRows,
@@ -1428,7 +1437,7 @@ export {
 // re-derived on read, so a hand-edited file cannot carry a commander nobody
 // designated, a notification nobody made, or a deadline the record does not
 // compute.
-export const SCHEMA_VERSION = 198;
+export const SCHEMA_VERSION = 199;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -2888,6 +2897,13 @@ export const DEFAULT_SETTINGS = Object.freeze({
   // made in, declared per request, so there is no workspace default to drift
   // into a plausible one.
   ...normalizeMutualAidSettings({}),
+  // ADR-0245: the personal-dealing conventions — the clearance turnaround, the
+  // privacy floor below which a per-state export is withheld, and the rule switch.
+  // Note what is NOT here: a closed-period window and a clearance validity. Both
+  // are facts about a particular event and a particular decision, declared per row.
+  // A workspace default window would silently decide, every day, that dealing was
+  // open — the single most dangerous default a dealing register could carry.
+  ...normalizeDwlSettings({}),
   // ADR-0243: the employee-voice conventions — the reply window, the minutes
   // window, the privacy floor below which a per-state export is withheld, and the
   // rule switch. Note what is NOT here: a consultation period. The period a body
@@ -4071,6 +4087,18 @@ export const COLLECTIONS = [
   'mutualAidWithdrawals',
   'mutualAidReleases',
   'mutualAidMarkers',
+  // ADR-0245 (Schema v199): the Personal-Account Dealing & Insider-List Register.
+  // Designations on a written instrument, declared closed periods with their exact
+  // window arithmetic, clearance requests, independent decisions, executed
+  // dealings and identity-free rule markers. No window verdict, clearance state,
+  // dealing state, days-late figure or breach flag is stored: each is re-derived
+  // on read, so a hand-edited file cannot carry a green tick over a closed window.
+  'dwlDesignations',
+  'dwlEvents',
+  'dwlClearances',
+  'dwlDecisions',
+  'dwlDealings',
+  'dwlMarkers',
 ];
 
 /** Stable empty state. `now` is an ISO string so the result is a pure value. */
@@ -4368,6 +4396,11 @@ export function normalizeSettings(raw) {
     // with no acceptance, promised help whose day passed, or a withdrawal whose
     // release is owed is never the silent default.
     ...normalizeMutualAidSettings(s),
+    // ADR-0245: the personal-dealing register's conventions, clamped on load. The
+    // rule switch is defaulted ON so a pause that hides a dealing inside a closed
+    // window, a clearance decided by its own requester, or a decision owed past its
+    // turnaround is never the silent default.
+    ...normalizeDwlSettings(s),
     // Repair of a standing red reported at base HEAD: two rule switches the
     // pause census maps were not carried in settings, so the only writes that
     // can silence those rules were refused as unknown keys. Declared here with
@@ -9725,6 +9758,14 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.mutualAidWithdrawals = normalizeMutualAidWithdrawals(raw.mutualAidWithdrawals, state.mutualAidAcceptances, warnings);
   state.mutualAidReleases = normalizeMutualAidReleases(raw.mutualAidReleases, state.mutualAidAcceptances, state.mutualAidWithdrawals, warnings);
   state.mutualAidMarkers = normalizeMutualAidMarkers(raw.mutualAidMarkers, warnings);
+  // ADR-0245: the personal-dealing register, loaded fail-closed in dependency
+  // order — a decision needs its clearance, a dealing needs the clearance it cites.
+  state.dwlDesignations = normalizeDwlDesignations(raw.dwlDesignations, warnings);
+  state.dwlEvents = normalizeDwlEvents(raw.dwlEvents, warnings);
+  state.dwlClearances = normalizeDwlClearances(raw.dwlClearances, state.dwlDesignations, warnings);
+  state.dwlDecisions = normalizeDwlDecisions(raw.dwlDecisions, state.dwlClearances, warnings);
+  state.dwlDealings = normalizeDwlDealings(raw.dwlDealings, state.dwlClearances, warnings);
+  state.dwlMarkers = normalizeDwlMarkers(raw.dwlMarkers, warnings);
   // ADR-0229 (Schema v182): a case, option, cost line or act that cannot be read
   // exactly is DROPPED with a counted warning — never repaired, re-termed,
   // re-priced or re-pointed at another case. A cost line that does not belong to
@@ -10841,6 +10882,25 @@ export const MIGRATIONS = {
     mutualAidReleases: Array.isArray(v197.mutualAidReleases) ? v197.mutualAidReleases : [],
     mutualAidMarkers: Array.isArray(v197.mutualAidMarkers) ? v197.mutualAidMarkers : [],
     settings: { ...(v197.settings || {}), ...normalizeMutualAidSettings(v197.settings || {}) },
+  }),
+  // 198 → 199: ADR-0245 adds SIX EMPTY ledgers (`dwlDesignations`, `dwlEvents`,
+  // `dwlClearances`, `dwlDecisions`, `dwlDealings`, `dwlMarkers`) and the
+  // register's conventions. Nothing is inferred from a roster title, a pay grade,
+  // a delegated authority or a prior deal: a designation is an appointment on a
+  // written instrument, and a closed period is a declared window against a
+  // declared disclosure day. Manufacturing either at upgrade time would put a
+  // person on an insider list they were never appointed to, and would silently
+  // decide that dealing was open on days nobody declared anything.
+  198: (v198) => ({
+    ...v198,
+    schemaVersion: 199,
+    dwlDesignations: Array.isArray(v198.dwlDesignations) ? v198.dwlDesignations : [],
+    dwlEvents: Array.isArray(v198.dwlEvents) ? v198.dwlEvents : [],
+    dwlClearances: Array.isArray(v198.dwlClearances) ? v198.dwlClearances : [],
+    dwlDecisions: Array.isArray(v198.dwlDecisions) ? v198.dwlDecisions : [],
+    dwlDealings: Array.isArray(v198.dwlDealings) ? v198.dwlDealings : [],
+    dwlMarkers: Array.isArray(v198.dwlMarkers) ? v198.dwlMarkers : [],
+    settings: { ...(v198.settings || {}), ...normalizeDwlSettings(v198.settings || {}) },
   }),
   // 183 → 184: ADR-0231 adds SEVEN EMPTY ledgers (`ibpCycles`, `ibpDemandRows`,
   // `ibpCapacityRows`, `ibpOptions`, `ibpDecisions`, `ibpGrades`, `ibpMarkers`)

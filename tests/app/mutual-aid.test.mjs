@@ -193,9 +193,11 @@ function harness(raw) {
 
 /* --------------------------------------------------------------- 1. schema */
 
-test('schema v198 is additive: seven empty ledgers, three conventions, nothing inferred', () => {
+test('schema v198 was additive: seven empty ledgers, three conventions, nothing inferred', () => {
   const empty = createEmptyState(T0);
-  assert.equal(SCHEMA_VERSION, 198);
+  // ADR-0245 moved the world schema to v199; the mutual-aid ledgers are unchanged,
+  // so this suite pins the FACTS it owns and follows the current version.
+  assert.equal(SCHEMA_VERSION, 199);
   for (const key of ['mutualAidAgreements', 'mutualAidRequests', 'mutualAidAcceptances', 'mutualAidArrivals', 'mutualAidWithdrawals', 'mutualAidReleases', 'mutualAidMarkers']) {
     assert.ok(COLLECTIONS.includes(key), `${key} is a declared collection`);
     assert.deepEqual(empty[key], [], `${key} starts empty`);
@@ -209,10 +211,11 @@ test('schema v198 is additive: seven empty ledgers, three conventions, nothing i
   assert.deepEqual(loaded.mutualAidAcceptances, []);
 });
 
-test('the 197 → 198 migration adds seven empty ledgers and the conventions, nothing else', () => {
+test('the 197 -> 198 migration adds seven empty ledgers and the conventions, nothing else', () => {
   const v197 = { ...createEmptyState(T0), schemaVersion: 197 };
   const { raw: out } = migrate(v197, { now: NOW });
-  assert.equal(out.schemaVersion, 198);
+  // Migration runs through to the current version; the order is what is pinned here.
+  assert.equal(out.schemaVersion, SCHEMA_VERSION);
   for (const key of ['mutualAidAgreements', 'mutualAidRequests', 'mutualAidAcceptances', 'mutualAidArrivals', 'mutualAidWithdrawals', 'mutualAidReleases', 'mutualAidMarkers']) {
     assert.deepEqual(out[key], [], `${key} migrates empty`);
   }
@@ -550,7 +553,7 @@ test('RULE-MAA-01 files the release ask from the withdrawal, even when the arriv
 });
 
 test('the spine carries ADR-0244: RULE-MAA-01 is registered with its contract', () => {
-  assert.equal(DEFAULT_POST_COMMIT_RULES.length, 157, 'the spine carries ADR-0244 (RULE-MAA-01) after ADR-0243');
+  assert.equal(DEFAULT_POST_COMMIT_RULES.length, 158, 'the spine carries ADR-0244 (RULE-MAA-01) and ADR-0245 (RULE-DWL-01)');
   const contract = PROPAGATION_CONTRACTS.find((row) => row.rule && row.rule.id === 'mutualAidRule');
   assert.ok(contract, 'mutualAidRule has a propagation contract');
   assert.equal(contract.module, 'mutualAidRules.js');
