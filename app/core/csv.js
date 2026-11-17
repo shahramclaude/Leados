@@ -249,6 +249,9 @@ import { LTO_CSV_COLUMNS, LTO_CSV_DESCRIPTOR, LTO_CSV_SCOPE } from './domain/aut
 import { LFG_CSV_COLUMNS, LFG_CSV_DESCRIPTOR, LFG_CSV_SCOPE } from './domain/lfgRegistry.js';
 import { claimCsvRows } from './domain/lfgReport.js';
 import { buildClaims } from './domain/lfgClaims.js';
+import { INS_CSV_COLUMNS, INS_CSV_DESCRIPTOR, INS_CSV_SCOPE } from './domain/insRegistry.js';
+import { insuranceCsvRows } from './domain/insReport.js';
+import { buildInsurance } from './domain/insCoverage.js';
 import { authorisationCsvRows } from './domain/authorisationReport.js';
 import { buildAuthorisations } from './domain/authorisation.js';
 import { loneWorkingCsvRows } from './domain/loneWorkingReport.js';
@@ -1790,6 +1793,13 @@ export const CSV_EXPORTS = [
   // mixed-currency. A per-state count below the declared floor exports BLANK with its
   // reason, never as a small number.
   LFG_CSV_DESCRIPTOR,
+  // #190 (ADR-0249): insurance notification and recovery. One summary row and one
+  // row per printed coverage state. No insurer, policy reference, matter reference,
+  // person, manager or day crosses this boundary; amounts cross only as
+  // whole-register minor-unit totals, and none at all where the register is
+  // mixed-currency. A per-state count below the declared floor exports BLANK with
+  // its reason, never as a small number.
+  INS_CSV_DESCRIPTOR,
 ];
 
 function personLookup(state) {
@@ -7113,6 +7123,17 @@ export function buildScopeTable(state, scope, now) {
       return {
         columns: LFG_CSV_COLUMNS.map((key) => ({ key, header: key })),
         rows: claimCsvRows(report),
+      };
+    }
+    case INS_CSV_SCOPE: {
+      // CSV scope #190 (ADR-0249, Schema v203). Built from the SAME reader the
+      // `#/insurance` panel renders, with no seat: every figure is a count, a day
+      // extreme or a whole-register minor-unit total, so no insurer, policy
+      // reference, matter reference, person, manager or individual day is reachable.
+      const report = buildInsurance(state, { now, settings: state.settings || {}, seat: null });
+      return {
+        columns: INS_CSV_COLUMNS.map((key) => ({ key, header: key })),
+        rows: insuranceCsvRows(report),
       };
     }
     case LWK_CSV_SCOPE: {

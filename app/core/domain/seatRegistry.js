@@ -322,6 +322,17 @@ export const RECORD_POLICIES = Object.freeze({
   lfgConcessions: { classKey: 'portfolio', detailCeiling: 4, label: 'Concessions — reserves, offers, payments, costs and interest as their own dated instruments with their exact amounts', route: '#/claims' },
   lfgAuthorityGrants: { classKey: 'individual', label: 'Settlement authority grants — the person, the scope, the currency, the ceiling and the written basis', route: '#/claims' },
   lfgMarkers: { classKey: 'unit', detailCeiling: 3, label: 'Claim-register observation markers — no joint seat, no responsible line to ask (identity-free)', route: '#/claims' },
+  // ADR-0249 (Schema v203): the insurance notification and recovery register. A
+  // policy, its coverages and its recoveries are PORTFOLIO material: which insurer
+  // answers for which claim and what the net cost is are facts a director and above
+  // must see, and above rank 3 the reader withholds the HANDS rather than the
+  // policy. A notification names the hand that recorded it, so it is INDIVIDUAL
+  // detail. The rule's own markers are identity-free.
+  insPolicies: { classKey: 'portfolio', detailCeiling: 4, label: 'Insurance policies — the declaration-page reference, the insurer, the class, the basis, the period, the limit, the deductible, the declared notification window and the responsible hands', route: '#/insurance' },
+  insCoverages: { classKey: 'portfolio', detailCeiling: 4, label: 'Coverages — the link between a matter and a policy, with the covered amount and the written basis', route: '#/insurance' },
+  insNotifications: { classKey: 'individual', label: 'Notifications — the day the insurer was told, the method, the reference that proves it, and the hand that recorded it', route: '#/insurance' },
+  insRecoveries: { classKey: 'portfolio', detailCeiling: 4, label: 'Recoveries — claims, payments, interim payments and denials as their own dated instruments with their exact amounts and written basis', route: '#/insurance' },
+  insMarkers: { classKey: 'unit', detailCeiling: 3, label: 'Insurance-register observation markers — no joint seat, no responsible line to ask (identity-free)', route: '#/insurance' },
   // ADR-0240 (Schema v194): the incident command register. An incident record
   // names the people on the bridge, the instrument it was declared under and the
   // external parties it owes — individual detail that is not handed upward, so
@@ -1497,6 +1508,8 @@ export const ACTION_RIGHTS = Object.freeze({
   'manage-authorisations': { minRank: 1, maxRank: 5, label: 'Declare an authority on a written instrument, declare its conditions, record dated evidence, record a regulator action and its close, submit a renewal and record its decision, and set the register’s conventions' },
   'read-claims': { minRank: 1, maxRank: 5, label: 'Read the claims, limitation and settlement-authority register within your grant — the matters you hold, their accruals and proved suspensions, their concessions and resolutions and the authority computed above their lines. Above rank 3 the reader prints counts and withholds responsible hands' },
   'manage-claims': { minRank: 1, maxRank: 5, label: 'Open a claim matter on the document that started the clock, declare its accrual and limitation period, record a suspension or a resolution, declare a concession, declare a settlement authority and set the register’s conventions' },
+  'read-insurance': { minRank: 1, maxRank: 5, label: 'Read the insurance notification and recovery register within your grant — the policies you hold, their coverages, their derived notification deadlines, their notifications and recoveries, and the derived net cost. Above rank 3 the reader prints counts and withholds responsible hands' },
+  'manage-insurance': { minRank: 1, maxRank: 5, label: 'Declare an insurance policy on its declaration page, link a coverage to a matter, record a notification or a recovery, and set the register’s conventions' },
   'read-mutual-aid': { minRank: 1, maxRank: 5, label: 'Read the mutual-aid activation and resource-commitment register within your grant — the agreement a request is made under, the request and its validity, the partner’s acceptance with its written confirmation and promise, the arrival compared against the promise, and the withdrawal and release that close the commitment' },
   'declare-mutual-aid': { minRank: 2, maxRank: 5, label: 'Declare a bilateral agreement, request help under it, record the partner’s acceptance with its written confirmation and promise, record the arrival, the withdrawal and the release of the commitment, cancel a request that was never accepted, and set the register’s conventions' },
   // ADR-0235/0236 (Schema v191). Six rights, and the shape is the point: RECORDING

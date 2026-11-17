@@ -2434,6 +2434,107 @@ function seedClaims(state, now, { priya, mei, jordan, samuel, freya }) {
   state.lfgMarkers = Array.isArray(state.lfgMarkers) ? state.lfgMarkers : [];
 }
 
+function seedInsurance(state, now, { priya, mei, jordan, samuel, freya }) {
+  const day = (days) => new Date(now.getTime() + days * 86_400_000).toISOString().slice(0, 10);
+  const iso = (days) => new Date(now.getTime() + days * 86_400_000).toISOString();
+
+  state.insPolicies = [
+    {
+      id: 'ins-pol-demo-1', policyRef: 'EPL-2026-8801 — employment practices schedule', insurerRef: 'Hispania Underwriting',
+      policyClass: 'employment-practices', basis: 'claims-made', periodStartDay: day(-200), periodEndDay: day(165),
+      notificationWindowDays: 60, limitMinor: 25000000, deductibleMinor: 500000, currency: 'GBP', triggerRef: null,
+      responsibleIds: [mei], declaredById: priya, declaredAt: iso(-200), createdAt: iso(-200), updatedAt: iso(-200),
+    },
+    {
+      id: 'ins-pol-demo-2', policyRef: 'PL-2024-4410 — public and products liability schedule', insurerRef: 'Meridian Syndicate 1910',
+      policyClass: 'general-liability', basis: 'occurrence', periodStartDay: day(-800), periodEndDay: day(-435),
+      notificationWindowDays: 30, limitMinor: 50000000, deductibleMinor: 1000000, currency: 'GBP', triggerRef: null,
+      responsibleIds: [samuel, mei], declaredById: priya, declaredAt: iso(-800), createdAt: iso(-800), updatedAt: iso(-800),
+    },
+    {
+      id: 'ins-pol-demo-3', policyRef: 'PI-2026-1190 — professional indemnity schedule', insurerRef: 'Caledonian Specialty',
+      policyClass: 'professional-indemnity', basis: 'claims-made', periodStartDay: day(-200), periodEndDay: day(165),
+      notificationWindowDays: 180, limitMinor: 30000000, deductibleMinor: 750000, currency: 'GBP', triggerRef: null,
+      responsibleIds: [freya], declaredById: priya, declaredAt: iso(-200), createdAt: iso(-200), updatedAt: iso(-200),
+    },
+    {
+      id: 'ins-pol-demo-4', policyRef: 'PRP-2025-3302 — property and business interruption policy', insurerRef: 'Northsea Mutual',
+      policyClass: 'property', basis: 'occurrence', periodStartDay: day(-700), periodEndDay: day(-335),
+      notificationWindowDays: 30, limitMinor: 40000000, deductibleMinor: 500000, currency: 'GBP', triggerRef: null,
+      responsibleIds: [jordan], declaredById: priya, declaredAt: iso(-700), createdAt: iso(-700), updatedAt: iso(-700),
+    },
+    {
+      id: 'ins-pol-demo-5', policyRef: 'PL-2026-7721 — commercial combined liability policy', insurerRef: 'Meridian Syndicate 1910',
+      policyClass: 'general-liability', basis: 'occurrence', periodStartDay: day(-200), periodEndDay: day(165),
+      notificationWindowDays: 30, limitMinor: 20000000, deductibleMinor: 250000, currency: 'GBP', triggerRef: null,
+      responsibleIds: [jordan, freya], declaredById: priya, declaredAt: iso(-200), createdAt: iso(-200), updatedAt: iso(-200),
+    },
+    {
+      id: 'ins-pol-demo-6', policyRef: 'DO-2025-9904 — management liability schedule', insurerRef: 'Vanguard Excess',
+      policyClass: 'directors-officers', basis: 'claims-made', periodStartDay: day(-300), periodEndDay: day(65),
+      notificationWindowDays: 60, limitMinor: 50000000, deductibleMinor: 1000000, currency: 'GBP', triggerRef: null,
+      responsibleIds: [samuel, freya], declaredById: priya, declaredAt: iso(-300), createdAt: iso(-300), updatedAt: iso(-300),
+    },
+    {
+      id: 'ins-pol-demo-7', policyRef: 'EPL-2026-8802 — employment practices excess layer', insurerRef: 'Hispania Underwriting',
+      policyClass: 'employment-practices', basis: 'claims-made', periodStartDay: day(-200), periodEndDay: day(165),
+      notificationWindowDays: 60, limitMinor: 15000000, deductibleMinor: 250000, currency: 'GBP', triggerRef: null,
+      responsibleIds: [mei], declaredById: priya, declaredAt: iso(-200), createdAt: iso(-200), updatedAt: iso(-200),
+    },
+    {
+      id: 'ins-pol-demo-8', policyRef: 'PL-2025-6612 — environmental and public liability schedule', insurerRef: 'Caledonian Specialty',
+      policyClass: 'general-liability', basis: 'occurrence', periodStartDay: day(-350), periodEndDay: day(15),
+      notificationWindowDays: 60, limitMinor: 25000000, deductibleMinor: 500000, currency: 'GBP', triggerRef: null,
+      responsibleIds: [mei, jordan], declaredById: priya, declaredAt: iso(-350), createdAt: iso(-350), updatedAt: iso(-350),
+    },
+    {
+      id: 'ins-pol-demo-9', policyRef: 'EL-2024-1108 — employers liability compulsory cover', insurerRef: 'Northsea Mutual',
+      policyClass: 'general-liability', basis: 'occurrence', periodStartDay: day(-600), periodEndDay: day(-235),
+      notificationWindowDays: 30, limitMinor: 50000000, deductibleMinor: 0, currency: 'GBP', triggerRef: null,
+      responsibleIds: [samuel, jordan], declaredById: priya, declaredAt: iso(-600), createdAt: iso(-600), updatedAt: iso(-600),
+    },
+    {
+      id: 'ins-pol-demo-10', policyRef: 'CYB-2026-5501 — cyber and operational disruption policy', insurerRef: 'Vanguard Excess',
+      policyClass: 'cyber', basis: 'occurrence', periodStartDay: day(-100), periodEndDay: day(265),
+      notificationWindowDays: 30, limitMinor: 10000000, deductibleMinor: 250000, currency: 'GBP', triggerRef: null,
+      responsibleIds: [mei], declaredById: priya, declaredAt: iso(-100), createdAt: iso(-100), updatedAt: iso(-100),
+    },
+  ];
+
+  state.insCoverages = [
+    { id: 'ins-cov-demo-1', matterId: 'lfg-mat-demo-1', policyId: 'ins-pol-demo-1', coveredMinor: 4200000, currency: 'GBP', basisRef: 'EPL insuring clause 1.1 covers tribunal claims first made during the policy period.', declaredById: priya, createdAt: iso(-37) },
+    { id: 'ins-cov-demo-2', matterId: 'lfg-mat-demo-2', policyId: 'ins-pol-demo-2', coveredMinor: 18500000, currency: 'GBP', basisRef: 'Public liability section A responds to contractor bodily injury occurring during the policy year.', declaredById: priya, createdAt: iso(-750) },
+    { id: 'ins-cov-demo-3', matterId: 'lfg-mat-demo-3', policyId: 'ins-pol-demo-3', coveredMinor: 9600000, currency: 'GBP', basisRef: 'Professional indemnity wording clause 2.3 covers allegations of defective specification.', declaredById: priya, createdAt: iso(-68) },
+    { id: 'ins-cov-demo-4', matterId: 'lfg-mat-demo-4', policyId: 'ins-pol-demo-4', coveredMinor: 3100000, currency: 'GBP', basisRef: 'Property section C covers escape of water affecting third-party premises.', declaredById: priya, createdAt: iso(-600) },
+    { id: 'ins-cov-demo-5', matterId: 'lfg-mat-demo-5', policyId: 'ins-pol-demo-5', coveredMinor: 1450000, currency: 'GBP', basisRef: 'Linked provisionally pending accrual declaration on the underlying debt demand.', declaredById: priya, createdAt: iso(-19) },
+    { id: 'ins-cov-demo-6', matterId: 'lfg-mat-demo-6', policyId: 'ins-pol-demo-6', coveredMinor: 9000000, currency: 'GBP', basisRef: 'Management liability entity side C endorsement covers contractual repudiation defence and settlement.', declaredById: priya, createdAt: iso(-255) },
+    { id: 'ins-cov-demo-7', matterId: 'lfg-mat-demo-7', policyId: 'ins-pol-demo-7', coveredMinor: 2600000, currency: 'GBP', basisRef: 'EPL wording responds to unfair dismissal claims notified within 60 days of receipt of the ET1.', declaredById: priya, createdAt: iso(-24) },
+    { id: 'ins-cov-demo-8', matterId: 'lfg-mat-demo-8', policyId: 'ins-pol-demo-8', coveredMinor: 5500000, currency: 'GBP', basisRef: 'Public liability nuisance extension covers interference arising from drainage works.', declaredById: priya, createdAt: iso(-115) },
+    { id: 'ins-cov-demo-9', matterId: 'lfg-mat-demo-10', policyId: 'ins-pol-demo-9', coveredMinor: 22000000, currency: 'GBP', basisRef: 'Employers liability policy responds to occupational illness sustained during employment.', declaredById: priya, createdAt: iso(-550) },
+    { id: 'ins-cov-demo-10', matterId: 'lfg-mat-demo-9', policyId: 'ins-pol-demo-10', coveredMinor: 780000, currency: 'GBP', basisRef: 'Linked by operations; the reader tests the occurrence date against the policy inception date.', declaredById: priya, createdAt: iso(-95) },
+  ];
+
+  state.insNotifications = [
+    { id: 'ins-not-demo-2', coverageId: 'ins-cov-demo-2', notifiedDay: day(-740), method: 'broker-notification', referenceRef: 'BRK-2024-8821 — broker bordereau acknowledgement', recordedById: priya, createdAt: iso(-740) },
+    { id: 'ins-not-demo-6', coverageId: 'ins-cov-demo-6', notifiedDay: day(-250), method: 'direct-insurer', referenceRef: 'CLM-VAN-2025-119 — insurer claims portal acknowledgement', recordedById: priya, createdAt: iso(-250) },
+    { id: 'ins-not-demo-7', coverageId: 'ins-cov-demo-7', notifiedDay: day(-20), method: 'notice-of-circumstances', referenceRef: 'NOC-2026-0412 — notice of circumstances accepted by underwriters', recordedById: priya, createdAt: iso(-20) },
+    { id: 'ins-not-demo-8', coverageId: 'ins-cov-demo-8', notifiedDay: day(-280), method: 'broker-notification', referenceRef: 'BRK-2026-1044 — broker notice of claim', recordedById: priya, createdAt: iso(-280) },
+    { id: 'ins-not-demo-9', coverageId: 'ins-cov-demo-9', notifiedDay: day(-500), method: 'broker-notification', referenceRef: 'BRK-2025-9910 — late broker notification after occupational health review', recordedById: priya, createdAt: iso(-500) },
+  ];
+
+  state.insRecoveries = [
+    { id: 'ins-rec-demo-2a', coverageId: 'ins-cov-demo-2', kind: 'claimed', atDay: day(-700), amountMinor: 15000000, currency: 'GBP', basisRef: 'Initial proof of loss submitted on medical reserve less policy deductible.', recordedById: priya, createdAt: iso(-700) },
+    { id: 'ins-rec-demo-2b', coverageId: 'ins-cov-demo-2', kind: 'interim', atDay: day(-190), amountMinor: 5000000, currency: 'GBP', basisRef: 'Interim indemnity payment received from lead syndicate on account of defence and interim outlay.', recordedById: priya, createdAt: iso(-190) },
+    { id: 'ins-rec-demo-6a', coverageId: 'ins-cov-demo-6', kind: 'claimed', atDay: day(-28), amountMinor: 8000000, currency: 'GBP', basisRef: 'Final proof of loss for the mediated settlement less the GBP 10,000 policy retention.', recordedById: priya, createdAt: iso(-28) },
+    { id: 'ins-rec-demo-6b', coverageId: 'ins-cov-demo-6', kind: 'recovered', atDay: day(-12), amountMinor: 8000000, currency: 'GBP', basisRef: 'Remittance received from Vanguard Excess settling the insured portion in full.', recordedById: priya, createdAt: iso(-12) },
+    { id: 'ins-rec-demo-8a', coverageId: 'ins-cov-demo-8', kind: 'claimed', atDay: day(-12), amountMinor: 3300000, currency: 'GBP', basisRef: 'Indemnity claim submitted against claimant’s settlement offer less deductible.', recordedById: priya, createdAt: iso(-12) },
+    { id: 'ins-rec-demo-9a', coverageId: 'ins-cov-demo-9', kind: 'claimed', atDay: day(-490), amountMinor: 20000000, currency: 'GBP', basisRef: 'Indemnity claim submitted following late notification of occupational illness claim.', recordedById: priya, createdAt: iso(-490) },
+    { id: 'ins-rec-demo-9b', coverageId: 'ins-cov-demo-9', kind: 'denied', atDay: day(-450), amountMinor: null, currency: null, basisRef: 'Insurer declinature letter citing breach of the 30-day condition precedent notification clause.', recordedById: priya, createdAt: iso(-450) },
+  ];
+
+  state.insMarkers = Array.isArray(state.insMarkers) ? state.insMarkers : [];
+}
+
 function seedPermitToWork(state, now, { priya, mei, jordan, samuel, freya }) {
   const hours = (value) => new Date(now.getTime() + value * 60 * 60_000).toISOString();
   const iso = (hoursFromNow) => hours(hoursFromNow);
@@ -7184,6 +7285,7 @@ export function buildDemoState(now = new Date()) {
   // ADR-0248: eight claim matters placed relative to the injected clock, one for each
   // printed state plus the facts that make the register worth reading.
   seedClaims(state, now, { priya, mei, jordan, samuel, freya });
+  seedInsurance(state, now, { priya, mei, jordan, samuel, freya });
   // ADR-0240: one declared incident with a running external clock, an accepted
   // line, an unaccepted line and a recorded severity raise — so the register
   // shows a real bridge rather than an honest empty state on first load.

@@ -189,7 +189,7 @@ function harness(raw) {
 
 test('schema v197 is additive: seven empty ledgers, four conventions, nothing inferred', () => {
   const empty = createEmptyState(T0);
-  assert.equal(SCHEMA_VERSION, 202);
+  assert.equal(SCHEMA_VERSION, 203);
   for (const key of ['voiceBodies', 'voiceMembers', 'voiceItems', 'voiceSittings', 'voiceResponses', 'voiceDecisions', 'voiceMarkers']) {
     assert.ok(COLLECTIONS.includes(key), `${key} is a declared collection`);
     assert.deepEqual(empty[key], [], `${key} starts empty`);
@@ -213,7 +213,7 @@ test('schema v197 is additive: seven empty ledgers, four conventions, nothing in
   // invalidating the claim that ADR-0243's own step runs.
   assert.deepEqual(applied.slice(0, 1), ['196 → 197']);
   assert.equal(applied[applied.length - 1], `${SCHEMA_VERSION - 1} → ${SCHEMA_VERSION}`);
-  assert.equal(raw.schemaVersion, 202);
+  assert.equal(raw.schemaVersion, 203);
   for (const key of ['voiceBodies', 'voiceMembers', 'voiceItems', 'voiceSittings', 'voiceResponses', 'voiceDecisions', 'voiceMarkers']) {
     assert.deepEqual(raw[key], [], `${key} is empty after the upgrade`);
   }
