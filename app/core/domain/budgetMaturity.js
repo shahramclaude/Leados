@@ -102,7 +102,21 @@ export function buildBudgetMaturity(state, { now = new Date() } = {}) {
   let invalidCurrencyN = 0;
   let invalidRowN = 0;
   let unplacedLineN = 0;
-  const lineKeys = new Set();
+  // JSON tuples preserve component boundaries; delimiter concatenation does not.
+  const identity = (value) => typeof value === 'string' && value.trim().length > 0;
+  const tuple = (...parts) => JSON.stringify(parts);
+  const budgetCounts = new Map();
+  const lineCounts = new Map();
+  for (const budget of budgets) {
+    if (identity(budget.id)) budgetCounts.set(budget.id, (budgetCounts.get(budget.id) || 0) + 1);
+    for (const line of Array.isArray(budget.lines) ? budget.lines : []) {
+      if (!line || !['committed', 'planned'].includes(line.status)) continue;
+      if (identity(budget.id) && identity(line.id)) {
+        const key = tuple(budget.id, line.id);
+        lineCounts.set(key, (lineCounts.get(key) || 0) + 1);
+      }
+    }
+  }
   const sourceRefs = new Map();
 
   for (const budget of budgets) {
@@ -111,12 +125,14 @@ export function buildBudgetMaturity(state, { now = new Date() } = {}) {
     for (const line of Array.isArray(budget.lines) ? budget.lines : []) {
       if (!line || !['committed', 'planned'].includes(line.status)) continue;
       sourceLineN += 1;
-      const lineKey = budget.id && line.id ? `${budget.id}|${line.id}` : null;
-      if (!lineKey || lineKeys.has(lineKey)) { invalidRowN += 1; unplacedLineN += 1; continue; }
-      lineKeys.add(lineKey);
+      const lineKey = identity(budget.id) && identity(line.id) ? tuple(budget.id, line.id) : null;
+      // Refuse every copy, not whichever copy happened to arrive second.
+      if (!lineKey || budgetCounts.get(budget.id) !== 1 || lineCounts.get(lineKey) !== 1) {
+        invalidRowN += 1; unplacedLineN += 1; continue;
+      }
       if (!currency) { invalidCurrencyN += 1; unplacedLineN += 1; continue; }
       const kind = line.status === 'committed' ? 'committed' : 'planned';
-      const ref = line.sourceType && line.sourceId ? `${line.sourceType}|${line.sourceId}` : null;
+      const ref = identity(line.sourceType) && identity(line.sourceId) ? tuple(line.sourceType, line.sourceId) : null;
       const candidate = { budgetId: budget.id, lineId: line.id, currency, kind, ref, day: line.expectedOn, amount: cents(line.committedAmount) };
       candidates.push(candidate);
       if (ref) {

@@ -1,3 +1,17 @@
+## 2026-11-17 — Commitment timing identity integrity — COMPLETE
+
+**Coverage:** CEO / VP finance primary; director budget stewards secondary × single-chain and matrix. Fixes trustworthy commitment placement without selecting a reporting-line owner or adding a second hierarchy. Frontline/mid-manager workflow coverage unchanged; this bounded trust defect takes priority over new automation.
+
+**Built:** collision-safe tuples for envelope/line and source-reference identities; nonempty string identity validation; all copies of duplicate active envelope IDs or open line IDs are refused before placement, irrespective of input order. Counts reconcile; ambiguous figures remain withheld in screen and CSV. No schema or asset change.
+
+**Benchmark:** Anaplan / Oracle NetSuite planning are the conceptual specialist-platform comparison inherited from ADR-0239. Bar for this slice: auditable source identity, order-independent refusals, exact screen/export reconciliation. Local tests establish those properties, not product parity. **[BENCHMARK-UNVERIFIED]**: no vendor environment or current external documentation review; no claim of matching their broader planning capability or AI intelligence.
+
+**Verification:** focused maturity + CSV pass 11/11 after one test-contract correction (row-builder null versus serialized blank). Source immutability, real-store reload, exact rendered cents, aggregate exports, delimiter collisions, duplicate identity refusal, reversal invariance and adjacent CSV coverage. Full suite and real-browser walkthrough [UNVERIFIED].
+
+**New gap — Planned: reverse stress-test survival frontier.** Targeted search for `reverse stress`, `reverse-stress` and `survival frontier` in domain modules and ROADMAP returned no matches; repository-wide absence [UNVERIFIED]. CEO / VP × matrix: work backwards from a declared unacceptable operating outcome to the smallest joint demand, cost and dependency shocks that breach it. Framework: reverse stress testing and constrained optimization; correlated shocks, declared constraints, per-currency budgets, explicit feasibility refusals, no invented probabilities. Distinct from forward scenario comparison or commitment timing. Unbuilt; requires scoped design and specialist benchmark against enterprise risk scenario tools before implementation.
+
+**Next:** scope reverse stress-test inputs and feasibility contract (CEO / VP × matrix). No unfinished implementation in this slice.
+
 ## 2026-11-17 — Session 325: ADR-0247 statutory authorisations & licence to operate (Schema v201, `#/authorisations`, CSV #188, `RULE-LTO-01`) — SHIPPED
 
 **Branch and scope.** Active branch `arena/5f10d3f7-leados`, based at `ecd944408f17f0b35aeccbdfcafd31906b5c7417`. Altitude **director / VP compliance and site leadership** × **matrix**. One item, completed end to end.

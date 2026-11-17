@@ -143,3 +143,46 @@ test('ADR-0239: bad currency and malformed row are counted; invalid currency nev
   assert.ok(report.rows.every((row) => row.amountCents === null), 'the source cannot support an all-currency zero claim');
   assert.equal(report.figuresComplete, false);
 });
+
+test('maturity identity tuples never collide at delimiter boundaries', () => {
+  const state = { budgets: [
+    budget('a|b', 'USD', [line('c', 'committed', '2026-11-17', '1', { sourceType: 'x|y', sourceId: 'z' })]),
+    budget('a', 'USD', [line('b|c', 'committed', '2026-11-17', '2', { sourceType: 'x', sourceId: 'y|z' }), line('third', 'committed', '2026-11-17', '3')]),
+  ] };
+  const report = buildBudgetMaturity(state, { now: NOW });
+  assert.equal(report.invalidRowN, 0);
+  assert.equal(report.duplicateSourceN, 0);
+  assert.equal(report.figuresComplete, true);
+  assert.equal(report.rows.find((r) => r.week === 1 && r.recordType === 'committed').amountCents, '600');
+});
+
+test('all copies of ambiguous budget/line identities are refused independent of order', () => withDom((dom) => {
+  const cases = [
+    [budget('same', 'USD', [line('a', 'committed', '2026-11-17', '1')]), budget('same', 'EUR', [line('b', 'committed', '2026-11-17', '2')])],
+    [budget('unique', 'USD', [line('same', 'committed', '2026-11-17', '1'), line('same', 'planned', '2026-11-18', '2')])],
+    [budget('unique', 'USD', [line(42, 'committed', '2026-11-17', '1'), line(' ', 'planned', '2026-11-18', '2')])],
+  ];
+  for (const bad of cases) {
+    const good = budget('good', 'USD', [1, 2, 3].map((n) => line(`g${n}`, 'committed', '2026-11-17', '5')));
+    const state = { budgets: [...bad, good] };
+    const snapshot = JSON.stringify(state);
+    const report = buildBudgetMaturity(state, { now: NOW });
+    assert.equal(report.invalidRowN, 2);
+    assert.equal(report.unplacedLineN, 2);
+    assert.equal(report.placedLineN, 3);
+    assert.equal(report.partitionReconciles, true);
+    assert.equal(report.figuresComplete, false);
+    assert.ok(report.rows.every((r) => r.amountCents === null && r.lineN === null));
+    const reversed = { budgets: [...state.budgets].reverse().map((b) => ({ ...b, lines: [...b.lines].reverse() })) };
+    assert.deepEqual(buildBudgetMaturity(reversed, { now: NOW }), report);
+    assert.equal(JSON.stringify(state), snapshot, 'reader does not rewrite source evidence');
+    const exported = budgetMaturityCsvRows(report);
+    assert.ok(exported.every((r) => r.amount_cents === null && r.line_n === null));
+    const node = renderBudgetMaturityPanel({ state, now: NOW }, { tabs: null });
+    dom.window.document.body.replaceChildren(node);
+    for (const row of node.querySelectorAll('tbody tr[data-currency]')) {
+      assert.equal(row.getAttribute('data-amount-cents'), '');
+    }
+    assert.ok(node.textContent.includes('unreadable identity'));
+  }
+}));
