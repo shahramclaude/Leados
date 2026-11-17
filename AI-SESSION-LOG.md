@@ -1,3 +1,17 @@
+## 2026-11-17 — Commitment timing source-identity integrity
+
+Doctrine exists and all four binding mandates confirmed. Origin matches shahramclaude/Leados (canonical HTTPS remote with .git suffix). Worked only on arena/896b27fd-leados. Read NORTH_STAR, ROADMAP and recent log entries; spot-checked the maturity reader, panel, tests and README.
+
+**Built / coverage:** completed collision-safe tuple keys and fail-closed duplicate-envelope / duplicate-line identity handling for CEO/VP finance and director stewards × single-chain/matrix. Every ambiguous open copy is unplaced, never first-copy-wins; non-string/blank identities are refused. No stored declaration is changed. No visual/onboarding/communication asset introduced; asset generation not applicable.
+
+**Gap hunt:** reverse stress-test survival frontier logged Planned in ROADMAP. Targeted absence only, not a market-first or repository-wide absence claim.
+
+**Benchmark:** Anaplan / Oracle NetSuite conceptual planning comparison; auditable identity and exact reconciliation tested locally. [BENCHMARK-UNVERIFIED]: no vendor execution or current vendor documentation validation. No parity claim.
+
+**Focused verification:** node --test tests/app/budget-maturity.test.mjs tests/app/csv.test.mjs — final 11/11 PASS. Initial 10/11 exposed a new test incorrectly expecting blank strings from the pre-serialization CSV row builder; corrected to null once, then passed. Tests cover unchanged persisted budgets through store reload, computed/displayed cents, withheld DOM/CSV values, tuple collisions, both duplicate copies, order independence and adjacent CSV behavior. No further repeated verification. Full suite / real browser [UNVERIFIED]. No asset blocker for this nonvisual slice.
+
+**Delivery:** committed and pushed on the session branch; PR result reported in the session response.
+
 ## 2026-11-17 — Session 323: ADR-0245 personal-account dealing, insider lists & closed-period pre-clearance (Schema v199, `#/personal-dealing`, CSV #186, `RULE-DWL-01`) — SHIPPED
 
 **Altitude × structure.** director / VP × matrix. A control that binds every altitude from IC to CEO, which is why the seat question had to be answered honestly rather than papered over.
