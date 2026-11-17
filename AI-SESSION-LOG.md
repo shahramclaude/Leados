@@ -1,3 +1,17 @@
+## 2026-11-17 — Session 322: lone-working overlap precision
+
+**Doctrine and sync:** `NORTH_STAR.md` exists and contains all four required mandates; `origin` is the equivalent `https://github.com/shahramclaude/Leados.git`. Branch `arena/adba4dd0-leados`, base `c26842df900413b36d6403a45212dbca43d9f7c9`.
+
+**Built:** the declaration guard compares actual half-open interval endpoints rather than using a floored minute count as a predicate. A one-millisecond conflict is refused, with the exact millisecond duration and floored whole-minute count; abutting intervals remain legal. Altitude frontline / mid-manager × single-chain and matrix; the same person ID is checked regardless of line.
+
+**Gap hunt:** mutual-aid activation and resource commitments, director / VP / CEO × single-chain and matrix, logged unbuilt in ROADMAP. The distinct open-overrun overlap defect and historical-row limitations are explicitly In Progress there.
+
+**Benchmark [BENCHMARK-UNVERIFIED]:** Blackline Safety's lone-worker platform sets a relevant check-in and escalation bar; we did not test its overlap guard or establish parity with a specialized AI tool. No external asset was needed for this validation/error-message change.
+
+**One focused verification:** `node --test tests/app/lone-working.test.mjs` passed 31/31, including exact refusal message, no persisted write on refusal, successful abutting write and its persisted end, existing panel display/computed comparison, CSV and matrix tests. Full suite, real browser and assistive technology [UNVERIFIED]. No changes to underlying timer or imported records.
+
+---
+
 ## 2026-11-17 — Session 321: ADR-0243 employee voice & collective consultation register (Schema v197, `#/voice`, CSV #184, `RULE-VOI-01`) — SHIPPED
 
 **Doctrine, synchronization and scope.** `NORTH_STAR.md` carries all four binding mandates; `origin` is `https://github.com/shahramclaude/Leados.git`; the branch is `arena/fb2d375b-leados`, based at `95b8db6dffc967e0d8cef759c424e421131ff6a3` (base Schema v196, ADR-0242, CSV #183, Session 320). Primary altitude **director / VP** × **matrix** — the reader whose signature follows a change that a staff body says it never really saw.

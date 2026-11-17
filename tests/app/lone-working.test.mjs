@@ -571,6 +571,27 @@ test('the door refuses an OVERLAPPING deployment and prints the exact overlap, a
   assert.equal(self.refusal, 'loneWorking:self-declaration');
 });
 
+test('the declaration door refuses even one millisecond of overlap without storing it, but permits abutting spans', () => {
+  const { api, store, storage } = harness(fixture());
+  const base = {
+    personId: 'sam', siteRef: 'Tank room — north', task: 'Valve inspection',
+    protocolRef: 'LWA-2026-108 rev 3 — tank room entry', intervalMinutes: 30, graceMinutes: 5,
+    startAt: '2026-11-17T04:00:00.000Z',
+  };
+  const before = storage.getItem(STORAGE_KEY);
+  const conflict = api.loneWorkingDeclareDeployment({ ...base, expectedEndAt: '2026-11-17T05:00:00.001Z' });
+  assert.equal(conflict.ok, false);
+  assert.equal(conflict.refusal, 'loneWorking:overlapping-deployment');
+  assert.match(conflict.error, /0 whole minute\(s\) \(1 milliseconds\)/);
+  assert.equal(storage.getItem(STORAGE_KEY), before, 'refusal does not write');
+  assert.equal(store.state.lwkDeployments.length, 1);
+  const abutting = api.loneWorkingDeclareDeployment({ ...base, expectedEndAt: '2026-11-17T05:00:00.000Z' });
+  assert.equal(abutting.ok, true, abutting.error);
+  const stored = JSON.parse(storage.getItem(STORAGE_KEY)).lwkDeployments;
+  assert.equal(stored.length, 2);
+  assert.equal(stored.find((row) => row.id === abutting.id)?.expectedEndAt, '2026-11-17T05:00:00.000Z');
+});
+
 test('the door refuses a future, backwards or doubled contact, and a contact on a closed deployment', () => {
   const { store, api } = harness(fixture({ checkins: [contact('c-1', '2026-11-17T08:00:00.000Z')] }));
 
