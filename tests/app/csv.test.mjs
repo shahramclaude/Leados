@@ -147,9 +147,9 @@ test('every CSV scope round-trips cleanly and preserves unknown values as blank 
 // catalog count silently. Session 311 repairs a stale pin left by PR #353:
 // scopes #167..#174 (manager handover, shared dependency, sourcing, Vroom–Yetton,
 // integrated business plan, improvement suggestions, decision-domain sensing)
-// registered 166 → 174 without this count moving; the pin is back on the real
-// catalog total.
-assert.equal(CSV_EXPORTS.length, 174);
+// registered 166 → 174 without this count moving; the pin was then repaired.
+// Session 318 adds the aggregate commitment-maturity scope #180.
+assert.equal(CSV_EXPORTS.length, 180);
   for (const spec of CSV_EXPORTS) {
     const res = exportWorkspaceCsv(state, spec.key, { now: NOW });
     assert.equal(res.ok, true, `${spec.key} export succeeds`);

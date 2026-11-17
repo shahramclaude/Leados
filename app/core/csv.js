@@ -231,6 +231,7 @@ import { buildRiskAppetite, riskAppetiteCsvRows } from './domain/riskAppetite.js
 import { RA_CSV_COLUMNS, RA_CSV_DESCRIPTOR, RA_CSV_SCOPE } from './domain/riskAppetiteRegistry.js';
 // ADR-0238: identity-free Distributed-Work Equity aggregates (CSV scope #179).
 import { DWE_CSV_COLUMNS, DWE_CSV_DESCRIPTOR, DWE_CSV_SCOPE } from './domain/distributedEquityRegistry.js';
+import { buildBudgetMaturity, budgetMaturityCsvRows, BUDGET_MATURITY_CSV_COLUMNS, BUDGET_MATURITY_CSV_DESCRIPTOR, BUDGET_MATURITY_CSV_SCOPE } from './domain/budgetMaturity.js';
 import { buildDistributedEquity, distributedEquityCsvRows } from './domain/distributedEquity.js';
 // ADR-0229: CSV #170 — the capability sourcing & firm-boundary register.
 import { SRC_CSV_COLUMNS, SRC_CSV_DESCRIPTOR, SRC_CSV_SCOPE } from './domain/sourcingRegistry.js';
@@ -1688,6 +1689,9 @@ export const CSV_EXPORTS = [
   // executive altitude. An uncomputable figure exports BLANK with its reason,
   // never a zero.
   DWE_CSV_DESCRIPTOR,
+  // #180 (ADR-0239): per-currency maturity ladder of recorded encumbrances.
+  // Identity-free and never pooled across currencies; it is not cash-flow data.
+  BUDGET_MATURITY_CSV_DESCRIPTOR,
 ];
 
 function personLookup(state) {
@@ -6950,6 +6954,12 @@ export function buildScopeTable(state, scope, now) {
         columns: JUST_CULTURE_CSV_COLUMNS.map((key) => ({ key, header: key })),
         rows: justCultureCsvRows(report),
       };
+    }
+    case BUDGET_MATURITY_CSV_SCOPE: {
+      // CSV scope #180 (ADR-0239). Built from the SAME pure reader as the finance
+      // panel. Identity-free, per-currency aggregate, and explicitly not a cash forecast.
+      const report = buildBudgetMaturity(state, { now });
+      return { columns: BUDGET_MATURITY_CSV_COLUMNS.map((key) => ({ key, header: key })), rows: budgetMaturityCsvRows(report) };
     }
     case RA_CSV_SCOPE: {
       // CSV scope #161 (ADR-0219, Schema v173). Built from the SAME reader the

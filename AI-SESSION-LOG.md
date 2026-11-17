@@ -1,3 +1,19 @@
+## 2026-11-17 — Session 318: commitment maturity ladder (ADR-0239, `#/finance?panel=maturity`, CSV #180) — SHIPPED
+
+**Doctrine, synchronization and scope.** `NORTH_STAR.md` exists and includes all four binding mandates: matrix leadership, bulletproof reliability, visual/content integrity and competitive benchmark. `origin` is `https://github.com/shahramclaude/Leados.git`; local HEAD `86e3475d7539a30c537257e12b0b0c22057dc5f7` equals `origin/main`; remained on `arena/2d872d82-leados`. ROADMAP's Session 317 entry and the Session 317 log at the top were reconciled as current. Chosen item: the new read-only commitment-maturity capability, **CEO / C-suite primary; director / VP finance readers × matrix and single-chain**. One item completed; no schema, rules, records, migrations or stored report added.
+
+**Step 3 — genuinely new gap.** Targeted searches of budget/finance modules and ROADMAP found no recurring obligation, renewal or subscription schedule (repository-wide absence **[UNVERIFIED]**). Logged in ROADMAP as a separate Planned item: a sourced, term-aware recurring contractual-obligations schedule. It is not partly implemented here.
+
+**Built.** ADR-0239 and Finance → Commitment timing (`#/finance?panel=maturity`) read active budget lines into one overdue bucket plus thirteen consecutive seven-day buckets. `committed` encumbrances and `planned` pipeline remain separate; currencies are never pooled; exact stored cents are summed with `BigInt`; CSV scope #180 and the screen use the same aggregate reader. A floor of three suppresses small cells. Missing/invalid dates, unsupported amounts, malformed rows, invalid currencies, duplicate source references and beyond-horizon lines are counted or withheld rather than guessed. The UI prints source-placement and completeness claims separately. No budget, line, owner or free-text identity reaches the aggregate export. Expected date is explicitly not cash date; the view is not a liquidity, solvency or treasury forecast. README and ADR-0239 describe the same boundaries.
+
+**Visual asset / specialist-tool blocker.** Added `app/assets/budget-commitment-maturity-method.jpg` as an explanatory method aid only, not operational evidence. Arena's built-in image generator was used; a specialized external diagram/asset tool was not available in this session. Specialist-tool validation is an explicit blocker, not a claim of tool parity.
+
+**Benchmark `[BENCHMARK-UNVERIFIED]`.** Conceptual comparison is a treasury maturity worksheet and enterprise planning tools (Anaplan / Oracle NetSuite planning). No hands-on vendor run, current market feature check or independent finance review occurred; no parity is claimed.
+
+**Focused verification (one final pass).** After installing the lockfile dependencies with `npm ci --ignore-scripts --no-audit --no-fund`, `node --test tests/app/budget-maturity.test.mjs tests/app/csv.test.mjs` passed **9/9**. The new tests assert stored budget declarations survive a real store reload byte-for-byte, the computed report is stable across reload, displayed exact cents/counts equal the report, CSV cells equal the same report, identity-bearing fields are absent, privacy floors apply, and ambiguous/missing/malformed/out-of-horizon inputs fail closed. The adjacent CSV suite round-trips every registered export shape. An early combined run exposed the stale CSV catalog pin, now updated 174 → 180; the final run is green. Full suite, browser/assistive-technology and deployment **[UNVERIFIED]**. No further verification pass was run.
+
+**PR:** one-shot PR attempt to be made from this branch after the session record is saved; actual result will be recorded below.
+
 ## 2026-11-17 — Session 317: ADR-0238 distributed-work equity register (Schema v193, `#/distributed-equity`, CSV #179, `RULE-DWE-01`) — SHIPPED
 
 **Branch.** `arena/93a322d4-leados`, based at `4b99ef8b82260b915b391cc2b3d1cc49a20e6eac`.
