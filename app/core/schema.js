@@ -455,6 +455,16 @@ import {
   normalizeVoiceSettings,
 } from './domain/voiceSchema.js';
 import {
+  normalizeMutualAidAgreements,
+  normalizeMutualAidAcceptances,
+  normalizeMutualAidArrivals,
+  normalizeMutualAidMarkers,
+  normalizeMutualAidReleases,
+  normalizeMutualAidRequests,
+  normalizeMutualAidSettings,
+  normalizeMutualAidWithdrawals,
+} from './domain/mutualAidSchema.js';
+import {
   normalizeIbpCycles,
   normalizeIbpDemandRows,
   normalizeIbpCapacityRows,
@@ -1418,7 +1428,7 @@ export {
 // re-derived on read, so a hand-edited file cannot carry a commander nobody
 // designated, a notification nobody made, or a deadline the record does not
 // compute.
-export const SCHEMA_VERSION = 197;
+export const SCHEMA_VERSION = 198;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -2871,6 +2881,13 @@ export const DEFAULT_SETTINGS = Object.freeze({
   // screen. None is fitted from the record.
   ...normalizeLwkSettings({}),
   ...normalizeVoiceSettings({}),
+  // ADR-0244: the mutual-aid conventions — the release grace after a
+  // withdrawal, the privacy floor below which a per-state export is withheld,
+  // and the rule switch. Note what is NOT here: a request validity. The window
+  // a request stays open is a fact about each request and the situation it was
+  // made in, declared per request, so there is no workspace default to drift
+  // into a plausible one.
+  ...normalizeMutualAidSettings({}),
   // ADR-0243: the employee-voice conventions — the reply window, the minutes
   // window, the privacy floor below which a per-state export is withheld, and the
   // rule switch. Note what is NOT here: a consultation period. The period a body
@@ -4040,6 +4057,20 @@ export const COLLECTIONS = [
   'voiceResponses',
   'voiceDecisions',
   'voiceMarkers',
+  // ADR-0244 (Schema v198): the Mutual-Aid Activation & Resource-Commitment
+  // Register. Bilateral agreements, requests with their declared validity, the
+  // partner's acceptance with its written confirmation and promise, arrivals
+  // compared against the promise, withdrawals, releases and identity-free rule
+  // markers. No state, close day, days-overdue figure, days-late figure or
+  // coverage verdict is stored: each is re-derived on read, so a hand-edited
+  // file cannot carry an arrival that disagrees with the promise beside it.
+  'mutualAidAgreements',
+  'mutualAidRequests',
+  'mutualAidAcceptances',
+  'mutualAidArrivals',
+  'mutualAidWithdrawals',
+  'mutualAidReleases',
+  'mutualAidMarkers',
 ];
 
 /** Stable empty state. `now` is an ISO string so the result is a pure value. */
@@ -4332,6 +4363,11 @@ export function normalizeSettings(raw) {
     // window, an advice nobody answered or a sitting with no minutes is never
     // the silent default.
     ...normalizeVoiceSettings(s),
+    // ADR-0244: the mutual-aid register's conventions, clamped on load. The
+    // rule switch is defaulted ON so a pause that hides a request that lapsed
+    // with no acceptance, promised help whose day passed, or a withdrawal whose
+    // release is owed is never the silent default.
+    ...normalizeMutualAidSettings(s),
     // Repair of a standing red reported at base HEAD: two rule switches the
     // pause census maps were not carried in settings, so the only writes that
     // can silence those rules were refused as unknown keys. Declared here with
@@ -9673,6 +9709,22 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.voiceResponses = normalizeVoiceResponses(raw.voiceResponses, state.voiceItems, warnings);
   state.voiceDecisions = normalizeVoiceDecisions(raw.voiceDecisions, state.voiceItems, warnings);
   state.voiceMarkers = normalizeVoiceMarkers(raw.voiceMarkers, warnings);
+  // ADR-0244 (Schema v198): the Mutual-Aid Activation & Resource-Commitment
+  // Register. An agreement without its written reference, a request without an
+  // agreement or a declared validity, an acceptance without the partner's
+  // written confirmation, a second acceptance or arrival, a withdrawal or
+  // release without an acceptance are DROPPED with counted warnings. Ordering
+  // breaches (a release before its withdrawal, a cancellation after an
+  // acceptance, a request under an expired agreement) are KEPT so the reader
+  // can print them, because deleting the row would erase the one fact the
+  // register exists to surface.
+  state.mutualAidAgreements = normalizeMutualAidAgreements(raw.mutualAidAgreements, warnings);
+  state.mutualAidRequests = normalizeMutualAidRequests(raw.mutualAidRequests, state.mutualAidAgreements, warnings);
+  state.mutualAidAcceptances = normalizeMutualAidAcceptances(raw.mutualAidAcceptances, state.mutualAidRequests, warnings);
+  state.mutualAidArrivals = normalizeMutualAidArrivals(raw.mutualAidArrivals, state.mutualAidAcceptances, warnings);
+  state.mutualAidWithdrawals = normalizeMutualAidWithdrawals(raw.mutualAidWithdrawals, state.mutualAidAcceptances, warnings);
+  state.mutualAidReleases = normalizeMutualAidReleases(raw.mutualAidReleases, state.mutualAidAcceptances, state.mutualAidWithdrawals, warnings);
+  state.mutualAidMarkers = normalizeMutualAidMarkers(raw.mutualAidMarkers, warnings);
   // ADR-0229 (Schema v182): a case, option, cost line or act that cannot be read
   // exactly is DROPPED with a counted warning — never repaired, re-termed,
   // re-priced or re-pointed at another case. A cost line that does not belong to
@@ -10770,6 +10822,25 @@ export const MIGRATIONS = {
     voiceDecisions: Array.isArray(v196.voiceDecisions) ? v196.voiceDecisions : [],
     voiceMarkers: Array.isArray(v196.voiceMarkers) ? v196.voiceMarkers : [],
     settings: { ...(v196.settings || {}), ...normalizeVoiceSettings(v196.settings || {}) },
+  }),
+  // 197 → 198: ADR-0244 adds SEVEN EMPTY ledgers (`mutualAidAgreements`,
+  // `mutualAidRequests`, `mutualAidAcceptances`, `mutualAidArrivals`,
+  // `mutualAidWithdrawals`, `mutualAidReleases`, `mutualAidMarkers`) and the
+  // register's conventions. Nothing is inferred from an incident record, a
+  // delegation, a contact or a prior arrangement: a mutual-aid request is a
+  // dated human act made under a written agreement, and manufacturing one at
+  // upgrade time would put a promise on the record that no partner ever made.
+  197: (v197) => ({
+    ...v197,
+    schemaVersion: 198,
+    mutualAidAgreements: Array.isArray(v197.mutualAidAgreements) ? v197.mutualAidAgreements : [],
+    mutualAidRequests: Array.isArray(v197.mutualAidRequests) ? v197.mutualAidRequests : [],
+    mutualAidAcceptances: Array.isArray(v197.mutualAidAcceptances) ? v197.mutualAidAcceptances : [],
+    mutualAidArrivals: Array.isArray(v197.mutualAidArrivals) ? v197.mutualAidArrivals : [],
+    mutualAidWithdrawals: Array.isArray(v197.mutualAidWithdrawals) ? v197.mutualAidWithdrawals : [],
+    mutualAidReleases: Array.isArray(v197.mutualAidReleases) ? v197.mutualAidReleases : [],
+    mutualAidMarkers: Array.isArray(v197.mutualAidMarkers) ? v197.mutualAidMarkers : [],
+    settings: { ...(v197.settings || {}), ...normalizeMutualAidSettings(v197.settings || {}) },
   }),
   // 183 → 184: ADR-0231 adds SEVEN EMPTY ledgers (`ibpCycles`, `ibpDemandRows`,
   // `ibpCapacityRows`, `ibpOptions`, `ibpDecisions`, `ibpGrades`, `ibpMarkers`)

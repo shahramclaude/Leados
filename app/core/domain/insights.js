@@ -137,6 +137,7 @@ import { loneWorkingSignals } from './loneWorking.js';
 // VOI-01..04 — a window that closed with no advice, advice nobody answered, a
 // decision out of order, and sittings with no minutes or below quorum.
 import { voiceSignals } from './voice.js';
+import { mutualAidSignals } from './mutualAid.js';
 import { incidentCommandSignals } from './incidentCommand.js';
 import { autopilotSignals } from './autopilot.js';
 
@@ -2631,6 +2632,12 @@ export function buildInsights(state, now) {
   // reads its own ledgers and the live matrix, so it cannot recurse into the
   // engine that is running it.
   for (const signal of voiceSignals(state, now, settings)) add(signal);
+  // ADR-0244 (read-side): the Mutual-Aid register contributes MAA-01..04 — a
+  // request that lapsed with no acceptance, accepted help whose promised day
+  // passed, a withdrawal whose release is owed, and an act recorded out of
+  // order. It reads its own ledgers and the live matrix, so it cannot recurse
+  // into the engine that is running it.
+  for (const signal of mutualAidSignals(state, now, settings)) add(signal);
   // ADR-0240 (read-side): the Incident Command register contributes MIC-01..03 —
   // a passed notification deadline, a live major incident with no commander (or a
   // closed one still holding command), and a response line nobody accepted. It

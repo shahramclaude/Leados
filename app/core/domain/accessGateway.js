@@ -32,6 +32,7 @@ import { WPA_RIGHTS } from './workplaceAdjustmentRegistry.js';
 import { LWK_RIGHTS } from './loneWorkingRegistry.js';
 import { VOI_RIGHTS } from './voiceRegistry.js';
 import { MIC_RIGHTS } from './incidentCommandRegistry.js';
+import { MAA_RIGHTS } from './mutualAidRegistry.js';
 // ADR-0229: the capability sourcing register's four rights.
 import { SRC_RIGHTS } from './sourcingRegistry.js';
 import { VY_RIGHTS } from './vyRegistry.js';
@@ -354,6 +355,16 @@ const groups = [
   // are enforced inside the action against the live reporting graph.
   [MIC_RIGHTS.READ, 'incidentReport incidentAttentionCount incidentCandidates'],
   [MIC_RIGHTS.COMMAND, 'incidentDeclare incidentAssignLine incidentAcceptLine incidentAssumeCommand incidentTransferCommand incidentChangeSeverity incidentRecordNotification incidentResolve incidentStandDown incidentSetConventions incidentScan'],
+  // ADR-0244: the mutual-aid activation register. Reading is open at rank 1 —
+  // every seat may see whether the workspace owes or is owed mutual aid and
+  // where a commitment stands — while the READER withholds partner identity,
+  // agreement references, subjects, confirmations, hands and resource lines
+  // above rank 3. Every write is a leader act narrowed inside the action: a
+  // request is opened only against an agreement this seat declared, and every
+  // acceptance, arrival, withdrawal, release and cancellation only by a seat
+  // that HOLDS one of the requesting lines (the joint apex above two or more).
+  [MAA_RIGHTS.READ, 'maaReport maaAttention maaCandidates'],
+  [MAA_RIGHTS.DECLARE, 'maaDeclareAgreement maaOpenRequest maaRecordAcceptance maaRecordArrival maaRecordWithdrawal maaRecordRelease maaCancelRequest maaSetConventions maaScan'],
   // ADR-0229: the capability sourcing & firm-boundary register. Reading is
   // portfolio material (rank 3+). Recording an option is the leader who HOLDS
   // the capability (rank 2+), narrowed inside the action to a line the case
@@ -831,6 +842,13 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // reads are absent from SAFE_READS is unreadable under enforcement while its
 // writes are still gated.
 'incidentReport', 'incidentAttentionCount', 'incidentCandidates',
+// ADR-0244: the mutual-aid activation register's pure read surface. Every one
+// of these re-proves the read right inside the action, because a module whose
+// reads are absent from SAFE_READS is unreadable under enforcement while its
+// writes are still gated — and whether the workspace owes outside help, or is
+// owed help that never arrived, would vanish the moment enforcement was turned
+// on.
+'maaReport', 'maaAttention', 'maaCandidates',
 // ADR-0241: the workplace adjustment register's pure read surface. Every one of
 // these re-proves the read right inside the action, exactly as the distributed-
 // work and incident registers do — a module whose reads are absent from

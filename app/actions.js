@@ -134,6 +134,7 @@ import { createLoneWorkingActions } from './core/domain/loneWorkingActions.js';
 // reply and a decision — nothing else. The door refuses a decision before the
 // declared window closes and refuses one recorded by a single affected line.
 import { createVoiceActions } from './core/domain/voiceActions.js';
+import { createMutualAidActions } from './core/domain/mutualAidActions.js';
 // ADR-0240: the Major-Incident Command & Notification-Clock Register's commands
 // and seat-checked reads. Declaring, staffing, commanding, notifying, resolving
 // and standing down — nothing else.
@@ -20398,6 +20399,13 @@ export function createApi(store, options = {}) {
   // re-proved against the live reporting graph inside the action; every read is a
   // seat-scoped SAFE_READ.
   Object.assign(api, createVoiceActions(store, { now: clock, idFactory: id }));
+  // ADR-0244: the mutual-aid activation and resource-commitment register's
+  // commands. Declaring an agreement, opening a request, recording the partner's
+  // acceptance with its written confirmation, the arrival against the promise,
+  // the withdrawal and the release are declared commands, each re-proved against
+  // the live reporting graph inside the action; every read is a seat-scoped
+  // SAFE_READ.
+  Object.assign(api, createMutualAidActions(store, { now: clock, idFactory: id }));
   // ADR-0240: the incident command register's commands.
   Object.assign(api, createIncidentCommandActions(store, { now: clock, idFactory: id }));
   // ADR-0220: the variable-pay design & incentive integrity register's commands.

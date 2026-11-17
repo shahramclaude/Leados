@@ -168,6 +168,9 @@ import { renderAdjustments } from './views/adjustments.js';
 import { renderLoneWorking } from './views/loneWorking.js';
 // ADR-0243: the employee-voice and collective-consultation register.
 import { renderVoice } from './views/voice.js';
+// ADR-0244: the mutual-aid activation & resource-commitment register.
+import { renderMutualAid } from './views/mutualAid.js';
+import { mutualAidAttentionCount } from './core/domain/mutualAid.js';
 import { distributedEquityAttentionCount } from './core/domain/distributedEquity.js';
 import { workplaceAdjustmentAttentionCount } from './core/domain/workplaceAdjustment.js';
 import { loneWorkingAttentionCount } from './core/domain/loneWorking.js';
@@ -651,6 +654,13 @@ export const NAV = [
     // decision preceded the close of the window. Director/VP primary; above rank 3
     // the reader prints counts and withholds subjects, names and written advice.
     { route: 'voice', label: 'Employee voice', icon: '☱', badge: 'voice' },
+    // ADR-0244: the mutual-aid activation & resource-commitment register. What
+    // was asked of an outside organisation, whether it ever accepted, what it
+    // promised, what actually arrived against the promise, and whether the
+    // commitment was withdrawn and released in order. Director/VP primary with
+    // CEO/C-suite oversight; above rank 3 the reader prints counts and withholds
+    // partner names, subjects and confirmations.
+    { route: 'mutual-aid', label: 'Mutual aid', icon: '⇄', badge: 'mutualAid' },
     // ADR-0220: what the variable pay in a leader's remit actually pays for, who
     // verifies the number, what the record can prove, and where the same outcome
     // is paid twice because a person sits on two lines. Beside risk appetite on
@@ -897,6 +907,8 @@ const RENDERERS = {
   'lone-working': (ctx) => renderLoneWorking(ctx),
   // ADR-0243: the employee-voice and collective-consultation register.
   voice: (ctx) => renderVoice(ctx),
+  // ADR-0244: the mutual-aid activation & resource-commitment register.
+  'mutual-aid': (ctx) => renderMutualAid(ctx),
   // ADR-0220: the variable-pay design & incentive integrity register.
   incentive: (ctx) => renderIncentive(ctx),
   // ADR-0221: the Duty-Without-Means Register.
@@ -1078,6 +1090,12 @@ export function parseRoute(hash) {
     voice: 'voice', 'employee-voice': 'voice', 'works-council': 'voice', 'staff-council': 'voice',
     'cooperation-committee': 'voice', 'employee-forum': 'voice', 'consultation': 'voice',
     'collective-consultation': 'voice', 'union-recognition': 'voice', 'staff-reps': 'voice',
+    // ADR-0244: mutual aid. Aliases are the words a commander actually uses for
+    // "who do we call when we need help from outside", and none shadows a
+    // shipped route.
+    'mutual-aid': 'mutual-aid', 'mutual aid': 'mutual-aid', 'reciprocal-aid': 'mutual-aid',
+    'backup-agreement': 'mutual-aid', 'aid-partner': 'mutual-aid', 'external-aid': 'mutual-aid',
+    'standby-agreement': 'mutual-aid',
     'welfare-check': 'lone-working', 'check-in-timer': 'lone-working', 'working-alone': 'lone-working',
     'lone-deployment': 'lone-working', 'man-down': 'lone-working', 'roll-call': 'lone-working',
     // ADR-0148: the names a person types looking for "did anyone actually agree
@@ -1845,6 +1863,10 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       // sittings past their minutes day and decisions recorded out of order — the
       // same conditions RULE-VOI-01 files. A COUNT, never a name.
       voice: voiceAttentionCount(state, { now: at, settings: state.settings, seat: seatCtx?.seat || null }),
+      // ADR-0244: requests that lapsed with no acceptance, promised help whose
+      // day passed, withdrawals whose release is owed and acts recorded out of
+      // order — the same conditions RULE-MAA-01 files. A COUNT, never a name.
+      mutualAid: mutualAidAttentionCount(state, { now: at, settings: state.settings, seat: seatCtx?.seat || null }),
       // ADR-0220: over-ceiling envelopes, contested outcomes and outstanding
       // recoveries this seat holds the joint apex above, plus live plans of its
       // own with no verified reading. The same conditions RULE-INC-01 files.
@@ -2441,6 +2463,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
   incidents: 'Major incidents — the command record while it runs: who declared it and against what written criterion, who took command and when they handed it over, every declared notification clock with its exact deadline, whether each party was actually told, and whether command was ever released',
       adjustments: 'Workplace adjustments — what work a person must not do and what was actually done about it: the functional limitation and its written instrument, the day an adjustment was agreed against the day it took effect, whether declared work on ANY reporting line breaks a limit the record can test exactly, and whether every line that hands the person work has been told',
       voice: 'Employee voice — what was put to a staff body and what it said back: the written instrument that set the period, the documents supplied, the day the window closed against the day advice arrived, the body’s own words and whether the organisation answered, the decision’s day against the window, each sitting’s attendance against the body’s own quorum, and the joint reporting seat above the affected lines',
+      'mutual-aid': 'Mutual aid — the help the enterprise asked an outside organisation for and what actually happened to it: the bilateral agreement the request was made under and whether it was live, the request and its declared validity, the partner’s acceptance with its written confirmation and promise, the arrival compared against the promise line by line, and the withdrawal and release that close the commitment in order',
       'lone-working': 'Lone working — who is alone right now, where, against which written assessment: the declared check-in interval and grace running from the last contact, the exact deadline, whether the record holds contact, a concern nobody answered, an escalation, or nothing at all, whether it ran past its declared end unclosed, and the joint reporting seat that owes the response',
       undertakings: 'Undertakings — the promise the enterprise made to a regulator, a board, a lender or a customer: its obligation lines, each independently tested, and the written report that discharges it to the counterparty',
       'information-requests': 'Information requests — what an authority demanded, on the day they set: every production line certified, every claim of privilege ruled on by a seat outside the parties, and the release that answers them',
