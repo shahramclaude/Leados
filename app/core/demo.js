@@ -2037,6 +2037,200 @@ function seedIncidentCommand(state, now, { priya, mei, jordan, at, ts }) {
   ];
 }
 
+/**
+ * ADR-0241: a small, REAL-SHAPED workplace-adjustment record.
+ *
+ * Four cases, drawn from the failures the adjustment-register category names, so
+ * the register shows live duties rather than an honest empty state on first load.
+ * NOTHING here states a state, a conflict or a duration — every one of those is
+ * derived by the reader:
+ *
+ *   1. Samuel carries a night-work restriction from a fit note, and his line
+ *      rosters a 23:00 → 06:00 shift straight through it. The reader PROVES 420
+ *      minutes of conflict. His line acknowledgement is also 0 of 1 for Mei's
+ *      restriction below, which is the handover failure made visible.
+ *   2. Mei's restriction is broken by a 540-minute shift against a declared
+ *      480-minute limit — a conflict on an hours domain rather than on a clock,
+ *      so the two testable kernels are both exercised.
+ *   3. Jordan's adjustment was AGREED fifteen days ago and never made
+ *      operational: the distance between the two dates, which the category says
+ *      employers cannot produce.
+ *   4. Freya's restriction carries a written REFUSAL of the aid she asked for,
+ *      which is the defensible position the register keeps distinct from an
+ *      unanswered request — and her lifting limit remains an untestable domain,
+ *      printed as such, never as clear.
+ *
+ * The shifts are declared through the same fields `workRestSchema` reads, so the
+ * conflict above is computed by the reader rather than written here. Nothing in
+ * this seed states a conflict, a state or a duration: those are all derived.
+ */
+function seedWorkplaceAdjustment(state, now, { priya, mei, jordan, samuel, freya, at, ts }) {
+  const restriction = (seq, personId, domain, instrument, statement, sourceRef, limitValue, declaredDaysAgo, reviewInDays) => ({
+    id: `wpa-res-demo-${seq}`,
+    personId,
+    domain,
+    instrument,
+    statement,
+    sourceRef,
+    limitUnit: limitValue === null ? null : (domain === 'manual-handling' ? 'grams' : 'minutes'),
+    limitValue,
+    declaredOn: at(declaredDaysAgo),
+    declaredAt: ts(declaredDaysAgo),
+    declaredById: 'leader',
+    reviewOn: reviewInDays === null ? null : at(-reviewInDays),
+    note: '',
+    status: 'active',
+    withdrawnOn: null,
+    withdrawalReason: '',
+    withdrawnById: '',
+    createdAt: ts(declaredDaysAgo),
+    updatedAt: ts(declaredDaysAgo),
+  });
+
+  state.wpaRestrictions = [
+    restriction(1, samuel, 'no-night-work', 'fit-note',
+      'Must not work between 22:00 and 06:00 while the treatment continues.',
+      'Statement of fitness for work dated 2026-10-28: "may be fit for work" with the adjustment "no night work" ticked.',
+      null, 20, 12),
+    restriction(2, mei, 'max-shift-hours', 'occupational-health',
+      'No more than 8 hours (480 minutes) in any single shift.',
+      'Occupational-health assessment of 2026-11-02: sustained-hours restriction pending review of the treatment plan.',
+      480, 15, 20),
+    restriction(3, freya, 'manual-handling', 'ergonomic-assessment',
+      'No lifting above 5 kilograms; no repetitive lifting above shoulder height.',
+      'Ergonomic assessment of 2026-11-05 following the workstation review: lifting limit of 5 kg recorded.',
+      5000, 12, 30),
+    restriction(4, jordan, 'sustained-posture', 'self-declared',
+      'No more than 30 minutes standing or walking without a seated break.',
+      'Declared by Jordan at the 1:1 on 2026-11-02 and recorded by the line manager; a clinician letter is expected and has not yet arrived.',
+      30, 15, 25),
+  ];
+
+  const adjustment = (seq, restrictionId, kind, detail, agreedDaysAgo, operationalDaysAgo, status = 'active', retiredDaysAgo = null, retiredReason = '') => ({
+    id: `wpa-adj-demo-${seq}`,
+    restrictionId,
+    kind,
+    detail,
+    agreedOn: at(agreedDaysAgo),
+    agreedAt: ts(agreedDaysAgo),
+    agreedById: priya,
+    operationalOn: operationalDaysAgo === null ? null : at(operationalDaysAgo),
+    operationalAt: operationalDaysAgo === null ? null : ts(operationalDaysAgo),
+    operationalById: operationalDaysAgo === null ? '' : priya,
+    costNote: '',
+    status,
+    retiredOn: retiredDaysAgo === null ? null : at(retiredDaysAgo),
+    retiredReason,
+    retiredById: retiredDaysAgo === null ? '' : priya,
+    createdAt: ts(agreedDaysAgo),
+    updatedAt: ts(agreedDaysAgo),
+  });
+
+  state.wpaAdjustments = [
+    // Case 2: agreed 12 days ago, still with no operational day. The reader
+    // prints the exact distance to the declared grace, and RULE-WPA-01 asks.
+    adjustment(1, 'wpa-res-demo-2', 'task-substitution',
+      'The Sunday billing release window was taken off Mei and given to the on-call engineer for the quarter.',
+      12, null),
+    // Case 3: an aid is in place, so this restriction reads `in-place`.
+    adjustment(2, 'wpa-res-demo-3', 'equipment',
+      'A height-adjustable trolley and a lifting aid were bought for the data-room weekly restock.',
+      14, 9),
+    // Case 4: agreed fifteen days ago and still with no operational day — the
+    // distance between agreement and effect, printed exactly.
+    adjustment(3, 'wpa-res-demo-4', 'hours-change',
+      'A standing desk and a seated-break slot at 10:30 each morning, agreed with the line manager.',
+      15, null),
+    // Cases 1 and 2: an adjustment IS in place on both conflicted restrictions.
+    // Both facts stay true and both are printed — an adjustment existing does not
+    // make the rostered work lawful — and these are the rows the agreed-to-
+    // operational median is computed from.
+    adjustment(4, 'wpa-res-demo-1', 'task-substitution',
+      'Night cover was taken off Samuel and given to the two volunteers who asked for it; the rota was re-published.',
+      16, 10),
+    adjustment(5, 'wpa-res-demo-2', 'hours-change',
+      'The billing release window was capped at eight hours, with the hand-over moved to the following morning.',
+      10, 4),
+  ];
+
+  // Per-line acknowledgements. Priya's home line has acknowledged Samuel's
+  // restriction; Samuel's own project line has NOT, which is the handover
+  // failure made visible rather than assumed.
+  state.wpaAcknowledgements = [
+    {
+      id: 'wpa-ack-demo-1',
+      restrictionId: 'wpa-res-demo-1',
+      lineManagerId: priya,
+      acknowledgedOn: at(18),
+      acknowledgedAt: ts(18),
+      acknowledgedById: 'leader',
+      note: 'Read at the Monday leadership huddle.',
+      createdAt: ts(18),
+    },
+    {
+      id: 'wpa-ack-demo-2',
+      restrictionId: 'wpa-res-demo-3',
+      lineManagerId: samuel,
+      acknowledgedOn: at(11),
+      acknowledgedAt: ts(11),
+      acknowledgedById: 'leader',
+      note: '',
+      createdAt: ts(11),
+    },
+  ];
+
+  // One recorded review that DECLINED an adjustment for Freya, with a written
+  // basis — the defensible position, which the register keeps distinct from an
+  // unanswered request. A decline is not a clearance: the lifting limit stands.
+  state.wpaReviews = [
+    {
+      id: 'wpa-rev-demo-1',
+      restrictionId: 'wpa-res-demo-3',
+      decision: 'declined',
+      basis: 'A second trolley was requested for the mezzanine and declined: the existing aid covers the task, the store is a two-minute walk and the cost was disproportionate to the residual risk. The lifting limit itself is unchanged.',
+      reviewedOn: at(6),
+      reviewedAt: ts(6),
+      reviewedById: priya,
+      nextReviewOn: null,
+      createdAt: ts(6),
+    },
+  ];
+
+  // The declared work. Samuel's support line rosters a night shift that runs
+  // straight through his written restriction, so the register proves a conflict.
+  // These are ordinary rows in the ledger `workRestSchema` already reads.
+  const shift = (seq, personId, lineManagerId, day, start, end, startOffsetMin, endOffsetMin) => ({
+    id: `wpa-shift-demo-${seq}`,
+    personId,
+    lineManagerId,
+    zone: 'Europe/Copenhagen',
+    start: `${day}T${start}`,
+    // An end at or before its start is the NEXT day: a night shift is a real and
+    // ordinary span, not a mistake to reject.
+    end: `${end <= start ? addDays(day, 1) : day}T${end}`,
+    startOffsetMin,
+    endOffsetMin,
+    source: 'roster',
+    note: '',
+    declaredOn: day,
+    declaredAt: `${day}T08:00:00.000Z`,
+    declaredById: 'leader',
+    via: 'operator',
+  });
+
+  state.workRestShifts = Array.isArray(state.workRestShifts) ? state.workRestShifts : [];
+  state.workRestShifts.push(
+    // 23:00 → 06:00 the next morning: seven hours, all of it inside the declared
+    // night window, in direct conflict with Samuel's fit note.
+    shift(1, samuel, priya, at(3), '23:00', '06:00', 60, 60),
+    // An ordinary day shift on the same line, which conflicts with nothing.
+    shift(2, samuel, priya, at(1), '08:00', '16:00', 60, 60),
+    // Mei's 09:30–18:30 run is 540 minutes against a declared 480 limit — a
+    // second, differently-shaped conflict on an hours domain rather than a clock.
+    shift(3, mei, priya, at(2), '09:30', '18:30', 60, 60),
+  );
+}
+
 function seedDistributedEquity(state, now, { priya, mei, jordan, samuel, freya, at, ts }) {
   // ADR-0238 (Schema v193): the demo roster is a genuinely distributed team —
   // two zones, a recurring late bridge and an evening sitting — so the register
@@ -5693,6 +5887,10 @@ export function buildDemoState(now = new Date()) {
   // roster — sourced, dated, and read back through the same fail-closed loader
   // every import uses.
   seedDistributedEquity(state, now, { priya, mei, jordan, samuel, freya, at, ts });
+  // ADR-0241: three real-shaped restrictions — a cross-line night-work conflict,
+  // an adjustment agreed and never made operational, and a recorded refusal —
+  // declared through the same ledgers the fail-closed loaders read.
+  seedWorkplaceAdjustment(state, now, { priya, mei, jordan, samuel, freya, at, ts });
   // ADR-0240: one declared incident with a running external clock, an accepted
   // line, an unaccepted line and a recorded severity raise — so the register
   // shows a real bridge rather than an honest empty state on first load.

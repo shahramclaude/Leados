@@ -265,6 +265,16 @@ export const RECORD_POLICIES = Object.freeze({
   dweWindows: { classKey: 'individual', label: 'Declared working windows — one sourced daily span per person, with its zone', route: '#/distributed-equity' },
   dweSittings: { classKey: 'individual', label: 'Declared unsociable-hour sittings — dated wall-clock events with their attendees and chair', route: '#/distributed-equity' },
   dweMarkers: { classKey: 'unit', detailCeiling: 3, label: 'Distributed-equity observation markers — unreadable windows, no joint seat (identity-free)', route: '#/distributed-equity' },
+  // ADR-0241: a functional restriction is INDIVIDUAL material — it is a statement
+  // about a person's body, the same class as 1:1 content and Just Culture reviews.
+  // The reader discloses per-person rows below rank 3 and counts above it; the
+  // generic projection never hands over a raw row at the top. The adjustment,
+  // acknowledgement and review ledgers are equally individual: each names a person.
+  wpaRestrictions: { classKey: 'individual', label: 'Declared functional restrictions — the limitation the work must respect, its instrument and its written source', route: '#/adjustments' },
+  wpaAdjustments: { classKey: 'individual', label: 'Adjustments agreed and made operational for a person — what was done, and the two dates', route: '#/adjustments' },
+  wpaAcknowledgements: { classKey: 'individual', label: 'Per-line acknowledgements that a manager has been shown a restriction they hold', route: '#/adjustments' },
+  wpaReviews: { classKey: 'individual', label: 'Recorded reviews of a restriction — the decision, its basis and the day', route: '#/adjustments' },
+  wpaMarkers: { classKey: 'unit', detailCeiling: 3, label: 'Workplace-adjustment observation markers — no joint seat, no line to ask (identity-free)', route: '#/adjustments' },
   // ADR-0240 (Schema v194): the incident command register. An incident record
   // names the people on the bridge, the instrument it was declared under and the
   // external parties it owes — individual detail that is not handed upward, so
@@ -1382,6 +1392,15 @@ export const ACTION_RIGHTS = Object.freeze({
   // alone cannot say who is on a bridge.
   'read-incidents': { minRank: 1, maxRank: 5, label: 'Read the incident command register within your grant — the incidents you declared or command, the response lines you lead, and the span that holds them' },
   'command-incidents': { minRank: 2, maxRank: 5, label: 'Declare an incident against a written criterion, staff its response lines, take and hand over command, record notifications against their declared clocks, change severity, resolve and stand command down, and set the register’s conventions' },
+  // ADR-0241 (Schema v195). Two rights, and the split is the moral centre of the
+  // register: READING is open at rank 1 because a person must be able to read
+  // their OWN restriction and whether the workplace put it in place, while the
+  // READER narrows what any seat sees (names below rank 3, counts above).
+  // DECLARING, acknowledging a line, marking an adjustment operational and
+  // recording a review are leader acts, each narrowed inside the action to a seat
+  // that HOLDS the person through the span or a declared line.
+  'read-workplace-adjustments': { minRank: 1, maxRank: 5, label: 'Read the workplace adjustment register within your grant — your own restriction and whether it was put in place, and the restrictions of the people you hold' },
+  'declare-workplace-adjustments': { minRank: 2, maxRank: 5, label: 'Declare a functional restriction on a written instrument, record an adjustment and the day it became operational, acknowledge a restriction on a line you hold, record a review, and set the register’s conventions' },
   // ADR-0235/0236 (Schema v191). Six rights, and the shape is the point: RECORDING
   // a demand (with a follow-up link only to a readable insufficient parent),
   // STAFFING its lines and RELEASING to the authority are rank 3+ acts —

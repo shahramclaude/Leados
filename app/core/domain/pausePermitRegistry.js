@@ -327,6 +327,7 @@ export const PAUSE_PERMIT_MATRIX_REACH_SWITCHES = Object.freeze([
   // told. It reaches across reporting lines, so it carries a permit like every
   // other cross-line switch.
   'micAutoPropagate',
+  'wpaAutoPropagate',
 ]);
 
 export function pausePermitReachesMatrix(key) {

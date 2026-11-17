@@ -4878,3 +4878,35 @@ New gaps logged as Planned: cross-entity/cross-currency appetite under a declare
 **Asset.** Generated with the built-in image tool; Higgsfield `unsupported` in this conversation, so reported plainly rather than claimed. One correction round was needed: the first render duplicated a column heading and drew RESOLVE as following TRANSFER, which is the exact order the register refuses.
 
 **New gap logged, not built.** The postmortem itself — a dated, owned review obligation with named action holders and a due day, opened at stand-down and never before. `#/incidents` proves the bridge was released and deliberately prints nothing about what was learned; the benchmark bar requires a 3-day SEV-1 / 5-day SEV-2 review, and no shipped module records that one was held.
+
+---
+
+## Session 319 — 2026-11-17 — ADR-0241 workplace adjustment & functional-restriction register
+
+**Task.** The Duty to Make Reasonable Adjustments record — Equality Act 2010 ss.20–21 — a statutory obligation with no product shape. Built end to end at Schema v195 on branch `arena/b5b48991-leados` from base `5775e1e7`.
+
+**Doctrine.** PASS. **Sync.** PASS (HEAD `5775e1e7` == `origin/main`). **Gap hunt.** Four sweeps; the selected gap is not a leftover from a prior session's list but a category the repo had no vocabulary for. **Benchmark.** Cleared before building, from practitioner analysis of the two dates, the refusal-versus-unanswered distinction and the Reasonable Adjustments Passport literature, plus occupational-health vendor documentation at documentation level.
+
+**Decision.** A restriction is declared against a written instrument as a functional LIMITATION, never a diagnosis — a diagnosis-shaped field drops the row whole, because scrubbing the field would leave the register printing a restriction whose stated basis it had silently edited. An adjustment carries two dates and the gap between them is the record. A limit the workspace can prove is computed exactly; a limit it cannot prove is refused with its printed reason and never rendered as "no conflict". A refusal with a recorded reason is a defensible position and a request nothing answered is a defect, so they are two states — and `unanswered` is not one of them, because nothing in the workspace could derive it.
+
+**Built.** `workplaceAdjustmentRegistry/Schema/Math/…Actions/…Rules/…Report.js` plus `views/adjustments.js`; wired through `schema.js`, `actions.js`, `main.js`, `accessGateway.js`, `seatRegistry.js`, `propagationContracts.js`/`postCommit.js`, `pausePermitRegistry.js`, `csv.js` (#182), `insights.js`, `demo.js`. Route `#/adjustments`, `RULE-WPA-01`, CSV scope `workplace-adjustments`.
+
+**Nine real defects found by the suite and fixed.**
+
+1. `WPA_UNPROVEN.no-shifts` was parsed as subtraction (`no - shifts`) and **threw for any person with no declared shifts** — the register crashed on the commonest honest case in a fresh workspace.
+2. The night window accepted `start === end`; read as a wrapping span that is a **full 24-hour night**, so every shift breached.
+3. The night window was declared in settings but **never normalized**, so an unreadable declaration was silently replaced by the default while the reader printed the window it believed it had.
+4. `workplaceAdjustmentConditions` threw on a row with no derived state instead of skipping it.
+5. The `unanswered_n` CSV column outlived the removal of its state and had no source — removed rather than exported as a fabricated zero.
+6. Three stale `unanswered` references survived in the reader's totals.
+7. The demo's night shift ended `06:00` on the same day as its `23:00` start — a negative span the work/rest loader silently drops, which is why the seed declared three shifts and only two loaded.
+8. The demo carried only two paired adjustments while its own reader implied a median, so the median was withheld; two further adjustments were added and the median now computes exactly `6`.
+9. The unquoted-hyphen-key class of bug (keys silently read as subtraction) reappeared across the ask signature, the registry vocabulary and the view.
+
+**Two branches deliberately not claimed as states.** The `no-line`, `no-apex` and `self-apex` observation paths cannot be reached by any legal roster: the matrix places a person with no declared manager on the leader's line, refuses a line that would close a loop, and `matrixJointApex` therefore never returns the restricted person. Brute-forced over 15 graph configurations with zero hits. They are kept as guards and pinned against the pure function — tested as a boundary, never printed as a state a reader could see.
+
+**Verified.** `tests/app/workplace-adjustment.test.mjs` **34/34**. `standalone.test.mjs` **7/7** after rebuilding at v195 (21,389,249 bytes / 1,080 modules / 19,805 B·module⁻¹, density guard unchanged). The ceiling moved by the repo's own documented convention: it tracks the module count, and density is what still catches a module inlined twice.
+
+**Not verified.** Full `npm test` not completed (structurally red at base). `verify:canonical` not run since Session 315. Real-browser and assistive-technology walkthrough of `#/adjustments` [UNVERIFIED]. Product parity [BENCHMARK-UNVERIFIED] — no vendor environment was run.
+
+**Gap logged, not built.** The grievance / appeal ladder: a refusal a person disputes has nowhere to go. No dated appeal, no independent reviewer, no answer deadline, no count of appeals open past their day. `declined` is a final state with no route, which is the same silence the register exists to end, one level up.

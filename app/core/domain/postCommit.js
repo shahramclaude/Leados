@@ -204,6 +204,7 @@ import { synergyRule } from './synergyRules.js';
 import { earnedValueRule } from './earnedValueRules.js';
 import { riskAppetiteRule } from './riskAppetiteRules.js';
 import { distributedEquityRule } from './distributedEquityRules.js';
+import { workplaceAdjustmentRule } from './workplaceAdjustmentRules.js';
 import { incidentCommandRule } from './incidentCommandRules.js';
 import { sourcingRule } from './sourcingRules.js';
 import { ibpRule } from './ibpRules.js';
@@ -1279,6 +1280,11 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // are not told that somebody is carrying the unsociable hour over the ceiling.
   distributedEquityRule,
   incidentCommandRule,
+  // ADR-0241: the workplace adjustment rule reads the live matrix for the joint
+  // apex above every line that holds a restricted person, so silencing it
+  // reaches across reporting lines — and those lines' managers are not told that
+  // somebody is rostered onto work their own record forbids.
+  workplaceAdjustmentRule,
   // ADR-0229: the Capability Sourcing & Firm-Boundary Register. ONE rule reads
   // the finished register and files at most one dated ask per condition: a
   // boundary decision owed where both sides are priced on the case's own terms

@@ -233,17 +233,18 @@ function withDOM(run) {
 }
 
 test('Schema v190→191 preserves recorded requests as roots and never infers a follow-up', () => {
-  assert.equal(SCHEMA_VERSION, 194, 'ADR-0240 (major-incident command & notification clocks) is the current head');
+  assert.equal(SCHEMA_VERSION, 195, 'ADR-0241 (workplace adjustment & functional restrictions) is the current head');
   assert.ok(COLLECTIONS.includes('informationRequests'));
   const legacy = createEmptyState(created);
   legacy.schemaVersion = 190;
   legacy.informationRequests = [requestRow('rq-legacy', created)];
   const migrated = migrate(legacy);
   // The chain now continues to head: 190 → 191 (this suite), 191 → 192 (ADR-0237),
-  // 192 → 193 (ADR-0238) and 193 → 194 (ADR-0240). Each step still runs exactly
-  // once, in order, and this suite's own step is asserted by position.
-  assert.deepEqual(migrated.applied, ['190 → 191', '191 → 192', '192 → 193', '193 → 194']);
-  assert.equal(migrated.raw.schemaVersion, 194);
+  // 192 → 193 (ADR-0238), 193 → 194 (ADR-0240) and 194 → 195 (ADR-0241). Each step
+  // still runs exactly once, in order, and this suite's own step is asserted by
+  // position rather than by the chain stopping at it.
+  assert.deepEqual(migrated.applied, ['190 → 191', '191 → 192', '192 → 193', '193 → 194', '194 → 195']);
+  assert.equal(migrated.raw.schemaVersion, 195);
   assert.equal(migrated.raw.informationRequests[0].followsUpOn, null);
   assert.equal(migrated.raw.informationRequests[0].id, 'rq-legacy');
 });

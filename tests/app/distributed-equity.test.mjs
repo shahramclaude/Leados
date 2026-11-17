@@ -151,17 +151,17 @@ function makeEnv(state = fixture()) {
 /* ------------------------------------------------------- 1. the schema bump */
 
 test('ADR-0238 schema: the bump is additive — three empty ledgers, and nothing is inferred', () => {
-  assert.equal(SCHEMA_VERSION, 194);
+  assert.equal(SCHEMA_VERSION, 195);
   for (const key of ['dweWindows', 'dweSittings', 'dweMarkers']) {
     assert.ok(COLLECTIONS.includes(key), `${key} is a declared collection`);
   }
   const migrated = migrate({ schemaVersion: 192, settings: { ...createEmptyState(T0).settings } });
-  // ADR-0238's own step is still applied in order; later bumps (v194, ADR-0240)
-  // append, so the step that matters to THIS register is asserted by position
-  // rather than by being the last one.
-  assert.equal(migrated.applied.at(-2), '192 → 193', 'ADR-0238’s own step still runs, in order');
+  // ADR-0238's own step is still applied in order; later bumps (v194 ADR-0240,
+  // v195 ADR-0241) append, so the step that matters to THIS register is asserted
+  // by position rather than by being the last one.
+  assert.equal(migrated.applied.at(-3), '192 → 193', 'ADR-0238’s own step still runs, in order');
   assert.ok(migrated.applied.includes('192 → 193'), 'the whole chain runs to the current schema');
-  assert.equal(migrated.raw.schemaVersion, 194);
+  assert.equal(migrated.raw.schemaVersion, 195);
   assert.deepEqual(migrated.raw.dweWindows, []);
   assert.deepEqual(migrated.raw.dweSittings, []);
   assert.deepEqual(migrated.raw.dweMarkers, []);

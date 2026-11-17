@@ -408,6 +408,19 @@ import {
   normalizeMicMarkers,
   normalizeMicSettings,
 } from './domain/incidentCommandSchema.js';
+// ADR-0241 (Schema v195): the Workplace Adjustment & Functional-Restriction
+// Register. Every loader here is fail-closed: a row that cannot be read exactly
+// is DROPPED with a counted warning, never repaired into a plausible default —
+// and a restriction carrying a diagnosis-shaped field is dropped WHOLE, because
+// this register holds a functional limitation and never a medical record.
+import {
+  normalizeWpaRestrictions,
+  normalizeWpaAdjustments,
+  normalizeWpaAcknowledgements,
+  normalizeWpaReviews,
+  normalizeWpaMarkers,
+  normalizeWpaSettings,
+} from './domain/workplaceAdjustmentSchema.js';
 import {
   normalizeIbpCycles,
   normalizeIbpDemandRows,
@@ -1372,7 +1385,7 @@ export {
 // re-derived on read, so a hand-edited file cannot carry a commander nobody
 // designated, a notification nobody made, or a deadline the record does not
 // compute.
-export const SCHEMA_VERSION = 194;
+export const SCHEMA_VERSION = 195;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -3946,6 +3959,18 @@ export const COLLECTIONS = [
   'micIncidents',
   'micActs',
   'micMarkers',
+  // ADR-0241 (Schema v195): the Workplace Adjustment & Functional-Restriction
+  // Register. Declared functional restrictions with their instrument, the
+  // adjustments somebody actually made (with the agreed and operational days as
+  // SEPARATE facts), the dated per-line acknowledgements, the recorded reviews,
+  // and identity-free rule markers. No state, conflict, duration, acknowledged
+  // verdict or median is stored: each is re-derived on read, so a hand-edited
+  // file cannot carry an adjustment nobody put in place or a review nobody held.
+  'wpaRestrictions',
+  'wpaAdjustments',
+  'wpaAcknowledgements',
+  'wpaReviews',
+  'wpaMarkers',
 ];
 
 /** Stable empty state. `now` is an ISO string so the result is a pure value. */
@@ -4223,6 +4248,11 @@ export function normalizeSettings(raw) {
     // The rule switch is defaulted ON so a pause that hides a blown notification
     // deadline or an uncommanded incident is never the silent default.
     ...normalizeMicSettings(s),
+    // ADR-0241: the workplace adjustment register's conventions, clamped on
+    // load. The rule switch is defaulted ON so a pause that hides a declaration
+    // conflict with declared work, a review nobody held, or a line that was
+    // never shown the restriction is never the silent default.
+    ...normalizeWpaSettings(s),
     // Repair of a standing red reported at base HEAD: two rule switches the
     // pause census maps were not carried in settings, so the only writes that
     // can silence those rules were refused as unknown keys. Declared here with
@@ -9526,6 +9556,19 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.micIncidents = normalizeMicIncidents(raw.micIncidents, warnings);
   state.micActs = normalizeMicActs(raw.micActs, state.micIncidents, warnings);
   state.micMarkers = normalizeMicMarkers(raw.micMarkers, warnings);
+  // ADR-0241 (Schema v195): a restriction, adjustment, acknowledgement or review
+  // that cannot be read exactly is DROPPED with a counted warning — never
+  // repaired, re-dated, re-united with a unit it does not match, or re-pointed
+  // at another person. A restriction with no written instrument reference is
+  // dropped at this boundary too: a claim about a human being's body with no
+  // source is exactly the plausible default the mandate forbids. A row carrying
+  // a diagnosis-shaped field is dropped WHOLE rather than stripped, so nobody
+  // can believe a condition was stored. No conflict or verdict is stored.
+  state.wpaRestrictions = normalizeWpaRestrictions(raw.wpaRestrictions, warnings);
+  state.wpaAdjustments = normalizeWpaAdjustments(raw.wpaAdjustments, state.wpaRestrictions, warnings);
+  state.wpaAcknowledgements = normalizeWpaAcknowledgements(raw.wpaAcknowledgements, state.wpaRestrictions, warnings);
+  state.wpaReviews = normalizeWpaReviews(raw.wpaReviews, state.wpaRestrictions, warnings);
+  state.wpaMarkers = normalizeWpaMarkers(raw.wpaMarkers, warnings);
   // ADR-0229 (Schema v182): a case, option, cost line or act that cannot be read
   // exactly is DROPPED with a counted warning — never repaired, re-termed,
   // re-priced or re-pointed at another case. A cost line that does not belong to
@@ -10572,6 +10615,23 @@ export const MIGRATIONS = {
     micActs: Array.isArray(v193.micActs) ? v193.micActs : [],
     micMarkers: Array.isArray(v193.micMarkers) ? v193.micMarkers : [],
     settings: { ...(v193.settings || {}), ...normalizeMicSettings(v193.settings || {}) },
+  }),
+  // 194 → 195: ADR-0241 adds FIVE EMPTY ledgers (`wpaRestrictions`,
+  // `wpaAdjustments`, `wpaAcknowledgements`, `wpaReviews`, `wpaMarkers`) and the
+  // register's conventions. Nothing is inferred from a period of absence, a
+  // return-to-work plan, a shift pattern, a roster or an existing report: a
+  // restriction is a sourced human declaration about a person's body, and
+  // manufacturing one at upgrade time would both invent a duty nobody owes and
+  // put a claim about somebody's health on the record that nobody made.
+  194: (v194) => ({
+    ...v194,
+    schemaVersion: 195,
+    wpaRestrictions: Array.isArray(v194.wpaRestrictions) ? v194.wpaRestrictions : [],
+    wpaAdjustments: Array.isArray(v194.wpaAdjustments) ? v194.wpaAdjustments : [],
+    wpaAcknowledgements: Array.isArray(v194.wpaAcknowledgements) ? v194.wpaAcknowledgements : [],
+    wpaReviews: Array.isArray(v194.wpaReviews) ? v194.wpaReviews : [],
+    wpaMarkers: Array.isArray(v194.wpaMarkers) ? v194.wpaMarkers : [],
+    settings: { ...(v194.settings || {}), ...normalizeWpaSettings(v194.settings || {}) },
   }),
   // 183 → 184: ADR-0231 adds SEVEN EMPTY ledgers (`ibpCycles`, `ibpDemandRows`,
   // `ibpCapacityRows`, `ibpOptions`, `ibpDecisions`, `ibpGrades`, `ibpMarkers`)
