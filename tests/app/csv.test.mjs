@@ -149,7 +149,7 @@ test('every CSV scope round-trips cleanly and preserves unknown values as blank 
 // integrated business plan, improvement suggestions, decision-domain sensing)
 // registered 166 → 174 without this count moving; the pin was then repaired.
 // Session 318 adds the aggregate commitment-maturity scope #180.
-assert.equal(CSV_EXPORTS.length, 180);
+assert.equal(CSV_EXPORTS.length, 183);
   for (const spec of CSV_EXPORTS) {
     const res = exportWorkspaceCsv(state, spec.key, { now: NOW });
     assert.equal(res.ok, true, `${spec.key} export succeeds`);
