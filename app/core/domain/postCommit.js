@@ -212,6 +212,7 @@ import { personalDealingRule } from './personalDealingRules.js';
 import { permitToWorkRule } from './permitToWorkRules.js';
 import { authorisationRule } from './authorisationRules.js';
 import { claimRule } from './lfgRules.js';
+import { insuranceRule } from './insRules.js';
 import { incidentCommandRule } from './incidentCommandRules.js';
 import { sourcingRule } from './sourcingRules.js';
 import { ibpRule } from './ibpRules.js';
@@ -1330,6 +1331,12 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // cannot be proved at all, that a matter settled beyond the computed authority, or
   // that a suspension somebody recorded was never proved.
   claimRule,
+  // ADR-0249: the insurance rule reads the live matrix for the joint apex above every
+  // line holding ANY responsible hand, so silencing it reaches across reporting lines
+  // — and nobody is told that a coverage passed its notification deadline, that a
+  // deadline cannot be proved at all, that a linked policy does not respond, or that
+  // a recovery was denied.
+  insuranceRule,
   workplaceAdjustmentRule,
   // ADR-0229: the Capability Sourcing & Firm-Boundary Register. ONE rule reads
   // the finished register and files at most one dated ask per condition: a

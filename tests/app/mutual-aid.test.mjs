@@ -197,7 +197,7 @@ test('schema v198 was additive: seven empty ledgers, three conventions, nothing 
   const empty = createEmptyState(T0);
   // ADR-0245 moved the world schema to v199; the mutual-aid ledgers are unchanged,
   // so this suite pins the FACTS it owns and follows the current version.
-  assert.equal(SCHEMA_VERSION, 202);
+  assert.equal(SCHEMA_VERSION, 203);
   for (const key of ['mutualAidAgreements', 'mutualAidRequests', 'mutualAidAcceptances', 'mutualAidArrivals', 'mutualAidWithdrawals', 'mutualAidReleases', 'mutualAidMarkers']) {
     assert.ok(COLLECTIONS.includes(key), `${key} is a declared collection`);
     assert.deepEqual(empty[key], [], `${key} starts empty`);
@@ -553,7 +553,7 @@ test('RULE-MAA-01 files the release ask from the withdrawal, even when the arriv
 });
 
 test('the spine carries ADR-0244: RULE-MAA-01 is registered with its contract', () => {
-  assert.equal(DEFAULT_POST_COMMIT_RULES.length, 161, 'the spine carries ADR-0244 (RULE-MAA-01) and ADR-0245 (RULE-DWL-01)');
+  assert.equal(DEFAULT_POST_COMMIT_RULES.length, 162, 'the spine carries ADR-0244 (RULE-MAA-01) and ADR-0245 (RULE-DWL-01)');
   const contract = PROPAGATION_CONTRACTS.find((row) => row.rule && row.rule.id === 'mutualAidRule');
   assert.ok(contract, 'mutualAidRule has a propagation contract');
   assert.equal(contract.module, 'mutualAidRules.js');

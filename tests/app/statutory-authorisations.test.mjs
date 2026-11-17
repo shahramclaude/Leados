@@ -203,7 +203,7 @@ function harness(raw) {
 /* --------------------------------------------------------------- 1. schema */
 
 test('schema v201 is additive: six empty ledgers, three conventions, nothing inferred', () => {
-  assert.equal(SCHEMA_VERSION, 202);
+  assert.equal(SCHEMA_VERSION, 203);
   for (const key of ['ltoAuthorisations', 'ltoConditions', 'ltoEvidence', 'ltoActions', 'ltoRenewals', 'ltoMarkers']) {
     assert.ok(COLLECTIONS.includes(key), `${key} must be a declared collection`);
   }
@@ -227,7 +227,7 @@ test('migrating a v200 workspace adds six empty ledgers and infers no authority'
   delete base.ltoRenewals;
   delete base.ltoMarkers;
   const migrated = migrate(base).raw;
-  assert.equal(migrated.schemaVersion, 202);
+  assert.equal(migrated.schemaVersion, 203);
   assert.deepEqual(migrated.ltoAuthorisations, [], 'a permit to work is not an authority granted by anybody');
   assert.deepEqual(migrated.ltoConditions, [], 'no condition is inferred from a permit');
   assert.deepEqual(migrated.ltoActions, []);

@@ -241,9 +241,9 @@ function harness(raw) {
 /* ------------------------------------------------------------------ schema */
 
 test('the schema bump is additive and infers nothing', () => {
-  assert.equal(SCHEMA_VERSION, 202);
+  assert.equal(SCHEMA_VERSION, 203);
   const migrated = migrate({ ...createEmptyState(T0), schemaVersion: 198 }, { now: NOW });
-  assert.equal(migrated.raw.schemaVersion, 202);
+  assert.equal(migrated.raw.schemaVersion, 203);
   for (const key of ['dwlDesignations', 'dwlEvents', 'dwlClearances', 'dwlDecisions', 'dwlDealings', 'dwlMarkers']) {
     assert.ok(Array.isArray(migrated.raw[key]), `${key} must be an array`);
     assert.equal(migrated.raw[key].length, 0, `${key} must start EMPTY — nothing is inferred`);

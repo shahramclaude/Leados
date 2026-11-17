@@ -5100,3 +5100,26 @@ New gaps logged as Planned: cross-entity/cross-currency appetite under a declare
 **New gap — Planned: contingent liability, insurance recovery & notification.** No policy, no notification window derived from the policy's own terms, no recovery claimed-versus-recovered. A claim's gross cost is not its net cost, and an organisation can be well-governed on the claim and out of time on the notification. CEO / VP finance × matrix. Unbuilt.
 
 **Next:** the insurance-notification and recovery register, then carry the computed reserve into the finance and provisioning surfaces.
+
+---
+
+## Session 327 — 2026-11-17 — ADR-0249 Insurance notification & recovery register (Schema v203, `#/insurance`, CSV #190, `RULE-INS-01`)
+
+**Branch** `arena/6206705b-leados`, based at `35db782efbcb315bfd39c5fd3df051f37318b1bb` (= `origin/main`). **Doctrine:** PASS — `NORTH_STAR.md` present with all four mandates; no edit needed. **Sync:** PASS. **Altitude:** CEO / C-suite finance, treasury and general counsel primary, director / VP secondary, **matrix**.
+
+**Gap hunt.** Closes the Planned gap logged at the end of Session 326 (*contingent liability, insurance recovery & notification*). Word-boundary verification across `app/` confirmed zero existing domain modules for insurance policies, claims-made vs occurrence triggers, notification windows, reservation of rights, policy retentions/deductibles, or indemnity recovery ledgers. The positive claim and six rejected adjacent instruments (ADR-0248 claims, ADR-0247 statutory authorisations, ADR-0244 mutual aid, ADR-0240 incident command, ADR-0234 regulatory undertakings, ADR-0219 risk appetite) are documented in `insRegistry.js` and ADR-0249.
+
+**Built.** Five collections (`insPolicies`, `insCoverages`, `insNotifications`, `insRecoveries`, `insMarkers`), three bounded conventions (`insAutoPropagate`, `insPrivacyFloor`, `insWarningHorizonDays`), ten derived states, four panels, six dialogs, fourteen non-colliding route aliases, CSV #190 (`insurance-notification-recovery`), spine rule **162/162** (`RULE-INS-01`), pause switch, insights `INS-01..05` in bucket `'Insurance & recovery'`, and demo seed (`seedInsurance`: 10 policies, 10 coverages spanning all 10 states, 5 notifications, 7 recoveries).
+
+**Design rules now in code.** Trigger basis (`claims-made` vs `occurrence`) checked against the policy period (`periodFrom`..`periodTo`); notification deadline = `addDaysUtc(circumstanceKnownOn, notificationWindowDays)`; late notifications kept with `notified-late` and exact `lateBy` days; recovery entries in integer minor units only; `netRecoverableMinor` clamped by retention and remaining per-claim/aggregate limit; cross-currency claim/policy pairs flagged `currencyMismatch: true` with net-exposure subtraction withheld; `RULE-INS-01` addresses opaque asks to the joint apex via `matrixJointApex`.
+
+**Two real defects the suite found, both fixed.** (1) `normalizeInsRecoveries` in `insSchema.js` checked `amountMinor === null` before checking whether a raw non-integer amount had been passed on money-moving kinds, dropping fractional amounts without incrementing `unreadableAmounts`; reordered so the whole-minor-units warning fires. (2) `insuranceRecordNotification` in `insActions.js` computed `buildInsurance` before `writeDraft`, so `derived.lateBy` was `null` when checking whether to emit the late-notification warning; moved after `writeDraft`.
+
+**Verification — one focused pass.** `insurance.test.mjs` **30/30**. Ten-suite batch **260/260 pass** (`insurance` 30/30, `claims` 36/36, `statutory-authorisations` 26/26, `permit-to-work` 48/48, `personal-dealing` 29/29, `mutual-aid` 20/20, `employee-voice` 28/28, `lone-working` 31/31, `domain-sense-wiring` 7/7, `csv` 5/5). `check:boundary` clean (1,149 app ES modules, 305 test suites, 23 documentation checks, 0 leaks); `check:a11y` clean (149 declared routes). Real-browser and assistive-technology walkthrough of `#/insurance` **[UNVERIFIED]**. Full `npm test` remains broadly red at base on inherited stale head pins (v179) and `pause-permits` reach census — reported, not repaired.
+
+**Benchmark.** **[vendor documentation, hands-on parity UNVERIFIED]** — no vendor environment run. Matched on matter-linked coverage, trigger basis, notification deadlines and recovery stages (Xakia, enterprise risk/claims management category); exceeded on late-notification retention, cross-currency subtraction refusal, and opaque joint-apex routing.
+
+**Asset.** `app/assets/insurance-notification-method.jpg`. **Higgsfield unavailable in this conversation** — reported plainly; generated with `generate_image` and documented in ADR-0249.
+
+**New gap — Planned: IAS 37 / contingent-liability provisioning & finance reserve bridge.** Bridging `#/claims` gross exposure and `#/insurance` verified recoveries into a formal IAS 37 provision and reimbursement-asset schedule reconciled with `#/finance`. CEO / VP finance × matrix. Unbuilt.
+

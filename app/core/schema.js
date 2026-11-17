@@ -514,6 +514,24 @@ import {
   normalizeLfgSettings,
   normalizeLfgStays,
 } from './domain/lfgSchema.js';
+// ADR-0249 (Schema v203): the Insurance Notification & Recovery Register. Five
+// ledgers — the policy, the coverage linking a matter to a policy, the
+// notification to the insurer, every recovery and denial, and the rule's
+// identity-free markers. Every loader is fail-closed: a policy with no
+// declaration-page reference is DROPPED, a coverage with no written basis is
+// DROPPED, a notification with no reference is DROPPED, a recovery with no exact
+// amount is DROPPED. A LATE notification and a DENIAL are KEPT, because deleting a
+// late notification would erase the breach and deleting a denial would leave the
+// recovery ledger reading as though nothing was ever claimed. Nothing derived
+// (state, deadline, day count, cover verdict, net cost) is stored anywhere.
+import {
+  normalizeInsCoverages,
+  normalizeInsMarkers as normalizeInsMarkersLedger,
+  normalizeInsNotifications,
+  normalizeInsPolicies,
+  normalizeInsRecoveries,
+  normalizeInsSettings,
+} from './domain/insSchema.js';
 import {
   normalizeDwlClearances,
   normalizeDwlDealings,
@@ -1498,7 +1516,7 @@ export {
 // granted by an external body on a written instrument, and nothing the workspace
 // already holds is one. Every state, window, day count and minute count is derived
 // on read.
-export const SCHEMA_VERSION = 202;
+export const SCHEMA_VERSION = 203;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -2987,6 +3005,13 @@ export const DEFAULT_SETTINGS = Object.freeze({
   // the workspace has no default period that could one day place a deadline nobody
   // was given.
   ...normalizeLfgSettings({}),
+  // ADR-0249: the insurance-register conventions — the privacy floor below which
+  // a per-state export is withheld, the warning horizon the bench wants to see
+  // ahead, and the rule switch. Note what is NOT here: a notification window. A
+  // window belongs to the policy and the insurer, and is declared on each policy,
+  // so the workspace has no default window that could one day place a deadline
+  // nobody was given.
+  ...normalizeInsSettings({}),
   // ADR-0243: the employee-voice conventions — the reply window, the minutes
   // window, the privacy floor below which a per-state export is withheld, and the
   // rule switch. Note what is NOT here: a consultation period. The period a body
@@ -4225,6 +4250,17 @@ export const COLLECTIONS = [
   'lfgConcessions',
   'lfgAuthorityGrants',
   'lfgMarkers',
+  // ADR-0249 (Schema v203): the Insurance Notification & Recovery Register.
+  // Declared policies with the declaration-page reference and the notification
+  // window, coverages linking matters to policies, notifications with the day and
+  // the reference that proves them, recoveries and denials as their own dated
+  // instruments, and identity-free rule markers. No state, deadline, day count,
+  // cover verdict or net cost is stored: every one is re-derived on read.
+  'insPolicies',
+  'insCoverages',
+  'insNotifications',
+  'insRecoveries',
+  'insMarkers',
 ];
 
 /** Stable empty state. `now` is an ISO string so the result is a pure value. */
@@ -4542,6 +4578,11 @@ export function normalizeSettings(raw) {
     // a clock nobody can prove or a settlement beyond computed authority is never the
     // silent default.
     ...normalizeLfgSettings(s),
+    // ADR-0249: the insurance register's conventions, clamped on load. The rule
+    // switch is defaulted ON so a pause that leaves a notification window running
+    // out unanswered, an unprovable deadline, a coverage with no cover or a denied
+    // recovery is never the silent default.
+    ...normalizeInsSettings(s),
     // Repair of a standing red reported at base HEAD: two rule switches the
     // pause census maps were not carried in settings, so the only writes that
     // can silence those rules were refused as unknown keys. Declared here with
@@ -9943,6 +9984,16 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.lfgConcessions = normalizeLfgConcessions(raw.lfgConcessions, state.lfgMatters, warnings);
   state.lfgAuthorityGrants = normalizeLfgAuthorityGrants(raw.lfgAuthorityGrants, warnings);
   state.lfgMarkers = normalizeLfgMarkersLedger(raw.lfgMarkers, warnings);
+  // ADR-0249 (Schema v203): a policy, coverage, notification or recovery that
+  // cannot be read exactly is DROPPED with a counted warning — never repaired,
+  // re-dated, re-pointed at another coverage or rescued from a partially readable
+  // holder list. A LATE notification and a DENIAL are kept. No state, deadline,
+  // day count, cover verdict or net cost is stored.
+  state.insPolicies = normalizeInsPolicies(raw.insPolicies, warnings);
+  state.insCoverages = normalizeInsCoverages(raw.insCoverages, state.lfgMatters, state.insPolicies, warnings);
+  state.insNotifications = normalizeInsNotifications(raw.insNotifications, state.insCoverages, warnings);
+  state.insRecoveries = normalizeInsRecoveries(raw.insRecoveries, state.insCoverages, warnings);
+  state.insMarkers = normalizeInsMarkersLedger(raw.insMarkers, warnings);
   // ADR-0229 (Schema v182): a case, option, cost line or act that cannot be read
   // exactly is DROPPED with a counted warning — never repaired, re-termed,
   // re-priced or re-pointed at another case. A cost line that does not belong to
@@ -11137,6 +11188,24 @@ export const MIGRATIONS = {
     lfgAuthorityGrants: Array.isArray(v201.lfgAuthorityGrants) ? v201.lfgAuthorityGrants : [],
     lfgMarkers: Array.isArray(v201.lfgMarkers) ? v201.lfgMarkers : [],
     settings: { ...(v201.settings || {}), ...normalizeLfgSettings(v201.settings || {}) },
+  }),
+  // 202 → 203: ADR-0249 adds FIVE EMPTY ledgers (`insPolicies`, `insCoverages`,
+  // `insNotifications`, `insRecoveries`, `insMarkers`) and the insurance
+  // register's conventions. NOTHING is inferred from a matter on the claim
+  // register, a reserve, a risk, a permit or an undertaking: a policy is issued
+  // by an insurer on a declaration page, and a notification window belongs to
+  // that policy. Manufacturing a policy or a coverage at upgrade time would put a
+  // notification deadline on the record that no policy supports — the precise
+  // failure this register exists to prevent.
+  202: (v202) => ({
+    ...v202,
+    schemaVersion: 203,
+    insPolicies: Array.isArray(v202.insPolicies) ? v202.insPolicies : [],
+    insCoverages: Array.isArray(v202.insCoverages) ? v202.insCoverages : [],
+    insNotifications: Array.isArray(v202.insNotifications) ? v202.insNotifications : [],
+    insRecoveries: Array.isArray(v202.insRecoveries) ? v202.insRecoveries : [],
+    insMarkers: Array.isArray(v202.insMarkers) ? v202.insMarkers : [],
+    settings: { ...(v202.settings || {}), ...normalizeInsSettings(v202.settings || {}) },
   }),
   // 183 → 184: ADR-0231 adds SEVEN EMPTY ledgers (`ibpCycles`, `ibpDemandRows`,
   // `ibpCapacityRows`, `ibpOptions`, `ibpDecisions`, `ibpGrades`, `ibpMarkers`)
