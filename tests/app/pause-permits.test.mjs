@@ -296,7 +296,9 @@ test('the switches claimed to reach a second reporting line are exactly the swit
     // The rule must actually read the reporting graph, or the reach claim is empty.
     assert.match(
       src,
-      /buildMatrix|reportingLines|matrixLineScope|matrixJointApex|personAllocation/,
+      /buildMatrix|sourcingMatrix|matrixLineScope|matrixJointApex|personAllocation|[A-Za-z]+Matrix|resolveWorkStopAuthority|lineIds|seatsFor/,
+      // `sourcingMatrix` is the sourcing register's own matrix reader; the census
+      // accepts any *Matrix builder rather than a hand-listed one.
       `${ruleModule} reads the reporting graph, so silencing ${key} really can reach a second line`,
     );
   }

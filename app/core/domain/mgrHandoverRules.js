@@ -274,4 +274,11 @@ export function mgrHandoverRule(draft, ctx = {}) {
   return effects;
 }
 
-export const MGR_HANDOVER_PAUSE_SWITCH = MHH_SETTING_KEYS.autoPropagate;
+/**
+ * The literal key this rule reads, named here so the pause-permit census can grep
+ * it. It must stay equal to `MHH_SETTING_KEYS.autoPropagate`.
+ */
+export const MGR_HANDOVER_PAUSE_SWITCH = 'mgrHandoverAutoPropagate';
+if (MGR_HANDOVER_PAUSE_SWITCH !== MHH_SETTING_KEYS.autoPropagate) {
+  throw new Error('MGR_HANDOVER_PAUSE_SWITCH drifted from the registry key');
+}

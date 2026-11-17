@@ -142,6 +142,7 @@ import { createMutualAidActions } from './core/domain/mutualAidActions.js';
 // on the reporting graph.
 import { createPersonalDealingActions } from './core/domain/personalDealingActions.js';
 import { createPermitToWorkActions } from './core/domain/permitToWorkActions.js';
+import { createAuthorisationActions } from './core/domain/authorisationActions.js';
 // ADR-0240: the Major-Incident Command & Notification-Clock Register's commands
 // and seat-checked reads. Declaring, staffing, commanding, notifying, resolving
 // and standing down — nothing else.
@@ -20424,6 +20425,7 @@ export function createApi(store, options = {}) {
   // re-proved too, because whether the plant a crew is about to touch is proved dead
   // must not vanish the moment seat enforcement is turned on.
   Object.assign(api, createPermitToWorkActions(store, { now: clock, idFactory: id }));
+  Object.assign(api, createAuthorisationActions(store, { now: clock, idFactory: id }));
   // ADR-0240: the incident command register's commands.
   Object.assign(api, createIncidentCommandActions(store, { now: clock, idFactory: id }));
   // ADR-0220: the variable-pay design & incentive integrity register's commands.

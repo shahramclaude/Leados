@@ -35,6 +35,7 @@ import { MIC_RIGHTS } from './incidentCommandRegistry.js';
 import { MAA_RIGHTS } from './mutualAidRegistry.js';
 import { DWL_RIGHTS } from './personalDealingRegistry.js';
 import { PTW_RIGHTS } from './permitToWorkRegistry.js';
+import { LTO_RIGHTS } from './authorisationRegistry.js';
 // ADR-0229: the capability sourcing register's four rights.
 import { SRC_RIGHTS } from './sourcingRegistry.js';
 import { VY_RIGHTS } from './vyRegistry.js';
@@ -389,6 +390,13 @@ const groups = [
   [PTW_RIGHTS.READ, 'permitToWorkReport permitToWorkAttention permitToWorkCandidates'],
   [PTW_RIGHTS.ISSUE, 'permitToWorkIssue permitToWorkSetConventions'],
   [PTW_RIGHTS.ACT, 'permitToWorkApplyIsolation permitToWorkVerifyIsolation permitToWorkRemoveIsolation permitToWorkRecordAtmosphere permitToWorkHandover permitToWorkSuspend permitToWorkResume permitToWorkClose permitToWorkScan'],
+  // ADR-0247: the statutory authorisation register. Reading is open at rank 1 —
+  // the hand that opens the gates must be able to read the authority it is opening
+  // them under — while the READER withholds accountable hands above rank 3. Every
+  // write is narrowed inside the action to a seat that HOLDS every accountable
+  // hand, so one line cannot declare another line's authority.
+  [LTO_RIGHTS.READ, 'authorisationReport authorisationAttention authorisationCandidates'],
+  [LTO_RIGHTS.MANAGE, 'authorisationDeclare authorisationDeclareCondition authorisationRecordEvidence authorisationRecordAction authorisationCloseAction authorisationSubmitRenewal authorisationDecideRenewal authorisationSetConventions authorisationScan'],
   // ADR-0229: the capability sourcing & firm-boundary register. Reading is
   // portfolio material (rank 3+). Recording an option is the leader who HOLDS
   // the capability (rank 2+), narrowed inside the action to a line the case
@@ -897,6 +905,12 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // still gated — and where a named human being is alone at this minute would
 // vanish the moment enforcement was turned on.
 'loneWorkingReport', 'loneWorkingAttention', 'loneWorkingCandidates',
+// ADR-0247: the statutory authorisation register's pure read surface. Every one of
+// these re-proves the read right inside the action, because a module whose reads
+// are absent from SAFE_READS is unreadable under enforcement while its writes are
+// still gated — and which consent lapsed at nine this morning would vanish the
+// moment enforcement was turned on.
+'authorisationReport', 'authorisationAttention', 'authorisationCandidates',
 // ADR-0243: the employee-voice register's pure read surface. Every one of these
 // re-proves the read right inside the action, because a module whose reads are
 // absent from SAFE_READS is unreadable under enforcement while its writes are

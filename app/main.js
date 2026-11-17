@@ -179,6 +179,9 @@ import { distributedEquityAttentionCount } from './core/domain/distributedEquity
 import { workplaceAdjustmentAttentionCount } from './core/domain/workplaceAdjustment.js';
 import { loneWorkingAttentionCount } from './core/domain/loneWorking.js';
 import { permitToWorkAttentionCount } from './core/domain/permitToWork.js';
+// ADR-0247: the statutory authorisation & licence-to-operate register.
+import { renderAuthorisations } from './views/authorisations.js';
+import { authorisationAttentionCount } from './core/domain/authorisation.js';
 import { voiceAttentionCount } from './core/domain/voice.js';
 // ADR-0220: the variable-pay design & incentive integrity register.
 import { renderIncentive } from './views/incentive.js';
@@ -655,6 +658,11 @@ export const NAV = [
     // reader prints counts and withholds names.
     { route: 'lone-working', label: 'Lone working', icon: '☍', badge: 'loneWorking' },
     { route: 'permit-to-work', label: 'Permit to work', icon: '⊘', badge: 'permitToWork' },
+    // ADR-0247: which power to operate is held, on what written instrument, whether
+    // it is in force, which conditions are evidenced and which regulator actions
+    // stand. Director/VP primary with frontline execution; above rank 3 the reader
+    // prints counts and withholds accountable hands.
+    { route: 'authorisations', label: 'Authorisations', icon: '⚖', badge: 'authorisations' },
     // ADR-0243: what was put to a staff body, the period its own instrument gave
     // it, what it advised, whether the organisation answered, and whether the
     // decision preceded the close of the window. Director/VP primary; above rank 3
@@ -920,6 +928,8 @@ const RENDERERS = {
   'lone-working': (ctx) => renderLoneWorking(ctx),
   // ADR-0246: the permit-to-work, energy-isolation and simultaneous-operations register.
   'permit-to-work': (ctx) => renderPermitToWork(ctx),
+  // ADR-0247: the statutory authorisation & licence-to-operate register.
+  authorisations: (ctx) => renderAuthorisations(ctx),
   // ADR-0243: the employee-voice and collective-consultation register.
   voice: (ctx) => renderVoice(ctx),
   // ADR-0244: the mutual-aid activation & resource-commitment register.
@@ -1132,6 +1142,15 @@ export function parseRoute(hash) {
     'loto': 'permit-to-work', 'energy-isolation': 'permit-to-work', 'gas-test': 'permit-to-work',
     'atmosphere-test': 'permit-to-work', 'simops': 'permit-to-work',
     'simultaneous-operations': 'permit-to-work', 'permit-conflict': 'permit-to-work',
+    // ADR-0247: statutory authorisations. The words a site director, a compliance
+    // lead and a supervisor actually type for the same duty; none shadows a route.
+    'authorisations': 'authorisations', 'authorisation': 'authorisations',
+    'licences': 'authorisations', 'licence': 'authorisations', 'licenses': 'authorisations',
+    'license': 'authorisations', 'licence-register': 'authorisations',
+    'statutory-licence': 'authorisations', 'permit-to-operate': 'authorisations',
+    'operating-licence': 'authorisations', 'consents': 'authorisations',
+    'regulatory-actions': 'authorisations', 'prohibition-notice': 'authorisations',
+    'improvement-notice': 'authorisations', 'statutory-compliance': 'authorisations',
     // ADR-0148: the names a person types looking for "did anyone actually agree
     // to this share of me" / "who accepted this project line".
     'line-consent': 'matrix', consent: 'matrix', 'matrix-consent': 'matrix',
@@ -1897,6 +1916,10 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       // permit whose atmosphere is outside its own limits, a lapsed permit nobody
       // closed — never every open permit.
       permitToWork: permitToWorkAttentionCount(state, { now: at, settings: state.settings, seat: seatCtx?.seat || null }),
+      // ADR-0247: a lapsed authority, a suspension, a revocation, a standing
+      // prohibition, an authority inside its renewal window and an improvement
+      // notice past its day — the same conditions RULE-LTO-01 files. A COUNT.
+      authorisations: authorisationAttentionCount(state, { now: at, settings: state.settings, seat: seatCtx?.seat || null }),
       // ADR-0243: windows that closed with no advice, advice nobody answered,
       // sittings past their minutes day and decisions recorded out of order — the
       // same conditions RULE-VOI-01 files. A COUNT, never a name.
@@ -2509,6 +2532,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       'personal-dealing': 'Personal dealing — who is on the insider list and on what written instrument, the closed period around each disclosure with its exact arithmetic, the clearance as a request and a SEPARATE decision by a hand strictly above the requester, and the executed trade against the window it fell in and the clearance it cites',
       'mutual-aid': 'Mutual aid — the help the enterprise asked an outside organisation for and what actually happened to it: the bilateral agreement the request was made under and whether it was live, the request and its declared validity, the partner’s acceptance with its written confirmation and promise, the arrival compared against the promise line by line, and the withdrawal and release that close the commitment in order',
       'permit-to-work': 'Permit to work — what the record authorises on which plant, the declared validity and exact minutes to it, every energy isolation with its lock and the proof of zero energy at the point of work (or the window it missed), the latest gas reading per declared test compared exactly against the permit\u2019s own limit and freshness window, and every simultaneous-operations conflict derived from the record on each read — a released isolation under a live permit, hot work over a release, two hot-work permits in one area, an entry during hot work, one isolation claimed twice, a double-booked holder, a lapsed permit nobody closed and a closure that left a line isolated',
+      authorisations: 'Statutory authorisations — which power to operate is held and whether it is in force at this instant: the issuing body and written instrument, the declared expiry against the effective expiry every granted renewal moved it to, the renewal window the declaration itself set, each declared condition’s latest dated evidence and its own re-evidence window (current, stale or unevidenced), every regulator action with its written basis, compliance day and close, and the joint reporting seat above every accountable hand across every line',
       'lone-working': 'Lone working — who is alone right now, where, against which written assessment: the declared check-in interval and grace running from the last contact, the exact deadline, whether the record holds contact, a concern nobody answered, an escalation, or nothing at all, whether it ran past its declared end unclosed, and the joint reporting seat that owes the response',
       undertakings: 'Undertakings — the promise the enterprise made to a regulator, a board, a lender or a customer: its obligation lines, each independently tested, and the written report that discharges it to the counterparty',
       'information-requests': 'Information requests — what an authority demanded, on the day they set: every production line certified, every claim of privilege ruled on by a seat outside the parties, and the release that answers them',

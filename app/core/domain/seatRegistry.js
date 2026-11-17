@@ -297,6 +297,18 @@ export const RECORD_POLICIES = Object.freeze({
   ptwSuspensions: { classKey: 'individual', label: 'Suspensions and resumptions of a permit — the reason work stopped and what was re-checked before it restarted', route: '#/permit-to-work' },
   ptwClosures: { classKey: 'individual', label: 'Closures of a permit — the outcome, the note and the hand that declared it', route: '#/permit-to-work' },
   ptwMarkers: { classKey: 'unit', detailCeiling: 3, label: 'Permit-to-work observation markers — no joint seat, no line to ask (identity-free)', route: '#/permit-to-work' },
+  // ADR-0247 (Schema v201): the statutory authorisation register. An authority names
+  // its accountable hands and a condition names its evidence and the hand that
+  // recorded it — so those are INDIVIDUAL detail. The authority and its regulator
+  // actions are PORTFOLIO material: which site lost which consent is a fact the
+  // director and above must see, and above rank 3 the reader withholds the hands
+  // rather than the instrument. The rule's own markers are identity-free.
+  ltoAuthorisations: { classKey: 'portfolio', detailCeiling: 4, label: 'Declared statutory authorities — site, activity, issuing body, written instrument, grant, expiry, renewal lead and accountable hands', route: '#/authorisations' },
+  ltoConditions: { classKey: 'individual', label: 'Conditions declared against an authority — the written condition and its own re-evidence window', route: '#/authorisations' },
+  ltoEvidence: { classKey: 'individual', label: 'Dated evidence recorded against a condition — the reference, the day and the hand that recorded it', route: '#/authorisations' },
+  ltoActions: { classKey: 'portfolio', detailCeiling: 4, label: 'Regulator actions served against an authority — the kind, the served and effective instants, the written basis, the compliance day and the close', route: '#/authorisations' },
+  ltoRenewals: { classKey: 'portfolio', detailCeiling: 4, label: 'Renewal submissions and decisions — what was filed, when it was decided, the grant’s new expiry and the reason', route: '#/authorisations' },
+  ltoMarkers: { classKey: 'unit', detailCeiling: 3, label: 'Statutory-authorisation observation markers — no joint seat, no accountable line to ask (identity-free)', route: '#/authorisations' },
   // ADR-0240 (Schema v194): the incident command register. An incident record
   // names the people on the bridge, the instrument it was declared under and the
   // external parties it owes — individual detail that is not handed upward, so
@@ -1461,6 +1473,15 @@ export const ACTION_RIGHTS = Object.freeze({
   'read-permit-to-work': { minRank: 1, maxRank: 5, label: 'Read the permit-to-work register within your grant — your own permit and its proven state, and the permits of the hands you hold. Above rank 3 the reader prints counts, exact minutes and conflict kinds and withholds every name, area and reading' },
   'issue-permit-to-work': { minRank: 2, maxRank: 5, label: 'Issue a permit to work on defined plant against a written method, with a validity you chose and — where the work kind requires it — a named fire watch and a declared test plan with limits you typed. Nobody may issue a permit to themselves, and the register’s conventions' },
   'act-permit-to-work': { minRank: 1, maxRank: 5, label: 'Apply and prove an isolation at zero energy, record a gas reading exactly as measured, hand the permit to another named holder, suspend and resume it, remove an isolation and close the permit out with an outcome and a note' },
+  // ADR-0247 (Schema v201). Two rights. READING is open at rank 1 — the supervisor
+  // who opens the gates must be able to read the authority they are opening them
+  // under — while the READER withholds accountable hands above rank 3. MANAGING is
+  // rank 1 by the same reasoning as the lone-working register: what protects the
+  // record is the written-instrument requirement, the reach over every accountable
+  // hand, the refusal of a renewal treated as a grant, and RULE-LTO-01 addressing
+  // the joint apex above all of them.
+  'read-authorisations': { minRank: 1, maxRank: 5, label: 'Read the statutory authorisation register within your grant — the authorities covering the sites and activities you hold, their conditions, evidence, regulator actions and renewals. Above rank 3 the reader prints counts and withholds accountable hands' },
+  'manage-authorisations': { minRank: 1, maxRank: 5, label: 'Declare an authority on a written instrument, declare its conditions, record dated evidence, record a regulator action and its close, submit a renewal and record its decision, and set the register’s conventions' },
   'read-mutual-aid': { minRank: 1, maxRank: 5, label: 'Read the mutual-aid activation and resource-commitment register within your grant — the agreement a request is made under, the request and its validity, the partner’s acceptance with its written confirmation and promise, the arrival compared against the promise, and the withdrawal and release that close the commitment' },
   'declare-mutual-aid': { minRank: 2, maxRank: 5, label: 'Declare a bilateral agreement, request help under it, record the partner’s acceptance with its written confirmation and promise, record the arrival, the withdrawal and the release of the commitment, cancel a request that was never accepted, and set the register’s conventions' },
   // ADR-0235/0236 (Schema v191). Six rights, and the shape is the point: RECORDING

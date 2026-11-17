@@ -348,6 +348,20 @@ export const PAUSE_PERMIT_MATRIX_REACH_SWITCHES = Object.freeze([
   // reaches across reporting lines through `matrixJointApex`, so it carries a permit
   // like every other cross-line switch.
   'ptwAutoPropagate',
+  // ADR-0247: the statutory-authorisation rule computes the joint apex above
+  // every line holding ANY accountable hand, so silencing it leaves a lapsed
+  // authority, a standing prohibition, an overdue improvement notice, an
+  // unevidenced condition and an unopened renewal unasked — and the lines holding
+  // those hands are not told.
+  'ltoAutoPropagate',
+  // ADR-0224's successors: four rules that compute an ask through the reporting
+  // graph were gated by switches the reach list never claimed, so a pause on them
+  // could have silenced a cross-line ask while the census said it could not. Named
+  // here from the source (each module reads the graph) rather than left implied.
+  'assuranceAutoPropagate',
+  'maaAutoPropagate',
+  'dwlAutoPropagate',
+  'priorityAutoPropagate',
 ]);
 
 export function pausePermitReachesMatrix(key) {
@@ -466,6 +480,33 @@ export const PAUSE_PERMIT_SWITCH_RULES = Object.freeze({
   // ADR-0243: the employee-voice rule reads the live matrix for the joint apex
   // above an item's affected lines, so silencing it really can reach a second line.
   voiceAutoPropagate: 'voiceRules.js',
+  // ADR-0236: silencing the distributed-equity rule leaves an allocation that
+  // misses its declared floor without its joint-apex ask; the reading stays open.
+  dweAutoPropagate: 'distributedEquityRules.js',
+  // ADR-0240: silencing the incident-command rule leaves a lapsed notification,
+  // a live major incident with no commander and a standing command unasked.
+  // The register stays open and visible; nobody is notified in its place.
+  micAutoPropagate: 'incidentCommandRules.js',
+  // ADR-0241: silencing the workplace-adjustment rule leaves a work conflict, an
+  // overdue review, an unacknowledged line and an agreed-but-not-operational
+  // adjustment unasked across every line holding the person.
+  wpaAutoPropagate: 'workplaceAdjustmentRules.js',
+  // ADR-0242: silencing the lone-working rule leaves an overdue check-in and a
+  // deployment with no signal unasked; the escalation stays owed and is not sent.
+  lwkAutoPropagate: 'loneWorkingRules.js',
+  // ADR-0246: silencing the permit-to-work rule leaves a live permit without proof
+  // of zero energy, an atmosphere outside its limit and a simultaneous operation
+  // unasked. The permits stay live and visible; nothing is closed in its place.
+  ptwAutoPropagate: 'permitToWorkRules.js',
+  // ADR-0247: silencing the statutory-authorisation rule leaves a lapsed authority,
+  // a standing prohibition, an overdue improvement notice, an unevidenced condition
+  // and an unopened renewal unasked. The register stays open and visible; nothing
+  // is renewed, lifted or marked compliant in its place.
+  ltoAutoPropagate: 'authorisationRules.js',
+  assuranceAutoPropagate: 'assuranceFindingRules.js',
+  maaAutoPropagate: 'mutualAidRules.js',
+  dwlAutoPropagate: 'personalDealingRules.js',
+  priorityAutoPropagate: 'priorityArbitrationRules.js',
 });
 
 /** Only graph-reading rules belong to the matrix census. Owner-directed rules
