@@ -494,6 +494,26 @@ import {
   normalizeLtoRenewals,
   normalizeLtoSettings,
 } from './domain/authorisationSchema.js';
+// ADR-0248 (Schema v202): the Claim, Limitation & Settlement-Authority Register.
+// Seven ledgers — the matter, its accrual, every suspension of the clock, every
+// resolution, every concession, the settlement authority humans were actually
+// granted, and the rule's identity-free markers. Every loader is fail-closed: a
+// matter with no document reference is DROPPED at this boundary, an accrual without
+// its written rule is DROPPED, a settlement with no exact amount is DROPPED. An
+// UNPROVED suspension is KEPT with `proved: false`, because deleting the allegation
+// would erase the belief while leaving the deadline that belief moved — it simply
+// moves no day. Nothing derived (state, deadline, day count, ceiling, total) is
+// stored anywhere.
+import {
+  normalizeLfgAccruals,
+  normalizeLfgAuthorityGrants,
+  normalizeLfgConcessions,
+  normalizeLfgMarkers as normalizeLfgMarkersLedger,
+  normalizeLfgMatters,
+  normalizeLfgResolutions,
+  normalizeLfgSettings,
+  normalizeLfgStays,
+} from './domain/lfgSchema.js';
 import {
   normalizeDwlClearances,
   normalizeDwlDealings,
@@ -1478,7 +1498,7 @@ export {
 // granted by an external body on a written instrument, and nothing the workspace
 // already holds is one. Every state, window, day count and minute count is derived
 // on read.
-export const SCHEMA_VERSION = 201;
+export const SCHEMA_VERSION = 202;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -2960,6 +2980,13 @@ export const DEFAULT_SETTINGS = Object.freeze({
   // particular instrument, declared on the authority or the condition, so the
   // workspace has no default that could one day decide a consent was still good.
   ...normalizeLtoSettings({}),
+  // ADR-0248: the claim-register conventions — the privacy floor below which a
+  // per-state export is withheld, the warning horizon the bench wants to see ahead,
+  // and the rule switch. Note what is NOT here: a limitation period. A period belongs
+  // to the cause of action and the jurisdiction, and is declared on each matter, so
+  // the workspace has no default period that could one day place a deadline nobody
+  // was given.
+  ...normalizeLfgSettings({}),
   // ADR-0243: the employee-voice conventions — the reply window, the minutes
   // window, the privacy floor below which a per-state export is withheld, and the
   // rule switch. Note what is NOT here: a consultation period. The period a body
@@ -4183,6 +4210,21 @@ export const COLLECTIONS = [
   'ltoActions',
   'ltoRenewals',
   'ltoMarkers',
+  // ADR-0248 (Schema v202): the Claim, Limitation & Settlement-Authority Register.
+  // Declared matters with the document that started the clock, the accrual that
+  // starts it and the rule relied on, every suspension with its span and its
+  // computed proof, every resolution and concession as its own dated instrument, the
+  // settlement authority humans were granted, and identity-free rule markers. No
+  // state, deadline, day count, computed ceiling or total is stored: every one is
+  // re-derived on read, so a hand-edited file cannot carry a green "in time" over an
+  // accrual date it disagrees with.
+  'lfgMatters',
+  'lfgAccruals',
+  'lfgStays',
+  'lfgResolutions',
+  'lfgConcessions',
+  'lfgAuthorityGrants',
+  'lfgMarkers',
 ];
 
 /** Stable empty state. `now` is an ISO string so the result is a pure value. */
@@ -4495,6 +4537,11 @@ export function normalizeSettings(raw) {
     // a standing prohibition, an unevidenced condition or a renewal window nobody
     // acted on is never the silent default.
     ...normalizeLtoSettings(s),
+    // ADR-0248: the claim register's conventions, clamped on load. The rule switch is
+    // defaulted ON so a pause that leaves a limitation period running out unanswered,
+    // a clock nobody can prove or a settlement beyond computed authority is never the
+    // silent default.
+    ...normalizeLfgSettings(s),
     // Repair of a standing red reported at base HEAD: two rule switches the
     // pause census maps were not carried in settings, so the only writes that
     // can silence those rules were refused as unknown keys. Declared here with
@@ -9882,6 +9929,20 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.ltoActions = normalizeLtoActions(raw.ltoActions, state.ltoAuthorisations, warnings);
   state.ltoRenewals = normalizeLtoRenewals(raw.ltoRenewals, state.ltoAuthorisations, warnings);
   state.ltoMarkers = normalizeLtoMarkers(raw.ltoMarkers, warnings);
+  // ADR-0248 (Schema v202): a matter, an accrual, a stay, a resolution, a concession
+  // or an authority grant that cannot be read exactly is DROPPED with a counted
+  // warning — never repaired, re-dated, re-pointed at another matter or rescued from a
+  // partially readable holder list. A matter with no document reference, an accrual
+  // with no written rule and a settlement with no exact amount are dropped at this
+  // boundary. An UNPROVED suspension is kept and prints why it moves nothing. No
+  // state, deadline, day count, ceiling or total is stored.
+  state.lfgMatters = normalizeLfgMatters(raw.lfgMatters, warnings);
+  state.lfgAccruals = normalizeLfgAccruals(raw.lfgAccruals, state.lfgMatters, warnings);
+  state.lfgStays = normalizeLfgStays(raw.lfgStays, state.lfgMatters, warnings);
+  state.lfgResolutions = normalizeLfgResolutions(raw.lfgResolutions, state.lfgMatters, warnings);
+  state.lfgConcessions = normalizeLfgConcessions(raw.lfgConcessions, state.lfgMatters, warnings);
+  state.lfgAuthorityGrants = normalizeLfgAuthorityGrants(raw.lfgAuthorityGrants, warnings);
+  state.lfgMarkers = normalizeLfgMarkersLedger(raw.lfgMarkers, warnings);
   // ADR-0229 (Schema v182): a case, option, cost line or act that cannot be read
   // exactly is DROPPED with a counted warning — never repaired, re-termed,
   // re-priced or re-pointed at another case. A cost line that does not belong to
@@ -11056,6 +11117,26 @@ export const MIGRATIONS = {
     ltoRenewals: Array.isArray(v200.ltoRenewals) ? v200.ltoRenewals : [],
     ltoMarkers: Array.isArray(v200.ltoMarkers) ? v200.ltoMarkers : [],
     settings: { ...(v200.settings || {}), ...normalizeLtoSettings(v200.settings || {}) },
+  }),
+  // 201 → 202: ADR-0248 adds SEVEN EMPTY ledgers (`lfgMatters`, `lfgAccruals`,
+  // `lfgStays`, `lfgResolutions`, `lfgConcessions`, `lfgAuthorityGrants`, `lfgMarkers`)
+  // and the claim register's conventions. NOTHING is inferred from an incident, a
+  // grievance, a permit, an undertaking, an information request or a risk on the
+  // register: a claim is asserted by a third party on a document, and a limitation
+  // clock runs from an accrual somebody must declare. Manufacturing a matter at
+  // upgrade time would put a deadline on the record that no accrual supports — the
+  // precise failure this register exists to prevent.
+  201: (v201) => ({
+    ...v201,
+    schemaVersion: 202,
+    lfgMatters: Array.isArray(v201.lfgMatters) ? v201.lfgMatters : [],
+    lfgAccruals: Array.isArray(v201.lfgAccruals) ? v201.lfgAccruals : [],
+    lfgStays: Array.isArray(v201.lfgStays) ? v201.lfgStays : [],
+    lfgResolutions: Array.isArray(v201.lfgResolutions) ? v201.lfgResolutions : [],
+    lfgConcessions: Array.isArray(v201.lfgConcessions) ? v201.lfgConcessions : [],
+    lfgAuthorityGrants: Array.isArray(v201.lfgAuthorityGrants) ? v201.lfgAuthorityGrants : [],
+    lfgMarkers: Array.isArray(v201.lfgMarkers) ? v201.lfgMarkers : [],
+    settings: { ...(v201.settings || {}), ...normalizeLfgSettings(v201.settings || {}) },
   }),
   // 183 → 184: ADR-0231 adds SEVEN EMPTY ledgers (`ibpCycles`, `ibpDemandRows`,
   // `ibpCapacityRows`, `ibpOptions`, `ibpDecisions`, `ibpGrades`, `ibpMarkers`)

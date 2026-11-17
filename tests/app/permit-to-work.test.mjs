@@ -197,7 +197,7 @@ function harness(raw) {
 test('schema v201 is additive: the v200 step adds seven empty ledgers, three conventions, nothing inferred', () => {
   const empty = createEmptyState(T0);
   // ADR-0247 moved the head to 201; the v201 step is asserted in its own suite.
-  assert.equal(SCHEMA_VERSION, 201);
+  assert.equal(SCHEMA_VERSION, 202);
   const keys = ['ptwPermits', 'ptwIsolations', 'ptwAtmosphere', 'ptwHandovers', 'ptwSuspensions', 'ptwClosures', 'ptwMarkers'];
   for (const key of keys) {
     assert.ok(COLLECTIONS.includes(key), `${key} is a declared collection`);
@@ -216,18 +216,18 @@ test('schema v201 is additive: the v200 step adds seven empty ledgers, three con
   const previous = { ...createEmptyState(T0), schemaVersion: 199 };
   for (const key of keys) delete previous[key];
   const { raw, applied } = migrate(previous);
-  assert.deepEqual(applied, ['199 → 200', '200 → 201'], 'ADR-0246’s own step runs once, in order, then ADR-0247’s');
-  assert.equal(raw.schemaVersion, 201);
+  assert.deepEqual(applied, ['199 → 200', '200 → 201', '201 → 202'], 'ADR-0246’s own step runs once, in order, then ADR-0247’s and ADR-0248’s');
+  assert.equal(raw.schemaVersion, 202);
   for (const key of keys) assert.deepEqual(raw[key], [], 'NOTHING is inferred at upgrade');
 });
 
 test('the spine carries RULE-PTW-01 with exactly one contract, and CSV #187 is registered', () => {
-  assert.equal(DEFAULT_POST_COMMIT_RULES.length, 160, 'ADR-0246 added the 159th spine rule; ADR-0247 the 160th');
+  assert.equal(DEFAULT_POST_COMMIT_RULES.length, 161, 'ADR-0246 added the 159th spine rule; ADR-0247 the 160th; ADR-0248 the 161st');
   assert.equal(DEFAULT_POST_COMMIT_RULES.some((rule) => rule && rule.id === 'permitToWorkRule'), true);
   assert.equal(PROPAGATION_CONTRACTS.length, DEFAULT_POST_COMMIT_RULES.length, 'one contract per spine rule');
   assert.equal(PROPAGATION_CONTRACTS.some((contract) => contract.rule && contract.rule.id === 'permitToWorkRule'), true);
   assert.equal(CSV_EXPORTS.some((entry) => entry.key === PTW_CSV_SCOPE), true);
-  assert.equal(CSV_EXPORTS.length, 188, 'ADR-0246 registered CSV #187; ADR-0247 #188');
+  assert.equal(CSV_EXPORTS.length, 189, 'ADR-0246 registered CSV #187; ADR-0247 #188; ADR-0248 #189');
 });
 
 /* -------------------------------------------------------------- 2. loaders */

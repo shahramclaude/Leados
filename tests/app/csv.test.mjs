@@ -152,8 +152,9 @@ test('every CSV scope round-trips cleanly and preserves unknown values as blank 
 // adds the identity-free employee-voice scope #184; Session 326 adds #185..#188
 // (workplace adjustment, lone working, permit to work, statutory authorisations)
 // without this pin moving. The count is repaired here to #188 rather than left
-// three scopes behind, so the next ADR cannot drift it silently.
-assert.equal(CSV_EXPORTS.length, 188);
+// three scopes behind, so the next ADR cannot drift it silently. Session 327 adds
+// the identity-free claim-register scope #189 and repairs the pin again.
+assert.equal(CSV_EXPORTS.length, 189);
   for (const spec of CSV_EXPORTS) {
     const res = exportWorkspaceCsv(state, spec.key, { now: NOW });
     assert.equal(res.ok, true, `${spec.key} export succeeds`);

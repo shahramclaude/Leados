@@ -137,6 +137,8 @@ import { loneWorkingSignals } from './loneWorking.js';
 import { permitToWorkSignals } from './permitToWork.js';
 // ADR-0247: the statutory authorisation register contributes LTO-01..05.
 import { authorisationSignals } from './authorisation.js';
+// ADR-0248: the claim register contributes LFG-01..05.
+import { claimSignals } from './lfgClaims.js';
 // ADR-0243: the employee-voice and collective-consultation register contributes
 // VOI-01..04 — a window that closed with no advice, advice nobody answered, a
 // decision out of order, and sittings with no minutes or below quorum.
@@ -379,6 +381,11 @@ export const DOMAIN_ORDER = [
   // Register contributes LTO-01..05. Without this bucket the signals would be
   // counted in `findings` and silently dropped from `byDomain`.
   'Statutory authorisations',
+  // ADR-0248 (Schema v202): the Claim, Limitation & Settlement-Authority Register
+  // contributes LFG-01..05. Without this bucket the signals would be counted in
+  // `findings` and silently dropped from `byDomain` — the exact failure this array
+  // exists to prevent.
+  'Claims & limitation',
 ];
 
 export function severityLabel(n) {
@@ -2659,6 +2666,11 @@ export function buildInsights(state, now) {
   // evidence or stale evidence. Listed for the same reason as every other bucket:
   // a signal nobody can find is a signal nobody acted on.
   for (const signal of authorisationSignals(state, now, settings)) add(signal);
+  // LFG-01..05 — a claim past its proved limitation deadline, one inside the urgent
+  // band, one whose clock cannot be proved, a settlement beyond computed authority and
+  // a suspension that was never proved. Listed for the same reason as every other
+  // bucket: a signal nobody can find is a signal nobody acted on.
+  for (const signal of claimSignals(state, now, settings)) add(signal);
   // ADR-0243 (read-side): the Employee Voice register contributes VOI-01..04. It
   // reads its own ledgers and the live matrix, so it cannot recurse into the
   // engine that is running it.

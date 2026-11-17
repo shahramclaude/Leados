@@ -246,6 +246,9 @@ import { permitToWorkCsvRows } from './domain/permitToWorkReport.js';
 import { buildPermitToWork } from './domain/permitToWork.js';
 // ADR-0247: identity-free statutory-authorisation aggregates (CSV scope #188).
 import { LTO_CSV_COLUMNS, LTO_CSV_DESCRIPTOR, LTO_CSV_SCOPE } from './domain/authorisationRegistry.js';
+import { LFG_CSV_COLUMNS, LFG_CSV_DESCRIPTOR, LFG_CSV_SCOPE } from './domain/lfgRegistry.js';
+import { claimCsvRows } from './domain/lfgReport.js';
+import { buildClaims } from './domain/lfgClaims.js';
 import { authorisationCsvRows } from './domain/authorisationReport.js';
 import { buildAuthorisations } from './domain/authorisation.js';
 import { loneWorkingCsvRows } from './domain/loneWorkingReport.js';
@@ -1778,6 +1781,15 @@ export const CSV_EXPORTS = [
   // exactly the disclosure that makes an export dangerous. A per-state count below
   // the declared floor exports BLANK with its reason, never as a small number.
   LTO_CSV_DESCRIPTOR,
+  // #189 (ADR-0248): claims, limitation and settlement authority. One summary row, one
+  // row per printed matter state and one row per printed stay state. This is the most
+  // sensitive export in the estate: a claim register names the party suing us, the sum
+  // at stake and what has been reserved against it. No party, claim type, forum,
+  // instrument, person, manager or day crosses this boundary; amounts cross only as
+  // whole-register minor-unit totals, and none at all where the register is
+  // mixed-currency. A per-state count below the declared floor exports BLANK with its
+  // reason, never as a small number.
+  LFG_CSV_DESCRIPTOR,
 ];
 
 function personLookup(state) {
@@ -7090,6 +7102,17 @@ export function buildScopeTable(state, scope, now) {
       return {
         columns: LTO_CSV_COLUMNS.map((key) => ({ key, header: key })),
         rows: authorisationCsvRows(report),
+      };
+    }
+    case LFG_CSV_SCOPE: {
+      // CSV scope #189 (ADR-0248, Schema v202). Built from the SAME reader the
+      // `#/claims` panel renders, with no seat: every figure is a count, a day extreme
+      // or a whole-register minor-unit total, so no party, claim type, forum,
+      // instrument, person, manager or individual day is reachable from this export.
+      const report = buildClaims(state, { now, settings: state.settings || {}, seat: null });
+      return {
+        columns: LFG_CSV_COLUMNS.map((key) => ({ key, header: key })),
+        rows: claimCsvRows(report),
       };
     }
     case LWK_CSV_SCOPE: {

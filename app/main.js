@@ -181,7 +181,9 @@ import { loneWorkingAttentionCount } from './core/domain/loneWorking.js';
 import { permitToWorkAttentionCount } from './core/domain/permitToWork.js';
 // ADR-0247: the statutory authorisation & licence-to-operate register.
 import { renderAuthorisations } from './views/authorisations.js';
+import { renderClaims } from './views/claims.js';
 import { authorisationAttentionCount } from './core/domain/authorisation.js';
+import { claimAttentionCount } from './core/domain/lfgClaims.js';
 import { voiceAttentionCount } from './core/domain/voice.js';
 // ADR-0220: the variable-pay design & incentive integrity register.
 import { renderIncentive } from './views/incentive.js';
@@ -663,6 +665,12 @@ export const NAV = [
     // stand. Director/VP primary with frontline execution; above rank 3 the reader
     // prints counts and withholds accountable hands.
     { route: 'authorisations', label: 'Authorisations', icon: '⚖', badge: 'authorisations' },
+    // ADR-0248: which claims run against us, the day each limitation clock started and
+    // the rule that makes it the right day, whether the clock is provable at all, and
+    // whose authority reaches the number a matter may settle for. Rank 1 reading is
+    // deliberate — the letter arrives at the front line — and above rank 3 the reader
+    // prints counts and withholds responsible hands.
+    { route: 'claims', label: 'Claims & limitation', icon: '§', badge: 'claims' },
     // ADR-0243: what was put to a staff body, the period its own instrument gave
     // it, what it advised, whether the organisation answered, and whether the
     // decision preceded the close of the window. Director/VP primary; above rank 3
@@ -930,6 +938,8 @@ const RENDERERS = {
   'permit-to-work': (ctx) => renderPermitToWork(ctx),
   // ADR-0247: the statutory authorisation & licence-to-operate register.
   authorisations: (ctx) => renderAuthorisations(ctx),
+  // ADR-0248: the claim, limitation & settlement-authority register.
+  claims: (ctx) => renderClaims(ctx),
   // ADR-0243: the employee-voice and collective-consultation register.
   voice: (ctx) => renderVoice(ctx),
   // ADR-0244: the mutual-aid activation & resource-commitment register.
@@ -1151,6 +1161,22 @@ export function parseRoute(hash) {
     'operating-licence': 'authorisations', 'consents': 'authorisations',
     'regulatory-actions': 'authorisations', 'prohibition-notice': 'authorisations',
     'improvement-notice': 'authorisations', 'statutory-compliance': 'authorisations',
+    // ADR-0248: claims, limitation and settlement authority. The words a general
+    // counsel, a business director and a supervisor actually type for the same duty —
+    // the person who receives the letter and the person who authorises the settlement.
+    // NOT 'claims': that hash already routes to the Cross-Examination terminal
+    // (ADR-0080's claims-audit aliases) and silently stealing it would break a
+    // shipped link. NOT 'settlement' either: it already carries the Outcome
+    // Attribution terminal and the hoshin carryover register. The register's own
+    // words are all free.
+    claim: 'claims', litigation: 'claims', dispute: 'claims',
+    'legal-claim': 'claims', 'legal-claims': 'claims',
+    'limitation': 'claims', 'limitation-period': 'claims', 'limitation-clock': 'claims',
+    'time-bar': 'claims', 'time-barred': 'claims', 'settlement-authority': 'claims',
+    'settle-claim': 'claims', 'tribunal': 'claims', 'lawsuit': 'claims',
+    'legal-matter': 'claims', 'matters': 'claims', 'counsel': 'claims',
+    'legal-register': 'claims', 'claim-register': 'claims', 'reserves': 'claims',
+    'provision': 'claims', 'claim-reserve': 'claims',
     // ADR-0148: the names a person types looking for "did anyone actually agree
     // to this share of me" / "who accepted this project line".
     'line-consent': 'matrix', consent: 'matrix', 'matrix-consent': 'matrix',
@@ -1920,6 +1946,10 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       // prohibition, an authority inside its renewal window and an improvement
       // notice past its day — the same conditions RULE-LTO-01 files. A COUNT.
       authorisations: authorisationAttentionCount(state, { now: at, settings: state.settings, seat: seatCtx?.seat || null }),
+      // ADR-0248: a claim past its proved limitation deadline, one inside the urgent
+      // band, one whose clock cannot be proved, a settlement beyond computed authority
+      // and an unproved suspension — the same conditions RULE-LFG-01 files. A COUNT.
+      claims: claimAttentionCount(state, { now: at, settings: state.settings, seat: seatCtx?.seat || null }),
       // ADR-0243: windows that closed with no advice, advice nobody answered,
       // sittings past their minutes day and decisions recorded out of order — the
       // same conditions RULE-VOI-01 files. A COUNT, never a name.
@@ -2532,6 +2562,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       'personal-dealing': 'Personal dealing — who is on the insider list and on what written instrument, the closed period around each disclosure with its exact arithmetic, the clearance as a request and a SEPARATE decision by a hand strictly above the requester, and the executed trade against the window it fell in and the clearance it cites',
       'mutual-aid': 'Mutual aid — the help the enterprise asked an outside organisation for and what actually happened to it: the bilateral agreement the request was made under and whether it was live, the request and its declared validity, the partner’s acceptance with its written confirmation and promise, the arrival compared against the promise line by line, and the withdrawal and release that close the commitment in order',
       'permit-to-work': 'Permit to work — what the record authorises on which plant, the declared validity and exact minutes to it, every energy isolation with its lock and the proof of zero energy at the point of work (or the window it missed), the latest gas reading per declared test compared exactly against the permit\u2019s own limit and freshness window, and every simultaneous-operations conflict derived from the record on each read — a released isolation under a live permit, hot work over a release, two hot-work permits in one area, an entry during hot work, one isolation claimed twice, a double-booked holder, a lapsed permit nobody closed and a closure that left a line isolated',
+      claims: 'Claims & limitation — what is actually being asserted against us and how long we have: the document that started each clock, the accrual day and the written rule that makes it the right day (never the incident date by default), the declared limitation period and the base deadline, every PROVED suspension of the clock with its exact whole days and every allegation that moves nothing, the exact whole days remaining or the whole days a proved deadline ran over, whether the clock is provable at all (a matter with no readable accrual prints “clock unprovable” and NO day count), every reserve, offer, payment, cost and interest as its own dated instrument with exact minor-unit amounts, and the settlement authority computed above every responsible line across every line — with the exact gap printed where the number paid exceeded it',
       authorisations: 'Statutory authorisations — which power to operate is held and whether it is in force at this instant: the issuing body and written instrument, the declared expiry against the effective expiry every granted renewal moved it to, the renewal window the declaration itself set, each declared condition’s latest dated evidence and its own re-evidence window (current, stale or unevidenced), every regulator action with its written basis, compliance day and close, and the joint reporting seat above every accountable hand across every line',
       'lone-working': 'Lone working — who is alone right now, where, against which written assessment: the declared check-in interval and grace running from the last contact, the exact deadline, whether the record holds contact, a concern nobody answered, an escalation, or nothing at all, whether it ran past its declared end unclosed, and the joint reporting seat that owes the response',
       undertakings: 'Undertakings — the promise the enterprise made to a regulator, a board, a lender or a customer: its obligation lines, each independently tested, and the written report that discharges it to the counterparty',
