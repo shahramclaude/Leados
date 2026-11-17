@@ -2639,6 +2639,214 @@ function seedEmployeeVoice(state, now, { priya, mei, jordan, samuel, freya, at, 
  *   7. A request cancelled three days after it was sent, before any acceptance:
  *      `cancelled`.
  */
+/**
+ * ADR-0245: a small, REAL-SHAPED personal-account dealing record.
+ *
+ * Places every row RELATIVE TO THE INJECTED CLOCK so the register shows live
+ * states rather than fixtures that were only true on the day they were written.
+ * NOTHING here states a state, a window verdict, a days-late figure or a breach —
+ * every one of those is derived by the reader from the days below:
+ *
+ *   1. Priya (director) designates Samuel and Jordan on written bases, so the
+ *      insider list is real and the whole-market closed period binds them.
+ *   2. A results announcement in 9 days with 21 closed days before it and 0 after:
+ *      the window OPENED 12 days ago and is CLOSED today. This is the case that
+ *      matters: a reader opening the demo today sees dealing closed.
+ *   3. A transaction window anchored 40 days ago, fully in the past and OPEN now,
+ *      so the reader can see the difference between "a window exists" and "the
+ *      window is closed today".
+ *   4. A clearance requested by Mei for Samuel 6 days ago with NO decision: six
+ *      days past a three-day declared turnaround, so it is `pending-overdue` — the
+ *      state this register exists to refuse to hide, because silence is not an
+ *      approval.
+ *   5. A clearance requested 1 day ago with a decision by Priya (strictly above the
+ *      requester), cleared for 10 days: `cleared-not-dealt`.
+ *   6. A clearance requested and granted 18 days ago for fourteen days, and a
+ *      dealing 8 days ago — four days into the declared window and four days
+ *      short of the clearance's expiry. The window is the graver fact, so the row
+ *      reads `breach-dealt-in-closed-window` with the exact days inside printed
+ *      beside it, and the clearance's own state prints `cleared-and-dealt`.
+ *   7. A clearance refused with a written reason 5 days ago, and NO dealing citing
+ *      it: `refused-not-dealt` — the control working, printed as such.
+ *   8. An executed dealing with no clearance at all, 90 days ago (before the
+ *      designation's coverage of the window), citing only its contract note.
+ */
+function seedPersonalDealing(state, now, { priya, mei, jordan, samuel, freya, at, ts }) {
+  state.dwlDesignations = [
+    {
+      id: 'dwl-des-demo-1',
+      personId: samuel,
+      basis: 'access-to-unpublished-price-sensitive',
+      instrumentRef: 'Group Insider Dealing & Market Abuse Policy 2026, clause 4.2 — designated persons list',
+      declaredOn: at(420),
+      endsOn: null,
+      note: 'Sees the half-year consolidation three weeks before the market does.',
+      declaredById: priya,
+      createdAt: ts(420),
+      updatedAt: ts(420),
+    },
+    {
+      id: 'dwl-des-demo-2',
+      personId: jordan,
+      basis: 'pdmr',
+      instrumentRef: 'Board appointment letter dated 12 January 2026, schedule 2 — managers’ transactions notification duty',
+      declaredOn: at(300),
+      endsOn: null,
+      note: 'Notified manager: dealings must be disclosed to the market separately.',
+      declaredById: priya,
+      createdAt: ts(300),
+      updatedAt: ts(300),
+    },
+  ];
+
+  state.dwlEvents = [
+    {
+      id: 'dwl-evt-demo-1',
+      kind: 'results-announcement',
+      subject: 'Half-year results for the period ended 30 September 2026',
+      disclosesOn: at(-9),
+      beforeDays: 21,
+      afterDays: 0,
+      scopeLineIds: [],
+      declaredById: priya,
+      createdAt: ts(60),
+      updatedAt: ts(60),
+    },
+    {
+      id: 'dwl-evt-demo-2',
+      kind: 'transaction',
+      subject: 'Disposal of the Ringkøbing logistics site to a regional buyer',
+      disclosesOn: at(40),
+      beforeDays: 30,
+      afterDays: 2,
+      scopeLineIds: [],
+      declaredById: priya,
+      createdAt: ts(120),
+      updatedAt: ts(120),
+    },
+  ];
+
+  state.dwlClearances = [
+    {
+      id: 'dwl-clr-demo-1',
+      personId: samuel,
+      securityRef: 'DK0062498333',
+      side: 'sell',
+      quantity: 400,
+      requestedOn: at(6),
+      requestedById: mei,
+      reason: 'Raising the deposit on a house purchase; no knowledge of the half-year position beyond the window itself.',
+      createdAt: ts(6),
+      updatedAt: ts(6),
+    },
+    {
+      id: 'dwl-clr-demo-2',
+      personId: jordan,
+      securityRef: 'DK0062498333',
+      side: 'buy',
+      quantity: 120,
+      requestedOn: at(1),
+      requestedById: freya,
+      reason: 'Monthly savings plan top-up.',
+      createdAt: ts(1),
+      updatedAt: ts(1),
+    },
+    {
+      id: 'dwl-clr-demo-3',
+      personId: samuel,
+      securityRef: 'DK0062498333',
+      side: 'sell',
+      quantity: 1000,
+      requestedOn: at(18),
+      requestedById: mei,
+      reason: 'Portfolio rebalance.',
+      createdAt: ts(20),
+      updatedAt: ts(20),
+    },
+    {
+      id: 'dwl-clr-demo-4',
+      personId: jordan,
+      securityRef: 'SE0000108656',
+      side: 'buy',
+      quantity: 60,
+      requestedOn: at(5),
+      requestedById: freya,
+      reason: 'Long-held position, adding on a price dip.',
+      createdAt: ts(5),
+      updatedAt: ts(5),
+    },
+  ];
+
+  state.dwlDecisions = [
+    {
+      id: 'dwl-dec-demo-2',
+      clearanceId: 'dwl-clr-demo-2',
+      decidedOn: at(1),
+      decidedById: priya,
+      outcome: 'cleared',
+      validityDays: 10,
+      reason: 'Savings plan, inside the open window, no exposure to the results.',
+      createdAt: ts(1),
+      updatedAt: ts(1),
+    },
+    {
+      id: 'dwl-dec-demo-3',
+      clearanceId: 'dwl-clr-demo-3',
+      decidedOn: at(18),
+      decidedById: priya,
+      outcome: 'cleared',
+      validityDays: 14,
+      reason: 'Rebalance approved before the window was declared.',
+      createdAt: ts(18),
+      updatedAt: ts(18),
+    },
+    {
+      id: 'dwl-dec-demo-4',
+      clearanceId: 'dwl-clr-demo-4',
+      decidedOn: at(5),
+      decidedById: priya,
+      outcome: 'refused',
+      validityDays: null,
+      reason: 'Refused: the disposal announced today is not yet public and this holding is not in the cleared plan. Re-apply after the announcement when the window opens.',
+      createdAt: ts(5),
+      updatedAt: ts(5),
+    },
+  ];
+
+  state.dwlDealings = [
+    {
+      id: 'dwl-dlg-demo-1',
+      personId: samuel,
+      securityRef: 'DK0062498333',
+      side: 'sell',
+      quantity: 1000,
+      dealtOn: at(8),
+      brokerRef: 'Contract note 2026-11-09-4471 (Nordea)',
+      clearanceId: 'dwl-clr-demo-3',
+      note: 'Executed two days after the clearance was granted — inside the declared results window.',
+      recordedById: mei,
+      createdAt: ts(16),
+      updatedAt: ts(16),
+    },
+    {
+      id: 'dwl-dlg-demo-2',
+      personId: samuel,
+      securityRef: 'DK0062498333',
+      side: 'sell',
+      quantity: 250,
+      dealtOn: at(90),
+      brokerRef: 'Contract note 2026-08-19-1188 (Nordea)',
+      clearanceId: null,
+      note: 'Recorded from the broker statement; no pre-clearance exists for it and the register does not invent one.',
+      recordedById: mei,
+      createdAt: ts(88),
+      updatedAt: ts(88),
+    },
+  ];
+
+  state.dwlMarkers = Array.isArray(state.dwlMarkers) ? state.dwlMarkers : [];
+}
+
 function seedMutualAid(state, now, { priya, mei, jordan, samuel, freya, at, ts }) {
   state.mutualAidAgreements = [
     {
@@ -6462,6 +6670,9 @@ export function buildDemoState(now = new Date()) {
   // never released, a pulled-back commitment and a cancelled request. Real-shaped,
   // dated relative to the injected clock.
   seedMutualAid(state, now, { priya, mei, jordan, samuel, freya, at, ts });
+  // ADR-0245: a live personal-account dealing record, placed relative to the
+  // injected clock so the register shows derived states rather than stale rows.
+  seedPersonalDealing(state, now, { priya, mei, jordan, samuel, freya, at, ts });
   // ADR-0240: one declared incident with a running external clock, an accepted
   // line, an unaccepted line and a recorded severity raise — so the register
   // shows a real bridge rather than an honest empty state on first load.

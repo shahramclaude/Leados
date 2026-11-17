@@ -171,6 +171,9 @@ import { renderVoice } from './views/voice.js';
 // ADR-0244: the mutual-aid activation & resource-commitment register.
 import { renderMutualAid } from './views/mutualAid.js';
 import { mutualAidAttentionCount } from './core/domain/mutualAid.js';
+// ADR-0245: the personal-account dealing & insider-list register.
+import { renderPersonalDealing } from './views/personalDealing.js';
+import { personalDealingAttentionCount } from './core/domain/personalDealing.js';
 import { distributedEquityAttentionCount } from './core/domain/distributedEquity.js';
 import { workplaceAdjustmentAttentionCount } from './core/domain/workplaceAdjustment.js';
 import { loneWorkingAttentionCount } from './core/domain/loneWorking.js';
@@ -661,6 +664,13 @@ export const NAV = [
     // CEO/C-suite oversight; above rank 3 the reader prints counts and withholds
     // partner names, subjects and confirmations.
     { route: 'mutual-aid', label: 'Mutual aid', icon: '⇄', badge: 'mutualAid' },
+    // ADR-0245: who is on the insider list, on what written instrument; the
+    // declared closed period; the clearance as a request and a SEPARATE decision
+    // by a hand strictly above the requester; and the executed trade against the
+    // window it fell in. CEO / C-suite and director / VP primary. Above rank 2 the
+    // reader prints counts and withholds every name — this is individual detail,
+    // and a VP reading named personal trades is the wrong direction for it to flow.
+    { route: 'personal-dealing', label: 'Personal dealing', icon: '⊘', badge: 'personalDealing' },
     // ADR-0220: what the variable pay in a leader's remit actually pays for, who
     // verifies the number, what the record can prove, and where the same outcome
     // is paid twice because a person sits on two lines. Beside risk appetite on
@@ -909,6 +919,8 @@ const RENDERERS = {
   voice: (ctx) => renderVoice(ctx),
   // ADR-0244: the mutual-aid activation & resource-commitment register.
   'mutual-aid': (ctx) => renderMutualAid(ctx),
+  // ADR-0245: the personal-account dealing & insider-list register.
+  'personal-dealing': (ctx) => renderPersonalDealing(ctx),
   // ADR-0220: the variable-pay design & incentive integrity register.
   incentive: (ctx) => renderIncentive(ctx),
   // ADR-0221: the Duty-Without-Means Register.
@@ -1096,6 +1108,17 @@ export function parseRoute(hash) {
     'mutual-aid': 'mutual-aid', 'mutual aid': 'mutual-aid', 'reciprocal-aid': 'mutual-aid',
     'backup-agreement': 'mutual-aid', 'aid-partner': 'mutual-aid', 'external-aid': 'mutual-aid',
     'standby-agreement': 'mutual-aid',
+    // ADR-0245: personal dealing. The words a compliance officer, an HR lead and a
+    // designated person actually use for the same control; none shadows a shipped
+    // route.
+    'personal-dealing': 'personal-dealing', 'personal dealing': 'personal-dealing',
+    insider: 'personal-dealing', 'insider-list': 'personal-dealing',
+    'closed-period': 'personal-dealing', 'blackout': 'personal-dealing',
+    'blackout-period': 'personal-dealing', 'pre-clearance': 'personal-dealing',
+    'preclearance': 'personal-dealing', 'pre-clear': 'personal-dealing',
+    'share-dealing': 'personal-dealing', 'market-abuse': 'personal-dealing',
+    'mnpi': 'personal-dealing', 'trading-window': 'personal-dealing',
+    'securities-dealing': 'personal-dealing',
     'welfare-check': 'lone-working', 'check-in-timer': 'lone-working', 'working-alone': 'lone-working',
     'lone-deployment': 'lone-working', 'man-down': 'lone-working', 'roll-call': 'lone-working',
     // ADR-0148: the names a person types looking for "did anyone actually agree
@@ -1867,6 +1890,11 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       // day passed, withdrawals whose release is owed and acts recorded out of
       // order — the same conditions RULE-MAA-01 files. A COUNT, never a name.
       mutualAid: mutualAidAttentionCount(state, { now: at, settings: state.settings, seat: seatCtx?.seat || null }),
+      // ADR-0245: dealings that breached a window, a refusal or a validity, a
+      // clearance decided by its own requester, and a decision owed past its
+      // declared turnaround — the same conditions RULE-DWL-01 files. A COUNT,
+      // never a name.
+      personalDealing: personalDealingAttentionCount(state, { now: at, settings: state.settings, seat: seatCtx?.seat || null }),
       // ADR-0220: over-ceiling envelopes, contested outcomes and outstanding
       // recoveries this seat holds the joint apex above, plus live plans of its
       // own with no verified reading. The same conditions RULE-INC-01 files.
@@ -2463,6 +2491,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
   incidents: 'Major incidents — the command record while it runs: who declared it and against what written criterion, who took command and when they handed it over, every declared notification clock with its exact deadline, whether each party was actually told, and whether command was ever released',
       adjustments: 'Workplace adjustments — what work a person must not do and what was actually done about it: the functional limitation and its written instrument, the day an adjustment was agreed against the day it took effect, whether declared work on ANY reporting line breaks a limit the record can test exactly, and whether every line that hands the person work has been told',
       voice: 'Employee voice — what was put to a staff body and what it said back: the written instrument that set the period, the documents supplied, the day the window closed against the day advice arrived, the body’s own words and whether the organisation answered, the decision’s day against the window, each sitting’s attendance against the body’s own quorum, and the joint reporting seat above the affected lines',
+      'personal-dealing': 'Personal dealing — who is on the insider list and on what written instrument, the closed period around each disclosure with its exact arithmetic, the clearance as a request and a SEPARATE decision by a hand strictly above the requester, and the executed trade against the window it fell in and the clearance it cites',
       'mutual-aid': 'Mutual aid — the help the enterprise asked an outside organisation for and what actually happened to it: the bilateral agreement the request was made under and whether it was live, the request and its declared validity, the partner’s acceptance with its written confirmation and promise, the arrival compared against the promise line by line, and the withdrawal and release that close the commitment in order',
       'lone-working': 'Lone working — who is alone right now, where, against which written assessment: the declared check-in interval and grace running from the last contact, the exact deadline, whether the record holds contact, a concern nobody answered, an escalation, or nothing at all, whether it ran past its declared end unclosed, and the joint reporting seat that owes the response',
       undertakings: 'Undertakings — the promise the enterprise made to a regulator, a board, a lender or a customer: its obligation lines, each independently tested, and the written report that discharges it to the counterparty',

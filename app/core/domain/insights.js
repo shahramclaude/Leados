@@ -138,6 +138,7 @@ import { loneWorkingSignals } from './loneWorking.js';
 // decision out of order, and sittings with no minutes or below quorum.
 import { voiceSignals } from './voice.js';
 import { mutualAidSignals } from './mutualAid.js';
+import { personalDealingSignals } from './personalDealing.js';
 import { incidentCommandSignals } from './incidentCommand.js';
 import { autopilotSignals } from './autopilot.js';
 
@@ -2638,6 +2639,12 @@ export function buildInsights(state, now) {
   // order. It reads its own ledgers and the live matrix, so it cannot recurse
   // into the engine that is running it.
   for (const signal of mutualAidSignals(state, now, settings)) add(signal);
+  // ADR-0245 (read-side): the Personal-Dealing register contributes DWL-01..05 — a
+  // trade inside a closed window, a clearance nobody should have decided, a trade
+  // after a refusal or outside its validity, a decision owed past its day, and a
+  // trade nothing approved. It reads its own ledgers and the live matrix, so it
+  // cannot recurse into the engine that is running it.
+  for (const signal of personalDealingSignals(state, now, settings)) add(signal);
   // ADR-0240 (read-side): the Incident Command register contributes MIC-01..03 —
   // a passed notification deadline, a live major incident with no commander (or a
   // closed one still holding command), and a response line nobody accepted. It

@@ -1,3 +1,25 @@
+## 2026-11-17 — Session 323: ADR-0245 personal-account dealing, insider lists & closed-period pre-clearance (Schema v199, `#/personal-dealing`, CSV #186, `RULE-DWL-01`) — SHIPPED
+
+**Altitude × structure.** director / VP × matrix. A control that binds every altitude from IC to CEO, which is why the seat question had to be answered honestly rather than papered over.
+
+**Built.** Schema v198 → v199, six empty-at-upgrade collections (`dwlDesignations`, `dwlEvents`, `dwlClearances`, `dwlDecisions`, `dwlDealings`, `dwlMarkers`), three bounded conventions and **no default window**. Five panels, seven dialogs, eight seat-checked commands. A designation names its **written basis** (art. 18 is about the basis, not the name). An event declares its own whole-day bounds; `windowSpan` computes the span once, ends inclusive, measured from the nearest edge, so `0` = inside-on-the-edge and `null` = outside. A bound that cannot be resolved reads `dealt-window-undeterminable`, never a silent pass. A request with no decision reads `pending` then `pending-overdue` with the days late — **silence is never an approval**, and no state in the register converts an unanswered request into a cleared one. Independence is **proved** through `matrixJointApex` against the requester and every line manager: freya, a peer-line manager, is refused `not-above-requester`; priya, above both lines, decides. A seeded self-approval is kept and printed as `breach-decided-by-requester` while the door refuses to create one. A bad trade is **recorded, never refused**, and `breaches` is a list — a cleared trade inside a closed window reads `breach-dealt-in-closed-window` while its clearance still reads `cleared-and-dealt`. `RULE-DWL-01` is spine **158/158**: four conditions, ≤4 asks/commit, joint-apex routing that never asks the person, opaque text with identity only in the typed link, identity-free markers where no seat resolves, self-closing, pause-governed on every path including the scan (a window opens and closes by the calendar). CSV #186 aggregate and identity-free; a below-floor count blanks **with its reason**, never `0`. Demo seed exercises the whole vocabulary against the injected clock: window closed today, a trade four days inside it, an overdue decision, a written refusal nobody dealt against, and a trade with no clearance.
+
+**Two real defects found and fixed in-build.** (1) *"Above rank 2, counts only"* **blinded the decider** — the seat that must decide a clearance is by construction above the requester, and a decider forbidden to see the security is being asked to approve what they may not look at, which disables the control rather than protecting the data. Disclosure now follows the **duty**, per row, with every withheld row's reason printed on the page. (2) The stat grid published `data-testid`s for four of eight figures, so the display contract could only half-prove itself.
+
+**Benchmark — [BENCHMARK-VERIFIED]** (fetched 2026-11-17: itexus.com vendor survey; starcompliance.com shadow-trading / banking / crypto; wifitalents.com comparison). Matched: explicit pre-clearance decision, per-individual scoping, blackout windows, audit-ready export. Exceeded: no "assumed approved" counterpart to silence; independence computed rather than asserted; joint-apex routing that never asks the person; per-row disclosure that keeps the decider sighted; exact whole-day arithmetic beside every verdict. Weaker and said so: **no broker statement ingestion**, no watch/restricted list object, no 10b5-1 lifecycle, no attestations, no sector scoping.
+
+**Verified.** `tests/app/personal-dealing.test.mjs` **29/29 PASS**; `mutual-aid` **20/20** and `domain-sense-wiring` **7/7** re-run green after their head pins moved (v198 → v199, spine 157 → 158). Whole `npm test` **not** run — broadly red at base for inherited reasons (**[UNVERIFIED]**). Real-browser walkthrough **[UNVERIFIED]**.
+
+**Flagged, not fixed.** ~181 stale `SCHEMA_VERSION === 179` pins; pause-permit reach census; S322 lone-working overlap remainder (In Progress); broker-feed ingestion and the four other named gaps (logged in the ADR and ROADMAP, unbuilt).
+
+**Asset — BLOCKER, reported plainly.** No method figure produced: **Higgsfield is not connected in this conversation**. No placeholder or fabricated diagram substituted; the Method panel renders correctly without it.
+
+**Why this one.** The gap hunt (19 terms across `app/`, 259 ADRs, ROADMAP, log, NORTH_STAR) returned **zero** hits. The workspace could store a decision, a delegation and a conflict of interest and could not store an insider list, a closed period, a clearance and the trade that followed — the oldest market-abuse control in the estate, missing entirely.
+
+**Repo status.** Branch `arena/d60cc270-leados` at `7dda7a9`, 9 modified + 9 new files, PR opened on this branch.
+
+---
+
 ## 2026-11-17 — Session 322: lone-working overlap precision
 
 **Doctrine and sync:** `NORTH_STAR.md` exists and contains all four required mandates; `origin` is the equivalent `https://github.com/shahramclaude/Leados.git`. Branch `arena/adba4dd0-leados`, base `c26842df900413b36d6403a45212dbca43d9f7c9`.

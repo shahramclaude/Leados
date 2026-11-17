@@ -251,6 +251,13 @@ import { buildVoice } from './domain/voice.js';
 import { MAA_CSV_COLUMNS, MAA_CSV_DESCRIPTOR, MAA_CSV_SCOPE } from './domain/mutualAidRegistry.js';
 import { mutualAidCsvRows } from './domain/mutualAidReport.js';
 import { buildMutualAid } from './domain/mutualAid.js';
+// ADR-0245: identity-free personal-account dealing control. The most individually
+// sensitive material in the workspace: the export carries counts and published
+// state keys only, and never a person, a basis, a security, a broker reference, a
+// quantity or a day.
+import { DWL_CSV_COLUMNS, DWL_CSV_DESCRIPTOR, DWL_CSV_SCOPE } from './domain/personalDealingRegistry.js';
+import { personalDealingCsvRows } from './domain/personalDealingReport.js';
+import { buildPersonalDealing } from './domain/personalDealing.js';
 import { incidentCsvRows, incidentReport } from './domain/incidentCommandReport.js';
 // ADR-0229: CSV #170 — the capability sourcing & firm-boundary register.
 import { SRC_CSV_COLUMNS, SRC_CSV_DESCRIPTOR, SRC_CSV_SCOPE } from './domain/sourcingRegistry.js';
@@ -1741,6 +1748,12 @@ export const CSV_EXPORTS = [
   // line or day crosses this boundary. A per-state count below the declared
   // floor exports BLANK with its reason, never as a small number.
   MAA_CSV_DESCRIPTOR,
+  // #186 (ADR-0245): personal-account dealing control. One summary row, one row
+  // per printed dealing state and one per printed clearance state. No person,
+  // basis, security reference, broker reference, quantity or day crosses this
+  // boundary. A per-state count below the declared floor exports BLANK with its
+  // reason, never as a small number.
+  DWL_CSV_DESCRIPTOR,
 ];
 
 function personLookup(state) {
@@ -7064,6 +7077,18 @@ export function buildScopeTable(state, scope, now) {
       return {
         columns: MAA_CSV_COLUMNS.map((key) => ({ key, header: key })),
         rows: mutualAidCsvRows(report),
+      };
+    }
+    case DWL_CSV_SCOPE: {
+      // CSV scope #186 (ADR-0245, Schema v199). Built from the SAME reader the
+      // `#/personal-dealing` panel renders, with no seat: every figure is an
+      // exact integer count over the whole register, so no person, designation
+      // basis, security reference, broker reference, quantity or day is
+      // reachable from this export.
+      const report = buildPersonalDealing(state, { now, settings: state.settings || {}, seat: null });
+      return {
+        columns: DWL_CSV_COLUMNS.map((key) => ({ key, header: key })),
+        rows: personalDealingCsvRows(report),
       };
     }
     case WPA_CSV_SCOPE: {
