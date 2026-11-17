@@ -354,6 +354,13 @@ export const PAUSE_PERMIT_MATRIX_REACH_SWITCHES = Object.freeze([
   // unevidenced condition and an unopened renewal unasked — and the lines holding
   // those hands are not told.
   'ltoAutoPropagate',
+  // ADR-0248: the claim rule computes the joint apex above every line holding ANY
+  // responsible hand, so silencing it leaves a claim past its proved limitation
+  // deadline, a clock nobody can prove, a settlement beyond computed authority and an
+  // unproved suspension unasked — and the lines holding those hands are not told. It
+  // reaches across reporting lines through `matrixJointApex`, so it carries a permit
+  // like every other cross-line switch.
+  'lfgAutoPropagate',
   // ADR-0224's successors: four rules that compute an ask through the reporting
   // graph were gated by switches the reach list never claimed, so a pause on them
   // could have silenced a cross-line ask while the census said it could not. Named
@@ -503,6 +510,11 @@ export const PAUSE_PERMIT_SWITCH_RULES = Object.freeze({
   // and an unopened renewal unasked. The register stays open and visible; nothing
   // is renewed, lifted or marked compliant in its place.
   ltoAutoPropagate: 'authorisationRules.js',
+  // ADR-0248: silencing the claim rule leaves a limitation period running out, a
+  // clock nobody can prove, a settlement beyond authority and an unproved suspension
+  // unasked. The matters stay open and visible; nothing is closed, extended or marked
+  // proved in its place.
+  lfgAutoPropagate: 'lfgRules.js',
   assuranceAutoPropagate: 'assuranceFindingRules.js',
   maaAutoPropagate: 'mutualAidRules.js',
   dwlAutoPropagate: 'personalDealingRules.js',

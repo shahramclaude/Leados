@@ -36,6 +36,7 @@ import { MAA_RIGHTS } from './mutualAidRegistry.js';
 import { DWL_RIGHTS } from './personalDealingRegistry.js';
 import { PTW_RIGHTS } from './permitToWorkRegistry.js';
 import { LTO_RIGHTS } from './authorisationRegistry.js';
+import { LFG_RIGHTS } from './lfgRegistry.js';
 // ADR-0229: the capability sourcing register's four rights.
 import { SRC_RIGHTS } from './sourcingRegistry.js';
 import { VY_RIGHTS } from './vyRegistry.js';
@@ -397,6 +398,15 @@ const groups = [
   // hand, so one line cannot declare another line's authority.
   [LTO_RIGHTS.READ, 'authorisationReport authorisationAttention authorisationCandidates'],
   [LTO_RIGHTS.MANAGE, 'authorisationDeclare authorisationDeclareCondition authorisationRecordEvidence authorisationRecordAction authorisationCloseAction authorisationSubmitRenewal authorisationDecideRenewal authorisationSetConventions authorisationScan'],
+  // ADR-0248: the claim, limitation and settlement-authority register. Reading is open
+  // at rank 1 — the supervisor who receives the letter must be able to open the matter
+  // it belongs to, and the failure this register prevents is that letter waiting until
+  // somebody senior recognises it as a claim — while the READER withholds responsible
+  // hands above rank 3. Every write is narrowed inside the action to a seat that HOLDS
+  // every responsible hand, and a settlement authority can only be granted to a person
+  // the acting seat holds.
+  [LFG_RIGHTS.READ, 'claimReport claimAttention claimCandidates'],
+  [LFG_RIGHTS.MANAGE, 'claimOpenMatter claimDeclareAccrual claimRecordStay claimRecordResolution claimRecordConcession claimDeclareAuthority claimSetConventions claimScan'],
   // ADR-0229: the capability sourcing & firm-boundary register. Reading is
   // portfolio material (rank 3+). Recording an option is the leader who HOLDS
   // the capability (rank 2+), narrowed inside the action to a line the case
@@ -911,6 +921,12 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // still gated — and which consent lapsed at nine this morning would vanish the
 // moment enforcement was turned on.
 'authorisationReport', 'authorisationAttention', 'authorisationCandidates',
+// ADR-0248: the claim register's pure read surface. Every one of these re-proves the
+// read right inside the action, because a module whose reads are absent from SAFE_READS
+// is unreadable under enforcement while its writes are still gated — and which party is
+// suing us, for what sum, with how many days left, would vanish the moment enforcement
+// was turned on.
+'claimReport', 'claimAttention', 'claimCandidates',
 // ADR-0243: the employee-voice register's pure read surface. Every one of these
 // re-proves the read right inside the action, because a module whose reads are
 // absent from SAFE_READS is unreadable under enforcement while its writes are

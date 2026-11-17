@@ -211,6 +211,7 @@ import { mutualAidRule } from './mutualAidRules.js';
 import { personalDealingRule } from './personalDealingRules.js';
 import { permitToWorkRule } from './permitToWorkRules.js';
 import { authorisationRule } from './authorisationRules.js';
+import { claimRule } from './lfgRules.js';
 import { incidentCommandRule } from './incidentCommandRules.js';
 import { sourcingRule } from './sourcingRules.js';
 import { ibpRule } from './ibpRules.js';
@@ -1323,6 +1324,12 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // prohibition notice stands, that an improvement notice is past its day, that a
   // condition is unevidenced, or that a renewal window opened with nothing filed.
   authorisationRule,
+  // ADR-0248: the claim rule reads the live matrix for the joint apex above every line
+  // holding ANY responsible hand, so silencing it reaches across reporting lines — and
+  // nobody is told that a claim passed its proved limitation deadline, that a clock
+  // cannot be proved at all, that a matter settled beyond the computed authority, or
+  // that a suspension somebody recorded was never proved.
+  claimRule,
   workplaceAdjustmentRule,
   // ADR-0229: the Capability Sourcing & Firm-Boundary Register. ONE rule reads
   // the finished register and files at most one dated ask per condition: a

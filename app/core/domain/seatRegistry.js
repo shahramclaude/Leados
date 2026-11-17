@@ -309,6 +309,19 @@ export const RECORD_POLICIES = Object.freeze({
   ltoActions: { classKey: 'portfolio', detailCeiling: 4, label: 'Regulator actions served against an authority — the kind, the served and effective instants, the written basis, the compliance day and the close', route: '#/authorisations' },
   ltoRenewals: { classKey: 'portfolio', detailCeiling: 4, label: 'Renewal submissions and decisions — what was filed, when it was decided, the grant’s new expiry and the reason', route: '#/authorisations' },
   ltoMarkers: { classKey: 'unit', detailCeiling: 3, label: 'Statutory-authorisation observation markers — no joint seat, no accountable line to ask (identity-free)', route: '#/authorisations' },
+  // ADR-0248 (Schema v202): the claim, limitation and settlement-authority register.
+  // A matter is PORTFOLIO material: which party is suing, in what forum, for what sum
+  // and against what reserve is exactly what a director and above must see, and above
+  // rank 3 the reader withholds the HANDS rather than the matter. The accrual carries
+  // the reasons the clock started, and a concession names the hand that recorded it,
+  // so both are INDIVIDUAL detail. The rule's own markers are identity-free.
+  lfgMatters: { classKey: 'portfolio', detailCeiling: 4, label: 'Claim matters — the document that started the clock, the party, the claim type, the forum, the currency, the sum claimed and the responsible hands', route: '#/claims' },
+  lfgAccruals: { classKey: 'individual', label: 'Accruals — the day each limitation clock started, the written rule relied on, the date of knowledge where the type requires it, and the declared period', route: '#/claims' },
+  lfgStays: { classKey: 'individual', label: 'Suspensions of a limitation clock — the kind, the instrument, the parties, the span and the computed proof', route: '#/claims' },
+  lfgResolutions: { classKey: 'portfolio', detailCeiling: 4, label: 'Resolutions — how each matter ended, the day, the exact amount where the outcome takes one, and the basis', route: '#/claims' },
+  lfgConcessions: { classKey: 'portfolio', detailCeiling: 4, label: 'Concessions — reserves, offers, payments, costs and interest as their own dated instruments with their exact amounts', route: '#/claims' },
+  lfgAuthorityGrants: { classKey: 'individual', label: 'Settlement authority grants — the person, the scope, the currency, the ceiling and the written basis', route: '#/claims' },
+  lfgMarkers: { classKey: 'unit', detailCeiling: 3, label: 'Claim-register observation markers — no joint seat, no responsible line to ask (identity-free)', route: '#/claims' },
   // ADR-0240 (Schema v194): the incident command register. An incident record
   // names the people on the bridge, the instrument it was declared under and the
   // external parties it owes — individual detail that is not handed upward, so
@@ -1482,6 +1495,8 @@ export const ACTION_RIGHTS = Object.freeze({
   // the joint apex above all of them.
   'read-authorisations': { minRank: 1, maxRank: 5, label: 'Read the statutory authorisation register within your grant — the authorities covering the sites and activities you hold, their conditions, evidence, regulator actions and renewals. Above rank 3 the reader prints counts and withholds accountable hands' },
   'manage-authorisations': { minRank: 1, maxRank: 5, label: 'Declare an authority on a written instrument, declare its conditions, record dated evidence, record a regulator action and its close, submit a renewal and record its decision, and set the register’s conventions' },
+  'read-claims': { minRank: 1, maxRank: 5, label: 'Read the claims, limitation and settlement-authority register within your grant — the matters you hold, their accruals and proved suspensions, their concessions and resolutions and the authority computed above their lines. Above rank 3 the reader prints counts and withholds responsible hands' },
+  'manage-claims': { minRank: 1, maxRank: 5, label: 'Open a claim matter on the document that started the clock, declare its accrual and limitation period, record a suspension or a resolution, declare a concession, declare a settlement authority and set the register’s conventions' },
   'read-mutual-aid': { minRank: 1, maxRank: 5, label: 'Read the mutual-aid activation and resource-commitment register within your grant — the agreement a request is made under, the request and its validity, the partner’s acceptance with its written confirmation and promise, the arrival compared against the promise, and the withdrawal and release that close the commitment' },
   'declare-mutual-aid': { minRank: 2, maxRank: 5, label: 'Declare a bilateral agreement, request help under it, record the partner’s acceptance with its written confirmation and promise, record the arrival, the withdrawal and the release of the commitment, cancel a request that was never accepted, and set the register’s conventions' },
   // ADR-0235/0236 (Schema v191). Six rights, and the shape is the point: RECORDING

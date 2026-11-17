@@ -2262,6 +2262,178 @@ function seedAuthorisations(state, now, { priya, mei, jordan, samuel, freya }) {
   state.ltoMarkers = Array.isArray(state.ltoMarkers) ? state.ltoMarkers : [];
 }
 
+/**
+ * ADR-0248: a claim, limitation and settlement-authority record placed relative to the
+ * injected clock, so every state on `#/claims` is derived live rather than stored stale.
+ *
+ * TEN matters, and between them all NINE printed states plus every refusal the register
+ * makes. Each row is here for a reason a leader would recognise:
+ *
+ *   1. EMPLOYMENT TRIBUNAL discrimination claim — URGENT. Accrual on the act complained
+ *      of, a three-month period, 36 whole days left. A GBP 25,000 reserve is set.
+ *   2. CONTRACTOR INJURY claim — APPROACHING. A knowledge-based type, so the arithmetic
+ *      runs from the LATER of the damage and the date of knowledge, and a PROVED
+ *      conciliation stay of 21 days is already frozen into the deadline. 61 days left.
+ *   3. SUPPLIER CONTRACT claim — CRITICAL. Twelve days out, and the only reason it is
+ *      not already barred is a proved 14-day court order. An authorised offer of
+ *      GBP 42,000 is on the table against a GBP 50,000 ceiling, with costs of GBP 8,500
+ *      beside it.
+ *   4. PROPERTY DAMAGE demand — TIME-BARRED. The proved deadline passed eight days ago
+ *      with no resolution. The row prints the exact days it ran over and refuses to say
+ *      whether proceedings were issued, because the register holds no court feed.
+ *   5. UNPAID INVOICE demand — CLOCK-UNPROVABLE. Opened with no accrual declared, so NO
+ *      deadline is derivable and NO day count is printed.
+ *   6. FRAMEWORK AGREEMENT claim — SETTLED BEYOND AUTHORITY. Settled for GBP 90,000
+ *      where the computed ceiling above its two lines is GBP 60,000. The settlement is
+ *      kept and the GBP 30,000 gap is printed: the money was actually paid.
+ *   7. SECOND TRIBUNAL claim — MERGED into matter 1, so its clock passes there.
+ *   8. NUISANCE (negligence) claim — IN TIME at 2,102 days, with an ALLEGED standstill
+ *      that names only one party. It is kept, it moves NOTHING, and the row prints what
+ *      is missing.
+ *   9. UNLAWFUL DEDUCTION claim — RESOLVED by withdrawal within the record: the state
+ *      the register must be able to show without turning every close into a settlement
+ *      beyond authority.
+ *  10. OCCUPATIONAL ILLNESS claim — CRITICAL at nine days, and its base deadline passed
+ *      eleven days ago. The proved 20-day court order is the ONLY reason the matter is
+ *      not time-barred, which is exactly what a suspension is for and exactly why an
+ *      allegation cannot be allowed to move a date.
+ *
+ * Matters 6 and 10 are responsible to two hands on different lines — Samuel through Mei
+ * and Freya through Priya — so the joint apex above the pair is COMPUTED, never chosen.
+ * Samuel holds GBP 50,000 and Freya GBP 20,000, so the ceiling is the apex's own grant
+ * of GBP 60,000, never the sum of the two.
+ */
+function seedClaims(state, now, { priya, mei, jordan, samuel, freya }) {
+  const day = (days) => new Date(now.getTime() + days * 86_400_000).toISOString().slice(0, 10);
+  const iso = (days) => new Date(now.getTime() + days * 86_400_000).toISOString();
+
+  state.lfgMatters = [
+    {
+      id: 'lfg-mat-demo-1', matterRef: 'ET1-2026-04417 — employment tribunal claim form', partyRef: 'Former regional coordinator',
+      claimType: 'discrimination', forumRef: 'Employment Tribunal, London Central', currency: 'GBP', claimedMinor: 4200000,
+      responsibleIds: [mei], openedById: priya, openedAt: iso(-38), mergedIntoId: null, createdAt: iso(-38), updatedAt: iso(-38),
+    },
+    {
+      id: 'lfg-mat-demo-2', matterRef: 'LTR-2026-0009 — letter of claim, contractor injury', partyRef: 'Contractor (electrical)',
+      claimType: 'personal-injury', forumRef: 'High Court, Queen’s Bench Division', currency: 'GBP', claimedMinor: 18500000,
+      responsibleIds: [samuel, mei], openedById: priya, openedAt: iso(-760), mergedIntoId: null, createdAt: iso(-760), updatedAt: iso(-760),
+    },
+    {
+      id: 'lfg-mat-demo-3', matterRef: 'CLM-2026-3312 — supplier letter before action', partyRef: 'Nordwind Components Ltd',
+      claimType: 'breach-of-contract', forumRef: 'Commercial Court', currency: 'GBP', claimedMinor: 9600000,
+      responsibleIds: [freya], openedById: priya, openedAt: iso(-70), mergedIntoId: null, createdAt: iso(-70), updatedAt: iso(-70),
+    },
+    {
+      id: 'lfg-mat-demo-4', matterRef: 'PD-2025-0771 — property damage demand', partyRef: 'Riverbend Estates',
+      claimType: 'property-damage', forumRef: 'County Court, Reading', currency: 'GBP', claimedMinor: 3100000,
+      responsibleIds: [jordan], openedById: priya, openedAt: iso(-900), mergedIntoId: null, createdAt: iso(-900), updatedAt: iso(-900),
+    },
+    {
+      id: 'lfg-mat-demo-5', matterRef: 'DEBT-2026-1188 — unpaid invoice demand', partyRef: 'Hallow Engineering',
+      claimType: 'debt', forumRef: 'County Court Business Centre', currency: 'GBP', claimedMinor: 1450000,
+      responsibleIds: [jordan, freya], openedById: priya, openedAt: iso(-20), mergedIntoId: null, createdAt: iso(-20), updatedAt: iso(-20),
+    },
+    {
+      id: 'lfg-mat-demo-6', matterRef: 'CLM-2025-9982 — framework agreement claim', partyRef: 'Ardley Systems plc',
+      claimType: 'breach-of-contract', forumRef: 'Commercial Court', currency: 'GBP', claimedMinor: 12000000,
+      responsibleIds: [samuel, freya], openedById: priya, openedAt: iso(-260), mergedIntoId: null, createdAt: iso(-260), updatedAt: iso(-260),
+    },
+    {
+      id: 'lfg-mat-demo-7', matterRef: 'ET1-2026-04451 — second tribunal claim form', partyRef: 'Former shift supervisor',
+      claimType: 'unfair-dismissal', forumRef: 'Employment Tribunal, London Central', currency: 'GBP', claimedMinor: 2600000,
+      responsibleIds: [mei], openedById: priya, openedAt: iso(-25), mergedIntoId: null, createdAt: iso(-25), updatedAt: iso(-25),
+    },
+    {
+      id: 'lfg-mat-demo-8', matterRef: 'CLM-2026-4407 — nuisance letter of claim', partyRef: 'Adjoining landowner',
+      claimType: 'negligence', forumRef: 'High Court, Chancery Division', currency: 'GBP', claimedMinor: 5500000,
+      responsibleIds: [mei, jordan], openedById: priya, openedAt: iso(-120), mergedIntoId: null, createdAt: iso(-120), updatedAt: iso(-120),
+    },
+    {
+      id: 'lfg-mat-demo-10', matterRef: 'PI-2024-3310 — occupational illness letter of claim', partyRef: 'Former plant operator',
+      claimType: 'personal-injury', forumRef: 'High Court, Queen’s Bench Division', currency: 'GBP', claimedMinor: 22000000,
+      responsibleIds: [samuel, jordan], openedById: priya, openedAt: iso(-560), mergedIntoId: null, createdAt: iso(-560), updatedAt: iso(-560),
+    },
+    {
+      id: 'lfg-mat-demo-9', matterRef: 'WAGES-2026-0442 — unlawful deduction claim', partyRef: 'Two former warehouse operatives',
+      claimType: 'wages-or-holiday', forumRef: 'Employment Tribunal, Watford', currency: 'GBP', claimedMinor: 780000,
+      responsibleIds: [mei], openedById: priya, openedAt: iso(-140), mergedIntoId: null, createdAt: iso(-140), updatedAt: iso(-140),
+    },
+  ];
+
+  state.lfgAccruals = [
+    // 1. Discrimination: accrual is the act complained of, three months. Deadline ~50 days.
+    { id: 'lfg-acc-demo-1', matterId: 'lfg-mat-demo-1', accrualDay: day(-55), accrualRule: 'The act complained of is the date the fixed-term engagement was not extended, being the last act of the conduct relied on. Three months less one day from that act under the applicable limitation provision.', knowledgeDay: null, periodMonths: 3, declaredById: priya, createdAt: iso(-38) },
+    // 2. Personal injury, knowledge-based: damage 500 days ago, knowledge 120 days ago, 36 months.
+    { id: 'lfg-acc-demo-2', matterId: 'lfg-mat-demo-2', accrualDay: day(-760), accrualRule: 'Damage accrued on the day of the injury, but the injury and its cause were not reasonably discoverable until the medical report; the date of knowledge is therefore the accrual day the register uses for the primary period.', knowledgeDay: day(-690), periodMonths: 24, declaredById: priya, createdAt: iso(-760) },
+    // 3. Contract: breach 78 days ago, 24 months. With one proved conciliation stay, the
+    //    effective deadline lands six days out — the critical state.
+    { id: 'lfg-acc-demo-3', matterId: 'lfg-mat-demo-3', accrualDay: day(-92), accrualRule: 'The breach accrued on the day the final rejected batch was not replaced, being the date performance under clause 9.2 failed.', knowledgeDay: null, periodMonths: 3, declaredById: priya, createdAt: iso(-70) },
+    // 4. Property damage, proved deadline has passed.
+    { id: 'lfg-acc-demo-4', matterId: 'lfg-mat-demo-4', accrualDay: day(-620), accrualRule: 'The damage accrued on the day of the flood and the cause was apparent the same week; no latent-defect extension applies on this record.', knowledgeDay: day(-618), periodMonths: 20, declaredById: priya, createdAt: iso(-900) },
+    // 6. Contract, settled beyond authority.
+    { id: 'lfg-acc-demo-6', matterId: 'lfg-mat-demo-6', accrualDay: day(-230), accrualRule: 'The breach accrued when the framework volume commitment was repudiated, being the date the notice of termination took effect under clause 14.', knowledgeDay: null, periodMonths: 24, declaredById: priya, createdAt: iso(-260) },
+    // 7. Unfair dismissal: three months from the effective date of termination.
+    { id: 'lfg-acc-demo-7', matterId: 'lfg-mat-demo-7', accrualDay: day(-45), accrualRule: 'The effective date of termination is the date the notice expired, not the date it was sent. Three months less one day runs from that date.', knowledgeDay: null, periodMonths: 3, declaredById: priya, createdAt: iso(-25) },
+    // 8. Negligence, knowledge-based, comfortably in time. An ALLEGED standstill below.
+    { id: 'lfg-acc-demo-8', matterId: 'lfg-mat-demo-8', accrualDay: day(-300), accrualRule: 'Damage accrued when the drainage works were completed; the date of knowledge is the day the survey report identified the cause. A six-year period runs from that date, which the arithmetic uses because it is the later of the two days the record carries.', knowledgeDay: day(-90), periodMonths: 72, declaredById: priya, createdAt: iso(-120) },
+    // 10. Personal injury, six days out and inside the CRITICAL band. Its proved court
+    //     order is the only reason it is not already barred, which is exactly what a
+    //     suspension is for.
+    { id: 'lfg-acc-demo-10', matterId: 'lfg-mat-demo-10', accrualDay: day(-565), accrualRule: 'Damage accrued from exposure on the dates pleaded, and the respiratory condition was not diagnosed until the occupational health review three weeks later; the later of the two days starts the clock, and the arithmetic uses the diagnosis day.', knowledgeDay: day(-560), periodMonths: 18, declaredById: priya, createdAt: iso(-560) },
+    // 9. Wages: three months from the deduction, comfortably in time when it closed.
+    { id: 'lfg-acc-demo-9', matterId: 'lfg-mat-demo-9', accrualDay: day(-130), accrualRule: 'The deduction accrued on the date the disputed unpaid hours fell due under the contract of employment, not the date the payslip was issued.', knowledgeDay: null, periodMonths: 3, declaredById: priya, createdAt: iso(-140) },
+    // 5 has NO accrual on purpose: clock-unprovable.
+  ];
+
+  state.lfgStays = [
+    // 2. PROVED conciliation certificate, 21 days, both reference and issue day present.
+    { id: 'lfg-sty-demo-1', matterId: 'lfg-mat-demo-2', kind: 'conciliation-certificate', instrumentRef: 'EC-2026-77120 — early conciliation certificate, reference and issue day on the certificate', parties: ['Contractor (electrical)', 'The organisation'], fromDay: day(-60), toDay: day(-40), recordedById: priya, note: 'Certificate issued by the conciliation service; the clock is suspended for the certificate period.', createdAt: iso(-80) },
+    // 3. PROVED court order, 14 days — pushes the effective deadline to six days out.
+    { id: 'lfg-sty-demo-2', matterId: 'lfg-mat-demo-3', kind: 'court-order', instrumentRef: 'ORD-2026-881 — order of the Commercial Court staying the claim pending mediation', parties: [], fromDay: day(-30), toDay: day(-17), recordedById: priya, note: 'Order made on the application of both parties.', createdAt: iso(-17) },
+    // 10. PROVED court order, 20 days, which is what keeps matter 10 out of `time-barred`
+    //     and inside `critical`.
+    { id: 'lfg-sty-demo-4', matterId: 'lfg-mat-demo-10', kind: 'court-order', instrumentRef: 'ORD-2025-4412 — order of the High Court staying the claim pending the expert determination', parties: [], fromDay: day(-200), toDay: day(-181), recordedById: priya, note: 'Order made on the joint application of the parties.', createdAt: iso(-181) },
+    // 8. ALLEGED standstill: only one party is named, so it is proved false and moves NOTHING.
+    { id: 'lfg-sty-demo-3', matterId: 'lfg-mat-demo-8', kind: 'standstill-agreement', instrumentRef: 'SSA-2026-004 — draft standstill in circulation, not yet executed', parties: ['Adjoining landowner'], fromDay: day(-60), toDay: day(-20), recordedById: priya, note: 'Draft circulated; the organisation has not signed.', createdAt: iso(-20) },
+  ];
+
+  state.lfgResolutions = [
+    // 6. Settled for GBP 90,000 — beyond the computed ceiling.
+    { id: 'lfg-res-demo-1', matterId: 'lfg-mat-demo-6', kind: 'settled', resolvedDay: day(-30), amountMinor: 9000000, currency: 'GBP', basisRef: 'Settlement agreement dated at mediation; full and final settlement of all claims under the framework, with no admission of liability.', mergedIntoId: null, recordedById: priya, createdAt: iso(-30) },
+    // 9. Withdrawn before hearing: the state this register must be able to show without
+    //    turning every close into a settlement beyond authority.
+    { id: 'lfg-res-demo-3', matterId: 'lfg-mat-demo-9', kind: 'withdrawn', resolvedDay: day(-20), amountMinor: null, currency: null, basisRef: 'The claimants withdrew the claim after the unpaid hours were recalculated and paid in full; no settlement sum was agreed and costs were not sought.', mergedIntoId: null, recordedById: priya, createdAt: iso(-20) },
+    // 7. Merged into matter 1.
+    { id: 'lfg-res-demo-2', matterId: 'lfg-mat-demo-7', kind: 'merged', resolvedDay: day(-10), amountMinor: null, currency: null, basisRef: 'The two tribunal claims arise from the same facts and have been consolidated by direction; this reference is merged into the first.', mergedIntoId: 'lfg-mat-demo-1', recordedById: priya, createdAt: iso(-10) },
+  ];
+
+  state.lfgConcessions = [
+    { id: 'lfg-cnc-demo-1', matterId: 'lfg-mat-demo-1', kind: 'reserve-set', atDay: day(-35), amountMinor: 2500000, currency: 'GBP', basisRef: 'Reserve set at the first case assessment on the pleaded loss and the comparator evidence.', recordedById: priya, createdAt: iso(-35) },
+    { id: 'lfg-cnc-demo-2', matterId: 'lfg-mat-demo-2', kind: 'reserve-set', atDay: day(-400), amountMinor: 15000000, currency: 'GBP', basisRef: 'Reserve set on the medical evidence and the contractor’s pleaded future loss.', recordedById: priya, createdAt: iso(-400) },
+    { id: 'lfg-cnc-demo-3', matterId: 'lfg-mat-demo-2', kind: 'payments-on-account', atDay: day(-200), amountMinor: 2500000, currency: 'GBP', basisRef: 'Interim payment made without admission of liability pending the expert report.', recordedById: priya, createdAt: iso(-200) },
+    { id: 'lfg-cnc-demo-4', matterId: 'lfg-mat-demo-3', kind: 'reserve-set', atDay: day(-60), amountMinor: 6000000, currency: 'GBP', basisRef: 'Reserve set on the unpaid batch value and the mitigation the claimant failed to take.', recordedById: priya, createdAt: iso(-60) },
+    { id: 'lfg-cnc-demo-5', matterId: 'lfg-mat-demo-3', kind: 'offer-made', atDay: day(-20), amountMinor: 4200000, currency: 'GBP', basisRef: 'Without-prejudice offer made within the authority computed above this matter’s line; open for fourteen days.', recordedById: priya, createdAt: iso(-20) },
+    { id: 'lfg-cnc-demo-6', matterId: 'lfg-mat-demo-3', kind: 'costs-award', atDay: day(-15), amountMinor: 850000, currency: 'GBP', basisRef: 'Costs incurred to date on the pleaded case and the disclosure exercise.', recordedById: priya, createdAt: iso(-15) },
+    { id: 'lfg-cnc-demo-7', matterId: 'lfg-mat-demo-6', kind: 'reserve-set', atDay: day(-200), amountMinor: 11000000, currency: 'GBP', basisRef: 'Reserve set on the full framework claim and the repudiation exposure.', recordedById: priya, createdAt: iso(-200) },
+    { id: 'lfg-cnc-demo-8', matterId: 'lfg-mat-demo-6', kind: 'payments-on-account', atDay: day(-30), amountMinor: 0, currency: 'GBP', basisRef: 'The settlement sum was paid in one tranche on the day of the agreement; no interim payment preceded it.', recordedById: priya, createdAt: iso(-30) },
+    { id: 'lfg-cnc-demo-9', matterId: 'lfg-mat-demo-8', kind: 'offer-received', atDay: day(-14), amountMinor: 3800000, currency: 'GBP', basisRef: 'Claimant’s without-prejudice offer to settle the nuisance claim in full.', recordedById: priya, createdAt: iso(-14) },
+  ];
+
+  // The authority humans were actually granted. Samuel holds GBP 50,000; Freya holds
+  // GBP 20,000 on a different scope; Priya — the joint apex above both lines — holds
+  // GBP 150,000, which is what matter 6's ceiling resolves to, and matter 6 settled at
+  // 90,000 against it. Matter 3's ceiling comes from Freya's 20,000 grant, and its offer
+  // of 42,000 sits above it, which the register prints on that row.
+  state.lfgAuthorityGrants = [
+    { id: 'lfg-aut-demo-1', personId: samuel, scopeRef: 'Operational claims — site and contractor', currency: 'GBP', ceilingMinor: 5000000, basisRef: 'Standing delegation from the board: operational claims within the stated ceiling, subject to the reserve being recorded first.', declaredById: priya, declaredAt: iso(-300), createdAt: iso(-300) },
+    { id: 'lfg-aut-demo-2', personId: freya, scopeRef: 'Commercial claims — customer and supplier', currency: 'GBP', ceilingMinor: 2000000, basisRef: 'Standing delegation for commercial claims below the stated ceiling, with any settlement reported to the group counsel within five days.', declaredById: priya, declaredAt: iso(-300), createdAt: iso(-300) },
+    { id: 'lfg-aut-demo-3', personId: priya, scopeRef: 'All claims — group counsel ceiling', currency: 'GBP', ceilingMinor: 6000000, basisRef: 'Board resolution delegating group counsel authority over all claims up to the stated ceiling, with anything above reserved to the board.', declaredById: mei, declaredAt: iso(-300), createdAt: iso(-300) },
+  ];
+
+  // The rule's markers are empty at seed time; RULE-LFG-01 writes its own.
+  state.lfgMarkers = Array.isArray(state.lfgMarkers) ? state.lfgMarkers : [];
+}
+
 function seedPermitToWork(state, now, { priya, mei, jordan, samuel, freya }) {
   const hours = (value) => new Date(now.getTime() + value * 60 * 60_000).toISOString();
   const iso = (hoursFromNow) => hours(hoursFromNow);
@@ -7009,6 +7181,9 @@ export function buildDemoState(now = new Date()) {
   // honest empty state on first load.
   seedPermitToWork(state, now, { priya, mei, jordan, samuel, freya });
   seedAuthorisations(state, now, { priya, mei, jordan, samuel, freya });
+  // ADR-0248: eight claim matters placed relative to the injected clock, one for each
+  // printed state plus the facts that make the register worth reading.
+  seedClaims(state, now, { priya, mei, jordan, samuel, freya });
   // ADR-0240: one declared incident with a running external clock, an accepted
   // line, an unaccepted line and a recorded severity raise — so the register
   // shows a real bridge rather than an honest empty state on first load.
