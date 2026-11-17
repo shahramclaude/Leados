@@ -127,6 +127,10 @@ import { createEarnedValueActions } from './core/domain/earnedValueActions.js';
 // Every read re-derives every figure; every write proves the line.
 import { createRiskAppetiteActions } from './core/domain/riskAppetiteActions.js';
 import { createDistributedEquityActions } from './core/domain/distributedEquityActions.js';
+// ADR-0240: the Major-Incident Command & Notification-Clock Register's commands
+// and seat-checked reads. Declaring, staffing, commanding, notifying, resolving
+// and standing down — nothing else.
+import { createIncidentCommandActions } from './core/domain/incidentCommandActions.js';
 import { createIncentiveActions } from './core/domain/incentiveActions.js';
 import { createDutyMeansActions } from './core/domain/dutyMeansActions.js';
 import { createPortfolioReviewActions } from './core/domain/portfolioReviewActions.js';
@@ -20375,6 +20379,8 @@ export function createApi(store, options = {}) {
   Object.assign(api, createRiskAppetiteActions(store, { now: clock, idFactory: id }));
   // ADR-0238: the distributed-work equity register's commands.
   Object.assign(api, createDistributedEquityActions(store, { now: clock, idFactory: id }));
+  // ADR-0240: the incident command register's commands.
+  Object.assign(api, createIncidentCommandActions(store, { now: clock, idFactory: id }));
   // ADR-0220: the variable-pay design & incentive integrity register's commands.
   Object.assign(api, createIncentiveActions(store, { now: clock, idFactory: id }));
   // ADR-0221: the Duty-Without-Means Register's commands and seat-checked reads.

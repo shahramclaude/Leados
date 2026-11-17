@@ -265,6 +265,15 @@ export const RECORD_POLICIES = Object.freeze({
   dweWindows: { classKey: 'individual', label: 'Declared working windows — one sourced daily span per person, with its zone', route: '#/distributed-equity' },
   dweSittings: { classKey: 'individual', label: 'Declared unsociable-hour sittings — dated wall-clock events with their attendees and chair', route: '#/distributed-equity' },
   dweMarkers: { classKey: 'unit', detailCeiling: 3, label: 'Distributed-equity observation markers — unreadable windows, no joint seat (identity-free)', route: '#/distributed-equity' },
+  // ADR-0240 (Schema v194): the incident command register. An incident record
+  // names the people on the bridge, the instrument it was declared under and the
+  // external parties it owes — individual detail that is not handed upward, so
+  // the detail ceiling sits at the director altitude and above it only counts
+  // survive. The acts are open at every rank (a responder must be able to see the
+  // incident they are on) with the reader narrowing per-person detail.
+  micIncidents: { classKey: 'individual', detailCeiling: 3, label: 'Declared incidents — title, severity and criterion, detection and declaration instants, response lines, declared clocks and notification obligations', route: '#/incidents' },
+  micActs: { classKey: 'individual', detailCeiling: 3, label: 'Append-only incident acts — line assignment and acceptance, command assumption and transfer, notification records, severity changes, resolution and stand-down', route: '#/incidents' },
+  micMarkers: { classKey: 'unit', detailCeiling: 3, label: 'Incident-command observation markers — no joint seat above the lines, unnamable commander (identity-free)', route: '#/incidents' },
   // ADR-0229: a capability case, its priced options and its acts are PORTFOLIO
   // material — the boundary of the firm is not a unit's own instrument. Each row
   // is span-scoped by its owner and lines inside the register's reader, so a
@@ -1363,6 +1372,16 @@ export const ACTION_RIGHTS = Object.freeze({
   'deliver-undertaking-line': { minRank: 1, maxRank: 5, label: 'Assert the deliverable on a line you hold, in your own name, with dated evidence — nobody asserts on somebody else’s line' },
   'verify-undertaking-line': { minRank: 1, maxRank: 5, label: 'Independently confirm or reject a line’s deliverable — only from a seat strictly above the line’s holder, never as the holder and never below them' },
   'report-undertaking-closure': { minRank: 4, maxRank: 5, label: 'Record that the counterparty was told in writing that the promise is met, record their acknowledgement, and move a due day — only once every line is independently confirmed' },
+  // ADR-0240 (Schema v194): the incident command register. Two rights, and the
+  // split is the product. READING is open at every rank — a responder must be
+  // able to see the incident they are on, and the READER narrows per-person
+  // detail above the director altitude. COMMANDING an incident is a rank 2+ act
+  // in the declaring seat's own span; the tighter tests (party to the incident,
+  // strict reach above every line lead, only the holder may hand over or release)
+  // are re-proved inside each action against the reporting graph, because rank
+  // alone cannot say who is on a bridge.
+  'read-incidents': { minRank: 1, maxRank: 5, label: 'Read the incident command register within your grant — the incidents you declared or command, the response lines you lead, and the span that holds them' },
+  'command-incidents': { minRank: 2, maxRank: 5, label: 'Declare an incident against a written criterion, staff its response lines, take and hand over command, record notifications against their declared clocks, change severity, resolve and stand command down, and set the register’s conventions' },
   // ADR-0235/0236 (Schema v191). Six rights, and the shape is the point: RECORDING
   // a demand (with a follow-up link only to a readable insufficient parent),
   // STAFFING its lines and RELEASING to the authority are rank 3+ acts —

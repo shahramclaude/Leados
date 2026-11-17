@@ -180,6 +180,10 @@ import { assuranceFindingAttentionCount } from './core/domain/assuranceFindingRe
 // ADR-0233: the Probation Confirmation Gate Register — the dated decision and
 // the per-line evidence duty a probation window owes, before the window closes.
 import { renderProbationGates } from './views/probation-gates.js';
+// ADR-0240: the incident command record — declared with a written criterion,
+// commanded by a named hand, with every external clock computed separately.
+import { renderIncidents } from './views/incidents.js';
+import { incidentAttentionCount } from './core/domain/incidentCommand.js';
 import { probationGateAttentionCount } from './core/domain/probationGateReport.js';
 // ADR-0234: the promise made outward — the counterparty report every confirmed
 // obligation line owes, and the due day nobody has been told about.
@@ -662,6 +666,9 @@ export const NAV = [
     // decision a control failure owes, the other the decision a joiner's
     // first window owes.
     { route: 'probation', label: 'Probation gates', icon: '⏳', badge: 'probationGates' },
+    // ADR-0240: the command record of a live incident — who declared it, who is
+    // commanding, every external clock it owes, and whether command was released.
+    { route: 'incidents', label: 'Incidents', icon: '⚠', badge: 'incidents' },
     // ADR-0234: the promise the enterprise made OUTWARD — to a regulator, a
     // board, a lender, a customer — and whether the counterparty was ever told it
     // was met. Beside the assurance findings and probation gates on purpose: one
@@ -880,6 +887,8 @@ const RENDERERS = {
   findings: (ctx) => renderAssuranceFindings(ctx),
   // ADR-0233: the probation confirmation gate register.
   probation: (ctx) => renderProbationGates(ctx),
+  // ADR-0240: the major-incident command & notification-clock register.
+  incidents: (ctx) => renderIncidents(ctx),
   // ADR-0234: the regulatory undertaking & outward-commitment closure register.
   undertakings: (ctx) => renderUndertakings(ctx),
   // ADR-0235: the regulator information-request & examination response register.
@@ -999,6 +1008,9 @@ export function parseRoute(hash) {
     'seal': 'seal', 'seals': 'seal', 'audit-chain': 'seal', 'attestation': 'seal',
     'identity': 'identity', 'attested-commits': 'identity', 'seat-identity': 'identity',
     'probation': 'probation', 'probation-gates': 'probation', 'probation-gate': 'probation', 'confirmation': 'probation', 'new-hire-decision': 'probation',
+    'incident': 'incidents', 'major-incident': 'incidents', 'incident-command': 'incidents', 'command': 'incidents',
+    'notification-clock': 'incidents', 'notification-clocks': 'incidents', 'regulatory-clock': 'incidents',
+    'sev1': 'incidents', 'sev-1': 'incidents', 'outage': 'incidents', 'p1': 'incidents', 'bridge': 'incidents',
     // ADR-0234: the promise made outward. `commitments` and `promise` already
     // belong to Promise solvency, and `covenant` to finance, so nothing here may
     // shadow an existing route.
@@ -1807,6 +1819,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       // notification a gate it confirms is owed, or an overdue evidence ask
       // addressed to a line it holds.
       probationGates: probationGateAttentionCount(state, { now: at, seat: seatCtx?.seat || null }),
+      incidents: incidentAttentionCount(state, { now: at, settings: state.settings, seat: seatCtx?.seat || null }),
       undertakings: undertakingAttentionCount(state, { now: at, seat: seatCtx?.seat || null }),
       // ADR-0235: demands this seat owes an act on — a line it must produce, a
       // production it may review as a seat outside the parties, a reviewed
@@ -2379,6 +2392,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       'work-stop': 'Stop-work & safe restart — an active hold, independent clearance, then the affected operator’s key',
       'manager-handover': 'Manager handover — a role does not expire with its holder: brief, successor acceptance, governor release',
       probation: 'Probation gates — the decision a joiner’s first window owes: confirm, extend or end, on evidence from every declared line, communicated in writing',
+  incidents: 'Major incidents — the command record while it runs: who declared it and against what written criterion, who took command and when they handed it over, every declared notification clock with its exact deadline, whether each party was actually told, and whether command was ever released',
       undertakings: 'Undertakings — the promise the enterprise made to a regulator, a board, a lender or a customer: its obligation lines, each independently tested, and the written report that discharges it to the counterparty',
       'information-requests': 'Information requests — what an authority demanded, on the day they set: every production line certified, every claim of privilege ruled on by a seat outside the parties, and the release that answers them',
       sourcing: 'Capability sourcing — make, buy, partner or hybrid: the boundary of the firm, decided on asset specificity and the safeguards a contract can carry',

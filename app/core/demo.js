@@ -1908,6 +1908,135 @@ function seedSignalPath(state, now) {
 }
 
 
+/**
+ * ADR-0240 (Schema v194): one declared incident on the demo record, written the
+ * way a real bridge writes one — an external clock that is genuinely running, a
+ * response line nobody accepted, and a commander whose handover is on the record.
+ *
+ * WHAT THIS SEED IS CAREFUL ABOUT. Every instant is derived from `now`, so the
+ * demo never carries a stale deadline. The declared clock is a 72-hour period
+ * from AWARENESS (the loader's own allowed origin), and the awareness instant is
+ * placed so that the deadline is genuinely inside its closing window at demo
+ * load — the screen therefore shows a real "closing" row rather than a
+ * comfortable one, which is the state this register exists for. No notification
+ * is seeded as recorded: the gap between "we know" and "we told them" is exactly
+ * what the register exists to make visible, and faking a recording would hide it.
+ */
+function seedIncidentCommand(state, now, { priya, mei, jordan, at, ts }) {
+  const nowDate = now instanceof Date ? now : new Date(now);
+  const iso = (daysAgo, hourUtc, minute = 0) => {
+    const day = at(daysAgo);
+    return new Date(`${day}T${String(hourUtc).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00.000Z`).toISOString();
+  };
+  const incidentId = 'mic-inc-demo-1';
+  const clockKey = 'mic-clk-demo-1';
+  const lineOps = 'mic-ln-demo-1';
+  const lineClock = 'mic-ln-demo-2';
+
+  // THE CLOCK IS PLACED BY ARITHMETIC, NEVER HARD-CODED, so the demo is never
+  // stale. A 4-hour contractual notice period runs from AWARENESS, and awareness
+  // is placed so the deadline sits inside the register's default 120-minute
+  // closing window at load: 240 - 118 = 122 minutes before `now`. The screen
+  // therefore shows a genuinely closing obligation the moment it opens.
+  const clockMinutes = 4 * 60;
+  const awarenessMs = nowDate.getTime() - (clockMinutes - 118) * 60_000;
+  const awarenessAt = new Date(awarenessMs).toISOString();
+  // Awareness IS detection: the instant the entity first knew is the instant the
+  // clock runs from, and the register stores one instant for both on purpose.
+  const detectedAt = awarenessAt;
+  // Declared 40 minutes after it was detected — a real, unflattering interval the
+  // review can read, not a flattering zero.
+  const declaredAt = new Date(awarenessMs + 40 * 60_000).toISOString();
+
+  state.micIncidents = [
+    {
+      id: incidentId,
+      title: 'Card authorisation failing for one acquirer route',
+      severity: 'sev3',
+      criterion: 'A contained degradation of a customer-facing service with a known workaround, affecting one line and — as first declared — no external obligation.',
+      detectedAt,
+      declaredAt,
+      declaredById: priya,
+      followsUpOn: null,
+      clocks: [
+        {
+          key: clockKey,
+          clockSource: 'contract',
+          clockMinutes,
+          clockOrigin: 'awareness',
+          basis: 'The acquirer agreement requires notice of a payment-processing disruption within four hours of the entity becoming aware of it. Read off the service schedule; the register records the period and does not interpret it.',
+          declaredAt,
+          declaredById: priya,
+        },
+      ],
+      lines: [
+        {
+          lineId: lineOps,
+          duty: 'operations-impact',
+          dutyText: 'Contain the authorisation failures and hold the affected acquirer route at a degraded-but-honest state.',
+          leadId: mei,
+        },
+        {
+          lineId: lineClock,
+          duty: 'compliance-clock',
+          dutyText: 'Own the acquirer notification period and the evidence the notice went out under.',
+          leadId: jordan,
+        },
+      ],
+      notifications: [
+        {
+          notifId: 'mic-nf-demo-1',
+          party: 'affected-customer',
+          basis: 'The acquirer agreement requires notice of a processing disruption affecting their traffic.',
+          clockKey,
+        },
+      ],
+      createdAt: declaredAt,
+      updatedAt: declaredAt,
+    },
+  ];
+
+  state.micActs = [
+    {
+      id: 'mic-act-demo-1',
+      incidentId,
+      actorId: priya,
+      kind: 'assign',
+      lineId: lineOps,
+      leadId: mei,
+      assignedAt: iso(0, 3, 22),
+      at: iso(0, 3, 22),
+    },
+    {
+      id: 'mic-act-demo-2',
+      incidentId,
+      actorId: mei,
+      kind: 'accept',
+      lineId: lineOps,
+      acceptedAt: iso(0, 3, 26),
+      at: iso(0, 3, 26),
+    },
+    {
+      id: 'mic-act-demo-3',
+      incidentId,
+      actorId: priya,
+      kind: 'assume',
+      assumedAt: iso(0, 3, 21),
+      at: iso(0, 3, 21),
+    },
+    {
+      id: 'mic-act-demo-4',
+      incidentId,
+      actorId: priya,
+      kind: 'severity',
+      severity: 'sev2',
+      reason: 'Raised from SEV-3 once the failure was confirmed on a second acquirer route and the contractual notice period applied.',
+      changedAt: iso(0, 3, 34),
+      at: iso(0, 3, 34),
+    },
+  ];
+}
+
 function seedDistributedEquity(state, now, { priya, mei, jordan, samuel, freya, at, ts }) {
   // ADR-0238 (Schema v193): the demo roster is a genuinely distributed team —
   // two zones, a recurring late bridge and an evening sitting — so the register
@@ -5564,6 +5693,10 @@ export function buildDemoState(now = new Date()) {
   // roster — sourced, dated, and read back through the same fail-closed loader
   // every import uses.
   seedDistributedEquity(state, now, { priya, mei, jordan, samuel, freya, at, ts });
+  // ADR-0240: one declared incident with a running external clock, an accepted
+  // line, an unaccepted line and a recorded severity raise — so the register
+  // shows a real bridge rather than an honest empty state on first load.
+  seedIncidentCommand(state, now, { priya, mei, jordan, at, ts });
   // Schema v35: anchor assumptions to the real metrics decision and two real
   // continuity dependencies, then run the real sensor rule over them.
   const premiseDecision = (state.decisions || []).find((d) => d && d.title === 'Standardise weekly metrics on warehouse tables');
