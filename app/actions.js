@@ -102,6 +102,7 @@ import { createGoalAttainmentActions } from './core/domain/goalAttainmentActions
 import { createInvestmentCaseActions } from './core/domain/investmentCaseActions.js';
 import { createCapitalRationingActions } from './core/domain/capitalRationingActions.js';
 import { createStandardWaiverActions } from './core/domain/standardWaiverActions.js';
+import { createStandardRevisionActions } from './core/domain/standardRevisionActions.js';
 import { createFlexBudgetActions } from './core/domain/flexBudgetActions.js';
 // ADR-0214: the enterprise value bridge — two dated readings, four attributed
 // legs, and a leg owner declared rather than guessed.
@@ -20348,6 +20349,8 @@ export function createApi(store, options = {}) {
   // resolves the line holder from the matrix on every answer and refuses the
   // requester, a peer line and an ancestor alike.
   Object.assign(api, createStandardWaiverActions(store, { now: clock, idFactory: id }));
+  // ADR-0237: the standard-work revision register — approved revisions and briefings.
+  Object.assign(api, createStandardRevisionActions(store, { now: clock, idFactory: id }));
   // ADR-0213: the flexible-budget variance statement — a declared standard,
   // dated actuals, and an exact split of the gap. Nothing derived is stored.
   Object.assign(api, createFlexBudgetActions(store, { now: clock, idFactory: id }));

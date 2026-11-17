@@ -233,14 +233,15 @@ function withDOM(run) {
 }
 
 test('Schema v190→191 preserves recorded requests as roots and never infers a follow-up', () => {
-  assert.equal(SCHEMA_VERSION, 191);
+  assert.equal(SCHEMA_VERSION, 192);
   assert.ok(COLLECTIONS.includes('informationRequests'));
   const legacy = createEmptyState(created);
   legacy.schemaVersion = 190;
   legacy.informationRequests = [requestRow('rq-legacy', created)];
   const migrated = migrate(legacy);
-  assert.deepEqual(migrated.applied, ['190 → 191']);
-  assert.equal(migrated.raw.schemaVersion, 191);
+  // The chain now continues to head: 190 → 191 (this suite) and 191 → 192 (ADR-0237).
+  assert.deepEqual(migrated.applied, ['190 → 191', '191 → 192']);
+  assert.equal(migrated.raw.schemaVersion, 192);
   assert.equal(migrated.raw.informationRequests[0].followsUpOn, null);
   assert.equal(migrated.raw.informationRequests[0].id, 'rq-legacy');
 });

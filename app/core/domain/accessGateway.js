@@ -19,6 +19,7 @@ import { WORK_REST_RIGHTS } from './workRestRegistry.js';
 import { WORK_NIGHT_RIGHTS } from './workNightRegistry.js';
 import { CONFLICT_RECUSAL_RIGHTS } from './conflictRecusalRegistry.js';
 import { STANDARD_WAIVER_RIGHTS } from './standardWaiverRegistry.js';
+import { STANDARD_REVISION_RIGHTS } from './standardRevisionRegistry.js';
 import { FLEX_BUDGET_RIGHTS } from './flexBudgetRegistry.js';
 import { VALUE_BRIDGE_RIGHTS } from './valueBridgeRegistry.js';
 import { SPEAK_UP_RIGHTS } from './speakUpRegistry.js';
@@ -219,6 +220,13 @@ const groups = [
   [STANDARD_WAIVER_RIGHTS.AUTHORISE, 'standardWaiverAnswer standardWaiverRevoke'],
   [STANDARD_WAIVER_RIGHTS.DECIDE, 'standardWaiverDecide'],
   [STANDARD_WAIVER_RIGHTS.GOVERN, 'standardWaiverScan standardWaiverSetConventions'],
+  // ADR-0237: the standard-work revision register. The report is a pure read that
+  // re-proves the read right and projects by seat inside the reader. Approving a
+  // revision is the holder of the line the routine is owed under; briefing is the
+  // approver's own act. The action re-proves the line and the owner on every call.
+  [STANDARD_REVISION_RIGHTS.READ, 'standardRevisionReport'],
+  [STANDARD_REVISION_RIGHTS.APPROVE, 'standardRevisionCandidates standardRevisionApprove'],
+  [STANDARD_REVISION_RIGHTS.BRIEF, 'standardRevisionBrief'],
   // ADR-0213: the flexible-budget variance statement. Its pure reads sit on the
   // read right; declaring a standard and recording actuals each re-prove, inside
   // the action, that the seat holds the budget holder (and is not the holder,
@@ -818,6 +826,8 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // action; the report never exposes raw collections to the generic projection.
 'mgrHandoverReport', 'mgrHandoverAttentionCount', 'mgrHandoverCandidates',
 'portfolioReport', 'portfolioAttentionCount', 'portfolioCandidates',
+// ADR-0237: the revision register's report re-proves its read right inside the reader.
+'standardRevisionReport',
 'standardWaiverAttentionCount', 'standardWaiverBriefText', 'standardWaiverCandidates', 'standardWaiverCsvRows', 'standardWaiverReport', 'concordanceAttentionCount', 'concordanceBriefText', 'concordanceCsvRows', 'concordanceRead', 'concordanceStats', 'disclosureAttentionCount', 'disclosureBriefText', 'disclosureCsvRows', 'disclosureGrantRead', 'disclosureGrants', 'disclosureRead', 'envoyAttentionCount', 'envoyBriefText', 'envoyCsvRows', 'envoyIdentity', 'envoyPacketText', 'envoyPreview', 'envoyRead', 'escalationBriefText', 'escalationCsvRows', 'escalationRead', 'escalationStats', 'differencesAttentionCount', 'differencesBriefText', 'differencesCsvRows', 'differencesRead', 'federationAttentionCount', 'federationBriefText', 'federationCsvRows', 'federationRead',
 'freezeLineAttentionCount', 'freezeLineBriefText', 'freezeLineConventions', 'freezeLineCsvRows', 'freezeLineReport',
 'spanCalibrationAttentionCount', 'spanCalibrationBriefText', 'spanCalibrationConventions', 'spanCalibrationCsvRows', 'spanCalibrationReport', 'spanCalibrationSettings', 'spanCalibrationSignals',
