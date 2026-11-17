@@ -2129,6 +2129,226 @@ function seedLoneWorking(state, now, { priya, mei, jordan, samuel, freya }) {
 }
 
 /**
+ * ADR-0246: a permit-to-work record placed relative to the injected clock, so every
+ * state on `#/permit-to-work` is derived live rather than stored stale.
+ *
+ * Seven permits and the isolations, readings, suspensions and closures they need:
+ *
+ *   1. HOT WORK, live, in the tank room — with a SECOND permit (3) isolating the line
+ *      into it and its isolation REMOVED two hours ago while the hot work runs to
+ *      tonight. That is the register's headline conflict, and it is derived, never
+ *      stored.
+ *   2. COLD WORK, live, electrical — one isolation applied and never proved, so the
+ *      permit reads `live-unverified`: work may be under way on plant the record
+ *      cannot show is dead.
+ *   3. LINE BREAKING on the tank-room line, live, whose isolation was removed early
+ *      and confirmed — the release that conflicts with permit 1.
+ *   4. CONFINED-SPACE ENTRY, live, with a reading INSIDE the oxygen band and a second
+ *      reading that FAILED the H2S limit forty minutes ago: `live-atmosphere`.
+ *   5. GENERAL maintenance, expired three hours ago, never closed: `expired-open`.
+ *   6. GENERAL maintenance, closed cleanly with both isolations removed and confirmed:
+ *      `closed-complete`.
+ *   7. GENERAL maintenance, closed while its isolation was never removed: the
+ *      `closed-isolation-owed` state, kept and printed rather than repaired.
+ *
+ * Permit 3 is issued by Mei and held by Jordan, and permit 1 by Priya and held by
+ * Samuel — so the joint apex above the pair is computed, not chosen.
+ */
+function seedPermitToWork(state, now, { priya, mei, jordan, samuel, freya }) {
+  const hours = (value) => new Date(now.getTime() + value * 60 * 60_000).toISOString();
+  const iso = (hoursFromNow) => hours(hoursFromNow);
+
+  const permit = (seq, fields) => ({
+    id: `ptw-permit-demo-${seq}`,
+    authorityKind: 'single',
+    fireWatchId: null,
+    crewIds: [],
+    atmospherePlan: [],
+    flightFromAt: null,
+    createdAt: iso(-6),
+    updatedAt: iso(-1),
+    ...fields,
+  });
+
+  state.ptwPermits = [
+    // 1. Hot work in the tank room, live now. No proof owed: hot work is not
+    //    energy-control work in this fixture, but the fire watch is named because
+    //    the door refuses to issue one without it.
+    permit(1, {
+      workRef: 'PTW-2481 tank room hot work',
+      areaRef: 'Tank room — north',
+      workKind: 'hot-work',
+      holderId: samuel,
+      issuerId: priya,
+      lineManagerId: mei,
+      basisRef: 'MS-114 rev 4 — tank room hot work and fire watch',
+      validityMinutes: 480,
+      validFromAt: iso(-3),
+      fireWatchId: jordan,
+      crewIds: [samuel, jordan],
+      energyControl: false,
+    }),
+    // 2. Electrical cold work, live, one isolation applied and NEVER proved.
+    permit(2, {
+      workRef: 'PTW-2482 pump house electrical',
+      areaRef: 'Pump house — bay 2',
+      workKind: 'electrical-isolation',
+      holderId: mei,
+      issuerId: priya,
+      lineManagerId: priya,
+      basisRef: 'MS-207 rev 3 — LV motor replacement with isolation',
+      validityMinutes: 360,
+      validFromAt: iso(-2),
+      energyControl: true,
+    }),
+    // 3. Line breaking on the tank-room line. Its isolation was removed 2h ago and
+    //    CONFIRMED — the release that makes the conflict with permit 1 provable.
+    permit(3, {
+      workRef: 'PTW-2483 tank room line break',
+      areaRef: 'Tank room — north',
+      workKind: 'line-breaking',
+      holderId: jordan,
+      issuerId: mei,
+      lineManagerId: mei,
+      basisRef: 'MS-131 rev 2 — line break on the tank room transfer main',
+      validityMinutes: 300,
+      validFromAt: iso(-5),
+      energyControl: true,
+    }),
+    // 4. Confined-space entry with two declared tests and a FAILING H2S reading.
+    permit(4, {
+      workRef: 'PTW-2484 sump confined-space entry',
+      areaRef: 'Effluent sump 1',
+      workKind: 'confined-space-entry',
+      holderId: freya,
+      issuerId: priya,
+      lineManagerId: priya,
+      basisRef: 'MS-402 rev 1 — effluent sump entry and atmosphere testing',
+      validityMinutes: 240,
+      validFromAt: iso(-1),
+      energyControl: true,
+      atmospherePlan: [
+        { testKey: 'oxygen', limitMin: 19.5, limitMax: 23.5, freshnessMinutes: 60 },
+        { testKey: 'h2s', limitMin: 0, limitMax: 5, freshnessMinutes: 60 },
+        { testKey: 'lel', limitMin: 0, limitMax: 10, freshnessMinutes: 60 },
+      ],
+      crewIds: [freya, jordan],
+    }),
+    // 5. Expired three hours ago and never closed.
+    permit(5, {
+      workRef: 'PTW-2476 warehouse routine',
+      areaRef: 'Warehouse — aisle 9',
+      workKind: 'general',
+      holderId: jordan,
+      issuerId: mei,
+      lineManagerId: mei,
+      basisRef: 'MS-088 rev 2 — warehouse routine maintenance',
+      validityMinutes: 120,
+      validFromAt: iso(-5),
+    }),
+    // 6. Closed cleanly: both isolations removed and confirmed.
+    permit(6, {
+      workRef: 'PTW-2470 compressor service',
+      areaRef: 'Compressor house',
+      workKind: 'cold-work',
+      holderId: samuel,
+      issuerId: mei,
+      lineManagerId: mei,
+      basisRef: 'MS-155 rev 5 — compressor service and isolation',
+      validityMinutes: 240,
+      validFromAt: iso(-9),
+      energyControl: true,
+    }),
+    // 7. Closed with an isolation never restored.
+    permit(7, {
+      workRef: 'PTW-2468 cooling tower repair',
+      areaRef: 'Cooling tower — cell 2',
+      workKind: 'cold-work',
+      holderId: mei,
+      issuerId: priya,
+      lineManagerId: priya,
+      basisRef: 'MS-163 rev 2 — cooling tower cell isolation',
+      validityMinutes: 180,
+      validFromAt: iso(-12),
+      energyControl: true,
+    }),
+  ];
+
+  state.ptwIsolations = [
+    // Permit 2: applied, never proved. The window was 30 minutes; it is long past.
+    {
+      id: 'ptw-iso-demo-1', permitId: 'ptw-permit-demo-2', pointRef: 'Bay 2 MCC breaker 14',
+      lockRef: 'LOCK-2041', energyKind: 'electrical', appliedAt: iso(-2), appliedById: mei,
+      verifyWithinMinutes: 30, verifiedAt: null, verifiedById: null,
+      removedAt: null, removedById: null, removalConfirmedById: null, removalNote: '', createdAt: iso(-2),
+    },
+    // Permit 3: applied six hours ago, proved inside its window, then REMOVED two
+    // hours ago and confirmed — while the hot-work permit in the same area runs on.
+    {
+      id: 'ptw-iso-demo-2', permitId: 'ptw-permit-demo-3', pointRef: 'Tank room transfer main XV-118',
+      lockRef: 'LOCK-2052', energyKind: 'process-fluid', appliedAt: iso(-6), appliedById: jordan,
+      verifyWithinMinutes: 45, verifiedAt: iso(-5.5), verifiedById: mei,
+      removedAt: iso(-2), removedById: jordan, removalConfirmedById: mei,
+      removalNote: 'Zero pressure confirmed at the gauge and the line drained before the valve was reopened to production.', createdAt: iso(-2),
+    },
+    // Permit 4: the sump inlet isolated and proved inside its window.
+    {
+      id: 'ptw-iso-demo-3', permitId: 'ptw-permit-demo-4', pointRef: 'Sump inlet valve SV-9',
+      lockRef: 'LOCK-2061', energyKind: 'chemical', appliedAt: iso(-1.2), appliedById: freya,
+      verifyWithinMinutes: 30, verifiedAt: iso(-1), verifiedById: jordan,
+      removedAt: null, removedById: null, removalConfirmedById: null, removalNote: '', createdAt: iso(-1.2),
+    },
+    // Permit 6: two isolations, both removed and confirmed before the clean closure.
+    {
+      id: 'ptw-iso-demo-4', permitId: 'ptw-permit-demo-6', pointRef: 'Compressor K-2 motor breaker',
+      lockRef: 'LOCK-1980', energyKind: 'electrical', appliedAt: iso(-9), appliedById: samuel,
+      verifyWithinMinutes: 20, verifiedAt: iso(-8.9), verifiedById: mei,
+      removedAt: iso(-6), removedById: samuel, removalConfirmedById: mei,
+      removalNote: 'Motor run-up confirmed by the panel and the lock returned to the board.', createdAt: iso(-6),
+    },
+    {
+      id: 'ptw-iso-demo-5', permitId: 'ptw-permit-demo-6', pointRef: 'Compressor K-2 suction valve',
+      lockRef: 'LOCK-1981', energyKind: 'process-fluid', appliedAt: iso(-9), appliedById: samuel,
+      verifyWithinMinutes: 30, verifiedAt: iso(-8.8), verifiedById: mei,
+      removedAt: iso(-6), removedById: samuel, removalConfirmedById: mei,
+      removalNote: 'Valve stroked and the suction pressure rebuilt on the gauge before hand-back.', createdAt: iso(-6),
+    },
+    // Permit 7: the isolation left on the plant at closure.
+    {
+      id: 'ptw-iso-demo-6', permitId: 'ptw-permit-demo-7', pointRef: 'Cooling tower cell 2 fan breaker',
+      lockRef: 'LOCK-1944', energyKind: 'electrical', appliedAt: iso(-12), appliedById: mei,
+      verifyWithinMinutes: 30, verifiedAt: iso(-11.9), verifiedById: priya,
+      removedAt: null, removedById: null, removalConfirmedById: null, removalNote: '', createdAt: iso(-12),
+    },
+  ];
+
+  state.ptwAtmosphere = [
+    // Permit 4: oxygen and LEL inside their bands, H2S FAILING its 5 ppm limit.
+    { id: 'ptw-atm-demo-1', permitId: 'ptw-permit-demo-4', testKey: 'oxygen', reading: 20.8, testedAt: iso(-0.75), testedById: jordan, instrumentRef: 'GX-3R 4471', note: '', createdAt: iso(-0.75) },
+    { id: 'ptw-atm-demo-2', permitId: 'ptw-permit-demo-4', testKey: 'h2s', reading: 12, testedAt: iso(-0.66), testedById: jordan, instrumentRef: 'GX-3R 4471', note: 'Reading taken at the sump cover before entry; the air in the space is not proved by this.', createdAt: iso(-0.66) },
+    { id: 'ptw-atm-demo-3', permitId: 'ptw-permit-demo-4', testKey: 'lel', reading: 2, testedAt: iso(-0.66), testedById: jordan, instrumentRef: 'GX-3R 4471', note: '', createdAt: iso(-0.66) },
+  ];
+
+  state.ptwHandovers = [];
+  state.ptwSuspensions = [];
+  state.ptwClosures = [
+    {
+      id: 'ptw-cls-demo-1', permitId: 'ptw-permit-demo-6', closedAt: iso(-5.8), closedById: mei,
+      outcome: 'work-completed', note: 'Service finished, both isolations restored and confirmed, and the compressor handed back to production at the end of the job.',
+      createdAt: iso(-5.8),
+    },
+    {
+      id: 'ptw-cls-demo-2', permitId: 'ptw-permit-demo-7', closedAt: iso(-3), closedById: priya,
+      outcome: 'work-abandoned', note: 'Repair called off when the cell was found to need a full fan replacement; closed out with the fan breaker still locked, which is exactly what this register prints.',
+      createdAt: iso(-3),
+    },
+  ];
+
+  // The rule's markers are empty at seed time; RULE-PTW-01 writes its own.
+  state.ptwMarkers = Array.isArray(state.ptwMarkers) ? state.ptwMarkers : [];
+}
+
+/**
  * ADR-0241: a small, REAL-SHAPED workplace-adjustment record.
  *
  * Four cases, drawn from the failures the adjustment-register category names, so
@@ -6673,6 +6893,13 @@ export function buildDemoState(now = new Date()) {
   // ADR-0245: a live personal-account dealing record, placed relative to the
   // injected clock so the register shows derived states rather than stale rows.
   seedPersonalDealing(state, now, { priya, mei, jordan, samuel, freya, at, ts });
+  // ADR-0246: seven permits with their isolations, readings and closures placed
+  // relative to the injected clock — a live hot-work permit over a released
+  // isolation, a live permit with no proof of zero energy, a failing H2S reading
+  // inside a live entry, a lapsed permit nobody closed and a closure that left a
+  // line isolated — so the register derives live conflicts rather than showing an
+  // honest empty state on first load.
+  seedPermitToWork(state, now, { priya, mei, jordan, samuel, freya });
   // ADR-0240: one declared incident with a running external clock, an accepted
   // line, an unaccepted line and a recorded severity raise — so the register
   // shows a real bridge rather than an honest empty state on first load.

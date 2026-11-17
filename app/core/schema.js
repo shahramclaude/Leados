@@ -465,6 +465,16 @@ import {
   normalizeMutualAidWithdrawals,
 } from './domain/mutualAidSchema.js';
 import {
+  normalizePtwAtmosphere,
+  normalizePtwClosures,
+  normalizePtwHandovers,
+  normalizePtwIsolations,
+  normalizePtwMarkers,
+  normalizePtwPermits,
+  normalizePtwSettings,
+  normalizePtwSuspensions,
+} from './domain/permitToWorkSchema.js';
+import {
   normalizeDwlClearances,
   normalizeDwlDealings,
   normalizeDwlDecisions,
@@ -1437,7 +1447,7 @@ export {
 // re-derived on read, so a hand-edited file cannot carry a commander nobody
 // designated, a notification nobody made, or a deadline the record does not
 // compute.
-export const SCHEMA_VERSION = 199;
+export const SCHEMA_VERSION = 200;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -2904,6 +2914,14 @@ export const DEFAULT_SETTINGS = Object.freeze({
   // A workspace default window would silently decide, every day, that dealing was
   // open — the single most dangerous default a dealing register could carry.
   ...normalizeDwlSettings({}),
+  // ADR-0246: the permit-to-work conventions — the privacy floor below which a
+  // per-state or per-conflict export is withheld, the planning horizon beyond which
+  // a permit is a plan rather than an authorisation, and the rule switch. Note what
+  // is NOT here: a permit validity, a gas limit, a gas-test freshness window and an
+  // isolation verification window. Every one is a fact about a particular permit and
+  // a particular plant, declared on the permit, so the workspace has no default that
+  // could one day authorise work in an atmosphere nobody measured.
+  ...normalizePtwSettings({}),
   // ADR-0243: the employee-voice conventions — the reply window, the minutes
   // window, the privacy floor below which a per-state export is withheld, and the
   // rule switch. Note what is NOT here: a consultation period. The period a body
@@ -4099,6 +4117,21 @@ export const COLLECTIONS = [
   'dwlDecisions',
   'dwlDealings',
   'dwlMarkers',
+  // ADR-0246 (Schema v200): the Permit-to-Work, Energy-Isolation &
+  // Simultaneous-Operations Register. Declared permits with their written basis and
+  // declared validity, the isolations applied to each with their lock references and
+  // proof windows, the gas readings recorded against each permit's own declared
+  // limits, shift handovers, suspensions and closures, and identity-free rule
+  // markers. No permit state, expiry, proof verdict, atmosphere verdict or conflict
+  // is stored: every one is re-derived on read, so a hand-edited file cannot carry a
+  // green permit over a line whose isolation was lifted at eleven.
+  'ptwPermits',
+  'ptwIsolations',
+  'ptwAtmosphere',
+  'ptwHandovers',
+  'ptwSuspensions',
+  'ptwClosures',
+  'ptwMarkers',
 ];
 
 /** Stable empty state. `now` is an ISO string so the result is a pure value. */
@@ -4401,6 +4434,11 @@ export function normalizeSettings(raw) {
     // window, a clearance decided by its own requester, or a decision owed past its
     // turnaround is never the silent default.
     ...normalizeDwlSettings(s),
+    // ADR-0246: the permit-to-work register's conventions, clamped on load. The rule
+    // switch is defaulted ON so that a pause which hides a live permit with no proof
+    // of zero energy, a permit whose atmosphere is outside its own declared limits,
+    // or a permit that lapsed with nobody closing it is never the silent default.
+    ...normalizePtwSettings(s),
     // Repair of a standing red reported at base HEAD: two rule switches the
     // pause census maps were not carried in settings, so the only writes that
     // can silence those rules were refused as unknown keys. Declared here with
@@ -9766,6 +9804,16 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.dwlDecisions = normalizeDwlDecisions(raw.dwlDecisions, state.dwlClearances, warnings);
   state.dwlDealings = normalizeDwlDealings(raw.dwlDealings, state.dwlClearances, warnings);
   state.dwlMarkers = normalizeDwlMarkers(raw.dwlMarkers, warnings);
+  // ADR-0246: the permit-to-work register, loaded fail-closed in dependency order —
+  // an isolation needs its permit, a reading needs the test plan the permit declared,
+  // and a closure needs the permit it closes.
+  state.ptwPermits = normalizePtwPermits(raw.ptwPermits, warnings);
+  state.ptwIsolations = normalizePtwIsolations(raw.ptwIsolations, state.ptwPermits, warnings);
+  state.ptwAtmosphere = normalizePtwAtmosphere(raw.ptwAtmosphere, state.ptwPermits, warnings);
+  state.ptwHandovers = normalizePtwHandovers(raw.ptwHandovers, state.ptwPermits, warnings);
+  state.ptwSuspensions = normalizePtwSuspensions(raw.ptwSuspensions, state.ptwPermits, warnings);
+  state.ptwClosures = normalizePtwClosures(raw.ptwClosures, state.ptwPermits, warnings);
+  state.ptwMarkers = normalizePtwMarkers(raw.ptwMarkers, warnings);
   // ADR-0229 (Schema v182): a case, option, cost line or act that cannot be read
   // exactly is DROPPED with a counted warning — never repaired, re-termed,
   // re-priced or re-pointed at another case. A cost line that does not belong to
@@ -10901,6 +10949,26 @@ export const MIGRATIONS = {
     dwlDealings: Array.isArray(v198.dwlDealings) ? v198.dwlDealings : [],
     dwlMarkers: Array.isArray(v198.dwlMarkers) ? v198.dwlMarkers : [],
     settings: { ...(v198.settings || {}), ...normalizeDwlSettings(v198.settings || {}) },
+  }),
+  // 199 → 200: ADR-0246 adds SEVEN EMPTY ledgers (`ptwPermits`, `ptwIsolations`,
+  // `ptwAtmosphere`, `ptwHandovers`, `ptwSuspensions`, `ptwClosures`, `ptwMarkers`)
+  // and the register's conventions. Nothing is inferred from a shift, a station
+  // roster, an incident, a maintenance job, a functional restriction or a stop-work
+  // hold: a permit is a dated human authorisation of a defined task on defined plant
+  // against a written method. Manufacturing one at upgrade time would put an
+  // authorisation on the record that no hand gave, and would silently decide that a
+  // plant had been proved dead.
+  199: (v199) => ({
+    ...v199,
+    schemaVersion: 200,
+    ptwPermits: Array.isArray(v199.ptwPermits) ? v199.ptwPermits : [],
+    ptwIsolations: Array.isArray(v199.ptwIsolations) ? v199.ptwIsolations : [],
+    ptwAtmosphere: Array.isArray(v199.ptwAtmosphere) ? v199.ptwAtmosphere : [],
+    ptwHandovers: Array.isArray(v199.ptwHandovers) ? v199.ptwHandovers : [],
+    ptwSuspensions: Array.isArray(v199.ptwSuspensions) ? v199.ptwSuspensions : [],
+    ptwClosures: Array.isArray(v199.ptwClosures) ? v199.ptwClosures : [],
+    ptwMarkers: Array.isArray(v199.ptwMarkers) ? v199.ptwMarkers : [],
+    settings: { ...(v199.settings || {}), ...normalizePtwSettings(v199.settings || {}) },
   }),
   // 183 → 184: ADR-0231 adds SEVEN EMPTY ledgers (`ibpCycles`, `ibpDemandRows`,
   // `ibpCapacityRows`, `ibpOptions`, `ibpDecisions`, `ibpGrades`, `ibpMarkers`)

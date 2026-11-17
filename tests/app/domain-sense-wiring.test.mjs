@@ -121,7 +121,7 @@ function parseCsv(csv) {
 // workspace at the current version, rather than pinning the whole suite to the
 // version ADR-0228 happened to ship at.
 test('domain sense: the v186 step adds two empty ledgers, the spine carries ADR-0232 as well, and CSV #174 is registered', () => {
-  assert.equal(SCHEMA_VERSION, 199, 'ADR-0245 (personal-account dealing, insider lists, pre-clearance) is the current head');
+  assert.equal(SCHEMA_VERSION, 200, 'ADR-0246 (permit-to-work, isolations, SIMOPS) is the current head');
   for (const key of ['domainDecisions', 'domainSenseActs']) {
     assert.ok(COLLECTIONS.includes(key), `${key} is declared`);
   }
@@ -138,9 +138,10 @@ test('domain sense: the v186 step adds two empty ledgers, the spine carries ADR-
   // RULE-DSN-01 is enforced in the reader, not by a post-commit rule: ADR-0228
   // added no spine rule and every rule keeps exactly one contract. The spine
   // stood at 152 through ADR-0238; ADR-0240 added `incidentCommandRule` and the
-  // count moved to 154; ADR-0243 added `voiceRule` and the count moved to 156 —
-  // one contract per rule, unchanged discipline.
-  assert.equal(DEFAULT_POST_COMMIT_RULES.length, 158, 'the spine carries ADR-0245 (RULE-DWL-01) after ADR-0244');
+  // count moved to 154; ADR-0243 added `voiceRule` and the count moved to 156;
+  // ADR-0246 added `permitToWorkRule` and the count moved to 159 — one contract per
+  // rule, unchanged discipline.
+  assert.equal(DEFAULT_POST_COMMIT_RULES.length, 159, 'the spine carries ADR-0246 (RULE-PTW-01) after ADR-0245');
   assert.equal(DEFAULT_POST_COMMIT_RULES.some((rule) => rule && rule.id === 'incidentCommandRule'), true, 'RULE-MIC-01 is on the spine');
   assert.equal(DEFAULT_POST_COMMIT_RULES.some((rule) => rule && rule.id === 'mutualAidRule'), true, 'RULE-MAA-01 is on the spine');
   assert.equal(DEFAULT_POST_COMMIT_RULES.some((rule) => rule && rule.id === 'domainSenseRule'), false, 'no new spine rule; refusals are reader refusals');

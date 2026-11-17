@@ -340,6 +340,14 @@ export const PAUSE_PERMIT_MATRIX_REACH_SWITCHES = Object.freeze([
   // affected reporting lines are not told. It reaches across reporting lines through
   // `matrixJointApex`, so it carries a permit like every other cross-line switch.
   'voiceAutoPropagate',
+  // ADR-0246: the permit-to-work rule. Silencing it stops the asks for a live permit
+  // with no proof of zero energy, a live permit whose atmosphere is outside the
+  // limits its own issuer declared, a permit that lapsed with nobody closing it, a
+  // contradiction between two live permits on one plant, and a closure that left a
+  // line isolated — and the reporting lines that hold those crews are not told. It
+  // reaches across reporting lines through `matrixJointApex`, so it carries a permit
+  // like every other cross-line switch.
+  'ptwAutoPropagate',
 ]);
 
 export function pausePermitReachesMatrix(key) {

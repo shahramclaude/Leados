@@ -153,6 +153,7 @@ import { loneWorkingRule } from './loneWorkingRules.js';
 import { voiceRule } from './voiceRules.js';
 import { mutualAidRule } from './mutualAidRules.js';
 import { personalDealingRule } from './personalDealingRules.js';
+import { permitToWorkRule } from './permitToWorkRules.js';
 import { incidentCommandRule } from './incidentCommandRules.js';
 import { sourcingRule } from './sourcingRules.js';
 import { ibpRule } from './ibpRules.js';
@@ -1222,6 +1223,11 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     writes: ['delegations', 'links', 'dwlMarkers'],
     emits: [],
     scansWorkspace: true,
+  },
+  {
+    rule: permitToWorkRule,
+    module: 'permitToWorkRules.js',
+    purpose: 'RULE-PTW-01: reads the Permit-to-Work, Energy-Isolation & Simultaneous-Operations Register (`buildPermitToWork`, ADR-0246) with the whole-workspace view on permit issue, every isolation applied / proved / removed, every gas reading, every handover, suspension, resumption and closure, convention changes and explicit `permitToWork.scan` scans — and on any other commit, because a permit LAPSES BY THE CALENDAR and an isolation\u2019s verification window RUNS OUT with nobody having written anything. FIVE conditions, each filed at most once per (deterministic `ptw1:\u2026` signature, addressee) and bounded at 4 per commit with the remainder counted: `live-unverified` where a live permit has an isolation with no proof of zero energy inside the permit\u2019s own declared window (or energy-control work with no isolation at all); `live-atmosphere` where a live permit\u2019s latest reading per declared test fails the permit\u2019s own limit, or a declared test has never been recorded; `expired-open` where the validity ended with no closure; `simultaneous-operations`, filed ONCE per (conflict kind, the sorted pair of permit ids) so two crews\u2019 managers are told once rather than twice, where the record derives a contradiction between two live permits \u2014 a released isolation under a live permit, hot work over a release, two hot-work permits in one area, an entry during hot work, one isolation claimed twice or one holder double-booked; and `isolation-outstanding` where a permit was CLOSED with an isolation never removed and confirmed. Every ask goes to the JOINT APEX above every line holding the holder(s) \u2014 never to the holder, whose own plant the ask protects \u2014 and a conflict between two lines goes above both, because no single line can resolve it. An apex that resolves to a holder, an unresolvable graph or a person on no active line writes ONE identity-free `ptwMarkers` observation per condition and substitutes nobody. The ask text is deliberately opaque \u2014 no person, area, work reference, isolation point, lock, instrument or reading \u2014 because a delegation is readable above the addressee; the opaque signature lives only in the typed `issues-obligation` link. Asks carry typed `issues-obligation` provenance and close themselves when the condition clears or the addressee moves. It never issues, applies, proves, removes, tests, hands over, suspends, resumes or closes anything, never extends a validity, never clears a conflict by editing a status, and never scores, ranks or names a person as a cause; pause-governed on every path (`ptwAutoPropagate`), including the explicit scan.',
   },
   {
     rule: workplaceAdjustmentRule,

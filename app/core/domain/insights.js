@@ -133,6 +133,8 @@ import { distributedEquitySignals } from './distributedEquity.js';
 import { workplaceAdjustmentSignals } from './workplaceAdjustment.js';
 // ADR-0242: the lone-working welfare check register contributes LWK-01..04.
 import { loneWorkingSignals } from './loneWorking.js';
+// ADR-0246: the permit-to-work register contributes PTW-01..04.
+import { permitToWorkSignals } from './permitToWork.js';
 // ADR-0243: the employee-voice and collective-consultation register contributes
 // VOI-01..04 — a window that closed with no advice, advice nobody answered, a
 // decision out of order, and sittings with no minutes or below quorum.
@@ -2629,6 +2631,12 @@ export function buildInsights(state, now) {
   // its own ledgers and the live matrix, so it cannot recurse into the engine
   // that is running it.
   for (const signal of loneWorkingSignals(state, now, settings)) add(signal);
+
+  // PTW-01..04 — a live permit with no proof of zero energy, a permit lapsed with
+  // nobody closing it, simultaneous-operations conflicts derived from the record, and
+  // a closure that left a line isolated. Listed for the same reason as every other
+  // bucket: a signal nobody can find is a signal nobody acted on.
+  for (const signal of permitToWorkSignals(state, now, settings)) add(signal);
   // ADR-0243 (read-side): the Employee Voice register contributes VOI-01..04. It
   // reads its own ledgers and the live matrix, so it cannot recurse into the
   // engine that is running it.
