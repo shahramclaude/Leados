@@ -12,7 +12,7 @@
 
 **Focused verification (one final pass).** After installing the lockfile dependencies with `npm ci --ignore-scripts --no-audit --no-fund`, `node --test tests/app/budget-maturity.test.mjs tests/app/csv.test.mjs` passed **9/9**. The new tests assert stored budget declarations survive a real store reload byte-for-byte, the computed report is stable across reload, displayed exact cents/counts equal the report, CSV cells equal the same report, identity-bearing fields are absent, privacy floors apply, and ambiguous/missing/malformed/out-of-horizon inputs fail closed. The adjacent CSV suite round-trips every registered export shape. An early combined run exposed the stale CSV catalog pin, now updated 174 → 180; the final run is green. Full suite, browser/assistive-technology and deployment **[UNVERIFIED]**. No further verification pass was run.
 
-**PR:** one-shot PR attempt to be made from this branch after the session record is saved; actual result will be recorded below.
+**PR / delivery.** One-shot PR creation succeeded: [PR #363](https://github.com/shahramclaude/Leados/pull/363), from `arena/2d872d82-leados`. Branch commit `92f0aa9` contains the feature. `gh pr edit` hit GitHub's deprecated Projects (classic) GraphQL field; corrected the PR description through `gh api` PATCH. No merge was performed.
 
 ## 2026-11-17 — Session 317: ADR-0238 distributed-work equity register (Schema v193, `#/distributed-equity`, CSV #179, `RULE-DWE-01`) — SHIPPED
 
