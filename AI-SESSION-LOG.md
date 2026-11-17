@@ -1,3 +1,23 @@
+## 2026-11-16 — Session 316: ADR-0237 standard-work revision register (Schema v192) — PARTIALLY BUILT; FULL SUITE NOT COMPLETED
+
+**Branch.** `arena/186e447b-leados`, based at `b24ec798ba89c30423d1b3d52cdc01b8b90c642d`.
+
+**Sequencing deviation, stated plainly.** The build started before the gap was confirmed absent. The revision gap was already logged as Planned in Session 304, so this build carries a prior gap, as Session 315 did. The new gap for this session is the pre-shift safety talk record.
+
+**Built.** Schema v192 (two empty collections, no inferred history). The approve, brief and read slice of the revision register at `#/standard-work?panel=revisions`. Approval by the declared-line holder, never the owner; multi-line owners with no named line are refused. Derived states and verdicts.
+
+**Test fixes made during the session.** The registration test read the wrong policy map (`RECORD_POLICIES`, not `RECORD_CLASSES`). The panel read `totals.incomplete` instead of `report.incomplete`. The approval test was probing with the text already in force, so the rule under test was never reached; the probes now use a genuine change. The five wiring suites that pinned schema 191 were moved to 192, and one migration-array assertion now expects both steps.
+
+**Verification.** `standard-revisions.test.mjs` 12/12. Focused slice 95/98, with three pre-existing failures: two stale `SCHEMA_VERSION` 179 pins in the waiver and standard-work suites (base fails with 191; this branch fails with 192), and the `v73 → v74` test (base also fails). `LeadOS-standalone.html` rebuilt at v192; `standalone.test.mjs` passes. Full `tests/app` run stopped at about 1,650 results. Compared to the base commit, there was no new failure apart from the stale standalone bundle, which the rebuild resolved. **Full `npm test` and `verify:canonical` were not completed.**
+
+**Benchmark.** [BENCHMARK-UNVERIFIED]. Bar from published QMS SOP-change material. Parity not claimed for the effective-date gate or briefee acknowledgement.
+
+**Flagged.** Stale schema pins (179) in two suites; the v73 → v74 failure on base. Session 314's lifecycle verification debt is still open and is not cleared here.
+
+**Next.** Remainder of ADR-0237 (In Progress). New gap: pre-shift safety talk record (Planned).
+
+---
+
 ## 2026-11-16 — Session 315: ADR-0236 information-request follow-up lineage (Schema v191, `#/information-requests`, CSV #178) — SHIPPED; SESSION 314 VERIFICATION DEBT RETAINED
 
 **Branch and scope.** Work stayed on the active branch `arena/396c7128-leados`, based at `ae314b1fcece4840682265036a68273efe73eb1b`. Closed the Session 314 gap: a requester’s second demand can now explicitly follow a recorded `insufficient` verdict without reopening or rewriting the first demand.

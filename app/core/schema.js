@@ -302,6 +302,12 @@ import {
   normalizeStandardWaiverRequests,
   normalizeStandardWaiverSettings,
 } from './domain/standardWaiverSchema.js';
+// ADR-0237 (Schema v192): the Standard-Work Revision Register. Approved revisions
+// of a routine's written standard and the dated briefings of the people owed them.
+import {
+  normalizeStandardRevisionBriefs,
+  normalizeStandardRevisions,
+} from './domain/standardRevisionSchema.js';
 // ADR-0213 (Schema v167): the Flexible-Budget Variance Statement. Declared
 // standards and dated actuals; recordings resolve only through a plan that
 // survived its own reading.
@@ -1347,7 +1353,7 @@ export {
 // notification is stored; each is re-derived on read, so a hand-edited file
 // cannot carry a decision nobody made, an extension the instrument did not
 // allow, or a window that defaulted itself.
-export const SCHEMA_VERSION = 191;
+export const SCHEMA_VERSION = 192;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -3708,6 +3714,12 @@ export const COLLECTIONS = [
   'standardWaiverGrants',
   'standardWaiverDecisions',
   'standardWaiverMarkers',
+  // ADR-0237 (Schema v192): the Standard-Work Revision Register. Approved revisions
+  // of one routine's written standard (prior text, new text, approver, effective
+  // day, the people owed the text) and the dated briefings of those people. No
+  // state, verdict, coverage or current text is stored: each is re-derived on read.
+  'standardRevisions',
+  'standardRevisionBriefs',
   // ADR-0213 (Schema v167): the Flexible-Budget Variance Statement. Declared
   // standards and dated actuals. No flexible budget, variance, materiality
   // verdict or attribution is stored: each is re-derived on read.
@@ -9380,6 +9392,9 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.standardWaiverGrants = normalizeStandardWaiverGrants(raw.standardWaiverGrants, state.standardWaiverRequests, warnings);
   state.standardWaiverDecisions = normalizeStandardWaiverDecisions(raw.standardWaiverDecisions, state.standardWaiverRequests, state.standardWaiverGrants, state.standardWorkRoutines, warnings);
   state.standardWaiverMarkers = normalizeStandardWaiverMarkers(raw.standardWaiverMarkers);
+  // ADR-0237: fail-closed. A revision that does not continue an unbroken chain is dropped with every later revision of its routine, and a briefing that names no surviving revision or owed person is dropped.
+  state.standardRevisions = normalizeStandardRevisions(raw.standardRevisions, state.standardWorkRoutines, warnings);
+  state.standardRevisionBriefs = normalizeStandardRevisionBriefs(raw.standardRevisionBriefs, state.standardRevisions, warnings);
   // ADR-0213: a standard or a recording that cannot be read exactly is DROPPED
   // with a counted warning — never repaired, clamped or zero-filled. Recordings
   // resolve only through plans that survived.
@@ -10439,6 +10454,17 @@ export const MIGRATIONS = {
     informationRequests: Array.isArray(v190.informationRequests)
       ? v190.informationRequests.map((request) => ({ ...request, followsUpOn: request?.followsUpOn ?? null }))
       : [],
+  }),
+  // 191 → 192: ADR-0237 adds TWO EMPTY ledgers, `standardRevisions` and
+  // `standardRevisionBriefs`. No revision, prior text, approver, effective day or
+  // briefing is inferred from the routines already on the record: a routine's
+  // declared text is the text it was declared with, and a change to it that was
+  // never recorded cannot be reconstructed without inventing an approver.
+  191: (v191) => ({
+    ...v191,
+    schemaVersion: 192,
+    standardRevisions: Array.isArray(v191.standardRevisions) ? v191.standardRevisions : [],
+    standardRevisionBriefs: Array.isArray(v191.standardRevisionBriefs) ? v191.standardRevisionBriefs : [],
   }),
   // 183 → 184: ADR-0231 adds SEVEN EMPTY ledgers (`ibpCycles`, `ibpDemandRows`,
   // `ibpCapacityRows`, `ibpOptions`, `ibpDecisions`, `ibpGrades`, `ibpMarkers`)

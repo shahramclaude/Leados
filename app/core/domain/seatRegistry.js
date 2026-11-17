@@ -220,6 +220,11 @@ export const RECORD_POLICIES = Object.freeze({
   standardWaiverGrants: { classKey: 'unit', detailCeiling: 0, label: 'Answers to waiver requests — grant, refusal, revocation (report only)', route: '#/standard-work?panel=waivers' },
   standardWaiverDecisions: { classKey: 'unit', detailCeiling: 0, label: 'Closing decisions on waivers — standard restored, routine retired (report only)', route: '#/standard-work?panel=waivers' },
   standardWaiverMarkers: { classKey: 'unit', detailCeiling: 0, label: 'Standard-waiver ask & observation markers', route: '#/standard-work?panel=waivers' },
+  // ADR-0237: report-only. A revision names a routine, its prior and new text and
+  // the people owed it; the register's own reader discloses it to the seat whose
+  // reach holds the owner, and withholds the rest.
+  standardRevisions: { classKey: 'unit', detailCeiling: 0, label: 'Standard-work revisions — prior text, new text, approver, effective day (report only)', route: '#/standard-work?panel=revisions' },
+  standardRevisionBriefs: { classKey: 'unit', detailCeiling: 0, label: 'Briefings of people owed a revised standard (report only)', route: '#/standard-work?panel=revisions' },
   // ADR-0213: declared standards and dated actuals name a budget holder and the
   // declared owners of a variance. Report only: the panel reads its own
   // seat-checked report, never the raw rows.
@@ -868,6 +873,12 @@ export const ACTION_RIGHTS = Object.freeze({
   'authorise-standard-work-waiver': { minRank: 2, maxRank: 5, label: 'Answer a waiver request as the holder of the line the routine is owed under' },
   'decide-standard-work-waiver': { minRank: 1, maxRank: 5, label: 'Record that the standard is back in force, or that the routine was retired' },
   'govern-standard-work-waivers': { minRank: 3, maxRank: 5, label: 'Set the waiver window, renewal review threshold, reading horizon and slot floor' },
+  // ADR-0237: the standard-work revision register. Approval is the holder of the
+  // line a routine is owed under, re-proved in the action; the owner cannot approve
+  // their own standard. Briefing is recorded only by the approver of that revision.
+  'read-standard-revisions': { minRank: 1, maxRank: 5, label: 'Read the standard-work revision register within your span' },
+  'approve-standard-revision': { minRank: 2, maxRank: 5, label: 'Approve a revision of a routine’s standard as the holder of the line it is owed under' },
+  'brief-standard-revision': { minRank: 2, maxRank: 5, label: 'Record who was briefed on a revision you approved, on the day it happened' },
   // ADR-0191: the cross-line priority ballot. Declaring a round freezes one
   // person's work set for the lines that share them — a management act at any
   // leadership altitude, so the action narrows it rather than the rank. Casting

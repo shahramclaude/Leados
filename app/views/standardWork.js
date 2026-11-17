@@ -25,6 +25,7 @@ import { renderStationCoveragePanel } from './stationCoveragePanel.js';
 import { renderWorkRestPanel } from './workRestPanel.js';
 import { renderWorkNightPanel } from './workNightPanel.js';
 import { renderStandardWaiverPanel } from './standardWaiverPanel.js';
+import { renderStandardRevisionPanel } from './standardRevisionPanel.js';
 import { h, toast, openModal, closeAllModals, buildForm } from '../ui/dom.js';
 import { downloadText } from '../ui/download.js';
 import { pageHeader, card, stat, badge, banner, tabs, emptyState, table } from '../ui/components.js';
@@ -60,6 +61,9 @@ const PANELS = Object.freeze([
   // ADR-0212: the temporary standard waiver register — a dated, authorised
   // departure from one written standard, and the day it ended.
   Object.freeze({ key: 'waivers', label: 'Waivers' }),
+  // ADR-0237: approved revisions of a routine's written standard, who owed the new
+  // text, and the dated briefings that say whether they knew before it applied.
+  Object.freeze({ key: 'revisions', label: 'Revisions' }),
 ]);
 const WEEKDAYS = Object.freeze([['1', 'Mon'], ['2', 'Tue'], ['3', 'Wed'], ['4', 'Thu'], ['5', 'Fri'], ['6', 'Sat'], ['0', 'Sun']]);
 
@@ -471,6 +475,6 @@ export function renderStandardWork(ctx) {
     ]),
     tabs({ items: PANELS.map((p) => ({ key: p.key, label: p.label })), active: panel, ariaLabel: 'Standard work panels',
       onSelect: (key) => ctx.navigate(`#/standard-work?panel=${encodeURIComponent(key)}`) }),
-    panel === 'rest' ? renderWorkRestPanel(ctx) : panel === 'night' ? renderWorkNightPanel(ctx) : panel === 'waivers' ? renderStandardWaiverPanel(ctx) : panel === 'skills' ? renderSkillCoveragePanel(ctx) : panel === 'stations' ? renderStationCoveragePanel(ctx) : panel === 'spans' ? spansPanel(report) : panel === 'method' ? methodPanel(ctx, report) : boardPanel(ctx, report),
+    panel === 'rest' ? renderWorkRestPanel(ctx) : panel === 'night' ? renderWorkNightPanel(ctx) : panel === 'waivers' ? renderStandardWaiverPanel(ctx) : panel === 'revisions' ? renderStandardRevisionPanel(ctx) : panel === 'skills' ? renderSkillCoveragePanel(ctx) : panel === 'stations' ? renderStationCoveragePanel(ctx) : panel === 'spans' ? spansPanel(report) : panel === 'method' ? methodPanel(ctx, report) : boardPanel(ctx, report),
   );
 }
