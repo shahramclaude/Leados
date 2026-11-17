@@ -28,6 +28,7 @@ import { EV_RIGHTS } from './earnedValueRegistry.js';
 import { RA_RIGHTS } from './riskAppetiteRegistry.js';
 // ADR-0238: the distributed-work equity register's two rights.
 import { DWE_RIGHTS } from './distributedEquityRegistry.js';
+import { WPA_RIGHTS } from './workplaceAdjustmentRegistry.js';
 import { MIC_RIGHTS } from './incidentCommandRegistry.js';
 // ADR-0229: the capability sourcing register's four rights.
 import { SRC_RIGHTS } from './sourcingRegistry.js';
@@ -317,6 +318,15 @@ const groups = [
   // a seat that HOLDS the person (or the chair); the conventions and the scan
   // are the declarer's acts because the conventions bound every verdict.
   [DWE_RIGHTS.READ, 'distributedEquityReport distributedEquityAttentionCount'],
+  // ADR-0241: the workplace adjustment register. Reading is INDIVIDUAL material
+  // and open at rank 1 — a person must be able to read their own limitation and
+  // whether the workplace put it in place — while the READER withholds
+  // person-level rows above rank 3. Every write is a leader act narrowed inside
+  // the action to a seat that HOLDS the person through the span or a declared
+  // line; lifting a restriction additionally requires a recorded review, which
+  // no rank can bypass.
+  [WPA_RIGHTS.READ, 'workplaceAdjustmentReport workplaceAdjustmentAttention workplaceAdjustmentCandidates'],
+  [WPA_RIGHTS.DECLARE, 'workplaceAdjustmentDeclareRestriction workplaceAdjustmentWithdrawRestriction workplaceAdjustmentRecordAdjustment workplaceAdjustmentMarkOperational workplaceAdjustmentRetireAdjustment workplaceAdjustmentAcknowledgeLine workplaceAdjustmentRecordReview workplaceAdjustmentSetConventions workplaceAdjustmentScan'],
   [DWE_RIGHTS.DECLARE, 'distributedEquityDeclareWindow distributedEquityWithdrawWindow distributedEquityDeclareSitting distributedEquityRetractSitting distributedEquitySetConventions distributedEquityScan'],
   // ADR-0240: the incident command register. Reading is registered as safe and
   // therefore bypasses the gateway's rank check — so the read right is re-proved
@@ -803,6 +813,12 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // reads are absent from SAFE_READS is unreadable under enforcement while its
 // writes are still gated.
 'incidentReport', 'incidentAttentionCount', 'incidentCandidates',
+// ADR-0241: the workplace adjustment register's pure read surface. Every one of
+// these re-proves the read right inside the action, exactly as the distributed-
+// work and incident registers do — a module whose reads are absent from
+// SAFE_READS is unreadable under enforcement while its writes are still gated,
+// so a person's own limitation would vanish the moment enforcement was turned on.
+'workplaceAdjustmentReport', 'workplaceAdjustmentAttention', 'workplaceAdjustmentCandidates',
 // ADR-0229: the capability sourcing register's pure read surface. Every one of
 // these re-proves the read right inside the action, because a module whose
 // reads are absent from SAFE_READS is unreadable under enforcement while its

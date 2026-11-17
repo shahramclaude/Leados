@@ -164,7 +164,9 @@ import { renderRiskAppetite } from './views/riskAppetite.js';
 import { riskAppetiteAttentionCount } from './core/domain/riskAppetite.js';
 // ADR-0238: the distributed-work equity register.
 import { renderDistributedEquity } from './views/distributedEquity.js';
+import { renderAdjustments } from './views/adjustments.js';
 import { distributedEquityAttentionCount } from './core/domain/distributedEquity.js';
+import { workplaceAdjustmentAttentionCount } from './core/domain/workplaceAdjustment.js';
 // ADR-0220: the variable-pay design & incentive integrity register.
 import { renderIncentive } from './views/incentive.js';
 import { incentiveAttentionCount } from './core/domain/incentiveIntegrity.js';
@@ -633,6 +635,7 @@ export const NAV = [
     // declared windows, the sittings placed in each person's own day, and whether
     // the burden is shared or concentrated. Frontline-first by altitude.
     { route: 'distributed-equity', label: 'Distributed equity', icon: '⌗', badge: 'distributedEquity' },
+    { route: 'adjustments', label: 'Workplace adjustments', icon: '⚕', badge: 'adjustments' },
     // ADR-0220: what the variable pay in a leader's remit actually pays for, who
     // verifies the number, what the record can prove, and where the same outcome
     // is paid twice because a person sits on two lines. Beside risk appetite on
@@ -874,6 +877,7 @@ const RENDERERS = {
   'risk-appetite': (ctx) => renderRiskAppetite(ctx),
   // ADR-0238: the distributed-work equity register.
   'distributed-equity': (ctx) => renderDistributedEquity(ctx),
+  adjustments: (ctx) => renderAdjustments(ctx),
   // ADR-0220: the variable-pay design & incentive integrity register.
   incentive: (ctx) => renderIncentive(ctx),
   // ADR-0221: the Duty-Without-Means Register.
@@ -1043,6 +1047,9 @@ export function parseRoute(hash) {
     'unsociable-hours': 'distributed-equity', 'timezone-burden': 'distributed-equity',
     'after-hours': 'distributed-equity', 'distributed-team': 'distributed-equity',
     'distributed-work': 'distributed-equity', 'follow-the-sun': 'distributed-equity',
+    'adjustments': 'adjustments', 'adjustment': 'adjustments', 'reasonable-adjustments': 'adjustments', 'accommodations': 'adjustments',
+    'work-restrictions': 'adjustments', 'fit-note': 'adjustments', 'occupational-health': 'adjustments', 'reduced-duties': 'adjustments',
+    'modified-duty': 'adjustments', 'light-duty': 'adjustments', 'return-to-work': 'adjustments',
     // ADR-0148: the names a person types looking for "did anyone actually agree
     // to this share of me" / "who accepted this project line".
     'line-consent': 'matrix', consent: 'matrix', 'matrix-consent': 'matrix',
@@ -1799,6 +1806,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       // ADR-0238: over-ceiling burdens and a concentrated workspace verdict — the
       // same conditions RULE-DWE-01 files. A COUNT, never a name.
       distributedEquity: distributedEquityAttentionCount(state, { now: at, settings: state.settings, seat: seatCtx?.seat || null }),
+      adjustments: workplaceAdjustmentAttentionCount(state, { now: at, settings: state.settings, seat: seatCtx?.seat || null }),
       // ADR-0220: over-ceiling envelopes, contested outcomes and outstanding
       // recoveries this seat holds the joint apex above, plus live plans of its
       // own with no verified reading. The same conditions RULE-INC-01 files.
@@ -2393,6 +2401,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       'manager-handover': 'Manager handover — a role does not expire with its holder: brief, successor acceptance, governor release',
       probation: 'Probation gates — the decision a joiner’s first window owes: confirm, extend or end, on evidence from every declared line, communicated in writing',
   incidents: 'Major incidents — the command record while it runs: who declared it and against what written criterion, who took command and when they handed it over, every declared notification clock with its exact deadline, whether each party was actually told, and whether command was ever released',
+      adjustments: 'Workplace adjustments — what work a person must not do and what was actually done about it: the functional limitation and its written instrument, the day an adjustment was agreed against the day it took effect, whether declared work on ANY reporting line breaks a limit the record can test exactly, and whether every line that hands the person work has been told',
       undertakings: 'Undertakings — the promise the enterprise made to a regulator, a board, a lender or a customer: its obligation lines, each independently tested, and the written report that discharges it to the counterparty',
       'information-requests': 'Information requests — what an authority demanded, on the day they set: every production line certified, every claim of privilege ruled on by a seat outside the parties, and the release that answers them',
       sourcing: 'Capability sourcing — make, buy, partner or hybrid: the boundary of the firm, decided on asset specificity and the safeguards a contract can carry',

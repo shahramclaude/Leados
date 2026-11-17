@@ -235,6 +235,9 @@ import { buildBudgetMaturity, budgetMaturityCsvRows, BUDGET_MATURITY_CSV_COLUMNS
 import { buildDistributedEquity, distributedEquityCsvRows } from './domain/distributedEquity.js';
 // ADR-0240: identity-free incident-command aggregates (CSV scope #181).
 import { MIC_CSV_COLUMNS, MIC_CSV_DESCRIPTOR, MIC_CSV_SCOPE } from './domain/incidentCommandRegistry.js';
+import { WPA_CSV_COLUMNS, WPA_CSV_DESCRIPTOR, WPA_CSV_SCOPE } from './domain/workplaceAdjustmentRegistry.js';
+import { workplaceAdjustmentCsvRows } from './domain/workplaceAdjustmentReport.js';
+import { buildWorkplaceAdjustment } from './domain/workplaceAdjustment.js';
 import { incidentCsvRows, incidentReport } from './domain/incidentCommandReport.js';
 // ADR-0229: CSV #170 — the capability sourcing & firm-boundary register.
 import { SRC_CSV_COLUMNS, SRC_CSV_DESCRIPTOR, SRC_CSV_SCOPE } from './domain/sourcingRegistry.js';
@@ -1701,6 +1704,11 @@ export const CSV_EXPORTS = [
   // text, reference or free text of any kind crosses this boundary. An
   // uncomputable figure exports BLANK with its reason, never a zero.
   MIC_CSV_DESCRIPTOR,
+  // #182 (ADR-0241): workplace adjustments and functional restrictions — counts
+  // only. No person id, name, manager, functional statement, instrument
+  // reference, source text or date crosses this boundary: a restriction is a
+  // claim about a person's body, and the export is a distribution.
+  WPA_CSV_DESCRIPTOR,
 ];
 
 function personLookup(state) {
@@ -6990,6 +6998,17 @@ export function buildScopeTable(state, scope, now) {
       return {
         columns: MIC_CSV_COLUMNS.map((key) => ({ key, header: key })),
         rows: incidentCsvRows(report),
+      };
+    }
+    case WPA_CSV_SCOPE: {
+      // CSV scope #182 (ADR-0241, Schema v195). Built from the SAME reader the
+      // `#/adjustments` panel renders, with no seat: every figure is a count or
+      // an exact integer over the whole register, so no person, manager,
+      // statement, reference or day is reachable from this export.
+      const report = buildWorkplaceAdjustment(state, { now, settings: state.settings || {}, seat: null });
+      return {
+        columns: WPA_CSV_COLUMNS.map((key) => ({ key, header: key })),
+        rows: workplaceAdjustmentCsvRows(report),
       };
     }
     case DWE_CSV_SCOPE: {

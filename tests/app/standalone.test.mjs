@@ -462,7 +462,12 @@ test('standalone artifact exists and is a single inline HTML document', () => {
   // bytes per module, still below the unchanged density guard. Move the
   // absolute ceiling to measured size plus headroom; this is not a relaxation
   // of density.
-  assert.ok(bytes < 20_750_000, `standalone file is unexpectedly large (${bytes} bytes)`);
+  // ADR-0241 (Session 319, Schema v195) adds the workplace adjustment register:
+  // eight domain modules plus its panel, on top of the v194 build. Measured at
+  // 21,389,249 bytes / 1,080 source modules = 19,805 bytes per module, still
+  // below the unchanged 24,000 density guard. The ceiling moves with the module
+  // count; the density bound is what still catches a module inlined twice.
+  assert.ok(bytes < 21_500_000, `standalone file is unexpectedly large (${bytes} bytes)`);
   // Derived from the folder, not from a list in this file: the day a panel adds
   // a diagram, an enumerator that names the old two would still pass. Same
   // lesson the build script learned in ADR-0186.

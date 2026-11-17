@@ -127,6 +127,7 @@ import { createEarnedValueActions } from './core/domain/earnedValueActions.js';
 // Every read re-derives every figure; every write proves the line.
 import { createRiskAppetiteActions } from './core/domain/riskAppetiteActions.js';
 import { createDistributedEquityActions } from './core/domain/distributedEquityActions.js';
+import { createWorkplaceAdjustmentActions } from './core/domain/workplaceAdjustmentActions.js';
 // ADR-0240: the Major-Incident Command & Notification-Clock Register's commands
 // and seat-checked reads. Declaring, staffing, commanding, notifying, resolving
 // and standing down — nothing else.
@@ -20379,6 +20380,12 @@ export function createApi(store, options = {}) {
   Object.assign(api, createRiskAppetiteActions(store, { now: clock, idFactory: id }));
   // ADR-0238: the distributed-work equity register's commands.
   Object.assign(api, createDistributedEquityActions(store, { now: clock, idFactory: id }));
+  // ADR-0241: the Workplace Adjustment & Functional-Restriction Register.
+  // Declaring a restriction, recording an adjustment, marking it operational,
+  // acknowledging a line and recording a review are declared commands; every
+  // read is a seat-scoped SAFE_READ. Lifting a restriction requires a recorded
+  // review, which is enforced inside the action and not by a dialog.
+  Object.assign(api, createWorkplaceAdjustmentActions(store, { now: clock, idFactory: id }));
   // ADR-0240: the incident command register's commands.
   Object.assign(api, createIncidentCommandActions(store, { now: clock, idFactory: id }));
   // ADR-0220: the variable-pay design & incentive integrity register's commands.
