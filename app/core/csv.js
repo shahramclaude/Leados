@@ -240,6 +240,10 @@ import { workplaceAdjustmentCsvRows } from './domain/workplaceAdjustmentReport.j
 import { buildWorkplaceAdjustment } from './domain/workplaceAdjustment.js';
 // ADR-0242: identity-free lone-working welfare aggregates (CSV scope #183).
 import { LWK_CSV_COLUMNS, LWK_CSV_DESCRIPTOR, LWK_CSV_SCOPE } from './domain/loneWorkingRegistry.js';
+// ADR-0246: the permit-to-work register's aggregate-only export.
+import { PTW_CSV_COLUMNS, PTW_CSV_DESCRIPTOR, PTW_CSV_SCOPE } from './domain/permitToWorkRegistry.js';
+import { permitToWorkCsvRows } from './domain/permitToWorkReport.js';
+import { buildPermitToWork } from './domain/permitToWork.js';
 import { loneWorkingCsvRows } from './domain/loneWorkingReport.js';
 import { buildLoneWorking } from './domain/loneWorking.js';
 // ADR-0243: identity-free employee-voice and consultation aggregates (CSV #184).
@@ -1754,6 +1758,15 @@ export const CSV_EXPORTS = [
   // boundary. A per-state count below the declared floor exports BLANK with its
   // reason, never as a small number.
   DWL_CSV_DESCRIPTOR,
+  // #187 (ADR-0246): permit-to-work, energy isolation and simultaneous operations.
+  // One summary row, one row per printed permit state and one row per printed
+  // conflict kind. No person, area, work reference, isolation point, lock, instrument,
+  // reading or instant crosses this boundary — a confined-space record says which
+  // named crew is in which space, and the export is a count. The conflict KINDS are
+  // named rather than smoothed over, because a safety export that hid the conflicts
+  // would be the one thing this category must never do. A per-state or per-conflict
+  // count below the declared floor exports BLANK with its reason, never as a number.
+  PTW_CSV_DESCRIPTOR,
 ];
 
 function personLookup(state) {
@@ -7043,6 +7056,18 @@ export function buildScopeTable(state, scope, now) {
       return {
         columns: MIC_CSV_COLUMNS.map((key) => ({ key, header: key })),
         rows: incidentCsvRows(report),
+      };
+    }
+    case PTW_CSV_SCOPE: {
+      // CSV scope #187 (ADR-0246, Schema v200). Built from the SAME reader the
+      // `#/permit-to-work` panel renders, with no seat: every figure is a count or an
+      // exact whole-minute total over the whole register, so no person, area, work
+      // reference, isolation point, lock, instrument, reading or instant is reachable
+      // from this export.
+      const report = buildPermitToWork(state, { now, settings: state.settings || {}, seat: null });
+      return {
+        columns: PTW_CSV_COLUMNS.map((key) => ({ key, header: key })),
+        rows: permitToWorkCsvRows(report),
       };
     }
     case LWK_CSV_SCOPE: {

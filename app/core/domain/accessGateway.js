@@ -34,6 +34,7 @@ import { VOI_RIGHTS } from './voiceRegistry.js';
 import { MIC_RIGHTS } from './incidentCommandRegistry.js';
 import { MAA_RIGHTS } from './mutualAidRegistry.js';
 import { DWL_RIGHTS } from './personalDealingRegistry.js';
+import { PTW_RIGHTS } from './permitToWorkRegistry.js';
 // ADR-0229: the capability sourcing register's four rights.
 import { SRC_RIGHTS } from './sourcingRegistry.js';
 import { VY_RIGHTS } from './vyRegistry.js';
@@ -378,6 +379,16 @@ const groups = [
   [DWL_RIGHTS.DECLARE, 'dwlDeclareDesignation dwlEndDesignation dwlDeclareEvent dwlSetConventions dwlScan'],
   [DWL_RIGHTS.REQUEST, 'dwlRequestClearance dwlRecordDealing'],
   [DWL_RIGHTS.DECIDE, 'dwlDecideClearance'],
+  // ADR-0246: the permit-to-work register. Reading opens at rank 1 — a holder must
+  // be able to see whether the plant they are about to touch is proved dead — while
+  // the READER narrows to counts, exact minutes and conflict kinds above rank 3,
+  // because which named crew is inside which space is operational detail. ISSUING
+  // sits at rank 2 and is narrowed inside the action to a holder who is not the
+  // issuer: rank alone never makes an independent authoriser. ACTING is the record
+  // of a human act on the plant and is re-proved inside every action.
+  [PTW_RIGHTS.READ, 'permitToWorkReport permitToWorkAttention permitToWorkCandidates'],
+  [PTW_RIGHTS.ISSUE, 'permitToWorkIssue permitToWorkSetConventions'],
+  [PTW_RIGHTS.ACT, 'permitToWorkApplyIsolation permitToWorkVerifyIsolation permitToWorkRemoveIsolation permitToWorkRecordAtmosphere permitToWorkHandover permitToWorkSuspend permitToWorkResume permitToWorkClose permitToWorkScan'],
   // ADR-0229: the capability sourcing & firm-boundary register. Reading is
   // portfolio material (rank 3+). Recording an option is the leader who HOLDS
   // the capability (rank 2+), narrowed inside the action to a line the case
@@ -868,6 +879,12 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // still gated — and whether a closed period is open, or whether your own trade was
 // cleared, would vanish the moment enforcement was turned on.
 'dwlReport', 'dwlAttention', 'dwlCandidates',
+// ADR-0246: the permit-to-work register's pure read surface. Every one of these
+// re-proves the read right inside the action, because a module whose reads are
+// absent from SAFE_READS is unreadable under enforcement while its writes are still
+// gated — and whether the plant a crew is about to touch is proved dead would
+// vanish the moment enforcement was turned on.
+'permitToWorkReport', 'permitToWorkAttention', 'permitToWorkCandidates',
 // ADR-0241: the workplace adjustment register's pure read surface. Every one of
 // these re-proves the read right inside the action, exactly as the distributed-
 // work and incident registers do — a module whose reads are absent from

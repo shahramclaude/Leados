@@ -141,6 +141,7 @@ import { createMutualAidActions } from './core/domain/mutualAidActions.js';
 // door refuses a decision by the requester or by any hand not strictly above them
 // on the reporting graph.
 import { createPersonalDealingActions } from './core/domain/personalDealingActions.js';
+import { createPermitToWorkActions } from './core/domain/permitToWorkActions.js';
 // ADR-0240: the Major-Incident Command & Notification-Clock Register's commands
 // and seat-checked reads. Declaring, staffing, commanding, notifying, resolving
 // and standing down — nothing else.
@@ -20418,6 +20419,11 @@ export function createApi(store, options = {}) {
   // against the live reporting graph inside the action — decision control is
   // never the decision manager's — and every read is a seat-scoped SAFE_READ.
   Object.assign(api, createPersonalDealingActions(store, { now: clock, idFactory: id }));
+  // ADR-0246: the permit-to-work, energy-isolation and simultaneous-operations
+  // register. Every write re-proves its right inside the action and every read is
+  // re-proved too, because whether the plant a crew is about to touch is proved dead
+  // must not vanish the moment seat enforcement is turned on.
+  Object.assign(api, createPermitToWorkActions(store, { now: clock, idFactory: id }));
   // ADR-0240: the incident command register's commands.
   Object.assign(api, createIncidentCommandActions(store, { now: clock, idFactory: id }));
   // ADR-0220: the variable-pay design & incentive integrity register's commands.

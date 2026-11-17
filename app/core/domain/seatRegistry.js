@@ -286,6 +286,17 @@ export const RECORD_POLICIES = Object.freeze({
   voiceResponses: { classKey: 'unit', label: 'The body’s advice and the organisation’s written reply — the day each arrived and the course the body took', route: '#/voice' },
   voiceDecisions: { classKey: 'unit', label: 'Decisions taken after consultation — the day, the deciding joint seat, the course against the advice and the day the change took effect', route: '#/voice' },
   voiceMarkers: { classKey: 'unit', detailCeiling: 3, label: 'Employee-voice observation markers — no joint seat, no affected line to ask (identity-free)', route: '#/voice' },
+  // ADR-0246 (Schema v200): the permit-to-work register. A permit names its holder,
+  // its crew and its fire watch, and an isolation names the hand that applied it and
+  // the hand that proved it — so every one of these is INDIVIDUAL detail. The rule's
+  // own markers are identity-free by construction and are the only unit-class rows.
+  ptwPermits: { classKey: 'individual', label: 'Permits to work — the plant, the work reference, the written basis, the declared validity, the fire watch and the named crew', route: '#/permit-to-work' },
+  ptwIsolations: { classKey: 'individual', label: 'Energy isolations applied to a permit — the point, the lock, the energy kind, the proof and its declared window', route: '#/permit-to-work' },
+  ptwAtmosphere: { classKey: 'individual', label: 'Gas readings recorded against a permit’s own declared limits — the reading, the instrument and the hand that took it', route: '#/permit-to-work' },
+  ptwHandovers: { classKey: 'individual', label: 'Shift handovers of a permit — who handed it to whom, and what they said was still live', route: '#/permit-to-work' },
+  ptwSuspensions: { classKey: 'individual', label: 'Suspensions and resumptions of a permit — the reason work stopped and what was re-checked before it restarted', route: '#/permit-to-work' },
+  ptwClosures: { classKey: 'individual', label: 'Closures of a permit — the outcome, the note and the hand that declared it', route: '#/permit-to-work' },
+  ptwMarkers: { classKey: 'unit', detailCeiling: 3, label: 'Permit-to-work observation markers — no joint seat, no line to ask (identity-free)', route: '#/permit-to-work' },
   // ADR-0240 (Schema v194): the incident command register. An incident record
   // names the people on the bridge, the instrument it was declared under and the
   // external parties it owes — individual detail that is not handed upward, so
@@ -1443,6 +1454,13 @@ export const ACTION_RIGHTS = Object.freeze({
   'declare-personal-dealing': { minRank: 3, maxRank: 5, label: 'Declare who is on the insider list and on what written instrument and basis, declare a closed period with its anchor disclosure day and exact whole-day bounds before and after it, end a designation, and set the register’s conventions' },
   'request-personal-dealing': { minRank: 1, maxRank: 5, label: 'Request a clearance for your own trade or for a hand you hold, and record an executed dealing against the broker’s own contract note — including a trade that breached a window, because a bad trade is a fact, not something to hide' },
   'decide-personal-dealing': { minRank: 2, maxRank: 5, label: 'Decide a clearance you did not request, from a seat strictly above the requester on the reporting graph through every line they hold — never a peer, never a subordinate, never the requester' },
+  // ADR-0246: the permit-to-work register's three rights. Issuing sits at rank 2
+  // because a permit authorises a SECOND CREW to work on live plant and the hand
+  // that authorises it must sit above the hand that holds it; the separation-of-
+  // duties refusal at the door is what actually carries the control, not the rank.
+  'read-permit-to-work': { minRank: 1, maxRank: 5, label: 'Read the permit-to-work register within your grant — your own permit and its proven state, and the permits of the hands you hold. Above rank 3 the reader prints counts, exact minutes and conflict kinds and withholds every name, area and reading' },
+  'issue-permit-to-work': { minRank: 2, maxRank: 5, label: 'Issue a permit to work on defined plant against a written method, with a validity you chose and — where the work kind requires it — a named fire watch and a declared test plan with limits you typed. Nobody may issue a permit to themselves, and the register’s conventions' },
+  'act-permit-to-work': { minRank: 1, maxRank: 5, label: 'Apply and prove an isolation at zero energy, record a gas reading exactly as measured, hand the permit to another named holder, suspend and resume it, remove an isolation and close the permit out with an outcome and a note' },
   'read-mutual-aid': { minRank: 1, maxRank: 5, label: 'Read the mutual-aid activation and resource-commitment register within your grant — the agreement a request is made under, the request and its validity, the partner’s acceptance with its written confirmation and promise, the arrival compared against the promise, and the withdrawal and release that close the commitment' },
   'declare-mutual-aid': { minRank: 2, maxRank: 5, label: 'Declare a bilateral agreement, request help under it, record the partner’s acceptance with its written confirmation and promise, record the arrival, the withdrawal and the release of the commitment, cancel a request that was never accepted, and set the register’s conventions' },
   // ADR-0235/0236 (Schema v191). Six rights, and the shape is the point: RECORDING
