@@ -1,3 +1,25 @@
+## 2026-11-17 — Session 317: ADR-0238 distributed-work equity register (Schema v193, `#/distributed-equity`, CSV #179, `RULE-DWE-01`) — SHIPPED
+
+**Branch.** `arena/93a322d4-leados`, based at `4b99ef8b82260b915b391cc2b3d1cc49a20e6eac`.
+
+**Doctrine and sync.** `NORTH_STAR.md` verified (Matrix Leadership, Bulletproof Reliability, Visual/Content Integrity, Competitive Benchmark). Working tree clean at the branch point; all work on the session branch.
+
+**Gap hunt (new this session).** The distributed/hybrid work equity gap: nothing in `app/` records a person's declared working window or measures who carries the unsociable hour across time zones. Targeted searches found no `dwe*` vocabulary and no window concept in `app/` or `tests/`; `workRestTime` stores shifts, not windows, and no sitting ledger exists. Logged in ROADMAP and built this session.
+
+**Built.** Schema v193 (three additive EMPTY-at-upgrade collections `dweWindows`/`dweSittings`/`dweMarkers`; five bounded conventions; `dweAutoPropagate`). Full reader with exact per-attendee DST placement, matrix-correct attribution (one person measured once; chair-line / self / off-graph / named buckets; no invented zero-filled population rows), floors-gated equity verdict, the coverage claim kept separate from the verdict, `RULE-DWE-01` (spine 152/152, opaque asks to the joint apex), CSV #179 aggregate identity-free, `#/distributed-equity` four-tab panel with five dialogs, insights bucket "Distributed work" (DWE-01..03), demo seed, access-gateway rights and safe reads, pause-permit reach registration. Method diagram `app/assets/distributed-equity-method.jpg` generated with Arena's built-in image generator (Higgsfield not connected in this conversation; reported plainly).
+
+**Test fixes made during the TDD loop (real defects the suite caught).** The reader attributed a chair's sitting by scanning distinct manager-id sets — a chair holding two declared lines of one attendee could attribute by array accident; attribution now consumes active line records and keeps the named buckets. Person rows were roster-filled with zeros for members who never attended; rows now come from attendees of valid sittings only. An environment bug in the new suite's fixture (the store was never loaded from its seeded storage) was the cause of four door failures, not the door.
+
+**Verification.** `tests/app/distributed-equity.test.mjs` **23/23**. Six neighbouring schema-head pins moved to v193, all green (assurance-finding 11/11, domain-sense 7/7, probation-gate 13/13, standard-revisions 12/12, undertaking 16/16, information-request-lineage 6/6). `standalone.test.mjs` **7/7** after rebuild (20,645,547 bytes / 1,063 modules / 19,422 B·module⁻¹; absolute ceiling raised to measured+headroom, density guard unchanged). `npm run lint`, `check:boundary` (1,068 modules / 294 suites / 23 doc checks), `check:links` (1,320 links) all pass. Two `pause-permits` failures are **pre-existing at base `4b99ef8`** (verified by re-running with the branch's changes stashed): the reach census counts 35 declared switches against 40 registry keys, and the `workStopRules.js` source scan misses its switch read through `SWP_SETTING_KEYS` — catalogued in ADR-0238 §Pre-existing reds, not repaired here.
+
+**Benchmark `[BENCHMARK-UNVERIFIED]`.** Microsoft Viva Insights / Clockwise / Reclaim set the published bar; differentiators claimed on the record (refusal-with-reason placement, matrix-correct attribution, no people-scoring) are code-verified here, vendor parity is not — no hands-on run.
+
+**Flagged.** Browser/AT rendering **[UNVERIFIED]**; full `npm test` sweep not run (focused suites + static gates only, per the one-verify-pass mandate); the two pre-existing pause-permits reds left for a dedicated repair.
+
+**Next.** Team-scoped equity verdicts; a declared sitting-import door; the pause-permits census repair (ten reach keys not carried into fresh settings).
+
+---
+
 ## 2026-11-16 — Session 316: ADR-0237 standard-work revision register (Schema v192) — PARTIALLY BUILT; FULL SUITE NOT COMPLETED
 
 **Branch.** `arena/186e447b-leados`, based at `b24ec798ba89c30423d1b3d52cdc01b8b90c642d`.

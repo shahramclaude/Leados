@@ -258,6 +258,13 @@ export const RECORD_POLICIES = Object.freeze({
   riskAppetiteStatements: { classKey: 'portfolio', detailCeiling: 4, label: 'Declared appetite statements — one exact ceiling per domain, measure and currency (report only)', route: '#/risk-appetite' },
   riskDeclarations: { classKey: 'portfolio', detailCeiling: 4, label: 'Declared retained exposure per live risk, with its written basis (report only)', route: '#/risk-appetite' },
   riskAppetiteMarkers: { classKey: 'portfolio', detailCeiling: 4, label: 'Risk-appetite observation markers — no joint seat, declarer departed (identity-free)', route: '#/risk-appetite' },
+  // ADR-0238: a working window and a sitting are INDIVIDUAL material — claims
+  // about a person's daily life and the clock they worked under. The reader
+  // discloses per-person rows below the executive altitude and counts above
+  // it; the generic projection never hands over raw rows at the top.
+  dweWindows: { classKey: 'individual', label: 'Declared working windows — one sourced daily span per person, with its zone', route: '#/distributed-equity' },
+  dweSittings: { classKey: 'individual', label: 'Declared unsociable-hour sittings — dated wall-clock events with their attendees and chair', route: '#/distributed-equity' },
+  dweMarkers: { classKey: 'unit', detailCeiling: 3, label: 'Distributed-equity observation markers — unreadable windows, no joint seat (identity-free)', route: '#/distributed-equity' },
   // ADR-0229: a capability case, its priced options and its acts are PORTFOLIO
   // material — the boundary of the firm is not a unit's own instrument. Each row
   // is span-scoped by its owner and lines inside the register's reader, so a
@@ -977,6 +984,12 @@ export const ACTION_RIGHTS = Object.freeze({
   'read-risk-appetite': { minRank: 3, maxRank: 5, label: 'Read the enterprise risk-appetite register: every declared ceiling, its measured population and whether coverage is complete' },
   'declare-risk-appetite': { minRank: 4, maxRank: 5, label: 'Declare, retire or review an appetite statement for a risk domain, and scan the register for owed decisions' },
   'carry-risk-appetite': { minRank: 3, maxRank: 5, label: 'Declare or withdraw the retained exposure of one live risk whose owner you hold — never your own' },
+  // ADR-0238: the distributed-work equity register. Reading is individual
+  // material, open at every rank; the reader narrows what each altitude sees.
+  // Declaring a window for another person or a sitting is a leader's act,
+  // narrowed inside the action to a seat that holds the person or the chair.
+  'read-distributed-equity': { minRank: 1, maxRank: 5, label: 'Read the distributed-work equity register: declared windows, placed burden, concentration verdicts and coverage gaps' },
+  'declare-distributed-equity': { minRank: 1, maxRank: 5, label: 'Declare, withdraw or retract windows and sittings for people and chairs you hold, set the register’s conventions, and scan it' },
   // ADR-0229: the capability sourcing & firm-boundary register. Reading is
   // portfolio material (rank 3+), matching the record class. Recording an option
   // is a manager's act, narrowed inside the action to a line the case names and

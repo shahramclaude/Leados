@@ -1908,6 +1908,67 @@ function seedSignalPath(state, now) {
 }
 
 
+function seedDistributedEquity(state, now, { priya, mei, jordan, samuel, freya, at, ts }) {
+  // ADR-0238 (Schema v193): the demo roster is a genuinely distributed team —
+  // two zones, a recurring late bridge and an evening sitting — so the register
+  // says something on first load instead of printing an honest empty state.
+  // The windows are sourced (as the door requires), the sittings are dated
+  // inside the trailing window, and the numbers are computed by the reader,
+  // never written by hand. The burden lands on the Europe/Copenhagen side; the
+  // New York side attends inside its own window, and one attendee (Jordan)
+  // reports to a manager other than the chair, so his convened minutes fall to
+  // the named "no declared line" bucket — exercising the attribution rule.
+  const windowSource = (day) => `Stated by the person at the 1:1 on ${day} and kept in the team's working-agreement note; the contract names no fixed hours.`;
+  const win = (seq, personId, zone, start, end, declaredDaysAgo) => ({
+    id: `dwe-win-demo-${seq}`,
+    personId,
+    zone,
+    start,
+    end,
+    declaredOn: at(declaredDaysAgo),
+    declaredById: 'leader',
+    source: windowSource(at(declaredDaysAgo)),
+    note: '',
+    status: 'active',
+    withdrawnOn: null,
+    withdrawalReason: '',
+    createdAt: ts(declaredDaysAgo),
+    updatedAt: ts(declaredDaysAgo),
+  });
+  state.dweWindows = [
+    win(1, priya, 'Europe/Copenhagen', '09:00', '17:00', 40),
+    win(2, mei, 'Europe/Copenhagen', '09:00', '17:00', 40),
+    win(3, jordan, 'Europe/Copenhagen', '09:00', '17:00', 40),
+    win(4, samuel, 'America/New_York', '09:00', '17:00', 38),
+    win(5, freya, 'America/New_York', '09:00', '17:00', 38),
+  ];
+  const sit = (seq, daysAgo, start, minutes, zone, attendeeIds, chairId, note) => ({
+    id: `dwe-sit-demo-${seq}`,
+    day: at(daysAgo),
+    start,
+    minutes,
+    zone,
+    attendeeIds,
+    chairId,
+    fold: null,
+    declaredById: 'leader',
+    note,
+    status: 'active',
+    retractedOn: null,
+    retractionReason: '',
+    createdAt: ts(daysAgo),
+    updatedAt: ts(daysAgo),
+  });
+  state.dweSittings = [
+    sit(1, 20, '21:30', 60, 'Europe/Copenhagen', [mei, samuel, freya], priya, 'Monthly late bridge with the support/data side.'),
+    sit(2, 13, '21:30', 60, 'Europe/Copenhagen', [mei, samuel, freya], priya, 'Late bridge, standing slot.'),
+    sit(3, 6, '21:30', 60, 'Europe/Copenhagen', [mei, samuel, freya], priya, 'Late bridge, standing slot.'),
+    sit(4, 10, '09:30', 30, 'America/New_York', [mei, samuel], priya, 'Morning sync, inside both declared windows.'),
+    sit(5, 9, '17:30', 60, 'Europe/Copenhagen', [priya, mei, jordan], priya, 'Release-readiness review overran the day.'),
+    sit(6, 3, '21:30', 45, 'Europe/Copenhagen', [mei], priya, 'Follow-up on the billing migration only.'),
+  ];
+}
+
 export function buildDemoState(now = new Date()) {
   const today = dayKey(now);
   const at = (daysAgo) => addDays(today, -daysAgo);
@@ -5499,6 +5560,10 @@ export function buildDemoState(now = new Date()) {
   seedAllocation(state, now);
   seedLoad(state, now);
   seedDynamics(state, now);
+  // ADR-0238: declared windows and unsociable-hour sittings for the distributed
+  // roster — sourced, dated, and read back through the same fail-closed loader
+  // every import uses.
+  seedDistributedEquity(state, now, { priya, mei, jordan, samuel, freya, at, ts });
   // Schema v35: anchor assumptions to the real metrics decision and two real
   // continuity dependencies, then run the real sensor rule over them.
   const premiseDecision = (state.decisions || []).find((d) => d && d.title === 'Standardise weekly metrics on warehouse tables');

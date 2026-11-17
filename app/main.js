@@ -162,6 +162,9 @@ import { justCultureAttentionCount } from './core/domain/justCulture.js';
 // ADR-0219: the enterprise risk-appetite register.
 import { renderRiskAppetite } from './views/riskAppetite.js';
 import { riskAppetiteAttentionCount } from './core/domain/riskAppetite.js';
+// ADR-0238: the distributed-work equity register.
+import { renderDistributedEquity } from './views/distributedEquity.js';
+import { distributedEquityAttentionCount } from './core/domain/distributedEquity.js';
 // ADR-0220: the variable-pay design & incentive integrity register.
 import { renderIncentive } from './views/incentive.js';
 import { incentiveAttentionCount } from './core/domain/incentiveIntegrity.js';
@@ -622,6 +625,10 @@ export const NAV = [
     // measured over the whole population. The executive decision form asks the
     // question; this is the instrument that answers it.
     { route: 'risk-appetite', label: 'Risk appetite', icon: '◎', badge: 'riskAppetite' },
+    // ADR-0238: who carries the unsociable hour across a distributed team — the
+    // declared windows, the sittings placed in each person's own day, and whether
+    // the burden is shared or concentrated. Frontline-first by altitude.
+    { route: 'distributed-equity', label: 'Distributed equity', icon: '⌗', badge: 'distributedEquity' },
     // ADR-0220: what the variable pay in a leader's remit actually pays for, who
     // verifies the number, what the record can prove, and where the same outcome
     // is paid twice because a person sits on two lines. Beside risk appetite on
@@ -858,6 +865,8 @@ const RENDERERS = {
   'just-culture': (ctx) => renderJustCulture(ctx),
   // ADR-0219: the enterprise risk-appetite register.
   'risk-appetite': (ctx) => renderRiskAppetite(ctx),
+  // ADR-0238: the distributed-work equity register.
+  'distributed-equity': (ctx) => renderDistributedEquity(ctx),
   // ADR-0220: the variable-pay design & incentive integrity register.
   incentive: (ctx) => renderIncentive(ctx),
   // ADR-0221: the Duty-Without-Means Register.
@@ -1016,6 +1025,12 @@ export function parseRoute(hash) {
     // answer to" / "why is my engineer on four projects".
     matrix: 'matrix', 'matrix-accountability': 'matrix', 'reporting-lines': 'matrix',
     'dotted-line': 'matrix', 'dual-reporting': 'matrix', 'second-manager': 'matrix',
+    // ADR-0238: the names a leader types looking for "who is always on the
+    // late call" / "is the timezone burden shared". None shadows a shipped route.
+    'distributed-equity': 'distributed-equity', 'time-zone-burden': 'distributed-equity',
+    'unsociable-hours': 'distributed-equity', 'timezone-burden': 'distributed-equity',
+    'after-hours': 'distributed-equity', 'distributed-team': 'distributed-equity',
+    'distributed-work': 'distributed-equity', 'follow-the-sun': 'distributed-equity',
     // ADR-0148: the names a person types looking for "did anyone actually agree
     // to this share of me" / "who accepted this project line".
     'line-consent': 'matrix', consent: 'matrix', 'matrix-consent': 'matrix',
@@ -1769,6 +1784,9 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       // review dates it declared, and domains carrying risk with no appetite.
       // The same three figures the panel prints for the seat.
       riskAppetite: riskAppetiteAttentionCount(state, { now: at, settings: state.settings, seat: seatCtx?.seat || null }),
+      // ADR-0238: over-ceiling burdens and a concentrated workspace verdict — the
+      // same conditions RULE-DWE-01 files. A COUNT, never a name.
+      distributedEquity: distributedEquityAttentionCount(state, { now: at, settings: state.settings, seat: seatCtx?.seat || null }),
       // ADR-0220: over-ceiling envelopes, contested outcomes and outstanding
       // recoveries this seat holds the joint apex above, plus live plans of its
       // own with no verified reading. The same conditions RULE-INC-01 files.
@@ -2402,6 +2420,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       'standard-work': 'Leader standard work — the repeatable part of every leader’s job declared as routines with an observable standard, checked first-person slot by calendar slot, with adherence and its Wilson interval, lapsed routines sent to the next tier on the line the routine names, and abnormalities carried one dated tier at a time until a tier contains them',
       'duty-cover': 'Duty coverage — for every duty line this altitude (and the spans below it) is supposed to perform: who is declared answerable when the holder is absent, whether that person’s altitude can reach the duty at all, whether their access has ever been exercised on a dated record, which duty carries open work with nobody behind it, where one hand is carrying a duty alone, and — under the Absence plan panel — which dated absence windows leave a duty line with no available cover at all',
       means: 'Duty without means — whether every accountable outcome duty carries the authority, budget, and protected hours required to deliver it, which line controls each pillar, and which cross-line locks escalate to the joint apex',
+      'distributed-equity': 'Distributed-work equity — who carries the unsociable hour across a team spread over time zones: declared working windows placed against declared sittings in each person’s own day, the burden per person and per convening line, the concentration verdict with its floors, and the coverage claim kept separate from the verdict',
     };
     return labels[route] || 'LeadOS';
   }

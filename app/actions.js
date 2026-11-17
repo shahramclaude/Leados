@@ -126,6 +126,7 @@ import { createEarnedValueActions } from './core/domain/earnedValueActions.js';
 // live risk, and a breach escalated to the joint seat above the carrying lines.
 // Every read re-derives every figure; every write proves the line.
 import { createRiskAppetiteActions } from './core/domain/riskAppetiteActions.js';
+import { createDistributedEquityActions } from './core/domain/distributedEquityActions.js';
 import { createIncentiveActions } from './core/domain/incentiveActions.js';
 import { createDutyMeansActions } from './core/domain/dutyMeansActions.js';
 import { createPortfolioReviewActions } from './core/domain/portfolioReviewActions.js';
@@ -20372,6 +20373,8 @@ export function createApi(store, options = {}) {
   // field its measure owns; money is converted once, in integer arithmetic, and
   // the line above the risk owner is the line that may declare its retention.
   Object.assign(api, createRiskAppetiteActions(store, { now: clock, idFactory: id }));
+  // ADR-0238: the distributed-work equity register's commands.
+  Object.assign(api, createDistributedEquityActions(store, { now: clock, idFactory: id }));
   // ADR-0220: the variable-pay design & incentive integrity register's commands.
   Object.assign(api, createIncentiveActions(store, { now: clock, idFactory: id }));
   // ADR-0221: the Duty-Without-Means Register's commands and seat-checked reads.
