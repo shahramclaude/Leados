@@ -52,6 +52,8 @@ import { renderFinanceDealSynergyPanel } from './dealSynergyPanel.js';
 // deal thesis says what the deal promised; an earned-value case measures
 // whether the work is arriving on the curve the budget will actually buy.
 import { renderFinanceEarnedValuePanel } from './earnedValuePanel.js';
+// ADR-0239: aggregate commitment timing without claiming cash dates.
+import { renderBudgetMaturityPanel } from './budgetMaturityPanel.js';
 
 const STATUS_TONE = { active: 'good', closed: 'neutral', archived: 'neutral' };
 const LINE_TONE = { planned: 'neutral', committed: 'info', spent: 'good', released: 'neutral' };
@@ -134,10 +136,11 @@ const FINANCE_PANELS = [
   { key: 'synergy', label: 'Deal synergy', href: '#/finance?panel=synergy' },
   // ADR-0217: where the programme actually is against the curve it signed.
   { key: 'earned-value', label: 'Earned value', href: '#/finance?panel=earned-value' },
+  { key: 'maturity', label: 'Commitment timing', href: '#/finance?panel=maturity' },
 ];
 
-function financePanelTabs(ctx, panel, { envelopes = undefined, queue = undefined, cases = undefined, rationing = undefined, variance = undefined, value = undefined, synergy = undefined, earnedValue = undefined } = {}) {
-  const counts = { envelopes, span: queue, cases, rationing, variance, value, synergy, 'earned-value': earnedValue };
+function financePanelTabs(ctx, panel, { envelopes = undefined, queue = undefined, cases = undefined, rationing = undefined, variance = undefined, value = undefined, synergy = undefined, earnedValue = undefined, maturity = undefined } = {}) {
+  const counts = { envelopes, span: queue, cases, rationing, variance, value, synergy, 'earned-value': earnedValue, maturity };
   return tabs({
     ariaLabel: 'Budget & finance views',
     active: panel,
@@ -229,7 +232,7 @@ function downloadOrCopy({ filename, text, title }) {
 
 export function renderFinance(ctx) {
   const requestedPanel = ctx.query?.get?.('panel');
-  const panel = requestedPanel === 'span' || requestedPanel === 'cases' || requestedPanel === 'rationing' || requestedPanel === 'variance' || requestedPanel === 'value' || requestedPanel === 'synergy' || requestedPanel === 'earned-value' ? requestedPanel : 'envelopes';
+  const panel = requestedPanel === 'span' || requestedPanel === 'cases' || requestedPanel === 'rationing' || requestedPanel === 'variance' || requestedPanel === 'value' || requestedPanel === 'synergy' || requestedPanel === 'earned-value' || requestedPanel === 'maturity' ? requestedPanel : 'envelopes';
   const seat = ctx.seatContext?.seat || null;
   const built = ctx.seatContext?.built || null;
   // One evaluator, two readings: the exposure re-evaluates the SAME envelopes
@@ -254,6 +257,21 @@ export function renderFinance(ctx) {
         variance: varianceCount,
         synergy: synergyCount,
         earnedValue: earnedValueCount,
+      }),
+    });
+  }
+  if (panel === 'maturity') {
+    return renderBudgetMaturityPanel(ctx, {
+      tabs: financePanelTabs(ctx, panel, {
+        envelopes: budgetsRollup(ctx.state, ctx.now).all.length,
+        queue: exposure.queue.length + exposure.queueDeferred,
+        cases: casesCount,
+        rationing: rationingCount,
+        variance: varianceCount,
+        value: valueCount,
+        synergy: synergyCount,
+        earnedValue: earnedValueCount,
+        maturity: (ctx.state.budgets || []).filter((budget) => budget?.status === 'active').length,
       }),
     });
   }
