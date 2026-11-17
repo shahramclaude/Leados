@@ -1423,6 +1423,13 @@ export const ACTION_RIGHTS = Object.freeze({
   // a decision is narrowed to the JOINT APEX above those lines.
   'read-employee-voice': { minRank: 1, maxRank: 5, label: 'Read the employee-voice and consultation register within your grant — what was put to each body, the period its instrument gave, what it advised, whether it was answered, and whether the decision followed' },
   'declare-employee-voice': { minRank: 2, maxRank: 5, label: 'Declare a consultation body and its members, open an item on a written instrument, supply documents, hold a sitting and record its minutes, record the body’s advice and answer it, record the decision at the joint seat above the affected lines, and set the register’s conventions' },
+  // ADR-0244 (Schema v198). Two rights: READ is rank 1 and carries the
+  // disclosure ladder (above rank 3 the reader withholds partner names,
+  // agreement references, subjects, confirmations and external hands); DECLARE
+  // is rank 2 and every act on a request is narrowed further to a seat that
+  // holds one of the requesting lines.
+  'read-mutual-aid': { minRank: 1, maxRank: 5, label: 'Read the mutual-aid activation and resource-commitment register within your grant — the agreement a request is made under, the request and its validity, the partner’s acceptance with its written confirmation and promise, the arrival compared against the promise, and the withdrawal and release that close the commitment' },
+  'declare-mutual-aid': { minRank: 2, maxRank: 5, label: 'Declare a bilateral agreement, request help under it, record the partner’s acceptance with its written confirmation and promise, record the arrival, the withdrawal and the release of the commitment, cancel a request that was never accepted, and set the register’s conventions' },
   // ADR-0235/0236 (Schema v191). Six rights, and the shape is the point: RECORDING
   // a demand (with a follow-up link only to a readable insufficient parent),
   // STAFFING its lines and RELEASING to the authority are rank 3+ acts —

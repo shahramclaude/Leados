@@ -2611,6 +2611,242 @@ function seedEmployeeVoice(state, now, { priya, mei, jordan, samuel, freya, at, 
   state.voiceMarkers = Array.isArray(state.voiceMarkers) ? state.voiceMarkers : [];
 }
 
+/**
+ * ADR-0244: a small, REAL-SHAPED mutual-aid record.
+ *
+ * Two agreements and six requests placed RELATIVE TO THE INJECTED CLOCK, so the
+ * register shows live states rather than rows that were only true on the day the
+ * demo was written. NOTHING here states a state, a lapse, a shortfall or a
+ * lateness — every one of those is derived by the reader from the days and lines
+ * below:
+ *
+ *   1. A live agreement with the neighbouring plant and one that expired thirty
+ *      days ago.
+ *   2. A personnel-and-equipment request whose five-day validity closed seven
+ *      days ago with no acceptance: `request-lapsed`. A request nobody answered
+ *      is not a promise.
+ *   3. A pump request accepted three days ago, promising one pump and one
+ *      responder against an ask of two pumps: `accepted-differently`, with the
+ *      shortfall printed, and arrival promised tomorrow.
+ *   4. A transport request accepted twenty days ago with help promised five days
+ *      ago and nothing arrived: `not-arrived-overdue` with the exact days.
+ *   5. A specialist-advice request accepted, advice delivered on time, help
+ *      withdrawn twenty days ago and never released: `arrived-complete` with the
+ *      release owed — the rule files the release ask from the withdrawal, not
+ *      from the state.
+ *   6. A request the partner accepted and then pulled back from before the
+ *      promised day: `withdrawn`, release owed.
+ *   7. A request cancelled three days after it was sent, before any acceptance:
+ *      `cancelled`.
+ */
+function seedMutualAid(state, now, { priya, mei, jordan, samuel, freya, at, ts }) {
+  state.mutualAidAgreements = [
+    {
+      id: 'maa-agr-demo-1',
+      partnerOrg: 'Ringkøbing Plant',
+      agreementRef: 'Mutual Aid Agreement 2024-R1 with Ringkøbing Plant, clause 3 — reciprocal assistance within 48 hours',
+      agreedOn: at(300),
+      expiresOn: at(-120),
+      scopeNote: 'Personnel, pumps and transport for plant-level incidents.',
+      declaredById: 'leader',
+      createdAt: ts(300),
+      updatedAt: ts(300),
+    },
+    {
+      id: 'maa-agr-demo-2',
+      partnerOrg: 'Regional Fire Service',
+      agreementRef: 'Standing Aid Arrangement with the Regional Fire Service, section 2 — specialist advice on hazardous materials',
+      agreedOn: at(400),
+      expiresOn: at(30),
+      scopeNote: 'Specialist hazardous-materials advice during declared incidents.',
+      declaredById: 'leader',
+      createdAt: ts(400),
+      updatedAt: ts(400),
+    },
+  ];
+
+  state.mutualAidRequests = [
+    {
+      id: 'maa-req-demo-1',
+      agreementId: 'maa-agr-demo-1',
+      subject: 'Two responders and a pump for the flooding at the river-side yard',
+      kind: 'personnel',
+      openedOn: at(12),
+      validityDays: 5,
+      requestingLineIds: [priya],
+      askedLines: [{ kind: 'personnel', quantity: 2 }, { kind: 'equipment', quantity: 1 }],
+      cancelledOn: null,
+      cancelledById: null,
+      declaredById: priya,
+      createdAt: ts(12),
+      updatedAt: ts(12),
+    },
+    {
+      id: 'maa-req-demo-2',
+      agreementId: 'maa-agr-demo-1',
+      subject: 'Two high-capacity pumps for the reservoir outlet failure',
+      kind: 'equipment',
+      openedOn: at(20),
+      validityDays: 10,
+      requestingLineIds: [mei],
+      askedLines: [{ kind: 'equipment', quantity: 2 }],
+      cancelledOn: null,
+      cancelledById: null,
+      declaredById: mei,
+      createdAt: ts(20),
+      updatedAt: ts(20),
+    },
+    {
+      id: 'maa-req-demo-3',
+      agreementId: 'maa-agr-demo-1',
+      subject: 'Transport for the temporary generator and its fuel bowser',
+      kind: 'transport',
+      openedOn: at(25),
+      validityDays: 30,
+      requestingLineIds: [mei, priya],
+      askedLines: [{ kind: 'transport', quantity: 1 }],
+      cancelledOn: null,
+      cancelledById: null,
+      declaredById: mei,
+      createdAt: ts(25),
+      updatedAt: ts(25),
+    },
+    {
+      id: 'maa-req-demo-4',
+      agreementId: 'maa-agr-demo-2',
+      subject: 'Specialist advice on the chlorine release response plan',
+      kind: 'specialist-advice',
+      openedOn: at(30),
+      validityDays: 15,
+      requestingLineIds: [jordan],
+      askedLines: [{ kind: 'specialist-advice', quantity: 1 }],
+      cancelledOn: null,
+      cancelledById: null,
+      declaredById: jordan,
+      createdAt: ts(30),
+      updatedAt: ts(30),
+    },
+    {
+      id: 'maa-req-demo-5',
+      agreementId: 'maa-agr-demo-1',
+      subject: 'A standby crew for the planned maintenance shutdown weekend',
+      kind: 'personnel',
+      openedOn: at(16),
+      validityDays: 10,
+      requestingLineIds: [freya],
+      askedLines: [{ kind: 'personnel', quantity: 4 }],
+      cancelledOn: null,
+      cancelledById: null,
+      declaredById: freya,
+      createdAt: ts(16),
+      updatedAt: ts(16),
+    },
+    {
+      id: 'maa-req-demo-6',
+      agreementId: 'maa-agr-demo-1',
+      subject: 'One responder for the evening shift gap caused by the leave rotation',
+      kind: 'personnel',
+      openedOn: at(40),
+      validityDays: 7,
+      requestingLineIds: [samuel],
+      askedLines: [{ kind: 'personnel', quantity: 1 }],
+      cancelledOn: at(35),
+      cancelledById: samuel,
+      declaredById: samuel,
+      createdAt: ts(40),
+      updatedAt: ts(35),
+    },
+  ];
+
+  state.mutualAidAcceptances = [
+    {
+      id: 'maa-acc-demo-1',
+      requestId: 'maa-req-demo-2',
+      acceptedOn: at(3),
+      confirmationRef: 'Ringkøbing duty officer message, reference RKP-2026-11-04-B, confirming one pump and one responder',
+      acceptingHand: 'Ringkøbing duty officer',
+      promisedArrivalOn: at(-1),
+      promisedLines: [{ kind: 'equipment', quantity: 1 }, { kind: 'personnel', quantity: 1 }],
+      recordedById: mei,
+      createdAt: ts(3),
+      updatedAt: ts(3),
+    },
+    {
+      id: 'maa-acc-demo-2',
+      requestId: 'maa-req-demo-3',
+      acceptedOn: at(20),
+      confirmationRef: 'Ringkøbing dispatch call log, entry 8821, confirming transport with arrival within five days',
+      acceptingHand: 'Ringkøbing dispatch',
+      promisedArrivalOn: at(5),
+      promisedLines: [{ kind: 'transport', quantity: 1 }],
+      recordedById: mei,
+      createdAt: ts(20),
+      updatedAt: ts(20),
+    },
+    {
+      id: 'maa-acc-demo-3',
+      requestId: 'maa-req-demo-4',
+      acceptedOn: at(28),
+      confirmationRef: 'Fire service liaison note, reference FSL-77, confirming hazardous-materials advice within two days',
+      acceptingHand: 'Regional Fire Service liaison',
+      promisedArrivalOn: at(26),
+      promisedLines: [{ kind: 'specialist-advice', quantity: 1 }],
+      recordedById: jordan,
+      createdAt: ts(28),
+      updatedAt: ts(28),
+    },
+    {
+      id: 'maa-acc-demo-4',
+      requestId: 'maa-req-demo-5',
+      acceptedOn: at(14),
+      confirmationRef: 'Ringkøbing shift-cover email, reference RKP-SH-9, confirming a standby crew of four',
+      acceptingHand: 'Ringkøbing shift manager',
+      promisedArrivalOn: at(6),
+      promisedLines: [{ kind: 'personnel', quantity: 4 }],
+      recordedById: freya,
+      createdAt: ts(14),
+      updatedAt: ts(14),
+    },
+  ];
+
+  state.mutualAidArrivals = [
+    {
+      id: 'maa-arr-demo-1',
+      acceptanceId: 'maa-acc-demo-3',
+      arrivedOn: at(26),
+      arrivedLines: [{ kind: 'specialist-advice', quantity: 1 }],
+      note: 'Advice delivered on the promised day.',
+      recordedById: jordan,
+      createdAt: ts(26),
+      updatedAt: ts(26),
+    },
+  ];
+
+  state.mutualAidWithdrawals = [
+    {
+      id: 'maa-wdr-demo-1',
+      acceptanceId: 'maa-acc-demo-3',
+      withdrawnOn: at(20),
+      note: 'The fire service recalled its liaison for a county-level incident.',
+      recordedById: jordan,
+      createdAt: ts(20),
+      updatedAt: ts(20),
+    },
+    {
+      id: 'maa-wdr-demo-2',
+      acceptanceId: 'maa-acc-demo-4',
+      withdrawnOn: at(2),
+      note: 'The partner pulled the standby crew back before the promised day.',
+      recordedById: freya,
+      createdAt: ts(2),
+      updatedAt: ts(2),
+    },
+  ];
+
+  state.mutualAidReleases = Array.isArray(state.mutualAidReleases) ? state.mutualAidReleases : [];
+  state.mutualAidMarkers = Array.isArray(state.mutualAidMarkers) ? state.mutualAidMarkers : [];
+}
+
 export function buildDemoState(now = new Date()) {
   const today = dayKey(now);
   const at = (daysAgo) => addDays(today, -daysAgo);
@@ -6220,6 +6456,12 @@ export function buildDemoState(now = new Date()) {
   // that followed advice — and two sittings, one of them below the council's own
   // quorum. Real-shaped, dated relative to the injected clock.
   seedEmployeeVoice(state, now, { priya, mei, jordan, samuel, freya, at, ts });
+  // ADR-0244: two bilateral agreements and six requests — a request that
+  // lapsed with no acceptance, an acceptance that promised less than was asked,
+  // promised help whose day passed, a delivered promise whose withdrawal was
+  // never released, a pulled-back commitment and a cancelled request. Real-shaped,
+  // dated relative to the injected clock.
+  seedMutualAid(state, now, { priya, mei, jordan, samuel, freya, at, ts });
   // ADR-0240: one declared incident with a running external clock, an accepted
   // line, an unaccepted line and a recorded severity raise — so the register
   // shows a real bridge rather than an honest empty state on first load.

@@ -246,6 +246,11 @@ import { buildLoneWorking } from './domain/loneWorking.js';
 import { VOI_CSV_COLUMNS, VOI_CSV_DESCRIPTOR, VOI_CSV_SCOPE } from './domain/voiceRegistry.js';
 import { voiceCsvRows } from './domain/voiceReport.js';
 import { buildVoice } from './domain/voice.js';
+// ADR-0244: identity-free mutual-aid activation and resource-commitment
+// aggregates (CSV #185).
+import { MAA_CSV_COLUMNS, MAA_CSV_DESCRIPTOR, MAA_CSV_SCOPE } from './domain/mutualAidRegistry.js';
+import { mutualAidCsvRows } from './domain/mutualAidReport.js';
+import { buildMutualAid } from './domain/mutualAid.js';
 import { incidentCsvRows, incidentReport } from './domain/incidentCommandReport.js';
 // ADR-0229: CSV #170 — the capability sourcing & firm-boundary register.
 import { SRC_CSV_COLUMNS, SRC_CSV_DESCRIPTOR, SRC_CSV_SCOPE } from './domain/sourcingRegistry.js';
@@ -1730,6 +1735,12 @@ export const CSV_EXPORTS = [
   // boundary. A per-state count below the declared floor exports BLANK with its
   // reason, never as a small number.
   VOI_CSV_DESCRIPTOR,
+  // #185 (ADR-0244): mutual-aid activation and resource commitment. One summary
+  // row and one row per printed request state. No partner name, agreement
+  // reference, request subject, confirmation reference, external hand, resource
+  // line or day crosses this boundary. A per-state count below the declared
+  // floor exports BLANK with its reason, never as a small number.
+  MAA_CSV_DESCRIPTOR,
 ];
 
 function personLookup(state) {
@@ -7041,6 +7052,18 @@ export function buildScopeTable(state, scope, now) {
       return {
         columns: VOI_CSV_COLUMNS.map((key) => ({ key, header: key })),
         rows: voiceCsvRows(report),
+      };
+    }
+    case MAA_CSV_SCOPE: {
+      // CSV scope #185 (ADR-0244, Schema v198). Built from the SAME reader the
+      // `#/mutual-aid` panel renders, with no seat: every figure is an exact
+      // integer count over the whole register, so no partner, agreement
+      // reference, subject, confirmation, external hand, resource line or day
+      // is reachable from this export.
+      const report = buildMutualAid(state, { now, settings: state.settings || {}, seat: null });
+      return {
+        columns: MAA_CSV_COLUMNS.map((key) => ({ key, header: key })),
+        rows: mutualAidCsvRows(report),
       };
     }
     case WPA_CSV_SCOPE: {

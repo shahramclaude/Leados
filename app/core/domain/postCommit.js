@@ -207,6 +207,7 @@ import { distributedEquityRule } from './distributedEquityRules.js';
 import { workplaceAdjustmentRule } from './workplaceAdjustmentRules.js';
 import { loneWorkingRule } from './loneWorkingRules.js';
 import { voiceRule } from './voiceRules.js';
+import { mutualAidRule } from './mutualAidRules.js';
 import { incidentCommandRule } from './incidentCommandRules.js';
 import { sourcingRule } from './sourcingRules.js';
 import { ibpRule } from './ibpRules.js';
@@ -1296,6 +1297,12 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // reporting lines — and nobody is told that a consultation window closed with no
   // advice or that a decision was recorded out of order.
   voiceRule,
+  // ADR-0244: the mutual-aid rule reads the live matrix for the joint apex
+  // above a request's requesting lines, so silencing it reaches across
+  // reporting lines — and nobody is told that a request lapsed with no
+  // acceptance, that promised help did not arrive, that a withdrawal's release
+  // is owed, or that an act was recorded out of order.
+  mutualAidRule,
   workplaceAdjustmentRule,
   // ADR-0229: the Capability Sourcing & Firm-Boundary Register. ONE rule reads
   // the finished register and files at most one dated ask per condition: a
