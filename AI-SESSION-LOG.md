@@ -4856,3 +4856,25 @@ New gaps logged as Planned: cross-entity/cross-currency appetite under a declare
 **Flagged.** Test execution blocked by missing `jsdom`; browser/AT rendering and specialized-tool benchmark **[UNVERIFIED]**. No user-facing application logic changed; README not changed.
 
 **Next:** Work/rest recovery ledger remainder — particularly the worker's own view (frontline × matrix and single-chain), then night-work and in-shift break reading.
+
+## 2026-11-17 — Session 318 — ADR-0240: major-incident command & notification clocks (Schema v194, `#/incidents`, CSV #181)
+
+**Shipped.** Schema v193 → v194; three empty-at-upgrade collections (`micIncidents`, `micActs`, `micMarkers`); five bounded conventions plus the `micAutoPropagate` pause switch; route `#/incidents` with five views and seven dialogs; CSV scope #181 (group `operations`); `RULE-MIC-01` as spine rule 153; insights signals MIC-01..03; demo seed proving a commanded SEV-2 with a lapsed obligation 118 minutes inside its closing window; method figure `app/assets/incident-command-method.jpg`.
+
+**The duty fixed.** Altitude CEO / C-suite × matrix. An incident is declared on a written criterion at a recorded instant. Command is one named hand and moves only by a recorded assume or handover — and the transfer makes the NAMED SUCCESSOR the holder, never the actor, because reading a handover as the outgoing commander's assumption reverses the one thing the screen exists to show. A notification obligation carries a declared clock with a written source, or it carries none: there is no jurisdiction table and no 72-hour default, and an obligation with no clock reads `no-clock` with no deadline at all. Resolution and release are two acts: a closed incident with no stand-down reads `command-standing` at any later instant, and a stand-down before a close is refused.
+
+**Six real product defects, found by writing the suite.**
+1. `components.table()` reads `col.render`, not `col.cell` — 38 columns were silently ignored and `[object Object]` was rendered on screen. It survived the first render check; only reading the row's HTML back exposed it.
+2. A phantom ask cycle — an addressee move was read as condition clearance, so the lapsed ask closed `done` with a duplicate `active` filed beside it in the same pass.
+3. The operator seat could take command and then be told "that person is not on the active roster" on the next act; one `isLegalHand` now separates "legitimate commander" from "roster person".
+4. The raw id `leader` printed in the executive-facing command column.
+5. A block `<div>` nested inside a `<span>` in the accountable-seat cell.
+6. The declare dialog's stub-shaped `'__first__'` clock-key back-patch through `ctx.api.store.update`, replaced by the door resolving the positional `first` token — and still refusing any other unknown key.
+
+**Verified.** `tests/app/incident-command.test.mjs` 53/53. Seven neighbouring suites' head pins moved from v193/152 to v194/153 and re-run green, each keeping its own migration step asserted by position rather than by being last: distributed-equity 23/23, domain-sense-wiring 6/6, information-request-lineage 6/6, assurance-finding-wiring 11/11, probation-gate-wiring 13/13, standard-revisions 12/12, undertaking-wiring 16/16.
+
+**Not verified.** Full `npm test` not completed (structurally red at base). `verify:canonical` not run since Session 315. Real-browser and assistive-technology walkthrough of `#/incidents` [UNVERIFIED]. Standalone bundle not rebuilt this session. Product parity [BENCHMARK-UNVERIFIED] — vendor documentation only, no hands-on environment run.
+
+**Asset.** Generated with the built-in image tool; Higgsfield `unsupported` in this conversation, so reported plainly rather than claimed. One correction round was needed: the first render duplicated a column heading and drew RESOLVE as following TRANSFER, which is the exact order the register refuses.
+
+**New gap logged, not built.** The postmortem itself — a dated, owned review obligation with named action holders and a due day, opened at stand-down and never before. `#/incidents` proves the bridge was released and deliberately prints nothing about what was learned; the benchmark bar requires a 3-day SEV-1 / 5-day SEV-2 review, and no shipped module records that one was held.

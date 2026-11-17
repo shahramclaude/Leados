@@ -28,6 +28,7 @@ import { EV_RIGHTS } from './earnedValueRegistry.js';
 import { RA_RIGHTS } from './riskAppetiteRegistry.js';
 // ADR-0238: the distributed-work equity register's two rights.
 import { DWE_RIGHTS } from './distributedEquityRegistry.js';
+import { MIC_RIGHTS } from './incidentCommandRegistry.js';
 // ADR-0229: the capability sourcing register's four rights.
 import { SRC_RIGHTS } from './sourcingRegistry.js';
 import { VY_RIGHTS } from './vyRegistry.js';
@@ -317,6 +318,14 @@ const groups = [
   // are the declarer's acts because the conventions bound every verdict.
   [DWE_RIGHTS.READ, 'distributedEquityReport distributedEquityAttentionCount'],
   [DWE_RIGHTS.DECLARE, 'distributedEquityDeclareWindow distributedEquityWithdrawWindow distributedEquityDeclareSitting distributedEquityRetractSitting distributedEquitySetConventions distributedEquityScan'],
+  // ADR-0240: the incident command register. Reading is registered as safe and
+  // therefore bypasses the gateway's rank check — so the read right is re-proved
+  // inside the action, exactly as every register in this workspace re-proves it.
+  // Commanding is a rank 2+ act; the party-to-the-incident test, the strict reach
+  // above every line lead and the "only the holder may hand over or release" rule
+  // are enforced inside the action against the live reporting graph.
+  [MIC_RIGHTS.READ, 'incidentReport incidentAttentionCount incidentCandidates'],
+  [MIC_RIGHTS.COMMAND, 'incidentDeclare incidentAssignLine incidentAcceptLine incidentAssumeCommand incidentTransferCommand incidentChangeSeverity incidentRecordNotification incidentResolve incidentStandDown incidentSetConventions incidentScan'],
   // ADR-0229: the capability sourcing & firm-boundary register. Reading is
   // portfolio material (rank 3+). Recording an option is the leader who HOLDS
   // the capability (rank 2+), narrowed inside the action to a line the case
@@ -789,6 +798,11 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // re-prove the read right inside the action, exactly as the risk-appetite
 // register re-proves it.
 'distributedEquityReport', 'distributedEquityAttentionCount',
+// ADR-0240: the incident command register's pure read surface. Every one of
+// these re-proves the read right inside the action, because a module whose
+// reads are absent from SAFE_READS is unreadable under enforcement while its
+// writes are still gated.
+'incidentReport', 'incidentAttentionCount', 'incidentCandidates',
 // ADR-0229: the capability sourcing register's pure read surface. Every one of
 // these re-proves the read right inside the action, because a module whose
 // reads are absent from SAFE_READS is unreadable under enforcement while its
@@ -1134,6 +1148,10 @@ const MATRIX_LINE_SCOPED = new Set([
   // ADR-0188: a corroboration request names participants reachable only through a
   // declared Matrix line; the action re-checks the holder against the frozen set.
   'aarCorroborationRequest',
+  // ADR-0240: declaring an incident names response-line leads and a successor
+  // commander reachable only through a declared Matrix line; the action re-checks
+  // every one of them against the live graph before it writes anything.
+  'incidentDeclare', 'incidentAssignLine', 'incidentTransferCommand',
   // ADR-0190: declaring a routine may name a person the declaring seat reaches
   // only through a dotted line; the action re-checks the line holder itself.
   'standardWorkDeclareRoutine',

@@ -233,6 +233,9 @@ import { RA_CSV_COLUMNS, RA_CSV_DESCRIPTOR, RA_CSV_SCOPE } from './domain/riskAp
 import { DWE_CSV_COLUMNS, DWE_CSV_DESCRIPTOR, DWE_CSV_SCOPE } from './domain/distributedEquityRegistry.js';
 import { buildBudgetMaturity, budgetMaturityCsvRows, BUDGET_MATURITY_CSV_COLUMNS, BUDGET_MATURITY_CSV_DESCRIPTOR, BUDGET_MATURITY_CSV_SCOPE } from './domain/budgetMaturity.js';
 import { buildDistributedEquity, distributedEquityCsvRows } from './domain/distributedEquity.js';
+// ADR-0240: identity-free incident-command aggregates (CSV scope #181).
+import { MIC_CSV_COLUMNS, MIC_CSV_DESCRIPTOR, MIC_CSV_SCOPE } from './domain/incidentCommandRegistry.js';
+import { incidentCsvRows, incidentReport } from './domain/incidentCommandReport.js';
 // ADR-0229: CSV #170 — the capability sourcing & firm-boundary register.
 import { SRC_CSV_COLUMNS, SRC_CSV_DESCRIPTOR, SRC_CSV_SCOPE } from './domain/sourcingRegistry.js';
 import { buildSourcing } from './domain/sourcing.js';
@@ -1692,6 +1695,12 @@ export const CSV_EXPORTS = [
   // #180 (ADR-0239): per-currency maturity ladder of recorded encumbrances.
   // Identity-free and never pooled across currencies; it is not cash-flow data.
   BUDGET_MATURITY_CSV_DESCRIPTOR,
+  // #181 (ADR-0240): incident command & notification clocks. One summary row,
+  // one row per severity, one per notification party and one per response duty
+  // as stable positional codes. No incident id, title, person, name, instrument
+  // text, reference or free text of any kind crosses this boundary. An
+  // uncomputable figure exports BLANK with its reason, never a zero.
+  MIC_CSV_DESCRIPTOR,
 ];
 
 function personLookup(state) {
@@ -6969,6 +6978,18 @@ export function buildScopeTable(state, scope, now) {
       return {
         columns: RA_CSV_COLUMNS.map((key) => ({ key, header: key })),
         rows: riskAppetiteCsvRows(report),
+      };
+    }
+    case MIC_CSV_SCOPE: {
+      // CSV scope #181 (ADR-0240, Schema v194). Built from the SAME reader the
+      // `#/incidents` panel renders, with no seat: every figure is an exact
+      // integer count over the whole register, so no incident id, title,
+      // declaring seat, commander, line lead, instrument text, basis text,
+      // notification reference or clock label is reachable from this export.
+      const report = incidentReport(state, { now, settings: state.settings || {}, seat: null });
+      return {
+        columns: MIC_CSV_COLUMNS.map((key) => ({ key, header: key })),
+        rows: incidentCsvRows(report),
       };
     }
     case DWE_CSV_SCOPE: {

@@ -130,6 +130,7 @@ import { successionSignals } from './succession.js';
 import { chainSignals } from './chain.js';
 // ADR-0238: the distributed-work equity register contributes DWE-01..03.
 import { distributedEquitySignals } from './distributedEquity.js';
+import { incidentCommandSignals } from './incidentCommand.js';
 import { autopilotSignals } from './autopilot.js';
 
 const CONF_WEIGHT = { high: 3, medium: 2, low: 1 };
@@ -2599,6 +2600,12 @@ export function buildInsights(state, now) {
   // windows. It reads its own ledgers and the live matrix, so it cannot recurse
   // into the engine that is running it.
   for (const signal of distributedEquitySignals(state, now, settings)) add(signal);
+  // ADR-0240 (read-side): the Incident Command register contributes MIC-01..03 —
+  // a passed notification deadline, a live major incident with no commander (or a
+  // closed one still holding command), and a response line nobody accepted. It
+  // reads its own ledgers and the live matrix, so it cannot recurse into the
+  // engine that is running it.
+  for (const signal of incidentCommandSignals(state, now, settings)) add(signal);
   // Schema v56 (read-side): the Leader Probability Calibration Terminal
   // contributes LCAL-01..04 for an overconfident verdict, drift, first verdict
   // readiness and underconfidence.

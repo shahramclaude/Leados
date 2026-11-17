@@ -399,6 +399,15 @@ import {
 import { normalizeIbpSettings } from './domain/ibpRegistry.js';
 // ADR-0238: the Distributed-Work Equity Register's conventions, clamped on load.
 import { normalizeDweSettings, normalizeDweWindows, normalizeDweSittings, normalizeDweMarkers } from './domain/distributedEquitySchema.js';
+// ADR-0240 (Schema v194): the Major-Incident Command & Notification-Clock
+// Register. Every loader here is fail-closed: a row that cannot be read exactly
+// is DROPPED with a counted warning, never repaired into a plausible default.
+import {
+  normalizeMicIncidents,
+  normalizeMicActs,
+  normalizeMicMarkers,
+  normalizeMicSettings,
+} from './domain/incidentCommandSchema.js';
 import {
   normalizeIbpCycles,
   normalizeIbpDemandRows,
@@ -1355,7 +1364,15 @@ export {
 // notification is stored; each is re-derived on read, so a hand-edited file
 // cannot carry a decision nobody made, an extension the instrument did not
 // allow, or a window that defaulted itself.
-export const SCHEMA_VERSION = 193;
+// ADR-0240 (Schema v194): the Major-Incident Command & Notification-Clock
+// Register — declared incidents carrying one to six response lines and their
+// declared notification clocks, the append-only command / notification /
+// severity / resolution / stand-down acts, and identity-free rule markers. No
+// state, duration, deadline, overrun or notification verdict is stored; each is
+// re-derived on read, so a hand-edited file cannot carry a commander nobody
+// designated, a notification nobody made, or a deadline the record does not
+// compute.
+export const SCHEMA_VERSION = 194;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -3919,6 +3936,16 @@ export const COLLECTIONS = [
   'dweWindows',
   'dweSittings',
   'dweMarkers',
+  // ADR-0240 (Schema v194): the Major-Incident Command & Notification-Clock
+  // Register. Declared incidents with their response lines and declared clocks,
+  // the append-only acts that command them, and identity-free rule markers. No
+  // state, interval, deadline, overrun or notification verdict is stored: each
+  // is re-derived on read, so a hand-edited file cannot carry a commander nobody
+  // designated, a notification nobody made, or a deadline the record does not
+  // compute.
+  'micIncidents',
+  'micActs',
+  'micMarkers',
 ];
 
 /** Stable empty state. `now` is an ISO string so the result is a pure value. */
@@ -4192,6 +4219,10 @@ export function normalizeSettings(raw) {
     // persistence vocabulary so updateSettings can move it, and defaulted ON so
     // a switch that hides an over-ceiling burden is never the silent default.
     dweAutoPropagate: s.dweAutoPropagate !== false,
+    // ADR-0240: the incident command register's conventions, clamped on load.
+    // The rule switch is defaulted ON so a pause that hides a blown notification
+    // deadline or an uncommanded incident is never the silent default.
+    ...normalizeMicSettings(s),
     // Repair of a standing red reported at base HEAD: two rule switches the
     // pause census maps were not carried in settings, so the only writes that
     // can silence those rules were refused as unknown keys. Declared here with
@@ -9486,6 +9517,15 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.dweWindows = normalizeDweWindows(raw.dweWindows, warnings);
   state.dweSittings = normalizeDweSittings(raw.dweSittings, warnings);
   state.dweMarkers = normalizeDweMarkers(raw.dweMarkers, warnings);
+  // ADR-0240 (Schema v194): an incident, act or marker that cannot be read
+  // exactly is DROPPED with a counted warning — never repaired, re-dated,
+  // re-commanded or re-pointed at another incident. An incident with no
+  // detection instant is refused rather than having one manufactured from its
+  // creation time, because the detection-to-declaration interval is the first
+  // figure a review reads. No deadline or verdict is stored.
+  state.micIncidents = normalizeMicIncidents(raw.micIncidents, warnings);
+  state.micActs = normalizeMicActs(raw.micActs, state.micIncidents, warnings);
+  state.micMarkers = normalizeMicMarkers(raw.micMarkers, warnings);
   // ADR-0229 (Schema v182): a case, option, cost line or act that cannot be read
   // exactly is DROPPED with a counted warning — never repaired, re-termed,
   // re-priced or re-pointed at another case. A cost line that does not belong to
@@ -10519,6 +10559,19 @@ export const MIGRATIONS = {
     dweSittings: Array.isArray(v192.dweSittings) ? v192.dweSittings : [],
     dweMarkers: Array.isArray(v192.dweMarkers) ? v192.dweMarkers : [],
     settings: { ...(v192.settings || {}), ...normalizeDweSettings(v192.settings || {}) },
+  }),
+  // 193 → 194: ADR-0240 adds THREE EMPTY ledgers (`micIncidents`, `micActs`,
+  // `micMarkers`) and the register rule's conventions. No incident, clock,
+  // commander, notification or deadline is inferred from existing records: a
+  // workspace with an operational case on file does not thereby have an incident
+  // someone declared, and the register will not manufacture one.
+  193: (v193) => ({
+    ...v193,
+    schemaVersion: 194,
+    micIncidents: Array.isArray(v193.micIncidents) ? v193.micIncidents : [],
+    micActs: Array.isArray(v193.micActs) ? v193.micActs : [],
+    micMarkers: Array.isArray(v193.micMarkers) ? v193.micMarkers : [],
+    settings: { ...(v193.settings || {}), ...normalizeMicSettings(v193.settings || {}) },
   }),
   // 183 → 184: ADR-0231 adds SEVEN EMPTY ledgers (`ibpCycles`, `ibpDemandRows`,
   // `ibpCapacityRows`, `ibpOptions`, `ibpDecisions`, `ibpGrades`, `ibpMarkers`)

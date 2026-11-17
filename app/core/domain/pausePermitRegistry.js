@@ -321,6 +321,12 @@ export const PAUSE_PERMIT_MATRIX_REACH_SWITCHES = Object.freeze([
   // across reporting lines, and those lines' managers are not told that
   // somebody is carrying the unsociable hour over the declared ceiling.
   'dweAutoPropagate',
+  // ADR-0240: the incident command register's rule. Silencing it stops the asks
+  // for a blown external notification deadline and for a live major incident with
+  // nobody in command — and the response lines that carry those duties are not
+  // told. It reaches across reporting lines, so it carries a permit like every
+  // other cross-line switch.
+  'micAutoPropagate',
 ]);
 
 export function pausePermitReachesMatrix(key) {
