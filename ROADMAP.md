@@ -1,3 +1,15 @@
+## 2026-11-17 — Session 322: lone-working sub-minute overlap guard — SHIPPED (bounded slice)
+
+**Coverage:** frontline / mid-manager × single-chain and matrix. The declaration door now compares half-open spans at millisecond precision, refusing even one millisecond of overlap and reporting both the actual milliseconds and floored whole minutes. A refusal writes nothing; abutting spans remain legal. Existing closed-deployment semantics are unchanged. Focused suite: 31/31, including rendered/computed equality and storage assertions.
+
+**Remaining safety gap — In Progress:** an unclosed deployment is still compared only up to its expected end, even when it has overrun. A new deployment after that end can be accepted although the first remains open. Design and test an explicit treatment of uncertain ongoing occupancy and future scheduling; do not silently equate expected end with actual close. Existing imported overlapping rows are also not retroactively repaired or flagged by this slice.
+
+**New capability gap — unbuilt:** inter-organisation mutual-aid activation and resource commitments [director / VP / CEO × single-chain and matrix]. Incident command is not a record of a bilateral aid agreement, a request, an external provider's explicit acceptance, the promised resources and time, or withdrawal and release. A resilient emergency response needs these separately dated acts, a named accountable internal line and uncertainty when a partner has not confirmed; never infer acceptance from a request. Targeted search of `app/core/domain` and this roadmap for mutual-aid agreements and requests returned no exact matches; wider absence **[UNVERIFIED]**.
+
+**Benchmark [BENCHMARK-UNVERIFIED]:** Blackline Safety is a specialized lone-worker safety platform; the relevant bar is reliable check-in and escalation without conflicting assignments, not a language-model-generated assurance. Its precise overlap behavior and comparative performance have not been tested, and no specialized AI product parity is established. This narrow guard is not a substitute for device monitoring or emergency response.
+
+---
+
 ## 2026-11-17 — Session 320: ADR-0242 lone-working welfare-check register (Schema v196, `#/lone-working`, CSV #183, `RULE-LWK-01`) — SHIPPED
 
 **Branch and scope.** Active branch `arena/f0ca8f76-leados`, based at `ad12d52b7e94ba701869d565ac497378c7e7137f`. Altitude **frontline / mid-manager** × **matrix and single-chain** — the unaccompanied-worker welfare check, the one safety control in the estate that is administered by the person it protects. One item, completed end to end.

@@ -1,3 +1,7 @@
+## 2026-11-17 — Lone-working overlap precision
+
+The lone-working declaration guard (`#/lone-working`) refuses overlaps down to one millisecond and reports both the exact milliseconds and the floored whole-minute count. Adjacent intervals are allowed. This guard does not yet treat an unclosed deployment as extending beyond its expected end; see ROADMAP for that safety limitation.
+
 ## 2026-11-17 — Who is always on the late call, and is the burden shared?
 
 **Mid-manager → director → Distributed-work equity** (`#/distributed-equity`, [ADR-0238](./docs/adr/0238-distributed-work-equity-register.md), Schema v193, CSV #179) is the register for a team spread over time zones. Each person declares their own working window with a written source — the register never infers one from calendar data. A chair declares a sitting: who met, when, under whose clock, with every attendee on the roster (one off-roster attendee refuses the whole sitting). The reader then places that sitting in **each attendee's own local day**, through the DST engine: the 21:30 Copenhagen bridge is 60 minutes of burden for the Copenhagen side and 0 for the New York side, both printed, both exact. A person with no readable window is **unknown, not zero**, and the register says so.

@@ -18,8 +18,8 @@
  *    welfare is the control failing at the first step. (The workspace operator
  *    seat is not a roster person, so this is never a block on a solo operator.)
  *  - One person cannot be declared alone in TWO PLACES at once: an overlapping
- *    span is refused with the EXACT overlap in minutes, computed on the effective
- *    span — a deployment that was closed early ends at its close, not at the end
+ *    span is refused using exact instants, with the overlap in milliseconds and
+ *    whole minutes, computed on the effective span — a deployment that was closed early ends at its close, not at the end
  *    it was originally declared to.
  *  - A contact cannot be recorded in the future, before the deployment started, or
  *    at or before the last contact. History that can run backwards is history
@@ -227,9 +227,10 @@ export function createLoneWorkingActions(store, { now, idFactory }) {
         if (other.personId !== person.personId) continue;
         const otherStart = instantMs(other.startAt);
         const otherEnd = other.closedAt ? instantMs(other.closedAt) : instantMs(other.expectedEndAt);
-        const overlap = overlapMinutes(startMs, endMs, otherStart, otherEnd);
-        if (overlap > 0) {
-          return fail(`This person is already declared alone over part of that span, overlapping by ${overlap} whole minute(s). One person cannot be alone in two places at once, and two overlapping clocks would each be honoured by a different hand.`, 'startAt', REFUSAL('overlapping-deployment'));
+        const overlapMs = Math.min(endMs, otherEnd) - Math.max(startMs, otherStart);
+        if (overlapMs > 0) {
+          const overlap = overlapMinutes(startMs, endMs, otherStart, otherEnd);
+          return fail(`This person is already declared alone over part of that span, overlapping by ${overlap} whole minute(s) (${overlapMs} milliseconds). One person cannot be alone in two places at once, and two overlapping clocks would each be honoured by a different hand.`, 'startAt', REFUSAL('overlapping-deployment'));
         }
       }
 
