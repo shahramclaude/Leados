@@ -246,7 +246,7 @@ function withDom(fn) {
 /* ------------------------------------------- 1. schema, spine & registration */
 
 test('schema v210 is additive, migration 209 → 210 invents zero records, and spine #167 / CSV #195 / manifest / pause switch are wired', () => {
-  assert.equal(SCHEMA_VERSION, 210);
+  assert.equal(SCHEMA_VERSION, 211);
   const empty = createEmptyState(T0);
   for (const key of PSR_KEYS) {
     assert.ok(COLLECTIONS.includes(key), `${key} declared in COLLECTIONS`);
@@ -268,8 +268,8 @@ test('schema v210 is additive, migration 209 → 210 invents zero records, and s
   };
   for (const key of PSR_KEYS) delete v209[key];
   const { raw, applied } = migrate(v209);
-  assert.deepEqual(applied, ['209 → 210']);
-  assert.equal(raw.schemaVersion, 210);
+  assert.deepEqual(applied, ['209 → 210', '210 → 211']);
+  assert.equal(raw.schemaVersion, SCHEMA_VERSION);
   for (const key of PSR_KEYS) assert.deepEqual(raw[key], []);
   assert.equal(raw.ptwPermits[0].id, 'ptw-keep');
 

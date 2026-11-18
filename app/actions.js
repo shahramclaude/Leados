@@ -161,6 +161,7 @@ import { createPsrActions } from './core/domain/psrActions.js';
 // and standing down — nothing else.
 import { createIncidentCommandActions } from './core/domain/incidentCommandActions.js';
 import { createServiceBudgetActions } from './core/domain/serviceBudgetActions.js';
+import { createCashCovenantActions } from './core/domain/cashCovenantActions.js';
 import { createIncentiveActions } from './core/domain/incentiveActions.js';
 import { createDutyMeansActions } from './core/domain/dutyMeansActions.js';
 import { createPortfolioReviewActions } from './core/domain/portfolioReviewActions.js';
@@ -20462,6 +20463,7 @@ export function createApi(store, options = {}) {
   // ADR-0240: the incident command register's commands.
   Object.assign(api, createIncidentCommandActions(store, { now: clock, idFactory: id }));
   Object.assign(api, createServiceBudgetActions(store, { now: clock, idFactory: id }));
+  Object.assign(api, createCashCovenantActions(store, { now: clock, idFactory: id }));
   // ADR-0220: the variable-pay design & incentive integrity register's commands.
   Object.assign(api, createIncentiveActions(store, { now: clock, idFactory: id }));
   // ADR-0221: the Duty-Without-Means Register's commands and seat-checked reads.

@@ -1,3 +1,9 @@
+## Record a dated minimum-cash test in the workspace
+
+Open **Cash covenant workpapers** (`#/cash-covenant`). From a declared director or VP seat, choose **Review a test**, name every accountable leadership steward, enter the contractual cutoff converted to UTC and a source version reference, then open or paste the complete UTF-8 TSV described below. Use stable facility and account codes, not account numbers. Supply the executed clause/amendment locator, a separately sourced book control and each balance and eligibility reference. **Preview reconciliation** does not save. Record the workpaper after review; the receipt prints signed headroom or the reason it was withheld, and the exact submitted account evidence.
+
+A readable but incomplete test can be kept without a headroom reading. To correct it, open the latest receipt, choose **Prepare correction**, cite a new source version and the change, and submit the entire revised TSV for the same facility, day, currency and stewards. Earlier revisions stay readable and are marked superseded. Declared directors, VPs and CEOs must reach **all** named stewards through active home or additional reporting paths to review it. The CEO and local operator views do not record. Use one editing tab. Full backups contain the evidence; do not share one as a scoped handoff. This is not a lender certificate or a determination of default. See [ADR-0259](docs/adr/0259-cash-covenant-receipts.md) for limits and scope.
+
 ## Review minimum-cash headroom (local treasury workpaper)
 
 Run `node scripts/review-minimum-cash.mjs evidence.tsv` (or `-` for stdin). Use only for a clause comparing the sum of eligible cash balances with a fixed, inclusive minimum. Use one facility, one contractual test date/cutoff and one currency per file. Do not use for averages, available credit lines, currency conversions, caps, partial eligibility or percentage tests.

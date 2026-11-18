@@ -227,7 +227,7 @@ function asSeat(api, store, seatId) {
 /* --------------------------------------------------------------- 1. schema */
 
 test('schema v209 is additive: six empty ledgers, three conventions, nothing inferred', () => {
-  assert.equal(SCHEMA_VERSION, 210, 'ADR-0258 (pre-startup safety review) is the current head');
+  assert.equal(SCHEMA_VERSION, 211, 'ADR-0259 (cash covenant evidence) is the current head');
   const keys = ['taxNotices', 'taxDeadlines', 'taxFilings', 'taxEvidence', 'taxResolutions', 'taxMarkers'];
   for (const key of keys) assert.ok(COLLECTIONS.includes(key), `${key} must be a declared collection`);
   const empty = createEmptyState(T0);

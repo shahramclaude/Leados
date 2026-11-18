@@ -1,10 +1,28 @@
+## 2026-11-18 — Versioned minimum-cash receipts ([ADR-0259](docs/adr/0259-cash-covenant-receipts.md))
+
+**Complete, bounded slice:** `#/cash-covenant` previews, records and reopens the evidence for a fixed, inclusive minimum at one declared facility/date/currency/cutoff. The shared CLI/workspace kernel uses exact signed minor units, distinguishes row/subtotal balance from both independent controls and keeps identical account copies once. Incomplete evidence withholds headroom. Schema v211 stores the submitted evidence and dated clause/source references, not results. Corrections append to the same test with a new source version and a reason; older receipts are marked superseded. No certificate, sign-off, cross-test roll-up or alert is implied.
+
+**Coverage map (single-chain and matrix):** frontline / mid-manager do not receive portfolio balances; director Treasury and VP Finance can prepare and correct; in-reach director, VP and declared CEO can review. Every accountable steward must be named and reachable via an active path; a multipath identity appears once and partial reach grants no receipt. Recent operational sessions emphasized frontline and mid-manager controls; this delivers the next treasury priority without widening low-altitude disclosure.
+
+**Benchmark:** [2](https://finquery.com/debt-management-software/) sets the bar with human-reviewed AI agreement intake, traceable instrument history and continuous Cash Balance/DSCR tests. LeadOS verifies the bounded native closed-test arithmetic and revisions, not continuous feeds, extraction or comparable vendor execution. **[BENCHMARK-UNVERIFIED]**.
+
+**Focused verification:** 12/14 initially, then both end-to-end form tests passed after scoping the preview assertions to the dialog instead of the old receipt underneath. Form → persisted inputs → fresh render matched exact minor units and every distinct account row in both structures. The quota refusal and encrypted reopen checks, 13 adjacent migration/wiring checks, changed-file lint and canonical boundary passed. Real-browser/AT, field agreement validation, full suite and CI **[UNVERIFIED]**.
+
+**In Progress / next priority:** reusable effective-dated facility terms and amendment applicability (director Treasury / VP Finance × both structures). Ratios, add-backs, notices/cure clocks and waiver or certification authority remain unbuilt. Bank-confirmed signatory revocation is a separate new Planned capability below.
+
+---
+
+## 2026-11-18 — New gap: bank-confirmed signatory revocation
+
+**Planned, unbuilt.** Mid-managers in treasury operations and directors of treasury prepare; VP Finance reviews exceptions × single-chain and matrix. Reconcile the approved internal revocation, the instruction actually sent, and independently evidenced removal at the bank for each stable account × signer × authority. Leaving the organization or sending a request must not close the exposure; distinguish a receipt acknowledgment from effective removal. Use separate dated populations for internal mandates and bank evidence, count each entitlement once across legal-entity and treasury lines, and withhold clearance when coverage or authority is ambiguous. This applies segregation of duties and external confirmation to an offboarding control; it is distinct from workspace credentials and cash-balance eligibility. Targeted search of `app/`, `docs/adr/` and this roadmap found no bank-mandate or bank-entitlement reconciliation; wider absence **[UNVERIFIED]**. [1](https://www.kyriba.com/products/treasury/) describes signatory tracking and approval workflows. Bank-confirmed reconciliation and same-input parity **[BENCHMARK-UNVERIFIED]**.
+
 ## 2026-11-18 — Minimum-cash covenant workpaper
 
 **Complete:** one local, read-only facility/date/currency test. Compares signed eligible balances to an inclusive fixed minimum in exact minor units. Distinct-account count, book-total agreement and unresolved classifications are reported separately. No zero substitution or headroom on incomplete evidence. **Coverage:** director treasury prepares; VP Finance / CFO and CEO review × single-chain and matrix. Identical shared account evidence counts once, conflicts refuse the file. No new frontline/mid-manager view or hierarchy roll-up.
 
 **Benchmark:** DebtBook describes collaborative covenant calculations, detailed schedules and approval history [2](https://www.debtbook.com/financial-reporting). The local receipt addresses the dated arithmetic and evidence trail only; no AI agreement extraction, shared approval workflow or same-input vendor trial. **[BENCHMARK-UNVERIFIED]**.
 
-**In Progress / next priority:** workspace-native covenant register for director treasury / VP Finance: dated terms and immutable test receipts first; ratio definitions, add-backs, cure clocks and waiver authority still unbuilt. The CLI does not authorize a covenant certificate.
+**Follow-through:** dated terms snapshots and append-only test receipts are now available in the workspace (ADR-0259 above). The broader covenant register remains In Progress. Neither the CLI nor the workspace workpaper authorizes a covenant certificate.
 
 **New gap — Planned:** asset-based lending borrowing-base certificate (director treasury / VP Finance × both structures). Reconcile an aged invoice population once across sales and finance; apply contract-specific eligibility, concentration caps, advance rates and lender reserves in contractual order before comparing collateral availability to drawings. A positive cash balance cannot answer how much may be drawn. Refuse missing lien, eligibility or reserve evidence. No match on `borrowing base`, `ineligible receivables` or `concentration reserve` in canonical app, ADRs or roadmap; wider absence **[UNVERIFIED]**.
 

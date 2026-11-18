@@ -164,7 +164,7 @@ function harness(raw, { normalize = true } = {}) {
 
 test('schema v196 is additive: four empty ledgers, three conventions, nothing inferred', () => {
   const empty = createEmptyState(T0);
-  assert.equal(SCHEMA_VERSION, 210, 'ADR-0258 (pre-startup safety review) is the current head');
+  assert.equal(SCHEMA_VERSION, 211, 'ADR-0259 (cash covenant evidence) is the current head');
   for (const key of ['lwkDeployments', 'lwkCheckins', 'lwkEscalations', 'lwkMarkers']) {
     assert.ok(COLLECTIONS.includes(key), `${key} is a declared collection`);
     assert.deepEqual(empty[key], [], `${key} starts empty`);

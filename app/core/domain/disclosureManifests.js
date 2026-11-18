@@ -117,6 +117,7 @@ export const MODULE_MANIFESTS = Object.freeze({
   negotiation: row('negotiation', 'Negotiation detail', ['negotiations'], { mode: A, parent: 'negotiations' }),
   finance: row('finance', 'Budget & finance', ['budgets'], { mode: A, dates: ['createdAt'], amounts: ['limit'], currencies: ['currency'], statuses: ['status'], note: 'Money is aggregated per currency and never pooled across currencies.' }),
   budget: row('budget', 'Budget detail', ['budgets'], { mode: A, parent: 'finance' }),
+  'cash-covenant': row('cash-covenant', 'Cash covenant workpapers', ['cashCovenantTests'], { mode: A, classKey: 'portfolio', adapterScoped: true, detailCeiling: 5, note: 'Report-only: no generic release or aggregate. A declared seat reviews one test only when it reaches all its named stewards.' }),
   insights: row('insights', 'Signals', WORK, { mode: A, dates: ['openedOn'] }),
 
   /* ------------------------------------------------------------- succession */

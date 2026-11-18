@@ -1,3 +1,17 @@
+## 2026-11-18 — Minimum-cash evidence that can be reopened and corrected
+
+**Doctrine / sync:** `NORTH_STAR.md` exists and includes all four binding mandates; no amendment. `origin` fetch and push both match the requested repository. Active branch `arena/88c9a43b-leados`, base `c5da962`.
+
+**Built:** [ADR-0259](docs/adr/0259-cash-covenant-receipts.md), `#/cash-covenant`. Director Treasury and VP Finance prepare and correct; director / VP / CEO review × single-chain and matrix, only when every named steward is in reach. The cash test uses one closed declared cutoff, versioned clause and independently referenced account population. Freezes evidence, not a conclusion; exact rows and control comparisons explain why there is or is not signed headroom. Stale corrections are refused and corrupted lineage does not promote an older receipt. Additive schema v211, shared CLI kernel, opaque audit events, no automation or synthetic balances.
+
+**Benchmark / asset:** FinQuery’s published bar is human-reviewed AI intake, dated tracking and continuous covenant tests [2](https://finquery.com/debt-management-software/). This offline slice replays the exact submitted evidence, but it does not extract agreements or run live tests. Same-input and full-workflow parity **[BENCHMARK-UNVERIFIED]**. Higgsfield lookup returned `unsupported`; no generated asset is needed for the evidence form or receipt.
+
+**New gap, unbuilt:** reconcile internally revoked bank-signing mandates to independently confirmed effective removal at the bank, distinguishing request sent, acknowledgment and effective removal. Logged in [ROADMAP.md](ROADMAP.md) with mid-manager/director ownership and VP exception review in both structures. Reusable effective-dated facility terms and amendment applicability are next; the broader covenant register remains In Progress.
+
+**Verification:** focused workspace + CLI pass was 12/14 initially. Both failures read the underlying receipt instead of the correction preview; the one selector fix passed both cases on targeted retry (2/2). The tests compared every displayed figure and distinct row against sourced inputs and fresh reload in both structures, and checked quota refusal and encrypted reopen. Adjacent migration/wiring checks 13/13; changed-file ESLint and boundary passed. **[UNVERIFIED]:** real-browser/AT and field use, vendor parity, full suite/CI, and standalone distribution (not rebuilt). Save retains existing single-editor workspace semantics; no multi-tab consistency claim.
+
+---
+
 ## 2026-11-18 — One facility, one test date: minimum-cash headroom
 
 All four mandates present; origin matched. Recent sessions emphasized frontline safety, so this session took the executive treasury priority. Built a local file/stdin → JSON workpaper for director / VP Finance / CFO and CEO review in both structures. Printed signed headroom is withheld unless the population count, gross book total and account classifications support it. Cross-line copies retain line provenance; no inferred owner or persisted mutation. No generated visual or onboarding asset needed. New unbuilt gap: borrowing-base certificate (see roadmap).

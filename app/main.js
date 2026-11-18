@@ -358,6 +358,7 @@ import { settlementAttentionCount } from './core/domain/settlement.js';
 import { counterfactualAttentionCount } from './core/domain/counterfactualPolicy.js';
 import { renderReliability } from './views/reliability.js';
 import { renderServiceBudget } from './views/serviceBudget.js';
+import { renderCashCovenant } from './views/cashCovenant.js';
 import { reliabilityAttentionCount } from './core/domain/reliability.js';
 import { renderSupply } from './views/supply.js';
 import { renderChain } from './views/chain.js';
@@ -629,6 +630,7 @@ export const NAV = [
     { route: 'confidence', label: 'Confidence transport', icon: '⇝', badge: 'confidence' },
     { route: 'negotiations', label: 'Negotiation', icon: '⤄', badge: 'negotiations' },
     { route: 'finance', label: 'Budget & finance', icon: '◈', badge: 'finance' },
+    { route: 'cash-covenant', label: 'Cash covenant workpapers', icon: '§' },
     { route: 'stakeholders', label: 'Stakeholders', icon: '♜', badge: 'stakeholders' },
     { route: 'forecasts', label: 'Forecast integrity', icon: '⌁', badge: 'forecast' },
     { route: 'premises', label: 'Assumption ledger', icon: '⟡', badge: 'premises' },
@@ -970,6 +972,7 @@ const RENDERERS = {
   confidence: (ctx) => renderConfidence(ctx),
   negotiations: (ctx) => renderNegotiations(ctx),
   finance: (ctx) => renderFinance(ctx),
+  'cash-covenant': (ctx) => renderCashCovenant(ctx),
   budget: (ctx, segments) => renderBudgetDetail(ctx, safeDecode(segments[1])),
   stakeholders: (ctx) => renderStakeholders(ctx),
   stakeholder: (ctx, segments) => renderStakeholderDetail(ctx, safeDecode(segments[1])),
@@ -2753,6 +2756,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       negotiations: 'Negotiation workbench',
       negotiation: state.negotiations?.find((n) => n.id === seg1)?.title || 'Negotiation',
       finance: 'Budget & finance',
+      'cash-covenant': 'Cash covenant workpapers — dated fixed-minimum cash evidence, reconciliation and revision history without certification',
       budget: state.budgets?.find((b) => b.id === seg1)?.name || 'Budget envelope',
       stakeholders: 'Stakeholder influence register',
       stakeholder: state.stakeholders?.find((s) => s.id === seg1)?.name || 'Stakeholder',
