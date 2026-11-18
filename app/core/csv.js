@@ -256,6 +256,10 @@ import { buildInsurance } from './domain/insCoverage.js';
 import { PROV_CSV_COLUMNS, PROV_CSV_DESCRIPTOR, PROV_CSV_SCOPE } from './domain/prvRegistry.js';
 import { provisionCsvRows } from './domain/prvReport.js';
 import { buildProvisions } from './domain/prvProvision.js';
+// ADR-0257: identity-free tax-controversy aggregates (CSV #194).
+import { TAX_CSV_COLUMNS, TAX_CSV_DESCRIPTOR, TAX_CSV_SCOPE } from './domain/taxRegistry.js';
+import { taxCsvRows } from './domain/taxReport.js';
+import { buildTaxControversy } from './domain/taxControversy.js';
 // ADR-0253: identity-free product-nonconformance aggregates (CSV #192).
 import {
   QNC_CSV_COLUMNS,
@@ -1846,6 +1850,16 @@ export const CSV_EXPORTS = [
   // with its reason, never as a small number. A dismissal count is a count of
   // decisions, never a list of people.
   DGI_CSV_DESCRIPTOR,
+  // #194 (ADR-0257): tax controversy and appeal control. One summary row, one row
+  // per printed controversy state and one row per currency carrying the money
+  // bridge (disputed, resolved, swing). This is as sensitive as the provision and
+  // claim exports and rather more so in one respect: a controversy schedule names
+  // the authority and the position under challenge. No notice reference,
+  // jurisdiction, position, person, manager, basis, evidence reference or day
+  // crosses this boundary; amounts cross only as per-currency minor-unit totals.
+  // A per-state count below the declared privacy floor exports BLANK with its
+  // reason, never as a small number.
+  TAX_CSV_DESCRIPTOR,
 ];
 
 function personLookup(state) {
@@ -7192,6 +7206,19 @@ export function buildScopeTable(state, scope, now) {
       return {
         columns: PROV_CSV_COLUMNS.map((key) => ({ key, header: key })),
         rows: provisionCsvRows(report),
+      };
+    }
+    case TAX_CSV_SCOPE: {
+      // CSV scope #194 (ADR-0257, Schema v209). Built from the SAME reader the
+      // `#/tax` panel renders, with no seat: every figure is a count or a
+      // per-currency minor-unit total, so no notice reference, jurisdiction,
+      // position, person, manager, written basis, evidence reference or day is
+      // reachable. A per-state count below the declared floor exports BLANK with
+      // its reason.
+      const report = buildTaxControversy(state, { now, settings: state.settings || {}, seat: null });
+      return {
+        columns: TAX_CSV_COLUMNS.map((key) => ({ key, header: key })),
+        rows: taxCsvRows(report),
       };
     }
     case QNC_CSV_SCOPE: {

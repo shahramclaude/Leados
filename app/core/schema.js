@@ -588,6 +588,28 @@ import {
   normalizeQncSettings,
   normalizeQncVerifications,
 } from './domain/productNonconformanceSchema.js';
+// ADR-0257 (Schema v209): the Tax Controversy & Appeal-Control Register. Six
+// ledgers — the authority notice (its reference, the disputed position, the
+// jurisdiction AS DECLARED, the tax type and the disputed amount), the declared
+// objection deadline with the written basis that sets its window, the filings
+// made against that deadline, the evidence items behind the disputed position,
+// the resolutions that close it, and the rule's identity-free markers. Every
+// loader is fail-closed: a notice with no reference, position, jurisdiction, tax
+// type, notice day, disputed amount, currency, written basis or declared hand is
+// DROPPED at this boundary; a deadline whose jurisdiction basis is undeclared is
+// dropped, because a window nobody cited is a date the register would otherwise
+// enforce against a real filing. Nothing derived — state, timeliness, days
+// remaining, days overdue, swing, disclosure or reconciliation — is stored
+// anywhere; every one is re-derived on read from the declared rows.
+import {
+  normalizeTaxDeadlines,
+  normalizeTaxEvidence,
+  normalizeTaxFilings,
+  normalizeTaxMarkers,
+  normalizeTaxNotices,
+  normalizeTaxResolutions,
+  normalizeTaxSettings,
+} from './domain/taxSchema.js';
 // ADR-0250 (Schema v204): the Provision & Reimbursement Register. Five ledgers —
 // the declared assessment (classification and best-estimate method), the
 // scenarios of an expected-value estimate, the reimbursement recognitions
@@ -1584,7 +1606,7 @@ export {
 // already holds is one. Every state, window, day count and minute count is derived
 // on read.
 // ADR-0252: dated instrument-use extracts on abnormal standard-work checks.
-export const SCHEMA_VERSION = 208;
+export const SCHEMA_VERSION = 209;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -3101,6 +3123,16 @@ export const DEFAULT_SETTINGS = Object.freeze({
   // workspace default would impose a sanction nobody chose or a procedure no
   // instrument requires.
   ...normalizeDgiSettings({}),
+  // ADR-0257: the tax-controversy conventions — the privacy floor below which a
+  // per-state count is withheld from the export, the resolution horizon past
+  // which a filed-but-unresolved controversy is asked for a status review, and
+  // the rule switch. Note what is NOT here, and this is the whole point of the
+  // register: no objection window, no appeal window and no jurisdiction
+  // calendar. A deadline is a fact about a particular notice in a particular
+  // jurisdiction, declared by a named hand with the written basis that sets it.
+  // A workspace default would silently date a real filing against a window
+  // nobody cited.
+  ...normalizeTaxSettings({}),
   // ADR-0243: the employee-voice conventions — the reply window, the minutes
   // window, the privacy floor below which a per-state export is withheld, and the
   // rule switch. Note what is NOT here: a consultation period. The period a body
@@ -4397,6 +4429,21 @@ export const COLLECTIONS = [
   'dgiAppealOutcomes',
   'dgiWithdrawals',
   'dgiMarkers',
+  // ADR-0257 (Schema v209): the Tax Controversy & Appeal-Control Register. Six
+  // ledgers — the authority notice with its disputed position and the
+  // jurisdiction AS DECLARED, the objection deadline and the written basis that
+  // sets its window, the filings made against it, the evidence items behind the
+  // position, the resolutions that close it, and identity-free rule markers. No
+  // state, timeliness verdict, days-remaining figure, days-overdue figure, swing,
+  // attention count or reconciliation is stored: every one is re-derived on read,
+  // so a hand-edited file cannot carry a controversy recorded as timely whose
+  // filing landed after the window, or a swing nobody measured.
+  'taxNotices',
+  'taxDeadlines',
+  'taxFilings',
+  'taxEvidence',
+  'taxResolutions',
+  'taxMarkers',
 ];
 
 /** Stable empty state. `now` is an ISO string so the result is a pure value. */
@@ -4735,6 +4782,15 @@ export function normalizeSettings(raw) {
     // convention (appeal/decision/finding windows, privacy floor) rides here too
     // so a reload cannot quietly reset a declared convention to its default.
     ...normalizeDgiSettings(s),
+    // ADR-0257: the tax-controversy conventions, defaulted on load. The rule
+    // switch is defaulted ON so a pause that leaves an undeclared objection
+    // deadline, an overdue-unfiled notice, a late filing, an empty evidence
+    // packet or an aging unresolved controversy is never the silent default.
+    // The privacy floor and the resolution horizon ride here for the reason
+    // recorded at the v207→v208 repair: a convention carried in
+    // DEFAULT_SETTINGS but not in the load path is silently reset to undefined
+    // by the next save, and the only write that can pause the rule is dropped.
+    ...normalizeTaxSettings(s),
     // Repair of a standing red reported at base HEAD: two rule switches the
     // pause census maps were not carried in settings, so the only writes that
     // can silence those rules were refused as unknown keys. Declared here with
@@ -10184,6 +10240,20 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.dgiAppealOutcomes = normalizeDgiAppealOutcomes(raw.dgiAppealOutcomes, state.dgiAppeals, now, warnings);
   state.dgiWithdrawals = normalizeDgiWithdrawals(raw.dgiWithdrawals, state.dgiCases, now, warnings);
   state.dgiMarkers = normalizeDgiMarkers(raw.dgiMarkers, now, warnings);
+  // ADR-0257 (Schema v209): the tax-controversy register, loaded in dependency
+  // order. A notice is validated first because every other ledger hangs off it;
+  // a deadline is validated against its notice and is DROPPED if its written
+  // jurisdictional basis is undeclared, because a window nobody cited is a date
+  // this register would otherwise enforce against a real filing. The filing, the
+  // evidence item and the resolution are each dropped when the notice they point
+  // at is not on the record, so a hand-edited import cannot smuggle a filing into
+  // a controversy that was never registered. Nothing derived is stored.
+  state.taxNotices = normalizeTaxNotices(raw.taxNotices, warnings);
+  state.taxDeadlines = normalizeTaxDeadlines(raw.taxDeadlines, state.taxNotices, warnings);
+  state.taxFilings = normalizeTaxFilings(raw.taxFilings, state.taxNotices, warnings);
+  state.taxEvidence = normalizeTaxEvidence(raw.taxEvidence, state.taxNotices, warnings);
+  state.taxResolutions = normalizeTaxResolutions(raw.taxResolutions, state.taxNotices, warnings);
+  state.taxMarkers = normalizeTaxMarkers(raw.taxMarkers, warnings);
   // ADR-0229 (Schema v182): a case, option, cost line or act that cannot be read
   // exactly is DROPPED with a counted warning — never repaired, re-termed,
   // re-priced or re-pointed at another case. A cost line that does not belong to
@@ -11462,6 +11532,28 @@ export const MIGRATIONS = {
   }),
   // 207 → 208: ADR-0255 adds only dated evidence. No SLO or counts are inferred from incident records.
   207: (v207) => ({ ...v207, schemaVersion: 208, serviceBudgets: v207.serviceBudgets === undefined ? [] : v207.serviceBudgets }),
+  // 208 → 209: ADR-0257 adds SIX EMPTY ledgers (`taxNotices`, `taxDeadlines`,
+  // `taxFilings`, `taxEvidence`, `taxResolutions`, `taxMarkers`) and the tax
+  // controversy register's conventions. NOTHING is inferred from a tax filing, a
+  // general-ledger tax account, the provision register's uncertain positions, an
+  // audit query kept in an inbox or a payment already made: an authority notice is
+  // a document that names a disputed position, a deadline is a window a named hand
+  // cited, and a resolution is an outcome the authority actually reached.
+  // Manufacturing a notice at upgrade time would put a live dispute on the record
+  // that no authority raised; manufacturing a deadline would date a real filing
+  // against a window nobody wrote down — and a deadline this register invents is
+  // one it would later enforce against the people it exists to protect.
+  208: (v208) => ({
+    ...v208,
+    schemaVersion: 209,
+    taxNotices: Array.isArray(v208.taxNotices) ? v208.taxNotices : [],
+    taxDeadlines: Array.isArray(v208.taxDeadlines) ? v208.taxDeadlines : [],
+    taxFilings: Array.isArray(v208.taxFilings) ? v208.taxFilings : [],
+    taxEvidence: Array.isArray(v208.taxEvidence) ? v208.taxEvidence : [],
+    taxResolutions: Array.isArray(v208.taxResolutions) ? v208.taxResolutions : [],
+    taxMarkers: Array.isArray(v208.taxMarkers) ? v208.taxMarkers : [],
+    settings: { ...(v208.settings || {}), ...normalizeTaxSettings(v208.settings || {}) },
+  }),
   // 183 → 184: ADR-0231 adds SEVEN EMPTY ledgers (`ibpCycles`, `ibpDemandRows`,
   // `ibpCapacityRows`, `ibpOptions`, `ibpDecisions`, `ibpGrades`, `ibpMarkers`)
   // and the plan rule's pause. No cycle, demand figure, capacity figure, option

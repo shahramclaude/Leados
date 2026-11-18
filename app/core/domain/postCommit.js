@@ -219,6 +219,8 @@ import { insuranceRule } from './insRules.js';
 // reimbursement asset, an asset resting on a declared judgment with no cash, or
 // a computed provision that disagrees with the declared finance carrying.
 import { provisionRule } from './prvRules.js';
+// ADR-0257: the tax controversy & appeal-control rule.
+import { taxRule } from './taxRules.js';
 import { productNonconformanceRule } from './productNonconformanceRules.js';
 import { caseToAnswerRule } from './caseToAnswerRules.js';
 import { incidentCommandRule } from './incidentCommandRules.js';
@@ -1353,6 +1355,13 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // capped, or that the figure finance carries disagrees with the computed
   // provision.
   provisionRule,
+  // ADR-0257: the tax-controversy rule resolves the joint apex above every line
+  // holding a responsible hand on a notice, so silencing it reaches across
+  // reporting lines — and nobody is told that an authority notice has no declared
+  // objection deadline, that the window closed with nothing filed, that a filing
+  // landed late, that a filed objection carries no evidence packet or that a
+  // controversy has sat unresolved past the declared horizon.
+  taxRule,
   // ADR-0253: the product-nonconformance rule resolves the joint apex above every
   // line holding an accountable hand on an identified output, so silencing it
   // reaches across reporting lines — and nobody is told that a lot is uncontained,

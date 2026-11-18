@@ -45,6 +45,8 @@ import { INS_RIGHTS } from './insRegistry.js';
 // PROV because the portfolio-review register already owns `PRV_` here — and its
 // rule id is already `RULE-PRV-01`, so a second rule may not share it.
 import { PROV_RIGHTS } from './prvRegistry.js';
+// ADR-0257: the tax controversy and appeal-control register's rights.
+import { TAX_RIGHTS } from './taxRegistry.js';
 // ADR-0229: the capability sourcing register's four rights.
 import { SRC_RIGHTS } from './sourcingRegistry.js';
 import { VY_RIGHTS } from './vyRegistry.js';
@@ -462,6 +464,15 @@ const groups = [
   // reconciliation are declarations, never derived from the acting seat.
   [PROV_RIGHTS.READ, 'provisionReport provisionAttention provisionCandidates'],
   [PROV_RIGHTS.MANAGE, 'provisionDeclareAssessment provisionDeclareScenario provisionDeclareReimbursement provisionDeclareCarrying provisionSetConventions provisionScan'],
+  // ADR-0257: the tax controversy and appeal-control register. Reading is
+  // portfolio material (director / VP tax and above) — a controversy schedule
+  // names the authority and the position under challenge, and the reader withholds
+  // responsible hands above rank 3. Every write is narrowed inside the action to a
+  // seat that HOLDS every responsible hand, and the deadline, the filing day and
+  // the resolution are declarations a named hand makes, never anything the
+  // register infers from a notice day or an amount.
+  [TAX_RIGHTS.READ, 'taxReport taxAttention taxCandidates'],
+  [TAX_RIGHTS.MANAGE, 'taxRecordNotice taxDeclareDeadline taxRecordFiling taxRecordEvidence taxRecordResolution taxSetConventions taxScan'],
   // ADR-0229: the capability sourcing & firm-boundary register. Reading is
   // portfolio material (rank 3+). Recording an option is the leader who HOLDS
   // the capability (rank 2+), narrowed inside the action to a line the case
