@@ -80,6 +80,14 @@ import { latestLwkActMs, lwkChronologyWindow, lwkWindowConflict } from './loneWo
 
 const REFUSAL = (key) => `loneWorking:${key}`;
 const text = (value, max = L.textMax) => (typeof value === 'string' ? value.replace(/\s+/g, ' ').trim().slice(0, max) : '');
+// Only explicit decimal whole-minute inputs; Number(null), Number('') and
+// Number(false) would otherwise fabricate zero grace for an undeclared value.
+const declaredMinutes = (value) => {
+  if (typeof value === 'number') return Number.isSafeInteger(value) ? value : null;
+  if (typeof value !== 'string' || !/^\d+$/.test(value.trim())) return null;
+  const number = Number(value.trim());
+  return Number.isSafeInteger(number) ? number : null;
+};
 
 export function createLoneWorkingActions(store, { now, idFactory }) {
   const fail = (error, field = null, refusal = null) => ({ ok: false, error, ...(field ? { field } : {}), ...(refusal ? { refusal } : {}) });
@@ -189,12 +197,12 @@ export function createLoneWorkingActions(store, { now, idFactory }) {
         return fail(`Cite the written lone-working assessment this deployment rests on, in at least ${L.protocolMin} characters — its reference and revision. A deployment with no assessment is exactly the plausible default this register forbids.`, 'protocolRef', REFUSAL('protocol-missing'));
       }
 
-      const intervalMinutes = lwkInterval(Number(input.intervalMinutes));
+      const intervalMinutes = lwkInterval(declaredMinutes(input.intervalMinutes));
       if (intervalMinutes === null) {
         return fail(`The check-in interval is a whole number of minutes between ${L.intervalMin} and ${L.intervalMax}. A fraction, a zero or a value beyond the bound is refused rather than rounded, because the whole register is a timer running against this number.`, 'intervalMinutes', REFUSAL('interval-invalid'));
       }
 
-      const graceMinutes = lwkGrace(Number(input.graceMinutes));
+      const graceMinutes = lwkGrace(declaredMinutes(input.graceMinutes));
       if (graceMinutes === null) {
         return fail(`The grace is a whole number of minutes between 0 and ${L.graceMax}. Zero is a legitimate declaration — “no grace, ring immediately” — and is stored as such.`, 'graceMinutes', REFUSAL('grace-invalid'));
       }

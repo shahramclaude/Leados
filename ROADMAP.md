@@ -1,3 +1,19 @@
+## 2026-11-18 — Explicit lone-working timer declarations
+
+**Status: complete bounded reliability fix.** Declaration now requires explicitly entered decimal whole-minute interval and grace; blanks, nulls, booleans and coercible non-decimal inputs cannot become a zero. Explicit zero grace remains valid. The form no longer pre-fills either value and passes raw input to the action. Existing stored values are not changed or retrospectively verified; no schema or roll-up change.
+
+**Coverage:** frontline / mid-manager declaration × single-chain and matrix, both exercised with the same identity; director in-reach uses the existing detail contract, VP / CEO counts unchanged. No new senior-level feature. This safety integrity fix takes precedence over the planned concurrent-control impairment capability, which remains Planned.
+
+**Benchmark [BENCHMARK-UNVERIFIED]:** [Blackline Safety G7](https://www.blacklinesafety.com/hubfs/Technical%20User%20Manuals/G7/G7_Technical%20User%20Manual_R33-1_EN.pdf?hsLang=en) documents configurable check-in and pending-notification timers plus monitored alerts. This local declaration guard is not a connected device or monitored service; vendor behavior on missing configuration, AI parity and same-input comparison are unverified. No visual or onboarding asset was added.
+
+**Focused verification:** `TZ=Europe/Copenhagen node --test tests/app/lone-working.test.mjs` 43/43; refusals leave storage unchanged, explicit zero survives reload, computed deadline and DOM interval/grace agree in single-chain and matrix fixtures. Changed-file ESLint and canonical boundary passed. Real browser form submission, assistive technology, encrypted storage, full suite and CI **[UNVERIFIED]**.
+
+**New gap — Planned: temperature-excursion evidence and affected-product disposition [frontline / mid-manager operations; director quality oversight × single-chain and matrix].** Join dated product/lot custody windows to temperature logger readings and declared thresholds, and record human disposition with source evidence. Time gaps, ambiguous sensor-to-product links, calibration uncertainty and incomplete custody must be exposed rather than treated as compliant; count shared lots once, never infer release or legal limits. Targeted search for `cold chain`, `cold-chain`, `temperature excursion`, `thermal excursion` and `temperature logger` in canonical app, ADRs and roadmap yielded no match; broader absence **[UNVERIFIED]**. [iFactory Cold Chain Analytics](https://ifactoryapp.com/industries/fmcg/cold-chain-analytics-fmcg-product-quality) describes automated excursion correlation and batch disposition evidence; no hands-on or same-input comparison **[BENCHMARK-UNVERIFIED]**. Unbuilt.
+
+**Next priority:** concurrent impairment of credited safety controls and independent reinstatement, director / VP × both structures, with frontline evidence holders. Planned; no claim of completion.
+
+---
+
 ## 2026-11-18 — Lone-working chronology and actual close-outs ([ADR-0256](docs/adr/0256-lone-working-chronology.md))
 
 **Status: completed evidence-and-guard slice in canonical source.** In **Lone working → History**, review distinct same-person pairs and flagged acts on readable records. Actual spans, intersecting expected windows and unproved separation are separate readings. The review prints exact UTC instants and durations, never a welfare clearance. Declarations guard both chronological directions; a close must name an actual time no earlier than its own accepted evidence. Imported contradictory acts remain available for review without resetting welfare clocks. Schema v208 unchanged; the existing scoped aggregate export appends a finding count only when eligible for publication.

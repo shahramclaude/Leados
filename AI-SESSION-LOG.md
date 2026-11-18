@@ -1,3 +1,17 @@
+## 2026-11-18 — Explicit lone-working timer declaration
+
+**Doctrine and sync:** NORTH_STAR and all four mandates present. Fetch and push origin match the requested repository (canonical `.git` suffix); active branch `arena/71e43e43-leados`. Read roadmap and recent entries; inspected declaration, schema, chronology, form and focused tests.
+
+**Built:** frontline / mid-manager × single-chain and matrix. Blank or coerced inputs no longer manufacture zero grace; interval and grace accept explicitly supplied whole-minute decimal values only. Both form fields now start empty; explicit zero remains valid. Existing records cannot reveal whether a historical zero was intentional. No schema or roll-up changes. Prior planned concurrent-control-impairment work remains unbuilt and is next.
+
+**New gap:** cold-chain excursion → affected lot/custody → evidenced human disposition, including missing readings and calibration uncertainty. Targeted app/ADR/roadmap search found no relevant terms; wider absence **[UNVERIFIED]**. Planned, unbuilt. iFactory advertises sensor correlation and batch disposition; parity **[BENCHMARK-UNVERIFIED]**.
+
+**Benchmark:** Blackline Safety G7's configurable check-in and pending notification timer and monitored alerts set the workflow bar ([manual](https://www.blacklinesafety.com/hubfs/Technical%20User%20Manuals/G7/G7_Technical%20User%20Manual_R33-1_EN.pdf?hsLang=en)). This is not a monitoring device, no same-input test or specialized-AI parity is established **[BENCHMARK-UNVERIFIED]**. No visual or onboarding asset involved.
+
+**Verification:** focused lone-working suite 43/43, including no-write refusal, explicit zero → persisted reload → derived deadline and exact rendered interval/grace for both structures, and adjacent chronology/actions/CSV checks. Changed-file ESLint and canonical boundary passed. Real-browser form behavior, AT, encrypted persistence, full suite and CI **[UNVERIFIED]**. Source app only; standalone not rebuilt. Push and PR outcome reported separately.
+
+---
+
 ## 2026-11-18 — Lone-working chronology: reconcile the close before trusting the handoff
 
 **Doctrine / sync:** NORTH_STAR exists and all four binding mandates are present, so no amendment. Fetch/push `origin` both match `https://github.com/shahramclaude/Leados.git`. Worked on `arena/56f03b0f-leados` at base `955ac6b940037224dc6736677ea0af92da6ec840`. Read the recent safety, fair-process and service-error-budget entries; inspected the lone-working reader, action guards, loader, rule, scope and exports.
