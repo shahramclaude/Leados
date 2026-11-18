@@ -43,9 +43,20 @@ export function instantMs(value) {
   }
   if (typeof value !== 'string') return null;
   const raw = value.trim();
-  if (!raw) return null;
-  const time = Date.parse(raw);
-  return Number.isFinite(time) ? time : null;
+  if (raw.length === 24 && raw.endsWith('Z')) {
+    const ms = Date.parse(raw);
+    return Number.isFinite(ms) && new Date(ms).toISOString() === raw ? ms : null;
+  }
+  // The forms declare UTC. A zone-less datetime-local value is UTC, never the
+  // machine's timezone. Verify the wall time before applying an explicit offset:
+  // Date.parse alone can normalize impossible dates and truncate sub-ms input.
+  const match = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2})(?::(\d{2})(\.\d{1,3})?)?(Z|[+-]\d{2}:\d{2})?$/.exec(raw);
+  if (!match) return null;
+  const wall = `${match[1]}:${match[2] || '00'}`;
+  const wallMs = Date.parse(`${wall}Z`);
+  if (!Number.isFinite(wallMs) || new Date(wallMs).toISOString().slice(0, 19) !== wall) return null;
+  const time = Date.parse(`${wall}${match[3] || ''}${match[4] || 'Z'}`);
+  return Number.isFinite(time) && new Date(time).toISOString().length === 24 ? time : null;
 }
 
 /** Whole minutes elapsed from `fromMs` to `toMs`, floored; negative if `to` is earlier. */

@@ -34,11 +34,14 @@ import { JSDOM } from 'jsdom';
 import { createEmptyState, migrate, normalizeState, SCHEMA_VERSION, COLLECTIONS } from '../../app/core/schema.js';
 import { createStore, STORAGE_KEY } from '../../app/core/store.js';
 import { createApi } from '../../app/actions.js';
-import { guardApi } from '../../app/core/domain/accessGateway.js';
+import { guardApi, workspaceRouteVerdict } from '../../app/core/domain/accessGateway.js';
+import { moduleAggregate } from '../../app/core/domain/disclosure.js';
+import { safeSeatContext, scopedViewState } from '../../app/core/domain/viewScope.js';
 import { exportWorkspaceCsv, parseCsv } from '../../app/core/csv.js';
 import { buildDemoState } from '../../app/core/demo.js';
 import { buildMatrix } from '../../app/core/domain/matrix.js';
 import { buildLoneWorking } from '../../app/core/domain/loneWorking.js';
+import { lwkWindowConflict } from '../../app/core/domain/loneWorkingChronology.js';
 import {
   normalizeLwkDeployments,
   normalizeLwkCheckins,
@@ -66,6 +69,7 @@ import {
 import {
   LWK_CSV_COLUMNS,
   LWK_CSV_SCOPE,
+  LWK_LIMITS,
   LWK_SETTING_KEYS,
   LWK_STATE_BY_KEY,
 } from '../../app/core/domain/loneWorkingRegistry.js';
@@ -138,8 +142,8 @@ const LATE_CONTACT = contact('c-1', '2026-11-17T07:00:00.000Z');
 const load = (raw) => normalizeState(raw, { now: NOW }).state;
 const read = (raw, opts = {}) => buildLoneWorking(load(raw), { now: NOW, seat: null, ...opts });
 
-function harness(raw) {
-  const values = new Map([[STORAGE_KEY, JSON.stringify(load(raw))]]);
+function harness(raw, { normalize = true } = {}) {
+  const values = new Map([[STORAGE_KEY, JSON.stringify(normalize ? load(raw) : raw)]]);
   const storage = {
     getItem: (key) => values.get(key) ?? null,
     setItem: (key, value) => values.set(key, String(value)),
@@ -147,10 +151,13 @@ function harness(raw) {
   };
   let sequence = 0;
   const idFactory = (prefix) => `${prefix}-t-${++sequence}`;
-  const store = createStore({ storage, now: () => NOW, idFactory });
-  store.load();
-  const api = guardApi(createApi(store, { now: () => NOW, idFactory }), store, { now: () => NOW.getTime() });
-  return { store, storage, api };
+  function reopen() {
+    const store = createStore({ storage, now: () => NOW, idFactory });
+    store.load();
+    const api = guardApi(createApi(store, { now: () => NOW, idFactory }), store, { now: () => NOW.getTime() });
+    return { store, api };
+  }
+  return { ...reopen(), storage, reopen };
 }
 
 /* --------------------------------------------------------------- 1. schema */
@@ -358,7 +365,7 @@ test('a closed deployment is read AT ITS CLOSE, and a close with no contact is i
   const clean = read(fixture({
     deployments: [deployment({ closedAt: iso('2026-11-17T12:00:00.000Z'), closeOutcome: 'returned', closedById: 'mei', closeNote: 'Came back in and signed the log at the gate.' })],
     checkins: [contact('c-1', '2026-11-17T11:55:00.000Z')],
-  }));
+  }), { now: new Date('2026-11-17T16:00:00.000Z') });
   assert.equal(clean.rows[0].state.key, 'closed-out');
   assert.equal(clean.rows[0].latenessMinutes, 0, 'the last contact was five minutes before the close, inside the interval');
 
@@ -367,7 +374,7 @@ test('a closed deployment is read AT ITS CLOSE, and a close with no contact is i
       expectedEndAt: iso('2026-11-17T08:00:00.000Z'),
       closedAt: iso('2026-11-17T12:00:00.000Z'), closeOutcome: 'returned', closedById: 'sam', closeNote: 'Signed out at the gate himself; no radio check was ever recorded.',
     })],
-  }));
+  }), { now: new Date('2026-11-17T16:00:00.000Z') });
   assert.equal(silent.rows[0].state.key, 'closed-without-contact');
   assert.equal(silent.rows[0].closeOverrunMinutes, 240, 'four hours past its declared end when it was eventually closed');
   assert.equal(silent.rows[0].selfClosed, true, 'a close by the deployed person is printed as exactly that');
@@ -574,25 +581,30 @@ test('the door refuses an OVERLAPPING deployment and prints the exact overlap, a
   assert.equal(self.refusal, 'loneWorking:self-declaration');
 });
 
-test('the declaration door refuses even one millisecond of overlap without storing it, but permits abutting spans', () => {
-  const { api, store, storage } = harness(fixture());
+test('single-chain declaration refuses one millisecond of overlap with a recorded close and admits exact abutment', () => {
+  const raw = fixture({ deployments: [deployment({ startAt: '2026-11-17T04:00:00.000Z',
+    closedAt: '2026-11-17T05:00:00.000Z', closeOutcome: 'returned', closedById: 'mei' })] });
+  raw.reportingLines = [];
+  raw.settings.activeSeatId = 'mei';
+  const { api, store, storage } = harness(raw);
   const base = {
-    personId: 'sam', siteRef: 'Tank room — north', task: 'Valve inspection',
-    protocolRef: 'LWA-2026-108 rev 3 — tank room entry', intervalMinutes: 30, graceMinutes: 5,
-    startAt: '2026-11-17T04:00:00.000Z',
+    personId: 'sam', siteRef: 'North yard', task: 'Valve inspection',
+    protocolRef: 'LWA-2026-108 rev 3 — north yard', intervalMinutes: 30, graceMinutes: 5,
+    expectedEndAt: '2026-11-17T08:00:00.000Z',
   };
   const before = storage.getItem(STORAGE_KEY);
-  const conflict = api.loneWorkingDeclareDeployment({ ...base, expectedEndAt: '2026-11-17T05:00:00.001Z' });
+  const conflict = api.loneWorkingDeclareDeployment({ ...base, startAt: '2026-11-17T04:59:59.999Z' });
   assert.equal(conflict.ok, false);
   assert.equal(conflict.refusal, 'loneWorking:overlapping-deployment');
   assert.match(conflict.error, /0 whole minute\(s\) \(1 milliseconds\)/);
   assert.equal(storage.getItem(STORAGE_KEY), before, 'refusal does not write');
   assert.equal(store.state.lwkDeployments.length, 1);
-  const abutting = api.loneWorkingDeclareDeployment({ ...base, expectedEndAt: '2026-11-17T05:00:00.000Z' });
-  assert.equal(abutting.ok, true, abutting.error);
+  const abutting = api.loneWorkingDeclareDeployment({ ...base, startAt: '2026-11-17T05:00:00.000Z' });
+  assert.equal(abutting.saved, true, abutting.error);
   const stored = JSON.parse(storage.getItem(STORAGE_KEY)).lwkDeployments;
   assert.equal(stored.length, 2);
-  assert.equal(stored.find((row) => row.id === abutting.id)?.expectedEndAt, '2026-11-17T05:00:00.000Z');
+  assert.equal(stored.find((row) => row.id === abutting.id)?.startAt, '2026-11-17T05:00:00.000Z');
+  assert.equal(api.loneWorkingReport().report.chronology.findingsN, 0);
 });
 
 test('an open overrun refuses uncertain later work across lines until its actual close is recorded', () => {
@@ -620,7 +632,7 @@ test('an open overrun refuses uncertain later work across lines until its actual
   assert.deepEqual(persisted.lwkDeployments, store.state.lwkDeployments);
 });
 
-test('open uncertainty does not block a span entirely before the open start or a different person', () => {
+test('a backfilled open declaration cannot prove separation from an existing later start; another person is unaffected', () => {
   const raw = fixture({ deployments: [deployment({ expectedEndAt: iso('2026-11-17T08:00:00Z') })] });
   const { api } = harness(raw);
   const base = {
@@ -629,7 +641,8 @@ test('open uncertainty does not block a span entirely before the open start or a
     startAt: '2026-11-17T04:00:00.000Z', expectedEndAt: '2026-11-17T05:00:00.000Z',
   };
   const prior = api.loneWorkingDeclareDeployment(base);
-  assert.equal(prior.ok, true, prior.error);
+  assert.equal(prior.refusal, 'loneWorking:open-deployment-uncertain');
+  assert.match(prior.error, /including for backfilled work/);
   const other = api.loneWorkingDeclareDeployment({ ...base, personId: 'mei', startAt: '2026-11-17T08:30:00.000Z', expectedEndAt: '2026-11-17T10:00:00.000Z' });
   assert.equal(other.ok, true, other.error);
 });
@@ -814,5 +827,259 @@ test('the panel renders every tab without throwing on a workspace with no deploy
     delete globalThis.document;
     delete globalThis.Node;
     delete globalThis.Element;
+  }
+});
+
+/* ------------------------------------------------------------ ADR-0256 */
+
+const ts = (time) => `2026-11-17T${time}Z`;
+const historical = (id, personId, start, expectedEnd, close, other = {}) => deployment({
+  id, personId, startAt: ts(start), expectedEndAt: ts(expectedEnd),
+  ...(close ? { closedAt: ts(close), closedById: 'mei', closeOutcome: 'returned', closeNote: 'Actual close documented in the source log.' } : {}),
+  ...other,
+});
+const response = (id, deploymentId, at) => ({ id, deploymentId, raisedAt: ts(at), raisedById: 'mei',
+  basis: 'welfare-doubt', outcome: 'welfare-confirmed', detail: 'Contacted the site and checked the written log.', createdAt: T0 });
+
+function chronoOrg(raw, activeSeatId = 'freya') {
+  raw.settings.activeSeatId = activeSeatId;
+  raw.settings.chainLeaderAltitude = 'chief';
+  raw.people = [
+    { ...person('vp', null), level: 'vp' },
+    { ...person('priya', 'vp'), level: 'director' }, { ...person('mei', 'priya'), level: 'manager' },
+    { ...person('freya', 'priya'), level: 'lead' }, person('sam', 'mei'), person('outside', 'mei'),
+    person('jordan', 'freya'), person('alex', 'freya'),
+  ];
+  return raw;
+}
+
+test('chronology kernel agrees with an independent discrete occupancy oracle, including empty closed spans', () => {
+  const windows = [];
+  for (let startMs = 0; startMs < 4; startMs += 1) {
+    for (let expectedEndMs = startMs + 1; expectedEndMs <= 5; expectedEndMs += 1) {
+      for (const closeMs of [null, ...Array.from({ length: 7 - startMs }, (_, i) => i + startMs)]) {
+        windows.push({ startMs, expectedEndMs, closeMs });
+      }
+    }
+  }
+  const ticks = Array.from({ length: 9 }, (_, i) => i);
+  const occupies = (frame, t, useExpected) => t >= frame.startMs
+    && (frame.closeMs !== null ? t < frame.closeMs : !useExpected || t < frame.expectedEndMs);
+  for (const a of windows) for (const b of windows) {
+    const possible = ticks.some((t) => occupies(a, t, false) && occupies(b, t, false));
+    const overlap = ticks.filter((t) => occupies(a, t, true) && occupies(b, t, true));
+    const result = lwkWindowConflict(a, b);
+    if (!possible) assert.equal(result, null);
+    else if (!overlap.length) assert.deepEqual(result, { kind: 'separation-unproved', fromMs: null, toMs: null, overlapMs: null });
+    else assert.deepEqual(result, {
+      kind: a.closeMs !== null && b.closeMs !== null ? 'recorded-overlap' : 'window-overlap',
+      fromMs: overlap[0], toMs: overlap.at(-1) + 1, overlapMs: overlap.length,
+    });
+  }
+});
+
+test('UTC form instants keep exact milliseconds; nonexistent civil dates and sub-ms inputs are refused', () => {
+  assert.equal(lwkInstant('2026-11-17T06:01:00.005'), '2026-11-17T06:01:00.005Z');
+  assert.equal(lwkInstant('2026-11-17T07:01:00.005+01:00'), '2026-11-17T06:01:00.005Z');
+  for (const bad of ['2026-11-17', '2026-02-30T06:01:00.005Z', '2026-11-17T24:00Z', '2026-11-17T06:01:00.0051Z', '2026-11-17T06:01+02:75']) {
+    assert.equal(lwkInstant(bad), null, bad);
+  }
+});
+
+test('loaded recorded overlap, uncertain separation and mixed windows have distinct, exact evidence', () => {
+  const raw = chronoOrg(fixture({ deployments: [
+    historical('project-first', 'sam', '05:00', '06:00', '06:00:00.001', { lineManagerId: 'freya' }),
+    historical('home-second', 'sam', '06:00', '07:00', '07:00'),
+    historical('older-open', 'sam', '07:00', '07:10', null),
+    historical('later-closed', 'sam', '08:00', '08:30', '08:31'),
+    historical('open-one', 'jordan', '05:00', '06:00', null),
+    historical('open-two', 'jordan', '05:59:59.999', '06:30', null),
+    historical('peer-row', 'outside', '05:00', '07:00', '07:00', { siteRef: 'Peer-only source location' }),
+  ] }));
+  const w = harness(raw, { normalize: false });
+  const { report } = w.api.loneWorkingReport();
+  const audit = report.chronology;
+  assert.equal(report.detailed, true);
+  assert.deepEqual(audit.counts, { 'recorded-overlap': 1, 'window-overlap': 1, 'separation-unproved': 1, 'after-close': 0, 'future-record': 0 });
+  assert.equal(audit.findingsN, 3);
+  assert.equal(audit.deploymentsN, 6);
+  assert.equal(audit.affectedPeopleN, 2);
+  assert.deepEqual(audit.findings.map((row) => [row.kind, row.first.id, row.second.id, row.overlapMs, row.from, row.to]), [
+    ['separation-unproved', 'older-open', 'later-closed', null, null, null],
+    ['window-overlap', 'open-one', 'open-two', 1, ts('05:59:59.999'), ts('06:00:00.000')],
+    ['recorded-overlap', 'project-first', 'home-second', 1, ts('06:00:00.000'), ts('06:00:00.001')],
+  ]);
+  const verdict = safeSeatContext(w.store.state, NOW);
+  assert.equal(workspaceRouteVerdict('lone-working', verdict.seat, { state: w.store.state, built: verdict.built, now: NOW }).allow, true);
+  for (const key of ['lwkDeployments', 'lwkCheckins', 'lwkEscalations', 'lwkMarkers']) {
+    assert.deepEqual(scopedViewState(w.store.state, verdict, { now: NOW })[key], []);
+  }
+  assert.equal(moduleAggregate(w.store.state, 'lone-working', verdict.seat, verdict.built, { now: NOW }), null);
+  assert.equal(report.matrix, null);
+  assert.doesNotMatch(JSON.stringify(report), /Peer-only source location|peer-row/);
+  assert.equal(w.api.loneWorkingCloseDeployment({ deploymentId: 'peer-row' }).refusal, 'loneWorking:deployment-not-found');
+  const reply = w.api.loneWorkingDeclareDeployment({ personId: 'sam', siteRef: 'Recorded site', task: 'Inspect transit area',
+    protocolRef: 'Safety Assessment LW-301', intervalMinutes: 60, graceMinutes: 0,
+    startAt: '2026-11-17T08:45', expectedEndAt: '2026-11-17T10:00' });
+  assert.equal(reply.refusal, 'loneWorking:open-deployment-uncertain', 'project-only writer reaches the domain guard');
+
+  const expired = structuredClone(raw);
+  expired.reportingLines[0].toISO = '2026-11-16';
+  const expiredReport = harness(expired).api.loneWorkingReport().report;
+  assert.equal(expiredReport.chronology.findingsN, 1);
+  assert.ok(expiredReport.deployments.every((row) => row.personId === 'jordan'));
+  for (const id of ['vp', 'leader']) {
+    const executive = chronoOrg(structuredClone(raw), id);
+    const executiveApi = harness(executive).api;
+    const summary = executiveApi.loneWorkingReport().report;
+    assert.equal(summary.chronology.findingsN, 3, id);
+    assert.equal(summary.chronology.deploymentsN, 7, id);
+    assert.equal(summary.detailed, false, id);
+    for (const key of ['rows', 'deployments', 'checkins', 'escalations', 'lineRows']) assert.deepEqual(summary[key], [], id);
+    assert.deepEqual(summary.chronology.findings, [], id);
+    assert.deepEqual(executiveApi.loneWorkingCandidates().people, [], id);
+    assert.equal(executiveApi.loneWorkingCloseDeployment({ deploymentId: 'older-open' }).ok, false, id);
+  }
+});
+
+test('a later closed record also blocks an earlier open backfill; a contradicted close cannot establish separation', () => {
+  const later = historical('later', 'sam', '06:00', '07:00', '07:00');
+  const base = { personId: 'sam', siteRef: 'North yard', task: 'Valve inspection', protocolRef: 'Written assessment reference',
+    intervalMinutes: 60, graceMinutes: 10 };
+  const earlierW = harness(fixture({ deployments: [later] }));
+  const prior = earlierW.api.loneWorkingDeclareDeployment({ ...base, startAt: ts('04:00'), expectedEndAt: ts('05:00') });
+  assert.equal(prior.refusal, 'loneWorking:open-deployment-uncertain');
+  const earlier = historical('earlier', 'sam', '04:00', '04:30', '05:00');
+  const contradicted = harness(fixture({ deployments: [earlier], checkins: [contact('later-contact', ts('05:00:00.001'), { deploymentId: 'earlier' })] }));
+  const result = contradicted.api.loneWorkingDeclareDeployment({ ...base, startAt: ts('06:00'), expectedEndAt: ts('08:00') });
+  assert.equal(result.refusal, 'loneWorking:open-deployment-uncertain');
+});
+
+test('close refuses an absent time and any time before its own latest act; a supported actual close retains an imported cross-record conflict', () => {
+  const raw = chronoOrg(fixture({ deployments: [historical('earlier', 'sam', '04:00', '04:30', null), historical('later', 'sam', '06:00', '07:00', '07:00')],
+    checkins: [contact('gate-check', ts('05:45'), { deploymentId: 'earlier' })], escalations: [response('gate-rsp', 'earlier', '06:10')] }), 'mei');
+  const w = harness(raw);
+  const before = w.storage.getItem(STORAGE_KEY);
+  const close = { deploymentId: 'earlier', closeOutcome: 'returned', note: 'Return corroborated in the signed source log.' };
+  assert.equal(w.api.loneWorkingReport().report.chronology.counts['separation-unproved'], 1);
+  assert.equal(w.api.loneWorkingCloseDeployment(close).refusal, 'loneWorking:close-time-required');
+  assert.equal(w.api.loneWorkingCloseDeployment({ ...close, at: ts('05:44') }).refusal, 'loneWorking:close-before-evidence');
+  assert.equal(w.api.loneWorkingCloseDeployment({ ...close, at: ts('06:09:59.999') }).refusal, 'loneWorking:close-before-evidence');
+  assert.equal(w.storage.getItem(STORAGE_KEY), before);
+  const accepted = w.api.loneWorkingCloseDeployment({ ...close, at: ts('06:10') });
+  assert.equal(accepted.saved, true, accepted.error);
+  const reopened = w.reopen();
+  const after = JSON.parse(w.storage.getItem(STORAGE_KEY));
+  assert.equal(after.lwkDeployments.find((row) => row.id === 'earlier').closedAt, ts('06:10:00.000'));
+  assert.deepEqual(after.lwkDeployments.find((row) => row.id === 'later'), JSON.parse(before).lwkDeployments.find((row) => row.id === 'later'));
+  assert.deepEqual(after.lwkCheckins, JSON.parse(before).lwkCheckins);
+  assert.deepEqual(after.lwkEscalations, JSON.parse(before).lwkEscalations);
+  assert.equal(after.events.filter((event) => event.type === 'loneWorking.deployment.closed').length, 1);
+  const audit = reopened.api.loneWorkingReport().report.chronology;
+  assert.equal(audit.findingsN, 1);
+  assert.equal(audit.findings[0].kind, 'recorded-overlap');
+  assert.equal(audit.findings[0].overlapMs, 600_000);
+});
+
+test('imports retain post-close and future acts but cannot use them as reassuring clock evidence', () => {
+  const raw = fixture({ deployments: [historical('closed', 'sam', '04:00', '04:30', '05:00'),
+    historical('not-closed-yet', 'mei', '05:00', '08:00', '10:00'), historical('future-start', 'freya', '09:15', '10:00', null)],
+  checkins: [contact('outside-close', ts('05:00:00.001'), { deploymentId: 'closed' }), contact('ahead-of-clock', ts('09:05'), { deploymentId: 'not-closed-yet' })],
+  escalations: [response('after-close-response', 'closed', '05:20')] });
+  const w = harness(raw);
+  const report = w.reopen().api.loneWorkingReport().report;
+  assert.equal(report.totals.checkins, 2, 'evidence remains on the recorded ledger');
+  assert.equal(report.totals.escalations, 1);
+  assert.equal(report.chronology.counts['after-close'], 2);
+  assert.equal(report.chronology.counts['future-record'], 3);
+  assert.equal(report.closedRows[0].state.key, 'closed-without-contact');
+  assert.equal(report.closedRows[0].lastContact, null);
+  assert.equal(report.closedRows[0].lastEscalation, null);
+  const unclosed = report.openRows.find((row) => row.deployment.id === 'not-closed-yet');
+  assert.equal(unclosed.state.key, 'welfare-unconfirmed');
+  assert.equal(unclosed.lastContact, null);
+  assert.equal(report.balances.statesReconcile, true);
+  const parsed = JSON.parse(w.storage.getItem(STORAGE_KEY));
+  assert.deepEqual(parsed.lwkCheckins.map((row) => row.id), ['outside-close', 'ahead-of-clock']);
+});
+
+test('finding pages reconcile without dropping the long tail and export floor counts people, not pairs', () => {
+  const raw = fixture({ deployments: Array.from({ length: 13 }, (_, i) => historical(`bulk-${i}`, 'sam', '05:00', '06:00', '06:00')) });
+  const w = harness(raw);
+  const first = w.api.loneWorkingReport().report;
+  const second = w.api.loneWorkingReport({ chronologyPage: 2 }).report;
+  assert.equal(first.chronology.findingsN, 78);
+  assert.equal(first.chronology.findings.length, LWK_LIMITS.rowsShown);
+  assert.equal(second.chronology.firstFinding, 61);
+  assert.equal(second.chronology.lastFinding, 78);
+  const pairs = [...first.chronology.findings, ...second.chronology.findings].map((row) => [row.first.id, row.second.id].sort().join(' '));
+  assert.equal(new Set(pairs).size, first.chronology.findingsN);
+  assert.equal(loneWorkingCsvRows(first)[0].chronology_findings_n, '');
+  assert.match(loneWorkingCsvRows(first)[0].chronology_blank_reason, /3 distinct people/);
+  assert.equal(w.api.loneWorkingReport({ chronologyPage: 3 }).report.chronology.findings.length, 0);
+});
+
+test('a loader refusal is not silently converted into a clean chronology or a publishable zero', () => {
+  const input = fixture({ deployments: [deployment({ closedAt: 'impossible', closeOutcome: 'unknown', closedById: '?' })] });
+  const w = harness(input, { normalize: false });
+  const { report } = w.api.loneWorkingReport();
+  assert.equal(report.chronology.deploymentsN, 0);
+  assert.equal(report.chronology.sourceIncomplete, true);
+  assert.match(report.warnings[0], /1 deployment row\(s\)/);
+  const [row] = loneWorkingCsvRows(report);
+  assert.equal(row.chronology_findings_n, '');
+  assert.match(row.chronology_blank_reason, /coverage/);
+});
+
+test('reloaded source instants, finding counts and in-scope History cells equal the report and downloaded CSV model', () => {
+  const raw = chronoOrg(fixture({ deployments: ['sam', 'jordan', 'alex'].flatMap((id) => [
+    historical(`${id}-east`, id, '05:00', '06:00', '06:00:00.001', { siteRef: 'East source location' }),
+    historical(`${id}-west`, id, '06:00', '07:00', '07:00', { siteRef: 'West source location' }),
+  ]), escalations: [response('valid-rsp', 'sam-west', '06:30')] }));
+  const w = harness(raw);
+  const bytes = w.storage.getItem(STORAGE_KEY);
+  const loaded = w.reopen();
+  const { report } = loaded.api.loneWorkingReport();
+  const dom = new JSDOM('<!doctype html><html><body><div id="modal-root"></div></body></html>');
+  const originals = Object.fromEntries(['window', 'document', 'Node', 'Element', 'URL'].map((k) => [k, globalThis[k]]));
+  const { window } = dom;
+  Object.assign(globalThis, { window, document: window.document, Node: window.Node, Element: window.Element, URL: window.URL });
+  try {
+    const { document } = window;
+    document.body.append(renderLoneWorking({ api: loaded.api, query: new URLSearchParams('view=history') }));
+    const audit = report.chronology;
+    assert.equal(document.querySelector('[data-testid="lwk-chronology-reviewed"]').textContent, '6');
+    assert.equal(document.querySelector('[data-testid="lwk-chronology-total"]').textContent, '3');
+    for (const [kind, count] of Object.entries(audit.counts)) {
+      assert.equal(document.querySelector(`[data-testid="lwk-chronology-${kind}"]`).textContent, String(count));
+    }
+    const tableRows = [...document.querySelectorAll('table[aria-label="Chronology findings"] tbody tr')];
+    assert.equal(tableRows.length, audit.findingsN);
+    for (const [i, tr] of tableRows.entries()) {
+      const match = audit.findings[i];
+      const stored = JSON.parse(bytes).lwkDeployments;
+      const first = stored.find((row) => row.id === match.first.id);
+      const second = stored.find((row) => row.id === match.second.id);
+      assert.deepEqual([...tr.querySelectorAll('time')].map((node) => [node.getAttribute('datetime'), node.textContent]),
+        [first.startAt, first.closedAt, second.startAt, second.closedAt, ts('06:00:00.000'), ts('06:00:00.001')].map((at) => [at, at]));
+      assert.equal(tr.dataset.kind, match.kind);
+      assert.equal(tr.querySelector('[data-testid="lwk-overlap-ms"]').textContent, `${match.overlapMs} ms`);
+    }
+    assert.equal(document.querySelector('table[aria-label="Escalations, newest first"] tbody tr').cells[1].textContent, 'West source location');
+    const button = [...document.querySelectorAll('button')].find((node) => node.textContent.trim() === 'Export (counts)');
+    assert.ok(button, 'the scoped report must offer a working export action');
+    button.click();
+    const csv = document.querySelector('[aria-label="Lone-working aggregate CSV"]').value;
+    const parsed = parseCsv(csv);
+    assert.deepEqual(parsed.headers, LWK_CSV_COLUMNS);
+    const summary = Object.fromEntries(parsed.headers.map((key, i) => [key, parsed.rows[0][i]]));
+    assert.equal(summary.chronology_findings_n, String(audit.findingsN));
+    assert.equal(summary.chronology_blank_reason, '');
+    assert.equal(summary.deployments_n, String(audit.deploymentsN));
+    assert.doesNotMatch(csv, /source location|sam-east|jordan|valid-rsp|T06:00/);
+    assert.equal(w.storage.getItem(STORAGE_KEY), bytes, 'read and export store no derived figures');
+  } finally {
+    dom.window.close();
+    Object.assign(globalThis, originals);
   }
 });

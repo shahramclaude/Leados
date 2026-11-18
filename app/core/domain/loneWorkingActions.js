@@ -21,8 +21,8 @@
  *    span is refused using exact instants, with the overlap in milliseconds and
  *    whole minutes, computed on the effective span — a closed deployment ends at
  *    its recorded close, not its expected end. If it is still open, a later
- *    declaration is refused as uncertain rather than treating the expected end as
- *    proof of a close.
+ *    declaration is refused in either chronological direction rather than
+ *    treating the expected end of an open row as proof of a close.
  *  - A contact cannot be recorded in the future, before the deployment started, or
  *    at or before the last contact. History that can run backwards is history
  *    nobody can read, and the whole register is a timer running from the last
@@ -49,7 +49,7 @@
 import { dayKey } from '../time.js';
 import { buildSeats, activeSeat, canAct } from './seat.js';
 import { matrixLineScopeFor, buildMatrix } from './matrix.js';
-import { buildLoneWorking, loneWorkingAttentionCount } from './loneWorking.js';
+import { buildLoneWorking, loneWorkingAttentionCount, loneWorkingHoldsPerson, loneWorkingShowsDetails } from './loneWorking.js';
 import {
   LWK_CHANNEL_BY_KEY,
   LWK_CLOSE_OUTCOME_BY_KEY,
@@ -75,7 +75,8 @@ import {
   normalizeLwkEscalations,
   normalizeLwkSettings,
 } from './loneWorkingSchema.js';
-import { instantMs, overlapMinutes } from './loneWorkingMath.js';
+import { instantMs, MINUTE_MS } from './loneWorkingMath.js';
+import { latestLwkActMs, lwkChronologyWindow, lwkWindowConflict } from './loneWorkingChronology.js';
 
 const REFUSAL = (key) => `loneWorking:${key}`;
 const text = (value, max = L.textMax) => (typeof value === 'string' ? value.replace(/\s+/g, ' ').trim().slice(0, max) : '');
@@ -96,6 +97,7 @@ export function createLoneWorkingActions(store, { now, idFactory }) {
     if (seat.readOnly) return fail(LWK_REFUSALS.notSeated);
     const verdict = canAct(right, seat);
     if (!verdict.allow) return fail(verdict.reason);
+    if (!loneWorkingShowsDetails(seat)) return fail('This seat has a counts-only reading. A seat responsible for the deployment must record the act.', null, REFUSAL('counts-only'));
     return { ok: true, seat, at, cfg, actorId: seat.fullAccess ? 'leader' : (seat.nodeId || seat.id || null), today: dayKey(at) };
   }
 
@@ -117,24 +119,13 @@ export function createLoneWorkingActions(store, { now, idFactory }) {
     return { ok: true, seat, at, cfg, today: dayKey(at) };
   }
 
-  /** Does the acting seat hold this person (span, declared line, or itself)? */
-  function holdsPerson(check, personId) {
-    if (!personId) return false;
-    if (check.seat.fullAccess) return true;
-    const nodeId = check.seat.nodeId || check.seat.id || null;
-    if (personId === nodeId) return true;
-    if (check.seat.scope?.has?.(personId)) return true;
-    if (check.seat.lineScope?.has?.(personId)) return true;
-    return false;
-  }
-
   function personContext(check, personId) {
     const id = text(personId, L.idMax) || null;
     if (!id) return fail('Name the person this deployment sends out alone.', 'personId');
     const person = rows('people').find((row) => row && row.id === id) || null;
     if (!person) return fail('That person is not on this record. Nothing was saved.', 'personId', REFUSAL('person-not-found'));
     if (person.status === 'archived') return fail('That person is archived. An archived person is not sent out alone.', 'personId', REFUSAL('person-archived'));
-    if (!holdsPerson(check, id)) {
+    if (!loneWorkingHoldsPerson(check.seat, id)) {
       return fail(LWK_REFUSALS.noReach, 'personId', REFUSAL('not-your-person'));
     }
     return { ok: true, personId: id, person };
@@ -145,8 +136,16 @@ export function createLoneWorkingActions(store, { now, idFactory }) {
     return true;
   }
 
-  function liveDeployment(id) {
-    return normalizeLwkDeployments(rows('lwkDeployments'), []).find((row) => row.id === id) || null;
+  function liveDeployment(check, id) {
+    return normalizeLwkDeployments(rows('lwkDeployments'), [])
+      .find((row) => row.id === id && loneWorkingHoldsPerson(check.seat, row.personId)) || null;
+  }
+
+  function activityByDeployment(deployments, ids) {
+    const activity = new Map([...ids].map((id) => [id, { checkins: [], escalations: [] }]));
+    for (const act of normalizeLwkCheckins(rows('lwkCheckins'), deployments)) activity.get(act.deploymentId)?.checkins.push(act);
+    for (const act of normalizeLwkEscalations(rows('lwkEscalations'), deployments)) activity.get(act.deploymentId)?.escalations.push(act);
+    return activity;
   }
 
   /** The instant a write names, defaulting to the injected clock and never to the future. */
@@ -222,25 +221,26 @@ export function createLoneWorkingActions(store, { now, idFactory }) {
         return fail(`A deployment cannot be recorded more than ${L.backfillMaxDays} days after it started; the contacts it needed would already be missing and a backfilled record would read as a control that ran.`, 'startAt', REFUSAL('start-too-old'));
       }
 
-      // ONE PERSON, ONE PLACE. A recorded close bounds the known span. An open
-      // deployment has no known end: its expected end is not proof of return.
-      // Keep the exact declared-span overlap refusal distinct from this uncertainty.
       const existing = normalizeLwkDeployments(rows('lwkDeployments'), []);
-      for (const other of existing) {
-        if (other.personId !== person.personId) continue;
-        const otherStart = instantMs(other.startAt);
-        const otherEnd = other.closedAt ? instantMs(other.closedAt) : instantMs(other.expectedEndAt);
-        const overlapMs = Math.min(endMs, otherEnd) - Math.max(startMs, otherStart);
-        if (overlapMs > 0) {
-          const overlap = overlapMinutes(startMs, endMs, otherStart, otherEnd);
-          return fail(`This person is already declared alone over part of that span, overlapping by ${overlap} whole minute(s) (${overlapMs} milliseconds). One person cannot be alone in two places at once, and two overlapping clocks would each be honoured by a different hand.`, 'startAt', REFUSAL('overlapping-deployment'));
-        }
-        if (!other.closedAt && endMs > otherStart) {
-          return fail('An earlier deployment for this person is still open. Its expected end is not a recorded close, so a later deployment cannot be confirmed non-overlapping. Establish what happened and record the actual close before declaring this span; do not invent a close time.', 'startAt', REFUSAL('open-deployment-uncertain'));
-        }
-      }
-
       if (existing.length >= L.deployments) return fail('The deployment ledger is full. Export the workspace before proceeding.', null, REFUSAL('ledger-full'));
+      const samePerson = existing.filter((row) => row.personId === person.personId);
+      const activity = activityByDeployment(existing, samePerson.map((row) => row.id));
+      const nowMs = check.at.getTime();
+      const proposed = lwkChronologyWindow({ startAt: start.at, expectedEndAt }, nowMs);
+      let uncertain = false;
+      for (const other of samePerson) {
+        const { checkins, escalations } = activity.get(other.id);
+        const frame = lwkChronologyWindow(other, nowMs, latestLwkActMs(checkins, escalations));
+        const conflict = lwkWindowConflict(proposed, frame);
+        if (conflict?.overlapMs > 0) {
+          const minutes = Math.floor(conflict.overlapMs / MINUTE_MS);
+          return fail(`This person has another deployment window overlapping by ${minutes} whole minute(s) (${conflict.overlapMs} milliseconds). This compares windows, not whereabouts. Review the source times and close-outs in History.`, 'startAt', REFUSAL('overlapping-deployment'));
+        }
+        uncertain ||= conflict?.kind === 'separation-unproved';
+      }
+      if (uncertain) {
+        return fail('Separation from another deployment is not proved. An expected end is not a recorded close. The earlier deployment needs a supported actual close, including for backfilled work. Review History and do not invent a close time.', 'startAt', REFUSAL('open-deployment-uncertain'));
+      }
 
       const id = idFactory('lwk-dep');
       const row = {
@@ -290,14 +290,9 @@ export function createLoneWorkingActions(store, { now, idFactory }) {
       if (!check.ok) return check;
       const deploymentId = text(input.deploymentId, L.idMax) || null;
       if (!deploymentId) return fail('Name the deployment this contact is for.', 'deploymentId');
-      const deployment = liveDeployment(deploymentId);
+      const deployment = liveDeployment(check, deploymentId);
       if (!deployment) return fail(LWK_REFUSALS.notFound, 'deploymentId', REFUSAL('deployment-not-found'));
       if (deployment.closedAt) return fail('That deployment is closed out. A contact recorded after the close would edit a finished history.', 'deploymentId', REFUSAL('deployment-closed'));
-
-      const isPerson = check.actorId === deployment.personId;
-      if (!isPerson && !holdsPerson(check, deployment.personId)) {
-        return fail('Only the deployed person or a seat that holds them can record this contact.', 'deploymentId', REFUSAL('not-authorised'));
-      }
 
       const channel = text(input.channel, 40);
       if (!LWK_CHANNEL_BY_KEY[channel]) return fail('Choose how contact was made. “Somehow” is not a channel, and the strength of the evidence depends on which it was.', 'channel', REFUSAL('channel-invalid'));
@@ -356,15 +351,12 @@ export function createLoneWorkingActions(store, { now, idFactory }) {
       if (!check.ok) return check;
       const deploymentId = text(input.deploymentId, L.idMax) || null;
       if (!deploymentId) return fail('Name the deployment this escalation answers.', 'deploymentId');
-      const deployment = liveDeployment(deploymentId);
+      const deployment = liveDeployment(check, deploymentId);
       if (!deployment) return fail(LWK_REFUSALS.notFound, 'deploymentId', REFUSAL('deployment-not-found'));
       if (deployment.closedAt) return fail('That deployment is closed out. An escalation recorded after the close would answer a duty that had already ended.', 'deploymentId', REFUSAL('deployment-closed'));
 
       if (check.actorId === deployment.personId) {
         return fail('A person cannot raise the welfare escalation about themselves. Record a concern on the contact instead — that is the act the register is built for, and it owes somebody else a response.', 'deploymentId', REFUSAL('self-escalation'));
-      }
-      if (!holdsPerson(check, deployment.personId)) {
-        return fail('This seat neither holds this person through the span nor through a declared line.', 'deploymentId', REFUSAL('not-authorised'));
       }
 
       const basis = text(input.basis, 60);
@@ -382,7 +374,7 @@ export function createLoneWorkingActions(store, { now, idFactory }) {
 
       // Is there a condition to answer? Read it through the ONE reader so the door
       // and the screen cannot disagree about the state.
-      const report = buildLoneWorking(store.state, { now: new Date(instantMs(raised.at)), settings: settings(), seat: null });
+      const report = buildLoneWorking(store.state, { now: new Date(instantMs(raised.at)), settings: settings(), seat: null, chronologyPage: null });
       const row = report.rows.find((candidate) => candidate.deployment.id === deploymentId) || null;
       const answerable = new Set(['check-due', 'welfare-unconfirmed', 'escalation-open', 'welfare-confirmed-late', 'concern-unanswered', 'overran']);
       if (!row || !answerable.has(row.state.key)) {
@@ -427,36 +419,42 @@ export function createLoneWorkingActions(store, { now, idFactory }) {
       if (!check.ok) return check;
       const deploymentId = text(input.deploymentId, L.idMax) || null;
       if (!deploymentId) return fail('Name the deployment being closed out.', 'deploymentId');
-      const deployment = liveDeployment(deploymentId);
+      const deployment = liveDeployment(check, deploymentId);
       if (!deployment) return fail(LWK_REFUSALS.notFound, 'deploymentId', REFUSAL('deployment-not-found'));
       if (deployment.closedAt) return fail(`That deployment was already closed out on ${deployment.closedAt}. History is never rewritten.`, 'deploymentId', REFUSAL('already-closed'));
 
       const isPerson = check.actorId === deployment.personId;
-      if (!isPerson && !holdsPerson(check, deployment.personId)) {
-        return fail('Only the deployed person or a seat that holds them can close this deployment out.', 'deploymentId', REFUSAL('not-authorised'));
-      }
 
       const closeOutcome = text(input.closeOutcome, 60);
       if (!LWK_CLOSE_OUTCOME_BY_KEY[closeOutcome]) return fail('Choose how the deployment ended. A close-out that names nothing is an administrative delete of a safety duty.', 'closeOutcome', REFUSAL('close-outcome-invalid'));
       const closeNote = lwkReason(input.note);
       if (!closeNote) return fail(`Write what happened, in at least ${L.textMin} characters. The next hand needs it, and so does anyone who reads this after an incident.`, 'note', REFUSAL('close-note-missing'));
+      if (!input.at || (typeof input.at === 'string' && !input.at.trim())) {
+        return fail('Enter the actual close time. The clock and the expected end do not establish when the deployment ended.', 'at', REFUSAL('close-time-required'));
+      }
 
       const at = writeInstant(check, input.at, 'at');
       if (at.error) return at.error;
-      if (instantMs(at.at) < instantMs(deployment.startAt)) {
+      const closeMs = instantMs(at.at);
+      if (closeMs < instantMs(deployment.startAt)) {
         return fail('A deployment cannot be closed out before it started.', 'at', REFUSAL('close-before-start'));
       }
+      const { checkins, escalations } = activityByDeployment(normalizeLwkDeployments(rows('lwkDeployments')), [deploymentId]).get(deploymentId);
+      const newestAct = latestLwkActMs(checkins, escalations);
+      if (newestAct !== null && closeMs < newestAct) {
+        return fail(`This close would precede a recorded check-in or escalation at ${new Date(newestAct).toISOString()}. Verify the actual close and the source log. Nothing was saved.`, 'at', REFUSAL('close-before-evidence'));
+      }
 
+      // Never ask a supervisor to enter a false close to remove a cross-record
+      // conflict. Record the ordered actual close and let History show the pair.
+      const [closed] = normalizeLwkDeployments([{
+        ...deployment, closedAt: at.at, closeOutcome, closedById: check.actorId,
+        closeNote, updatedAt: check.at.toISOString(),
+      }]);
+      if (!closed) return fail('The close could not be read back. Nothing was saved.', 'at', REFUSAL('unreadable'));
       writeDraft((draft) => {
-        for (const row of draft.lwkDeployments || []) {
-          if (row && row.id === deploymentId) {
-            row.closedAt = at.at;
-            row.closeOutcome = closeOutcome;
-            row.closedById = check.actorId;
-            row.closeNote = closeNote;
-            row.updatedAt = check.at.toISOString();
-          }
-        }
+        const index = draft.lwkDeployments.findIndex((row) => row?.id === deploymentId);
+        draft.lwkDeployments[index] = closed;
       }, {
         type: LWK_EVENTS.DEPLOYMENT_CLOSED,
         entity: 'person',
@@ -501,10 +499,12 @@ export function createLoneWorkingActions(store, { now, idFactory }) {
 
     /* ---------------------------------------------------------------- reads */
 
-    loneWorkingReport() {
+    loneWorkingReport({ chronologyPage = 1 } = {}) {
       const check = readCheck();
       if (!check.ok) return check;
-      return { ok: true, report: buildLoneWorking(store.state, { now: check.at, settings: check.cfg, seat: check.seat }) };
+      return { ok: true, report: buildLoneWorking(store.state, {
+        now: check.at, settings: check.cfg, seat: check.seat, chronologyPage, loadWarnings: store.warnings,
+      }) };
     },
 
     loneWorkingAttention() {
@@ -517,9 +517,10 @@ export function createLoneWorkingActions(store, { now, idFactory }) {
     loneWorkingCandidates() {
       const check = readCheck();
       if (!check.ok) return check;
+      if (!loneWorkingShowsDetails(check.seat)) return { ok: true, people: [] };
       const roster = rows('people').filter((row) => row && row.status !== 'archived' && row.id);
       const people = roster
-        .filter((row) => holdsPerson(check, row.id) && (check.seat.fullAccess || row.id !== (check.seat.nodeId || check.seat.id)))
+        .filter((row) => loneWorkingHoldsPerson(check.seat, row.id) && (check.seat.fullAccess || row.id !== (check.seat.nodeId || check.seat.id)))
         .map((row) => ({ id: row.id, name: row.name || row.id, role: row.role || '' }))
         .sort((a, b) => String(a.name).localeCompare(String(b.name)));
       return { ok: true, people };

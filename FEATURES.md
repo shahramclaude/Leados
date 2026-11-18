@@ -1,3 +1,7 @@
+## 2026-11-18 · Lone-working chronology ([ADR-0256](docs/adr/0256-lone-working-chronology.md))
+
+**Lone working → History** separates actual-span intersections from expected-window intersections, unproved separation and acts outside the recorded chronology. Scoped rows show exact UTC evidence with paginated findings; a declared executive receives only counts. The existing aggregate CSV may publish a protected total. New open entries check both chronological directions, and close-out requires an explicit time consistent with its own evidence. No new ledger or rule.
+
 ## 2026-11-18 · Service error-budget workpapers ([ADR-0255](docs/adr/0255-service-error-budget-evidence.md))
 
 `#/service-error-budget` reconciles one closed UTC window of request counts with a separate good/eligible control, deriving exact whole-error allowance, headroom and burn. Closed dates, row uniqueness and all-steward matrix reach are enforced. Missing evidence withholds a verdict; workpapers and numeric receipts do not grant release authority.

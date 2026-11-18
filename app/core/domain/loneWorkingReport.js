@@ -36,6 +36,12 @@ export function loneWorkingCsvRows(report) {
   const empty = Object.fromEntries(LWK_CSV_COLUMNS.map((key) => [key, '']));
   const floor = report.conventions[LWK_SETTING_KEYS.privacyFloor] || 3;
   const complete = report.figuresComplete ? 1 : 0;
+  const chronology = report.chronology;
+  // No breakdown, time or person count for the finding population. Exception
+  // pairs can multiply on one person, so the release floor is on unique people.
+  const chronologyReason = !chronology || chronology.sourceIncomplete
+    ? 'Chronology coverage could not be established from the readable inputs.'
+    : chronology.affectedPeopleN < floor ? `Publication requires findings on at least ${floor} distinct people.` : '';
 
   const rows = [];
 
@@ -65,6 +71,8 @@ export function loneWorkingCsvRows(report) {
     privacy_floor: floor,
     complete,
     blank_reason: report.figuresComplete ? '' : report.incompleteReasons.join('; ').slice(0, 300),
+    chronology_findings_n: chronologyReason ? '' : chronology.findingsN,
+    chronology_blank_reason: chronologyReason,
   });
 
   /* 2. One row per printed state. Below the floor and non-zero, the count is

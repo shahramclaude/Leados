@@ -204,7 +204,7 @@ export function loneWorkingRule(draft, ctx = {}) {
 
   let report;
   try {
-    report = buildLoneWorking(draft, { now, settings: draft.settings || {}, seat: null });
+    report = buildLoneWorking(draft, { now, settings: draft.settings || {}, seat: null, chronologyPage: null });
   } catch {
     // An unreadable record is not a licence to ask somebody something invented.
     return [];
