@@ -1,3 +1,15 @@
+## Review concurrent control impairment (local command)
+
+Run `node scripts/review-control-overlap.mjs evidence.tsv` (or pass `-` for stdin). Use one hazard per file. Supply this exact tab-separated header:
+
+```tsv
+hazard	control	fromUTC	untilUTC	creditRef	impairmentRef
+```
+
+Use stable hazard/control identifiers across reporting lines. Each row asserts that the cited records support **both** the hazard credit and the impairment throughout `[fromUTC, untilUTC)`. Enter UTC timestamps as `YYYY-MM-DDTHH:mm:ss.sssZ`. The end is the limit of the evidence, not a forecast or proof of reinstatement. Do not submit open or inferred intervals as closed evidence.
+
+The JSON receipt links each positive intersection to two source lines. Identical copies count once; conflicting overlapping records for one control refuse the review. Pair durations are not additive exposure. No intersections means none in the submitted windows, not that barriers are available. The command does not validate source documents or enforce workspace seat access; keep both input and receipt with authorized reviewers.
+
 ## 2026-11-18 — Review conflicting lone-working records
 
 Open **Lone working → History** (`#/lone-working?view=history`, [ADR-0256](docs/adr/0256-lone-working-chronology.md)). The chronology lists overlapping recorded spans, intersections that rely on expected ends, and pairs for which separation cannot be proved. Read the exact UTC timestamps before acting. A new open declaration cannot rely on a forecast end, even when backfilling. In **Now → Close out**, enter the actual close time; it must not precede a recorded check-in or escalation. A valid close can reveal an existing conflict rather than erase it.
