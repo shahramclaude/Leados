@@ -226,6 +226,8 @@ import { msaRule } from './msaRules.js';
 import { psrRule } from './psrRules.js';
 // ADR-0261: the performance calibration decision rule.
 import { calRule } from './calRules.js';
+// ADR-0262: the secondment & assignment-return rule.
+import { asgRule } from './asgRules.js';
 import { productNonconformanceRule } from './productNonconformanceRules.js';
 import { caseToAnswerRule } from './caseToAnswerRules.js';
 import { incidentCommandRule } from './incidentCommandRules.js';
@@ -1623,6 +1625,19 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // opaque; pause-governed on every path (`calAutoPropagate`). Registered
   // immediately before `speakUpRule`, `seatRule` and `sealRule`.
   calRule,
+  // ADR-0262: RULE-ASG-01 — the secondment & assignment-return rule. Reads
+  // the register on assignment declaration, cover declaration, decision,
+  // consent, handback, convention changes and explicit `asg.scan` scans — and
+  // on any other commit, because a return decision runs out by its own
+  // declared day with nobody having written a rationale. FIVE conditions,
+  // each filed at most once per (deterministic `asg1:…` signature, addressee)
+  // and bounded at 4 per commit with the remainder counted. Every ask goes to
+  // the lowest joint apex above every hand that answers for the move — the two
+  // named sides and every active line holding the person; where nobody can be
+  // asked it writes one identity-free `asgMarkers` observation. Ask text is
+  // opaque; pause-governed on every path (`asgAutoPropagate`). Registered
+  // immediately before `speakUpRule`, `seatRule` and `sealRule`.
+  asgRule,
   // Registered immediately before `seatRule` and `sealRule`.
   speakUpRule,
   // ADR-0076: the Operating Seat (vertical roll-up + enforced boundaries).

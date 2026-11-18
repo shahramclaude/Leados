@@ -58,32 +58,42 @@ export function createCalActions(store, { now, idFactory }) {
   const settings = () => store.state.settings || {};
   const rows = (key) => (Array.isArray(store.state[key]) ? store.state[key] : []);
 
-  function actingSeat() {
+  // ADR-0261 standing repair (defects 1–2): the gate used to discard the
+  // `canAct` verdict — a truthy `{ allow: false, … }` PASSED `Boolean()` — and
+  // fell back to `seats[0]`, so a refused or wrong-seated caller was treated as
+  // seated. Now it is the msaActions `seatFor` pattern verbatim: the seat is
+  // the one `activeSeat(built)` resolves, the right's verdict must be
+  // `allow: true`, and there is no first-seat fallback. The floors are
+  // unchanged (writes accept manage or read; the scan accepts read).
+  function seatFor(right) {
     try {
-      const seats = buildSeats(store.state, { now: clock() });
-      return activeSeat(seats, store.state?.actingSeatId || null) || seats?.[0] || null;
+      const built = buildSeats(store.state, { now: clock(), settings: settings() });
+      const seat = activeSeat(built);
+      if (!seat || seat.readOnly) return false;
+      const verdict = canAct(right, seat);
+      return Boolean(verdict && verdict.allow);
     } catch {
-      return null;
+      return false;
     }
   }
 
   function canManage() {
-    const seat = actingSeat();
-    if (!seat) return false;
-    try {
-      return canAct(seat, CAL_RIGHTS.MANAGE) || canAct(seat, CAL_RIGHTS.READ);
-    } catch {
-      return false;
-    }
+    return seatFor(CAL_RIGHTS.MANAGE) || seatFor(CAL_RIGHTS.READ);
   }
 
   function canRead() {
-    const seat = actingSeat();
-    if (!seat) return false;
+    return seatFor(CAL_RIGHTS.READ) || seatFor(CAL_RIGHTS.MANAGE);
+  }
+
+  /** The resolved active seat, for naming the recording hand only. Never a
+   * fallback seat: an unresolved seat returns null and the act is refused
+   * upstream by `canManage`/`canRead` before this is read. */
+  function actingSeat() {
     try {
-      return canAct(seat, CAL_RIGHTS.READ) || canAct(seat, CAL_RIGHTS.MANAGE);
+      const built = buildSeats(store.state, { now: clock(), settings: settings() });
+      return activeSeat(built) || null;
     } catch {
-      return false;
+      return null;
     }
   }
 

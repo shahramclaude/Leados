@@ -3463,6 +3463,109 @@ function seedModernSlavery(state, now, { priya, mei, jordan, samuel, freya }) {
   state.msaMarkers = Array.isArray(state.msaMarkers) ? state.msaMarkers : [];
 }
 
+
+function seedSecondment(state, now, { priya, mei, jordan, samuel, freya }) {
+  // ADR-0262: nine assignments placed relative to the injected clock — one per
+  // derived state, with ZERO stored states, verdicts, timeliness flags, day
+  // counts or handback-complete flags. Every printed state is derived from the
+  // declared window and the act ledger by `asg.js`, and the person is counted
+  // once no matter how many lines hold them.
+  //
+  //   1 jordan  active                    in window, beyond the warn horizon
+  //   2 freya   decision-due              return day 6 days out, no decision
+  //   3 mei     return-decision-overdue    day passed 20 days ago — silence
+  //                                       changed nothing; one duty UNCOVERED
+  //   4 samuel  returned                  decided on time, both handbacks
+  //   5 freya   transferred               convert decided 10 days LATE, home
+  //                                       consent then both handbacks
+  //   6 mei     handback-open             return decided, home handback only —
+  //                                       the host evidence is missing
+  //   7 samuel  transfer-consent-owed     convert decided, no home consent
+  //   8 jordan  planned                   start day still ahead
+  //   9 freya   transfer-handback-open    convert + consent, one handback only
+  //
+  // The host side of a live secondment is a declared Matrix line (that is what
+  // `reportingLines` is FOR), so the home manager, the host manager and the
+  // joint apex resolve against the live graph exactly as the rule resolves
+  // them. Two historical assignments (4, 7) name a host whose line is no
+  // longer on the live graph — the register prints `side-line-mismatch` there
+  // rather than repointing a declaration nobody re-made.
+  const day = (days) => new Date(now.getTime() + days * 86_400_000).toISOString().slice(0, 10);
+  const iso = (days) => new Date(now.getTime() + days * 86_400_000).toISOString();
+  const rafe = 'person-demo-11';
+  const row = (id, fields) => ({ id, createdAt: iso(-40), updatedAt: iso(-1), ...fields });
+
+  state.reportingLines.push(
+    row('asg-line-demo-1', { personId: jordan, managerId: samuel, kind: 'project', shareH: 40, rights: [], fromISO: day(-60), toISO: null, declaredAt: iso(-60), note: 'Host line while seconded to the support escalation workstream.', status: 'active', history: [] }),
+    row('asg-line-demo-2', { personId: freya, managerId: priya, kind: 'project', shareH: 50, rights: [], fromISO: day(-40), toISO: null, declaredAt: iso(-40), note: 'Host line while seconded to the platform reliability programme.', status: 'active', history: [] }),
+    row('asg-line-demo-3', { personId: mei, managerId: samuel, kind: 'project', shareH: 30, rights: [], fromISO: day(-120), toISO: null, declaredAt: iso(-120), note: 'Host line while seconded to the billing handover.', status: 'active', history: [] }),
+    row('asg-line-demo-4', { personId: samuel, managerId: rafe, kind: 'project', shareH: 35, rights: [], fromISO: day(-200), toISO: day(-26), declaredAt: iso(-200), note: 'Host line for the escalation rebuild, ended at the handback.', status: 'ended', history: [] }),
+  );
+
+  const assignment = (seq, fields) => ({
+    assignmentId: `asg-a-demo-${seq}`,
+    recordedById: fields.homeManagerId,
+    recordedDay: day(fields.startDaysAgo),
+    recordedAt: iso(fields.startDaysAgo),
+    note: '',
+    ...fields.fields,
+  });
+  state.asgAssignments = [
+    assignment(1, { startDaysAgo: -60, homeManagerId: mei, fields: { personId: jordan, homeManagerId: mei, hostManagerId: samuel, startDay: day(-60), declaredReturnDay: day(40), termsRef: 'SEC-2026-14 secondment agreement (product to support span)' } }),
+    assignment(2, { startDaysAgo: -40, homeManagerId: samuel, fields: { personId: freya, homeManagerId: samuel, hostManagerId: priya, startDay: day(-40), declaredReturnDay: day(6), termsRef: 'SEC-2026-19 secondment agreement (support to platform programme)' } }),
+    assignment(3, { startDaysAgo: -120, homeManagerId: priya, fields: { personId: mei, homeManagerId: priya, hostManagerId: samuel, startDay: day(-120), declaredReturnDay: day(-20), termsRef: 'SEC-2026-07 secondment agreement (platform to billing handover)' } }),
+    assignment(4, { startDaysAgo: -200, homeManagerId: priya, fields: { personId: samuel, homeManagerId: priya, hostManagerId: rafe, startDay: day(-200), declaredReturnDay: day(-30), termsRef: 'SEC-2025-22 secondment agreement (support to director programme)' } }),
+    assignment(5, { startDaysAgo: -300, homeManagerId: samuel, fields: { personId: freya, homeManagerId: samuel, hostManagerId: priya, startDay: day(-300), declaredReturnDay: day(-120), termsRef: 'SEC-2025-11 secondment agreement (support to platform reliability)' } }),
+    assignment(6, { startDaysAgo: -400, homeManagerId: priya, fields: { personId: mei, homeManagerId: priya, hostManagerId: rafe, startDay: day(-400), declaredReturnDay: day(-250), termsRef: 'SEC-2025-04 secondment agreement (platform to director review)' } }),
+    assignment(7, { startDaysAgo: -25, homeManagerId: priya, fields: { personId: samuel, homeManagerId: priya, hostManagerId: rafe, startDay: day(-25), declaredReturnDay: day(-10), termsRef: 'SEC-2026-31 secondment agreement (support to director office)' } }),
+    assignment(8, { startDaysAgo: -3, homeManagerId: mei, fields: { personId: jordan, homeManagerId: mei, hostManagerId: priya, startDay: day(15), declaredReturnDay: day(90), termsRef: 'SEC-2027-01 secondment agreement (product to platform programme)' } }),
+    assignment(9, { startDaysAgo: -50, homeManagerId: samuel, fields: { personId: freya, homeManagerId: samuel, hostManagerId: priya, startDay: day(-50), declaredReturnDay: day(-12), termsRef: 'SEC-2026-33 secondment agreement (support to data workstream)' } }),
+  ];
+
+  const cover = (seq, fields) => ({
+    coverId: `asg-c-demo-${seq}`,
+    coverHandId: null,
+    note: '',
+    declaredAt: iso(-1),
+    ...fields,
+  });
+  state.asgCovers = [
+    cover(1, { assignmentId: 'asg-a-demo-1', dutyLabel: 'Activation definition working group', coverKind: 'retained-by-home', declaredById: mei, declaredDay: day(-58) }),
+    cover(2, { assignmentId: 'asg-a-demo-1', dutyLabel: 'Escalation rota analysis', coverKind: 'named-cover', coverHandId: freya, declaredById: mei, declaredDay: day(-58) }),
+    cover(3, { assignmentId: 'asg-a-demo-2', dutyLabel: 'Weekly numbers trust workstream', coverKind: 'named-cover', coverHandId: jordan, declaredById: samuel, declaredDay: day(-38) }),
+    cover(4, { assignmentId: 'asg-a-demo-3', dutyLabel: 'Billing migration technical direction', coverKind: 'uncovered', declaredById: priya, declaredDay: day(-118) }),
+    cover(5, { assignmentId: 'asg-a-demo-3', dutyLabel: 'Architecture review duty', coverKind: 'retained-by-home', declaredById: priya, declaredDay: day(-118) }),
+    cover(6, { assignmentId: 'asg-a-demo-4', dutyLabel: 'Escalation rebuild programme', coverKind: 'retained-by-home', declaredById: priya, declaredDay: day(-198) }),
+    cover(7, { assignmentId: 'asg-a-demo-5', dutyLabel: 'Reliability metric baselines', coverKind: 'named-cover', coverHandId: jordan, declaredById: samuel, declaredDay: day(-298) }),
+    cover(8, { assignmentId: 'asg-a-demo-6', dutyLabel: 'Director review pack', coverKind: 'retained-by-home', declaredById: priya, declaredDay: day(-398) }),
+    cover(9, { assignmentId: 'asg-a-demo-7', dutyLabel: 'Support lead rota', coverKind: 'retained-by-home', declaredById: priya, declaredDay: day(-24) }),
+    cover(10, { assignmentId: 'asg-a-demo-8', dutyLabel: 'Activation definition working group', coverKind: 'retained-by-home', declaredById: mei, declaredDay: day(-3) }),
+    cover(11, { assignmentId: 'asg-a-demo-9', dutyLabel: 'Data quality workstream', coverKind: 'named-cover', coverHandId: jordan, declaredById: samuel, declaredDay: day(-48) }),
+  ];
+
+  const act = (seq, fields) => ({ actId: `asg-act-demo-${seq}`, note: '', ...fields });
+  state.asgActs = [
+    // 4 — return decided on time, both lines hand back.
+    act(1, { assignmentId: 'asg-a-demo-4', kind: 'return-decision', decisionKind: 'return', rationale: 'The escalation rebuild completed on the declared day; both lines asked for the return.', newDeclaredReturnDay: null, recordedById: priya, day: day(-45), at: iso(-45) }),
+    act(2, { assignmentId: 'asg-a-demo-4', kind: 'handback', side: 'home', receivedById: priya, evidenceRef: 'Handback note SEC-2025-22-H1', recordedById: priya, day: day(-32), at: iso(-32) }),
+    act(3, { assignmentId: 'asg-a-demo-4', kind: 'handback', side: 'host', receivedById: rafe, evidenceRef: 'Handback note SEC-2025-22-H2', recordedById: rafe, day: day(-28), at: iso(-28) }),
+    // 5 — convert decided 10 days LATE (kept as recorded), then consent, then both handbacks.
+    act(4, { assignmentId: 'asg-a-demo-5', kind: 'return-decision', decisionKind: 'convert', rationale: 'The programme role was made permanent and the home line minuted its agreement to transfer.', newDeclaredReturnDay: null, recordedById: samuel, day: day(-110), at: iso(-110) }),
+    act(5, { assignmentId: 'asg-a-demo-5', kind: 'home-consent', basis: 'Home-line consent to permanent transfer, minuted at the March people review.', consentById: samuel, recordedById: samuel, day: day(-105), at: iso(-105) }),
+    act(6, { assignmentId: 'asg-a-demo-5', kind: 'handback', side: 'home', receivedById: samuel, evidenceRef: 'Handback note SEC-2025-11-H1', recordedById: samuel, day: day(-100), at: iso(-100) }),
+    act(7, { assignmentId: 'asg-a-demo-5', kind: 'handback', side: 'host', receivedById: priya, evidenceRef: 'Handback note SEC-2025-11-H2', recordedById: priya, day: day(-95), at: iso(-95) }),
+    // 6 — return decided, home handback on file, HOST evidence missing.
+    act(8, { assignmentId: 'asg-a-demo-6', kind: 'return-decision', decisionKind: 'return', rationale: 'The director review cycle closed; the person returned to the home line.', newDeclaredReturnDay: null, recordedById: priya, day: day(-260), at: iso(-260) }),
+    act(9, { assignmentId: 'asg-a-demo-6', kind: 'handback', side: 'home', receivedById: priya, evidenceRef: 'Handback note SEC-2025-04-H1', recordedById: priya, day: day(-255), at: iso(-255) }),
+    // 7 — convert decided, NO home consent on the record.
+    act(10, { assignmentId: 'asg-a-demo-7', kind: 'return-decision', decisionKind: 'convert', rationale: 'The director office offered a permanent role; the home line has not minuted its consent.', newDeclaredReturnDay: null, recordedById: priya, day: day(-15), at: iso(-15) }),
+    // 9 — convert + consent, home handback only.
+    act(11, { assignmentId: 'asg-a-demo-9', kind: 'return-decision', decisionKind: 'convert', rationale: 'The data workstream continues in the host span under a permanent arrangement.', newDeclaredReturnDay: null, recordedById: samuel, day: day(-12), at: iso(-12) }),
+    act(12, { assignmentId: 'asg-a-demo-9', kind: 'home-consent', basis: 'Home-line consent to permanent transfer, minuted in the weekly leadership note.', consentById: samuel, recordedById: samuel, day: day(-11), at: iso(-11) }),
+    act(13, { assignmentId: 'asg-a-demo-9', kind: 'handback', side: 'home', receivedById: samuel, evidenceRef: 'Handback note SEC-2026-33-H1', recordedById: samuel, day: day(-8), at: iso(-8) }),
+  ];
+}
+
 function seedTax(state, now, { priya, mei, jordan, samuel, freya }) {
   const day = (days) => new Date(now.getTime() + days * 86_400_000).toISOString().slice(0, 10);
   const iso = (days) => new Date(now.getTime() + days * 86_400_000).toISOString();
@@ -8451,6 +8554,13 @@ export function buildDemoState(now = new Date()) {
   // each carrying its evidence reference, three findings whose instance is never
   // blurred into a risk, and remediation acts where a plan closes nothing.
   seedModernSlavery(state, now, { priya, mei, jordan, samuel, freya });
+  // ADR-0262: nine secondments placed relative to the injected clock — one per
+  // derived assignment state, from `planned` through `transferred`, with an
+  // uncovered duty, a decision recorded 10 days late and kept as recorded, and
+  // a handback owed on one line's missing evidence. Host accountability is a
+  // declared Matrix line; the joint apex resolves live. Nothing stored below is
+  // a state, a verdict or a count.
+  seedSecondment(state, now, { priya, mei, jordan, samuel, freya });
   // ADR-0258: ten pre-startup safety reviews placed relative to the injected
   // clock — one for each of the ten mutually exclusive derived states, with
   // cross-line proposer/holder/signer sets whose startup authority resolves live

@@ -391,6 +391,25 @@ export const RECORD_POLICIES = Object.freeze({
   msaRemediations: { classKey: 'portfolio', detailCeiling: 4, label: 'Remediation acts — the kind, the status, the declared day and, for a complete act, the completed day and evidence reference', route: '#/modern-slavery' },
   msaTraining: { classKey: 'portfolio', detailCeiling: 4, label: 'Training records — the training day, the population covered, the delivery reference and the evidence reference', route: '#/modern-slavery' },
   msaMarkers: { classKey: 'unit', detailCeiling: 3, label: 'Modern-slavery observation markers — no joint seat, no responsible line to ask (identity-free)', route: '#/modern-slavery' },
+  // ADR-0261 (Schema v213) STANDING REPAIR: the performance-calibration
+  // ledgers shipped without RECORD_POLICIES rows, so the seat projection never
+  // governed them at all. Declared now: a session names its holders and scope
+  // (portfolio material, hands withheld above rank 4), a decision names a
+  // person, their ratings and a rationale (individual detail at the same
+  // ceiling), and the markers are identity-free.
+  calSessions: { classKey: 'portfolio', detailCeiling: 4, label: 'Calibration sessions — the cycle label, title, scope as declared, status, opened and closed days, declared distribution target and responsible hands', route: '#/performance-calibration' },
+  calDecisions: { classKey: 'portfolio', detailCeiling: 4, label: 'Calibration decisions — the person, the review, the proposed and calibrated ratings and the written rationale', route: '#/performance-calibration' },
+  calMarkers: { classKey: 'unit', detailCeiling: 3, label: 'Performance-calibration observation markers — no joint seat, no person (identity-free)', route: '#/performance-calibration' },
+  // ADR-0262 (Schema v214): the secondment & assignment-return register. An
+  // assignment names a person and two named sides, a cover names a duty and a
+  // cover hand, and an act names the hand that made it — all INDIVIDUAL detail
+  // at the portfolio ceiling, because which spans carry secondments is
+  // material a director and above must see while above rank 4 the hands are
+  // withheld. The rule's own markers are identity-free.
+  asgAssignments: { classKey: 'portfolio', detailCeiling: 4, label: 'Assignments — the person, the two named sides, the start day, the declared return day, the written terms instrument and the recording hand', route: '#/secondment' },
+  asgCovers: { classKey: 'portfolio', detailCeiling: 4, label: 'Duty-cover declarations — the duty label, the coverage kind and the named cover hand', route: '#/secondment' },
+  asgActs: { classKey: 'portfolio', detailCeiling: 4, label: 'Assignment acts — return decisions with rationale, home-line consents with basis and handbacks with evidence references', route: '#/secondment' },
+  asgMarkers: { classKey: 'unit', detailCeiling: 3, label: 'Secondment observation markers — no joint seat, no responsible line to ask (identity-free)', route: '#/secondment' },
   // ADR-0253 (Schema v206): the product nonconformance register. A case names a
   // product, a site, one identified lot or serial, a written requirement and a
   // finding — an operational fact about a unit of output, so it is UNIT material,
@@ -1635,6 +1654,18 @@ export const ACTION_RIGHTS = Object.freeze({
   // end.
   'read-modern-slavery': { minRank: 3, maxRank: 5, label: 'Read the modern slavery & supply-chain due-diligence statement register — the statements you hold, their declared publication deadlines and written bases, the board approvals and publications, the declared supplier population, the dated assessments, the findings and remediation acts, the six derived element verdicts and the claim the evidence supports. Above rank 4 the reader prints counts and withholds responsible hands and supplier detail' },
   'manage-modern-slavery': { minRank: 3, maxRank: 5, label: 'Record a statement on its declared regime, declare a publication deadline with its written basis, record a board approval and a publication, add a supplier at its declared tier, record an assessment with its evidence reference, record a finding, record a remediation act (complete only with its evidence reference), record a training act, and set the register’s conventions' },
+  // ADR-0261 (Schema v213) STANDING REPAIR: these two rights were claimed by
+  // the register but never declared here, so no seat could hold them and the
+  // seat gate in its actions was dead code. Declared now with the window the
+  // ADR claims: director / VP with mid-manager execution.
+  'read-performance-calibration': { minRank: 2, maxRank: 5, label: 'Read the performance-calibration decision register — the sessions you hold, the proposed and calibrated ratings with their written rationale, the derived person states and the derived distributions. Above rank 4 the reader prints counts and withholds person detail' },
+  'manage-performance-calibration': { minRank: 2, maxRank: 5, label: 'Record a calibration session, record a committee decision with its written rationale (the proposed rating is re-read from the review and never overwritten), close a session, and set the register’s conventions' },
+  // ADR-0262: the secondment & assignment-return register. Mid-manager /
+  // director primary with VP oversight — the manager whose person moves is the
+  // first reader and the first declarer, and every write is additionally
+  // narrowed inside the action to a seat that HOLDS a named side.
+  'read-secondment': { minRank: 2, maxRank: 5, label: 'Read the secondment & assignment-return register — the assignments you hold a side of or that sit in your span, the named duty coverage, the return decisions with their rationale and timeliness, the home-line consents and the two-sided handbacks. Above rank 4 the reader prints counts and withholds person detail' },
+  'manage-secondment': { minRank: 2, maxRank: 5, label: 'Declare an assignment between two named sides, name duty coverage per duty, record a return decision with written rationale, record the home line’s consent to a conversion, record a handback with its evidence reference, and set the register’s conventions — every write narrowed to a seat holding a named side' },
   // ADR-0258 (Schema v210): the pre-startup safety review register's four rights.
   // Reading and field verification acts open at rank 1 (frontline operators and
   // supervisors inspect equipment, log punch items, sign discipline walkdowns,

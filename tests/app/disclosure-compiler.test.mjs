@@ -150,6 +150,15 @@ const RENDERER_ROUTES = [
   // by two routes since ADR-0258. The list is the live shell; it is corrected
   // here rather than the assertion loosened.
   'cash-covenant', 'pre-startup', 'modern-slavery',
+  // Standing repair: `performance-calibration` (ADR-0261) also declares an
+  // adapter-scoped manifest row but was never added to this list — the route
+  // shipped at the last session and the catalogue assertion has been red by one
+  // route since. Corrected here rather than the assertion loosened.
+  'performance-calibration',
+  // ADR-0262: the Secondment / Assignment Return & Handover Register declares
+  // its own manifest row (portfolio class, adapter-scoped, detail ceiling 4),
+  // so the catalogue and the shell stay one route for one route.
+  'secondment',
 ];
 
 /** Sentinel-bearing roster: every person, span and private note is traceable. */
@@ -246,7 +255,7 @@ function seatsOrThrow(state) {
 /* --------------------------------------------------------------- 1. schema */
 
 test('schema v90 migrates additively and refuses malformed or stale grants', () => {
-  assert.equal(SCHEMA_VERSION, 213, 'ADR-0260 (modern slavery & due diligence) is the current head');
+  assert.equal(SCHEMA_VERSION, 214, 'ADR-0262 (secondment & assignment return) is the current head; prior registers ride along');
   // This pin follows the head; the v90 step this test actually proves is below.
   const old = { schemaVersion: 89, settings: { leaderName: 'Keep' }, cases: [{ id: 'keep' }], disclosureGrants: [{ id: 'existing' }] };
   const migrated = migrate(old);

@@ -1,4 +1,5 @@
-// ADR-0261 — Performance Calibration Decision Register (Schema v213).
+// ADR-0261 — Performance Calibration Decision Register (Schema v214 head; the
+// register itself landed at v213).
 //
 // The claims this suite exists to prove:
 //
@@ -49,6 +50,7 @@ import { buildDemoState } from '../../app/core/demo.js';
 import { DEFAULT_POST_COMMIT_RULES } from '../../app/core/domain/postCommit.js';
 import { PROPAGATION_CONTRACTS } from '../../app/core/domain/propagationContracts.js';
 import { buildCalibration, deriveCalibration, calAttentionCount, calSignals } from '../../app/core/domain/cal.js';
+import { createCalActions } from '../../app/core/domain/calActions.js';
 import {
   normalizeCalDecisions,
   normalizeCalMarkers,
@@ -187,8 +189,8 @@ function asSeat(api, store, seatId) {
 
 /* --------------------------------------------------------------- 1. schema */
 
-test('schema v213 is additive: three empty ledgers, three conventions, nothing inferred', () => {
-  assert.equal(SCHEMA_VERSION, 213, 'ADR-0261 (performance calibration) is the current head');
+test('schema v214 is additive: three empty ledgers, three conventions, nothing inferred', () => {
+  assert.equal(SCHEMA_VERSION, 214, 'ADR-0262 (secondment & assignment return) is the current head; prior registers ride along');
   const state = load(fixture());
   for (const collection of ['calSessions', 'calDecisions', 'calMarkers']) {
     assert.ok(COLLECTIONS.includes(collection), `${collection} must be a governed collection`);
@@ -203,12 +205,18 @@ test('schema v213 is additive: three empty ledgers, three conventions, nothing i
   assert.deepEqual(state.calDecisions, []);
 });
 
-test('migration 212 → 213 is additive and carries the empty ledgers forward', () => {
+test('migration 212 → 214 is additive and carries the empty ledgers forward', () => {
   const before = migrate({ schemaVersion: 212, settings: {} });
-  assert.equal(before.raw.schemaVersion, 213);
+  assert.equal(before.raw.schemaVersion, 214);
+  assert.deepEqual(before.applied, ['212 → 213', '213 → 214']);
   assert.deepEqual(before.raw.calSessions, []);
   assert.deepEqual(before.raw.calDecisions, []);
   assert.deepEqual(before.raw.calMarkers, []);
+  // ADR-0262 rode along at 213 → 214: four empty secondment ledgers, nothing inferred.
+  assert.deepEqual(before.raw.asgAssignments, []);
+  assert.deepEqual(before.raw.asgCovers, []);
+  assert.deepEqual(before.raw.asgActs, []);
+  assert.deepEqual(before.raw.asgMarkers, []);
 });
 
 /* -------------------------------------------------------------- 2. loaders */
@@ -521,6 +529,34 @@ test('the panel renders on an empty workspace without throwing', () => {
     delete globalThis.Node;
     delete globalThis.Element;
   }
+});
+
+/* ------------------------------------------- 8b. standing repair: the seat gate */
+
+test('standing repair (ADR-0261): a truthy { allow:false } verdict is a REFUSAL, and no first-seat fallback exists', () => {
+  const { api, store } = harness(fixture({ reviews: [review()] }));
+  // The undeclared operator (full access) manages — the historical default.
+  assert.equal(api.recordCalSession(session()).ok, true, 'the operator seat still manages');
+
+  // A seated hand with NO calibration right: `canAct` returns a truthy object
+  // whose `allow` is false — the old gate passed that object as its own
+  // permission. Call the ACTION directly (past the gateway, which also now
+  // refuses) to prove the gate itself fails closed.
+  const rawApi = createCalActions(store, { now: () => NOW, idFactory: (prefix) => `${prefix}-raw` });
+  asSeat(api, store, 'samuel');
+  const refused = rawApi.recordCalSession(session({ sessionId: 'cal-sess-two' }));
+  assert.equal(refused.ok, false, 'a verdict object is not its own permission');
+  assert.equal(refused.refusal, 'performance-calibration:no-right');
+  // An unresolvable seat acts on nothing — the old `seats[0]` fallback is gone.
+  asSeat(api, store, 'seat-that-never-existed');
+  const ghostRefused = rawApi.recordCalSession(session({ sessionId: 'cal-sess-three' }));
+  assert.equal(ghostRefused.ok, false, 'an unresolved seat acts on nothing');
+  // The gateway refuses the same unseated call too (the wiring repair).
+  asSeat(api, store, 'samuel');
+  const gated = api.recordCalSession(session({ sessionId: 'cal-sess-four' }));
+  assert.equal(gated.ok, false, 'the gateway refuses an unseated write by name');
+  // Nothing was written by any refusal.
+  assert.equal(store.state.calSessions.length, 1, 'displayed == stored: one session on the record');
 });
 
 /* ------------------------------------------------------------- 9. reader */

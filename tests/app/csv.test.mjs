@@ -154,7 +154,7 @@ test('every CSV scope round-trips cleanly and preserves unknown values as blank 
 // without this pin moving. The count is repaired here to #188 rather than left
 // three scopes behind, so the next ADR cannot drift it silently. Session 327 adds
 // the identity-free claim-register scope #189 and repairs the pin again.
-assert.equal(CSV_EXPORTS.length, 196, 'ADR-0260 (modern slavery & due diligence, #196) is the current tail');
+assert.equal(CSV_EXPORTS.length, 198, 'ADR-0262 (secondment & assignment return, #198) is the current tail; ADR-0261 (#197) rides along');
   for (const spec of CSV_EXPORTS) {
     const res = exportWorkspaceCsv(state, spec.key, { now: NOW });
     assert.equal(res.ok, true, `${spec.key} export succeeds`);

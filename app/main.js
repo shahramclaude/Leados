@@ -203,6 +203,9 @@ import { msaAttentionCount } from './core/domain/modernSlavery.js';
 // ADR-0261: the performance-calibration decision register.
 import { renderPerformanceCalibration } from './views/performanceCalibration.js';
 import { buildCalibration, calAttentionCount } from './core/domain/cal.js';
+// ADR-0262: the secondment & assignment-return register.
+import { renderSecondment } from './views/secondment.js';
+import { buildAssignmentReport, asgAttentionCount } from './core/domain/asg.js';
 // ADR-0258: the pre-startup safety review & commissioning readiness register.
 import { renderPreStartup } from './views/preStartup.js';
 import { psrAttentionCount } from './core/domain/psrSafety.js';
@@ -740,6 +743,12 @@ export const NAV = [
     // never stored. Mid-manager proposes, director calibrates, VP approves,
     // CEO sees the distribution. Two divergent proposals are never averaged.
     { route: 'performance-calibration', label: 'Performance calibration', icon: '⚖', badge: 'performanceCalibration' },
+    // ADR-0262: the person who moved across lines — the named cover per duty,
+    // the return decision before the declared day, and both lines' handback.
+    // An overdue day is a state, never a decision; nothing is ended, extended
+    // or transferred by silence. Mid-manager / director primary with VP
+    // oversight, matrix-native.
+    { route: 'secondment', label: 'Secondment & return', icon: '⇄', badge: 'secondment' },
     // ADR-0253: what one identified manufactured lot or serial failed against, what
     // was actually done to hold it, who signed the disposition and whether a hand
     // strictly senior to the one that did the rework independently verified it. The
@@ -1035,6 +1044,8 @@ const RENDERERS = {
   tax: (ctx) => renderTax(ctx),
   'modern-slavery': (ctx) => renderModernSlavery(ctx),
   'performance-calibration': (ctx) => renderPerformanceCalibration(ctx),
+  // ADR-0262: the secondment & assignment-return register.
+  secondment: (ctx) => renderSecondment(ctx),
   // ADR-0253: the product nonconformance and disposition register.
   nonconformance: (ctx) => renderProductNonconformance(ctx),
   // ADR-0254: the fair-process discipline and grievance register.
@@ -1348,6 +1359,11 @@ export function parseRoute(hash) {
     'supply-chain-due-diligence': 'modern-slavery', 'due-diligence': 'modern-slavery',
     'supply-chain': 'modern-slavery', 'forced-labour': 'modern-slavery',
     'supply-chain-assessment': 'modern-slavery', 's54-statement': 'modern-slavery',
+    'secondment': 'secondment', 'secondments': 'secondment', 'assignment-return': 'secondment',
+    'assignment-returns': 'secondment', 'assignment-register': 'secondment',
+    'return-decision': 'secondment', 'return-decisions': 'secondment',
+    'duty-cover': 'secondment', 'duty-coverage': 'secondment',
+    'handback': 'secondment', 'hand-back': 'secondment', 'repatriation': 'secondment',
     'performance-calibration': 'performance-calibration', 'performancecalibration': 'performance-calibration',
     'calibration-session': 'performance-calibration', 'calibration-sessions': 'performance-calibration',
     'calibration-decision': 'performance-calibration', 'calibration-decisions': 'performance-calibration',
@@ -1734,6 +1750,9 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       // ADR-0261: the calibration report, derived on every render by the ONE
       // reader. Nothing derived is stored; the view reads it, never recomputes.
       calibrationReport: buildCalibration(state, { now: now(), settings: state.settings }),
+      // ADR-0262: the assignment report, derived on every render by the ONE
+      // reader. Nothing derived is stored; the view reads it, never recomputes.
+      secondmentReport: buildAssignmentReport(state, { now: now(), settings: state.settings }),
       warnings: store.warnings,
       persistError: store.persistError,
       storageSize: () => store.sizeBytes(),
@@ -2155,6 +2174,11 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       // distribution flags — the same conditions RULE-CAL-01 files. A COUNT,
       // never a name.
       performanceCalibration: calAttentionCount(state, { now: at, settings: state.settings, seat: seatCtx?.seat || null }),
+      // ADR-0262: an overdue return decision, a decision inside the warn
+      // horizon, an uncovered duty, a missing handback and a conversion with no
+      // home-line consent — the same conditions RULE-ASG-01 files. A COUNT,
+      // never a name.
+      secondment: asgAttentionCount(state, { now: at, settings: state.settings, seat: seatCtx?.seat || null }),
       // ADR-0258: unsafe energisation breaches, expired temporary modifications,
       // overdue Category B post-startup conditions, rejected gates, Category A
       // startup blockers, verified reviews awaiting joint-apex authorisation and

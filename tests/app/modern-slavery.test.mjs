@@ -300,8 +300,8 @@ function asSeat(api, store, seatId) {
 
 /* --------------------------------------------------------------- 1. schema */
 
-test('schema v213 is additive: ten empty ledgers, four conventions, nothing inferred', () => {
-  assert.equal(SCHEMA_VERSION, 213, 'ADR-0261 (performance calibration) is the current head; ADR-0260 ledgers ride along');
+test('schema v214 is additive: ten empty ledgers, four conventions, nothing inferred', () => {
+  assert.equal(SCHEMA_VERSION, 214, 'ADR-0262 (secondment & assignment return) is the current head; prior registers ride along');
   const state = load(fixture());
   for (const collection of ['msaStatements', 'msaDeadlines', 'msaApprovals', 'msaPublications', 'msaSuppliers', 'msaAssessments', 'msaFindings', 'msaRemediations', 'msaTraining', 'msaMarkers']) {
     assert.ok(COLLECTIONS.includes(collection), `${collection} must be a governed collection`);
@@ -734,8 +734,8 @@ test('the rule conditions are the five the register exists for, and indexing rea
 });
 
 test('the rule is registered on the spine, in the propagation contracts, and in the pause census', () => {
-  assert.equal(DEFAULT_POST_COMMIT_RULES.length, 169, 'the spine carries ADR-0257 (RULE-TAX-01), ADR-0258 (RULE-PSR-01), ADR-0260 (RULE-MSA-01) and ADR-0261 (RULE-CAL-01)');
-  assert.equal(PROPAGATION_CONTRACTS.length, 169);
+  assert.equal(DEFAULT_POST_COMMIT_RULES.length, 170, 'the spine carries ADR-0257 (RULE-TAX-01), ADR-0258 (RULE-PSR-01), ADR-0260 (RULE-MSA-01), ADR-0261 (RULE-CAL-01) and, as the 170th, ADR-0262 (RULE-ASG-01)');
+  assert.equal(PROPAGATION_CONTRACTS.length, 170);
   const contract = PROPAGATION_CONTRACTS.find((row) => row.module === 'msaRules.js');
   assert.ok(contract, 'the rule must have a propagation contract');
   assert.deepEqual(contract.writes.sort(), ['delegations', 'links', 'msaMarkers']);

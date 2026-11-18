@@ -137,7 +137,7 @@ function withDom(run) {
 /* ------------------------------------------------------------ 1. schema v169 */
 
 test('ADR-0215 schema: the bump is additive — three empty ledgers, four declared conventions', () => {
-  assert.equal(SCHEMA_VERSION, 213, 'ADR-0260 (modern slavery & due diligence) is the current head');
+  assert.equal(SCHEMA_VERSION, 214, 'ADR-0262 (secondment & assignment return) is the current head; prior registers ride along');
   const old = createEmptyState(T0);
   old.schemaVersion = 168;
   delete old.concernReports;

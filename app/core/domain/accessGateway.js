@@ -48,6 +48,12 @@ import { PROV_RIGHTS } from './prvRegistry.js';
 // ADR-0257: the tax controversy and appeal-control register's rights.
 import { TAX_RIGHTS } from './taxRegistry.js';
 import { MSA_RIGHTS } from './msaRegistry.js';
+// ADR-0261: the performance-calibration register's rights (standing repair —
+// they were never mapped here, so every write under a declared seat was
+// refused as an unknown API name).
+import { CAL_RIGHTS } from './calRegistry.js';
+// ADR-0262: the secondment & assignment-return register's rights.
+import { ASG_RIGHTS } from './asgRegistry.js';
 // ADR-0229: the capability sourcing register's four rights.
 import { SRC_RIGHTS } from './sourcingRegistry.js';
 import { VY_RIGHTS } from './vyRegistry.js';
@@ -488,6 +494,19 @@ const groups = [
   // infers from a financial-year end or an amount.
   [MSA_RIGHTS.READ, 'msaReport msaAttention msaCandidates'],
   [MSA_RIGHTS.MANAGE, 'msaRecordStatement msaDeclareDeadline msaRecordApproval msaRecordPublication msaRecordSupplier msaRecordAssessment msaRecordFinding msaRecordRemediation msaRecordTraining msaSetConventions msaScan'],
+  // ADR-0261 (standing repair): the performance-calibration commands, mapped
+  // at last. Reading is the register's own attention count; every write is
+  // narrowed inside the action to a seat holding the right and re-proved there.
+  [CAL_RIGHTS.READ, 'calAttentionCount'],
+  [CAL_RIGHTS.MANAGE, 'recordCalSession recordCalDecision closeCalSession setCalConventions scanCalibration'],
+  // ADR-0262: the secondment & assignment-return commands. Reading is the
+  // register's own attention count; declaring an assignment names a person the
+  // acting seat may reach only through a declared Matrix line (the gateway
+  // boundary below), and every write is narrowed INSIDE the action to a seat
+  // that holds a named side — the home manager names coverage and consents to
+  // a conversion, and each line evidences its own handback.
+  [ASG_RIGHTS.READ, 'asgAttentionCount'],
+  [ASG_RIGHTS.MANAGE, 'asgDeclareAssignment asgDeclareDutyCover asgRecordReturnDecision asgRecordHomeConsent asgRecordHandback asgSetConventions asgScanAssignments'],
   // ADR-0258: the pre-startup safety review & commissioning readiness register.
   // Reading and field verification acts open at rank 1; opening a review and
   // changing conventions sit at rank 2+; Startup Authorisation sits at rank 2+
@@ -1403,6 +1422,10 @@ const MATRIX_LINE_SCOPED = new Set([
   // commander reachable only through a declared Matrix line; the action re-checks
   // every one of them against the live graph before it writes anything.
   'incidentDeclare', 'incidentAssignLine', 'incidentTransferCommand',
+  // ADR-0262: declaring an assignment names a person the declaring seat may
+  // hold only through a declared Matrix line — and names two sides the action
+  // re-proves against the live graph before it writes anything.
+  'asgDeclareAssignment',
   // Lone working re-proves the named person's standing before evaluating any window.
   'loneWorkingDeclareDeployment',
   // ADR-0190: declaring a routine may name a person the declaring seat reaches
