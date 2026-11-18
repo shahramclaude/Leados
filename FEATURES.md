@@ -1,3 +1,7 @@
+## 2026-11-18 · Failed-instrument look-back ([ADR-0252](docs/adr/0252-instrument-use-lookback.md))
+
+`#/instrument-lookback` — trace a dated gauge failure to distinct inspection/release decisions using a local CSV/TSV extract. Preview, reconcile source controls, record and reopen the workpaper. Uncertain uses remain visible and an unsupported total is withheld. Named tier recipients get the review list, not unrelated source rows; receipt CSV is aggregate only. No disposition, automatic hold or retrospective product clearance.
+
 ## 2026-11-18 · Single-absence staffing check ([ADR-0251](docs/adr/0251-station-single-absence-check.md))
 
 **Standard Work → Stations** tests whether an already feasible concurrent window can still fill demand after any one declared candidate is absent. It rematches exact integer capacity with current matrix reach, whole-window availability and qualifications valid through the end. The holder sees reconciled scenario counts and a bottleneck proof; ancestors receive outcomes within their reach and disclosure floor, not scenarios. Missing evidence or an incomplete sweep does not become a definite answer. The brief and aggregate CSV #148 share the reader. No new data entry, schema, or scheduling actions.

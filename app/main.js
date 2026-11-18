@@ -370,7 +370,7 @@ import { renderIdentity } from './views/identity.js';
 // ADR-0121: who answers for each duty line when the seat holder is absent.
 import { renderDutyCover } from './views/dutyCover.js';
 import { renderStandby } from './views/standby.js';
-import { renderStandardWork } from './views/standardWork.js';
+import { renderInstrumentLookback, renderStandardWork } from './views/standardWork.js';
 import { dutyCoverageAttentionCount } from './core/domain/dutyCoverage.js';
 // ADR-0140: the Matrix Accountability Ledger.
 import { renderMatrix } from './views/matrix.js';
@@ -801,6 +801,7 @@ export const NAV = [
     // routine layer every altitude owes, and the tier-by-tier escalation of
     // what those routines find.
     { route: 'standard-work', label: 'Leader standard work', icon: '☑', badge: 'standardWork' },
+    { route: 'instrument-lookback', label: 'Instrument look-back', icon: '⌕' },
   ] },
 ];
 
@@ -865,6 +866,7 @@ const RENDERERS = {
   contradiction: (ctx) => renderContradiction(ctx),
   standby: (ctx) => renderStandby(ctx),
   'standard-work': (ctx) => renderStandardWork(ctx),
+  'instrument-lookback': (ctx) => renderInstrumentLookback(ctx),
   people: (ctx) => renderPeople(ctx),
   person: (ctx, segments) => renderPerson(ctx, safeDecode(segments[1])),
   onboarding: (ctx) => {
@@ -2659,6 +2661,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       prep: '1:1 prep sheet',
       'agenda-ledger': '1:1 agenda ledger',
       matrix: 'Matrix accountability — for every person with more than one manager: which lines they are accountable through, what share of them each line owns, whether those shares add back to one person, who holds each of the six decision rights, and whether every manager’s span adds up to the headcount without counting anybody twice',
+      'instrument-lookback': 'Instrument look-back — trace a failed gauge to the inspection and release decisions to review',
       'standard-work': 'Leader standard work — the repeatable part of every leader’s job declared as routines with an observable standard, checked first-person slot by calendar slot, with adherence and its Wilson interval, lapsed routines sent to the next tier on the line the routine names, and abnormalities carried one dated tier at a time until a tier contains them',
       'duty-cover': 'Duty coverage — for every duty line this altitude (and the spans below it) is supposed to perform: who is declared answerable when the holder is absent, whether that person’s altitude can reach the duty at all, whether their access has ever been exercised on a dated record, which duty carries open work with nobody behind it, where one hand is carrying a duty alone, and — under the Absence plan panel — which dated absence windows leave a duty line with no available cover at all',
       means: 'Duty without means — whether every accountable outcome duty carries the authority, budget, and protected hours required to deliver it, which line controls each pillar, and which cross-line locks escalate to the joint apex',

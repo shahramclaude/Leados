@@ -1,3 +1,8 @@
+## 2026-11-18 · Identify decisions to review after a gauge failure
+
+- Added **Instrument look-back**, with local extract import, source reconciliation, first-person workpapers and a tier-scoped review list. A missing link or unproved total is shown explicitly.
+- Schema v205 adds an empty `instrumentLookbacks` ledger on ordinary upgrade. Existing abnormal checks are not reinterpreted; Standard Work's escalation rules are unchanged. [ADR-0252](docs/adr/0252-instrument-use-lookback.md).
+
 ## 2026-11-18 · Single-absence station coverage
 
 - Added a pre-shift single-absence check under **Standard Work → Stations**, with a worst-case staffing bottleneck and a separate missing-evidence outcome.

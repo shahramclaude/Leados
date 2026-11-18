@@ -268,7 +268,7 @@ export function grantedRecords(state, seat, built, { now = new Date(), settings 
     if (!manifest || manifest.mode === DISCLOSURE_MODES.AGGREGATE) continue;
     for (const collection of manifest.collections) {
       const policy = recordPolicy(collection);
-      if (GRANT_INELIGIBLE_CLASSES.includes(policy.classKey)) continue;
+      if (policy.reportOnly || GRANT_INELIGIBLE_CLASSES.includes(policy.classKey)) continue;
       const rows = Array.isArray(state?.[collection]) ? state[collection] : [];
       for (const record of rows) {
         if (!record || !record.id) continue;
@@ -305,7 +305,10 @@ function addMoney(target, currency, amount) {
  */
 export function moduleAggregate(state, manifestOrRoute, seat, built, { now = new Date(), settings = null } = {}) {
   const manifest = typeof manifestOrRoute === 'string' ? manifestFor(manifestOrRoute) : manifestOrRoute;
-  if (!manifest) return null;
+  // A report-only ledger may be scoped by a parent check and its named tiers,
+  // not by person fields on its rows. A generic read would count peers as
+  // unattributed. Refuse it; the module's guarded reader owns those counts.
+  if (!manifest || manifest.collections.some((key) => recordPolicy(key).reportOnly)) return null;
   const conventions = disclosureConventions(settings || state?.settings || {});
   const floorN = conventions.disclosureCellFloor;
   const today = dayKey(now);

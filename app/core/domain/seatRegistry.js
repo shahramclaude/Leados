@@ -203,6 +203,8 @@ export const RECORD_POLICIES = Object.freeze({
   workBreaks: { classKey: 'unit', detailCeiling: 0, label: 'Declared in-shift breaks (report only; every continuous stretch re-derived on read)', route: '#/standard-work?panel=night' },
   workNightPolicies: { classKey: 'unit', detailCeiling: 0, label: 'Declared night policies — the window and the limits, with their source (report only)', route: '#/standard-work?panel=night' },
   workNightMarkers: { classKey: 'unit', detailCeiling: 0, label: 'Night-work breach observation markers', route: '#/standard-work?panel=night' },
+  // ADR-0252: the source extract belongs to the preparer; only its scoped reader discloses a worklist.
+  instrumentLookbacks: { classKey: 'unit', detailCeiling: 0, reportOnly: true, label: 'Instrument-use look-back workpapers (report only)', route: '#/instrument-lookback' },
   // ADR-0210: report-only, like every governance ledger above. An interest names
   // a person and a record; the raw rows are never handed to the generic
   // projection. The register's own reader discloses a person to the seat whose
