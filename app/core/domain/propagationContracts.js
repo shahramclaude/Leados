@@ -164,6 +164,8 @@ import { taxRule } from './taxRules.js';
 import { msaRule } from './msaRules.js';
 // ADR-0258: the pre-startup safety review & commissioning readiness rule.
 import { psrRule } from './psrRules.js';
+// ADR-0261: the performance calibration decision rule.
+import { calRule } from './calRules.js';
 import { productNonconformanceRule } from './productNonconformanceRules.js';
 import { caseToAnswerRule } from './caseToAnswerRules.js';
 import { incidentCommandRule } from './incidentCommandRules.js';
@@ -1294,6 +1296,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'psrRules.js',
     purpose: 'RULE-PSR-01: reads the Pre-Startup Safety Review & Commissioning Readiness Register (`buildPreStartupSafety`, ADR-0258) with the whole-workspace view across review openings, punch recordings and closures, discipline sign-offs, operator readiness attestations, joint-apex Startup Authorisations, physical startups, temporary-change restorations, convention updates, explicit `preStartup.scan` sweeps and calendar commits while reviews or rule asks remain live. SIX conditions, each filed at most once per (deterministic `psr1:…` signature, addressee) and capped at 4 per commit with the remainder counted as deferred: `energised-unsafe`, `temporary-expired`, `post-startup-overdue`, `gate-rejected`, `ready-for-authorisation` and `temporary-expiring`. Every ask goes ONLY to the computed `matrixJointApex` across all active reporting lines holding the unit holder, proposer and governing signers — never to the proposer and never letting one line answer for another; unresolvable or incomplete reach records ONE identity-free `psrMarkers` observation and invents nobody. Ask titles and bodies carry zero unit names, review references, findings or identities; asks self-close when cleared, respect human closures/returns, never authorise or restore anything automatically, never score people, and are pause-governed on every path (`psrAutoPropagate`).',
     writes: ['delegations', 'links', 'psrMarkers'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: calRule,
+    module: 'calRules.js',
+    purpose: 'RULE-CAL-01: reads the Performance Calibration Decision Register (`buildCalibration`, ADR-0261) with the whole-workspace view on session recording, decision recording, session closure, convention changes and explicit `cal.scan` scans — and on any other commit, because a calibration duty runs out by the declared warn horizon with nobody having written a rationale. FOUR conditions, each filed at most once per (deterministic `cal1:…` signature, addressee) and bounded at 4 per commit with the remainder counted: `divergent-uncalibrated` where two or more lines proposed ratings two or more steps apart with no calibrated rating reconciling them (the register never averages them); `overdue-session` where a session is open past the declared warn horizon with uncalibrated persons; `distribution-flag` where a session four-fifths ratio is below 0.8 and not refused; and `uncalibrated-person` where a person in an open session has no calibrated rating past the warn horizon. Every ask goes to the LOWEST JOINT APEX above every line holding a responsible hand — never to one line on another’s behalf. A session whose hands are all off the graph, an unresolvable or ambiguous apex or a disconnected reporting graph writes ONE identity-free `calMarkers` observation per condition and substitutes nobody. The ask text is deliberately opaque — a calibration schedule names people and ratings, so no title carries a session reference, cycle label, person, manager, rating or rationale — because a delegation is readable above the addressee; the opaque signature lives only in the typed `issues-obligation` link. Asks carry typed `issues-obligation` provenance and close themselves when the condition clears or the addressee moves. It never records a session or any act, declares a distribution, authors a rationale, averages two divergent proposals, overwrites a proposed rating, or scores, ranks or names a person or line as a cause; pause-governed on every path (`calAutoPropagate`), including the explicit scan.',
+    writes: ['delegations', 'links', 'calMarkers'],
     emits: [],
     scansWorkspace: true,
   },

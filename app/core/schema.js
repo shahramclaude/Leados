@@ -646,6 +646,17 @@ import {
   normalizeMsaSuppliers,
   normalizeMsaTraining,
 } from './domain/msaSchema.js';
+// ADR-0261 (Schema v213): the Performance Calibration Decision Register. Three
+// ledgers — the calibration session (cycle, title, scope, status, opened day,
+// declared distribution, responsible hands), the calibrated decision (session,
+// person, review, proposed and calibrated ratings, written rationale) and the
+// rule's identity-free markers. Loaded fail-closed; nothing derived is stored.
+import {
+  normalizeCalDecisions,
+  normalizeCalMarkers,
+  normalizeCalSessions,
+  normalizeCalSettings,
+} from './domain/calSchema.js';
 // ADR-0250 (Schema v204): the Provision & Reimbursement Register. Five ledgers —
 // the declared assessment (classification and best-estimate method), the
 // scenarios of an expected-value estimate, the reimbursement recognitions
@@ -1655,7 +1666,7 @@ export {
 // upgrade. Nothing is inferred from a sourcing case, a contract, an audit kept
 // elsewhere or a published document: a statement is a dated statutory act and
 // its evidence is a chain of dated human declarations.
-export const SCHEMA_VERSION = 212;
+export const SCHEMA_VERSION = 213;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -3193,6 +3204,12 @@ export const DEFAULT_SETTINGS = Object.freeze({
   // default would silently date a statutory duty against a calendar nobody
   // cited.
   ...normalizeMsaSettings({}),
+  // ADR-0261: the performance-calibration conventions (privacy floor, warn
+  // horizon and defaulted-ON RULE-CAL-01 switch). Note what is NOT here: a
+  // distribution target. The target a session is calibrated against is a fact
+  // about that session, declared per session — a workspace default would
+  // silently norm a real distribution against a target nobody declared.
+  ...normalizeCalSettings({}),
   // ADR-0243: the employee-voice conventions — the reply window, the minutes
   // window, the privacy floor below which a per-state export is withheld, and the
   // rule switch. Note what is NOT here: a consultation period. The period a body
@@ -4532,6 +4549,14 @@ export const COLLECTIONS = [
   'msaRemediations',
   'msaTraining',
   'msaMarkers',
+  // ADR-0261 (Schema v213): the Performance Calibration Decision Register.
+  // Three fail-closed ledgers; zero stored distributions, kappa, bias ratios
+  // or states. The session and the calibrated decision are two separate dated
+  // acts; the proposed rating lives on the review and is never overwritten;
+  // the markers are the rule's own identity-free observations.
+  'calSessions',
+  'calDecisions',
+  'calMarkers',
 ];
 
 /** Stable empty state. `now` is an ISO string so the result is a pure value. */
@@ -4894,6 +4919,15 @@ export function normalizeSettings(raw) {
     // with the written basis that sets it; a workspace default would date a
     // real statutory duty against a window nobody cited.
     ...normalizeMsaSettings(s),
+    // ADR-0261: the performance-calibration conventions carried across every
+    // save and reload so `calAutoPropagate`, `calPrivacyFloor` and
+    // `calWarnHorizonDays` are never dropped. The rule switch is defaulted ON
+    // so a pause that hides a divergent-uncalibrated person, an overdue
+    // session or a distribution flag is never the silent default. Note what
+    // is NOT here: a default distribution target. A target is a fact about
+    // one session, declared per session; a workspace default would norm a
+    // real distribution against a target nobody declared.
+    ...normalizeCalSettings(s),
     // Repair of a standing red reported at base HEAD: two rule switches the
     // pause census maps were not carried in settings, so the only writes that
     // can silence those rules were refused as unknown keys. Declared here with
@@ -10386,6 +10420,13 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.msaRemediations = normalizeMsaRemediations(raw.msaRemediations, state.msaFindings, warnings);
   state.msaTraining = normalizeMsaTraining(raw.msaTraining, state.msaStatements, warnings);
   state.msaMarkers = normalizeMsaMarkers(raw.msaMarkers, warnings);
+  // ADR-0261 (Schema v213): the performance-calibration register, loaded
+  // fail-closed in dependency order so every decision verifies against a live
+  // session. A decision with no written rationale is DROPPED: a calibration
+  // nobody justified is not a calibration. Nothing derived is stored.
+  state.calSessions = normalizeCalSessions(raw.calSessions, warnings);
+  state.calDecisions = normalizeCalDecisions(raw.calDecisions, state.calSessions, warnings);
+  state.calMarkers = normalizeCalMarkers(raw.calMarkers, warnings);
   // ADR-0229 (Schema v182): a case, option, cost line or act that cannot be read
   // exactly is DROPPED with a counted warning — never repaired, re-termed,
   // re-priced or re-pointed at another case. A cost line that does not belong to
@@ -11321,6 +11362,22 @@ export const MIGRATIONS = {
     msaTraining: Array.isArray(v211.msaTraining) ? v211.msaTraining : [],
     msaMarkers: Array.isArray(v211.msaMarkers) ? v211.msaMarkers : [],
     settings: { ...(v211.settings || {}), ...normalizeMsaSettings(v211.settings || {}) },
+  }),
+  // 212 → 213: ADR-0261 adds THREE EMPTY ledgers (`calSessions`,
+  // `calDecisions`, `calMarkers`) and the performance-calibration register's
+  // conventions. NOTHING is inferred from a review, a merit cycle or a
+  // stewardship answer: a calibration session is a dated human declaration,
+  // a calibrated decision is a dated human act with written rationale, and
+  // the proposed rating lives on the review and is never overwritten.
+  // Manufacturing a session at upgrade time would put a calibration duty on
+  // the record that no committee accepted.
+  212: (v212) => ({
+    ...v212,
+    schemaVersion: 213,
+    calSessions: Array.isArray(v212.calSessions) ? v212.calSessions : [],
+    calDecisions: Array.isArray(v212.calDecisions) ? v212.calDecisions : [],
+    calMarkers: Array.isArray(v212.calMarkers) ? v212.calMarkers : [],
+    settings: { ...(v212.settings || {}), ...normalizeCalSettings(v212.settings || {}) },
   }),
   // 184 → 185: ADR-0227 adds THREE EMPTY ledgers (`suggestions`,
   // `suggestionActs`, `suggestionMarkers`) and the suggestion rule's pause. No

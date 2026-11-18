@@ -262,6 +262,10 @@ import { taxCsvRows } from './domain/taxReport.js';
 import { buildTaxControversy } from './domain/taxControversy.js';
 // ADR-0260: identity-free modern-slavery due-diligence aggregates (CSV #196).
 import { MSA_CSV_COLUMNS, MSA_CSV_DESCRIPTOR, MSA_CSV_SCOPE } from './domain/msaRegistry.js';
+// ADR-0261: identity-free performance-calibration aggregates (CSV #197).
+import { CAL_CSV_COLUMNS, CAL_CSV_DESCRIPTOR, CAL_CSV_SCOPE } from './domain/calRegistry.js';
+import { buildCalibration } from './domain/cal.js';
+import { calCsvRows } from './domain/calReport.js';
 import { msaCsvRows } from './domain/msaReport.js';
 import { buildModernSlavery } from './domain/modernSlavery.js';
 // ADR-0258: identity-free pre-startup safety review aggregates (CSV #195).
@@ -1878,6 +1882,12 @@ export const CSV_EXPORTS = [
   // references, entities, suppliers, countries, findings, remediation acts,
   // people or days.
   MSA_CSV_DESCRIPTOR,
+  // #197 (ADR-0261): performance calibration decision register — identity-free
+  // privacy-floored counts with the proposed/calibrated distributions printed as
+  // counts per published rating key and the four-fifths bias ratio; zero session
+  // references, cycle labels, scope text, people, managers, review references,
+  // rationale sentences or days.
+  CAL_CSV_DESCRIPTOR,
 ];
 
 function personLookup(state) {
@@ -7262,6 +7272,19 @@ export function buildScopeTable(state, scope, now) {
       return {
         columns: MSA_CSV_COLUMNS.map((key) => ({ key, header: key })),
         rows: msaCsvRows(report),
+      };
+    }
+    case CAL_CSV_SCOPE: {
+      // CSV scope #197 (ADR-0261, Schema v213). Built from the SAME reader the
+      // `#/performance-calibration` panel renders, with no seat: every figure is a
+      // count over the whole register or a published-vocabulary key, so no session
+      // reference, cycle label, scope text, person, manager, review reference,
+      // rationale sentence or day is reachable. A per-state count below the
+      // declared floor exports BLANK with its reason.
+      const report = buildCalibration(state, { now, settings: state.settings || {} });
+      return {
+        columns: CAL_CSV_COLUMNS.map((key) => ({ key, header: key })),
+        rows: calCsvRows(report),
       };
     }
     case QNC_CSV_SCOPE: {

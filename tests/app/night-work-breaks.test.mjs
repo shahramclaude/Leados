@@ -380,7 +380,7 @@ test('the reading is wired to the spine: rights, reads, record policies, CSV sco
   assert.equal(PAUSE_PERMIT_REACH_RULES.workNightAutoPropagate, 'workNightRules.js');
   assert.ok(fs.readFileSync(path.join(REPO, 'app/core/domain/workNightRules.js'), 'utf8').includes('workNightAutoPropagate === false'), 'the rule names its pause switch literally');
 
-  assert.equal(CSV_EXPORTS.length, 168);
+  assert.equal(CSV_EXPORTS.length, 169);
   assert.ok(CSV_EXPORTS.some((row) => row.key === WORK_NIGHT_CSV_SCOPE), 'scope #168 is registered');
 });
 

@@ -224,6 +224,8 @@ import { taxRule } from './taxRules.js';
 import { msaRule } from './msaRules.js';
 // ADR-0258: the pre-startup safety review & commissioning readiness rule.
 import { psrRule } from './psrRules.js';
+// ADR-0261: the performance calibration decision rule.
+import { calRule } from './calRules.js';
 import { productNonconformanceRule } from './productNonconformanceRules.js';
 import { caseToAnswerRule } from './caseToAnswerRules.js';
 import { incidentCommandRule } from './incidentCommandRules.js';
@@ -1610,6 +1612,17 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // has no complete remediation act. Registered immediately before
   // `speakUpRule`, `seatRule` and `sealRule`.
   msaRule,
+  // ADR-0261: RULE-CAL-01 — the performance calibration decision rule. Reads
+  // the Performance Calibration Decision Register on recording, decision,
+  // closure, convention changes and explicit `cal.scan` scans. Files at most
+  // one ask per condition per joint apex, capped at four per commit: a
+  // divergent-uncalibrated person, an overdue session, a distribution flag and
+  // an uncalibrated person past the warn horizon. Every ask goes to the lowest
+  // joint apex above every line holding a responsible hand; where nobody can
+  // be asked it writes one identity-free `calMarkers` observation. Ask text is
+  // opaque; pause-governed on every path (`calAutoPropagate`). Registered
+  // immediately before `speakUpRule`, `seatRule` and `sealRule`.
+  calRule,
   // Registered immediately before `seatRule` and `sealRule`.
   speakUpRule,
   // ADR-0076: the Operating Seat (vertical roll-up + enforced boundaries).

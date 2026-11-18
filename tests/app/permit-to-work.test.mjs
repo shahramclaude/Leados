@@ -197,7 +197,7 @@ function harness(raw) {
 test('schema v201 is additive: the v200 step adds seven empty ledgers, three conventions, nothing inferred', () => {
   const empty = createEmptyState(T0);
   // ADR-0247 moved the head to 201; the v201 step is asserted in its own suite.
-  assert.equal(SCHEMA_VERSION, 212, 'ADR-0260 (modern slavery & due diligence) is the current head');
+  assert.equal(SCHEMA_VERSION, 213, 'ADR-0260 (modern slavery & due diligence) is the current head');
   const keys = ['ptwPermits', 'ptwIsolations', 'ptwAtmosphere', 'ptwHandovers', 'ptwSuspensions', 'ptwClosures', 'ptwMarkers'];
   for (const key of keys) {
     assert.ok(COLLECTIONS.includes(key), `${key} is a declared collection`);
@@ -222,7 +222,7 @@ test('schema v201 is additive: the v200 step adds seven empty ledgers, three con
 });
 
 test('the spine carries RULE-PTW-01 with exactly one contract, and CSV #187 is registered', () => {
-  assert.equal(DEFAULT_POST_COMMIT_RULES.length, 168, 'ADR-0246..ADR-0258 registered through the 167th spine rule (RULE-PSR-01), and ADR-0260 (RULE-MSA-01) is the 168th');
+  assert.equal(DEFAULT_POST_COMMIT_RULES.length, 169, 'ADR-0246..ADR-0258 registered through the 167th spine rule (RULE-PSR-01), and ADR-0260 (RULE-MSA-01) is the 168th');
   assert.equal(DEFAULT_POST_COMMIT_RULES.some((rule) => rule && rule.id === 'permitToWorkRule'), true);
   assert.equal(PROPAGATION_CONTRACTS.length, DEFAULT_POST_COMMIT_RULES.length, 'one contract per spine rule');
   assert.equal(PROPAGATION_CONTRACTS.some((contract) => contract.rule && contract.rule.id === 'permitToWorkRule'), true);
