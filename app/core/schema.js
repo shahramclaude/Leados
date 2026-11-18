@@ -541,6 +541,26 @@ import {
   normalizePrvScenarios,
   normalizePrvSettings,
 } from './domain/prvSchema.js';
+// ADR-0253 (Schema v206): the Product Nonconformance & Disposition Register. Six
+// ledgers — the case (one identified lot OR serial, its requirement, finding and
+// source evidence), the containment attestations, the joint disposition
+// signatures, the acts that carry a disposition out, the independent senior
+// re-verifications, and the rule's identity-free markers. Every loader is
+// fail-closed: a case without an identifier kind, an identifier value, a written
+// requirement, a finding, a source-evidence reference and one to four declared
+// accountable hands is DROPPED at this boundary; an imported act that the reader
+// will refuse to recognise is KEPT and printed, because deleting it would hide a
+// control failure. Nothing derived — a state, a hold, an approval, a
+// verification verdict or a release — is stored anywhere.
+import {
+  normalizeQncCases,
+  normalizeQncContainments,
+  normalizeQncDecisions,
+  normalizeQncDispositionActs,
+  normalizeQncMarkers,
+  normalizeQncSettings,
+  normalizeQncVerifications,
+} from './domain/productNonconformanceSchema.js';
 // ADR-0250 (Schema v204): the Provision & Reimbursement Register. Five ledgers —
 // the declared assessment (classification and best-estimate method), the
 // scenarios of an expected-value estimate, the reimbursement recognitions
@@ -1537,7 +1557,7 @@ export {
 // already holds is one. Every state, window, day count and minute count is derived
 // on read.
 // ADR-0252: dated instrument-use extracts on abnormal standard-work checks.
-export const SCHEMA_VERSION = 205;
+export const SCHEMA_VERSION = 206;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -3040,6 +3060,12 @@ export const DEFAULT_SETTINGS = Object.freeze({
   // is no workspace default rate that could one day put a present value on the
   // balance sheet nobody chose.
   ...normalizePrvSettings({}),
+  // ADR-0253: the product-nonconformance convention — the rule switch only. Note
+  // what is NOT here: a hold duration, a disposition default, a rework window, a
+  // concession limit or a release authority. Every one of those is a fact about a
+  // particular case, decided and signed by the matrix apex above that case; a
+  // workspace default would silently authorise a release nobody signed.
+  ...normalizeQncSettings({}),
   // ADR-0243: the employee-voice conventions — the reply window, the minutes
   // window, the privacy floor below which a per-state export is withheld, and the
   // rule switch. Note what is NOT here: a consultation period. The period a body
@@ -4302,6 +4328,21 @@ export const COLLECTIONS = [
   'prvReimbursements',
   'prvCarryings',
   'prvMarkers',
+  // ADR-0253 (Schema v206): the Product Nonconformance & Disposition Register.
+  // One case per identified lot or serial with its written requirement, finding
+  // and source evidence; containment attestations against a written hold
+  // reference; the joint disposition signatures of the current matrix apex; the
+  // acts that carry a disposition out; independent strictly-senior
+  // re-verifications; and identity-free rule markers. No state, hold, approval,
+  // verification verdict or release is stored: every one is re-derived on read,
+  // so a hand-edited file cannot carry a released lot whose rework was never
+  // verified by anybody.
+  'qncCases',
+  'qncContainments',
+  'qncDecisions',
+  'qncDispositionActs',
+  'qncVerifications',
+  'qncMarkers',
 ];
 
 /** Stable empty state. `now` is an ISO string so the result is a pure value. */
@@ -4629,6 +4670,10 @@ export function normalizeSettings(raw) {
     // contingent liability unprovided or a computed provision that disagrees with
     // the figure finance carries is never the silent default.
     ...normalizePrvSettings(s),
+    // ADR-0253: the product-nonconformance rule switch, defaulted ON so a pause
+    // that hides an uncontained lot, an unsigned disposition, an unverified
+    // rework or a release nobody recorded is never the silent default.
+    ...normalizeQncSettings(s),
     // Repair of a standing red reported at base HEAD: two rule switches the
     // pause census maps were not carried in settings, so the only writes that
     // can silence those rules were refused as unknown keys. Declared here with
@@ -10052,6 +10097,16 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.prvReimbursements = normalizePrvReimbursements(raw.prvReimbursements, state.prvAssessments, warnings);
   state.prvCarryings = normalizePrvCarryings(raw.prvCarryings, warnings);
   state.prvMarkers = normalizePrvMarkers(raw.prvMarkers, warnings);
+  // ADR-0253 (Schema v206): the product-nonconformance register, loaded
+  // fail-closed in dependency order — a containment needs its case, a signature
+  // needs the containment that permits a disposition, an act needs the decision
+  // round it cites, and a re-verification needs the rework completion it judges.
+  state.qncCases = normalizeQncCases(raw.qncCases, now, warnings);
+  state.qncContainments = normalizeQncContainments(raw.qncContainments, state.qncCases, now, warnings);
+  state.qncDecisions = normalizeQncDecisions(raw.qncDecisions, state.qncCases, state.qncContainments, now, warnings);
+  state.qncDispositionActs = normalizeQncDispositionActs(raw.qncDispositionActs, state.qncCases, state.qncDecisions, now, warnings);
+  state.qncVerifications = normalizeQncVerifications(raw.qncVerifications, state.qncCases, state.qncDispositionActs, now, warnings);
+  state.qncMarkers = normalizeQncMarkers(raw.qncMarkers, now, warnings);
   // ADR-0229 (Schema v182): a case, option, cost line or act that cannot be read
   // exactly is DROPPED with a counted warning — never repaired, re-termed,
   // re-priced or re-pointed at another case. A cost line that does not belong to
@@ -11286,6 +11341,25 @@ export const MIGRATIONS = {
   }),
   // No gauge, failure, prior good check or use is inferred from an abnormality.
   204: (v204) => ({ ...v204, schemaVersion: 205, instrumentLookbacks: v204.instrumentLookbacks ?? [] }),
+  // 205 → 206: ADR-0253 adds SIX EMPTY ledgers (`qncCases`, `qncContainments`,
+  // `qncDecisions`, `qncDispositionActs`, `qncVerifications`, `qncMarkers`) and the
+  // register's rule switch. NOTHING is inferred from a case, an incident, a
+  // permit, a production plan, a lot number kept elsewhere or a shipment: a
+  // nonconformance case is a human observation of one identified output against a
+  // written requirement, and a containment is an attestation somebody signed.
+  // Manufacturing a case at upgrade time would put a finding on the record that
+  // nobody made, and manufacturing a containment would claim a hold nobody placed.
+  205: (v205) => ({
+    ...v205,
+    schemaVersion: 206,
+    qncCases: Array.isArray(v205.qncCases) ? v205.qncCases : [],
+    qncContainments: Array.isArray(v205.qncContainments) ? v205.qncContainments : [],
+    qncDecisions: Array.isArray(v205.qncDecisions) ? v205.qncDecisions : [],
+    qncDispositionActs: Array.isArray(v205.qncDispositionActs) ? v205.qncDispositionActs : [],
+    qncVerifications: Array.isArray(v205.qncVerifications) ? v205.qncVerifications : [],
+    qncMarkers: Array.isArray(v205.qncMarkers) ? v205.qncMarkers : [],
+    settings: { ...(v205.settings || {}), ...normalizeQncSettings(v205.settings || {}) },
+  }),
   // 183 → 184: ADR-0231 adds SEVEN EMPTY ledgers (`ibpCycles`, `ibpDemandRows`,
   // `ibpCapacityRows`, `ibpOptions`, `ibpDecisions`, `ibpGrades`, `ibpMarkers`)
   // and the plan rule's pause. No cycle, demand figure, capacity figure, option

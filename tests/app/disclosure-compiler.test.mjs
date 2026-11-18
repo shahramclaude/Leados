@@ -79,6 +79,12 @@ const RENDERER_ROUTES = [
   // ADR-0095: the Robust Allocation Terminal has its own manifest row and scoped
   // adapter, so the catalogue and the shell stay one route for one route.
   'robust-allocation',
+  // ADR-0253: the Product Nonconformance & Disposition Register declares its own
+  // manifest row (unit class, adapter-scoped, detail ceiling 3), so the catalogue
+  // and the shell stay one route for one route. A route with no manifest is
+  // WITHHELD by the compiler, which is the wrong answer for a register whose own
+  // reader scopes every row it prints.
+  'nonconformance',
   // ADR-0096: the Escalation Economy and the Operating Cadence Clock declare
   // manifest rows so their published aggregates enter the differencing register.
   'escalation', 'cadence',

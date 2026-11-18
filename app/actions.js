@@ -142,6 +142,7 @@ import { createMutualAidActions } from './core/domain/mutualAidActions.js';
 // on the reporting graph.
 import { createPersonalDealingActions } from './core/domain/personalDealingActions.js';
 import { createPermitToWorkActions } from './core/domain/permitToWorkActions.js';
+import { createProductNonconformanceActions } from './core/domain/productNonconformanceActions.js';
 import { createAuthorisationActions } from './core/domain/authorisationActions.js';
 import { createClaimActions } from './core/domain/lfgActions.js';
 import { createInsuranceActions } from './core/domain/insActions.js';
@@ -20432,6 +20433,12 @@ export function createApi(store, options = {}) {
   // re-proved too, because whether the plant a crew is about to touch is proved dead
   // must not vanish the moment seat enforcement is turned on.
   Object.assign(api, createPermitToWorkActions(store, { now: clock, idFactory: id }));
+  // ADR-0253: the product nonconformance and disposition register. Opening a case
+  // and attesting containment sit on the floor because the finding is identified
+  // there; the disposition is re-proved inside the action against the joint matrix
+  // apex, and the re-verification against strict seniority over the hand that did
+  // the rework. Every read is a seat-scoped SAFE_READ that re-proves its own right.
+  Object.assign(api, createProductNonconformanceActions(store, { now: clock, idFactory: id }));
   Object.assign(api, createAuthorisationActions(store, { now: clock, idFactory: id }));
   Object.assign(api, createClaimActions(store, { now: clock, idFactory: id }));
   Object.assign(api, createInsuranceActions(store, { now: clock, idFactory: id }));

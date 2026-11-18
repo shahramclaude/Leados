@@ -179,6 +179,9 @@ import { distributedEquityAttentionCount } from './core/domain/distributedEquity
 import { workplaceAdjustmentAttentionCount } from './core/domain/workplaceAdjustment.js';
 import { loneWorkingAttentionCount } from './core/domain/loneWorking.js';
 import { permitToWorkAttentionCount } from './core/domain/permitToWork.js';
+// ADR-0253: the product nonconformance and disposition register.
+import { renderProductNonconformance } from './views/productNonconformance.js';
+import { productNonconformanceAttentionCount } from './core/domain/productNonconformance.js';
 // ADR-0247: the statutory authorisation & licence-to-operate register.
 import { renderAuthorisations } from './views/authorisations.js';
 import { renderClaims } from './views/claims.js';
@@ -689,6 +692,12 @@ export const NAV = [
     // declared, never inferred — and above rank 3 the reader prints counts and
     // withholds responsible hands.
     { route: 'provisions', label: 'Provisions', icon: '◈', badge: 'provisions' },
+    // ADR-0253: what one identified manufactured lot or serial failed against, what
+    // was actually done to hold it, who signed the disposition and whether a hand
+    // strictly senior to the one that did the rework independently verified it. The
+    // first register in this group that is frontline-native by design: the finding is
+    // made at the bench, so opening a case and attesting containment sit at rank 1.
+    { route: 'nonconformance', label: 'Product nonconformance', icon: '⧖', badge: 'nonconformance' },
     // ADR-0243: what was put to a staff body, the period its own instrument gave
     // it, what it advised, whether the organisation answered, and whether the
     // decision preceded the close of the window. Director/VP primary; above rank 3
@@ -964,6 +973,8 @@ const RENDERERS = {
   insurance: (ctx) => renderInsurance(ctx),
   // ADR-0250: the provision and reimbursement register.
   provisions: (ctx) => renderProvisions(ctx),
+  // ADR-0253: the product nonconformance and disposition register.
+  nonconformance: (ctx) => renderProductNonconformance(ctx),
   // ADR-0243: the employee-voice and collective-consultation register.
   voice: (ctx) => renderVoice(ctx),
   // ADR-0244: the mutual-aid activation & resource-commitment register.
@@ -1176,6 +1187,15 @@ export function parseRoute(hash) {
     'loto': 'permit-to-work', 'energy-isolation': 'permit-to-work', 'gas-test': 'permit-to-work',
     'atmosphere-test': 'permit-to-work', 'simops': 'permit-to-work',
     'simultaneous-operations': 'permit-to-work', 'permit-conflict': 'permit-to-work',
+    // ADR-0253: the words a quality engineer, a production lead and a warehouse
+    // supervisor actually type for the same duty; none shadows a route.
+    nonconformance: 'nonconformance', nonconformanceCase: 'nonconformance',
+    ncr: 'nonconformance', 'non-conformance': 'nonconformance', 'non-conformity': 'nonconformance',
+    'nonconformity': 'nonconformance', hold: 'nonconformance', 'quality-hold': 'nonconformance',
+    quarantine: 'nonconformance', 'containment': 'nonconformance', 'disposition': 'nonconformance',
+    'use-as-is': 'nonconformance', 'concession': 'nonconformance', 'rework': 'nonconformance',
+    scrap: 'nonconformance', 'return-to-supplier': 'nonconformance', 'lot-hold': 'nonconformance',
+    'serial-hold': 'nonconformance', 'quality-case': 'nonconformance', 'defect': 'nonconformance',
     // ADR-0247: statutory authorisations. The words a site director, a compliance
     // lead and a supervisor actually type for the same duty; none shadows a route.
     'authorisations': 'authorisations', 'authorisation': 'authorisations',
@@ -1989,6 +2009,10 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       // permit whose atmosphere is outside its own limits, a lapsed permit nobody
       // closed — never every open permit.
       permitToWork: permitToWorkAttentionCount(state, { now: at, settings: state.settings, seat: seatCtx?.seat || null }),
+      // ADR-0253: an uncontained lot, an unsigned or incomplete joint disposition, an
+      // unverified rework, an owed release and a conflicting record — the same
+      // conditions RULE-QNC-01 files. A COUNT, never a case reference.
+      nonconformance: productNonconformanceAttentionCount(state, { now: at, settings: state.settings, seat: seatCtx?.seat || null }),
       // ADR-0247: a lapsed authority, a suspension, a revocation, a standing
       // prohibition, an authority inside its renewal window and an improvement
       // notice past its day — the same conditions RULE-LTO-01 files. A COUNT.
@@ -2620,6 +2644,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       'permit-to-work': 'Permit to work — what the record authorises on which plant, the declared validity and exact minutes to it, every energy isolation with its lock and the proof of zero energy at the point of work (or the window it missed), the latest gas reading per declared test compared exactly against the permit\u2019s own limit and freshness window, and every simultaneous-operations conflict derived from the record on each read — a released isolation under a live permit, hot work over a release, two hot-work permits in one area, an entry during hot work, one isolation claimed twice, a double-booked holder, a lapsed permit nobody closed and a closure that left a line isolated',
       claims: 'Claims & limitation — what is actually being asserted against us and how long we have: the document that started each clock, the accrual day and the written rule that makes it the right day (never the incident date by default), the declared limitation period and the base deadline, every PROVED suspension of the clock with its exact whole days and every allegation that moves nothing, the exact whole days remaining or the whole days a proved deadline ran over, whether the clock is provable at all (a matter with no readable accrual prints “clock unprovable” and NO day count), every reserve, offer, payment, cost and interest as its own dated instrument with exact minor-unit amounts, and the settlement authority computed above every responsible line across every line — with the exact gap printed where the number paid exceeded it',
       provisions: 'Provisions & reimbursement — what the organisation must carry on the balance sheet for each obligation and what it may recognize against it: the declared classification (probable, possible or remote — never inferred from an amount), the best-estimate method (the most likely outcome, or a probability-weighted expected value over declared scenarios whose probabilities must sum to exactly 100% and whose weighted sum must be a whole number of minor units, or the estimate is refused rather than rounded), the derived provision, the reimbursement asset recognized only when it is virtually certain and capped at the provision with the excess printed, the net exposure printed apart from both, and the reconciliation against the figure the finance seat declares it is carrying with the exact gap — with the responsible hands across every reporting line and the joint seat above them all',
+      nonconformance: 'Product nonconformance — one identified manufactured lot or serial at a time: the product, site, identifier kind and value, the written requirement and the finding with its source evidence; every containment attestation with its scope and written hold reference (the NEWEST attestation governs, so a later partial act leaves the case uncontained); the joint matrix apex the live graph resolves above every accountable hand, every signature in the current round, any disagreement and any route change; rework completion, an independent re-verification by a hand strictly senior to the one that did the rework, and the separate release; return and scrap as terminal non-release outcomes; and use-as-is only under a written concession reference with its own release act',
       insurance: 'Insurance & recovery — which policy answers for each claim, when the insurer must be told, whether it was told in time, and what the organisation actually carries: the declaration-page reference, the insurer, the class, the basis, the period, the limit, the deductible and the declared notification window (never a default), the trigger day and the derived deadline, whether the policy responds at all (a trigger day outside the period prints “no cover”), every notification with its day, method and reference (a late notification is kept as a breach fact), every recovery and denial as its own dated instrument with exact minor-unit amounts, and the derived net cost printed apart from the gross exposure and the recovery',
       authorisations: 'Statutory authorisations — which power to operate is held and whether it is in force at this instant: the issuing body and written instrument, the declared expiry against the effective expiry every granted renewal moved it to, the renewal window the declaration itself set, each declared condition’s latest dated evidence and its own re-evidence window (current, stale or unevidenced), every regulator action with its written basis, compliance day and close, and the joint reporting seat above every accountable hand across every line',
       'lone-working': 'Lone working — who is alone right now, where, against which written assessment: the declared check-in interval and grace running from the last contact, the exact deadline, whether the record holds contact, a concern nobody answered, an escalation, or nothing at all, whether it ran past its declared end unclosed, and the joint reporting seat that owes the response',
