@@ -266,6 +266,10 @@ import { MSA_CSV_COLUMNS, MSA_CSV_DESCRIPTOR, MSA_CSV_SCOPE } from './domain/msa
 import { CAL_CSV_COLUMNS, CAL_CSV_DESCRIPTOR, CAL_CSV_SCOPE } from './domain/calRegistry.js';
 import { buildCalibration } from './domain/cal.js';
 import { calCsvRows } from './domain/calReport.js';
+// ADR-0262: identity-free secondment & assignment-return aggregates (CSV #198).
+import { ASG_CSV_COLUMNS, ASG_CSV_DESCRIPTOR, ASG_CSV_SCOPE } from './domain/asgRegistry.js';
+import { buildAssignmentReport } from './domain/asg.js';
+import { asgCsvRows } from './domain/asgReport.js';
 import { msaCsvRows } from './domain/msaReport.js';
 import { buildModernSlavery } from './domain/modernSlavery.js';
 // ADR-0258: identity-free pre-startup safety review aggregates (CSV #195).
@@ -1888,6 +1892,12 @@ export const CSV_EXPORTS = [
   // references, cycle labels, scope text, people, managers, review references,
   // rationale sentences or days.
   CAL_CSV_DESCRIPTOR,
+  // #198 (ADR-0262): secondment & assignment-return register — identity-free
+  // privacy-floored counts with the nine-state split, the decision/extension/
+  // decided-late counts and the named/retained/uncovered coverage split; zero
+  // assignment references, people, managers, cover hands, duty labels, terms
+  // references, rationales, bases, evidence references or days.
+  ASG_CSV_DESCRIPTOR,
 ];
 
 function personLookup(state) {
@@ -7285,6 +7295,19 @@ export function buildScopeTable(state, scope, now) {
       return {
         columns: CAL_CSV_COLUMNS.map((key) => ({ key, header: key })),
         rows: calCsvRows(report),
+      };
+    }
+    case ASG_CSV_SCOPE: {
+      // CSV scope #198 (ADR-0262, Schema v214). Built from the SAME reader the
+      // `#/secondment` panel renders, with no seat: every figure is a count
+      // over the whole register or a published-vocabulary key, so no assignment
+      // reference, person, manager, cover hand, duty label, terms reference,
+      // rationale, basis, evidence reference or day is reachable. A per-state
+      // count below the declared floor exports BLANK with its reason.
+      const report = buildAssignmentReport(state, { now, settings: state.settings || {} });
+      return {
+        columns: ASG_CSV_COLUMNS.map((key) => ({ key, header: key })),
+        rows: asgCsvRows(report),
       };
     }
     case QNC_CSV_SCOPE: {

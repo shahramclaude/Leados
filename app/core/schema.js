@@ -657,6 +657,19 @@ import {
   normalizeCalSessions,
   normalizeCalSettings,
 } from './domain/calSchema.js';
+// ADR-0262 (Schema v214): the Secondment / Assignment Return & Handover
+// Register — four additive fail-closed ledgers: the assignment declaration
+// (person, two named sides, window, terms instrument), the duty-cover rows
+// (named per duty, never inferred), the acts ledger (return decisions with
+// rationale, home-line consents with basis, handbacks with evidence) and the
+// rule's identity-free markers. Loaded fail-closed; nothing derived is stored.
+import {
+  normalizeAsgActs,
+  normalizeAsgAssignments,
+  normalizeAsgCovers,
+  normalizeAsgMarkers,
+  normalizeAsgSettings,
+} from './domain/asgSchema.js';
 // ADR-0250 (Schema v204): the Provision & Reimbursement Register. Five ledgers —
 // the declared assessment (classification and best-estimate method), the
 // scenarios of an expected-value estimate, the reimbursement recognitions
@@ -1666,7 +1679,17 @@ export {
 // upgrade. Nothing is inferred from a sourcing case, a contract, an audit kept
 // elsewhere or a published document: a statement is a dated statutory act and
 // its evidence is a chain of dated human declarations.
-export const SCHEMA_VERSION = 213;
+// ADR-0261 (v213): the Performance Calibration Decision Register — three
+// additive fail-closed ledgers (`calSessions`, `calDecisions`, `calMarkers`).
+// ADR-0262 (v214): the Secondment / Assignment Return & Handover Register —
+// four additive fail-closed ledgers (`asgAssignments`, `asgCovers`, `asgActs`,
+// `asgMarkers`), all empty at upgrade. NOTHING is inferred from a person
+// record, a delegation, a goal or the reporting graph: an assignment is a
+// dated human declaration between two named sides, coverage is named per duty,
+// and the return decision is a dated act with written rationale. Manufacturing
+// one at upgrade time would move a person across lines that no manager
+// accepted.
+export const SCHEMA_VERSION = 214;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -3210,6 +3233,13 @@ export const DEFAULT_SETTINGS = Object.freeze({
   // about that session, declared per session — a workspace default would
   // silently norm a real distribution against a target nobody declared.
   ...normalizeCalSettings({}),
+  // ADR-0262: the secondment & assignment-return conventions (privacy floor,
+  // return-decision warn horizon, handback horizon and defaulted-ON
+  // RULE-ASG-01 switch). Note what is NOT here: a default assignment length
+  // and no default return window. A return day is a fact about one assignment's
+  // terms instrument, declared per assignment; a workspace default would date
+  // a real secondment against terms nobody cited.
+  ...normalizeAsgSettings({}),
   // ADR-0243: the employee-voice conventions — the reply window, the minutes
   // window, the privacy floor below which a per-state export is withheld, and the
   // rule switch. Note what is NOT here: a consultation period. The period a body
@@ -4557,6 +4587,16 @@ export const COLLECTIONS = [
   'calSessions',
   'calDecisions',
   'calMarkers',
+  // ADR-0262 (Schema v214): the Secondment / Assignment Return & Handover
+  // Register. Four fail-closed ledgers; zero stored states, day counts or
+  // timeliness verdicts. The assignment declaration, the duty-cover rows and
+  // the acts ledger are separate dated human acts; the return day in force is
+  // derived from the extend acts and the markers are the rule's own
+  // identity-free observations.
+  'asgAssignments',
+  'asgCovers',
+  'asgActs',
+  'asgMarkers',
 ];
 
 /** Stable empty state. `now` is an ISO string so the result is a pure value. */
@@ -4928,6 +4968,14 @@ export function normalizeSettings(raw) {
     // one session, declared per session; a workspace default would norm a
     // real distribution against a target nobody declared.
     ...normalizeCalSettings(s),
+    // ADR-0262: the secondment & assignment-return conventions carried across
+    // every save and reload so `asgAutoPropagate`, `asgPrivacyFloor`,
+    // `asgWarnHorizonDays` and `asgHandbackHorizonDays` are never dropped. The
+    // rule switch is defaulted ON so a pause that hides an overdue return
+    // decision, an uncovered duty or a missing handback is never the silent
+    // default. Note what is NOT here: a default assignment length or return
+    // window. A return day is a fact about one assignment's terms instrument.
+    ...normalizeAsgSettings(s),
     // Repair of a standing red reported at base HEAD: two rule switches the
     // pause census maps were not carried in settings, so the only writes that
     // can silence those rules were refused as unknown keys. Declared here with
@@ -10427,6 +10475,17 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.calSessions = normalizeCalSessions(raw.calSessions, warnings);
   state.calDecisions = normalizeCalDecisions(raw.calDecisions, state.calSessions, warnings);
   state.calMarkers = normalizeCalMarkers(raw.calMarkers, warnings);
+  // ADR-0262 (Schema v214): the secondment & assignment-return register,
+  // loaded fail-closed in dependency order so every cover and act verifies
+  // against a live assignment and every decision chain is walked in day order.
+  // A contradiction is DROPPED with a counted warning — a second answer to a
+  // question already answered, an extend that does not move the day forward, a
+  // consent with no convert on the chain, a handback with no decision before
+  // it. Nothing is repaired, re-dated or re-pointed.
+  state.asgAssignments = normalizeAsgAssignments(raw.asgAssignments, warnings);
+  state.asgCovers = normalizeAsgCovers(raw.asgCovers, state.asgAssignments, warnings);
+  state.asgActs = normalizeAsgActs(raw.asgActs, state.asgAssignments, warnings);
+  state.asgMarkers = normalizeAsgMarkers(raw.asgMarkers, warnings);
   // ADR-0229 (Schema v182): a case, option, cost line or act that cannot be read
   // exactly is DROPPED with a counted warning — never repaired, re-termed,
   // re-priced or re-pointed at another case. A cost line that does not belong to
@@ -11378,6 +11437,23 @@ export const MIGRATIONS = {
     calDecisions: Array.isArray(v212.calDecisions) ? v212.calDecisions : [],
     calMarkers: Array.isArray(v212.calMarkers) ? v212.calMarkers : [],
     settings: { ...(v212.settings || {}), ...normalizeCalSettings(v212.settings || {}) },
+  }),
+  // 213 → 214: ADR-0262 adds FOUR EMPTY ledgers (`asgAssignments`,
+  // `asgCovers`, `asgActs`, `asgMarkers`) and the secondment register's
+  // conventions. NOTHING is inferred from a person record, a delegation, a
+  // goal or the reporting graph: an assignment is a dated human declaration
+  // between two named sides, coverage is named per duty or printed as a hole,
+  // and the return decision is a dated act with written rationale.
+  // Manufacturing one at upgrade time would move a person across lines that
+  // no manager accepted.
+  213: (v213) => ({
+    ...v213,
+    schemaVersion: 214,
+    asgAssignments: Array.isArray(v213.asgAssignments) ? v213.asgAssignments : [],
+    asgCovers: Array.isArray(v213.asgCovers) ? v213.asgCovers : [],
+    asgActs: Array.isArray(v213.asgActs) ? v213.asgActs : [],
+    asgMarkers: Array.isArray(v213.asgMarkers) ? v213.asgMarkers : [],
+    settings: { ...(v213.settings || {}), ...normalizeAsgSettings(v213.settings || {}) },
   }),
   // 184 → 185: ADR-0227 adds THREE EMPTY ledgers (`suggestions`,
   // `suggestionActs`, `suggestionMarkers`) and the suggestion rule's pause. No

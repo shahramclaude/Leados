@@ -213,8 +213,12 @@ function sessionsPanel(ctx, report) {
       body: rows.length === 0
         ? emptyState({ title: 'No calibration sessions', body: 'Record a session to begin. Distributions and states are derived on read.' })
         : table({
-            columns: ['Cycle', 'Title', 'Status', 'Opened', 'Closed', 'Persons', 'Calibrated', 'Uncalibrated', 'Overdue'],
-            rows: rows.map((r) => [r.cycle, r.title, r.status, r.opened, r.closed, r.persons, r.calibrated, r.uncalibrated, r.overdue]),
+            columns: [
+              { label: 'Cycle', key: 'cycle' }, { label: 'Title', key: 'title' }, { label: 'Status', key: 'status' },
+              { label: 'Opened', key: 'opened' }, { label: 'Closed', key: 'closed' }, { label: 'Persons', key: 'persons' },
+              { label: 'Calibrated', key: 'calibrated' }, { label: 'Uncalibrated', key: 'uncalibrated' }, { label: 'Overdue', key: 'overdue' },
+            ],
+            rows,
           }),
     }),
   );
@@ -240,8 +244,12 @@ function decisionsPanel(ctx, report) {
       body: rows.length === 0
         ? emptyState({ title: 'No decisions', body: 'Record a decision with written rationale. A proposed rating is not a calibrated rating.' })
         : table({
-            columns: ['Session', 'Person', 'Proposed', 'Calibrated', 'State', 'Rationale'],
-            rows: rows.map((r) => [r.session, r.person, r.proposed, r.calibrated, r.state, r.rationale]),
+            columns: [
+              { label: 'Session', key: 'session' }, { label: 'Person', key: 'person' },
+              { label: 'Proposed', key: 'proposed' }, { label: 'Calibrated', key: 'calibrated' },
+              { label: 'State', key: 'state' }, { label: 'Rationale', key: 'rationale' },
+            ],
+            rows,
           }),
     }),
   );
@@ -257,8 +265,8 @@ function distributionsPanel(ctx, report) {
       body: h('div', { class: 'stack' },
         h('p', { class: 'muted' }, `Proposed total: ${proposed.total}. Calibrated total: ${calibrated.total}. Counts re-add to their rows; figuresComplete is separate from balances.`),
         table({
-          columns: ['Rating', 'Proposed', 'Calibrated'],
-          rows: CAL_RATING_KEYS.map((k) => [CAL_RATING_LABELS[k], String(proposed.counts[k]), String(calibrated.counts[k])]),
+          columns: [{ label: 'Rating', key: 'rating' }, { label: 'Proposed', key: 'proposed' }, { label: 'Calibrated', key: 'calibrated' }],
+          rows: CAL_RATING_KEYS.map((k) => ({ rating: CAL_RATING_LABELS[k], proposed: String(proposed.counts[k]), calibrated: String(calibrated.counts[k]) })),
         }),
         h('p', { class: 'muted small' }, `Unknown proposed: ${proposed.counts.unknown}. Unknown calibrated: ${calibrated.counts.unknown}.`),
       ),

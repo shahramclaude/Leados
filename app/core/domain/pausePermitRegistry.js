@@ -409,6 +409,17 @@ export const PAUSE_PERMIT_MATRIX_REACH_SWITCHES = Object.freeze([
   // lines through `matrixJointApex`, so it carries a permit like every other
   // cross-line switch.
   'msaAutoPropagate',
+  // ADR-0261 (standing repair): the calibration rule reaches across reporting
+  // lines through `matrixJointApex` for every divergent or overdue person, so
+  // silencing it leaves a second line's calibration duty unasked — and that
+  // line's manager is not told. It was never carried in this census.
+  'calAutoPropagate',
+  // ADR-0262: the secondment rule reaches across reporting lines through
+  // `matrixJointApex` for every owed return decision, uncovered duty and
+  // missing handback — the two named sides and every active line holding the
+  // person. Silencing it leaves a move nobody asked about, and neither side's
+  // manager is told.
+  'asgAutoPropagate',
 ]);
 
 export function pausePermitReachesMatrix(key) {
@@ -579,6 +590,11 @@ export const PAUSE_PERMIT_SWITCH_RULES = Object.freeze({
   dwlAutoPropagate: 'personalDealingRules.js',
   priorityAutoPropagate: 'priorityArbitrationRules.js',
   msaAutoPropagate: 'msaRules.js',
+  // ADR-0261 (standing repair): the calibration rule's pause switch was never
+  // carried in this map, so the pause census could not see the rule it
+  // silences. Declared now.
+  calAutoPropagate: 'calRules.js',
+  asgAutoPropagate: 'asgRules.js',
 });
 
 /** Only graph-reading rules belong to the matrix census. Owner-directed rules
