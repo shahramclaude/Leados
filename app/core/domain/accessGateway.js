@@ -372,6 +372,8 @@ const groups = [
   [MIC_RIGHTS.READ, 'incidentReport incidentAttentionCount incidentCandidates'],
   [SERVICE_BUDGET_RIGHTS.READ, 'serviceBudgetIndex serviceBudgetRead'],
   [SERVICE_BUDGET_RIGHTS.RECORD, 'serviceBudgetPreview serviceBudgetRecord'],
+  ['read-cash-covenant', 'cashCovenantIndex cashCovenantRead'],
+  ['record-cash-covenant', 'cashCovenantPreview cashCovenantRecord'],
   [MIC_RIGHTS.COMMAND, 'incidentDeclare incidentAssignLine incidentAcceptLine incidentAssumeCommand incidentTransferCommand incidentChangeSeverity incidentRecordNotification incidentResolve incidentStandDown incidentSetConventions incidentScan'],
   // ADR-0244: the mutual-aid activation register. Reading is open at rank 1 —
   // every seat may see whether the workspace owes or is owed mutual aid and
@@ -1320,7 +1322,9 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 'workNightReport', 'workNightBriefText', 'workNightCsvRows', 'workNightAttentionCount',
 'standardWorkReport', 'standardWorkBriefText', 'standardWorkAttentionCount', 'standardWorkCandidates', 'instrumentLookbackIndex', 'instrumentLookbackRead', 'standardWorkOwnSlots',
 // Both read adapters and the dry-run re-check rank and all-steward matrix reach.
-'serviceBudgetIndex', 'serviceBudgetRead', 'serviceBudgetPreview']);
+'serviceBudgetIndex', 'serviceBudgetRead', 'serviceBudgetPreview',
+// These read adapters and the dry run independently recheck rank and steward reach.
+'cashCovenantIndex', 'cashCovenantRead', 'cashCovenantPreview']);
 const refusal = (reason) => ({ ok: false, code: 'scope-refusal', error: reason, field: 'scope' });
 
 /** ADR-0087: under enforcement, boundary-management commands stay reachable

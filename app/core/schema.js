@@ -196,6 +196,7 @@ import {
 } from './domain/standardWorkSchema.js';
 import { normalizeInstrumentLookbacks } from './domain/instrumentLookbackSchema.js';
 import { normalizeServiceBudgets } from './domain/serviceBudgetSchema.js';
+import { normalizeCashCovenantTests } from './domain/cashCovenantSchema.js';
 // ADR-0191 (Schema v151): frozen cross-line priority rounds and first-person
 // ballots. Rounds normalize before their ballots resolve, so a ballot that
 // names a round the loader refused is dropped rather than orphaned.
@@ -1627,7 +1628,8 @@ export {
 // `psrPunchItems`, `psrSignoffs`, `psrReadiness`, `psrAuthorisations`,
 // `psrStartups`, `psrMarkers`), all empty at upgrade. Nothing is inferred from
 // permits to work, stop-work holds, waivers or organisational change rows.
-export const SCHEMA_VERSION = 210;
+// ADR-0259 (v211): one empty ledger of dated minimum-cash evidence revisions.
+export const SCHEMA_VERSION = 211;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -3989,6 +3991,7 @@ export const COLLECTIONS = [
   'standardWorkTierActs',
   'instrumentLookbacks',
   'serviceBudgets',
+  'cashCovenantTests',
   // ADR-0191 (Schema v151): the Cross-Line Priority Ballot register. Two
   // append-only ledgers — frozen rounds and first-person ballots. No pairwise
   // count, winner, cycle, beatpath, ranking or coverage state is stored; every
@@ -9426,6 +9429,7 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.standardWorkTierActs = normalizeStandardWorkTierActs(raw.standardWorkTierActs, state.standardWorkChecks, warnings);
   state.instrumentLookbacks = normalizeInstrumentLookbacks(raw.instrumentLookbacks, state.standardWorkChecks, now, warnings);
   state.serviceBudgets = normalizeServiceBudgets(raw.serviceBudgets, now, warnings);
+  state.cashCovenantTests = normalizeCashCovenantTests(raw.cashCovenantTests, now, warnings);
   state.priorityRounds = normalizePriorityRoundLedger(raw.priorityRounds, warnings);
   state.priorityBallots = normalizePriorityVotes(raw.priorityBallots, state.priorityRounds, warnings);
   // ADR-0193: declarations stand on their own; the goal and the reporting line
@@ -11211,6 +11215,8 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  // 210 → 211: no cash, facility or authority is inferred from existing budgets.
+  210: (v210) => ({ ...v210, schemaVersion: 211, cashCovenantTests: v210.cashCovenantTests === undefined ? [] : v210.cashCovenantTests }),
   // 184 → 185: ADR-0227 adds THREE EMPTY ledgers (`suggestions`,
   // `suggestionActs`, `suggestionMarkers`) and the suggestion rule's pause. No
   // suggestion is inferred from a case, an incident, an after-action review or

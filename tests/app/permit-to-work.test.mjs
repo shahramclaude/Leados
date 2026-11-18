@@ -197,7 +197,7 @@ function harness(raw) {
 test('schema v201 is additive: the v200 step adds seven empty ledgers, three conventions, nothing inferred', () => {
   const empty = createEmptyState(T0);
   // ADR-0247 moved the head to 201; the v201 step is asserted in its own suite.
-  assert.equal(SCHEMA_VERSION, 210, 'ADR-0258 (pre-startup safety review) is the current head');
+  assert.equal(SCHEMA_VERSION, 211, 'ADR-0259 (cash covenant evidence) is the current head');
   const keys = ['ptwPermits', 'ptwIsolations', 'ptwAtmosphere', 'ptwHandovers', 'ptwSuspensions', 'ptwClosures', 'ptwMarkers'];
   for (const key of keys) {
     assert.ok(COLLECTIONS.includes(key), `${key} is a declared collection`);
@@ -216,7 +216,7 @@ test('schema v201 is additive: the v200 step adds seven empty ledgers, three con
   const previous = { ...createEmptyState(T0), schemaVersion: 199 };
   for (const key of keys) delete previous[key];
   const { raw, applied } = migrate(previous);
-  assert.deepEqual(applied, ['199 → 200', '200 → 201', '201 → 202', '202 → 203', '203 → 204', '204 → 205', '205 → 206', '206 → 207', '207 → 208', '208 → 209', '209 → 210'], 'every step from ADR-0246 to the current schema runs once, in order');
+  assert.deepEqual(applied, ['199 → 200', '200 → 201', '201 → 202', '202 → 203', '203 → 204', '204 → 205', '205 → 206', '206 → 207', '207 → 208', '208 → 209', '209 → 210', '210 → 211'], 'every step from ADR-0246 to the current schema runs once, in order');
   assert.equal(raw.schemaVersion, SCHEMA_VERSION);
   for (const key of keys) assert.deepEqual(raw[key], [], 'NOTHING is inferred at upgrade');
 });

@@ -1,3 +1,8 @@
+## 2026-11-18 · Minimum-cash covenant receipts
+
+- Added scoped cash covenant workpapers with exact TSV preview, stored source revisions, reconciliation and readable prior receipts. Missing or inconsistent evidence withholds headroom.
+- Schema v211 adds one empty ledger. The existing CLI and the workspace use the same exact-money calculation. [ADR-0259](docs/adr/0259-cash-covenant-receipts.md).
+
 ## 2026-11-18 · Pre-startup safety review & commissioning readiness
 
 - Added **Pre-startup safety** (`#/pre-startup`) with five panels (Reviews, Punch list, Gates & readiness, Startups & temp changes, Method), ten derived readiness/breach states, CCPS Category A/B punch separation, multi-discipline gate sign-offs, operator briefing attestations, computed matrix joint-apex startup authorisation, permanent premature-startup breach recording, and temporary-modification restoration tracking.
