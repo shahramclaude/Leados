@@ -109,19 +109,15 @@ function declareDialog(ctx, report, candidates, onDone) {
       name: 'protocolRef', label: 'The written lone-working assessment', type: 'text', required: true,
       help: `At least ${L.protocolMin} characters: the reference and revision, e.g. “LWA-2026-114 rev 2 — substation isolation”. A deployment with no assessment is refused.`,
     },
-    { name: 'intervalMinutes', label: 'Check-in interval (whole minutes)', type: 'number', min: L.intervalMin, max: L.intervalMax, required: true, value: L.intervalMin * 12, help: `Between ${L.intervalMin} and ${L.intervalMax}. This is the number the whole register runs on.` },
-    { name: 'graceMinutes', label: 'Grace before it is overdue (whole minutes)', type: 'number', min: 0, max: L.graceMax, required: true, value: 10, help: `Between 0 and ${L.graceMax}. Zero is legitimate — “ring immediately”.` },
+    { name: 'intervalMinutes', label: 'Check-in interval (whole minutes)', type: 'number', min: L.intervalMin, max: L.intervalMax, required: true, help: `Between ${L.intervalMin} and ${L.intervalMax}. This is the number the whole register runs on.` },
+    { name: 'graceMinutes', label: 'Grace before it is overdue (whole minutes)', type: 'number', min: 0, max: L.graceMax, required: true, help: `Between 0 and ${L.graceMax}. Zero is legitimate — “ring immediately”.` },
     { name: 'startAt', label: 'Starts (stored instant, UTC)', type: 'datetime-local', step: 0.001, required: true, value: nowInput },
     { name: 'expectedEndAt', label: 'Declared end (stored instant, UTC)', type: 'datetime-local', step: 0.001, required: true },
   ]);
   const submit = () => {
     form.clearErrors();
     const values = form.getValues();
-    const result = ctx.api.loneWorkingDeclareDeployment({
-      ...values,
-      intervalMinutes: Number(values.intervalMinutes),
-      graceMinutes: Number(values.graceMinutes),
-    });
+    const result = ctx.api.loneWorkingDeclareDeployment(values);
     if (!result?.ok) {
       if (result?.field) form.setFieldError(result.field, result.error || '');
       toast(result?.error || 'The deployment was refused.', 'bad');

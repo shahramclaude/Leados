@@ -2,6 +2,8 @@
 
 Open **Lone working → History** (`#/lone-working?view=history`, [ADR-0256](docs/adr/0256-lone-working-chronology.md)). The chronology lists overlapping recorded spans, intersections that rely on expected ends, and pairs for which separation cannot be proved. Read the exact UTC timestamps before acting. A new open declaration cannot rely on a forecast end, even when backfilling. In **Now → Close out**, enter the actual close time; it must not precede a recorded check-in or escalation. A valid close can reveal an existing conflict rather than erase it.
 
+When declaring a deployment, enter the check-in interval and grace explicitly; neither field is pre-filled. Zero grace is valid when deliberately chosen. Existing saved values are unchanged.
+
 Details follow the current reporting span and active additional lines; VP and enterprise seats see counts only. The aggregate CSV does not export source times or identifiers. This is a records audit, not live monitoring, an emergency service, or proof that somebody returned safely.
 
 ## 2026-11-18 — Check service error headroom before a release review

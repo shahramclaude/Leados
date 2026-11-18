@@ -557,6 +557,49 @@ test('the door refuses an unsourced deployment, a fractional interval and a reve
   assert.equal(ok.ok, true, ok.error);
 });
 
+test('declaration requires explicit whole-minute values and preserves an explicit zero grace', () => {
+  for (const matrix of [false, true]) {
+    const raw = fixture({ deployments: [] });
+    if (!matrix) raw.reportingLines = [];
+    const w = harness(raw);
+    const base = { personId: 'sam', siteRef: 'Substation 4', task: 'Relay calibration',
+      protocolRef: 'LWA-2026-114 rev 2', intervalMinutes: '60', graceMinutes: '0',
+      startAt: '2026-11-17T05:00', expectedEndAt: '2026-11-17T13:00' };
+    const before = w.storage.getItem(STORAGE_KEY);
+    for (const value of [undefined, null, '', '  ', false, [], '0x0', '0e0', '0.0']) {
+      const result = w.api.loneWorkingDeclareDeployment({ ...base, graceMinutes: value });
+      assert.equal(result.ok, false, `grace ${String(value)} must be refused`);
+      assert.equal(result.field, 'graceMinutes');
+      assert.equal(w.storage.getItem(STORAGE_KEY), before, 'refusal makes no persistent write');
+    }
+    for (const value of [undefined, null, '', false, '0x3c', '6e1']) {
+      const result = w.api.loneWorkingDeclareDeployment({ ...base, intervalMinutes: value });
+      assert.equal(result.ok, false);
+      assert.equal(result.field, 'intervalMinutes');
+      assert.equal(w.storage.getItem(STORAGE_KEY), before);
+    }
+    const saved = w.api.loneWorkingDeclareDeployment(base);
+    assert.equal(saved.ok, true, saved.error);
+    assert.equal(saved.saved, true);
+    const reopened = w.reopen();
+    const record = reopened.store.state.lwkDeployments[0];
+    assert.equal(record.intervalMinutes, 60);
+    assert.equal(record.graceMinutes, 0);
+    const report = buildLoneWorking(reopened.store.state, { now: NOW, seat: null });
+    assert.equal(report.rows[0].overdueAtMs, instantMs(record.startAt) + 60 * 60_000);
+    const dom = new JSDOM('<!doctype html><html><body><div id="modal-root"></div></body></html>');
+    globalThis.window = dom.window; globalThis.document = dom.window.document;
+    globalThis.Node = dom.window.Node; globalThis.Element = dom.window.Element;
+    try {
+      const view = renderLoneWorking({ api: reopened.api, query: new URLSearchParams(''), state: reopened.store.state });
+      assert.ok(view.textContent.includes(`${record.intervalMinutes} min + ${record.graceMinutes} grace`));
+    } finally {
+      delete globalThis.window; delete globalThis.document; delete globalThis.Node; delete globalThis.Element;
+      dom.window.close();
+    }
+  }
+});
+
 test('the door refuses an OVERLAPPING deployment and prints the exact overlap, and nobody declares themselves alone', () => {
   const { api } = harness(fixture());
   const overlap = api.loneWorkingDeclareDeployment({
