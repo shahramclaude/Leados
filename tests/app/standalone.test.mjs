@@ -484,7 +484,14 @@ test('standalone artifact exists and is a single inline HTML document', () => {
   // the unchanged 24,000 bytes/module density guard, which remains the bound that
   // catches a module or asset inlined twice. The absolute ceiling moves with the
   // module count, per this file's documented convention; density is unchanged.
-  assert.ok(bytes < 22_500_000, `standalone file is unexpectedly large (${bytes} bytes)`);
+  // ADR-0250 (Session 328, Schema v204) adds the provision & reimbursement
+  // register: seven domain modules plus its view, on top of the v203 build.
+  // Measured at 23,021,965 bytes / 1,152 source modules = 19,984 bytes per
+  // module, still under the unchanged 24,000 bytes/module density guard, which
+  // remains the bound that catches a module or asset inlined twice. The
+  // absolute ceiling moves with the module count, per this file's documented
+  // convention; density is unchanged.
+  assert.ok(bytes < 23_500_000, `standalone file is unexpectedly large (${bytes} bytes)`);
   // Derived from the folder, not from a list in this file: the day a panel adds
   // a diagram, an enumerator that names the old two would still pass. Same
   // lesson the build script learned in ADR-0186.

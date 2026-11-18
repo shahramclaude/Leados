@@ -366,6 +366,13 @@ export const PAUSE_PERMIT_MATRIX_REACH_SWITCHES = Object.freeze([
   // deadline, an unprovable deadline, a coverage with no cover and a denied recovery
   // unasked — and the lines holding those hands are not told.
   'insAutoPropagate',
+  // ADR-0250: the provision rule computes the joint apex above every line holding ANY
+  // responsible hand, so silencing it leaves a matter unassessed, a contingent
+  // liability unprovided, a capped reimbursement asset and an unreconciled carrying
+  // unasked — and the lines holding those hands are not told. It reaches across
+  // reporting lines through `matrixJointApex`, so it carries a permit like every
+  // other cross-line switch.
+  'provAutoPropagate',
   // ADR-0224's successors: four rules that compute an ask through the reporting
   // graph were gated by switches the reach list never claimed, so a pause on them
   // could have silenced a cross-line ask while the census said it could not. Named
@@ -525,6 +532,12 @@ export const PAUSE_PERMIT_SWITCH_RULES = Object.freeze({
   // The coverages stay open and visible; nothing is closed, extended or marked in time
   // in its place.
   insAutoPropagate: 'insRules.js',
+  // ADR-0250: silencing the provision rule leaves a matter carrying a gross exposure
+  // with no assessment, a contingent liability disclosed but not provided, a capped
+  // reimbursement asset and a computed provision that disagrees with the declared
+  // finance carrying unasked. The register stays open and visible; nothing is
+  // provided, disclosed, recognized or reconciled in its place.
+  provAutoPropagate: 'prvRules.js',
   assuranceAutoPropagate: 'assuranceFindingRules.js',
   maaAutoPropagate: 'mutualAidRules.js',
   dwlAutoPropagate: 'personalDealingRules.js',

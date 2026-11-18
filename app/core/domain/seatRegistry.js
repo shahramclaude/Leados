@@ -333,6 +333,18 @@ export const RECORD_POLICIES = Object.freeze({
   insNotifications: { classKey: 'individual', label: 'Notifications — the day the insurer was told, the method, the reference that proves it, and the hand that recorded it', route: '#/insurance' },
   insRecoveries: { classKey: 'portfolio', detailCeiling: 4, label: 'Recoveries — claims, payments, interim payments and denials as their own dated instruments with their exact amounts and written basis', route: '#/insurance' },
   insMarkers: { classKey: 'unit', detailCeiling: 3, label: 'Insurance-register observation markers — no joint seat, no responsible line to ask (identity-free)', route: '#/insurance' },
+  // ADR-0250 (Schema v204): the provision and reimbursement register. An
+  // assessment names the classification, the best estimate, the currency and the
+  // responsible hands — PORTFOLIO material a director and above must see, with
+  // the reader withholding the HANDS above rank 3. The scenarios, the
+  // reimbursement recognitions and the finance carryings are the same class: a
+  // sum on the balance sheet, not a person's record. The rule's own markers are
+  // identity-free.
+  prvAssessments: { classKey: 'portfolio', detailCeiling: 4, label: 'Provision assessments — the matter, the declared classification, the best-estimate method, the exact amount where it is a single estimate, the currency, the written basis and the responsible hands', route: '#/provisions' },
+  prvScenarios: { classKey: 'portfolio', detailCeiling: 4, label: 'Scenarios — one outcome of an expected-value best estimate with its probability in basis points, its exact amount and its written basis', route: '#/provisions' },
+  prvReimbursements: { classKey: 'portfolio', detailCeiling: 4, label: 'Reimbursement recognitions — whether the recovery is virtually certain and the written basis, with the cash and the claimed amount derived from the insurance register', route: '#/provisions' },
+  prvCarryings: { classKey: 'portfolio', detailCeiling: 4, label: 'Finance carryings — the figure the finance seat declares it is carrying as the provision, per currency, with the reference to the finance record', route: '#/provisions' },
+  prvMarkers: { classKey: 'unit', detailCeiling: 3, label: 'Provision-register observation markers — no joint seat, no responsible line to ask (identity-free)', route: '#/provisions' },
   // ADR-0240 (Schema v194): the incident command register. An incident record
   // names the people on the bridge, the instrument it was declared under and the
   // external parties it owes — individual detail that is not handed upward, so
@@ -1510,6 +1522,8 @@ export const ACTION_RIGHTS = Object.freeze({
   'manage-claims': { minRank: 1, maxRank: 5, label: 'Open a claim matter on the document that started the clock, declare its accrual and limitation period, record a suspension or a resolution, declare a concession, declare a settlement authority and set the register’s conventions' },
   'read-insurance': { minRank: 1, maxRank: 5, label: 'Read the insurance notification and recovery register within your grant — the policies you hold, their coverages, their derived notification deadlines, their notifications and recoveries, and the derived net cost. Above rank 3 the reader prints counts and withholds responsible hands' },
   'manage-insurance': { minRank: 1, maxRank: 5, label: 'Declare an insurance policy on its declaration page, link a coverage to a matter, record a notification or a recovery, and set the register’s conventions' },
+  'read-provisions': { minRank: 3, maxRank: 5, label: 'Read the provision and reimbursement register — the matters you hold, their declared classifications and best estimates, the derived provisions and reimbursement assets, the net exposure and the reconciliation against the finance carrying. Above rank 3 the reader prints counts and withholds responsible hands' },
+  'manage-provisions': { minRank: 3, maxRank: 5, label: 'Declare a provision assessment and its classification and best-estimate method, declare a scenario, declare a reimbursement recognition and a finance carrying, and set the register’s conventions' },
   'read-mutual-aid': { minRank: 1, maxRank: 5, label: 'Read the mutual-aid activation and resource-commitment register within your grant — the agreement a request is made under, the request and its validity, the partner’s acceptance with its written confirmation and promise, the arrival compared against the promise, and the withdrawal and release that close the commitment' },
   'declare-mutual-aid': { minRank: 2, maxRank: 5, label: 'Declare a bilateral agreement, request help under it, record the partner’s acceptance with its written confirmation and promise, record the arrival, the withdrawal and the release of the commitment, cancel a request that was never accepted, and set the register’s conventions' },
   // ADR-0235/0236 (Schema v191). Six rights, and the shape is the point: RECORDING

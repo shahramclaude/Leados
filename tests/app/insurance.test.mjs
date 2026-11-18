@@ -225,7 +225,7 @@ function asSeat(api, store, seatId) {
 /* --------------------------------------------------------------- 1. schema */
 
 test('schema v203 is additive: five empty ledgers, three conventions, nothing inferred', () => {
-  assert.equal(SCHEMA_VERSION, 203);
+  assert.equal(SCHEMA_VERSION, 204);
   const keys = ['insPolicies', 'insCoverages', 'insNotifications', 'insRecoveries', 'insMarkers'];
   for (const key of keys) assert.ok(COLLECTIONS.includes(key), `${key} must be a declared collection`);
   const empty = createEmptyState(T0);
@@ -242,7 +242,7 @@ test('migrating a v202 workspace adds five empty ledgers and infers no policy, c
   base.lfgAccruals = [accrual()];
   for (const key of ['insPolicies', 'insCoverages', 'insNotifications', 'insRecoveries', 'insMarkers']) delete base[key];
   const migrated = migrate(base).raw;
-  assert.equal(migrated.schemaVersion, 203);
+  assert.equal(migrated.schemaVersion, 204);
   assert.deepEqual(migrated.insPolicies, [], 'a matter on the claim register is not an insurance policy');
   assert.deepEqual(migrated.insCoverages, [], 'no coverage is inferred from anything on the record');
   assert.equal(migrated.settings.insAutoPropagate, true);
@@ -555,7 +555,7 @@ test('the rule stays silent when paused, and observes identity-free where nobody
 });
 
 test('the rule is registered on the spine, in the propagation contracts, and in the pause census', () => {
-  assert.equal(DEFAULT_POST_COMMIT_RULES.length, 162, 'the spine carries ADR-0249 (RULE-INS-01) after ADR-0248');
+  assert.equal(DEFAULT_POST_COMMIT_RULES.length, 163, 'the spine carries RULE-INS-01 (ADR-0249) and RULE-PROV-01 (ADR-0250) after ADR-0248');
   const contract = PROPAGATION_CONTRACTS.find((row) => row.rule?.id === 'insuranceRule' || row.module === 'insRules.js');
   assert.ok(contract, 'the rule must have a propagation contract');
   assert.deepEqual(contract.writes.sort(), ['delegations', 'insMarkers', 'links']);

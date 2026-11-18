@@ -141,6 +141,8 @@ import { authorisationSignals } from './authorisation.js';
 import { claimSignals } from './lfgClaims.js';
 // ADR-0249: the insurance register contributes INS-01..05.
 import { insuranceSignals } from './insCoverage.js';
+// ADR-0250: the provision register contributes PRV-01..05.
+import { provisionSignals } from './prvProvision.js';
 // ADR-0243: the employee-voice and collective-consultation register contributes
 // VOI-01..04 — a window that closed with no advice, advice nobody answered, a
 // decision out of order, and sittings with no minutes or below quorum.
@@ -392,6 +394,10 @@ export const DOMAIN_ORDER = [
   // contributes INS-01..05. Without this bucket the signals would be counted in
   // `findings` and silently dropped from `byDomain`.
   'Insurance & recovery',
+  // ADR-0250 (Schema v204): the Provision & Reimbursement Register contributes
+  // PRV-01..05. Without this bucket the signals would be counted in `findings`
+  // and silently dropped from `byDomain`.
+  'Provisions & reimbursement',
 ];
 
 export function severityLabel(n) {
@@ -2681,6 +2687,11 @@ export function buildInsights(state, now) {
   // band, one whose deadline cannot be proved, one where the linked policy does not
   // respond, and a denied recovery.
   for (const signal of insuranceSignals(state, now, settings)) add(signal);
+  // PRV-01..05 — an open matter carrying a gross exposure with no assessment, a
+  // contingent liability disclosed but not provided, a reimbursement asset capped
+  // at the provision, an asset resting on a declared judgment with no cash, and a
+  // computed provision that disagrees with the declared finance carrying.
+  for (const signal of provisionSignals(state, now, settings)) add(signal);
   // ADR-0243 (read-side): the Employee Voice register contributes VOI-01..04. It
   // reads its own ledgers and the live matrix, so it cannot recurse into the
   // engine that is running it.

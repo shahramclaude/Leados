@@ -145,6 +145,11 @@ import { createPermitToWorkActions } from './core/domain/permitToWorkActions.js'
 import { createAuthorisationActions } from './core/domain/authorisationActions.js';
 import { createClaimActions } from './core/domain/lfgActions.js';
 import { createInsuranceActions } from './core/domain/insActions.js';
+// ADR-0250: the Provision & Reimbursement Register's commands and seat-checked
+// reads. Declaring an assessment, a scenario, a reimbursement recognition and a
+// finance carrying — nothing else. The provision, the asset and the reconciliation
+// are derived on read, so there is no command that writes a provision.
+import { createProvisionActions } from './core/domain/prvActions.js';
 // ADR-0240: the Major-Incident Command & Notification-Clock Register's commands
 // and seat-checked reads. Declaring, staffing, commanding, notifying, resolving
 // and standing down — nothing else.
@@ -20430,6 +20435,8 @@ export function createApi(store, options = {}) {
   Object.assign(api, createAuthorisationActions(store, { now: clock, idFactory: id }));
   Object.assign(api, createClaimActions(store, { now: clock, idFactory: id }));
   Object.assign(api, createInsuranceActions(store, { now: clock, idFactory: id }));
+  // ADR-0250: the provision and reimbursement register's commands.
+  Object.assign(api, createProvisionActions(store, { now: clock, idFactory: id }));
   // ADR-0240: the incident command register's commands.
   Object.assign(api, createIncidentCommandActions(store, { now: clock, idFactory: id }));
   // ADR-0220: the variable-pay design & incentive integrity register's commands.
