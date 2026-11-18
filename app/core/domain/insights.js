@@ -145,6 +145,8 @@ import { insuranceSignals } from './insCoverage.js';
 import { provisionSignals } from './prvProvision.js';
 // ADR-0257: the tax controversy register's signals.
 import { taxSignals } from './taxControversy.js';
+// ADR-0258: the pre-startup safety review & commissioning readiness signals (PSR-01..06).
+import { psrSignals } from './psrSafety.js';
 import { caseToAnswerSignals } from './caseToAnswer.js';
 // ADR-0243: the employee-voice and collective-consultation register contributes
 // VOI-01..04 — a window that closed with no advice, advice nobody answered, a
@@ -401,6 +403,9 @@ export const DOMAIN_ORDER = [
   // PRV-01..05. Without this bucket the signals would be counted in `findings`
   // and silently dropped from `byDomain`.
   'Provisions & reimbursement',
+  // ADR-0258 (Schema v210): the Pre-Startup Safety Review Register contributes
+  // PSR-01..06; listed here so findings and `byDomain` stay reconciled.
+  'Pre-startup safety',
 ];
 
 export function severityLabel(n) {
@@ -2700,6 +2705,11 @@ export function buildInsights(state, now) {
   // with no evidence packet, and a controversy left unresolved past its declared
   // horizon. Signals about the DISPUTE, never a score on the hand answering it.
   for (const signal of taxSignals(state, now, settings)) add(signal);
+  // PSR-01..06 — unsafe physical energisation breach, expired live temporary
+  // modification, overdue Category B post-startup conditions, rejected discipline
+  // gate, open Category A blockers, and reviews ready for joint-apex startup
+  // authorisation or approaching temporary revert day. Plant/procedure signals only.
+  for (const signal of psrSignals(state, now, settings)) add(signal);
   // DGI-01..06 — a fair-process record conflict, an investigator who is no longer
   // independent or senior, cases waiting on the procedure, decisions owed, decisions
   // that depart from the consistency ladder, and appeal problems. Signals about the

@@ -588,6 +588,22 @@ import {
   normalizeQncSettings,
   normalizeQncVerifications,
 } from './domain/productNonconformanceSchema.js';
+// ADR-0258 (Schema v210): the Pre-Startup Safety Review & Commissioning
+// Readiness Register. Seven fail-closed ledgers — reviews, Category A/B punch
+// items, discipline sign-offs, affected-operator readiness attestations,
+// joint-apex startup authorisations, physical startup/restoration records and
+// identity-free rule markers. Zero derived states, breaches or day counts are
+// stored; structurally readable governance breaches stay on file for audit.
+import {
+  normalizePsrAuthorisations,
+  normalizePsrMarkers,
+  normalizePsrPunchItems,
+  normalizePsrReadiness,
+  normalizePsrReviews,
+  normalizePsrSettings,
+  normalizePsrSignoffs,
+  normalizePsrStartups,
+} from './domain/psrSchema.js';
 // ADR-0257 (Schema v209): the Tax Controversy & Appeal-Control Register. Six
 // ledgers — the authority notice (its reference, the disputed position, the
 // jurisdiction AS DECLARED, the tax type and the disputed amount), the declared
@@ -1606,7 +1622,12 @@ export {
 // already holds is one. Every state, window, day count and minute count is derived
 // on read.
 // ADR-0252: dated instrument-use extracts on abnormal standard-work checks.
-export const SCHEMA_VERSION = 209;
+// ADR-0258 (Schema v210): the Pre-Startup Safety Review & Commissioning
+// Readiness Register — seven additive fail-closed ledgers (`psrReviews`,
+// `psrPunchItems`, `psrSignoffs`, `psrReadiness`, `psrAuthorisations`,
+// `psrStartups`, `psrMarkers`), all empty at upgrade. Nothing is inferred from
+// permits to work, stop-work holds, waivers or organisational change rows.
+export const SCHEMA_VERSION = 210;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -3133,6 +3154,9 @@ export const DEFAULT_SETTINGS = Object.freeze({
   // A workspace default would silently date a real filing against a window
   // nobody cited.
   ...normalizeTaxSettings({}),
+  // ADR-0258: pre-startup safety review conventions (privacy floor, temporary-
+  // change revert warning horizon, and defaulted-ON RULE-PSR-01 switch).
+  ...normalizePsrSettings({}),
   // ADR-0243: the employee-voice conventions — the reply window, the minutes
   // window, the privacy floor below which a per-state export is withheld, and the
   // rule switch. Note what is NOT here: a consultation period. The period a body
@@ -4444,6 +4468,16 @@ export const COLLECTIONS = [
   'taxEvidence',
   'taxResolutions',
   'taxMarkers',
+  // ADR-0258 (Schema v210): the Pre-Startup Safety Review & Commissioning
+  // Readiness Register. Seven fail-closed ledgers; zero stored states, breaches
+  // or day counts.
+  'psrReviews',
+  'psrPunchItems',
+  'psrSignoffs',
+  'psrReadiness',
+  'psrAuthorisations',
+  'psrStartups',
+  'psrMarkers',
 ];
 
 /** Stable empty state. `now` is an ISO string so the result is a pure value. */
@@ -4791,6 +4825,10 @@ export function normalizeSettings(raw) {
     // DEFAULT_SETTINGS but not in the load path is silently reset to undefined
     // by the next save, and the only write that can pause the rule is dropped.
     ...normalizeTaxSettings(s),
+    // ADR-0258: pre-startup safety review conventions carried across every save
+    // and reload so `psrAutoPropagate`, `psrPrivacyFloor` and
+    // `psrRevertHorizonDays` are never dropped.
+    ...normalizePsrSettings(s),
     // Repair of a standing red reported at base HEAD: two rule switches the
     // pause census maps were not carried in settings, so the only writes that
     // can silence those rules were refused as unknown keys. Declared here with
@@ -10254,6 +10292,17 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.taxEvidence = normalizeTaxEvidence(raw.taxEvidence, state.taxNotices, warnings);
   state.taxResolutions = normalizeTaxResolutions(raw.taxResolutions, state.taxNotices, warnings);
   state.taxMarkers = normalizeTaxMarkers(raw.taxMarkers, warnings);
+  // ADR-0258 (Schema v210): pre-startup safety reviews loaded fail-closed in
+  // dependency order so every punch item, sign-off, operator readiness row,
+  // startup authorisation and physical startup/restoration verifies against a
+  // live review on the register. Nothing derived is stored.
+  state.psrReviews = normalizePsrReviews(raw.psrReviews, warnings);
+  state.psrPunchItems = normalizePsrPunchItems(raw.psrPunchItems, state.psrReviews, warnings);
+  state.psrSignoffs = normalizePsrSignoffs(raw.psrSignoffs, state.psrReviews, warnings);
+  state.psrReadiness = normalizePsrReadiness(raw.psrReadiness, state.psrReviews, warnings);
+  state.psrAuthorisations = normalizePsrAuthorisations(raw.psrAuthorisations, state.psrReviews, warnings);
+  state.psrStartups = normalizePsrStartups(raw.psrStartups, state.psrReviews, warnings);
+  state.psrMarkers = normalizePsrMarkers(raw.psrMarkers, warnings);
   // ADR-0229 (Schema v182): a case, option, cost line or act that cannot be read
   // exactly is DROPPED with a counted warning — never repaired, re-termed,
   // re-priced or re-pointed at another case. A cost line that does not belong to
@@ -11553,6 +11602,25 @@ export const MIGRATIONS = {
     taxResolutions: Array.isArray(v208.taxResolutions) ? v208.taxResolutions : [],
     taxMarkers: Array.isArray(v208.taxMarkers) ? v208.taxMarkers : [],
     settings: { ...(v208.settings || {}), ...normalizeTaxSettings(v208.settings || {}) },
+  }),
+  // 209 → 210: ADR-0258 adds SEVEN EMPTY ledgers (`psrReviews`, `psrPunchItems`,
+  // `psrSignoffs`, `psrReadiness`, `psrAuthorisations`, `psrStartups`,
+  // `psrMarkers`) and the pre-startup safety review conventions. NOTHING is
+  // inferred from permits to work, stop-work holds, nonconformance cases,
+  // standard waivers or organisational changes: a pre-startup safety review and
+  // a startup authorisation are explicit human safety acts that must never be
+  // manufactured at upgrade time.
+  209: (v209) => ({
+    ...v209,
+    schemaVersion: 210,
+    psrReviews: Array.isArray(v209.psrReviews) ? v209.psrReviews : [],
+    psrPunchItems: Array.isArray(v209.psrPunchItems) ? v209.psrPunchItems : [],
+    psrSignoffs: Array.isArray(v209.psrSignoffs) ? v209.psrSignoffs : [],
+    psrReadiness: Array.isArray(v209.psrReadiness) ? v209.psrReadiness : [],
+    psrAuthorisations: Array.isArray(v209.psrAuthorisations) ? v209.psrAuthorisations : [],
+    psrStartups: Array.isArray(v209.psrStartups) ? v209.psrStartups : [],
+    psrMarkers: Array.isArray(v209.psrMarkers) ? v209.psrMarkers : [],
+    settings: { ...(v209.settings || {}), ...normalizePsrSettings(v209.settings || {}) },
   }),
   // 183 → 184: ADR-0231 adds SEVEN EMPTY ledgers (`ibpCycles`, `ibpDemandRows`,
   // `ibpCapacityRows`, `ibpOptions`, `ibpDecisions`, `ibpGrades`, `ibpMarkers`)

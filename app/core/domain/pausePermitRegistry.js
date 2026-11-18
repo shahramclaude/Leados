@@ -348,6 +348,12 @@ export const PAUSE_PERMIT_MATRIX_REACH_SWITCHES = Object.freeze([
   // reaches across reporting lines through `matrixJointApex`, so it carries a permit
   // like every other cross-line switch.
   'ptwAutoPropagate',
+  // ADR-0258: the pre-startup safety review rule resolves the joint apex above
+  // every active line holding the unit holder, proposer and governing signers,
+  // so silencing it leaves an unsafe energisation breach, an expired temporary
+  // modification, an overdue Category B condition, a rejected discipline gate
+  // and a verified review awaiting joint-apex startup authorisation unasked.
+  'psrAutoPropagate',
   // ADR-0247: the statutory-authorisation rule computes the joint apex above
   // every line holding ANY accountable hand, so silencing it leaves a lapsed
   // authority, a standing prohibition, an overdue improvement notice, an
@@ -558,6 +564,7 @@ export const PAUSE_PERMIT_SWITCH_RULES = Object.freeze({
   // stays open and visible; nothing is assigned, found, decided or withdrawn in its
   // place.
   dgiAutoPropagate: 'caseToAnswerRules.js',
+  psrAutoPropagate: 'psrRules.js',
   assuranceAutoPropagate: 'assuranceFindingRules.js',
   maaAutoPropagate: 'mutualAidRules.js',
   dwlAutoPropagate: 'personalDealingRules.js',

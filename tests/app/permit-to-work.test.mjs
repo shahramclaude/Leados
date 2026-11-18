@@ -197,7 +197,7 @@ function harness(raw) {
 test('schema v201 is additive: the v200 step adds seven empty ledgers, three conventions, nothing inferred', () => {
   const empty = createEmptyState(T0);
   // ADR-0247 moved the head to 201; the v201 step is asserted in its own suite.
-  assert.equal(SCHEMA_VERSION, 209, 'ADR-0257 (tax controversy) is the current head');
+  assert.equal(SCHEMA_VERSION, 210, 'ADR-0258 (pre-startup safety review) is the current head');
   const keys = ['ptwPermits', 'ptwIsolations', 'ptwAtmosphere', 'ptwHandovers', 'ptwSuspensions', 'ptwClosures', 'ptwMarkers'];
   for (const key of keys) {
     assert.ok(COLLECTIONS.includes(key), `${key} is a declared collection`);
@@ -216,18 +216,18 @@ test('schema v201 is additive: the v200 step adds seven empty ledgers, three con
   const previous = { ...createEmptyState(T0), schemaVersion: 199 };
   for (const key of keys) delete previous[key];
   const { raw, applied } = migrate(previous);
-  assert.deepEqual(applied, ['199 → 200', '200 → 201', '201 → 202', '202 → 203', '203 → 204', '204 → 205', '205 → 206', '206 → 207', '207 → 208', '208 → 209'], 'every step from ADR-0246 to the current schema runs once, in order');
+  assert.deepEqual(applied, ['199 → 200', '200 → 201', '201 → 202', '202 → 203', '203 → 204', '204 → 205', '205 → 206', '206 → 207', '207 → 208', '208 → 209', '209 → 210'], 'every step from ADR-0246 to the current schema runs once, in order');
   assert.equal(raw.schemaVersion, SCHEMA_VERSION);
   for (const key of keys) assert.deepEqual(raw[key], [], 'NOTHING is inferred at upgrade');
 });
 
 test('the spine carries RULE-PTW-01 with exactly one contract, and CSV #187 is registered', () => {
-  assert.equal(DEFAULT_POST_COMMIT_RULES.length, 166, 'ADR-0246 added the 159th spine rule; ADR-0247 the 160th; ADR-0248 the 161st; ADR-0249 the 162nd; ADR-0250 the 163rd; ADR-0253 the 164th; ADR-0254 the 165th');
+  assert.equal(DEFAULT_POST_COMMIT_RULES.length, 167, 'ADR-0246..ADR-0258 registered through the 167th spine rule (RULE-PSR-01)');
   assert.equal(DEFAULT_POST_COMMIT_RULES.some((rule) => rule && rule.id === 'permitToWorkRule'), true);
   assert.equal(PROPAGATION_CONTRACTS.length, DEFAULT_POST_COMMIT_RULES.length, 'one contract per spine rule');
   assert.equal(PROPAGATION_CONTRACTS.some((contract) => contract.rule && contract.rule.id === 'permitToWorkRule'), true);
   assert.equal(CSV_EXPORTS.some((entry) => entry.key === PTW_CSV_SCOPE), true);
-  assert.equal(CSV_EXPORTS.length, 193, 'ADR-0246 registered CSV #187; ADR-0247 #188; ADR-0248 #189; ADR-0249 #190; ADR-0250 #191; ADR-0253 #192; ADR-0254 #193');
+  assert.equal(CSV_EXPORTS.length, 195, 'ADR-0246..ADR-0258 registered through CSV #195 (pre-startup-safety)');
 });
 
 /* -------------------------------------------------------------- 2. loaders */

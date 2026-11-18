@@ -1,3 +1,19 @@
+## 2026-11-18 — Pre-Startup Safety Review & Commissioning Readiness Register ([ADR-0258](docs/adr/0258-pre-startup-safety-review-register.md))
+
+**Doctrine / sync:** `NORTH_STAR.md` verified with all four binding mandates intact (no amendment). `origin` fetch/push matched `https://github.com/shahramclaude/Leados.git`; worked on active branch `arena/661761df-leados` from base `2f9dd41`.
+
+**Built / why:** Shipped [ADR-0258](docs/adr/0258-pre-startup-safety-review-register.md) — `#/pre-startup`, Schema v209 → v210 (seven empty-at-upgrade collections, three bounded conventions, zero inferred rows), `RULE-PSR-01` (spine #167, `psrAutoPropagate`), aggregate floored CSV #195 (`pre-startup-safety`), insights signals `PSR-01..06`, and 10-state demo seed (`psr-demo-1..10`). Closes the pre-startup/commissioning readiness and Flixborough temporary-modification restoration gap distinct from permit-to-work (`#/permit-to-work`), stop-work (`#/standard-work?panel=stops`) and waivers (`#/standard-work?panel=waivers`). Primary altitude frontline/mid-manager through director operational detail, with VP/CEO aggregate counts plus narrow joint-apex authorisation refs, across single-chain and matrix structures.
+
+**Defects caught and fixed during verification:** aligned `psrActions.js` and `preStartup.js` to the live `seat.js` / `store.js` / `buildForm` contracts; added all eight PSR write commands to `MATRIX_LINE_SCOPED` in `accessGateway.js` so secondary matrix-line reach works through `guardApi`; and excluded synthetic `LEADER_ID` from `psrCandidates` so modal person selectors only offer active roster members.
+
+**Benchmark / asset:** Benchmarked against published documentation for Frontline Data Solutions, Sphera, Enablon, VelocityEHS, Intelex, Benchmark Gensuite and EcoOnline, plus OSHA 1910.119(i) and CCPS PSSR guidance; hands-on/same-input parity **[BENCHMARK-UNVERIFIED]**. `higgsfield` lookup returned `unsupported`; generated and visually verified `app/assets/pre-startup-safety-method.jpg` via Arena image tool (labelled illustrative, not operational evidence).
+
+**New gap — Planned (unbuilt):** Debt Covenant, Headroom & Equity-Cure Register (VP Finance / CFO / CEO × matrix and single-chain) — zero hits on targeted search for `debt covenant`, `equity cure`, `DSCR`, `interest coverage` (wider absence **[UNVERIFIED]**); logged in [ROADMAP.md](ROADMAP.md).
+
+**Verification:** `pre-startup-safety.test.mjs` 10/10 PASS; 16 neighbouring/canonical suites PASS (`claims`, `csv`, `disclosure-compiler`, `domain-sense-wiring`, `fair-process`, `insurance`, `lone-working`, `pause-permit`, `permit-to-work`, `product-nonconformance`, `provisions`, `service-error-budget`, `speak-up`, `tax-controversy`, `altitude-router`, `matrix-line-seat`); 167/167 spine ↔ contract parity PASS; `axe-core` 0 violations across all 5 tabs, modal and VP rank-4 view; `eval:app` (156 routes), `lint`, `check:boundary`, `check:a11y` and `check:links` PASS. Full 314-suite run, standalone rebuild (`LeadOS-standalone.html` left untouched), encrypted vault reload and real-browser/AT testing **[UNVERIFIED]**.
+
+---
+
 ## 2026-11-18 — Concurrent control impairment: evidenced-window review
 
 **Completed:** local TSV-to-JSON evidence review for one hazard, director / VP × single-chain and matrix. Frontline / mid-manager evidence can be supplied; no new CEO or browser view. Reconciles confirmed intersections to exact UTC bounds and source lines, collapsing identical cross-line copies. No workspace mutation, asset or roll-up. **In Progress / next:** workspace-native dated credits, shared dependencies, open impairments and independently evidenced reinstatement (director / VP). No restoration inference.

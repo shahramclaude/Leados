@@ -1,3 +1,8 @@
+## 2026-11-18 · Pre-startup safety review & commissioning readiness
+
+- Added **Pre-startup safety** (`#/pre-startup`) with five panels (Reviews, Punch list, Gates & readiness, Startups & temp changes, Method), ten derived readiness/breach states, CCPS Category A/B punch separation, multi-discipline gate sign-offs, operator briefing attestations, computed matrix joint-apex startup authorisation, permanent premature-startup breach recording, and temporary-modification restoration tracking.
+- Schema v210 adds seven empty ledgers and three bounded conventions (nothing inferred on upgrade); registered `RULE-PSR-01` (spine #167, `psrAutoPropagate`), aggregate privacy-floored CSV #195 (`pre-startup-safety`), insights signals `PSR-01..06`, and Method schematic `app/assets/pre-startup-safety-method.jpg`. [ADR-0258](docs/adr/0258-pre-startup-safety-review-register.md).
+
 ## 2026-11-18 · Lone-working chronology
 
 - Added a scoped chronology worklist with exact overlap evidence and explicit unknowns. Added a protected finding total to the existing aggregate CSV.

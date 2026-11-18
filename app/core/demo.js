@@ -3004,6 +3004,284 @@ function seedProvisions(state, now, { priya, mei, jordan, samuel, freya }) {
   state.prvMarkers = Array.isArray(state.prvMarkers) ? state.prvMarkers : [];
 }
 
+function seedPreStartupSafety(state, now, { priya, mei, jordan, samuel, freya }) {
+  const day = (days) => new Date(now.getTime() + days * 86_400_000).toISOString().slice(0, 10);
+  const iso = (days) => new Date(now.getTime() + Math.round(days * 86_400_000)).toISOString();
+  const mkReview = (seq, openedDays, fields) => ({
+    id: `psr-demo-${seq}`,
+    proposerId: jordan,
+    unitHolderId: freya,
+    affectedOperatorIds: [freya],
+    revertByDay: null,
+    openedById: priya,
+    openedAt: iso(openedDays),
+    openedDay: day(Math.floor(openedDays)),
+    createdAt: iso(openedDays),
+    updatedAt: iso(openedDays),
+    ...fields,
+  });
+
+  // ADR-0258: ten clock-relative reviews exercising every one of the ten derived
+  // pre-startup safety states from pure source records (zero stored states).
+  state.psrReviews = [
+    mkReview(1, -6, {
+      reviewRef: 'PSSR-2026-01',
+      unitRef: 'Compressor K-201 anti-surge loop',
+      triggerKind: 'modification',
+      changeBasisRef: 'MOC-2026-201 & HAZOP-18: anti-surge controller setpoint and recycle valve trim modification.',
+      requiredDisciplines: ['instrumentation', 'safety'],
+      plannedStartDay: day(-1),
+    }),
+    mkReview(2, -25, {
+      reviewRef: 'PSSR-2026-02',
+      unitRef: 'Exchanger E-104 temporary bypass spool',
+      triggerKind: 'temporary-change',
+      changeBasisRef: 'MOC-TEMP-2026-09 & PHA-11: temporary ASME B31.3 bypass spool installed during tube-bundle repair.',
+      requiredDisciplines: ['engineering', 'operations', 'safety'],
+      plannedStartDay: day(-22),
+      revertByDay: day(-6),
+    }),
+    mkReview(3, -21, {
+      reviewRef: 'PSSR-2026-03',
+      unitRef: 'Reactor R-302 feed nozzle upgrade',
+      triggerKind: 'modification',
+      changeBasisRef: 'MOC-2026-177 & LOPA-07: upgraded duplex alloy feed nozzle and high-temperature trip thermowell.',
+      requiredDisciplines: ['engineering', 'operations'],
+      plannedStartDay: day(-18),
+    }),
+    mkReview(4, -8, {
+      reviewRef: 'PSSR-2026-04',
+      unitRef: 'Solvent recovery skid SR-05',
+      triggerKind: 'new-facility',
+      changeBasisRef: 'CAP-2026-04 & HAZOP-29: initial commissioning of closed-loop solvent recovery distillation skid.',
+      requiredDisciplines: ['engineering', 'safety', 'operations'],
+      plannedStartDay: day(3),
+    }),
+    mkReview(5, -5, {
+      reviewRef: 'PSSR-2026-05',
+      unitRef: 'Steam boiler B-102 turnaround restart',
+      triggerKind: 'turnaround-restart',
+      changeBasisRef: 'TAR-2026-B102: post-turnaround restart following drum inspection, burner overhaul and PSV bench calibration.',
+      requiredDisciplines: ['maintenance', 'operations'],
+      plannedStartDay: day(2),
+    }),
+    mkReview(6, -4, {
+      reviewRef: 'PSSR-2026-06',
+      unitRef: 'Cooling tower CT-03 biocide dosing rack',
+      triggerKind: 'modification',
+      changeBasisRef: 'MOC-2026-214: dual-containment dosing manifold and low-flow interlock installation on CT-03.',
+      requiredDisciplines: ['engineering', 'operations'],
+      plannedStartDay: day(5),
+    }),
+    mkReview(7, -4, {
+      reviewRef: 'PSSR-2026-07',
+      unitRef: 'Nitrogen blanketing header N2-12',
+      triggerKind: 'modification',
+      changeBasisRef: 'MOC-2026-219 & HAZOP-31: redundant pressure-regulating train on tank-farm nitrogen blanketing header.',
+      requiredDisciplines: ['engineering', 'operations', 'safety'],
+      plannedStartDay: day(1),
+    }),
+    mkReview(8, -8, {
+      reviewRef: 'PSSR-2026-08',
+      unitRef: 'Analyser shelter AT-408 sample bypass',
+      triggerKind: 'temporary-change',
+      changeBasisRef: 'MOC-TEMP-2026-14: temporary manual sample-cooler conditioning loop while primary chiller is rebuilt.',
+      requiredDisciplines: ['instrumentation', 'operations'],
+      plannedStartDay: day(-5),
+      revertByDay: day(7),
+    }),
+    mkReview(9, -4, {
+      reviewRef: 'PSSR-2026-09',
+      unitRef: 'Vent scrubber V-501 post-trip restart',
+      triggerKind: 'post-incident-restart',
+      changeBasisRef: 'INC-2026-33 & RCA-12: restart of caustic vent scrubber after circulation pump seal failure and trip.',
+      requiredDisciplines: ['safety', 'operations', 'instrumentation'],
+      plannedStartDay: day(1),
+    }),
+    mkReview(10, -31, {
+      reviewRef: 'PSSR-2026-10',
+      unitRef: 'Charge pump P-110 temporary seal-flush plan',
+      triggerKind: 'temporary-change',
+      changeBasisRef: 'MOC-TEMP-2026-03: temporary external API Plan 32 flush tie-in pending permanent cyclone separator delivery.',
+      requiredDisciplines: ['maintenance', 'operations', 'quality'],
+      plannedStartDay: day(-28),
+      revertByDay: day(-14),
+    }),
+  ];
+
+  state.psrPunchItems = [
+    {
+      id: 'psrp-demo-1', reviewId: 'psr-demo-1', itemRef: 'PA-01', category: 'pre-startup', discipline: 'instrumentation',
+      finding: 'Anti-surge recycle valve FV-201 full-stroke speed test not witnessed against 1.5-second trip specification.',
+      ownerId: jordan, dueDay: null, recordedById: mei, recordedAt: iso(-4), recordedDay: day(-4),
+      closedDay: null, closedAt: null, closedById: null, closureEvidenceRef: null, closureBasis: null,
+      createdAt: iso(-4), updatedAt: iso(-4),
+    },
+    {
+      id: 'psrp-demo-2', reviewId: 'psr-demo-3', itemRef: 'PA-01', category: 'pre-startup', discipline: 'engineering',
+      finding: 'Verify positive material identification (PMI) certificate on duplex nozzle weld N-3B before feed-in.',
+      ownerId: jordan, dueDay: null, recordedById: mei, recordedAt: iso(-20), recordedDay: day(-20),
+      closedDay: day(-19), closedAt: iso(-19), closedById: mei, closureEvidenceRef: 'PMI-R302-CERT-14',
+      closureBasis: 'PMI XRF spectrum verified 2205 duplex composition on nozzle and weld cap against isometric r6.',
+      createdAt: iso(-20), updatedAt: iso(-19),
+    },
+    {
+      id: 'psrp-demo-3', reviewId: 'psr-demo-3', itemRef: 'PB-01', category: 'post-startup', discipline: 'maintenance',
+      finding: 'Install permanent acoustic insulation jacket and updated P&ID line-marker plate on nozzle N-3B.',
+      ownerId: samuel, dueDay: day(-5), recordedById: priya, recordedAt: iso(-19), recordedDay: day(-19),
+      closedDay: null, closedAt: null, closedById: null, closureEvidenceRef: null, closureBasis: null,
+      createdAt: iso(-19), updatedAt: iso(-19),
+    },
+    {
+      id: 'psrp-demo-4', reviewId: 'psr-demo-5', itemRef: 'PA-01', category: 'pre-startup', discipline: 'maintenance',
+      finding: 'Steam drum safety relief valve PSV-102B pop-test certificate and lead-wire seal missing at field walkdown.',
+      ownerId: freya, dueDay: day(1), recordedById: samuel, recordedAt: iso(-3), recordedDay: day(-3),
+      closedDay: null, closedAt: null, closedById: null, closureEvidenceRef: null, closureBasis: null,
+      createdAt: iso(-3), updatedAt: iso(-3),
+    },
+    {
+      id: 'psrp-demo-5', reviewId: 'psr-demo-6', itemRef: 'PA-01', category: 'pre-startup', discipline: 'engineering',
+      finding: 'Secondary containment bund leak test and eyewash shower flow check required before chemical fill.',
+      ownerId: freya, dueDay: null, recordedById: mei, recordedAt: iso(-3), recordedDay: day(-3),
+      closedDay: day(-2), closedAt: iso(-2), closedById: samuel, closureEvidenceRef: 'HYDRO-CT03-08',
+      closureBasis: '24-hour hydrostatic bund test passed with zero drop and emergency shower verified at 82 L/min.',
+      createdAt: iso(-3), updatedAt: iso(-2),
+    },
+    {
+      id: 'psrp-demo-6', reviewId: 'psr-demo-7', itemRef: 'PA-01', category: 'pre-startup', discipline: 'safety',
+      finding: 'Low-pressure alarm PAL-1204 control-room annunciation and duty-operator callout check before cutover.',
+      ownerId: freya, dueDay: null, recordedById: mei, recordedAt: iso(-3), recordedDay: day(-3),
+      closedDay: day(-2), closedAt: iso(-2), closedById: samuel, closureEvidenceRef: 'ALM-N212-CHK-02',
+      closureBasis: 'Simulated header drop to 18 mbar; priority-1 alarm enunciated on console B and logged cleanly.',
+      createdAt: iso(-3), updatedAt: iso(-2),
+    },
+    {
+      id: 'psrp-demo-7', reviewId: 'psr-demo-8', itemRef: 'PB-01', category: 'post-startup', discipline: 'operations',
+      finding: 'Update shelter wall laminated sample-routing diagram with temporary bypass tag numbers and review log.',
+      ownerId: samuel, dueDay: day(10), recordedById: priya, recordedAt: iso(-6), recordedDay: day(-6),
+      closedDay: null, closedAt: null, closedById: null, closureEvidenceRef: null, closureBasis: null,
+      createdAt: iso(-6), updatedAt: iso(-6),
+    },
+    {
+      id: 'psrp-demo-8', reviewId: 'psr-demo-9', itemRef: 'PA-01', category: 'pre-startup', discipline: 'safety',
+      finding: 'Confirm low-caustic-flow trip FSL-501 locks out vent blower within two seconds on bench and wet test.',
+      ownerId: samuel, dueDay: null, recordedById: priya, recordedAt: iso(-3), recordedDay: day(-3),
+      closedDay: day(-2), closedAt: iso(-2), closedById: mei, closureEvidenceRef: 'TRIP-V501-TEST-05',
+      closureBasis: 'Witnessed wet circulation loss test; FSL-501 tripped vent blower contactor in 1.1 seconds.',
+      createdAt: iso(-3), updatedAt: iso(-2),
+    },
+    {
+      id: 'psrp-demo-9', reviewId: 'psr-demo-10', itemRef: 'PA-01', category: 'pre-startup', discipline: 'maintenance',
+      finding: 'Hydro-test temporary flush tubing to 1.5x design pressure and install check valve upstream of seal gland.',
+      ownerId: samuel, dueDay: null, recordedById: mei, recordedAt: iso(-30), recordedDay: day(-30),
+      closedDay: day(-29), closedAt: iso(-29), closedById: mei, closureEvidenceRef: 'HT-P110-TEMP-01',
+      closureBasis: 'Flush tubing held 27 barg for 45 minutes with zero weepage; spring check valve orientation verified.',
+      createdAt: iso(-30), updatedAt: iso(-29),
+    },
+    {
+      id: 'psrp-demo-10', reviewId: 'psr-demo-10', itemRef: 'PB-01', category: 'post-startup', discipline: 'quality',
+      finding: 'Verify zero flush-medium dilution out of product moisture specification on first 48-hour lab composite.',
+      ownerId: samuel, dueDay: day(-24), recordedById: mei, recordedAt: iso(-29), recordedDay: day(-29),
+      closedDay: day(-25), closedAt: iso(-25), closedById: mei, closureEvidenceRef: 'COA-P110-48H-19',
+      closureBasis: 'Composite moisture measured 14 ppm against 50 ppm specification ceiling; certificate archived.',
+      createdAt: iso(-29), updatedAt: iso(-25),
+    },
+  ];
+
+  const mkSign = (id, reviewId, discipline, verdict, signer, daysAgo, ref, basis) => ({
+    id, reviewId, discipline, verdict, evidenceRef: ref, basisRef: basis,
+    signedById: signer, signedAt: iso(daysAgo), signedDay: day(Math.floor(daysAgo)), createdAt: iso(daysAgo),
+  });
+  state.psrSignoffs = [
+    mkSign('psrs-demo-1', 'psr-demo-2', 'engineering', 'cleared', mei, -23, 'WD-E104-ENG-01', 'Wall thickness, flange rating and thermal-expansion supports verified against temporary spool calc.'),
+    mkSign('psrs-demo-2', 'psr-demo-2', 'operations', 'cleared', samuel, -23, 'WD-E104-OPS-01', 'Valve line-up, temporary operating instruction TOI-E104 and car-sealed bypass tags verified in field.'),
+    mkSign('psrs-demo-3', 'psr-demo-2', 'safety', 'cleared', mei, -23, 'WD-E104-SAF-01', 'Relief path unobstructed, PHA safeguards verified active and temporary register tag hung at battery limit.'),
+    mkSign('psrs-demo-4', 'psr-demo-3', 'engineering', 'cleared', mei, -19, 'WD-R302-ENG-02', 'Radiography, PMI and gasket specification matched approved engineering package MOC-2026-177.'),
+    mkSign('psrs-demo-5', 'psr-demo-3', 'operations', 'cleared', samuel, -19, 'WD-R302-OPS-02', 'Updated SOP-R302 startup checklist, drain blinds and emergency depressuring line-up verified.'),
+    mkSign('psrs-demo-6', 'psr-demo-4', 'engineering', 'cleared', mei, -3, 'WD-SR05-ENG-01', 'Column internals, condenser tie-ins and grounding continuity matched as-built drawings.'),
+    mkSign('psrs-demo-7', 'psr-demo-4', 'safety', 'rejected', samuel, -2, 'WD-SR05-SAF-HOLD', 'Hold startup: vent header detonation flame arrester FA-502 lacks ATEX/ISO 16852 orientation proof.'),
+    mkSign('psrs-demo-8', 'psr-demo-5', 'maintenance', 'cleared', mei, -2, 'WD-B102-MNT-01', 'Drum manhole torque record, feedwater pump alignment and hydrostatic inspection pack verified.'),
+    mkSign('psrs-demo-9', 'psr-demo-6', 'engineering', 'cleared', mei, -2, 'WD-CT03-ENG-01', 'CPVC piping schedule, check valves and splash guarding verified against MOC-2026-214 isometric.'),
+    mkSign('psrs-demo-10', 'psr-demo-7', 'engineering', 'cleared', mei, -2, 'WD-N212-ENG-01', 'Dual PCV sizing, downstream orifice plate and relief valve set pressure verified against design.'),
+    mkSign('psrs-demo-11', 'psr-demo-7', 'operations', 'cleared', samuel, -2, 'WD-N212-OPS-01', 'Switchover SOP-N2-12 in control room, block valves tagged and nitrogen supply pressure confirmed.'),
+    mkSign('psrs-demo-12', 'psr-demo-7', 'safety', 'cleared', mei, -2, 'WD-N212-SAF-01', 'Oxygen-deficiency beacon checks and tank vacuum/overpressure protection verified across all tied tanks.'),
+    mkSign('psrs-demo-13', 'psr-demo-8', 'instrumentation', 'cleared', mei, -6, 'WD-AT408-INS-01', 'Sample flow switch, high-temperature shutoff valve and span-gas calibration verified in shelter.'),
+    mkSign('psrs-demo-14', 'psr-demo-8', 'operations', 'cleared', samuel, -6, 'WD-AT408-OPS-01', 'Temporary sample-cooler operating instruction posted and shift check frequency added to round sheet.'),
+    mkSign('psrs-demo-15', 'psr-demo-9', 'safety', 'cleared', mei, -2, 'WD-V501-SAF-01', 'Incident RCA pre-restart actions verified complete, caustic containment clean and gas monitors live.'),
+    mkSign('psrs-demo-16', 'psr-demo-9', 'operations', 'cleared', samuel, -2, 'WD-V501-OPS-01', 'Revised scrubber startup procedure SOP-V501-r9 staged and caustic strength verified at 12 wt%.'),
+    mkSign('psrs-demo-17', 'psr-demo-9', 'instrumentation', 'cleared', mei, -2, 'WD-V501-INS-01', 'Flow, differential-pressure and pH transmitters loop-checked end-to-end after seal replacement.'),
+    mkSign('psrs-demo-18', 'psr-demo-10', 'maintenance', 'cleared', mei, -29, 'WD-P110-MNT-01', 'Seal flush tubing supported against vibration, hydro-tested and tagged with temporary change placard.'),
+    mkSign('psrs-demo-19', 'psr-demo-10', 'operations', 'cleared', samuel, -29, 'WD-P110-OPS-01', 'Temporary flush flowmeter rotameter limits marked and operator startup procedure briefed.'),
+    mkSign('psrs-demo-20', 'psr-demo-10', 'quality', 'cleared', mei, -29, 'WD-P110-QAL-01', 'Flush-grade compatibility approved and post-startup composite sampling schedule registered in LIMS.'),
+  ];
+
+  const mkReady = (id, reviewId, operatorId, attester, daysAgo, proc, ev) => ({
+    id, reviewId, operatorId, procedureRef: proc, evidenceRef: ev,
+    attestedDay: day(Math.floor(daysAgo)), attestedById: attester, attestedAt: iso(daysAgo), createdAt: iso(daysAgo),
+  });
+  state.psrReadiness = [
+    mkReady('psrr-demo-1', 'psr-demo-2', freya, samuel, -23, 'TOI-E104-BYP-r1', 'TRN-E104-SHIFT-01'),
+    mkReady('psrr-demo-2', 'psr-demo-3', freya, samuel, -19, 'SOP-R302-r11', 'TRN-R302-SHIFT-04'),
+    mkReady('psrr-demo-3', 'psr-demo-7', freya, samuel, -2, 'SOP-N212-r5', 'TRN-N212-WALK-02'),
+    mkReady('psrr-demo-4', 'psr-demo-8', freya, samuel, -6, 'TOI-AT408-r1', 'TRN-AT408-SHIFT-03'),
+    mkReady('psrr-demo-5', 'psr-demo-9', freya, samuel, -2, 'SOP-V501-r9', 'TRN-V501-RESTART-01'),
+    mkReady('psrr-demo-6', 'psr-demo-10', freya, samuel, -29, 'TOI-P110-PLAN32-r1', 'TRN-P110-SHIFT-02'),
+  ];
+
+  const mkAuth = (id, reviewId, daysAgo, permitRef, basis) => ({
+    id, reviewId, authorisedById: priya, authorisedAt: iso(daysAgo), authorisedDay: iso(daysAgo).slice(0, 10),
+    permitClearanceRef: permitRef, basisRef: basis, createdAt: iso(daysAgo),
+  });
+  state.psrAuthorisations = [
+    mkAuth('psra-demo-1', 'psr-demo-2', -22.5, 'PTW-CLR-E104-12', 'Joint-apex authorisation granted after engineering, operations and safety clearances, LOTO removal and temporary bypass tagging.'),
+    mkAuth('psra-demo-2', 'psr-demo-3', -18.5, 'PTW-CLR-R302-08', 'Joint-apex authorisation granted with Cat A PMI closed, gates cleared and dated Cat B insulation follow-up logged.'),
+    mkAuth('psra-demo-3', 'psr-demo-8', -5.5, 'PTW-CLR-AT408-03', 'Joint-apex authorisation granted for 12-day temporary sample-cooler bypass with shift monitoring in place.'),
+    mkAuth('psra-demo-4', 'psr-demo-9', -1, 'PTW-CLR-V501-19', 'Joint-apex restart authorisation granted following verified wet trip test, all three discipline clearances and operator briefing.'),
+    mkAuth('psra-demo-5', 'psr-demo-10', -28.5, 'PTW-CLR-P110-02', 'Joint-apex authorisation granted for 14-day temporary seal flush after hydro-test, quality approval and briefing.'),
+  ];
+
+  state.psrStartups = [
+    {
+      id: 'psru-demo-1', reviewId: 'psr-demo-1', energisedAt: iso(-1), energisedDay: iso(-1).slice(0, 10),
+      energisedById: samuel, startupLogRef: 'DCR-K201-UNAUTH-01',
+      basisRef: 'Compressor K-201 placed online during peak demand before FV-201 stroke verification or joint-apex authorisation; logged for breach governance.',
+      restoredAt: null, restoredDay: null, restoredById: null, restorationRef: null, restorationBasis: null,
+      createdAt: iso(-1), updatedAt: iso(-1),
+    },
+    {
+      id: 'psru-demo-2', reviewId: 'psr-demo-2', energisedAt: iso(-22), energisedDay: iso(-22).slice(0, 10),
+      energisedById: samuel, startupLogRef: 'DCR-E104-START-22',
+      basisRef: 'Process flow lined up through temporary bypass spool E-104 under TOI-E104-BYP-r1 after nitrogen leak check.',
+      restoredAt: null, restoredDay: null, restoredById: null, restorationRef: null, restorationBasis: null,
+      createdAt: iso(-22), updatedAt: iso(-22),
+    },
+    {
+      id: 'psru-demo-3', reviewId: 'psr-demo-3', energisedAt: iso(-18), energisedDay: iso(-18).slice(0, 10),
+      energisedById: samuel, startupLogRef: 'DCR-R302-START-18',
+      basisRef: 'Master lock removed, warm-up ramp completed and reactor feed established under SOP-R302-r11 with zero leaks.',
+      restoredAt: null, restoredDay: null, restoredById: null, restorationRef: null, restorationBasis: null,
+      createdAt: iso(-18), updatedAt: iso(-18),
+    },
+    {
+      id: 'psru-demo-4', reviewId: 'psr-demo-8', energisedAt: iso(-5), energisedDay: iso(-5).slice(0, 10),
+      energisedById: samuel, startupLogRef: 'DCR-AT408-START-05',
+      basisRef: 'Sample stream opened through temporary conditioning cooler; online analyser readings validated against grab sample.',
+      restoredAt: null, restoredDay: null, restoredById: null, restorationRef: null, restorationBasis: null,
+      createdAt: iso(-5), updatedAt: iso(-5),
+    },
+    {
+      id: 'psru-demo-5', reviewId: 'psr-demo-10', energisedAt: iso(-28), energisedDay: iso(-28).slice(0, 10),
+      energisedById: samuel, startupLogRef: 'DCR-P110-START-28',
+      basisRef: 'Charge pump P-110 started on temporary API Plan 32 seal flush at 3.2 L/min with stable seal-pot pressure.',
+      restoredAt: iso(-16), restoredDay: iso(-16).slice(0, 10), restoredById: samuel, restorationRef: 'RESTORE-P110-BASE-07',
+      restorationBasis: 'Temporary Plan 32 tubing physically removed and blinded; permanent Plan 23/cyclone separator installed, leak-tested and returned to baseline P&ID.',
+      createdAt: iso(-28), updatedAt: iso(-16),
+    },
+  ];
+
+  state.psrMarkers = Array.isArray(state.psrMarkers) ? state.psrMarkers : [];
+}
+
 function seedTax(state, now, { priya, mei, jordan, samuel, freya }) {
   const day = (days) => new Date(now.getTime() + days * 86_400_000).toISOString().slice(0, 10);
   const iso = (days) => new Date(now.getTime() + days * 86_400_000).toISOString();
@@ -7983,6 +8261,11 @@ export function buildDemoState(now = new Date()) {
   // horizon. Hands cross two reporting lines in four of them, so the joint apex is
   // exercised rather than assumed.
   seedTax(state, now, { priya, mei, jordan, samuel, freya });
+  // ADR-0258: ten pre-startup safety reviews placed relative to the injected
+  // clock — one for each of the ten mutually exclusive derived states, with
+  // cross-line proposer/holder/signer sets whose startup authority resolves live
+  // to the matrix joint apex (`priya`) and zero stored states or verdicts.
+  seedPreStartupSafety(state, now, { priya, mei, jordan, samuel, freya });
   // ADR-0254: six cases placed relative to the injected clock — a varied appeal,
   // an appeal still lodged, a record conflict, an investigator who is the subject's
   // own manager, a decision inside its window with a counted ladder departure, and

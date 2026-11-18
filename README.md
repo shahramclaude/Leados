@@ -42,6 +42,14 @@ Open **Fair process & discipline** (`#/fair-process`, [ADR-0254](./docs/adr/0254
 
 **Not built, logged:** a register of deployed AI systems with high-risk classification evidence; uncertain tax positions; trade-sanctions screening; lease, TUPE and works-council follow-ons; field-failure trace after release (recall, warranty, product safety); revenue recognition. See [ADR-0254](./docs/adr/0254-fair-process-discipline-grievance-register.md).
 
+## 2026-11-18 — Mechanical completion is not safe to energise, and a temporary bypass is not closed until restored
+
+**Safety & frontline operations → Pre-startup safety** (`#/pre-startup`, [ADR-0258](./docs/adr/0258-pre-startup-safety-review-register.md), Schema v210, CSV #195, `RULE-PSR-01`) governs the gate between finishing work on a unit and introducing energy or hazardous material — across new builds, modifications, temporary changes, turnaround restarts and long-idle restarts.
+
+- **Separate prerequisites, derived on read:** Category A pre-startup blockers (owner and proposer cannot self-close), dated Category B post-startup conditions, required functional discipline sign-offs (latest verdict governs; a rejection re-holds startup), and affected-operator procedure briefings (self and proposer barred).
+- **Computed matrix joint-apex gate & honest breach retention:** Startup Authorisation requires the unique live `matrixJointApex` across every involved line (ambiguous matrix diamonds refuse rather than guess). Factual premature energisation is accepted on the startup log and permanently flagged `breach-energised-unsafe`; temporary changes require a `revertByDay` and remain live or expired until physical baseline restoration is verified.
+- **Scoped disclosure & honest boundary:** Full operational detail within active tree/matrix reach through rank 3; exact aggregate counts and separate `balances` vs `figuresComplete` flags at ranks 4–5; identity-free floored CSV #195. Local governance record only — never a physical interlock, DCS/SIS permissive or LOTO lock.
+
 ## 2026-11-18 — Which inspections relied on the failed gauge?
 
 Open **Instrument look-back** (`#/instrument-lookback`) when a measuring instrument is found out of tolerance. Choose an abnormal Standard Work check you recorded, or use **Record the source abnormality** to record it on your own routine. **Trace instrument uses** accepts a local UTF-8 CSV/TSV or a paste with the headers `use_ref,instrument_ref,used_on,decision_ref`. Use exact, cross-line IDs and `YYYY-MM-DD` dates. Keep the original file.

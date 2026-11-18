@@ -161,6 +161,8 @@ import { insuranceRule } from './insRules.js';
 import { provisionRule } from './prvRules.js';
 // ADR-0257: the tax controversy & appeal-control rule.
 import { taxRule } from './taxRules.js';
+// ADR-0258: the pre-startup safety review & commissioning readiness rule.
+import { psrRule } from './psrRules.js';
 import { productNonconformanceRule } from './productNonconformanceRules.js';
 import { caseToAnswerRule } from './caseToAnswerRules.js';
 import { incidentCommandRule } from './incidentCommandRules.js';
@@ -1275,6 +1277,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'taxRules.js',
     purpose: 'RULE-TAX-01: reads the Tax Controversy & Appeal-Control Register (`buildTaxControversy`, ADR-0257) with the whole-workspace view on notice recording, deadline declarations, filings, evidence items, resolutions, convention changes and explicit `tax.scan` scans — and on any other commit while a notice is on the record. FIVE conditions, each filed at most once per (deterministic `tax1:\u2026` signature, addressee) and bounded at 4 per commit with the remainder counted: `deadline-undeclared` where a notice carries an authority reference and no declared objection deadline (the register holds no jurisdiction calendar, so it never computes a window from the notice day and never asserts that none exists); `overdue-unfiled` where the declared window has closed with nothing filed, so the position stands unopposed unless somebody acts; `filed-late` where the first filing day is after the declared deadline day — recorded as late, never re-dated, never excused; `evidence-empty` where a notice has been filed and carries no evidence item behind the disputed position; and `aging-unresolved` where a filed controversy has stayed open past the declared resolution horizon. Every ask goes to the LOWEST JOINT APEX above every line holding a responsible hand on that notice — never to one line on another\u2019s behalf, and never to the hand who declared the deadline on the grounds that they were wrong. A notice whose hands are all off the graph, an unresolvable or ambiguous apex or a disconnected reporting graph writes ONE identity-free `taxMarkers` observation per condition and substitutes nobody. The ask text is deliberately opaque — a controversy schedule names the authority and the position under challenge, so no title carries a notice reference, jurisdiction, position, tax type, amount, currency, evidence reference or person — because a delegation is readable above the addressee; the opaque signature lives only in the typed `issues-obligation` link. Asks carry typed `issues-obligation` provenance and close themselves when the condition clears or the addressee moves. It never records a notice, declares a deadline, files anything, adds evidence, records a resolution, computes a deadline from a notice day, re-dates a late filing, infers an outcome from an amount, adopts either side of a swing, gives tax advice, or scores, ranks or names a person or line as a cause; pause-governed on every path (`taxAutoPropagate`), including the explicit scan.',
     writes: ['delegations', 'links', 'taxMarkers'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: psrRule,
+    module: 'psrRules.js',
+    purpose: 'RULE-PSR-01: reads the Pre-Startup Safety Review & Commissioning Readiness Register (`buildPreStartupSafety`, ADR-0258) with the whole-workspace view across review openings, punch recordings and closures, discipline sign-offs, operator readiness attestations, joint-apex Startup Authorisations, physical startups, temporary-change restorations, convention updates, explicit `preStartup.scan` sweeps and calendar commits while reviews or rule asks remain live. SIX conditions, each filed at most once per (deterministic `psr1:…` signature, addressee) and capped at 4 per commit with the remainder counted as deferred: `energised-unsafe`, `temporary-expired`, `post-startup-overdue`, `gate-rejected`, `ready-for-authorisation` and `temporary-expiring`. Every ask goes ONLY to the computed `matrixJointApex` across all active reporting lines holding the unit holder, proposer and governing signers — never to the proposer and never letting one line answer for another; unresolvable or incomplete reach records ONE identity-free `psrMarkers` observation and invents nobody. Ask titles and bodies carry zero unit names, review references, findings or identities; asks self-close when cleared, respect human closures/returns, never authorise or restore anything automatically, never score people, and are pause-governed on every path (`psrAutoPropagate`).',
+    writes: ['delegations', 'links', 'psrMarkers'],
     emits: [],
     scansWorkspace: true,
   },
