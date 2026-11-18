@@ -143,6 +143,7 @@ import { claimSignals } from './lfgClaims.js';
 import { insuranceSignals } from './insCoverage.js';
 // ADR-0250: the provision register contributes PRV-01..05.
 import { provisionSignals } from './prvProvision.js';
+import { caseToAnswerSignals } from './caseToAnswer.js';
 // ADR-0243: the employee-voice and collective-consultation register contributes
 // VOI-01..04 — a window that closed with no advice, advice nobody answered, a
 // decision out of order, and sittings with no minutes or below quorum.
@@ -2692,6 +2693,11 @@ export function buildInsights(state, now) {
   // at the provision, an asset resting on a declared judgment with no cash, and a
   // computed provision that disagrees with the declared finance carrying.
   for (const signal of provisionSignals(state, now, settings)) add(signal);
+  // DGI-01..06 — a fair-process record conflict, an investigator who is no longer
+  // independent or senior, cases waiting on the procedure, decisions owed, decisions
+  // that depart from the consistency ladder, and appeal problems. Signals about the
+  // PROCEDURE, never about the person inside it.
+  for (const signal of caseToAnswerSignals(state, now, settings)) add(signal);
   // ADR-0243 (read-side): the Employee Voice register contributes VOI-01..04. It
   // reads its own ledgers and the live matrix, so it cannot recurse into the
   // engine that is running it.

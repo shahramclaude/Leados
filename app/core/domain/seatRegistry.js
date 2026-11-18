@@ -354,6 +354,20 @@ export const RECORD_POLICIES = Object.freeze({
   // manager altitude to counts. The signatures, the acts and the re-verifications
   // carry people and evidence, so they are held at the same ceiling; the reader
   // withholds all of them above rank 3 and the rule's markers are identity-free.
+  // ADR-0254 (Schema v207): the fair-process register. Individual class with a
+  // ceiling of two: an allegation, a written finding and a sanction concern one
+  // named person, so above the manager altitude the reader receives counts and
+  // reasons, never the case. The label is what a reader is told is being withheld.
+  dgiCases: { classKey: 'individual', detailCeiling: 2, label: 'Fair-process cases — the matter, its written basis, the subject and the person who raised it, and the standard of proof the case is judged on', route: '#/fair-process' },
+  dgiAllegations: { classKey: 'individual', detailCeiling: 2, label: 'Written allegations — each one’s class, what is said to have happened, the written standard it is tested against and the evidence reference', route: '#/fair-process' },
+  dgiInvestigators: { classKey: 'individual', detailCeiling: 2, label: 'Investigator assignments — the hand assigned, the written terms of reference and the day, with independence and seniority computed on read', route: '#/fair-process' },
+  dgiDirections: { classKey: 'individual', detailCeiling: 2, label: 'Recorded directions — the subject informed, a companion offered, an interim measure and any recusal', route: '#/fair-process' },
+  dgiFindings: { classKey: 'individual', detailCeiling: 2, label: 'Written findings — one per allegation, on the case’s own declared standard of proof, with its written reason and evidence', route: '#/fair-process' },
+  dgiDecisions: { classKey: 'individual', detailCeiling: 2, label: 'Sanction decisions — the rung chosen from the declared ladder, its written reason, any expiry and any effective day', route: '#/fair-process' },
+  dgiAppeals: { classKey: 'individual', detailCeiling: 2, label: 'Appeals — the written grounds and the day lodged, by a party or a hand holding a duty on the case', route: '#/fair-process' },
+  dgiAppealOutcomes: { classKey: 'individual', detailCeiling: 2, label: 'Appeal outcomes — allowed, refused or varied with a substituted sanction, by a different hand strictly senior to the decision-maker', route: '#/fair-process' },
+  dgiWithdrawals: { classKey: 'individual', detailCeiling: 2, label: 'Withdrawals — the declared reason and the written basis. A withdrawal is never a clearance of the subject', route: '#/fair-process' },
+  dgiMarkers: { classKey: 'individual', detailCeiling: 2, label: 'Fair-process observation markers — no seat could be asked (identity-free)', route: '#/fair-process' },
   qncCases: { classKey: 'unit', detailCeiling: 3, label: 'Product nonconformance cases — the product, site, one lot or serial identifier, requirement reference, finding and source evidence', route: '#/nonconformance' },
   qncContainments: { classKey: 'unit', detailCeiling: 3, label: 'Containment attestations — the scope attested, the control, the written hold reference and the evidence (never an enforced hold)', route: '#/nonconformance' },
   qncDecisions: { classKey: 'unit', detailCeiling: 3, label: 'Joint disposition signatures — the route the live matrix resolved, the disposition, the written reason and any written concession reference', route: '#/nonconformance' },
@@ -691,6 +705,12 @@ const INDIVIDUAL_ROUTES = Object.freeze([
   'oneonones', 'feedback', 'conflicts', 'conflict', 'person', 'people',
   'reviews', 'review', 'performance', 'growth', 'recognition', 'onboarding',
   'prep', 'oneOnOnes',
+  // ADR-0254: the fair-process register is INDIVIDUAL material by law and by
+  // dignity. An allegation, a written finding and a sanction concern one named
+  // person, so the individual-record ceiling applies to the route itself: a
+  // director, a VP and a chief read the count of cases and the counts of states,
+  // never the allegation, the finding or the sanction of a named hand.
+  'fair-process', 'case-to-answer', 'discipline', 'grievance',
 ]);
 const PORTFOLIO_ROUTES = Object.freeze([
   'capital', 'allocation', 'portfolio', 'strategy', 'wargame', 'orgdesign',
@@ -1556,6 +1576,23 @@ export const ACTION_RIGHTS = Object.freeze({
   // joint matrix apex, recomputed inside the action; and a re-verification needs a
   // hand STRICTLY SENIOR to the one that did the rework. The reader withholds
   // every case, lot, finding and hand above rank 3.
+  // ADR-0254 (Schema v207): the fair-process register's nine rights.
+  // READING is open at rank 1 — a person who is the subject of an allegation must
+  // be able to read what the record says about them, and their manager must be able
+  // to act — while the ROUTE is an individual-record route, so the reader is
+  // narrowed to rank 1–2 and everyone above reads counts. OPENING, ASSIGNING,
+  // FINDING, DECIDING, APPEALING and WITHDRAWING each carry their own door inside
+  // the action: independence and strict seniority are computed from the live graph
+  // and are never taken from the caller.
+  'read-fair-process': { minRank: 1, maxRank: 5, label: 'Read the fair-process register within your grant — the cases you hold, their allegations, the investigator and the terms of reference, every written finding, the decision and any appeal. Above rank 2 the reader prints counts only and withholds every party, allegation, finding, sanction and named hand' },
+  'open-fair-process': { minRank: 1, maxRank: 5, label: 'Open a conduct case, a grievance about treatment or a grievance about an earlier decision: the subject, the written basis, the standard of proof it will be judged on, and at least one written allegation with its class, the written standard it is tested against and the evidence reference' },
+  'assign-fair-process-investigator': { minRank: 1, maxRank: 5, label: 'Assign an investigator holding written terms of reference, and record the directions the procedure owes. Independence of both parties and strict seniority over the subject are computed from the live graph inside the action' },
+  'record-fair-process-finding': { minRank: 1, maxRank: 5, label: 'Record ONE written finding against one allegation, on the case’s own declared standard of proof. A second finding for the same allegation is refused, and a finding on any other standard is refused' },
+  'decide-fair-process-sanction': { minRank: 2, maxRank: 5, label: 'Decide the sanction from the declared ladder — including “no sanction” — once every allegation carries a reliable finding, from a hand STRICTLY SENIOR to the investigator and independent of both parties. The ladder rung the record computes is printed beside the one chosen, with the departure counted' },
+  'lodge-fair-process-appeal': { minRank: 1, maxRank: 5, label: 'Lodge an appeal with written grounds against a decision on the record, by a party or a hand holding a duty on the case' },
+  'decide-fair-process-appeal': { minRank: 2, maxRank: 5, label: 'Decide an appeal — allowed, refused or varied with a substituted sanction — from a DIFFERENT hand STRICTLY SENIOR to the decision-maker. An appeal decided by the person who decided the case is refused by the action' },
+  'withdraw-fair-process-case': { minRank: 1, maxRank: 5, label: 'End a case on a declared withdrawal reason with a written basis. A withdrawal is never a clearance of the subject, and a case with a decision cannot be withdrawn' },
+  'govern-fair-process': { minRank: 4, maxRank: 5, label: 'Scan the fair-process register and re-declare its conventions — the appeal, decision and finding windows and the privacy floor. There is no default sanction, default standard of proof or presumed outcome to set' },
   'read-product-nonconformance': { minRank: 1, maxRank: 5, label: 'Read the product nonconformance register within your grant — the cases you hold, their containment, the current joint disposition, every re-verification and the derived state. Above rank 3 the reader prints counts only and withholds every case reference, product, site, lot or serial, requirement, finding and accountable hand' },
   'open-product-nonconformance': { minRank: 1, maxRank: 5, label: 'Open a case for ONE internally identified manufactured lot or serial: the product, the site, the identifier kind and its value, the source, the requirement reference and requirement, the finding, the source evidence, the day it was identified and one to four accountable hands this seat holds' },
   'contain-product-output': { minRank: 1, maxRank: 5, label: 'Record a containment attestation against a written hold reference — the control applied, the evidence and a note. A recorded attestation is never an enforced physical or system hold, and the newest attestation governs' },

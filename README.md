@@ -1,3 +1,21 @@
+## 2026-11-18 — A disciplinary case you can prove was fair, from its own record
+
+Open **Fair process & discipline** (`#/fair-process`, [ADR-0254](./docs/adr/0254-fair-process-discipline-grievance-register.md), Schema v207, CSV #193, `RULE-DGI-01`) when a conduct, capability or grievance case has to be run properly on a named person.
+
+**Declare the standard of proof before you hear the evidence, and it stays put.** A case opens on one of three standards — balance of probabilities, clear and convincing, or reasonable suspicion — and no later screen can change it. A finding recorded against any other standard is refused by the action and, if it arrives some other way, it is printed, counted and **does not count**: it cannot ground a sanction.
+
+**Independence is worked out from the reporting graph, in both directions.** The investigator must not be a party, must not manage a party, and must not report up to a party — the last one is the direction people forget, and it is the one that lets a junior hand judge the person who signs their objectives. The investigator must also be strictly senior to the subject; a peer is never independent enough. If the graph changes after the appointment, the case says so and the findings stop counting — the assignment is never quietly rewritten.
+
+**The consistency check is computed, and it never sentences anybody.** For an upheld allegation the register takes the person's **own** most recent live sanction of the same kind and works out the next rung above it. Your chosen rung is printed beside it with the exact number of rungs you moved and the reason you wrote. The register will not impose the rung — a machine that sets a sanction on a person is not a register — but it will not let a departure go unseen either.
+
+**The decision is never rewritten by the appeal.** An appeal is its own record with its own hand, who must be strictly senior to the decider and must not be that person. A varied outcome carries its own substituted sanction and the screen shows both the rung that was decided and the one that now stands. An appeal that is allowed does not erase the findings.
+
+**Withdrawing a case is not clearing somebody.** A withdrawal needs a stated reason and a written basis, and a superseded case must name what replaced it. It never reads as a clearance, the allegations stay on the record, and once a decision stands the case cannot be withdrawn at all — a decision is ended by an appeal, not erased.
+
+**What it will not do.** It does not score a person, rank a person or infer misconduct from text. It does not treat a closed appeal window as an appeal refused. Seats keep the detail out of the wrong hands as a **rendering** rule, not a security boundary, and the panel says so on the screen rather than implying a guarantee it cannot keep. Export #193 is identity-free: counts per state and per allegation kind, with a non-zero count below the privacy floor **blank with a reason**, never a small number and never a zero.
+
+**Not built, logged:** a register of deployed AI systems with high-risk classification evidence; uncertain tax positions; trade-sanctions screening; lease, TUPE and works-council follow-ons; field-failure trace after release (recall, warranty, product safety); revenue recognition. See [ADR-0254](./docs/adr/0254-fair-process-discipline-grievance-register.md).
+
 ## 2026-11-18 — Which inspections relied on the failed gauge?
 
 Open **Instrument look-back** (`#/instrument-lookback`) when a measuring instrument is found out of tolerance. Choose an abnormal Standard Work check you recorded, or use **Record the source abnormality** to record it on your own routine. **Trace instrument uses** accepts a local UTF-8 CSV/TSV or a paste with the headers `use_ref,instrument_ref,used_on,decision_ref`. Use exact, cross-line IDs and `YYYY-MM-DD` dates. Keep the original file.

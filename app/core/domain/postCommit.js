@@ -220,6 +220,7 @@ import { insuranceRule } from './insRules.js';
 // a computed provision that disagrees with the declared finance carrying.
 import { provisionRule } from './prvRules.js';
 import { productNonconformanceRule } from './productNonconformanceRules.js';
+import { caseToAnswerRule } from './caseToAnswerRules.js';
 import { incidentCommandRule } from './incidentCommandRules.js';
 import { sourcingRule } from './sourcingRules.js';
 import { ibpRule } from './ibpRules.js';
@@ -1358,6 +1359,13 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // that a disposition is unsigned, that rework was never independently verified or
   // that a release was never recorded.
   productNonconformanceRule,
+  // ADR-0254: the fair-process rule resolves the joint apex above every reporting
+  // line holding a party to a case, so silencing it reaches across reporting lines —
+  // and nobody is told that an allegation waits for an investigator able to hold it
+  // fairly, that a written finding is owed, that a decision waits for a hand senior
+  // to the investigator, that an appeal waits for a different senior hand, or that
+  // the case's own dated acts cannot all be true in a fair order.
+  caseToAnswerRule,
   workplaceAdjustmentRule,
   // ADR-0229: the Capability Sourcing & Firm-Boundary Register. ONE rule reads
   // the finished register and files at most one dated ask per condition: a

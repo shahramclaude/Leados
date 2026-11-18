@@ -2556,6 +2556,354 @@ function seedInsurance(state, now, { priya, mei, jordan, samuel, freya }) {
  * Matters 6 (settled), 7 (merged) and 9 (withdrawn) are closed on the claim
  * register and carry no open obligation, so they are not on the schedule.
  */
+/**
+ * ADR-0254: the fair-process register, placed relative to the injected clock.
+ *
+ * The demo org is deliberately shallow — Freya reports to Samuel, who reports to
+ * Priya, who reports to Rafe, who reports to Ingrid — so the FULL three-hand arc
+ * this register exists for (an investigator who holds neither party, a decision by
+ * a hand senior to the investigator, an appeal by a different hand senior again)
+ * fits exactly once, and the seed uses it honestly.
+ *
+ * Seven cases, one for each part of the duty and one for each record failure the
+ * register prints rather than repairs:
+ *
+ *   1. `dgi-demo-1` — the FULL ARC, ending in a VARIED APPEAL. Freya is the subject,
+ *      Jordan raised it. Priya holds neither directly and is strictly senior to
+ *      Freya, so she investigates; Rafe is strictly senior to Priya and independent,
+ *      so he decides; Ingrid is strictly senior to Rafe, so she hears the appeal and
+ *      VARIES the sanction down. Both rungs are printed.
+ *   2. `dgi-demo-2` — APPEAL LODGED, undecided, and lodged AFTER the declared window,
+ *      so it is kept and printed as late rather than refused.
+ *   3. `dgi-demo-3` — RECORD CONFLICT: the written finding is dated before the case
+ *      was opened. Nothing is repaired and no state is invented.
+ *   4. `dgi-demo-4` — INVESTIGATOR INVALID: the recorded investigator is the
+ *      subject's own manager. Kept, printed, and the finding does not count.
+ *   5. `dgi-demo-5` — DECIDED INSIDE ITS APPEAL WINDOW with a LADDER DEPARTURE the
+ *      register counts: the decision-maker chose a rung above the one the person's
+ *      own live record computes.
+ *   6. `dgi-demo-6` — WITHDRAWN by the person who raised it, with a written basis.
+ *      No finding was made and the subject is not cleared.
+ *   7. `dgi-demo-7` — INVESTIGATOR ASSIGNED with the findings still owed, so the
+ *      worklist has a live finding duty addressed to a named hand.
+ */
+function seedCaseToAnswer(state, now) {
+  const day = (days) => new Date(now.getTime() + days * 86_400_000).toISOString().slice(0, 10);
+  const iso = (days) => new Date(now.getTime() + days * 86_400_000).toISOString();
+  const PRIYA = 'person-demo-1';
+  const JORDAN = 'person-demo-2';
+  const MEI = 'person-demo-3';
+  const SAMUEL = 'person-demo-4';
+  const FREYA = 'person-demo-5';
+  const RAFE = 'person-demo-11';
+  const INGRID = 'person-demo-12';
+  const STANDARD = 'The workplace conduct standard requires that a colleague’s work is reviewed in the channel where the team agreed to review work, and that any concern about it is raised with the person first.';
+  const ROTA_STANDARD = 'A rota change is communicated to every affected person before it takes effect, with a written note of what moved.';
+
+  state.dgiCases = [
+    {
+      id: 'dgi-demo-1', caseRef: 'FPR-2026-001', caseKind: 'conduct', supervisorRef: 'HR-POL-04',
+      standardOfProof: 'balance-of-probabilities', subjectId: FREYA, raisedById: JORDAN,
+      basisRef: 'HR-POL-04 conduct procedure',
+      basisText: 'Opened under the team conduct procedure after a written complaint about how a review comment was given.',
+      openedOn: day(-44), declaredById: PRIYA, createdAt: iso(-44),
+    },
+    {
+      id: 'dgi-demo-2', caseRef: 'FPR-2026-002', caseKind: 'grievance', supervisorRef: 'HR-POL-07',
+      standardOfProof: 'balance-of-probabilities', subjectId: JORDAN, raisedById: null,
+      basisRef: 'HR-POL-07 grievance procedure',
+      basisText: 'A written grievance about how the handover rota was changed without telling the people it moved.',
+      openedOn: day(-40), declaredById: PRIYA, createdAt: iso(-40),
+    },
+    {
+      id: 'dgi-demo-3', caseRef: 'FPR-2026-003', caseKind: 'conduct', supervisorRef: null,
+      standardOfProof: 'reasonable-satisfaction', subjectId: JORDAN, raisedById: null,
+      basisRef: 'HR-POL-04 conduct procedure',
+      basisText: 'Opened on a written complaint that a release decision was overridden without a record.',
+      openedOn: day(-18), declaredById: PRIYA, createdAt: iso(-18),
+    },
+    {
+      id: 'dgi-demo-4', caseRef: 'FPR-2026-004', caseKind: 'grievance', supervisorRef: null,
+      standardOfProof: 'balance-of-probabilities', subjectId: FREYA, raisedById: null,
+      basisRef: 'HR-POL-07 grievance procedure',
+      basisText: 'A written grievance, raised without a named complainant, about how on-call cover is allocated.',
+      openedOn: day(-14), declaredById: PRIYA, createdAt: iso(-14),
+    },
+    {
+      id: 'dgi-demo-5', caseRef: 'FPR-2026-005', caseKind: 'conduct', supervisorRef: null,
+      standardOfProof: 'balance-of-probabilities', subjectId: JORDAN, raisedById: FREYA,
+      basisRef: 'HR-POL-04 conduct procedure',
+      basisText: 'A written complaint that the agreed review channel was bypassed twice in one week.',
+      openedOn: day(-26), declaredById: PRIYA, createdAt: iso(-26),
+    },
+    {
+      id: 'dgi-demo-6', caseRef: 'FPR-2026-006', caseKind: 'grievance-about-process', supervisorRef: null,
+      standardOfProof: 'balance-of-probabilities', subjectId: FREYA, raisedById: MEI,
+      basisRef: 'HR-POL-07 grievance procedure',
+      basisText: 'A written grievance that an earlier decision was reached without hearing both sides.',
+      openedOn: day(-12), declaredById: PRIYA, createdAt: iso(-12),
+    },
+    {
+      id: 'dgi-demo-7', caseRef: 'FPR-2026-007', caseKind: 'conduct', supervisorRef: null,
+      standardOfProof: 'balance-of-probabilities', subjectId: JORDAN, raisedById: null,
+      basisRef: 'HR-POL-04 conduct procedure',
+      basisText: 'A written complaint that the escalation rota was published without the on-call agreement the standard requires.',
+      openedOn: day(-6), declaredById: PRIYA, createdAt: iso(-6),
+    },
+  ];
+
+  state.dgiCases.push(
+    {
+      id: 'dgi-demo-8', caseRef: 'FPR-2026-008', caseKind: 'conduct', supervisorRef: null,
+      standardOfProof: 'balance-of-probabilities', subjectId: FREYA, raisedById: JORDAN,
+      basisRef: 'HR-POL-04 conduct procedure',
+      basisText: 'A written complaint that a handover note was left unwritten for a second consecutive shift.',
+      openedOn: day(-20), declaredById: PRIYA, createdAt: iso(-20),
+    },
+    {
+      id: 'dgi-demo-9', caseRef: 'FPR-2026-009', caseKind: 'conduct', supervisorRef: null,
+      standardOfProof: 'serious-and-substantiated', subjectId: JORDAN, raisedById: FREYA,
+      basisRef: 'HR-POL-04 conduct procedure',
+      basisText: 'A written allegation, on the higher declared burden the case names for itself, that a safety control was knowingly bypassed.',
+      openedOn: day(-96), declaredById: PRIYA, createdAt: iso(-96),
+    },
+  );
+
+  state.dgiCases.push(
+    {
+      id: 'dgi-demo-10', caseRef: 'FPR-2026-010', caseKind: 'grievance', supervisorRef: null,
+      standardOfProof: 'balance-of-probabilities', subjectId: FREYA, raisedById: JORDAN,
+      basisRef: 'HR-POL-07 grievance procedure',
+      basisText: 'A written grievance, raised this week, about how a support rotation was assigned. Nobody has been assigned to look into it yet.',
+      openedOn: day(-2), declaredById: PRIYA, createdAt: iso(-2),
+    },
+  );
+
+  state.dgiAllegations = [
+    {
+      id: 'dgi-demo-1-a1', caseId: 'dgi-demo-1', classKey: 'conduct', sequence: 1,
+      statement: 'A review comment on the billing migration was given in a public channel after the team had agreed that review comments go to the author first.',
+      standardRef: 'CS-REVIEW-02', standardText: STANDARD,
+      evidenceRef: 'SLACK-THREAD-2026-0912', raisedOn: day(-44), createdAt: iso(-44),
+    },
+    {
+      id: 'dgi-demo-2-a1', caseId: 'dgi-demo-2', classKey: 'relationship', sequence: 1,
+      statement: 'The handover rota was changed without telling the people whose shifts it moved, and the change was only found the day before it took effect.',
+      standardRef: 'TP-ROTA-11', standardText: ROTA_STANDARD,
+      evidenceRef: 'ROTA-2026-1002', raisedOn: day(-40), createdAt: iso(-40),
+    },
+    {
+      id: 'dgi-demo-3-a1', caseId: 'dgi-demo-3', classKey: 'conduct', sequence: 1,
+      statement: 'A release decision recorded as agreed was overridden the same afternoon without a note on the record or a word to the people who had agreed it.',
+      standardRef: 'ENG-DEC-01', standardText: 'A recorded decision is changed by a recorded decision, naming what changed and who agreed the change.',
+      evidenceRef: 'DEC-LOG-2026-1009', raisedOn: day(-18), createdAt: iso(-18),
+    },
+    {
+      id: 'dgi-demo-4-a1', caseId: 'dgi-demo-4', classKey: 'other', sequence: 1,
+      statement: 'On-call cover was allocated in a way that put the same two people on the rota for a third consecutive week, against the written rotation rule.',
+      standardRef: 'OPS-ONCALL-03', standardText: 'No person is on the primary on-call rota for more than two consecutive weeks without a recorded agreement.',
+      evidenceRef: 'ROTA-2026-1018', raisedOn: day(-14), createdAt: iso(-14),
+    },
+    {
+      id: 'dgi-demo-5-a1', caseId: 'dgi-demo-5', classKey: 'conduct', sequence: 1,
+      statement: 'Review comments were posted in the release channel twice in the same week after the team had agreed to use the review queue.',
+      standardRef: 'CS-REVIEW-02', standardText: STANDARD,
+      evidenceRef: 'SLACK-THREAD-2026-1021', raisedOn: day(-26), createdAt: iso(-26),
+    },
+    {
+      id: 'dgi-demo-6-a1', caseId: 'dgi-demo-6', classKey: 'relationship', sequence: 1,
+      statement: 'The earlier grievance was decided on written submissions alone, and the person it was about was never told a case existed.',
+      standardRef: 'HR-POL-07', standardText: 'A person who is the subject of a grievance is told about it in writing and given the opportunity to answer before a decision is made.',
+      evidenceRef: 'GRIEV-2026-0811', raisedOn: day(-12), createdAt: iso(-12),
+    },
+    {
+      id: 'dgi-demo-8-a1', caseId: 'dgi-demo-8', classKey: 'conduct', sequence: 1,
+      statement: 'The handover note was left blank for two consecutive shift changes, against the written handover standard, and the second shift started without knowing the state of the release.',
+      standardRef: 'OPS-HANDOVER-02', standardText: 'Every shift change carries a written handover note naming what is live, what is failing and what is unverified.',
+      evidenceRef: 'HANDOVER-2026-1101', raisedOn: day(-20), createdAt: iso(-20),
+    },
+    {
+      id: 'dgi-demo-9-a1', caseId: 'dgi-demo-9', classKey: 'safety', sequence: 1,
+      statement: 'A gas-detection interlock was bypassed to keep a line running, and the bypass was recorded nowhere. The written control prohibits a bypass without a signed permit.',
+      standardRef: 'SAFE-INTERLOCK-01', standardText: 'No safety interlock is bypassed without a signed permit naming the compensating control and its end.',
+      evidenceRef: 'PERMIT-2026-0714', raisedOn: day(-96), createdAt: iso(-96),
+    },
+    {
+      id: 'dgi-demo-10-a1', caseId: 'dgi-demo-10', classKey: 'relationship', sequence: 1,
+      statement: 'The support rotation for the next quarter was assigned without the written consultation the team agreement requires, and the same two people carry the weekend again.',
+      standardRef: 'SUP-ROTA-04', standardText: 'A quarterly support rotation is proposed in writing to the whole team and settled at the next team meeting before it is published.',
+      evidenceRef: 'ROTA-2026-1115', raisedOn: day(-2), createdAt: iso(-2),
+    },
+    {
+      id: 'dgi-demo-7-a1', caseId: 'dgi-demo-7', classKey: 'safety', sequence: 1,
+      statement: 'The escalation rota was published with a single-handed weekend on it, which the on-call agreement rules out without a recorded exception.',
+      standardRef: 'OPS-ONCALL-05', standardText: 'A weekend on-call period carries two named hands unless a written exception signed by the duty manager is on the record.',
+      evidenceRef: 'ROTA-2026-1112', raisedOn: day(-6), createdAt: iso(-6),
+    },
+    {
+      id: 'dgi-demo-7-a2', caseId: 'dgi-demo-7', classKey: 'safety', sequence: 2,
+      statement: 'The single-handed weekend was not escalated to the duty manager at any point, although the on-call agreement requires an escalation the same day.',
+      standardRef: 'OPS-ONCALL-05', standardText: 'A single-handed weekend on the on-call rota is escalated to the duty manager on the day it is identified.',
+      evidenceRef: 'ESCALATION-2026-1112', raisedOn: day(-6), createdAt: iso(-6),
+    },
+  ];
+
+  state.dgiInvestigators = [
+    {
+      id: 'dgi-demo-inv-1', caseId: 'dgi-demo-1', investigatorId: PRIYA,
+      termsRef: 'TOR-FPR-2026-001',
+      termsText: 'Establish whether the review comment departed from the agreed review standard, on the balance of probabilities, and report in writing against each allegation.',
+      assignedOn: day(-43), assignedById: PRIYA, createdAt: iso(-43),
+    },
+    {
+      id: 'dgi-demo-inv-2', caseId: 'dgi-demo-2', investigatorId: PRIYA,
+      termsRef: 'TOR-FPR-2026-002',
+      termsText: 'Establish whether the rota change was communicated as the standard requires, and whether the delay in telling people was avoidable.',
+      assignedOn: day(-39), assignedById: PRIYA, createdAt: iso(-39),
+    },
+    {
+      id: 'dgi-demo-inv-3', caseId: 'dgi-demo-3', investigatorId: PRIYA,
+      termsRef: 'TOR-FPR-2026-003',
+      termsText: 'Establish what was recorded when the release decision was changed, and by whom.',
+      assignedOn: day(-17), assignedById: PRIYA, createdAt: iso(-17),
+    },
+    {
+      // DELIBERATE RECORD FAILURE: the subject's own manager cannot investigate her.
+      // The row is kept, the register recomputes the verdict on every read, and the
+      // finding that follows does not count.
+      id: 'dgi-demo-inv-4', caseId: 'dgi-demo-4', investigatorId: SAMUEL,
+      termsRef: 'TOR-FPR-2026-004',
+      termsText: 'Establish whether the rotation rule was followed when the on-call cover was allocated.',
+      assignedOn: day(-13), assignedById: PRIYA, createdAt: iso(-13),
+    },
+    {
+      id: 'dgi-demo-inv-5', caseId: 'dgi-demo-5', investigatorId: PRIYA,
+      termsRef: 'TOR-FPR-2026-005',
+      termsText: 'Establish whether the agreed review channel was used, and whether the departure was a slip or a choice.',
+      assignedOn: day(-25), assignedById: PRIYA, createdAt: iso(-25),
+    },
+    {
+      id: 'dgi-demo-inv-8', caseId: 'dgi-demo-8', investigatorId: PRIYA,
+      termsRef: 'TOR-FPR-2026-008',
+      termsText: 'Establish whether the handover standard was departed from on both shifts, and whether the departure was a slip or a choice.',
+      assignedOn: day(-19), assignedById: PRIYA, createdAt: iso(-19),
+    },
+    {
+      id: 'dgi-demo-inv-9', caseId: 'dgi-demo-9', investigatorId: PRIYA,
+      termsRef: 'TOR-FPR-2026-009',
+      termsText: 'Establish, on the higher burden this case declares, whether the interlock was bypassed knowingly and without a signed permit.',
+      assignedOn: day(-95), assignedById: PRIYA, createdAt: iso(-95),
+    },
+    {
+      id: 'dgi-demo-inv-7', caseId: 'dgi-demo-7', investigatorId: PRIYA,
+      termsRef: 'TOR-FPR-2026-007',
+      termsText: 'Establish whether the escalation rota departed from the on-call agreement, and whether any written exception is on the record.',
+      assignedOn: day(-5), assignedById: PRIYA, createdAt: iso(-5),
+    },
+  ];
+
+  state.dgiDirections = [
+    { id: 'dgi-demo-dir-1', caseId: 'dgi-demo-1', kind: 'subject-informed', note: 'Told in writing on the day the case was opened, with the allegation and the standard attached.', recordedOn: day(-44), recordedById: PRIYA, createdAt: iso(-44) },
+    { id: 'dgi-demo-dir-2', caseId: 'dgi-demo-1', kind: 'companion-offered', note: 'A colleague of her choosing was offered and one was named. The offer is on the record whether or not it is taken up.', recordedOn: day(-44), recordedById: PRIYA, createdAt: iso(-44) },
+    { id: 'dgi-demo-dir-3', caseId: 'dgi-demo-2', kind: 'subject-informed', note: 'Told in writing with the grievance attached and a fortnight to answer.', recordedOn: day(-40), recordedById: PRIYA, createdAt: iso(-40) },
+    { id: 'dgi-demo-dir-4', caseId: 'dgi-demo-5', kind: 'interim-measure', note: 'Review comments moved to the queue for the duration of the case. This is an interim measure, not a sanction.', recordedOn: day(-25), recordedById: PRIYA, createdAt: iso(-25) },
+    { id: 'dgi-demo-dir-5', caseId: 'dgi-demo-7', kind: 'subject-informed', note: 'Told in writing with the allegation and the on-call agreement attached.', recordedOn: day(-6), recordedById: PRIYA, createdAt: iso(-6) },
+  ];
+
+  const FIND_A = 'The comment was posted in the public channel on the day the thread was started, and the team had agreed the author-first rule a month earlier. On the balance of probabilities the departure is established.';
+  const FIND_NOT = 'The rota change was published a fortnight before it took effect, and the record shows the affected people were told. The allegation is not established on the balance of probabilities.';
+  const FIND_REVIEW = 'What was recorded when the decision changed is a single line with no author. The standard requires a recorded decision naming who agreed the change, so the departure is established.';
+
+  state.dgiFindings = [
+    { id: 'dgi-demo-f1', caseId: 'dgi-demo-1', allegationId: 'dgi-demo-1-a1', outcome: 'upheld', standardOfProof: 'balance-of-probabilities', reason: FIND_A, evidenceRef: 'SLACK-EXPORT-2026-0912', foundOn: day(-40), foundById: PRIYA, createdAt: iso(-40) },
+    { id: 'dgi-demo-f2', caseId: 'dgi-demo-2', allegationId: 'dgi-demo-2-a1', outcome: 'not-upheld', standardOfProof: 'balance-of-probabilities', reason: FIND_NOT, evidenceRef: 'ROTA-LOG-2026-1002', foundOn: day(-36), foundById: PRIYA, createdAt: iso(-36) },
+    // DELIBERATE RECORD FAILURE: dated before the case was opened.
+    { id: 'dgi-demo-f3', caseId: 'dgi-demo-3', allegationId: 'dgi-demo-3-a1', outcome: 'upheld', standardOfProof: 'reasonable-satisfaction', reason: FIND_REVIEW, evidenceRef: 'DEC-LOG-EXPORT-2026-1009', foundOn: day(-22), foundById: PRIYA, createdAt: iso(-22) },
+    // DELIBERATE RECORD FAILURE: recorded by the subject's own manager, so it does not count.
+    { id: 'dgi-demo-f4', caseId: 'dgi-demo-4', allegationId: 'dgi-demo-4-a1', outcome: 'upheld', standardOfProof: 'balance-of-probabilities', reason: FIND_A, evidenceRef: 'ROTA-EXPORT-2026-1018', foundOn: day(-10), foundById: SAMUEL, createdAt: iso(-10) },
+    { id: 'dgi-demo-f5', caseId: 'dgi-demo-5', allegationId: 'dgi-demo-5-a1', outcome: 'partly-upheld', standardOfProof: 'balance-of-probabilities', reason: FIND_REVIEW, evidenceRef: 'SLACK-EXPORT-2026-1021', foundOn: day(-22), foundById: PRIYA, createdAt: iso(-22) },
+  ];
+
+  state.dgiFindings.push(
+    { id: 'dgi-demo-f8', caseId: 'dgi-demo-8', allegationId: 'dgi-demo-8-a1', outcome: 'upheld', standardOfProof: 'balance-of-probabilities', reason: FIND_REVIEW, evidenceRef: 'HANDOVER-EXPORT-2026-1101', foundOn: day(-14), foundById: PRIYA, createdAt: iso(-14) },
+    { id: 'dgi-demo-f9', caseId: 'dgi-demo-9', allegationId: 'dgi-demo-9-a1', outcome: 'upheld', standardOfProof: 'serious-and-substantiated', reason: 'The permit record has no entry for the day of the bypass, and two hands on the shift confirm the interlock was overridden. On the higher burden this case declares, the allegation is substantiated.', evidenceRef: 'PERMIT-EXPORT-2026-0714', foundOn: day(-86), foundById: PRIYA, createdAt: iso(-86) },
+  );
+
+  state.dgiFindings.push(
+    // ONE of two allegations found: the case reads `findings-owed` with the exact
+    // count printed, rather than being treated as complete or as nothing.
+    { id: 'dgi-demo-f7', caseId: 'dgi-demo-7', allegationId: 'dgi-demo-7-a1', outcome: 'upheld', standardOfProof: 'balance-of-probabilities', reason: 'The published rota carries one name against the weekend, and the on-call agreement rules that out without a written exception. No exception is on the record.', evidenceRef: 'ROTA-EXPORT-2026-1112', foundOn: day(-3), foundById: PRIYA, createdAt: iso(-3) },
+  );
+
+  state.dgiDecisions = [
+    {
+      id: 'dgi-demo-dec-1', caseId: 'dgi-demo-1', sanction: 'written-warning',
+      reason: 'A first recorded departure from the review standard. A written warning for six months, with the standard restated in writing, is proportionate to a conduct departure that caused no harm to the work itself.',
+      decidedOn: day(-36), decidedById: RAFE, expiresOn: day(146), effectiveOn: null,
+      createdAt: iso(-36),
+    },
+    {
+      id: 'dgi-demo-dec-3', caseId: 'dgi-demo-5', sanction: 'final-written-warning',
+      reason: 'A departure of the same class as an earlier recorded warning, and the review standard had been restated in writing between the two. A final written warning for twelve months.',
+      decidedOn: day(-18), decidedById: RAFE, expiresOn: day(347), effectiveOn: null,
+      createdAt: iso(-18),
+    },
+  ];
+
+  state.dgiDecisions.push(
+    {
+      // INSIDE its declared appeal window: 14 days from the decision day.
+      id: 'dgi-demo-dec-8', caseId: 'dgi-demo-8', sanction: 'recorded-conversation',
+      reason: 'A recorded departure from the handover standard with no harm to the release. A recorded conversation with the standard restated is proportionate for a first departure of this class.',
+      decidedOn: day(-5), decidedById: RAFE, expiresOn: null, effectiveOn: null,
+      createdAt: iso(-5),
+    },
+    {
+      // A DISMISSAL carries its effective day: that day is the accrual the limitation
+      // register derives a period from, and a dismissal with no end date has no clock.
+      id: 'dgi-demo-dec-9', caseId: 'dgi-demo-9', sanction: 'dismissal',
+      reason: 'A safety interlock was bypassed knowingly and without a permit, on a shift where two hands were present. On the higher burden this case declared, the departure is substantiated and the consequence of a deliberate control breach of this kind is the end of the engagement.',
+      decidedOn: day(-60), decidedById: RAFE, expiresOn: null, effectiveOn: day(-53),
+      createdAt: iso(-60),
+    },
+  );
+
+  state.dgiAppeals = [
+    {
+      id: 'dgi-demo-app-1', caseId: 'dgi-demo-1',
+      grounds: 'The finding rests on a single screenshot and the context of the thread is not in the record. The sanction is also above what a first departure has attracted in this team.',
+      lodgedOn: day(-30), lodgedById: FREYA, createdAt: iso(-30),
+    },
+    {
+      // DELIBERATE RECORD FACT: lodged after the declared window closed. Kept, printed
+      // as late, and never refused by the register.
+      id: 'dgi-demo-app-2', caseId: 'dgi-demo-5',
+      grounds: 'The earlier warning had run out before this case was decided, so the escalation to a final warning rests on a sanction that was no longer live.',
+      lodgedOn: day(-3), lodgedById: JORDAN, createdAt: iso(-3),
+    },
+  ];
+
+  state.dgiAppealOutcomes = [
+    {
+      // INGRID is strictly senior to RAFE and independent of both parties.
+      id: 'dgi-demo-appout-1', appealId: 'dgi-demo-app-1', outcome: 'varied', sanction: 'recorded-conversation',
+      reason: 'The grounds on the sanction are made out: the record does not show a previous departure of this class, so the ladder starts at a recorded conversation and the written warning was a departure without a stated reason. The grounds on the finding are refused — the standard was agreed in writing and the thread is on the record.',
+      decidedOn: day(-24), decidedById: INGRID, createdAt: iso(-24),
+    },
+  ];
+
+  state.dgiWithdrawals = [
+    {
+      id: 'dgi-demo-wd-1', caseId: 'dgi-demo-6', reasonKey: 'withdrawn-by-complainant',
+      basis: 'The person who raised the grievance asked in writing for it to be withdrawn because the earlier decision is being reconsidered separately. No finding was made and nothing is recorded as cleared.',
+      successorRef: null, withdrawnOn: day(-4), withdrawnById: MEI, createdAt: iso(-4),
+    },
+  ];
+
+  // The rule's markers are empty at seed time; RULE-DGI-01 writes its own.
+  state.dgiMarkers = Array.isArray(state.dgiMarkers) ? state.dgiMarkers : [];
+}
+
 function seedProvisions(state, now, { priya, mei, jordan, samuel, freya }) {
   const day = (days) => new Date(now.getTime() + days * 86_400_000).toISOString().slice(0, 10);
   const iso = (days) => new Date(now.getTime() + days * 86_400_000).toISOString();
@@ -7413,6 +7761,11 @@ export function buildDemoState(now = new Date()) {
   // an unreconciled carrying, so the register derives live states rather than
   // showing an honest empty state on first load.
   seedProvisions(state, now, { priya, mei, jordan, samuel, freya });
+  // ADR-0254: six cases placed relative to the injected clock — a varied appeal,
+  // an appeal still lodged, a record conflict, an investigator who is the subject's
+  // own manager, a decision inside its window with a counted ladder departure, and
+  // a written withdrawal. Every state the register prints is derived from these.
+  seedCaseToAnswer(state, now);
   // ADR-0240: one declared incident with a running external clock, an accepted
   // line, an unaccepted line and a recorded severity raise — so the register
   // shows a real bridge rather than an honest empty state on first load.

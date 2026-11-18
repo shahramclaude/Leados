@@ -182,6 +182,9 @@ import { permitToWorkAttentionCount } from './core/domain/permitToWork.js';
 // ADR-0253: the product nonconformance and disposition register.
 import { renderProductNonconformance } from './views/productNonconformance.js';
 import { productNonconformanceAttentionCount } from './core/domain/productNonconformance.js';
+// ADR-0254: the fair-process discipline and grievance register.
+import { renderCaseToAnswer } from './views/caseToAnswer.js';
+import { caseToAnswerAttentionCount } from './core/domain/caseToAnswer.js';
 // ADR-0247: the statutory authorisation & licence-to-operate register.
 import { renderAuthorisations } from './views/authorisations.js';
 import { renderClaims } from './views/claims.js';
@@ -698,6 +701,12 @@ export const NAV = [
     // first register in this group that is frontline-native by design: the finding is
     // made at the bench, so opening a case and attesting containment sit at rank 1.
     { route: 'nonconformance', label: 'Product nonconformance', icon: '⧖', badge: 'nonconformance' },
+    // ADR-0254: the first register in this workspace about a duty owed to a PERSON
+    // rather than to an asset, a plant or a sum of money — what is alleged in
+    // writing, who may fairly look into it, what was found on the standard the case
+    // declared, what it cost, and whether a different senior hand heard the appeal.
+    // Manager altitude by design: the reader withholds every case above rank 2.
+    { route: 'fair-process', label: 'Fair process & discipline', icon: '⚖', badge: 'fairProcess' },
     // ADR-0243: what was put to a staff body, the period its own instrument gave
     // it, what it advised, whether the organisation answered, and whether the
     // decision preceded the close of the window. Director/VP primary; above rank 3
@@ -975,6 +984,8 @@ const RENDERERS = {
   provisions: (ctx) => renderProvisions(ctx),
   // ADR-0253: the product nonconformance and disposition register.
   nonconformance: (ctx) => renderProductNonconformance(ctx),
+  // ADR-0254: the fair-process discipline and grievance register.
+  'fair-process': (ctx) => renderCaseToAnswer(ctx),
   // ADR-0243: the employee-voice and collective-consultation register.
   voice: (ctx) => renderVoice(ctx),
   // ADR-0244: the mutual-aid activation & resource-commitment register.
@@ -1196,6 +1207,19 @@ export function parseRoute(hash) {
     'use-as-is': 'nonconformance', 'concession': 'nonconformance', 'rework': 'nonconformance',
     scrap: 'nonconformance', 'return-to-supplier': 'nonconformance', 'lot-hold': 'nonconformance',
     'serial-hold': 'nonconformance', 'quality-case': 'nonconformance', 'defect': 'nonconformance',
+    // ADR-0254: the words a manager, a person raising a grievance and an HR lead
+    // actually type for the same duty. None of these shadows an existing route:
+    // 'performance' is the performance-review terminal, 'conflicts' is the
+    // conflict-of-interest register and 'speak-up' is the concern router — this
+    // register is the procedure those three refer INTO, never replace.
+    'fair-process': 'fair-process', 'fairprocess': 'fair-process',
+    'fair-process-discipline': 'fair-process', 'discipline': 'fair-process',
+    'disciplinary': 'fair-process', 'disciplinary-case': 'fair-process',
+    'case-to-answer': 'fair-process', 'grievance': 'fair-process',
+    'grievance-procedure': 'fair-process', 'disciplinary-hearing': 'fair-process',
+    'hearing': 'fair-process', 'appeal': 'fair-process', 'sanction': 'fair-process',
+    'capability-procedure': 'fair-process', 'misconduct': 'fair-process',
+    'investigation': 'fair-process', 'hr-case': 'fair-process',
     // ADR-0247: statutory authorisations. The words a site director, a compliance
     // lead and a supervisor actually type for the same duty; none shadows a route.
     'authorisations': 'authorisations', 'authorisation': 'authorisations',
@@ -2013,6 +2037,9 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       // unverified rework, an owed release and a conflicting record — the same
       // conditions RULE-QNC-01 files. A COUNT, never a case reference.
       nonconformance: productNonconformanceAttentionCount(state, { now: at, settings: state.settings, seat: seatCtx?.seat || null }),
+      // ADR-0254: the conditions RULE-DGI-01 files. A COUNT, never a case reference —
+      // a badge that named a person would be a disclosure on every screen.
+      fairProcess: caseToAnswerAttentionCount(state, { now: at, settings: state.settings, seat: seatCtx?.seat || null }),
       // ADR-0247: a lapsed authority, a suspension, a revocation, a standing
       // prohibition, an authority inside its renewal window and an improvement
       // notice past its day — the same conditions RULE-LTO-01 files. A COUNT.

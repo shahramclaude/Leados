@@ -143,6 +143,7 @@ import { createMutualAidActions } from './core/domain/mutualAidActions.js';
 import { createPersonalDealingActions } from './core/domain/personalDealingActions.js';
 import { createPermitToWorkActions } from './core/domain/permitToWorkActions.js';
 import { createProductNonconformanceActions } from './core/domain/productNonconformanceActions.js';
+import { createCaseToAnswerActions } from './core/domain/caseToAnswerActions.js';
 import { createAuthorisationActions } from './core/domain/authorisationActions.js';
 import { createClaimActions } from './core/domain/lfgActions.js';
 import { createInsuranceActions } from './core/domain/insActions.js';
@@ -20439,6 +20440,11 @@ export function createApi(store, options = {}) {
   // apex, and the re-verification against strict seniority over the hand that did
   // the rework. Every read is a seat-scoped SAFE_READ that re-proves its own right.
   Object.assign(api, createProductNonconformanceActions(store, { now: clock, idFactory: id }));
+  // ADR-0254: the fair-process discipline and grievance register. Every command
+  // re-proves its own right; independence of both parties and strict seniority are
+  // recomputed from the live reporting graph INSIDE the action, so no caller can
+  // declare them. Every read is a seat-scoped SAFE_READ that re-proves its own right.
+  Object.assign(api, createCaseToAnswerActions(store, { now: clock, idFactory: id }));
   Object.assign(api, createAuthorisationActions(store, { now: clock, idFactory: id }));
   Object.assign(api, createClaimActions(store, { now: clock, idFactory: id }));
   Object.assign(api, createInsuranceActions(store, { now: clock, idFactory: id }));
