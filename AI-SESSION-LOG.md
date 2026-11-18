@@ -5343,3 +5343,15 @@ New gaps logged as Planned: cross-entity/cross-currency appetite under a declare
 **Verified:** `node --test tests/app/tax-controversy.test.mjs` — **36/36 PASS**, including the data-integrity contract that the panel prints the reader's own figures cell by cell and that the demo's eight notices derive six states with nothing derived stored in any row. Head pins and migration-step lists moved v208→v209 / 165→166 across ten neighbouring suites; a standing red in the disclosure catalogue (`lone-working` manifest row absent from the route list since ADR-0242) was repaired. Whole suite and real-browser/AT walkthrough of `#/tax` **[UNVERIFIED]**.
 
 **New gaps logged, not built — Planned:** agent & adviser authority register; authority correspondence ingestion; penalty & interest exposure; group-wide dispute schedule across entities; return-preparation linkage. **Next up:** agent & adviser authority register (director / VP tax × matrix) — the register records the filing but cannot yet prove the filer was authorised to make it.
+
+## Session 331 — 2026-11-18 — Agent authority safety gate
+
+**Doctrine and sync:** North Star and all four mandates present; origin matches `https://github.com/shahramclaude/Leados` (Git URL uses `.git`). Branch `arena/e63f1d51-leados` based on `11daa93`.
+
+**Built:** no runtime feature. An unwired agent-authority prototype was explored and withdrawn rather than shipping incomplete or unsafe code. Agent & adviser authority remains **In Progress**; it must connect evidence, scoped authorisation, storage, seat controls, UI, export and matrix routing before it can be called complete. In particular, a filer's identity plus free-text scope cannot prove a filing is authorised.
+
+**Focused verification:** an inline Node assertion against the prototype CSV failed: with privacy floor 3, a state detail suppressed one refusal, but the summary exposed `refused_n = 1`. Removing the unwired prototype is the corrective action; no follow-up run was made. No screen exists, so displayed-versus-stored integrity, adjacent behavior and real-browser/AT remain **[UNVERIFIED]**. The pre-existing full suite is known red on stale pins and pause-permit reach census; not run in this session.
+
+**Altitude / structure:** director / VP tax execution and CEO / CFO oversight × single-chain and matrix. **Benchmark:** IRS 2848/8821 and HMRC 64-8 published distinctions informed the investigation; no vendor environment run, **[BENCHMARK-UNVERIFIED]**. **Asset:** none produced; no UI shipped. Higgsfield was unavailable; a method asset remains a blocker if the eventual feature includes one.
+
+**New gap:** beneficial-ownership and sanctions-control evidence for counterparty decisions, including source, dated screening and disposition, director / VP through CEO × matrix; targeted app/roadmap search found no explicit feature; repository-wide absence **[UNVERIFIED]**. **Next:** design a provable and privacy-safe authority-register slice before implementation. The earlier tax Insights bucket and pause-permit reach gaps remain unverified/unfixed here.
