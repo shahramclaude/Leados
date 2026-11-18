@@ -5219,3 +5219,13 @@ New gaps logged as Planned: cross-entity/cross-currency appetite under a declare
 **New gap — Planned: uncertain tax position & current/deferred tax provision.** A ten-term census returned zero hits for `uncertain tax`, `tax position`, `deferred tax`, `current tax`, `effective tax`, `tax provision`, `thin capital`, `sales tax` and `withholding` as a tax concept; the surviving hits are internal transfer pricing and a `tax` request kind (a revenue/customs authority demand). Nothing bridges accounting profit to taxable profit, measures an uncertain tax position, or splits current from deferred tax. CEO / C-suite finance × matrix. Unbuilt.
 
 **Next:** the uncertain-tax-position & current/deferred tax provision register bridging the provision schedule, the tax authority requests and the finance carryings.
+
+## Session 329 — 2026-11-18 — Tax controversy / appeal-control gap discovery
+
+**Doctrine:** `NORTH_STAR.md` exists and contains the Matrix Leadership, Bulletproof Reliability, Visual/Content Integrity, and Competitive Benchmark mandates. No doctrine edit required. **Sync:** origin is `https://github.com/shahramclaude/Leados.git`; local branch `arena/f2ad1438-leados` is active. **Orientation:** reviewed the North Star and latest roadmap/session-log entries; inspected the tax-authority-related domain/view references. Current checkout history exposes only the base commit in `git log`, so preceding logged sessions were read from the repository documents.
+
+**Built:** No runtime feature. This session is discovery/documentation only; no claim of a finished product capability. **New gap:** post-issuance tax dispute and appeal control — bind an authority notice and disputed position to a jurisdiction-declared objection deadline, actual filing, evidence packet, and resolution, integrated with (not duplicating) the planned uncertain-tax/current-deferred-tax provision register.
+
+**Altitude / structure:** CEO/CFO and VP tax portfolio view; director/frontline tax and legal execution × matrix. The duty is preventing a missed challenge deadline while preserving the evidence-to-position-to-reserve audit trail across separate reporting lines.
+
+**Benchmark:** [BENCHMARK-UNVERIFIED]. No specialist tax platform was evaluated hands-on and no jurisdictional primary sources were consulted; parity is not claimed. Benchmark research is a gate before implementation. **Asset:** none; no visual or communication deliverable was built. **Verification:** focused source census only; no code changed, so no runtime/data-integrity check was run. Repo status/PR not yet attempted. **Flagged:** live-browser/AT, vendor benchmark and jurisdiction coverage are unverified; this is an unbuilt roadmap item, not a shipped feature.
