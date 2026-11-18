@@ -1,3 +1,13 @@
+## 2026-11-18 — Concurrent control impairment: evidenced-window review
+
+**Completed:** local TSV-to-JSON evidence review for one hazard, director / VP × single-chain and matrix. Frontline / mid-manager evidence can be supplied; no new CEO or browser view. Reconciles confirmed intersections to exact UTC bounds and source lines, collapsing identical cross-line copies. No workspace mutation, asset or roll-up. **In Progress / next:** workspace-native dated credits, shared dependencies, open impairments and independently evidenced reinstatement (director / VP). No restoration inference.
+
+**Benchmark:** Sphera Process Safety Barrier Management sets the combined-impairment workflow bar. Local review covers only submitted historical windows; no operational or AI parity trial **[BENCHMARK-UNVERIFIED]**.
+
+**New gap — Planned:** CEO / VP finance, both structures: liquidation-preference waterfall for board review of sale proceeds. Reconcile seniority, participation caps and conversion elections to the distributable pool; refuse disputed terms or missing classes rather than allocating presumed residuals. Count each instrument once across sponsors. Targeted canonical/ADR/roadmap search for liquidation preference/waterfall found no match; wider absence **[UNVERIFIED]**. Unbuilt.
+
+Doctrine present, four mandates confirmed, origin matched. Verified with the focused CLI suite (2/2): submitted fields equal printed evidence, 1 ms overlap, abutment, duplicate evidence and atomic refusal. Canonical boundary passed. Operational documents, full suite and CI **[UNVERIFIED]**.
+
 ## 2026-11-18 — Explicit lone-working timer declaration
 
 **Doctrine and sync:** NORTH_STAR and all four mandates present. Fetch and push origin match the requested repository (canonical `.git` suffix); active branch `arena/71e43e43-leados`. Read roadmap and recent entries; inspected declaration, schema, chronology, form and focused tests.
