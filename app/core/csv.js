@@ -266,6 +266,16 @@ import {
   buildProductNonconformance,
   productNonconformanceCsvRows,
 } from './domain/productNonconformance.js';
+// ADR-0254: identity-free fair-process aggregates (CSV #193).
+import {
+  DGI_CSV_COLUMNS,
+  DGI_CSV_DESCRIPTOR,
+  DGI_CSV_SCOPE,
+} from './domain/caseToAnswerRegistry.js';
+import {
+  buildCaseToAnswer,
+  caseToAnswerCsvRows,
+} from './domain/caseToAnswer.js';
 import { authorisationCsvRows } from './domain/authorisationReport.js';
 import { buildAuthorisations } from './domain/authorisation.js';
 import { loneWorkingCsvRows } from './domain/loneWorkingReport.js';
@@ -1829,6 +1839,13 @@ export const CSV_EXPORTS = [
   // crosses this boundary. A non-zero state count below the fixed privacy floor of
   // three exports BLANK with its reason, never as a small number.
   QNC_CSV_DESCRIPTOR,
+  // #193 (ADR-0254): fair process and discipline. One summary row, one row per case
+  // kind and one row per derived review state. No case reference, party, allegation,
+  // written standard, finding, sanction reason, investigator, manager or day crosses
+  // this boundary. A non-zero count below the declared privacy floor exports BLANK
+  // with its reason, never as a small number. A dismissal count is a count of
+  // decisions, never a list of people.
+  DGI_CSV_DESCRIPTOR,
 ];
 
 function personLookup(state) {
@@ -7188,6 +7205,18 @@ export function buildScopeTable(state, scope, now) {
       return {
         columns: QNC_CSV_COLUMNS.map((key) => ({ key, header: key })),
         rows: productNonconformanceCsvRows(report),
+      };
+    }
+    case DGI_CSV_SCOPE: {
+      // CSV scope #193 (ADR-0254, Schema v207). Built from the SAME reader the
+      // `#/fair-process` panel renders, with no seat: every figure is a count over
+      // the whole register, so no case reference, party, allegation, standard,
+      // finding, sanction reason, investigator, manager or day is reachable. A count
+      // below the declared privacy floor exports BLANK with its reason.
+      const report = buildCaseToAnswer(state, { now, settings: state.settings || {}, seat: null });
+      return {
+        columns: DGI_CSV_COLUMNS.map((key) => ({ key, header: key })),
+        rows: caseToAnswerCsvRows(report),
       };
     }
     case LWK_CSV_SCOPE: {

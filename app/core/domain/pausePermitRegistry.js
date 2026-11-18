@@ -378,6 +378,14 @@ export const PAUSE_PERMIT_MATRIX_REACH_SWITCHES = Object.freeze([
   // leaves an uncontained lot, an unsigned disposition, an unverified rework or an
   // unrecorded release unasked — and the lines holding those hands are not told.
   'qncAutoPropagate',
+  // ADR-0254: the fair-process rule computes the joint apex above every line holding
+  // a PARTY to a case (the subject and, where there is one, the person who raised
+  // it), so silencing it leaves an uninvestigated allegation, an owed written
+  // finding, an undecided sanction, an undecided appeal and a running appeal window
+  // unasked — and the lines holding those parties are not told. It reaches across
+  // reporting lines through `matrixJointApex`, so it carries a permit like every
+  // other cross-line switch.
+  'dgiAutoPropagate',
   // ADR-0224's successors: four rules that compute an ask through the reporting
   // graph were gated by switches the reach list never claimed, so a pause on them
   // could have silenced a cross-line ask while the census said it could not. Named
@@ -544,6 +552,12 @@ export const PAUSE_PERMIT_SWITCH_RULES = Object.freeze({
   // provided, disclosed, recognized or reconciled in its place.
   provAutoPropagate: 'prvRules.js',
   qncAutoPropagate: 'productNonconformanceRules.js',
+  // ADR-0254: silencing the fair-process rule leaves an allegation waiting for an
+  // investigator able to hold it fairly, a written finding owed, a sanction decision
+  // owed, an appeal undecided and an appeal window closing unasked. The register
+  // stays open and visible; nothing is assigned, found, decided or withdrawn in its
+  // place.
+  dgiAutoPropagate: 'caseToAnswerRules.js',
   assuranceAutoPropagate: 'assuranceFindingRules.js',
   maaAutoPropagate: 'mutualAidRules.js',
   dwlAutoPropagate: 'personalDealingRules.js',

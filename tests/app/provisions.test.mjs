@@ -237,7 +237,7 @@ function asSeat(api, store, seatId) {
 /* --------------------------------------------------------------- 1. schema */
 
 test('schema v204 is additive: five empty ledgers, two conventions, nothing inferred', () => {
-  assert.equal(SCHEMA_VERSION, 206);
+  assert.equal(SCHEMA_VERSION, 207, 'ADR-0254 (fair process) is the current head');
   const keys = ['prvAssessments', 'prvScenarios', 'prvReimbursements', 'prvCarryings', 'prvMarkers'];
   for (const key of keys) assert.ok(COLLECTIONS.includes(key), `${key} must be a declared collection`);
   const empty = createEmptyState(T0);
@@ -707,7 +707,7 @@ test('the rule stays silent when paused, and observes identity-free where nobody
 });
 
 test('the rule is registered on the spine, in the propagation contracts, and in the pause census', () => {
-  assert.equal(DEFAULT_POST_COMMIT_RULES.length, 164, 'the spine carries ADR-0250 (RULE-PROV-01) after ADR-0249, then ADR-0253 (RULE-QNC-01)');
+  assert.equal(DEFAULT_POST_COMMIT_RULES.length, 165, 'the spine carries ADR-0250 (RULE-PROV-01) after ADR-0249, then ADR-0253 (RULE-QNC-01), then ADR-0254 (RULE-DGI-01)');
   const contract = PROPAGATION_CONTRACTS.find((row) => row.rule?.id === 'provisionRule' || row.module === 'prvRules.js');
   assert.ok(contract, 'the rule must have a propagation contract');
   assert.deepEqual(contract.writes.sort(), ['delegations', 'links', 'prvMarkers']);

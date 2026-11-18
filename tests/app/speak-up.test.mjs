@@ -137,14 +137,15 @@ function withDom(run) {
 /* ------------------------------------------------------------ 1. schema v169 */
 
 test('ADR-0215 schema: the bump is additive — three empty ledgers, four declared conventions', () => {
-  assert.equal(SCHEMA_VERSION, 179);
+  assert.equal(SCHEMA_VERSION, 207, 'ADR-0254 (fair process) is the current head');
   const old = createEmptyState(T0);
   old.schemaVersion = 168;
   delete old.concernReports;
   delete old.concernActs;
   delete old.concernMarkers;
   const migrated = migrate(old);
-  assert.equal(migrated.applied.at(-1), '178 → 179');
+  assert.ok(migrated.applied.includes('178 → 179'), 'the v179 step still runs as part of the chain');
+  assert.equal(migrated.applied.at(-1), `${SCHEMA_VERSION - 1} → ${SCHEMA_VERSION}`, 'the chain runs on to the current head');
   assert.deepEqual(migrated.raw.concernReports, []);
   assert.deepEqual(migrated.raw.concernActs, []);
   assert.deepEqual(migrated.raw.concernMarkers, []);

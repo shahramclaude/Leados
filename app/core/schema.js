@@ -552,6 +552,32 @@ import {
 // will refuse to recognise is KEPT and printed, because deleting it would hide a
 // control failure. Nothing derived — a state, a hold, an approval, a
 // verification verdict or a release — is stored anywhere.
+// ADR-0254 (Schema v207): the Fair-Process Discipline & Grievance Register. Ten
+// ledgers — the case and its declared standard of proof, the written allegations
+// (each with its own written standard and evidence reference), the investigator
+// assignments holding terms of reference, the directions the procedure owes, the
+// written findings, the sanction decisions, the appeals, the appeal outcomes, the
+// withdrawals and the rule's identity-free markers. Every loader is fail-closed: an
+// allegation with no written standard, no written statement or no evidence
+// reference is DROPPED, and a case with no readable allegation is dropped whole,
+// because a case nobody can state is not a case. A structurally readable but
+// procedurally ineffective act is KEPT and printed — deleting a second decision or
+// a finding by an interested hand would erase the control failure the register
+// exists to surface. Nothing derived — a state, an independence verdict, a
+// seniority verdict, a ladder rung, an appeal outcome verdict — is stored anywhere.
+import {
+  normalizeDgiAllegations,
+  normalizeDgiAppealOutcomes,
+  normalizeDgiAppeals,
+  normalizeDgiCases,
+  normalizeDgiDecisions,
+  normalizeDgiDirections,
+  normalizeDgiFindings,
+  normalizeDgiInvestigators,
+  normalizeDgiMarkers,
+  normalizeDgiSettings,
+  normalizeDgiWithdrawals,
+} from './domain/caseToAnswerSchema.js';
 import {
   normalizeQncCases,
   normalizeQncContainments,
@@ -1557,7 +1583,7 @@ export {
 // already holds is one. Every state, window, day count and minute count is derived
 // on read.
 // ADR-0252: dated instrument-use extracts on abnormal standard-work checks.
-export const SCHEMA_VERSION = 206;
+export const SCHEMA_VERSION = 207;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -3066,6 +3092,14 @@ export const DEFAULT_SETTINGS = Object.freeze({
   // particular case, decided and signed by the matrix apex above that case; a
   // workspace default would silently authorise a release nobody signed.
   ...normalizeQncSettings({}),
+  // ADR-0254: the fair-process conventions — the appeal window, the decision and
+  // finding windows, the privacy floor below which a per-state export is withheld,
+  // and the rule switch. Note what is NOT here: a default sanction, a default
+  // standard of proof, a presumed outcome, or a statutory investigation period.
+  // Every one of those is a fact about one case, declared by a named hand; a
+  // workspace default would impose a sanction nobody chose or a procedure no
+  // instrument requires.
+  ...normalizeDgiSettings({}),
   // ADR-0243: the employee-voice conventions — the reply window, the minutes
   // window, the privacy floor below which a per-state export is withheld, and the
   // rule switch. Note what is NOT here: a consultation period. The period a body
@@ -4343,6 +4377,24 @@ export const COLLECTIONS = [
   'qncDispositionActs',
   'qncVerifications',
   'qncMarkers',
+  // ADR-0254 (Schema v207): the Fair-Process Discipline & Grievance Register. One
+  // case per matter with the standard of proof it will be judged on; the written
+  // allegations and the written standard each is tested against; the independent
+  // investigator and their terms of reference; the directions; the written
+  // findings; the sanction decision; the appeal and its outcome; the withdrawal;
+  // and identity-free markers. No state, verdict, ladder rung or outcome is stored:
+  // every one is re-derived on read, so a hand-edited file cannot carry a decided
+  // case whose decision-maker held a party.
+  'dgiCases',
+  'dgiAllegations',
+  'dgiInvestigators',
+  'dgiDirections',
+  'dgiFindings',
+  'dgiDecisions',
+  'dgiAppeals',
+  'dgiAppealOutcomes',
+  'dgiWithdrawals',
+  'dgiMarkers',
 ];
 
 /** Stable empty state. `now` is an ISO string so the result is a pure value. */
@@ -4674,6 +4726,13 @@ export function normalizeSettings(raw) {
     // that hides an uncontained lot, an unsigned disposition, an unverified
     // rework or a release nobody recorded is never the silent default.
     ...normalizeQncSettings(s),
+    // ADR-0254: the fair-process conventions. Without this the switch was in
+    // DEFAULT_SETTINGS and in the v206→v207 migration but NOT in the load path,
+    // so every save dropped `dgiAutoPropagate` back to undefined and the only
+    // write that can pause RULE-DGI-01 was silently discarded. Every other DGI
+    // convention (appeal/decision/finding windows, privacy floor) rides here too
+    // so a reload cannot quietly reset a declared convention to its default.
+    ...normalizeDgiSettings(s),
     // Repair of a standing red reported at base HEAD: two rule switches the
     // pause census maps were not carried in settings, so the only writes that
     // can silence those rules were refused as unknown keys. Declared here with
@@ -10107,6 +10166,21 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.qncDispositionActs = normalizeQncDispositionActs(raw.qncDispositionActs, state.qncCases, state.qncDecisions, now, warnings);
   state.qncVerifications = normalizeQncVerifications(raw.qncVerifications, state.qncCases, state.qncDispositionActs, now, warnings);
   state.qncMarkers = normalizeQncMarkers(raw.qncMarkers, now, warnings);
+  // ADR-0254 (Schema v207): the fair-process register, loaded in dependency order.
+  // An allegation is validated before the case, because a case with nothing to
+  // answer is dropped whole; findings are validated against both; an appeal is
+  // validated against its decision, because an appeal with nothing to appeal is
+  // not an appeal.
+  state.dgiAllegations = normalizeDgiAllegations(raw.dgiAllegations, now, warnings);
+  state.dgiCases = normalizeDgiCases(raw.dgiCases, state.dgiAllegations, state.people, now, warnings);
+  state.dgiInvestigators = normalizeDgiInvestigators(raw.dgiInvestigators, state.dgiCases, now, warnings);
+  state.dgiDirections = normalizeDgiDirections(raw.dgiDirections, state.dgiCases, now, warnings);
+  state.dgiFindings = normalizeDgiFindings(raw.dgiFindings, state.dgiCases, state.dgiAllegations, now, warnings);
+  state.dgiDecisions = normalizeDgiDecisions(raw.dgiDecisions, state.dgiCases, now, warnings);
+  state.dgiAppeals = normalizeDgiAppeals(raw.dgiAppeals, state.dgiCases, state.dgiDecisions, now, warnings);
+  state.dgiAppealOutcomes = normalizeDgiAppealOutcomes(raw.dgiAppealOutcomes, state.dgiAppeals, now, warnings);
+  state.dgiWithdrawals = normalizeDgiWithdrawals(raw.dgiWithdrawals, state.dgiCases, now, warnings);
+  state.dgiMarkers = normalizeDgiMarkers(raw.dgiMarkers, now, warnings);
   // ADR-0229 (Schema v182): a case, option, cost line or act that cannot be read
   // exactly is DROPPED with a counted warning — never repaired, re-termed,
   // re-priced or re-pointed at another case. A cost line that does not belong to
@@ -11359,6 +11433,29 @@ export const MIGRATIONS = {
     qncVerifications: Array.isArray(v205.qncVerifications) ? v205.qncVerifications : [],
     qncMarkers: Array.isArray(v205.qncMarkers) ? v205.qncMarkers : [],
     settings: { ...(v205.settings || {}), ...normalizeQncSettings(v205.settings || {}) },
+  }),
+  // 206 → 207: ADR-0254 adds TEN EMPTY ledgers (`dgiCases`, `dgiAllegations`,
+  // `dgiInvestigators`, `dgiDirections`, `dgiFindings`, `dgiDecisions`,
+  // `dgiAppeals`, `dgiAppealOutcomes`, `dgiWithdrawals`, `dgiMarkers`) and the
+  // register's conventions. NOTHING is inferred from an incident, a just-culture
+  // review, a speak-up concern, an absence, a performance review or a claim: a case
+  // is a written allegation against a written standard, opened by a named hand, and
+  // manufacturing one at upgrade time would put an allegation on the record that
+  // nobody made — about a named person.
+  206: (v206) => ({
+    ...v206,
+    schemaVersion: 207,
+    dgiCases: Array.isArray(v206.dgiCases) ? v206.dgiCases : [],
+    dgiAllegations: Array.isArray(v206.dgiAllegations) ? v206.dgiAllegations : [],
+    dgiInvestigators: Array.isArray(v206.dgiInvestigators) ? v206.dgiInvestigators : [],
+    dgiDirections: Array.isArray(v206.dgiDirections) ? v206.dgiDirections : [],
+    dgiFindings: Array.isArray(v206.dgiFindings) ? v206.dgiFindings : [],
+    dgiDecisions: Array.isArray(v206.dgiDecisions) ? v206.dgiDecisions : [],
+    dgiAppeals: Array.isArray(v206.dgiAppeals) ? v206.dgiAppeals : [],
+    dgiAppealOutcomes: Array.isArray(v206.dgiAppealOutcomes) ? v206.dgiAppealOutcomes : [],
+    dgiWithdrawals: Array.isArray(v206.dgiWithdrawals) ? v206.dgiWithdrawals : [],
+    dgiMarkers: Array.isArray(v206.dgiMarkers) ? v206.dgiMarkers : [],
+    settings: { ...(v206.settings || {}), ...normalizeDgiSettings(v206.settings || {}) },
   }),
   // 183 → 184: ADR-0231 adds SEVEN EMPTY ledgers (`ibpCycles`, `ibpDemandRows`,
   // `ibpCapacityRows`, `ibpOptions`, `ibpDecisions`, `ibpGrades`, `ibpMarkers`)

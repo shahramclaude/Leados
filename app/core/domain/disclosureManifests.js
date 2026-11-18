@@ -278,6 +278,19 @@ export const MODULE_MANIFESTS = Object.freeze({
   // Unit class: a finding about an identified lot is operational detail, readable by
   // the seat that holds it and rolled up to counts above the manager altitude.
   nonconformance: row('nonconformance', 'Product nonconformance', ['qncCases', 'qncContainments', 'qncDecisions', 'qncDispositionActs', 'qncVerifications', 'qncMarkers'], { mode: A, classKey: 'unit', adapterScoped: true, detailCeiling: 3, dates: ['createdAt', 'recordedAt', 'decidedAt', 'performedAt', 'verifiedAt'], statuses: [], note: 'The register adapter publishes one derived state per identified lot or serial: whether containment is attested in full (the LATEST attestation governs, never an earlier one), which joint matrix apex is required, what each signature says, whether rework was independently re-verified by a hand strictly senior to the one that did it, and whether a separate release is on the record. Above rank 3 the reader prints counts only and withholds every case reference, product, site, lot or serial, requirement, finding and hand. A recorded containment is an attestation, not an enforced physical or system hold.' }),
+  // ADR-0254: the fair-process discipline and grievance register. Declared cases,
+  // written allegations, investigator assignments, directions, written findings,
+  // sanction decisions, appeals, appeal outcomes, withdrawals and identity-free
+  // markers — read through the register's own seat-scoped adapter and NOT through
+  // the raw collections.
+  //
+  // INDIVIDUAL class with a ceiling of TWO, and adapterScoped because the register
+  // narrows the row set before anything is rendered: a seat reads a case it opened,
+  // an assigned hand's case, or a case involving somebody it holds. Above rank 2 the
+  // adapter publishes counts and reasons only. This is deliberately the narrowest
+  // policy in the file: an allegation, a written finding and a sanction are about one
+  // named person, and the unit of analysis above the manager altitude is a span.
+  'fair-process': row('fair-process', 'Fair process & discipline', ['dgiCases', 'dgiAllegations', 'dgiInvestigators', 'dgiDirections', 'dgiFindings', 'dgiDecisions', 'dgiAppeals', 'dgiAppealOutcomes', 'dgiWithdrawals', 'dgiMarkers'], { mode: A, classKey: 'individual', adapterScoped: true, detailCeiling: 2, dates: ['createdAt', 'openedOn', 'assignedOn', 'recordedOn', 'foundOn', 'decidedOn', 'lodgedOn', 'withdrawnOn'], dues: [], statuses: [], note: 'The register adapter publishes one derived state per case: whether an independent, strictly-senior investigator holds written terms of reference, whether every allegation carries a reliable written finding on the case’s own standard of proof, the sanction decision with the ladder rung the record computes beside the rung chosen, any appeal and its outcome by a different strictly-senior hand, and any withdrawal. Above rank 2 the reader prints counts only and withholds every case reference, party, allegation, standard, finding, sanction and named hand. Seats are workflow declarations, not authentication.' }),
   cadence: row('cadence', 'Operating cadence', ['cadenceForums', 'cadenceSessions'], { mode: A, classKey: 'unit', adapterScoped: true, detailCeiling: 5, dates: ['createdAt', 'heldOn'], dues: ['nextOn'], statuses: ['status'], note: 'The cadence adapter publishes span counts of declared forums and held sittings; no chair name, attendee list, forum free text or item title. The register audits the release series as one integer system.' }),
 });
 

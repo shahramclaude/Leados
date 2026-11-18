@@ -36,6 +36,7 @@ import { MAA_RIGHTS } from './mutualAidRegistry.js';
 import { DWL_RIGHTS } from './personalDealingRegistry.js';
 import { PTW_RIGHTS } from './permitToWorkRegistry.js';
 import { QNC_RIGHTS } from './productNonconformanceRegistry.js';
+import { DGI_RIGHTS } from './caseToAnswerRegistry.js';
 import { LTO_RIGHTS } from './authorisationRegistry.js';
 import { LFG_RIGHTS } from './lfgRegistry.js';
 import { INS_RIGHTS } from './insRegistry.js';
@@ -411,6 +412,22 @@ const groups = [
   [QNC_RIGHTS.ACT, 'qncRecordDispositionAct'],
   [QNC_RIGHTS.VERIFY, 'qncVerifyRework'],
   [QNC_RIGHTS.GOVERN, 'qncSetConventions qncScan'],
+  // ADR-0254: the fair-process register. Every write is narrowed INSIDE the action
+  // to a door this table cannot express — independence of both parties and strict
+  // seniority are computed from the live reporting graph, never taken from the
+  // caller — so the table's job is only to keep the writes out of the hands that
+  // hold no right at all. Reading is open at rank 1 because a person who is the
+  // subject of an allegation must be able to read what the record says about them;
+  // the ROUTE is an individual-record route, so everything above rank 2 is counts.
+  [DGI_RIGHTS.READ, 'dgiReport dgiAttention dgiCandidates dgiCaseDetail'],
+  [DGI_RIGHTS.OPEN, 'dgiOpen'],
+  [DGI_RIGHTS.ASSIGN, 'dgiAssignInvestigator dgiRecordDirection'],
+  [DGI_RIGHTS.FIND, 'dgiRecordFinding'],
+  [DGI_RIGHTS.DECIDE, 'dgiDecideSanction'],
+  [DGI_RIGHTS.LODGE, 'dgiLodgeAppeal'],
+  [DGI_RIGHTS.APPEAL, 'dgiDecideAppeal'],
+  [DGI_RIGHTS.WITHDRAW, 'dgiWithdraw'],
+  [DGI_RIGHTS.GOVERN, 'dgiSetConventions dgiScan'],
   // ADR-0247: the statutory authorisation register. Reading is open at rank 1 —
   // the hand that opens the gates must be able to read the authority it is opening
   // them under — while the READER withholds accountable hands above rank 3. Every
@@ -943,6 +960,12 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // lot must be able to read what the record says about it even while identity
 // enforcement is on. The write path re-proves its own right and its own control.
 'qncReport', 'qncAttention', 'qncCandidates',
+// ADR-0254: the fair-process register's pure read surface. Every one re-proves the
+// read right inside the action, because a module whose reads are absent from
+// SAFE_READS is unreadable under enforcement while its writes are still gated —
+// and whether the allegation against you was upheld, and whether your appeal is
+// still open, would vanish the moment enforcement was turned on.
+'dgiReport', 'dgiAttention', 'dgiCandidates', 'dgiCaseDetail',
 // ADR-0241: the workplace adjustment register's pure read surface. Every one of
 // these re-proves the read right inside the action, exactly as the distributed-
 // work and incident registers do — a module whose reads are absent from
