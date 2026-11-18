@@ -143,6 +143,8 @@ import { claimSignals } from './lfgClaims.js';
 import { insuranceSignals } from './insCoverage.js';
 // ADR-0250: the provision register contributes PRV-01..05.
 import { provisionSignals } from './prvProvision.js';
+// ADR-0257: the tax controversy register's signals.
+import { taxSignals } from './taxControversy.js';
 import { caseToAnswerSignals } from './caseToAnswer.js';
 // ADR-0243: the employee-voice and collective-consultation register contributes
 // VOI-01..04 — a window that closed with no advice, advice nobody answered, a
@@ -2693,6 +2695,11 @@ export function buildInsights(state, now) {
   // at the provision, an asset resting on a declared judgment with no cash, and a
   // computed provision that disagrees with the declared finance carrying.
   for (const signal of provisionSignals(state, now, settings)) add(signal);
+  // TAX-01..05 — an authority notice with no declared objection deadline, a window
+  // that closed with nothing filed, a filing that landed late, a filed objection
+  // with no evidence packet, and a controversy left unresolved past its declared
+  // horizon. Signals about the DISPUTE, never a score on the hand answering it.
+  for (const signal of taxSignals(state, now, settings)) add(signal);
   // DGI-01..06 — a fair-process record conflict, an investigator who is no longer
   // independent or senior, cases waiting on the procedure, decisions owed, decisions
   // that depart from the consistency ladder, and appeal problems. Signals about the

@@ -76,7 +76,7 @@ test('service budget: v207 migration adds an empty evidence ledger and does not 
   delete earlier.serviceBudgets;
   earlier.micIncidents = [{ id: 'existing-incident' }];
   const { raw, applied } = migrate(earlier);
-  assert.deepEqual(applied, ['207 → 208']);
+  assert.deepEqual(applied, ['207 → 208', '208 → 209']);
   assert.equal(raw.schemaVersion, 208);
   assert.deepEqual(raw.serviceBudgets, []);
   assert.deepEqual(raw.micIncidents, earlier.micIncidents);

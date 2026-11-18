@@ -44,6 +44,20 @@ In **Standard Work → Stations** (`#/standard-work?panel=stations`), **Can thes
 
 The window holder can open **See the staffing proof** for the exact scenario counts and the stations limiting the worst recorded case. Missing availability can leave a result **Not proven**, never an invented absence. Directors and executives see window outcomes within their scope, subject to the disclosure floor. The station brief and aggregate CSV use the same results. The check does not schedule anyone, establish attendance, or model sequential work or failures across multiple windows. [Method and limits](docs/adr/0251-station-single-absence-check.md).
 
+## 2026-11-18 — The assessment is not the deadline: the window is
+
+**Director / VP tax → Tax controversy & appeal control** (`#/tax`, [ADR-0257](./docs/adr/0257-tax-controversy-appeal-control-register.md), Schema v209, CSV #194, `RULE-TAX-01`) records the dispute that produces an uncertain tax position: the authority's notice and the position it challenges, the objection deadline **declared with the written basis that sets it**, the filing that met it with the authority's receipt reference, the evidence packet behind the position, and the resolution with the amount finally payable.
+
+**The register holds no jurisdiction calendar, and that is the point.** A deadline is never computed from the notice day. A notice whose window nobody has written down prints **`deadline-undeclared`** — never "has no deadline", and never a guessed date — and the register asks the joint seat above the hands to declare it. A deadline row with no cited basis is refused at the door and dropped at the load boundary.
+
+**Timeliness is derived, never asserted.** The first filing by day is compared with the declared deadline day and the verdict is printed — on time, late by an exact number of days, or **unprovable** when either day cannot be read. A late filing is recorded as late and is never re-dated. A filed objection with no evidence item is flagged `evidence-empty`; evidence is never inferred from a filing.
+
+**The swing is printed apart from both figures.** Disputed less resolved, exact in minor units, per currency — because adding across currencies needs a rate this register does not hold. Where nothing has been resolved the swing is **blank with its reason**, never a zero.
+
+**Matrix is handled, not assumed.** A notice names one to four hands across tax, finance, legal and the operating business. Every active line holding any of them is resolved (a declared secondary line included), each person is counted once in the headcount, the ask goes to the **lowest joint apex above all of them**, and a hand off the reporting graph is kept and printed as an orphan — with the register reporting itself **not certified** rather than substituting a name.
+
+**Verified:** 36 claims green, including that every figure on screen is the reader's own. No setup from you: Schema v209 adds six empty registers and infers nothing. **Not built, and said so:** no jurisdiction content corpus, no return preparation, no interest or penalty computation, no authority-correspondence ingestion.
+
 ## 2026-11-17 — The reserve was a number somebody typed, and the provision is a judgement somebody has to make
 
 **CEO / C-suite finance → Provision & reimbursement** (`#/provisions`, [ADR-0250](./docs/adr/0250-provision-reimbursement-register.md), Schema v204, CSV #191, `RULE-PROV-01`) is the register for what the organisation must carry on the balance sheet for each obligation, what it may recognize as a reimbursement asset against it, and whether the figure finance carries agrees with the figure the record supports. The workspace could already store a claim's gross exposure and an insurance policy's verified recovery; it could not say what must be provided, what is only disclosed, or what the net exposure is.

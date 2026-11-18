@@ -348,6 +348,18 @@ export const RECORD_POLICIES = Object.freeze({
   prvReimbursements: { classKey: 'portfolio', detailCeiling: 4, label: 'Reimbursement recognitions — whether the recovery is virtually certain and the written basis, with the cash and the claimed amount derived from the insurance register', route: '#/provisions' },
   prvCarryings: { classKey: 'portfolio', detailCeiling: 4, label: 'Finance carryings — the figure the finance seat declares it is carrying as the provision, per currency, with the reference to the finance record', route: '#/provisions' },
   prvMarkers: { classKey: 'unit', detailCeiling: 3, label: 'Provision-register observation markers — no joint seat, no responsible line to ask (identity-free)', route: '#/provisions' },
+  // ADR-0257 (Schema v209): the tax controversy register. A notice names an
+  // authority, a position under challenge and a sum disputed — PORTFOLIO material a
+  // director and above must see, with the reader withholding the HANDS above rank
+  // 3. The deadline, the filings, the evidence and the resolutions are the same
+  // class: a sum on the record and a window an organisation had to meet, not a
+  // person's file. The rule's own markers are identity-free.
+  taxNotices: { classKey: 'portfolio', detailCeiling: 4, label: 'Authority notices — the authority reference, the disputed position, the jurisdiction as declared, the tax type, the disputed amount, the currency, the written basis and the responsible hands', route: '#/tax' },
+  taxDeadlines: { classKey: 'portfolio', detailCeiling: 4, label: 'Declared objection deadlines — the jurisdiction-declared day and the written basis that sets the window', route: '#/tax' },
+  taxFilings: { classKey: 'portfolio', detailCeiling: 4, label: 'Filings — the kind, the filed day, the authority receipt reference and the written basis', route: '#/tax' },
+  taxEvidence: { classKey: 'portfolio', detailCeiling: 4, label: 'Evidence items — the item, the document reference, the supplied day and what it proves about the disputed position', route: '#/tax' },
+  taxResolutions: { classKey: 'portfolio', detailCeiling: 4, label: 'Resolutions — the closed-vocabulary outcome, the amount finally payable, the currency, the resolved day and the written basis', route: '#/tax' },
+  taxMarkers: { classKey: 'unit', detailCeiling: 3, label: 'Tax-controversy observation markers — no joint seat, no responsible line to ask (identity-free)', route: '#/tax' },
   // ADR-0253 (Schema v206): the product nonconformance register. A case names a
   // product, a site, one identified lot or serial, a written requirement and a
   // finding — an operational fact about a unit of output, so it is UNIT material,
@@ -735,6 +747,11 @@ const PORTFOLIO_ROUTES = Object.freeze([
   // declared right: a rank-1 or rank-2 seat is told the floor instead of an empty
   // register.
   'provisions', 'service-error-budget',
+  // ADR-0257: the tax controversy register declares `read-tax-controversy` and
+  // `manage-tax-controversy` at rank 3–5, so the route is declared here with the
+  // same floor. Without it `routeRankWindow('tax')` defaults to floor 1 and the nav
+  // offers a screen the collection policies and the disclosure manifest withhold.
+  'tax',
 ]);
 const ENTERPRISE_ROUTES = Object.freeze([
   // Pay, workforce shape and board-reported statistical audit claims. Capital
@@ -1569,6 +1586,8 @@ export const ACTION_RIGHTS = Object.freeze({
   'manage-insurance': { minRank: 1, maxRank: 5, label: 'Declare an insurance policy on its declaration page, link a coverage to a matter, record a notification or a recovery, and set the register’s conventions' },
   'read-provisions': { minRank: 3, maxRank: 5, label: 'Read the provision and reimbursement register — the matters you hold, their declared classifications and best estimates, the derived provisions and reimbursement assets, the net exposure and the reconciliation against the finance carrying. Above rank 3 the reader prints counts and withholds responsible hands' },
   'manage-provisions': { minRank: 3, maxRank: 5, label: 'Declare a provision assessment and its classification and best-estimate method, declare a scenario, declare a reimbursement recognition and a finance carrying, and set the register’s conventions' },
+  'read-tax-controversy': { minRank: 3, maxRank: 5, label: 'Read the tax controversy and appeal-control register — the authority notices you hold, their declared objection deadlines and written jurisdictional bases, the filings and the timeliness derived from them, the evidence packets and the resolutions with the swing between what was disputed and what was finally payable. Above rank 3 the reader prints counts and withholds responsible hands' },
+  'manage-tax-controversy': { minRank: 3, maxRank: 5, label: 'Record an authority notice on the document the authority issued, declare an objection deadline with its written jurisdictional basis, record a filing with the authority receipt reference, record an evidence item, record a resolution, and set the register’s conventions' },
   // ADR-0253 (Schema v206): the product nonconformance register's five rights.
   // READING and OPENING are open at rank 1 — the finding is identified at the
   // bench, and a register that required a manager to be present to write down a

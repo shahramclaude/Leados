@@ -127,12 +127,23 @@ const RENDERER_ROUTES = [
   // rather than an older pre-ADR-0141/0142/0143 route list.
   'benchEvidence', 'contradiction', 'arbitration',
   'instrument-lookback', 'service-error-budget',
+  // Standing repair: `lone-working` declares an adapter-scoped manifest row but
+  // was missing from this list, so the catalogue assertion had been red by one
+  // route since ADR-0242. The list is the live shell; it is corrected here rather
+  // than the assertion loosened.
+  'lone-working',
   // ADR-0254: the Fair-Process Discipline & Grievance Register declares its own
   // manifest row (individual class, adapter-scoped, detail ceiling 2), so the
   // catalogue and the shell stay one route for one route. A route with no
   // manifest is WITHHELD by the compiler — the wrong answer for a register whose
   // own reader already withholds detail above rank 2.
   'fair-process',
+  // ADR-0257: the Tax Controversy & Appeal-Control Register declares its own
+  // manifest row (portfolio class, adapter-scoped, detail ceiling 4), so the
+  // catalogue and the shell stay one route for one route. A route with no
+  // manifest is WITHHELD by the compiler — the wrong answer for a register whose
+  // own reader already withholds responsible hands above rank 3.
+  'tax',
 ];
 
 /** Sentinel-bearing roster: every person, span and private note is traceable. */
@@ -229,7 +240,7 @@ function seatsOrThrow(state) {
 /* --------------------------------------------------------------- 1. schema */
 
 test('schema v90 migrates additively and refuses malformed or stale grants', () => {
-  assert.equal(SCHEMA_VERSION, 208, 'ADR-0255 (service error budget) is the current head');
+  assert.equal(SCHEMA_VERSION, 209, 'ADR-0257 (tax controversy) is the current head');
   // This pin follows the head; the v90 step this test actually proves is below.
   const old = { schemaVersion: 89, settings: { leaderName: 'Keep' }, cases: [{ id: 'keep' }], disclosureGrants: [{ id: 'existing' }] };
   const migrated = migrate(old);

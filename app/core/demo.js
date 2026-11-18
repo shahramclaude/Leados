@@ -3004,6 +3004,220 @@ function seedProvisions(state, now, { priya, mei, jordan, samuel, freya }) {
   state.prvMarkers = Array.isArray(state.prvMarkers) ? state.prvMarkers : [];
 }
 
+function seedTax(state, now, { priya, mei, jordan, samuel, freya }) {
+  const day = (days) => new Date(now.getTime() + days * 86_400_000).toISOString().slice(0, 10);
+  const iso = (days) => new Date(now.getTime() + days * 86_400_000).toISOString();
+  const notice = (seq, fields) => ({
+    id: `tax-notice-demo-${seq}`,
+    provisionRef: null,
+    createdAt: iso(-30),
+    updatedAt: iso(-1),
+    ...fields,
+  });
+
+  // Eight notices placed relative to the injected clock. Every printed state is
+  // DERIVED from these declared rows — nothing below carries a state, a
+  // timeliness verdict, a days-remaining figure, an overdue count or a swing.
+  //
+  //  1  VAT assessment, no deadline declared — the register refuses to compute
+  //     one from the notice day, so the state is `deadline-undeclared` and an ask
+  //     is filed rather than a window invented. Hands cross two lines (Mei via the
+  //     engineering span, Samuel via the support span), so the joint apex above
+  //     them both is the seat that must answer.
+  //  2  Transfer pricing, window open for another 40 days, nothing filed yet —
+  //     `awaiting-filing`. Hands again cross two lines (Jordan under Mei, Freya
+  //     under Samuel).
+  //  3  Payroll, window closed 12 days ago with nothing filed — `overdue-unfiled`.
+  //     The position stands unopposed and the register says so.
+  //  4  Customs, objection filed 5 days inside the window, two evidence items on
+  //     the record — `filed-on-time`.
+  //  5  Income tax in EUR, first filing 20 days AFTER the declared window —
+  //     `filed-late`, recorded as late and never re-dated.
+  //  6  VAT, filed on time and resolved partially upheld — `resolved`, with the
+  //     swing derived from the two declared figures and printed apart from both.
+  //  7  Transfer pricing, filed on time with NO evidence packet — `filed-on-time`
+  //     plus the `evidence-empty` flag, because a filed objection with nothing
+  //     behind it is the packet that will be missing at the hearing.
+  //  8  Income tax, filed on time more than a year ago and still open —
+  //     `filed-on-time` plus `aging-unresolved` against the declared 365-day
+  //     horizon.
+  state.taxNotices = [
+    notice(1, {
+      noticeRef: 'HMRC-VAT-8841203',
+      position: 'Input tax reclaimed on professional fees attributed to the exempt property-letting activity; the authority disallows the attribution and raises an assessment for the difference.',
+      jurisdiction: 'United Kingdom — VAT (VATA 1994 s.73 assessment)',
+      taxType: 'vat', noticeDay: day(-20), disputedMinor: 14850000, currency: 'GBP',
+      basisRef: 'The fees were incurred on the sale of a subsidiary, which is a general-purpose overhead of the whole business; the authority treats them as wholly attributable to the exempt letting activity and disallows the input tax in full.',
+      responsibleIds: [mei, samuel], recordedById: priya,
+      recordedAt: iso(-20), recordedDay: day(-20), provisionRef: 'GL-2400-118 uncertain-tax provision, quarter-close pack section 4.2',
+    }),
+    notice(2, {
+      noticeRef: 'SKAT-TP-2026-0044',
+      position: 'Intercompany royalty rate on the platform licence is challenged as below arm’s length; the authority proposes a transfer-pricing adjustment for the open years.',
+      jurisdiction: 'Denmark — transfer pricing (SKAT adjustment proposal, 60-day objection window)',
+      taxType: 'transfer-pricing', noticeDay: day(-10), disputedMinor: 27500000, currency: 'DKK',
+      basisRef: 'The royalty was set on the group’s benchmark study for comparable platform licences; the authority uses a different comparables set and a higher rate.',
+      responsibleIds: [jordan, freya], recordedById: priya,
+      recordedAt: iso(-10), recordedDay: day(-10), provisionRef: null,
+    }),
+    notice(3, {
+      noticeRef: 'ATO-PAYG-771209',
+      position: 'Fringe-benefits treatment of the relocation package is challenged; the authority treats the whole package as taxable salary rather than a qualifying relocation benefit.',
+      jurisdiction: 'Australia — PAYG withholding (FBTAA 1986 determination)',
+      taxType: 'payroll', noticeDay: day(-52), disputedMinor: 4600000, currency: 'AUD',
+      basisRef: 'The package meets the qualifying-relocation conditions and the exemption applies to the whole amount; the authority accepts the conditions but disputes the apportionment of the temporary-accommodation element.',
+      responsibleIds: [samuel], recordedById: priya,
+      recordedAt: iso(-52), recordedDay: day(-52), provisionRef: null,
+    }),
+    notice(4, {
+      noticeRef: 'HMRC-CUSTOMS-2291044',
+      position: 'Customs valuation on the intra-group supply of tooling is challenged; the authority adds the engineering-support charge to the customs value.',
+      jurisdiction: 'United Kingdom — customs (CRU assessment, 30-day review window)',
+      taxType: 'customs', noticeDay: day(-44), disputedMinor: 3100000, currency: 'GBP',
+      basisRef: 'The engineering support was supplied after importation and is not part of the customs value; the authority treats it as a condition of sale.',
+      responsibleIds: [freya], recordedById: priya,
+      recordedAt: iso(-44), recordedDay: day(-44), provisionRef: null,
+    }),
+    notice(5, {
+      noticeRef: 'BZSt-KST-2026-8817',
+      position: 'Withholding treatment of the intra-group service fee is challenged; the authority treats the fee as a royalty subject to withholding at source.',
+      jurisdiction: 'Germany — corporate income tax (KStG assessment, one-month objection window)',
+      taxType: 'income', noticeDay: day(-74), disputedMinor: 8800000, currency: 'EUR',
+      basisRef: 'The service fee pays for genuine support functions delivered by staff with the capability to perform them; it is business income, not a royalty, and the treaty assigns taxing rights accordingly.',
+      responsibleIds: [mei], recordedById: priya,
+      recordedAt: iso(-74), recordedDay: day(-74), provisionRef: null,
+    }),
+    notice(6, {
+      noticeRef: 'HMRC-VAT-7710092',
+      position: 'Place-of-supply treatment of digital services to non-business customers in other member states is challenged for two periods.',
+      jurisdiction: 'United Kingdom — VAT (VATA 1994 s.80 assessment)',
+      taxType: 'vat', noticeDay: day(-260), disputedMinor: 9000000, currency: 'GBP',
+      basisRef: 'The supplies were made before the place-of-supply change for digital services and are UK-supplied; the authority applies the later treatment to the earlier periods.',
+      responsibleIds: [jordan], recordedById: priya,
+      recordedAt: iso(-260), recordedDay: day(-260), provisionRef: null,
+    }),
+    notice(7, {
+      noticeRef: 'IRD-TP-2026-1180',
+      position: 'Cost-allocation on the shared service centre is challenged as over-allocated to the low-margin entity; the authority proposes a reallocation.',
+      jurisdiction: 'Ireland — transfer pricing (Revenue adjustment, 30-day appeal window)',
+      taxType: 'transfer-pricing', noticeDay: day(-31), disputedMinor: 12400000, currency: 'EUR',
+      basisRef: 'The allocation follows measured headcount and time recordings for each service; the authority relies on a benchmark range that assumes a different service mix.',
+      responsibleIds: [mei, jordan], recordedById: priya,
+      recordedAt: iso(-31), recordedDay: day(-31), provisionRef: null,
+    }),
+    notice(8, {
+      noticeRef: 'HMRC-CT-5540188',
+      position: 'Capital-allowance treatment of the plant upgrade is challenged; the authority holds that part of the spend is a repair and belongs in the revenue account.',
+      jurisdiction: 'United Kingdom — corporation tax (CTA 2009 enquiry closure notice)',
+      taxType: 'income', noticeDay: day(-440), disputedMinor: 19700000, currency: 'GBP',
+      basisRef: 'The upgrade increased the capacity and extended the useful life of the plant, so it is capital in nature; the authority accepts the capacity increase but disputes the life extension.',
+      responsibleIds: [freya, samuel], recordedById: priya,
+      recordedAt: iso(-440), recordedDay: day(-440), provisionRef: null,
+    }),
+  ];
+
+  // One deadline per notice except notice 1, whose window NOBODY has declared.
+  // That absence is the whole point of the seed: the register prints
+  // `deadline-undeclared` rather than computing a window from the notice day.
+  state.taxDeadlines = [
+    { id: 'tax-dl-demo-2', noticeId: 'tax-notice-demo-2', deadlineDay: day(40),
+      basisRef: 'SKAT’s adjustment proposal carries the 60-day objection window in the Danish tax-administration act; the window closes 60 days after the proposal was served, which was 20 days before the notice day recorded here.',
+      declaredById: priya, declaredAt: iso(-10), declaredDay: day(-10), createdAt: iso(-10) },
+    { id: 'tax-dl-demo-3', noticeId: 'tax-notice-demo-3', deadlineDay: day(-12),
+      basisRef: 'The FBTAA determination carries a 60-day objection window from the day the determination is served.',
+      declaredById: priya, declaredAt: iso(-52), declaredDay: day(-52), createdAt: iso(-52) },
+    { id: 'tax-dl-demo-4', noticeId: 'tax-notice-demo-4', deadlineDay: day(-14),
+      basisRef: 'The CRU review window for a customs assessment is 30 days from the assessment date under the customs review procedure.',
+      declaredById: priya, declaredAt: iso(-44), declaredDay: day(-44), createdAt: iso(-44) },
+    { id: 'tax-dl-demo-5', noticeId: 'tax-notice-demo-5', deadlineDay: day(-44),
+      basisRef: 'The KStG assessment carries a one-month objection window under the German fiscal code; the month runs from service of the assessment.',
+      declaredById: priya, declaredAt: iso(-74), declaredDay: day(-74), createdAt: iso(-74) },
+    { id: 'tax-dl-demo-6', noticeId: 'tax-notice-demo-6', deadlineDay: day(-230),
+      basisRef: 'The s.80 assessment carries a 30-day appeal window from the assessment date.',
+      declaredById: priya, declaredAt: iso(-260), declaredDay: day(-260), createdAt: iso(-260) },
+    { id: 'tax-dl-demo-7', noticeId: 'tax-notice-demo-7', deadlineDay: day(-6),
+      basisRef: 'Revenue’s adjustment carries a 30-day appeal window from the date of the notice; the window closes 30 days after service.',
+      declaredById: priya, declaredAt: iso(-31), declaredDay: day(-31), createdAt: iso(-31) },
+    { id: 'tax-dl-demo-8', noticeId: 'tax-notice-demo-8', deadlineDay: day(-410),
+      basisRef: 'An enquiry closure notice carries a 30-day appeal window from the date the closure notice is issued.',
+      declaredById: priya, declaredAt: iso(-440), declaredDay: day(-440), createdAt: iso(-440) },
+  ];
+
+  state.taxFilings = [
+    { id: 'tax-file-demo-4', noticeId: 'tax-notice-demo-4', filingKind: 'objection',
+      filedDay: day(-19), receiptRef: 'CRU-ACK-4417 — customs review acknowledgement',
+      basisRef: 'A written objection was lodged against the valuation adjustment on the ground that the engineering support was supplied after importation.',
+      filedById: freya, filedAt: iso(-19), filedDayStamp: day(-19), createdAt: iso(-19) },
+    { id: 'tax-file-demo-5', noticeId: 'tax-notice-demo-5', filingKind: 'objection',
+      filedDay: day(-24), receiptRef: 'BZSt-EINSPRUCH-2291 — objection received stamp',
+      basisRef: 'An objection was lodged against the withholding treatment, on the ground that the fee pays for genuine services and is business income under the treaty.',
+      filedById: mei, filedAt: iso(-24), filedDayStamp: day(-24), createdAt: iso(-24) },
+    { id: 'tax-file-demo-5b', noticeId: 'tax-notice-demo-5', filingKind: 'information-supply',
+      filedDay: day(-19), receiptRef: 'BZSt-NACHRICHT-0318 — supporting schedule received',
+      basisRef: 'The service-fee schedule and the staff-capability evidence were supplied in response to the authority’s request for further particulars.',
+      filedById: mei, filedAt: iso(-19), filedDayStamp: day(-19), createdAt: iso(-19) },
+    { id: 'tax-file-demo-6', noticeId: 'tax-notice-demo-6', filingKind: 'appeal',
+      filedDay: day(-225), receiptRef: 'HMRC-APPEAL-3317002 — appeal acknowledgement',
+      basisRef: 'A statutory appeal was lodged against the assessment on the place-of-supply ground, with a request for a statutory review.',
+      filedById: jordan, filedAt: iso(-225), filedDayStamp: day(-225), createdAt: iso(-225) },
+    { id: 'tax-file-demo-7', noticeId: 'tax-notice-demo-7', filingKind: 'objection',
+      filedDay: day(-25), receiptRef: 'IRD-OBJ-664012 — objection acknowledgement',
+      basisRef: 'An objection was lodged against the reallocation, with the time recordings offered as the primary evidence of the allocation basis.',
+      filedById: mei, filedAt: iso(-25), filedDayStamp: day(-25), createdAt: iso(-25) },
+    { id: 'tax-file-demo-8', noticeId: 'tax-notice-demo-8', filingKind: 'appeal',
+      filedDay: day(-415), receiptRef: 'HMRC-APPEAL-2881190 — appeal acknowledgement',
+      basisRef: 'An appeal was lodged against the closure notice on the capital-allowance ground, and the appeal has remained open since.',
+      filedById: freya, filedAt: iso(-415), filedDayStamp: day(-415), createdAt: iso(-415) },
+  ];
+
+  // Two packets on the record; notice 7 was filed on time and carries NONE, which
+  // the register prints as `evidence-empty` rather than assuming a filing implies
+  // a packet.
+  state.taxEvidence = [
+    { id: 'tax-ev-demo-4', noticeId: 'tax-notice-demo-4', itemLabel: 'Engineering-support scope and delivery dates',
+      itemRef: 'ENG-SOW-2291 rev 3 — scope of works, delivery schedule and post-importation acceptance',
+      suppliedDay: day(-18),
+      basisRef: 'The scope and the delivery schedule show the support was delivered over the nine months after importation and could not have been a condition of sale.',
+      suppliedById: freya, suppliedAt: iso(-18), suppliedDayStamp: day(-18), createdAt: iso(-18) },
+    { id: 'tax-ev-demo-4b', noticeId: 'tax-notice-demo-4', itemLabel: 'Supplier correspondence on valuation',
+      itemRef: 'SUP-CORR-1180 — supplier letter confirming the tooling price was settled before shipment',
+      suppliedDay: day(-17),
+      basisRef: 'The supplier’s own letter confirms the price was agreed and paid before shipment, so no post-importation charge belongs in the customs value.',
+      suppliedById: freya, suppliedAt: iso(-17), suppliedDayStamp: day(-17), createdAt: iso(-17) },
+    { id: 'tax-ev-demo-5', noticeId: 'tax-notice-demo-5', itemLabel: 'Service-capability and delivery evidence',
+      itemRef: 'SVC-CAP-0311 — capability statements, delivery logs and the fee schedule for the support functions',
+      suppliedDay: day(-34),
+      basisRef: 'The capability statements and delivery logs show the support functions were performed by staff who hold the capability to perform them, which is what distinguishes a service fee from a royalty.',
+      suppliedById: mei, suppliedAt: iso(-34), suppliedDayStamp: day(-34), createdAt: iso(-34) },
+    { id: 'tax-ev-demo-5b', noticeId: 'tax-notice-demo-5', itemLabel: 'Treaty business-profits analysis',
+      itemRef: 'TAX-TREATY-0092 — treaty article 7 analysis and the competent-authority correspondence',
+      suppliedDay: day(-30),
+      basisRef: 'The treaty analysis supports business-profits treatment and records the correspondence with the competent authority on the same issue.',
+      suppliedById: mei, suppliedAt: iso(-30), suppliedDayStamp: day(-30), createdAt: iso(-30) },
+    { id: 'tax-ev-demo-6', noticeId: 'tax-notice-demo-6', itemLabel: 'Place-of-supply position paper',
+      itemRef: 'TP-VAT-0402 — position paper on the pre-change treatment of digital supplies with the invoices for both periods',
+      suppliedDay: day(-180),
+      basisRef: 'The position paper and the invoices show the supplies were made before the place-of-supply change and were UK-supplied at the time.',
+      suppliedById: jordan, suppliedAt: iso(-180), suppliedDayStamp: day(-180), createdAt: iso(-180) },
+    { id: 'tax-ev-demo-8', noticeId: 'tax-notice-demo-8', itemLabel: 'Plant capacity and life-extension evidence',
+      itemRef: 'ENG-CAP-5510 — engineering assessment of the capacity increase and useful-life extension',
+      suppliedDay: day(-380),
+      basisRef: 'The engineering assessment supports the capacity increase the authority accepts, and sets out the life-extension element the authority disputes.',
+      suppliedById: freya, suppliedAt: iso(-380), suppliedDayStamp: day(-380), createdAt: iso(-380) },
+  ];
+
+  // One resolution, partially upheld. The swing is DERIVED from the disputed and
+  // resolved figures and printed apart from both; it is not stored anywhere.
+  state.taxResolutions = [
+    { id: 'tax-res-demo-6', noticeId: 'tax-notice-demo-6', outcome: 'partially-upheld',
+      resolvedDay: day(-150), resolvedMinor: 2500000, currency: 'GBP',
+      basisRef: 'The statutory review upheld the assessment for the first period and accepted the place-of-supply ground for the second, leaving GBP 25,000 payable of the GBP 90,000 assessed.',
+      recordedById: priya, recordedAt: iso(-150), recordedDay: day(-150), createdAt: iso(-150) },
+  ];
+
+  state.taxMarkers = Array.isArray(state.taxMarkers) ? state.taxMarkers : [];
+}
+
 function seedPermitToWork(state, now, { priya, mei, jordan, samuel, freya }) {
   const hours = (value) => new Date(now.getTime() + value * 60 * 60_000).toISOString();
   const iso = (hoursFromNow) => hours(hoursFromNow);
@@ -7761,6 +7975,14 @@ export function buildDemoState(now = new Date()) {
   // an unreconciled carrying, so the register derives live states rather than
   // showing an honest empty state on first load.
   seedProvisions(state, now, { priya, mei, jordan, samuel, freya });
+  // ADR-0257: eight authority notices placed relative to the injected clock — a
+  // notice with no declared deadline, a window still open with nothing filed, an
+  // overdue-unfiled notice, a filing inside its window, a filing twenty days after
+  // its window in another currency, a resolved controversy with its derived swing,
+  // a filed objection with no evidence packet and one left open past the declared
+  // horizon. Hands cross two reporting lines in four of them, so the joint apex is
+  // exercised rather than assumed.
+  seedTax(state, now, { priya, mei, jordan, samuel, freya });
   // ADR-0254: six cases placed relative to the injected clock — a varied appeal,
   // an appeal still lodged, a record conflict, an investigator who is the subject's
   // own manager, a decision inside its window with a counted ladder departure, and
