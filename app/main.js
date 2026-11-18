@@ -183,9 +183,12 @@ import { permitToWorkAttentionCount } from './core/domain/permitToWork.js';
 import { renderAuthorisations } from './views/authorisations.js';
 import { renderClaims } from './views/claims.js';
 import { renderInsurance } from './views/insurance.js';
+import { renderProvisions } from './views/provisions.js';
 import { authorisationAttentionCount } from './core/domain/authorisation.js';
 import { claimAttentionCount } from './core/domain/lfgClaims.js';
 import { insuranceAttentionCount } from './core/domain/insCoverage.js';
+// ADR-0250: the provision and reimbursement register's attention count.
+import { provisionAttentionCount } from './core/domain/prvProvision.js';
 import { voiceAttentionCount } from './core/domain/voice.js';
 // ADR-0220: the variable-pay design & incentive integrity register.
 import { renderIncentive } from './views/incentive.js';
@@ -679,6 +682,13 @@ export const NAV = [
     // from the trigger day, not from when someone senior recognises the incident —
     // and above rank 3 the reader prints counts and withholds responsible hands.
     { route: 'insurance', label: 'Insurance & recovery', icon: '☂', badge: 'insurance' },
+    // ADR-0250: what the organisation must carry on the balance sheet for each
+    // obligation, what it may recognize as a reimbursement asset against it, and
+    // whether the figure finance carries agrees with the figure the record
+    // supports. Director/VP primary — a provision moves the balance sheet and is
+    // declared, never inferred — and above rank 3 the reader prints counts and
+    // withholds responsible hands.
+    { route: 'provisions', label: 'Provisions', icon: '◈', badge: 'provisions' },
     // ADR-0243: what was put to a staff body, the period its own instrument gave
     // it, what it advised, whether the organisation answered, and whether the
     // decision preceded the close of the window. Director/VP primary; above rank 3
@@ -950,6 +960,8 @@ const RENDERERS = {
   claims: (ctx) => renderClaims(ctx),
   // ADR-0249: the insurance notification & recovery register.
   insurance: (ctx) => renderInsurance(ctx),
+  // ADR-0250: the provision and reimbursement register.
+  provisions: (ctx) => renderProvisions(ctx),
   // ADR-0243: the employee-voice and collective-consultation register.
   voice: (ctx) => renderVoice(ctx),
   // ADR-0244: the mutual-aid activation & resource-commitment register.
@@ -1199,6 +1211,17 @@ export function parseRoute(hash) {
     deductible: 'insurance', underwriter: 'insurance',
     'contingent-liability': 'insurance', 'insurance-register': 'insurance',
     'broker-notice': 'insurance',
+    // ADR-0250: the provision and reimbursement register. NOT 'provision': that
+    // hash already carries the claim register (ADR-0248's `reserves` family) and
+    // silently stealing it would break a shipped link. NOT 'contingent-liability'
+    // either: it carries the insurance register's disclosure duty. The provision
+    // register's own words are all free.
+    provisions: 'provisions', 'provision-register': 'provisions',
+    'provisioning': 'provisions', 'provision-ledger': 'provisions',
+    'reimbursement-asset': 'provisions', 'reimbursement-assets': 'provisions',
+    'reimbursements': 'provisions', 'finance-carrying': 'provisions',
+    'balance-sheet': 'provisions', 'ias-37': 'provisions',
+    'best-estimate': 'provisions', 'provision-reconciliation': 'provisions',
     // ADR-0148: the names a person types looking for "did anyone actually agree
     // to this share of me" / "who accepted this project line".
     'line-consent': 'matrix', consent: 'matrix', 'matrix-consent': 'matrix',
@@ -1976,6 +1999,11 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       // band, one whose deadline cannot be proved, one where the policy does not
       // respond, and a denied recovery — the same conditions RULE-INS-01 files.
       insurance: insuranceAttentionCount(state, { now: at, settings: state.settings, seat: seatCtx?.seat || null }),
+      // ADR-0250: a matter carrying a gross exposure with no assessment, a
+      // contingent liability disclosed but not provided, a capped reimbursement
+      // asset and an unreconciled carrying — the same conditions RULE-PRV-01 files.
+      // A COUNT, never a name.
+      provisions: provisionAttentionCount(state, { now: at, settings: state.settings, seat: seatCtx?.seat || null }),
       // ADR-0243: windows that closed with no advice, advice nobody answered,
       // sittings past their minutes day and decisions recorded out of order — the
       // same conditions RULE-VOI-01 files. A COUNT, never a name.
@@ -2589,6 +2617,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       'mutual-aid': 'Mutual aid — the help the enterprise asked an outside organisation for and what actually happened to it: the bilateral agreement the request was made under and whether it was live, the request and its declared validity, the partner’s acceptance with its written confirmation and promise, the arrival compared against the promise line by line, and the withdrawal and release that close the commitment in order',
       'permit-to-work': 'Permit to work — what the record authorises on which plant, the declared validity and exact minutes to it, every energy isolation with its lock and the proof of zero energy at the point of work (or the window it missed), the latest gas reading per declared test compared exactly against the permit\u2019s own limit and freshness window, and every simultaneous-operations conflict derived from the record on each read — a released isolation under a live permit, hot work over a release, two hot-work permits in one area, an entry during hot work, one isolation claimed twice, a double-booked holder, a lapsed permit nobody closed and a closure that left a line isolated',
       claims: 'Claims & limitation — what is actually being asserted against us and how long we have: the document that started each clock, the accrual day and the written rule that makes it the right day (never the incident date by default), the declared limitation period and the base deadline, every PROVED suspension of the clock with its exact whole days and every allegation that moves nothing, the exact whole days remaining or the whole days a proved deadline ran over, whether the clock is provable at all (a matter with no readable accrual prints “clock unprovable” and NO day count), every reserve, offer, payment, cost and interest as its own dated instrument with exact minor-unit amounts, and the settlement authority computed above every responsible line across every line — with the exact gap printed where the number paid exceeded it',
+      provisions: 'Provisions & reimbursement — what the organisation must carry on the balance sheet for each obligation and what it may recognize against it: the declared classification (probable, possible or remote — never inferred from an amount), the best-estimate method (the most likely outcome, or a probability-weighted expected value over declared scenarios whose probabilities must sum to exactly 100% and whose weighted sum must be a whole number of minor units, or the estimate is refused rather than rounded), the derived provision, the reimbursement asset recognized only when it is virtually certain and capped at the provision with the excess printed, the net exposure printed apart from both, and the reconciliation against the figure the finance seat declares it is carrying with the exact gap — with the responsible hands across every reporting line and the joint seat above them all',
       insurance: 'Insurance & recovery — which policy answers for each claim, when the insurer must be told, whether it was told in time, and what the organisation actually carries: the declaration-page reference, the insurer, the class, the basis, the period, the limit, the deductible and the declared notification window (never a default), the trigger day and the derived deadline, whether the policy responds at all (a trigger day outside the period prints “no cover”), every notification with its day, method and reference (a late notification is kept as a breach fact), every recovery and denial as its own dated instrument with exact minor-unit amounts, and the derived net cost printed apart from the gross exposure and the recovery',
       authorisations: 'Statutory authorisations — which power to operate is held and whether it is in force at this instant: the issuing body and written instrument, the declared expiry against the effective expiry every granted renewal moved it to, the renewal window the declaration itself set, each declared condition’s latest dated evidence and its own re-evidence window (current, stale or unevidenced), every regulator action with its written basis, compliance day and close, and the joint reporting seat above every accountable hand across every line',
       'lone-working': 'Lone working — who is alone right now, where, against which written assessment: the declared check-in interval and grace running from the last contact, the exact deadline, whether the record holds contact, a concern nobody answered, an escalation, or nothing at all, whether it ran past its declared end unclosed, and the joint reporting seat that owes the response',

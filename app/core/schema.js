@@ -533,6 +533,25 @@ import {
   normalizeInsSettings,
 } from './domain/insSchema.js';
 import {
+  normalizePrvAssessments,
+  normalizePrvCarryings,
+  normalizePrvMarkers,
+  normalizePrvReimbursements,
+  normalizePrvScenarios,
+  normalizePrvSettings,
+} from './domain/prvSchema.js';
+// ADR-0250 (Schema v204): the Provision & Reimbursement Register. Five ledgers —
+// the declared assessment (classification and best-estimate method), the
+// scenarios of an expected-value estimate, the reimbursement recognitions
+// (virtual certainty), the finance carryings the register reconciles against,
+// and the rule's identity-free markers. Every loader is fail-closed: an
+// assessment with no classification, method, currency, written basis, declared
+// hand or declared day is DROPPED at this boundary; an assessment whose hands
+// are off the roster is KEPT and printed as an orphan, because deleting it
+// would erase a live provision. Nothing derived (provision, asset, net
+// exposure, state, reconciliation gap) is stored anywhere — every verdict is
+// re-derived on read from the claim and insurance registers.
+import {
   normalizeDwlClearances,
   normalizeDwlDealings,
   normalizeDwlDecisions,
@@ -1516,7 +1535,7 @@ export {
 // granted by an external body on a written instrument, and nothing the workspace
 // already holds is one. Every state, window, day count and minute count is derived
 // on read.
-export const SCHEMA_VERSION = 203;
+export const SCHEMA_VERSION = 204;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -3012,6 +3031,13 @@ export const DEFAULT_SETTINGS = Object.freeze({
   // so the workspace has no default window that could one day place a deadline
   // nobody was given.
   ...normalizeInsSettings({}),
+  // ADR-0250: the provision-register conventions — the privacy floor below which
+  // a per-state export is withheld, and the rule switch. Note what is NOT here:
+  // a discount rate. A provision is carried at the undiscounted best estimate;
+  // discounting is a separate judgment this register does not perform, so there
+  // is no workspace default rate that could one day put a present value on the
+  // balance sheet nobody chose.
+  ...normalizePrvSettings({}),
   // ADR-0243: the employee-voice conventions — the reply window, the minutes
   // window, the privacy floor below which a per-state export is withheld, and the
   // rule switch. Note what is NOT here: a consultation period. The period a body
@@ -4261,6 +4287,18 @@ export const COLLECTIONS = [
   'insNotifications',
   'insRecoveries',
   'insMarkers',
+  // ADR-0250 (Schema v204): the Provision & Reimbursement Register. Declared
+  // assessments (the classification and the best-estimate method), the scenarios
+  // of an expected-value estimate, the reimbursement recognitions (virtual
+  // certainty), the finance carryings the register reconciles against, and
+  // identity-free rule markers. No provision, reimbursement asset, net exposure,
+  // state or reconciliation gap is stored: every one is re-derived on read from
+  // the declared inputs, the claim register and the insurance register.
+  'prvAssessments',
+  'prvScenarios',
+  'prvReimbursements',
+  'prvCarryings',
+  'prvMarkers',
 ];
 
 /** Stable empty state. `now` is an ISO string so the result is a pure value. */
@@ -4583,6 +4621,11 @@ export function normalizeSettings(raw) {
     // out unanswered, an unprovable deadline, a coverage with no cover or a denied
     // recovery is never the silent default.
     ...normalizeInsSettings(s),
+    // ADR-0250: the provision register's conventions, defaulted on load. The rule
+    // switch is defaulted ON so a pause that leaves a matter unassessed, a
+    // contingent liability unprovided or a computed provision that disagrees with
+    // the figure finance carries is never the silent default.
+    ...normalizePrvSettings(s),
     // Repair of a standing red reported at base HEAD: two rule switches the
     // pause census maps were not carried in settings, so the only writes that
     // can silence those rules were refused as unknown keys. Declared here with
@@ -9994,6 +10037,17 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.insNotifications = normalizeInsNotifications(raw.insNotifications, state.insCoverages, warnings);
   state.insRecoveries = normalizeInsRecoveries(raw.insRecoveries, state.insCoverages, warnings);
   state.insMarkers = normalizeInsMarkersLedger(raw.insMarkers, warnings);
+  // ADR-0250 (Schema v204): an assessment, scenario, reimbursement recognition or
+  // finance carrying that cannot be read exactly is DROPPED with a counted
+  // warning — never repaired, re-classified, re-priced or re-pointed at another
+  // matter. An assessment whose hands are off the roster is KEPT and printed as
+  // an orphan, because deleting it would erase a live provision. No provision,
+  // asset, net exposure, state or reconciliation gap is stored.
+  state.prvAssessments = normalizePrvAssessments(raw.prvAssessments, state.lfgMatters, warnings);
+  state.prvScenarios = normalizePrvScenarios(raw.prvScenarios, state.prvAssessments, warnings);
+  state.prvReimbursements = normalizePrvReimbursements(raw.prvReimbursements, state.prvAssessments, warnings);
+  state.prvCarryings = normalizePrvCarryings(raw.prvCarryings, warnings);
+  state.prvMarkers = normalizePrvMarkers(raw.prvMarkers, warnings);
   // ADR-0229 (Schema v182): a case, option, cost line or act that cannot be read
   // exactly is DROPPED with a counted warning — never repaired, re-termed,
   // re-priced or re-pointed at another case. A cost line that does not belong to
@@ -11206,6 +11260,25 @@ export const MIGRATIONS = {
     insRecoveries: Array.isArray(v202.insRecoveries) ? v202.insRecoveries : [],
     insMarkers: Array.isArray(v202.insMarkers) ? v202.insMarkers : [],
     settings: { ...(v202.settings || {}), ...normalizeInsSettings(v202.settings || {}) },
+  }),
+  // 203 → 204: ADR-0250 adds FIVE EMPTY ledgers (`prvAssessments`,
+  // `prvScenarios`, `prvReimbursements`, `prvCarryings`, `prvMarkers`) and the
+  // provision register's conventions. NOTHING is inferred from a claim matter, a
+  // reserve, an insurance recovery or a finance figure: a provision is the
+  // product of a declared classification and a declared best estimate, and a
+  // reimbursement asset is recognized only when it is virtually certain.
+  // Manufacturing an assessment at upgrade time would put a balance-sheet
+  // provision on the record that nobody classified — the precise failure this
+  // register exists to prevent.
+  203: (v203) => ({
+    ...v203,
+    schemaVersion: 204,
+    prvAssessments: Array.isArray(v203.prvAssessments) ? v203.prvAssessments : [],
+    prvScenarios: Array.isArray(v203.prvScenarios) ? v203.prvScenarios : [],
+    prvReimbursements: Array.isArray(v203.prvReimbursements) ? v203.prvReimbursements : [],
+    prvCarryings: Array.isArray(v203.prvCarryings) ? v203.prvCarryings : [],
+    prvMarkers: Array.isArray(v203.prvMarkers) ? v203.prvMarkers : [],
+    settings: { ...(v203.settings || {}), ...normalizePrvSettings(v203.settings || {}) },
   }),
   // 183 → 184: ADR-0231 adds SEVEN EMPTY ledgers (`ibpCycles`, `ibpDemandRows`,
   // `ibpCapacityRows`, `ibpOptions`, `ibpDecisions`, `ibpGrades`, `ibpMarkers`)

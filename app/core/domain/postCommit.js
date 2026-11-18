@@ -213,6 +213,12 @@ import { permitToWorkRule } from './permitToWorkRules.js';
 import { authorisationRule } from './authorisationRules.js';
 import { claimRule } from './lfgRules.js';
 import { insuranceRule } from './insRules.js';
+// ADR-0250: the provision rule reads the finished register and files at most one
+// dated ask per condition: an open matter carrying a gross exposure with no
+// assessment, a contingent liability disclosed but not provided, a capped
+// reimbursement asset, an asset resting on a declared judgment with no cash, or
+// a computed provision that disagrees with the declared finance carrying.
+import { provisionRule } from './prvRules.js';
 import { incidentCommandRule } from './incidentCommandRules.js';
 import { sourcingRule } from './sourcingRules.js';
 import { ibpRule } from './ibpRules.js';
@@ -1337,6 +1343,14 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // deadline cannot be proved at all, that a linked policy does not respond, or that
   // a recovery was denied.
   insuranceRule,
+  // ADR-0250: the provision and reimbursement rule reads the live matrix for the
+  // joint apex above every line holding ANY responsible hand, so silencing it
+  // reaches across reporting lines — and nobody is told that a matter carries a
+  // gross exposure with no assessment, that a contingent liability is disclosed
+  // but not provided, that a reimbursement asset exceeds the provision and is
+  // capped, or that the figure finance carries disagrees with the computed
+  // provision.
+  provisionRule,
   workplaceAdjustmentRule,
   // ADR-0229: the Capability Sourcing & Firm-Boundary Register. ONE rule reads
   // the finished register and files at most one dated ask per condition: a

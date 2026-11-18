@@ -38,6 +38,10 @@ import { PTW_RIGHTS } from './permitToWorkRegistry.js';
 import { LTO_RIGHTS } from './authorisationRegistry.js';
 import { LFG_RIGHTS } from './lfgRegistry.js';
 import { INS_RIGHTS } from './insRegistry.js';
+// ADR-0250: the provision and reimbursement register's two rights. The prefix is
+// PROV because the portfolio-review register already owns `PRV_` here — and its
+// rule id is already `RULE-PRV-01`, so a second rule may not share it.
+import { PROV_RIGHTS } from './prvRegistry.js';
 // ADR-0229: the capability sourcing register's four rights.
 import { SRC_RIGHTS } from './sourcingRegistry.js';
 import { VY_RIGHTS } from './vyRegistry.js';
@@ -415,6 +419,14 @@ const groups = [
   // action to a seat that HOLDS every responsible hand.
   [INS_RIGHTS.READ, 'insuranceReport insuranceAttention insuranceCandidates'],
   [INS_RIGHTS.MANAGE, 'insuranceDeclarePolicy insuranceDeclareCoverage insuranceRecordNotification insuranceRecordRecovery insuranceSetConventions insuranceScan'],
+  // ADR-0250: the provision and reimbursement register. Reading is portfolio
+  // material (director / VP and above) — a provision schedule is as sensitive as
+  // the claim export, and the reader withholds responsible hands above rank 3.
+  // Every write is narrowed inside the action to a seat that HOLDS every
+  // responsible hand, and the classification, the best estimate and the
+  // reconciliation are declarations, never derived from the acting seat.
+  [PROV_RIGHTS.READ, 'provisionReport provisionAttention provisionCandidates'],
+  [PROV_RIGHTS.MANAGE, 'provisionDeclareAssessment provisionDeclareScenario provisionDeclareReimbursement provisionDeclareCarrying provisionSetConventions provisionScan'],
   // ADR-0229: the capability sourcing & firm-boundary register. Reading is
   // portfolio material (rank 3+). Recording an option is the leader who HOLDS
   // the capability (rank 2+), narrowed inside the action to a line the case
@@ -941,6 +953,13 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // still gated — and which policy answers for a claim and when the window runs out
 // would vanish the moment enforcement was turned on.
 'insuranceReport', 'insuranceAttention', 'insuranceCandidates',
+// ADR-0250: the provision register's pure read surface. Every one of these
+// re-proves the read right inside the action, because a module whose reads are
+// absent from SAFE_READS is unreadable under enforcement while its writes are
+// still gated — and what the organisation must carry on the balance sheet for a
+// live obligation, and whether the figure finance carries agrees with it, would
+// vanish the moment enforcement was turned on.
+'provisionReport', 'provisionAttention', 'provisionCandidates',
 // ADR-0243: the employee-voice register's pure read surface. Every one of these
 // re-proves the read right inside the action, because a module whose reads are
 // absent from SAFE_READS is unreadable under enforcement while its writes are

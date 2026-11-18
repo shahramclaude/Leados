@@ -252,6 +252,10 @@ import { buildClaims } from './domain/lfgClaims.js';
 import { INS_CSV_COLUMNS, INS_CSV_DESCRIPTOR, INS_CSV_SCOPE } from './domain/insRegistry.js';
 import { insuranceCsvRows } from './domain/insReport.js';
 import { buildInsurance } from './domain/insCoverage.js';
+// ADR-0250: identity-free provision and reimbursement aggregates (CSV #191).
+import { PROV_CSV_COLUMNS, PROV_CSV_DESCRIPTOR, PROV_CSV_SCOPE } from './domain/prvRegistry.js';
+import { provisionCsvRows } from './domain/prvReport.js';
+import { buildProvisions } from './domain/prvProvision.js';
 import { authorisationCsvRows } from './domain/authorisationReport.js';
 import { buildAuthorisations } from './domain/authorisation.js';
 import { loneWorkingCsvRows } from './domain/loneWorkingReport.js';
@@ -1800,6 +1804,15 @@ export const CSV_EXPORTS = [
   // mixed-currency. A per-state count below the declared floor exports BLANK with
   // its reason, never as a small number.
   INS_CSV_DESCRIPTOR,
+  // #191 (ADR-0250): provision and reimbursement. One summary row, one row per
+  // printed provision state and one row per currency carrying the money bridge.
+  // This is as sensitive as the claim and insurance exports: a provision schedule
+  // names the matter, the party and the sum provided. No matter reference, party,
+  // person, manager, instrument or day crosses this boundary; amounts cross only
+  // as per-currency minor-unit totals, and none at all where the register is
+  // mixed-currency. A per-state count below the declared floor exports BLANK with
+  // its reason, never as a small number.
+  PROV_CSV_DESCRIPTOR,
 ];
 
 function personLookup(state) {
@@ -7134,6 +7147,18 @@ export function buildScopeTable(state, scope, now) {
       return {
         columns: INS_CSV_COLUMNS.map((key) => ({ key, header: key })),
         rows: insuranceCsvRows(report),
+      };
+    }
+    case PROV_CSV_SCOPE: {
+      // CSV scope #191 (ADR-0250, Schema v204). Built from the SAME reader the
+      // `#/provisions` panel renders, with no seat: every figure is a count, a
+      // per-currency minor-unit total or a day, so no matter reference, party,
+      // person, manager, instrument or individual day is reachable. A per-state
+      // count below the declared floor exports BLANK with its reason.
+      const report = buildProvisions(state, { now, settings: state.settings || {}, seat: null });
+      return {
+        columns: PROV_CSV_COLUMNS.map((key) => ({ key, header: key })),
+        rows: provisionCsvRows(report),
       };
     }
     case LWK_CSV_SCOPE: {

@@ -2535,6 +2535,127 @@ function seedInsurance(state, now, { priya, mei, jordan, samuel, freya }) {
   state.insMarkers = Array.isArray(state.insMarkers) ? state.insMarkers : [];
 }
 
+/**
+ * ADR-0250: the provision and reimbursement register, seeded relative to the
+ * injected clock so the register derives live states rather than an honest empty
+ * state on first load. Every figure is a DECLARED input — a classification, a
+ * best-estimate method, a most-likely amount, a scenario probability and amount,
+ * a virtual-certainty judgment and a finance carrying. Nothing here is a stored
+ * provision, asset or reconciliation: those are derived on read.
+ *
+ * The seven open matters are placed to print every state the register carries:
+ *   1  probable, most-likely            → provided
+ *   2  probable, expected-value (100%)  → provided, with an asset from cash received
+ *   3  possible, most-likely            → disclosed only
+ *   4  remote, most-likely              → remote
+ *   5  no assessment at all             → unassessed
+ *   8  probable, most-likely, virtual certainty on a claimed amount above the
+ *      provision                       → provided, asset capped, excess printed
+ *   10 probable, expected-value whose probabilities do NOT sum to 100%
+ *                                     → the estimate is REFUSED, so disclosed only
+ * Matters 6 (settled), 7 (merged) and 9 (withdrawn) are closed on the claim
+ * register and carry no open obligation, so they are not on the schedule.
+ */
+function seedProvisions(state, now, { priya, mei, jordan, samuel, freya }) {
+  const day = (days) => new Date(now.getTime() + days * 86_400_000).toISOString().slice(0, 10);
+  const iso = (days) => new Date(now.getTime() + days * 86_400_000).toISOString();
+
+  state.prvAssessments = [
+    {
+      id: 'prv-ass-demo-1', matterId: 'lfg-mat-demo-1', classification: 'probable',
+      estimateMethod: 'most-likely', mostLikelyMinor: 2500000, currency: 'GBP',
+      basisRef: 'Present obligation arising from the act complained of; the outflow is more likely than not on the comparator evidence and the pleaded loss, and the amount is reliably estimable at the most likely settlement. Made under IAS 37’s “more likely than not” threshold; the register records the classification the seat declared and does not infer it.',
+      responsibleIds: [mei], assessedById: priya, assessedAt: iso(-34), assessedDay: day(-34),
+      createdAt: iso(-34), updatedAt: iso(-34),
+    },
+    {
+      id: 'prv-ass-demo-2', matterId: 'lfg-mat-demo-2', classification: 'probable',
+      estimateMethod: 'expected-value', mostLikelyMinor: null, currency: 'GBP',
+      basisRef: 'Present obligation from the contractor injury; the outflow is probable and the amount is a population of three distinct outcomes, so the best estimate is the probability-weighted expected value over the declared scenarios. The scenarios sum to exactly 100% and their weighted sum is a whole number of minor units.',
+      responsibleIds: [samuel, mei], assessedById: priya, assessedAt: iso(-30), assessedDay: day(-30),
+      createdAt: iso(-30), updatedAt: iso(-30),
+    },
+    {
+      id: 'prv-ass-demo-3', matterId: 'lfg-mat-demo-3', classification: 'possible',
+      estimateMethod: 'most-likely', mostLikelyMinor: 6000000, currency: 'GBP',
+      basisRef: 'The supplier’s claim is contested on the specification defence; an outflow is possible but not probable on the evidence currently available, so no provision is recognized and the matter is a contingent liability that is disclosed.',
+      responsibleIds: [freya], assessedById: priya, assessedAt: iso(-60), assessedDay: day(-60),
+      createdAt: iso(-60), updatedAt: iso(-60),
+    },
+    {
+      id: 'prv-ass-demo-4', matterId: 'lfg-mat-demo-4', classification: 'remote',
+      estimateMethod: 'most-likely', mostLikelyMinor: 3100000, currency: 'GBP',
+      basisRef: 'The property damage demand is time-expired on the proved accrual and the cause was apparent at the time; the chance of an outflow is slight, so neither a provision nor a disclosure is required.',
+      responsibleIds: [jordan], assessedById: priya, assessedAt: iso(-600), assessedDay: day(-600),
+      createdAt: iso(-600), updatedAt: iso(-600),
+    },
+    {
+      id: 'prv-ass-demo-8', matterId: 'lfg-mat-demo-8', classification: 'probable',
+      estimateMethod: 'most-likely', mostLikelyMinor: 2000000, currency: 'GBP',
+      basisRef: 'Present obligation from the drainage nuisance; the outflow is probable and reliably estimable at the most likely settlement. The insurer’s indemnity claim exceeds the provision, so the reimbursement asset is capped at the provision and the excess is printed rather than recognized.',
+      responsibleIds: [mei, jordan], assessedById: priya, assessedAt: iso(-100), assessedDay: day(-100),
+      createdAt: iso(-100), updatedAt: iso(-100),
+    },
+    {
+      id: 'prv-ass-demo-10', matterId: 'lfg-mat-demo-10', classification: 'probable',
+      estimateMethod: 'expected-value', mostLikelyMinor: null, currency: 'GBP',
+      basisRef: 'Present obligation from the occupational illness; the outflow is probable and the amount is a population of two distinct outcomes. The declared scenarios do NOT sum to 100%, so the register refuses the expected value rather than rounding it, and the matter is disclosed as a contingent liability until the probabilities are completed.',
+      responsibleIds: [samuel, jordan], assessedById: priya, assessedAt: iso(-480), assessedDay: day(-480),
+      createdAt: iso(-480), updatedAt: iso(-480),
+    },
+  ];
+
+  state.prvScenarios = [
+    // Matter 2: 60% × £100,000 + 30% × £160,000 + 10% × £240,000 = £132,000 exactly.
+    { id: 'prv-scn-demo-2a', matterId: 'lfg-mat-demo-2', outcome: 'Settlement at the medical report’s mid-range loss of earnings',
+      probabilityBps: 6000, amountMinor: 10000000, currency: 'GBP',
+      basisRef: 'Most likely outcome on the orthopaedic report and the comparator schedule; the claimant’s pleaded future loss is discounted for the contingency the report itself identifies.',
+      declaredById: priya, declaredAt: iso(-30), declaredDay: day(-30), createdAt: iso(-30) },
+    { id: 'prv-scn-demo-2b', matterId: 'lfg-mat-demo-2', outcome: 'Settlement at the higher loss-of-earnings bracket after the second report',
+      probabilityBps: 3000, amountMinor: 16000000, currency: 'GBP',
+      basisRef: 'The second orthopaedic report revises the loss upwards; the probability reflects the two competing reports and the claimant’s age at the date of the index accident.',
+      declaredById: priya, declaredAt: iso(-30), declaredDay: day(-30), createdAt: iso(-30) },
+    { id: 'prv-scn-demo-2c', matterId: 'lfg-mat-demo-2', outcome: 'Trial award at the pleaded future loss with costs',
+      probabilityBps: 1000, amountMinor: 24000000, currency: 'GBP',
+      basisRef: 'The residual trial outcome; the probability is the chance the two reports are rejected and the pleaded sum with costs is awarded.',
+      declaredById: priya, declaredAt: iso(-30), declaredDay: day(-30), createdAt: iso(-30) },
+    // Matter 10: deliberately NOT 100% — 40% + 40% leaves 20% unassigned, so the
+    // reader refuses the expected value instead of inventing the missing mass.
+    { id: 'prv-scn-demo-10a', matterId: 'lfg-mat-demo-10', outcome: 'Settlement on the diagonosis without the downstream loss claim',
+      probabilityBps: 4000, amountMinor: 18000000, currency: 'GBP',
+      basisRef: 'Settlement on the respiratory diagnosis alone; the probability is provisional because the second report has not been served and the missing 20% is deliberately left unassigned.',
+      declaredById: priya, declaredAt: iso(-480), declaredDay: day(-480), createdAt: iso(-480) },
+    { id: 'prv-scn-demo-10b', matterId: 'lfg-mat-demo-10', outcome: 'Settlement including the downstream loss claim after the second report',
+      probabilityBps: 4000, amountMinor: 22000000, currency: 'GBP',
+      basisRef: 'Settlement including the downstream loss; the probability is provisional for the same reason — the scenario set is incomplete on the record.',
+      declaredById: priya, declaredAt: iso(-480), declaredDay: day(-480), createdAt: iso(-480) },
+  ];
+
+  state.prvReimbursements = [
+    // Matter 2: cash received, so the asset is certain and needs no declaration.
+    // (No row is needed — the reader derives the cash from the insurance register.)
+    // Matter 8: the claimed amount is recognized on a declared virtual certainty.
+    {
+      id: 'prv-rec-demo-8', matterId: 'lfg-mat-demo-8', virtuallyCertain: true,
+      basisRef: 'The insurer’s coverage opinion admits the nuisance extension and the indemnity claim is quantified against the claimant’s settlement offer; reimbursement is virtually certain, so the asset is recognized at the claimed amount capped at the provision. No cash has been received yet, which the register prints plainly.',
+      declaredById: priya, declaredAt: iso(-10), declaredDay: day(-10), createdAt: iso(-10),
+    },
+  ];
+
+  // The finance seat declares it is carrying GBP 150,000 against a computed
+  // provision of GBP 177,000. The exact gap of GBP 27,000 is printed and an ask
+  // is filed; the register never silently adopts either number.
+  state.prvCarryings = [
+    {
+      id: 'prv-car-demo-1', currency: 'GBP', carriedMinor: 15000000,
+      carriedRef: 'GL-2400-118 — general ledger provision account, quarter-close pack section 4.2, as signed by the financial controller',
+      declaredById: priya, declaredAt: iso(-5), declaredDay: day(-5), createdAt: iso(-5),
+    },
+  ];
+
+  state.prvMarkers = Array.isArray(state.prvMarkers) ? state.prvMarkers : [];
+}
+
 function seedPermitToWork(state, now, { priya, mei, jordan, samuel, freya }) {
   const hours = (value) => new Date(now.getTime() + value * 60 * 60_000).toISOString();
   const iso = (hoursFromNow) => hours(hoursFromNow);
@@ -7286,6 +7407,12 @@ export function buildDemoState(now = new Date()) {
   // printed state plus the facts that make the register worth reading.
   seedClaims(state, now, { priya, mei, jordan, samuel, freya });
   seedInsurance(state, now, { priya, mei, jordan, samuel, freya });
+  // ADR-0250: six assessments, five scenarios, one reimbursement recognition and
+  // one finance carrying placed relative to the injected clock — every printed
+  // provision state, a capped asset with its excess, a refused expected value and
+  // an unreconciled carrying, so the register derives live states rather than
+  // showing an honest empty state on first load.
+  seedProvisions(state, now, { priya, mei, jordan, samuel, freya });
   // ADR-0240: one declared incident with a running external clock, an accepted
   // line, an unaccepted line and a recorded severity raise — so the register
   // shows a real bridge rather than an honest empty state on first load.
