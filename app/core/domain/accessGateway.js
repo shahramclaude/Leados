@@ -47,6 +47,7 @@ import { INS_RIGHTS } from './insRegistry.js';
 import { PROV_RIGHTS } from './prvRegistry.js';
 // ADR-0257: the tax controversy and appeal-control register's rights.
 import { TAX_RIGHTS } from './taxRegistry.js';
+import { MSA_RIGHTS } from './msaRegistry.js';
 // ADR-0229: the capability sourcing register's four rights.
 import { SRC_RIGHTS } from './sourcingRegistry.js';
 import { VY_RIGHTS } from './vyRegistry.js';
@@ -477,6 +478,16 @@ const groups = [
   // register infers from a notice day or an amount.
   [TAX_RIGHTS.READ, 'taxReport taxAttention taxCandidates'],
   [TAX_RIGHTS.MANAGE, 'taxRecordNotice taxDeclareDeadline taxRecordFiling taxRecordEvidence taxRecordResolution taxSetConventions taxScan'],
+  // ADR-0260: the modern slavery & supply-chain due-diligence statement
+  // register. Reading is portfolio material (director / VP and above) — a
+  // due-diligence schedule names suppliers and findings about workers, and the
+  // reader withholds responsible hands and supplier detail above rank 4. Every
+  // write is narrowed inside the action to a seat that HOLDS every responsible
+  // hand, and the deadline, the approval, the publication and the remediation
+  // status are declarations a named hand makes, never anything the register
+  // infers from a financial-year end or an amount.
+  [MSA_RIGHTS.READ, 'msaReport msaAttention msaCandidates'],
+  [MSA_RIGHTS.MANAGE, 'msaRecordStatement msaDeclareDeadline msaRecordApproval msaRecordPublication msaRecordSupplier msaRecordAssessment msaRecordFinding msaRecordRemediation msaRecordTraining msaSetConventions msaScan'],
   // ADR-0258: the pre-startup safety review & commissioning readiness register.
   // Reading and field verification acts open at rank 1; opening a review and
   // changing conventions sit at rank 2+; Startup Authorisation sits at rank 2+

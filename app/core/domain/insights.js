@@ -145,6 +145,8 @@ import { insuranceSignals } from './insCoverage.js';
 import { provisionSignals } from './prvProvision.js';
 // ADR-0257: the tax controversy register's signals.
 import { taxSignals } from './taxControversy.js';
+// ADR-0260: the modern slavery & supply-chain due-diligence register's signals.
+import { msaSignals } from './modernSlavery.js';
 // ADR-0258: the pre-startup safety review & commissioning readiness signals (PSR-01..06).
 import { psrSignals } from './psrSafety.js';
 import { caseToAnswerSignals } from './caseToAnswer.js';
@@ -406,6 +408,10 @@ export const DOMAIN_ORDER = [
   // ADR-0258 (Schema v210): the Pre-Startup Safety Review Register contributes
   // PSR-01..06; listed here so findings and `byDomain` stay reconciled.
   'Pre-startup safety',
+  // ADR-0260 (Schema v212): the Modern Slavery & Supply-Chain Due-Diligence
+  // Statement Register contributes MSA-01..05; listed here so findings and
+  // `byDomain` stay reconciled.
+  'Modern slavery & due diligence',
 ];
 
 export function severityLabel(n) {
@@ -2705,6 +2711,13 @@ export function buildInsights(state, now) {
   // with no evidence packet, and a controversy left unresolved past its declared
   // horizon. Signals about the DISPUTE, never a score on the hand answering it.
   for (const signal of taxSignals(state, now, settings)) add(signal);
+  // MSA-01..05 — a statement with no declared publication deadline or one
+  // overdue and unpublished, a published statement the record does not support,
+  // a finding with no complete remediation act, unassessed suppliers on the
+  // declared population, and a statement that can support no claim about
+  // identified instances. Signals about the DUTY, never a score on a supplier
+  // or a hand.
+  for (const signal of msaSignals(state, now, settings)) add(signal);
   // PSR-01..06 — unsafe physical energisation breach, expired live temporary
   // modification, overdue Category B post-startup conditions, rejected discipline
   // gate, open Category A blockers, and reviews ready for joint-apex startup

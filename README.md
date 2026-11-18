@@ -90,6 +90,18 @@ In **Standard Work → Stations** (`#/standard-work?panel=stations`), **Can thes
 
 The window holder can open **See the staffing proof** for the exact scenario counts and the stations limiting the worst recorded case. Missing availability can leave a result **Not proven**, never an invented absence. Directors and executives see window outcomes within their scope, subject to the disclosure floor. The station brief and aggregate CSV use the same results. The check does not schedule anyone, establish attendance, or model sequential work or failures across multiple windows. [Method and limits](docs/adr/0251-station-single-absence-check.md).
 
+## 2026-11-18 — The statement may only say what its record supports
+
+**CEO / board → Modern slavery & supply-chain due diligence** (`#/modern-slavery`, [ADR-0260](./docs/adr/0260-modern-slavery-supply-chain-due-diligence-register.md), Schema v212, CSV #196, `RULE-MSA-01`) is the register for what the published statement can and cannot prove: the statement’s entity, financial year and regime as declared, the publication deadline **declared with the written basis that sets its window**, the board approval and the publication as two separate dated acts, the declared supplier population, and the dated assessments, findings and remediation acts beneath every claim.
+
+**The register holds no corporate calendar, and that is the point.** A deadline is never computed from the financial-year end. A statement whose window nobody has written down prints **`deadline-undeclared`** and the joint seat above the hands is asked to declare it. Six statutory content elements — structure, policies, due diligence, risk management, effectiveness, training — each print their **own** evidenced-or-missing verdict with the reason, derived from the dated record beneath them. One reassuring word for the whole statement is the collapse this register exists to refuse.
+
+**The claim about identified instances is derived, never typed.** Where no assessment supports any claim the register prints **`refused`** — because “no instances identified” is a finding, and a finding needs evidence. A risk indicator is never printed as an instance; an identified instance owes a remediation act that closes **only** when it is complete with its completed day and evidence reference. A plan is not a remedy.
+
+**Unassessed suppliers are printed, never silently absent.** Matrix is handled, not assumed: hands across operations, procurement and legal are resolved on every active line (a declared secondary line included), each person counted once, the ask sent to the **lowest joint apex above all of them**, and a hand off the graph printed as an orphan rather than substituted. Above rank 4 the reader prints counts and withholds responsible hands and supplier detail.
+
+**Verified:** 31 claims green, including that every figure on screen is the reader’s own. No setup from you: Schema v212 adds ten empty registers and infers nothing. **Not built, and said so:** sanctions/export-licence/denied-party screening (logged), recurring contractual obligations, and any supplier risk score — scoring suppliers is fake precision this register refuses.
+
 ## 2026-11-18 — The assessment is not the deadline: the window is
 
 **Director / VP tax → Tax controversy & appeal control** (`#/tax`, [ADR-0257](./docs/adr/0257-tax-controversy-appeal-control-register.md), Schema v209, CSV #194, `RULE-TAX-01`) records the dispute that produces an uncertain tax position: the authority's notice and the position it challenges, the objection deadline **declared with the written basis that sets it**, the filing that met it with the authority's receipt reference, the evidence packet behind the position, and the resolution with the amount finally payable.

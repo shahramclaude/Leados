@@ -86,7 +86,7 @@ test('cash covenant: additive v210 → v211 migration creates no evidence or der
   delete old.cashCovenantTests;
   old.budgets = [{ id: 'existing-budget' }];
   const { raw, applied } = migrate(old);
-  assert.deepEqual(applied, ['210 → 211']);
+  assert.deepEqual(applied, ['210 → 211', '211 → 212']);
   assert.deepEqual(raw, { ...old, schemaVersion: SCHEMA_VERSION, cashCovenantTests: [] });
   assert.deepEqual(normalizeState(raw, { now: NOW }).state.cashCovenantTests, []);
 });

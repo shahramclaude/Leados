@@ -373,6 +373,24 @@ export const RECORD_POLICIES = Object.freeze({
   taxEvidence: { classKey: 'portfolio', detailCeiling: 4, label: 'Evidence items — the item, the document reference, the supplied day and what it proves about the disputed position', route: '#/tax' },
   taxResolutions: { classKey: 'portfolio', detailCeiling: 4, label: 'Resolutions — the closed-vocabulary outcome, the amount finally payable, the currency, the resolved day and the written basis', route: '#/tax' },
   taxMarkers: { classKey: 'unit', detailCeiling: 3, label: 'Tax-controversy observation markers — no joint seat, no responsible line to ask (identity-free)', route: '#/tax' },
+  // ADR-0260 (Schema v212): the modern slavery & supply-chain due-diligence
+  // statement register. A statement is a statutory, board-approved document and
+  // its evidence chain names suppliers and findings about workers — PORTFOLIO
+  // material a director and above must see, with the reader withholding the
+  // HANDS and supplier detail above rank 4. The deadline, the approval, the
+  // publication, the assessments, the findings, the remediation acts and the
+  // training records are the same class. The rule's own markers are
+  // identity-free.
+  msaStatements: { classKey: 'portfolio', detailCeiling: 4, label: 'Statements — the statement reference, the entity, the financial-year label and end day as declared, the regime, the declared structure, policy and effectiveness references and the responsible hands', route: '#/modern-slavery' },
+  msaDeadlines: { classKey: 'portfolio', detailCeiling: 4, label: 'Declared publication deadlines — the declared day and the written basis that sets the window', route: '#/modern-slavery' },
+  msaApprovals: { classKey: 'portfolio', detailCeiling: 4, label: 'Board approvals — the approved day, the minute or written authority reference and the written basis', route: '#/modern-slavery' },
+  msaPublications: { classKey: 'portfolio', detailCeiling: 4, label: 'Publications — the published day, the reference the statement went live at and the written basis', route: '#/modern-slavery' },
+  msaSuppliers: { classKey: 'portfolio', detailCeiling: 4, label: 'Supplier population — the supplier reference and name, the declared tier, the country and category as declared, and the responsible hands', route: '#/modern-slavery' },
+  msaAssessments: { classKey: 'portfolio', detailCeiling: 4, label: 'Assessments — the kind, the outcome, the assessed day, the assessor and the evidence reference', route: '#/modern-slavery' },
+  msaFindings: { classKey: 'portfolio', detailCeiling: 4, label: 'Findings — the kind, the declared severity, the identified day, the finding reference and the written description', route: '#/modern-slavery' },
+  msaRemediations: { classKey: 'portfolio', detailCeiling: 4, label: 'Remediation acts — the kind, the status, the declared day and, for a complete act, the completed day and evidence reference', route: '#/modern-slavery' },
+  msaTraining: { classKey: 'portfolio', detailCeiling: 4, label: 'Training records — the training day, the population covered, the delivery reference and the evidence reference', route: '#/modern-slavery' },
+  msaMarkers: { classKey: 'unit', detailCeiling: 3, label: 'Modern-slavery observation markers — no joint seat, no responsible line to ask (identity-free)', route: '#/modern-slavery' },
   // ADR-0253 (Schema v206): the product nonconformance register. A case names a
   // product, a site, one identified lot or serial, a written requirement and a
   // finding — an operational fact about a unit of output, so it is UNIT material,
@@ -765,6 +783,10 @@ const PORTFOLIO_ROUTES = Object.freeze([
   // same floor. Without it `routeRankWindow('tax')` defaults to floor 1 and the nav
   // offers a screen the collection policies and the disclosure manifest withhold.
   'tax',
+  // ADR-0260: the modern slavery & supply-chain due-diligence statement register
+  // declares `read-modern-slavery` and `manage-modern-slavery` at rank 3–5, so
+  // the route is declared here with the same floor.
+  'modern-slavery',
 ]);
 const ENTERPRISE_ROUTES = Object.freeze([
   // Pay, workforce shape and board-reported statistical audit claims. Capital
@@ -1603,6 +1625,16 @@ export const ACTION_RIGHTS = Object.freeze({
   'manage-provisions': { minRank: 3, maxRank: 5, label: 'Declare a provision assessment and its classification and best-estimate method, declare a scenario, declare a reimbursement recognition and a finance carrying, and set the register’s conventions' },
   'read-tax-controversy': { minRank: 3, maxRank: 5, label: 'Read the tax controversy and appeal-control register — the authority notices you hold, their declared objection deadlines and written jurisdictional bases, the filings and the timeliness derived from them, the evidence packets and the resolutions with the swing between what was disputed and what was finally payable. Above rank 3 the reader prints counts and withholds responsible hands' },
   'manage-tax-controversy': { minRank: 3, maxRank: 5, label: 'Record an authority notice on the document the authority issued, declare an objection deadline with its written jurisdictional basis, record a filing with the authority receipt reference, record an evidence item, record a resolution, and set the register’s conventions' },
+  // ADR-0260 (Schema v212): the modern slavery & supply-chain due-diligence
+  // statement register. A statement is a statutory, board-approved document
+  // and its evidence chain names suppliers and findings about workers:
+  // director / VP and above, in both the reading and the writing. Above rank 4
+  // the reader prints counts and withholds responsible hands and supplier
+  // detail. The deadline is declared with its written basis — the register
+  // holds no corporate calendar and computes no window from a financial-year
+  // end.
+  'read-modern-slavery': { minRank: 3, maxRank: 5, label: 'Read the modern slavery & supply-chain due-diligence statement register — the statements you hold, their declared publication deadlines and written bases, the board approvals and publications, the declared supplier population, the dated assessments, the findings and remediation acts, the six derived element verdicts and the claim the evidence supports. Above rank 4 the reader prints counts and withholds responsible hands and supplier detail' },
+  'manage-modern-slavery': { minRank: 3, maxRank: 5, label: 'Record a statement on its declared regime, declare a publication deadline with its written basis, record a board approval and a publication, add a supplier at its declared tier, record an assessment with its evidence reference, record a finding, record a remediation act (complete only with its evidence reference), record a training act, and set the register’s conventions' },
   // ADR-0258 (Schema v210): the pre-startup safety review register's four rights.
   // Reading and field verification acts open at rank 1 (frontline operators and
   // supervisors inspect equipment, log punch items, sign discipline walkdowns,

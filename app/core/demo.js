@@ -3282,6 +3282,187 @@ function seedPreStartupSafety(state, now, { priya, mei, jordan, samuel, freya })
   state.psrMarkers = Array.isArray(state.psrMarkers) ? state.psrMarkers : [];
 }
 
+function seedModernSlavery(state, now, { priya, mei, jordan, samuel, freya }) {
+  const day = (days) => new Date(now.getTime() + days * 86_400_000).toISOString().slice(0, 10);
+  const iso = (days) => new Date(now.getTime() + days * 86_400_000).toISOString();
+  const stmt = (seq, fields) => ({
+    id: `msa-stmt-demo-${seq}`,
+    createdAt: iso(-40),
+    updatedAt: iso(-1),
+    ...fields,
+  });
+
+  // Six statements placed relative to the injected clock, one for each derived
+  // state. Every printed state, element verdict and claim is DERIVED from these
+  // declared rows — nothing below carries a state, an element verdict, a claim,
+  // a day count or an open-remediation figure.
+  //
+  //  1  FY2025-26 group statement, deadline 20 days out (inside the warning
+  //     horizon) — `awaiting-publication`, with all six elements evidenced and
+  //     the derived claim `risks-only` (one remediated risk on the record).
+  //     Hands cross two lines (Priya, Mei), so the joint apex is exercised.
+  //  2  FY2024-25 group statement, published 30 days after an approval —
+  //     `published-with-gaps`: the effectiveness reference is missing, one
+  //     assessment reported "unable to assess" with no finding beneath it, and
+  //     an IDENTIFIED INSTANCE (supplier 8, recruitment fees) carries only a
+  //     PLANNED remediation, so the finding is still open. The claim prints
+  //     `instances-identified`.
+  //  3  FY2024-25 Northwind statement, deadline closed 10 days ago with no
+  //     publication — `overdue-unpublished`, and with no assessment on the
+  //     record the claim is REFUSED: "no instances identified" is a finding, and
+  //     a finding needs evidence.
+  //  4  FY2026-27 Northwind statement with NO declared deadline —
+  //     `deadline-undeclared`. The register computes no window from the
+  //     financial-year end and files an ask instead.
+  //  5  FY2026-27 group statement, board-approved 5 days ago with a deadline
+  //     120 days out — `approved-unpublished`. Approval is a fact and
+  //     publication is another.
+  //  6  FY2023-24 group statement, published on time with every element
+  //     evidenced and every finding remediated with evidence — `published`.
+  state.msaStatements = [
+    stmt(1, {
+      statementRef: 'MSA-GRP-FY2025-26',
+      entityName: 'Meridian Components Group',
+      fyLabel: 'FY2025-26', fyEndDay: day(-170), regime: 'uk-msa-2015',
+      basisRef: 'The statement is prepared under the Modern Slavery Act 2015 s.54 for the group and its UK subsidiaries, covering the financial year and the supply chains in the group structure.',
+      structureRef: 'Website: /about/supply-chain (structure description v3, published 2026-04)',
+      policyRef: 'POL-ETH-04 Responsible Sourcing & Anti-Slavery Policy, revision 6',
+      effectivenessRef: 'QBR-ETH-2026-Q2 supplier ethics scorecard pack',
+      responsibleIds: [priya, mei], recordedById: priya,
+      recordedAt: iso(-40), recordedDay: day(-40),
+    }),
+    stmt(2, {
+      statementRef: 'MSA-GRP-FY2024-25',
+      entityName: 'Meridian Components Group',
+      fyLabel: 'FY2024-25', fyEndDay: day(-430), regime: 'uk-msa-2015',
+      basisRef: 'The statement is prepared under the Modern Slavery Act 2015 s.54 for the group and its UK subsidiaries, covering the financial year and the supply chains in the group structure.',
+      structureRef: 'Website: /about/supply-chain (structure description v2, published 2025-03)',
+      policyRef: 'POL-ETH-04 Responsible Sourcing & Anti-Slavery Policy, revision 5',
+      effectivenessRef: null,
+      responsibleIds: [priya], recordedById: priya,
+      recordedAt: iso(-80), recordedDay: day(-80),
+    }),
+    stmt(3, {
+      statementRef: 'MSA-NWS-FY2024-25',
+      entityName: 'Northwind Services Ltd',
+      fyLabel: 'FY2024-25', fyEndDay: day(-370), regime: 'au-msa-2018',
+      basisRef: 'The statement is prepared under the Australian Modern Slavery Act 2018 s.16 for Northwind Services Ltd and its wholly owned reporting entities.',
+      structureRef: null, policyRef: null, effectivenessRef: null,
+      responsibleIds: [samuel, freya], recordedById: priya,
+      recordedAt: iso(-60), recordedDay: day(-60),
+    }),
+    stmt(4, {
+      statementRef: 'MSA-NWS-FY2026-27',
+      entityName: 'Northwind Services Ltd',
+      fyLabel: 'FY2026-27', fyEndDay: day(-20), regime: 'au-msa-2018',
+      basisRef: 'The statement is prepared under the Australian Modern Slavery Act 2018 s.16 for Northwind Services Ltd and its wholly owned reporting entities.',
+      structureRef: null, policyRef: null, effectivenessRef: null,
+      responsibleIds: [jordan], recordedById: priya,
+      recordedAt: iso(-15), recordedDay: day(-15),
+    }),
+    stmt(5, {
+      statementRef: 'MSA-GRP-FY2026-27',
+      entityName: 'Meridian Components Group',
+      fyLabel: 'FY2026-27', fyEndDay: day(-25), regime: 'uk-msa-2015',
+      basisRef: 'The statement is prepared under the Modern Slavery Act 2015 s.54 for the group and its UK subsidiaries, covering the financial year and the supply chains in the group structure.',
+      structureRef: 'Website: /about/supply-chain (structure description v4, published 2026-10)',
+      policyRef: 'POL-ETH-04 Responsible Sourcing & Anti-Slavery Policy, revision 7',
+      effectivenessRef: 'QBR-ETH-2026-Q4 supplier ethics scorecard pack',
+      responsibleIds: [mei], recordedById: priya,
+      recordedAt: iso(-12), recordedDay: day(-12),
+    }),
+    stmt(6, {
+      statementRef: 'MSA-GRP-FY2023-24',
+      entityName: 'Meridian Components Group',
+      fyLabel: 'FY2023-24', fyEndDay: day(-800), regime: 'uk-msa-2015',
+      basisRef: 'The statement is prepared under the Modern Slavery Act 2015 s.54 for the group and its UK subsidiaries, covering the financial year and the supply chains in the group structure.',
+      structureRef: 'Website: /about/supply-chain (structure description v1, published 2024-02)',
+      policyRef: 'POL-ETH-04 Responsible Sourcing & Anti-Slavery Policy, revision 4',
+      effectivenessRef: 'QBR-ETH-2024-Q1 supplier ethics scorecard pack',
+      responsibleIds: [priya, samuel], recordedById: priya,
+      recordedAt: iso(-720), recordedDay: day(-720),
+    }),
+  ];
+
+  // Five deadlines, each with the written basis that sets its window. Statement
+  // 4 deliberately carries none: the register holds no corporate calendar and
+  // will not invent one.
+  state.msaDeadlines = [
+    { id: 'msa-dl-demo-1', statementId: 'msa-stmt-demo-1', deadlineDay: day(20), basisRef: 'Modern Slavery Act 2015 s.54(6): the statement must be published before the end of the period of six months beginning with the day after the financial year end (2026-11-30 for a 2026-05-01 year end).', declaredById: priya, declaredAt: iso(-40), declaredDay: day(-40), createdAt: iso(-40) },
+    { id: 'msa-dl-demo-2', statementId: 'msa-stmt-demo-2', deadlineDay: day(-40), basisRef: 'Modern Slavery Act 2015 s.54(6): six months from the day after the 2025-04-30 financial year end, closing 2025-10-31.', declaredById: priya, declaredAt: iso(-80), declaredDay: day(-80), createdAt: iso(-80) },
+    { id: 'msa-dl-demo-3', statementId: 'msa-stmt-demo-3', deadlineDay: day(-10), basisRef: 'Australian Modern Slavery Act 2018 s.16(4): the statement must be submitted within six months after the end of the entity’s financial year.', declaredById: priya, declaredAt: iso(-60), declaredDay: day(-60), createdAt: iso(-60) },
+    { id: 'msa-dl-demo-5', statementId: 'msa-stmt-demo-5', deadlineDay: day(120), basisRef: 'Modern Slavery Act 2015 s.54(6): six months from the day after the 2026-10-31 financial-year end, closing 2027-04-30. Declared early so the publication clock is visible.', declaredById: priya, declaredAt: iso(-12), declaredDay: day(-12), createdAt: iso(-12) },
+    { id: 'msa-dl-demo-6', statementId: 'msa-stmt-demo-6', deadlineDay: day(-700), basisRef: 'Modern Slavery Act 2015 s.54(6): six months from the day after the 2024-04-30 financial year end, closing 2024-10-31.', declaredById: priya, declaredAt: iso(-720), declaredDay: day(-720), createdAt: iso(-720) },
+  ];
+
+  state.msaApprovals = [
+    { id: 'msa-apr-demo-2', statementId: 'msa-stmt-demo-2', approvedDay: day(-35), approvalRef: 'BOARD-MIN-2025-09-18-04 (approval of the FY2024-25 modern slavery statement)', basisRef: 'The board approved the statement as presented by the ethics committee, minute reference recorded; the signature is a director’s own act recorded in the document.', recordedById: priya, recordedAt: iso(-35), recordedDay: day(-35), createdAt: iso(-35) },
+    { id: 'msa-apr-demo-5', statementId: 'msa-stmt-demo-5', approvedDay: day(-5), approvalRef: 'BOARD-MIN-2026-11-10-02 (approval of the FY2026-27 modern slavery statement)', basisRef: 'The board approved the draft statement and delegated publication to the group compliance officer once the effectiveness pack is attached.', recordedById: priya, recordedAt: iso(-5), recordedDay: day(-5), createdAt: iso(-5) },
+    { id: 'msa-apr-demo-6', statementId: 'msa-stmt-demo-6', approvedDay: day(-695), approvalRef: 'BOARD-MIN-2024-03-14-01 (approval of the FY2023-24 modern slavery statement)', basisRef: 'The board approved the statement at its March meeting, minute reference recorded.', recordedById: priya, recordedAt: iso(-695), recordedDay: day(-695), createdAt: iso(-695) },
+  ];
+
+  state.msaPublications = [
+    { id: 'msa-pub-demo-2', statementId: 'msa-stmt-demo-2', publishedDay: day(-30), publicationRef: 'https://meridian.example/modern-slavery-statement-2025.pdf', basisRef: 'Published on the group website with a prominent link from the footer of every page, as the regime requires.', recordedById: priya, recordedAt: iso(-30), recordedDay: day(-30), createdAt: iso(-30) },
+    { id: 'msa-pub-demo-6', statementId: 'msa-stmt-demo-6', publishedDay: day(-690), publicationRef: 'https://meridian.example/modern-slavery-statement-2024.pdf', basisRef: 'Published on the group website with a prominent link from the footer of every page, as the regime requires.', recordedById: priya, recordedAt: iso(-690), recordedDay: day(-690), createdAt: iso(-690) },
+  ];
+
+  // Eight suppliers on the declared population across tiers 1–3 and seven
+  // countries. Two carry no assessment at all — they are printed as unassessed,
+  // never silently absent from the statements’ coverage.
+  state.msaSuppliers = [
+    { id: 'msa-sup-demo-1', supplierRef: 'SUP-1001', supplierName: 'Dhaka Precision Garments Ltd', tier: 1, country: 'Bangladesh', category: 'Garments', addedDay: day(-500), responsibleIds: [mei], recordedById: priya, recordedAt: iso(-500), recordedDay: day(-500), createdAt: iso(-500) },
+    { id: 'msa-sup-demo-2', supplierRef: 'SUP-1002', supplierName: 'Haiphong Circuit Assembly JSC', tier: 1, country: 'Vietnam', category: 'Electronics', addedDay: day(-480), responsibleIds: [mei], recordedById: priya, recordedAt: iso(-480), recordedDay: day(-480), createdAt: iso(-480) },
+    { id: 'msa-sup-demo-3', supplierRef: 'SUP-2010', supplierName: 'Tiruppur Knit Fabrics Pvt', tier: 2, country: 'India', category: 'Fabrics', addedDay: day(-460), responsibleIds: [jordan], recordedById: priya, recordedAt: iso(-460), recordedDay: day(-460), createdAt: iso(-460) },
+    { id: 'msa-sup-demo-4', supplierRef: 'SUP-2011', supplierName: 'Bursa Metal Forming AS', tier: 2, country: 'Türkiye', category: 'Components', addedDay: day(-300), responsibleIds: [jordan], recordedById: priya, recordedAt: iso(-300), recordedDay: day(-300), createdAt: iso(-300) },
+    { id: 'msa-sup-demo-5', supplierRef: 'SUP-1003', supplierName: 'Felixstowe Freight Services Ltd', tier: 1, country: 'United Kingdom', category: 'Logistics', addedDay: day(-280), responsibleIds: [samuel], recordedById: priya, recordedAt: iso(-280), recordedDay: day(-280), createdAt: iso(-280) },
+    { id: 'msa-sup-demo-6', supplierRef: 'SUP-3001', supplierName: 'Perak Natural Rubber Sdn', tier: 3, country: 'Malaysia', category: 'Raw materials', addedDay: day(-260), responsibleIds: [freya], recordedById: priya, recordedAt: iso(-260), recordedDay: day(-260), createdAt: iso(-260) },
+    { id: 'msa-sup-demo-7', supplierRef: 'SUP-1004', supplierName: 'Porto Sole & Stitch SA', tier: 1, country: 'Portugal', category: 'Footwear', addedDay: day(-430), responsibleIds: [mei], recordedById: priya, recordedAt: iso(-430), recordedDay: day(-430), createdAt: iso(-430) },
+    { id: 'msa-sup-demo-8', supplierRef: 'SUP-2012', supplierName: 'Kraków Pack & Print Sp. z o.o.', tier: 2, country: 'Poland', category: 'Packaging', addedDay: day(-420), responsibleIds: [jordan], recordedById: priya, recordedAt: iso(-420), recordedDay: day(-420), createdAt: iso(-420) },
+  ];
+
+  // Nine assessments across four statements. Every one carries its evidence
+  // reference; none carries a state or a verdict. Statement 3 carries none —
+  // the claim behind it is REFUSED rather than defaulted to "no instances".
+  state.msaAssessments = [
+    { id: 'msa-asm-demo-1', statementId: 'msa-stmt-demo-1', supplierId: 'msa-sup-demo-1', assessmentKind: 'audit', outcome: 'no-issues', assessedOn: day(-60), assessorRef: 'Elevate Global — social audit programme', evidenceRef: 'AUD-2026-0871 Dhaka Precision social audit report', basisRef: 'Announced social audit against the group labour standards code, worker interviews and payroll sampling; no forced-labour indicator identified on the evidence examined.', recordedById: mei, recordedAt: iso(-60), recordedDay: day(-60), createdAt: iso(-60) },
+    { id: 'msa-asm-demo-2', statementId: 'msa-stmt-demo-1', supplierId: 'msa-sup-demo-2', assessmentKind: 'questionnaire', outcome: 'issues-found', assessedOn: day(-55), assessorRef: 'Group procurement due-diligence review', evidenceRef: 'DDQ-2026-0140 Haiphong questionnaire and dormitory photographs', basisRef: 'Completed due-diligence questionnaire with supporting documents identified agency-worker accommodation charges requiring review; recorded as issues for remediation.', recordedById: mei, recordedAt: iso(-55), recordedDay: day(-55), createdAt: iso(-55) },
+    { id: 'msa-asm-demo-3', statementId: 'msa-stmt-demo-1', supplierId: 'msa-sup-demo-5', assessmentKind: 'site-visit', outcome: 'no-issues', assessedOn: day(-50), assessorRef: 'Group ethics officer visit', evidenceRef: 'VISIT-2026-022 Felixstowe Freight site visit report', basisRef: 'Unannounced site visit with driver interviews and agency-labour records reviewed; no indicator identified on the evidence examined.', recordedById: samuel, recordedAt: iso(-50), recordedDay: day(-50), createdAt: iso(-50) },
+    { id: 'msa-asm-demo-4', statementId: 'msa-stmt-demo-2', supplierId: 'msa-sup-demo-7', assessmentKind: 'certification', outcome: 'no-issues', assessedOn: day(-380), assessorRef: 'SA8000 certification body', evidenceRef: 'CERT-SA8000-2025-114 Porto Sole & Stitch certificate', basisRef: 'Valid social certification held at the assessment date; the certificate’s own scope and validity are its limit, and the register records it as such.', recordedById: mei, recordedAt: iso(-380), recordedDay: day(-380), createdAt: iso(-380) },
+    { id: 'msa-asm-demo-5', statementId: 'msa-stmt-demo-2', supplierId: 'msa-sup-demo-8', assessmentKind: 'audit', outcome: 'issues-found', assessedOn: day(-370), assessorRef: 'Elevate Global — social audit programme', evidenceRef: 'AUD-2025-0455 Kraków Pack social audit report', basisRef: 'Unannounced audit identified recruitment fees paid by agency workers sourced from a third-country agency, retention of identity documents pending fee repayment, and restricted movement in agency housing. Recorded as an identified instance with a worker-remediation duty.', recordedById: jordan, recordedAt: iso(-370), recordedDay: day(-370), createdAt: iso(-370) },
+    { id: 'msa-asm-demo-6', statementId: 'msa-stmt-demo-2', supplierId: 'msa-sup-demo-1', assessmentKind: 'desktop-review', outcome: 'unable-to-assess', assessedOn: day(-375), assessorRef: 'Group procurement desktop review', evidenceRef: 'DESK-2025-0088 public and supplied material review', basisRef: 'Documented review could not reach a verdict: sub-agency records for the second production unit were not supplied. Recorded as unable to assess, never as no issues.', recordedById: mei, recordedAt: iso(-375), recordedDay: day(-375), createdAt: iso(-375) },
+    { id: 'msa-asm-demo-7', statementId: 'msa-stmt-demo-2', supplierId: 'msa-sup-demo-3', assessmentKind: 'questionnaire', outcome: 'no-issues', assessedOn: day(-420), assessorRef: 'Group procurement due-diligence review', evidenceRef: 'DDQ-2025-0021 Tiruppur questionnaire', basisRef: 'Completed questionnaire with wage records and labour-licence evidence; no indicator identified on the evidence examined.', recordedById: jordan, recordedAt: iso(-420), recordedDay: day(-420), createdAt: iso(-420) },
+    { id: 'msa-asm-demo-8', statementId: 'msa-stmt-demo-5', supplierId: 'msa-sup-demo-5', assessmentKind: 'site-visit', outcome: 'no-issues', assessedOn: day(-30), assessorRef: 'Group ethics officer visit', evidenceRef: 'VISIT-2026-031 Felixstowe Freight site visit report', basisRef: 'Annual site visit with driver interviews and agency records re-reviewed; no indicator identified on the evidence examined.', recordedById: samuel, recordedAt: iso(-30), recordedDay: day(-30), createdAt: iso(-30) },
+    { id: 'msa-asm-demo-9', statementId: 'msa-stmt-demo-6', supplierId: 'msa-sup-demo-2', assessmentKind: 'site-visit', outcome: 'no-issues', assessedOn: day(-640), assessorRef: 'Group ethics officer visit', evidenceRef: 'VISIT-2024-009 Haiphong site visit report', basisRef: 'Site visit with worker interviews and dormitory inspection; no indicator identified on the evidence examined.', recordedById: mei, recordedAt: iso(-640), recordedDay: day(-640), createdAt: iso(-640) },
+  ];
+
+  // Three findings. A risk indicator and a nonconformance are never printed as
+  // an instance; the instance carries the remediation duty the statement must
+  // speak to. Every state below is derived from these rows.
+  state.msaFindings = [
+    { id: 'msa-fnd-demo-1', assessmentId: 'msa-asm-demo-2', findingKind: 'risk', severity: 'material', identifiedOn: day(-55), findingRef: 'FND-2026-014', basisRef: 'Agency-worker accommodation charges deducted from wages at a rate that may breach the group code; a forced-labour risk indicator, not an identified instance.', recordedById: mei, recordedAt: iso(-55), recordedDay: day(-55), createdAt: iso(-55) },
+    { id: 'msa-fnd-demo-2', assessmentId: 'msa-asm-demo-5', findingKind: 'instance', severity: 'severe', identifiedOn: day(-370), findingRef: 'FND-2025-003', basisRef: 'Identified instance: agency workers paid recruitment fees and had identity documents retained pending repayment, with restricted movement in agency housing. Workers are owed direct remediation.', recordedById: jordan, recordedAt: iso(-370), recordedDay: day(-370), createdAt: iso(-370) },
+    { id: 'msa-fnd-demo-3', assessmentId: 'msa-asm-demo-9', findingKind: 'nonconformance', severity: 'minor', identifiedOn: day(-640), findingRef: 'FND-2024-002', basisRef: 'Nonconformance: the supplier’s labour-standards clause was signed but its worker-grievance channel was not communicated in the three working languages on site.', recordedById: mei, recordedAt: iso(-640), recordedDay: day(-640), createdAt: iso(-640) },
+  ];
+
+  // Remediation acts. A PLANNED act closes nothing: the instance on supplier 8
+  // stays `remediation-open` until a complete act is recorded with its evidence.
+  state.msaRemediations = [
+    { id: 'msa-rem-demo-1', findingId: 'msa-fnd-demo-1', remediationKind: 'fees-repaid', status: 'complete', declaredOn: day(-50), completedOn: day(-30), evidenceRef: 'PAY-2026-0181 accommodation-charge repayment schedule', basisRef: 'The accommodation charge was recalculated to the statutory maximum and the over-deduction repaid to the affected workers; the payment schedule is the evidence.', recordedById: mei, recordedAt: iso(-30), recordedDay: day(-30), createdAt: iso(-50) },
+    { id: 'msa-rem-demo-2', findingId: 'msa-fnd-demo-2', remediationKind: 'victim-remediation', status: 'planned', declaredOn: day(-360), completedOn: null, evidenceRef: null, basisRef: 'A worker-remediation plan is agreed with the agency: fees repaid in full, documents returned, housing terms corrected. The plan is a promise; the payment and return evidence will close it.', recordedById: jordan, recordedAt: iso(-360), recordedDay: day(-360), createdAt: iso(-360) },
+    { id: 'msa-rem-demo-3', findingId: 'msa-fnd-demo-2', remediationKind: 'monitoring-plan', status: 'planned', declaredOn: day(-355), completedOn: null, evidenceRef: null, basisRef: 'A re-audit is scheduled within the quarter with agency-labour and housing records in scope. A plan is not a remedy; the instance stays open.', recordedById: jordan, recordedAt: iso(-355), recordedDay: day(-355), createdAt: iso(-355) },
+    { id: 'msa-rem-demo-4', findingId: 'msa-fnd-demo-3', remediationKind: 'policy-change', status: 'complete', declaredOn: day(-630), completedOn: day(-600), evidenceRef: 'GRIEVANCE-POSTER-2024-11 multilingual poster rollout record', basisRef: 'The grievance channel is now posted in the three working languages at every entrance and in the dormitories, with the rollout record as evidence.', recordedById: mei, recordedAt: iso(-600), recordedDay: day(-600), createdAt: iso(-630) },
+  ];
+
+  // Two training records. Statements 2–5 carry none, and their training element
+  // prints `not evidenced` — never smoothed over by the headline.
+  state.msaTraining = [
+    { id: 'msa-trn-demo-1', statementId: 'msa-stmt-demo-1', trainingDay: day(-45), populationRef: 'Procurement, buying and supplier-quality staff (46 people)', deliveryRef: 'MSA-REFRESH-2026-Q1 workshop', evidenceRef: 'LMS-EXPORT-2026-0112 completion records', basisRef: 'Annual refresher on the ILO indicators of forced labour, recruitment-fee red flags and the escalation path; attendance and completion records are the evidence.', recordedById: mei, recordedAt: iso(-45), recordedDay: day(-45), createdAt: iso(-45) },
+    { id: 'msa-trn-demo-2', statementId: 'msa-stmt-demo-6', trainingDay: day(-620), populationRef: 'Procurement and site management staff (31 people)', deliveryRef: 'MSA-INTRO-2024 workshop', evidenceRef: 'LMS-EXPORT-2024-0044 completion records', basisRef: 'Introductory training on the Modern Slavery Act duties and the supplier code, with completion records as evidence.', recordedById: mei, recordedAt: iso(-620), recordedDay: day(-620), createdAt: iso(-620) },
+  ];
+
+  state.msaMarkers = Array.isArray(state.msaMarkers) ? state.msaMarkers : [];
+}
+
 function seedTax(state, now, { priya, mei, jordan, samuel, freya }) {
   const day = (days) => new Date(now.getTime() + days * 86_400_000).toISOString().slice(0, 10);
   const iso = (days) => new Date(now.getTime() + days * 86_400_000).toISOString();
@@ -8261,6 +8442,15 @@ export function buildDemoState(now = new Date()) {
   // horizon. Hands cross two reporting lines in four of them, so the joint apex is
   // exercised rather than assumed.
   seedTax(state, now, { priya, mei, jordan, samuel, freya });
+  // ADR-0260: six modern slavery statements placed relative to the injected
+  // clock — one per derived statement state (awaiting publication with all six
+  // elements evidenced, published with gaps and an identified instance whose
+  // remediation is still open, overdue and unpublished with its claim REFUSED,
+  // deadline undeclared, approved but unpublished, and fully published), eight
+  // suppliers across tiers 1–3 with two printed as unassessed, nine assessments
+  // each carrying its evidence reference, three findings whose instance is never
+  // blurred into a risk, and remediation acts where a plan closes nothing.
+  seedModernSlavery(state, now, { priya, mei, jordan, samuel, freya });
   // ADR-0258: ten pre-startup safety reviews placed relative to the injected
   // clock — one for each of the ten mutually exclusive derived states, with
   // cross-line proposer/holder/signer sets whose startup authority resolves live
