@@ -1,3 +1,23 @@
+## Review minimum-cash headroom (local treasury workpaper)
+
+Run `node scripts/review-minimum-cash.mjs evidence.tsv` (or `-` for stdin). Use only for a clause comparing the sum of eligible cash balances with a fixed, inclusive minimum. Use one facility, one contractual test date/cutoff and one currency per file. Do not use for averages, available credit lines, currency conversions, caps, partial eligibility or percentage tests.
+
+The UTF-8 TSV has two tables. Line 1 is this exact header; line 2 contains the terms and independent population controls:
+
+```tsv
+facility	testDate	currency	minimumMinor	clauseRef	controlAccounts	controlTotalMinor	controlRef
+```
+
+Line 3 is the following exact header; subsequent lines are the account evidence:
+
+```tsv
+account	testDate	currency	balanceMinor	treatment	basisRef	balanceRef
+```
+
+Use `YYYY-MM-DD`, the same three-letter currency code throughout, and integer **minor units** (not formatted major units). Supply clause and source locators that reviewers can reopen. Obtain `controlAccounts` and signed `controlTotalMinor` separately from the same book perimeter, **before exclusions**. Use the same stable account identifier across teams. Mark each whole balance `include`, `exclude` or `unresolved`; cite the classification basis or open question and the dated balance evidence. Preserve overdraft signs. Do not substitute a zero for a missing balance.
+
+The JSON receipt returns the source lines, distinct-account subtotals and reconciliation checks. Exact copies count once; conflicting copies refuse the file. Exit **0** means a supported arithmetic reading (including a shortfall), **2** means a receipt with reasons but no headroom, and **1** means the file could not be reviewed. Signed headroom is eligible cash minus the contractual minimum. Matching count and amount cannot prove account membership, source authenticity or legal compliance. Review the population and agreement yourself. This command neither saves a workspace record nor enforces seat access: restrict the input and receipt to authorized reviewers.
+
 ## Review concurrent control impairment (local command)
 
 Run `node scripts/review-control-overlap.mjs evidence.tsv` (or pass `-` for stdin). Use one hazard per file. Supply this exact tab-separated header:
