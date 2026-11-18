@@ -373,6 +373,11 @@ export const PAUSE_PERMIT_MATRIX_REACH_SWITCHES = Object.freeze([
   // reporting lines through `matrixJointApex`, so it carries a permit like every
   // other cross-line switch.
   'provAutoPropagate',
+  // ADR-0253: the product-nonconformance rule computes the joint apex above every
+  // line holding an accountable hand on an identified lot or serial, so silencing it
+  // leaves an uncontained lot, an unsigned disposition, an unverified rework or an
+  // unrecorded release unasked — and the lines holding those hands are not told.
+  'qncAutoPropagate',
   // ADR-0224's successors: four rules that compute an ask through the reporting
   // graph were gated by switches the reach list never claimed, so a pause on them
   // could have silenced a cross-line ask while the census said it could not. Named
@@ -538,6 +543,7 @@ export const PAUSE_PERMIT_SWITCH_RULES = Object.freeze({
   // finance carrying unasked. The register stays open and visible; nothing is
   // provided, disclosed, recognized or reconciled in its place.
   provAutoPropagate: 'prvRules.js',
+  qncAutoPropagate: 'productNonconformanceRules.js',
   assuranceAutoPropagate: 'assuranceFindingRules.js',
   maaAutoPropagate: 'mutualAidRules.js',
   dwlAutoPropagate: 'personalDealingRules.js',

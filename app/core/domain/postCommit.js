@@ -219,6 +219,7 @@ import { insuranceRule } from './insRules.js';
 // reimbursement asset, an asset resting on a declared judgment with no cash, or
 // a computed provision that disagrees with the declared finance carrying.
 import { provisionRule } from './prvRules.js';
+import { productNonconformanceRule } from './productNonconformanceRules.js';
 import { incidentCommandRule } from './incidentCommandRules.js';
 import { sourcingRule } from './sourcingRules.js';
 import { ibpRule } from './ibpRules.js';
@@ -1351,6 +1352,12 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // capped, or that the figure finance carries disagrees with the computed
   // provision.
   provisionRule,
+  // ADR-0253: the product-nonconformance rule resolves the joint apex above every
+  // line holding an accountable hand on an identified output, so silencing it
+  // reaches across reporting lines — and nobody is told that a lot is uncontained,
+  // that a disposition is unsigned, that rework was never independently verified or
+  // that a release was never recorded.
+  productNonconformanceRule,
   workplaceAdjustmentRule,
   // ADR-0229: the Capability Sourcing & Firm-Boundary Register. ONE rule reads
   // the finished register and files at most one dated ask per condition: a

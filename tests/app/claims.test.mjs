@@ -204,7 +204,7 @@ function asSeat(api, store, seatId) {
 /* --------------------------------------------------------------- 1. schema */
 
 test('schema v202 is additive: seven empty ledgers, three conventions, nothing inferred', () => {
-  assert.equal(SCHEMA_VERSION, 205);
+  assert.equal(SCHEMA_VERSION, 206);
   const keys = ['lfgMatters', 'lfgAccruals', 'lfgStays', 'lfgResolutions', 'lfgConcessions', 'lfgAuthorityGrants', 'lfgMarkers'];
   for (const key of keys) assert.ok(COLLECTIONS.includes(key), `${key} must be a declared collection`);
   const empty = createEmptyState(T0);
@@ -679,7 +679,7 @@ test('the rule stays silent when paused, and observes identity-free where nobody
 });
 
 test('the rule is registered on the spine, in the propagation contracts, and in the pause census', () => {
-  assert.equal(DEFAULT_POST_COMMIT_RULES.length, 163, 'the spine carries ADR-0248 (RULE-LFG-01), ADR-0249 (RULE-INS-01) and ADR-0250 (RULE-PROV-01)');
+  assert.equal(DEFAULT_POST_COMMIT_RULES.length, 164, 'the spine carries ADR-0248 (RULE-LFG-01), ADR-0249 (RULE-INS-01), ADR-0250 (RULE-PROV-01) and ADR-0253 (RULE-QNC-01)');
   const contract = PROPAGATION_CONTRACTS.find((row) => row.rule?.id === 'claimRule' || row.module === 'lfgRules.js');
   assert.ok(contract, 'the rule must have a propagation contract');
   assert.deepEqual(contract.writes.sort(), ['delegations', 'lfgMarkers', 'links']);

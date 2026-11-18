@@ -72,7 +72,7 @@ function workspace(matrix = true) {
 test('look-back: the migration adds an empty ledger, not failures inferred from abnormal notes', () => {
   const s = fixture(); s.schemaVersion = 204; delete s.instrumentLookbacks;
   const { raw, applied } = migrate(s);
-  assert.deepEqual(applied, ['204 → 205']); assert.deepEqual(raw.instrumentLookbacks, []);
+  assert.deepEqual(applied, ['204 → 205', '205 → 206']); assert.deepEqual(raw.instrumentLookbacks, []);
   assert.deepEqual(raw.standardWorkRoutines, s.standardWorkRoutines);
 });
 

@@ -154,7 +154,7 @@ test('every CSV scope round-trips cleanly and preserves unknown values as blank 
 // without this pin moving. The count is repaired here to #188 rather than left
 // three scopes behind, so the next ADR cannot drift it silently. Session 327 adds
 // the identity-free claim-register scope #189 and repairs the pin again.
-assert.equal(CSV_EXPORTS.length, 191);
+assert.equal(CSV_EXPORTS.length, 192);
   for (const spec of CSV_EXPORTS) {
     const res = exportWorkspaceCsv(state, spec.key, { now: NOW });
     assert.equal(res.ok, true, `${spec.key} export succeeds`);

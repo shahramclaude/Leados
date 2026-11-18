@@ -35,6 +35,7 @@ import { MIC_RIGHTS } from './incidentCommandRegistry.js';
 import { MAA_RIGHTS } from './mutualAidRegistry.js';
 import { DWL_RIGHTS } from './personalDealingRegistry.js';
 import { PTW_RIGHTS } from './permitToWorkRegistry.js';
+import { QNC_RIGHTS } from './productNonconformanceRegistry.js';
 import { LTO_RIGHTS } from './authorisationRegistry.js';
 import { LFG_RIGHTS } from './lfgRegistry.js';
 import { INS_RIGHTS } from './insRegistry.js';
@@ -396,6 +397,20 @@ const groups = [
   [PTW_RIGHTS.READ, 'permitToWorkReport permitToWorkAttention permitToWorkCandidates'],
   [PTW_RIGHTS.ISSUE, 'permitToWorkIssue permitToWorkSetConventions'],
   [PTW_RIGHTS.ACT, 'permitToWorkApplyIsolation permitToWorkVerifyIsolation permitToWorkRemoveIsolation permitToWorkRecordAtmosphere permitToWorkHandover permitToWorkSuspend permitToWorkResume permitToWorkClose permitToWorkScan'],
+  // ADR-0253: the product nonconformance register. Reading, opening and containing
+  // open at rank 1 — the finding is identified at the bench, and the hold has to be
+  // recorded by the hand that finds the lot. What carries the control is the door,
+  // not the rank: a disposition needs the joint matrix apex recomputed inside the
+  // action, and a re-verification needs a hand STRICTLY SENIOR to the one that
+  // completed the rework. The reader narrows to counts above rank 3, because a
+  // product, a site, a lot number and a finding are operational detail.
+  [QNC_RIGHTS.READ, 'qncReport qncAttention qncCandidates'],
+  [QNC_RIGHTS.OPEN, 'qncOpen'],
+  [QNC_RIGHTS.CONTAIN, 'qncRecordContainment'],
+  [QNC_RIGHTS.DECIDE, 'qncSignDisposition'],
+  [QNC_RIGHTS.ACT, 'qncRecordDispositionAct'],
+  [QNC_RIGHTS.VERIFY, 'qncVerifyRework'],
+  [QNC_RIGHTS.GOVERN, 'qncSetConventions qncScan'],
   // ADR-0247: the statutory authorisation register. Reading is open at rank 1 —
   // the hand that opens the gates must be able to read the authority it is opening
   // them under — while the READER withholds accountable hands above rank 3. Every
@@ -923,6 +938,11 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // gated — and whether the plant a crew is about to touch is proved dead would
 // vanish the moment enforcement was turned on.
 'permitToWorkReport', 'permitToWorkAttention', 'permitToWorkCandidates',
+// ADR-0253: the product nonconformance register's pure read surface. Every one of
+// these re-proves the read right inside the action, because the seat that holds a
+// lot must be able to read what the record says about it even while identity
+// enforcement is on. The write path re-proves its own right and its own control.
+'qncReport', 'qncAttention', 'qncCandidates',
 // ADR-0241: the workplace adjustment register's pure read surface. Every one of
 // these re-proves the read right inside the action, exactly as the distributed-
 // work and incident registers do — a module whose reads are absent from

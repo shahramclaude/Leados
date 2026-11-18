@@ -256,6 +256,16 @@ import { buildInsurance } from './domain/insCoverage.js';
 import { PROV_CSV_COLUMNS, PROV_CSV_DESCRIPTOR, PROV_CSV_SCOPE } from './domain/prvRegistry.js';
 import { provisionCsvRows } from './domain/prvReport.js';
 import { buildProvisions } from './domain/prvProvision.js';
+// ADR-0253: identity-free product-nonconformance aggregates (CSV #192).
+import {
+  QNC_CSV_COLUMNS,
+  QNC_CSV_DESCRIPTOR,
+  QNC_CSV_SCOPE,
+} from './domain/productNonconformanceRegistry.js';
+import {
+  buildProductNonconformance,
+  productNonconformanceCsvRows,
+} from './domain/productNonconformance.js';
 import { authorisationCsvRows } from './domain/authorisationReport.js';
 import { buildAuthorisations } from './domain/authorisation.js';
 import { loneWorkingCsvRows } from './domain/loneWorkingReport.js';
@@ -1813,6 +1823,12 @@ export const CSV_EXPORTS = [
   // mixed-currency. A per-state count below the declared floor exports BLANK with
   // its reason, never as a small number.
   PROV_CSV_DESCRIPTOR,
+  // #192 (ADR-0253): product nonconformance and disposition. One summary row and
+  // one row per derived case state. No case reference, product, site, lot or serial,
+  // requirement, finding, person, manager, concession, evidence reference or act day
+  // crosses this boundary. A non-zero state count below the fixed privacy floor of
+  // three exports BLANK with its reason, never as a small number.
+  QNC_CSV_DESCRIPTOR,
 ];
 
 function personLookup(state) {
@@ -7159,6 +7175,19 @@ export function buildScopeTable(state, scope, now) {
       return {
         columns: PROV_CSV_COLUMNS.map((key) => ({ key, header: key })),
         rows: provisionCsvRows(report),
+      };
+    }
+    case QNC_CSV_SCOPE: {
+      // CSV scope #192 (ADR-0253, Schema v206). Built from the SAME reader the
+      // `#/nonconformance` panel renders, with no seat: every figure is a count over
+      // the whole register, so no case reference, product, site, lot or serial,
+      // requirement, finding, person, manager, concession, evidence reference or act
+      // day is reachable. A count below the fixed privacy floor exports BLANK with
+      // its reason.
+      const report = buildProductNonconformance(state, { now, settings: state.settings || {}, seat: null });
+      return {
+        columns: QNC_CSV_COLUMNS.map((key) => ({ key, header: key })),
+        rows: productNonconformanceCsvRows(report),
       };
     }
     case LWK_CSV_SCOPE: {

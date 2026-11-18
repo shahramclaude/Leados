@@ -347,6 +347,19 @@ export const RECORD_POLICIES = Object.freeze({
   prvReimbursements: { classKey: 'portfolio', detailCeiling: 4, label: 'Reimbursement recognitions — whether the recovery is virtually certain and the written basis, with the cash and the claimed amount derived from the insurance register', route: '#/provisions' },
   prvCarryings: { classKey: 'portfolio', detailCeiling: 4, label: 'Finance carryings — the figure the finance seat declares it is carrying as the provision, per currency, with the reference to the finance record', route: '#/provisions' },
   prvMarkers: { classKey: 'unit', detailCeiling: 3, label: 'Provision-register observation markers — no joint seat, no responsible line to ask (identity-free)', route: '#/provisions' },
+  // ADR-0253 (Schema v206): the product nonconformance register. A case names a
+  // product, a site, one identified lot or serial, a written requirement and a
+  // finding — an operational fact about a unit of output, so it is UNIT material,
+  // readable on the floor by the seat that holds it and rolled up above the
+  // manager altitude to counts. The signatures, the acts and the re-verifications
+  // carry people and evidence, so they are held at the same ceiling; the reader
+  // withholds all of them above rank 3 and the rule's markers are identity-free.
+  qncCases: { classKey: 'unit', detailCeiling: 3, label: 'Product nonconformance cases — the product, site, one lot or serial identifier, requirement reference, finding and source evidence', route: '#/nonconformance' },
+  qncContainments: { classKey: 'unit', detailCeiling: 3, label: 'Containment attestations — the scope attested, the control, the written hold reference and the evidence (never an enforced hold)', route: '#/nonconformance' },
+  qncDecisions: { classKey: 'unit', detailCeiling: 3, label: 'Joint disposition signatures — the route the live matrix resolved, the disposition, the written reason and any written concession reference', route: '#/nonconformance' },
+  qncDispositionActs: { classKey: 'unit', detailCeiling: 3, label: 'Disposition acts — rework completion, return, scrap and the separate release, each with its evidence reference', route: '#/nonconformance' },
+  qncVerifications: { classKey: 'unit', detailCeiling: 3, label: 'Independent re-verifications of reworked output — the outcome, the evidence and the strictly senior hand that recorded it', route: '#/nonconformance' },
+  qncMarkers: { classKey: 'unit', detailCeiling: 3, label: 'Product-nonconformance observation markers — no joint seat, no line to ask (identity-free)', route: '#/nonconformance' },
   // ADR-0240 (Schema v194): the incident command register. An incident record
   // names the people on the bridge, the instrument it was declared under and the
   // external parties it owes — individual detail that is not handed upward, so
@@ -694,6 +707,13 @@ const PORTFOLIO_ROUTES = Object.freeze([
   // lead reads their own span's design through Mission Control, not by authoring
   // the split for an entire level.
   'operating-model',
+  // ADR-0250 declared `read-provisions` and `manage-provisions` at rank 3–5, but the
+  // route itself never appeared here, so `routeRankWindow('provisions')` defaulted to
+  // floor 1 and the nav offered a screen the collection policies (portfolio class,
+  // minRank 3) and the disclosure manifest both withhold. The floor now matches the
+  // declared right: a rank-1 or rank-2 seat is told the floor instead of an empty
+  // register.
+  'provisions',
 ]);
 const ENTERPRISE_ROUTES = Object.freeze([
   // Pay, workforce shape and board-reported statistical audit claims. Capital
@@ -1526,6 +1546,23 @@ export const ACTION_RIGHTS = Object.freeze({
   'manage-insurance': { minRank: 1, maxRank: 5, label: 'Declare an insurance policy on its declaration page, link a coverage to a matter, record a notification or a recovery, and set the register’s conventions' },
   'read-provisions': { minRank: 3, maxRank: 5, label: 'Read the provision and reimbursement register — the matters you hold, their declared classifications and best estimates, the derived provisions and reimbursement assets, the net exposure and the reconciliation against the finance carrying. Above rank 3 the reader prints counts and withholds responsible hands' },
   'manage-provisions': { minRank: 3, maxRank: 5, label: 'Declare a provision assessment and its classification and best-estimate method, declare a scenario, declare a reimbursement recognition and a finance carrying, and set the register’s conventions' },
+  // ADR-0253 (Schema v206): the product nonconformance register's five rights.
+  // READING and OPENING are open at rank 1 — the finding is identified at the
+  // bench, and a register that required a manager to be present to write down a
+  // nonconformity would be a register that is filled in on Fridays. What protects
+  // the record is not the rank but the door: a case needs one identified lot or
+  // serial WITH a requirement, a finding and source evidence; a containment is a
+  // signed attestation against a written hold reference; a disposition needs the
+  // joint matrix apex, recomputed inside the action; and a re-verification needs a
+  // hand STRICTLY SENIOR to the one that did the rework. The reader withholds
+  // every case, lot, finding and hand above rank 3.
+  'read-product-nonconformance': { minRank: 1, maxRank: 5, label: 'Read the product nonconformance register within your grant — the cases you hold, their containment, the current joint disposition, every re-verification and the derived state. Above rank 3 the reader prints counts only and withholds every case reference, product, site, lot or serial, requirement, finding and accountable hand' },
+  'open-product-nonconformance': { minRank: 1, maxRank: 5, label: 'Open a case for ONE internally identified manufactured lot or serial: the product, the site, the identifier kind and its value, the source, the requirement reference and requirement, the finding, the source evidence, the day it was identified and one to four accountable hands this seat holds' },
+  'contain-product-output': { minRank: 1, maxRank: 5, label: 'Record a containment attestation against a written hold reference — the control applied, the evidence and a note. A recorded attestation is never an enforced physical or system hold, and the newest attestation governs' },
+  'decide-product-disposition': { minRank: 1, maxRank: 5, label: 'Sign the disposition of a fully contained output as one of the current joint matrix apex seats: rework, return, scrap, or use-as-is under a written concession reference. Every required apex must sign the same disposition in the same round, and the action refuses any seat the live graph does not put there' },
+  'perform-product-disposition': { minRank: 1, maxRank: 5, label: 'Record the act a complete disposition requires — rework completion, the return, the scrap, or the separate release after a passing senior re-verification. The action refuses an act the derived state is not waiting for' },
+  'verify-product-rework': { minRank: 2, maxRank: 5, label: 'Record the independent re-verification of reworked output, passing or failing, from a DIFFERENT hand strictly senior to the one that completed the rework on the live reporting graph — the same rule the reader applies to every stored row' },
+  'govern-product-nonconformance': { minRank: 4, maxRank: 5, label: 'Scan the product nonconformance register and re-declare its conventions. There is no hold duration, disposition default, rework window, concession limit or release authority to set' },
   'read-mutual-aid': { minRank: 1, maxRank: 5, label: 'Read the mutual-aid activation and resource-commitment register within your grant — the agreement a request is made under, the request and its validity, the partner’s acceptance with its written confirmation and promise, the arrival compared against the promise, and the withdrawal and release that close the commitment' },
   'declare-mutual-aid': { minRank: 2, maxRank: 5, label: 'Declare a bilateral agreement, request help under it, record the partner’s acceptance with its written confirmation and promise, record the arrival, the withdrawal and the release of the commitment, cancel a request that was never accepted, and set the register’s conventions' },
   // ADR-0235/0236 (Schema v191). Six rights, and the shape is the point: RECORDING
