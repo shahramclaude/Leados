@@ -200,6 +200,9 @@ import { renderTax } from './views/tax.js';
 import { taxAttentionCount } from './core/domain/taxControversy.js';
 import { renderModernSlavery } from './views/modernSlavery.js';
 import { msaAttentionCount } from './core/domain/modernSlavery.js';
+// ADR-0261: the performance-calibration decision register.
+import { renderPerformanceCalibration } from './views/performanceCalibration.js';
+import { buildCalibration, calAttentionCount } from './core/domain/cal.js';
 // ADR-0258: the pre-startup safety review & commissioning readiness register.
 import { renderPreStartup } from './views/preStartup.js';
 import { psrAttentionCount } from './core/domain/psrSafety.js';
@@ -731,6 +734,12 @@ export const NAV = [
     // execution; above rank 4 the reader prints counts and withholds responsible
     // hands and supplier detail.
     { route: 'modern-slavery', label: 'Modern slavery', icon: '⛓', badge: 'modernSlavery' },
+    // ADR-0261: the committee's calibrated rating beside the manager's proposed
+    // rating, with written rationale — distributions, inter-rater agreement
+    // (Cohen's kappa) and adverse-impact ratios (four-fifths) derived on read,
+    // never stored. Mid-manager proposes, director calibrates, VP approves,
+    // CEO sees the distribution. Two divergent proposals are never averaged.
+    { route: 'performance-calibration', label: 'Performance calibration', icon: '⚖', badge: 'performanceCalibration' },
     // ADR-0253: what one identified manufactured lot or serial failed against, what
     // was actually done to hold it, who signed the disposition and whether a hand
     // strictly senior to the one that did the rework independently verified it. The
@@ -1025,6 +1034,7 @@ const RENDERERS = {
   // ADR-0257: the tax controversy and appeal-control register.
   tax: (ctx) => renderTax(ctx),
   'modern-slavery': (ctx) => renderModernSlavery(ctx),
+  'performance-calibration': (ctx) => renderPerformanceCalibration(ctx),
   // ADR-0253: the product nonconformance and disposition register.
   nonconformance: (ctx) => renderProductNonconformance(ctx),
   // ADR-0254: the fair-process discipline and grievance register.
@@ -1338,6 +1348,11 @@ export function parseRoute(hash) {
     'supply-chain-due-diligence': 'modern-slavery', 'due-diligence': 'modern-slavery',
     'supply-chain': 'modern-slavery', 'forced-labour': 'modern-slavery',
     'supply-chain-assessment': 'modern-slavery', 's54-statement': 'modern-slavery',
+    'performance-calibration': 'performance-calibration', 'performancecalibration': 'performance-calibration',
+    'calibration-session': 'performance-calibration', 'calibration-sessions': 'performance-calibration',
+    'calibration-decision': 'performance-calibration', 'calibration-decisions': 'performance-calibration',
+    'calibrated-rating': 'performance-calibration', 'calibrated-ratings': 'performance-calibration',
+    'performance-calibration-register': 'performance-calibration', 'calibration-register': 'performance-calibration',
     // ADR-0148: the names a person types looking for "did anyone actually agree
     // to this share of me" / "who accepted this project line".
     'line-consent': 'matrix', consent: 'matrix', 'matrix-consent': 'matrix',
@@ -1716,6 +1731,9 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       query,
       api,
       navigate,
+      // ADR-0261: the calibration report, derived on every render by the ONE
+      // reader. Nothing derived is stored; the view reads it, never recomputes.
+      calibrationReport: buildCalibration(state, { now: now(), settings: state.settings }),
       warnings: store.warnings,
       persistError: store.persistError,
       storageSize: () => store.sizeBytes(),
@@ -2133,6 +2151,10 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       // never a name.
       tax: taxAttentionCount(state, { now: at, settings: state.settings, seat: seatCtx?.seat || null }),
       modernSlavery: msaAttentionCount(state, { now: at, settings: state.settings, seat: seatCtx?.seat || null }),
+      // ADR-0261: divergent-uncalibrated persons, overdue sessions and
+      // distribution flags — the same conditions RULE-CAL-01 files. A COUNT,
+      // never a name.
+      performanceCalibration: calAttentionCount(state, { now: at, settings: state.settings, seat: seatCtx?.seat || null }),
       // ADR-0258: unsafe energisation breaches, expired temporary modifications,
       // overdue Category B post-startup conditions, rejected gates, Category A
       // startup blockers, verified reviews awaiting joint-apex authorisation and

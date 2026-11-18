@@ -243,7 +243,7 @@ const rowOf = (state, caseId = 'case-1') => buildProductNonconformance(state, { 
 
 test('schema v206 is additive: six empty ledgers, one declared switch, nothing inferred', () => {
   const empty = createEmptyState(T0);
-  assert.equal(SCHEMA_VERSION, 212, 'ADR-0260 (modern slavery & due diligence) is the current head');
+  assert.equal(SCHEMA_VERSION, 213, 'ADR-0260 (modern slavery & due diligence) is the current head');
   for (const key of ['qncCases', 'qncContainments', 'qncDecisions', 'qncDispositionActs', 'qncVerifications', 'qncMarkers']) {
     assert.ok(COLLECTIONS.includes(key), `${key} is a declared collection`);
     assert.deepEqual(empty[key], [], `${key} starts empty`);

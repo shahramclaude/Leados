@@ -246,7 +246,7 @@ function seatsOrThrow(state) {
 /* --------------------------------------------------------------- 1. schema */
 
 test('schema v90 migrates additively and refuses malformed or stale grants', () => {
-  assert.equal(SCHEMA_VERSION, 212, 'ADR-0260 (modern slavery & due diligence) is the current head');
+  assert.equal(SCHEMA_VERSION, 213, 'ADR-0260 (modern slavery & due diligence) is the current head');
   // This pin follows the head; the v90 step this test actually proves is below.
   const old = { schemaVersion: 89, settings: { leaderName: 'Keep' }, cases: [{ id: 'keep' }], disclosureGrants: [{ id: 'existing' }] };
   const migrated = migrate(old);
