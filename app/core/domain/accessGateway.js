@@ -1363,6 +1363,8 @@ const MATRIX_LINE_SCOPED = new Set([
   // commander reachable only through a declared Matrix line; the action re-checks
   // every one of them against the live graph before it writes anything.
   'incidentDeclare', 'incidentAssignLine', 'incidentTransferCommand',
+  // Lone working re-proves the named person's standing before evaluating any window.
+  'loneWorkingDeclareDeployment',
   // ADR-0190: declaring a routine may name a person the declaring seat reaches
   // only through a dotted line; the action re-checks the line holder itself.
   'standardWorkDeclareRoutine',

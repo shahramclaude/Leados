@@ -1,3 +1,8 @@
+## 2026-11-18 · Lone-working chronology
+
+- Added a scoped chronology worklist with exact overlap evidence and explicit unknowns. Added a protected finding total to the existing aggregate CSV.
+- Prevented unsupported open backfills and close-outs preceding their own evidence. Retained imported conflicting acts without using them to reset welfare clocks. Replaced the broken Method image reference. [ADR-0256](docs/adr/0256-lone-working-chronology.md).
+
 ## 2026-11-18 · Closed-window service error-budget evidence
 
 - Added **Service error budget** for portfolio seats that reach all named service stewards. Preview, record, reopen and export exact window counts and a refusal-aware numeric receipt from local CSV/TSV evidence.

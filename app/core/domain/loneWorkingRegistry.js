@@ -79,7 +79,7 @@
  *     out" and "who answers for them now" are two different hands.
  */
 
-export const LWK_ENGINE_VERSION = 'lone-working-2026.11-v1';
+export const LWK_ENGINE_VERSION = 'lone-working-2026.11-v2';
 export const LWK_ADR = 'ADR-0242';
 export const LWK_RULE_ID = 'RULE-LWK-01';
 export const LWK_ROUTE = 'lone-working';
@@ -311,12 +311,20 @@ export const LWK_SECTION_TITLES = Object.freeze({
   method: 'Method',
 });
 
+export const LWK_CHRONOLOGY_LABELS = Object.freeze({
+  'recorded-overlap': 'Recorded spans overlap',
+  'window-overlap': 'Windows overlap; a close is not proved',
+  'separation-unproved': 'Separation not proved',
+  'after-close': 'Evidence after the recorded close',
+  'future-record': 'Recorded instant is after this review time',
+});
+
 export const LWK_CSV_COLUMNS = Object.freeze([
   'as_of', 'row_kind', 'key', 'deployments_n', 'open_n', 'closed_n', 'people_n',
   'checkins_n', 'escalations_n', 'due_n', 'unconfirmed_n', 'unconfirmed_minutes_total',
   'escalation_open_n', 'overran_n', 'overran_minutes_total', 'concern_n',
   'confirmed_late_n', 'closed_without_contact_n', 'lines_n', 'privacy_floor',
-  'complete', 'blank_reason',
+  'complete', 'blank_reason', 'chronology_findings_n', 'chronology_blank_reason',
 ]);
 
 /**
@@ -333,7 +341,7 @@ export const LWK_CSV_DESCRIPTOR = Object.freeze({
   group: 'people',
   sensitive: true,
   filenameSlug: 'lone-working-welfare',
-  description: 'One summary row and one row per printed state. Counts of deployments, open and closed, people, contacts, escalations, checks due, welfare unconfirmed with the exact late minutes in total, escalations still open, deployments past their declared end with the exact overrun minutes, unanswered concerns, late confirmations and deployments closed with no contact at all, plus the reporting lines involved. No person, manager, site, task, reference or instant is exported.',
+  description: 'One summary row and one row per printed state. Counts of deployments, open and closed, people, contacts, escalations, checks due, welfare unconfirmed with the exact late minutes in total, escalations still open, deployments past their declared end with the exact overrun minutes, unanswered concerns, late confirmations and deployments closed with no contact at all, plus the reporting lines involved. The chronology finding count is withheld if evidence was refused or fewer than the privacy floor of distinct people have findings. No person, manager, site, task, reference or individual timestamp is exported.',
 });
 
 /** The published framework basis, printed on the method tab. Never a claim of parity. */
@@ -353,6 +361,7 @@ export const LWK_METHOD = Object.freeze({
     'Whether the deployment ran past its declared end and by exactly how many minutes.',
     'Whether it was closed out, by whom, and whether any contact was ever recorded.',
     'Which reporting lines hold the person today, and the joint seat above them.',
+    'In History: recorded spans that overlap, separation that cannot be established, and dated evidence the clock did not use. A planned end is never proof of a return.',
   ]),
   deliberatelyAbsent: Object.freeze([
     'No location, coordinate, movement trail or device telemetry. There is a declared site reference and nothing else.',

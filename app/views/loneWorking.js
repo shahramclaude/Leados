@@ -32,12 +32,15 @@
 import { h, toast, openModal, closeAllModals, buildForm } from '../ui/dom.js';
 import { pageHeader, card, stat, badge, banner, tabs, emptyState, table, kv } from '../ui/components.js';
 import { downloadText } from '../ui/download.js';
-import { exportWorkspaceCsv } from '../core/csv.js';
+import { serializeCsv } from '../core/csv.js';
+import { loneWorkingCsvRows } from '../core/domain/loneWorkingReport.js';
 import {
   LWK_CHANNELS,
   LWK_CHECKIN_OUTCOMES,
   LWK_CLOSE_OUTCOMES,
-  LWK_CSV_SCOPE,
+  LWK_CHRONOLOGY_LABELS,
+  LWK_CSV_COLUMNS,
+  LWK_CSV_DESCRIPTOR,
   LWK_ESCALATION_BASES,
   LWK_ESCALATION_OUTCOMES,
   LWK_HREF,
@@ -67,7 +70,7 @@ const options = (rows, { blank = null } = {}) => [
 const instantLabel = (value) => (typeof value === 'string' && value.length >= 16 ? `${value.slice(0, 10)} ${value.slice(11, 16)}` : '—');
 const clockLabel = (ms) => (Number.isFinite(ms) ? `${new Date(ms).toISOString().slice(0, 10)} ${new Date(ms).toISOString().slice(11, 16)}` : '—');
 /** A `datetime-local` value from a stored instant, so a dialog can prefill honestly. */
-const localInput = (iso) => (typeof iso === 'string' && iso.length >= 16 ? iso.slice(0, 16) : '');
+const localInput = (iso) => (typeof iso === 'string' && iso.endsWith('Z') ? iso.slice(0, -1) : '');
 
 function button(label, onClick, { primary = false, testid = null } = {}) {
   return h('button', {
@@ -76,6 +79,10 @@ function button(label, onClick, { primary = false, testid = null } = {}) {
     ...(testid ? { 'data-testid': testid } : {}),
     onClick,
   }, label);
+}
+
+function formFooter(label, submit) {
+  return [button('Cancel', closeAllModals), button(label, submit, { primary: true })];
 }
 
 function stateBadge(state) {
@@ -104,8 +111,8 @@ function declareDialog(ctx, report, candidates, onDone) {
     },
     { name: 'intervalMinutes', label: 'Check-in interval (whole minutes)', type: 'number', min: L.intervalMin, max: L.intervalMax, required: true, value: L.intervalMin * 12, help: `Between ${L.intervalMin} and ${L.intervalMax}. This is the number the whole register runs on.` },
     { name: 'graceMinutes', label: 'Grace before it is overdue (whole minutes)', type: 'number', min: 0, max: L.graceMax, required: true, value: 10, help: `Between 0 and ${L.graceMax}. Zero is legitimate — “ring immediately”.` },
-    { name: 'startAt', label: 'Starts (stored instant, UTC)', type: 'datetime-local', required: true, value: nowInput },
-    { name: 'expectedEndAt', label: 'Declared end (stored instant, UTC)', type: 'datetime-local', required: true },
+    { name: 'startAt', label: 'Starts (stored instant, UTC)', type: 'datetime-local', step: 0.001, required: true, value: nowInput },
+    { name: 'expectedEndAt', label: 'Declared end (stored instant, UTC)', type: 'datetime-local', step: 0.001, required: true },
   ]);
   const submit = () => {
     form.clearErrors();
@@ -121,7 +128,8 @@ function declareDialog(ctx, report, candidates, onDone) {
       return;
     }
     closeAllModals();
-    toast('Deployment declared. The clock starts from the declared start, and every line holding this person now owes an answer if it lapses.', 'good');
+    if (!result.saved) toast('Recorded in memory only. The workspace storage refused the save.', 'bad');
+    else toast('Deployment declared. Check-ins run from the recorded start.', 'good');
     onDone?.();
   };
   openModal({
@@ -134,7 +142,7 @@ function declareDialog(ctx, report, candidates, onDone) {
         body: 'Nothing in this workspace infers a check-in interval from a rota, a site or history. The number you declare is the number every deadline on the screen is computed from — which is why the door refuses a fraction and a blank.',
       }),
       form.node),
-    footer: [{ label: 'Cancel', onClick: () => closeAllModals() }, { label: 'Declare deployment', onClick: submit, primary: true }],
+    footer: formFooter('Declare deployment', submit),
   });
 }
 
@@ -152,7 +160,7 @@ function checkInDialog(ctx, row, onDone) {
       options: options(LWK_CHECKIN_OUTCOMES.map((outcome) => ({ value: outcome.key, label: outcome.label })), { blank: 'Choose the outcome' }),
       help: '“All well” resets the clock. “Concern raised” ALSO resets it — and opens a duty nobody has answered until an escalation records the response.',
     },
-    { name: 'at', label: 'Instant of contact (stored instant, UTC)', type: 'datetime-local', required: true, value: localInput(new Date().toISOString()) },
+    { name: 'at', label: 'Instant of contact (stored instant, UTC)', type: 'datetime-local', step: 0.001, required: true, value: localInput(new Date().toISOString()) },
     { name: 'note', label: 'Note (optional)', type: 'textarea' },
   ]);
   const submit = () => {
@@ -179,7 +187,7 @@ function checkInDialog(ctx, row, onDone) {
         body: 'A check-in resets the clock. It does not answer a concern the person raised, and it is never recorded on somebody else’s word at an instant that has not happened.',
       }),
       form.node),
-    footer: [{ label: 'Cancel', onClick: () => closeAllModals() }, { label: 'Record contact', onClick: submit, primary: true }],
+    footer: formFooter('Record contact', submit),
   });
 }
 
@@ -198,7 +206,7 @@ function escalateDialog(ctx, row, onDone) {
       help: 'Only “welfare confirmed” clears the unconfirmed state — and it clears nothing else: the exact late minutes stay on the record.',
     },
     { name: 'detail', label: 'What was done', type: 'textarea', required: true, help: `At least ${L.textMin} characters. The next hand needs to know what you tried before they try it again.` },
-    { name: 'raisedAt', label: 'Instant the escalation was raised (stored instant, UTC)', type: 'datetime-local', required: true, value: localInput(new Date().toISOString()) },
+    { name: 'raisedAt', label: 'Instant the escalation was raised (stored instant, UTC)', type: 'datetime-local', step: 0.001, required: true, value: localInput(new Date().toISOString()) },
   ]);
   const submit = () => {
     form.clearErrors();
@@ -222,7 +230,7 @@ function escalateDialog(ctx, row, onDone) {
         body: 'It says welfare is unconfirmed, because that is what the record knows. What you did about it is the fact it can hold, and the next hand reads it verbatim.',
       }),
       form.node),
-    footer: [{ label: 'Cancel', onClick: () => closeAllModals() }, { label: 'Record escalation', onClick: submit, primary: true }],
+    footer: formFooter('Record escalation', submit),
   });
 }
 
@@ -235,7 +243,7 @@ function closeDialog(ctx, row, onDone) {
       help: LWK_CLOSE_OUTCOMES.map((outcome) => `${outcome.label}: ${outcome.says}`).join(' '),
     },
     { name: 'note', label: 'What happened', type: 'textarea', required: true, help: `At least ${L.textMin} characters. This is the sentence the next hand and any later review will read.` },
-    { name: 'at', label: 'Instant of close-out (stored instant, UTC)', type: 'datetime-local', required: true, value: localInput(new Date().toISOString()) },
+    { name: 'at', label: 'Actual close time (UTC)', type: 'datetime-local', step: 0.001, required: true, help: 'Use the supported actual time, not the planned end. It must not precede a logged check-in or escalation.' },
   ]);
   const submit = () => {
     form.clearErrors();
@@ -246,9 +254,8 @@ function closeDialog(ctx, row, onDone) {
       return;
     }
     closeAllModals();
-    toast(row.contactsN === 0
-      ? 'Closed out — with no contact ever recorded. The register prints that state rather than treating the close as confirmation.'
-      : 'Deployment closed out.', row.contactsN === 0 ? 'caution' : 'good');
+    if (!result.saved) toast('Close recorded in memory only. The workspace storage refused the save.', 'bad');
+    else toast('Actual close recorded. Review chronology in History.', 'good');
     onDone?.();
   };
   openModal({
@@ -261,7 +268,7 @@ function closeDialog(ctx, row, onDone) {
         body: 'A passed declared end is printed as its own state, never closed automatically. Closing this out with no contact on the record will be printed as exactly that.',
       }),
       form.node),
-    footer: [{ label: 'Cancel', onClick: () => closeAllModals() }, { label: 'Close deployment', onClick: submit, primary: true }],
+    footer: formFooter('Close deployment', submit),
   });
 }
 
@@ -292,7 +299,7 @@ function conventionsDialog(ctx, report, onDone) {
     body: h('div', { class: 'stack' },
       banner({ tone: 'info', title: 'Declared, not fitted', body: 'The horizon and the floor are declarations. Neither is inferred from the record, and the register prints the value it used.' }),
       form.node),
-    footer: [{ label: 'Cancel', onClick: () => closeAllModals() }, { label: 'Set conventions', onClick: submit, primary: true }],
+    footer: formFooter('Set conventions', submit),
   });
 }
 
@@ -329,16 +336,16 @@ function claimsBanners(report) {
     banner({
       tone: report.figuresComplete ? 'good' : 'caution',
       title: report.figuresComplete
-        ? 'Coverage is complete: every stored row was read exactly and every deployment has a resolvable line position'
+        ? 'No unresolved person or unreadable source was reported for this reading'
         : 'NOT CERTIFIED — the register could not see the whole picture',
       body: report.figuresComplete
-        ? 'The second claim, separate from the first: no unreadable row, no orphan and no unresolvable reporting graph is outstanding.'
+        ? 'This is a coverage check of the readable workspace, not proof the activity log is complete or conflict-free.'
         : report.incompleteReasons.join(' '),
     }),
     banner({
       tone: 'info',
-      title: 'This register does not know where anybody is',
-      body: 'There is a declared site reference written by a supervisor and no coordinate, no movement trail and no device telemetry. The strongest claim the record can make is that welfare is unconfirmed — never that a person is missing.',
+      title: 'This register does not monitor or dispatch',
+      body: 'It records what people enter, not where anybody is. Use your site’s contact and emergency procedures; this local audit is not a welfare clearance.',
     }),
     report.detailed ? null : banner({ tone: 'caution', title: 'Names withheld at this altitude', body: report.disclosure.reason }),
   );
@@ -370,7 +377,7 @@ function openTable(ctx, report, onDone) {
           },
           {
             label: '',
-            render: (row) => h('div', { class: 'row-actions' },
+            render: (row) => row.deployment.closedAt ? 'Review the future-dated close in History' : h('div', { class: 'row-actions' },
               button('Check in', () => checkInDialog(ctx, row, onDone), { testid: 'lwk-action-checkin' }),
               button('Escalate', () => escalateDialog(ctx, row, onDone), { testid: 'lwk-action-escalate' }),
               button('Close out', () => closeDialog(ctx, row, onDone), { testid: 'lwk-action-close' })),
@@ -437,16 +444,87 @@ function linesView(report) {
   );
 }
 
+function historyCallout({ chronology }) {
+  if (!chronology.findingsN && !chronology.sourceIncomplete) return null;
+  return banner({ tone: 'caution', title: 'Review the deployment chronology',
+    body: h('span', null, `${chronology.findingsN} finding(s) on readable records. `,
+      h('a', { href: `${LWK_HREF}?view=history` }, 'Open History')),
+  });
+}
+
+const exactTime = (value) => h('time', { datetime: value }, value);
+
+function windowCell(span) {
+  return h('div', { class: 'stack compact' },
+    h('div', null, span.siteRef, h('span', { class: 'muted small' }, ` · ${span.id}`)),
+    h('div', null, 'Start: ', exactTime(span.startAt)),
+    span.usedRecordedClose
+      ? h('div', null, 'Recorded close: ', exactTime(span.recordedCloseAt))
+      : h('div', null, 'Expected end: ', exactTime(span.expectedEndAt),
+        h('div', { class: 'small' }, span.recordedCloseAt
+          ? ['Recorded close not used: ', exactTime(span.recordedCloseAt)] : 'No close recorded')),
+  );
+}
+
+function chronologyCard({ chronology: audit, nowIso, detailed, scoped }) {
+  const hist = `${LWK_HREF}?view=history`;
+  const { page, pages, firstFinding, lastFinding } = audit;
+  const review = audit.findingsN ? 'Review required'
+    : audit.sourceIncomplete ? 'Chronology not established'
+      : audit.deploymentsN ? 'No findings on readable records' : 'No deployments to compare';
+  return card({
+    title: 'Deployment chronology',
+    subtitle: `Review time ${nowIso} · ${scoped ? 'people in current reporting scope' : 'local operator’s register'}. Checks records, not whereabouts or welfare.`,
+    body: h('div', { class: 'stack', 'data-testid': 'lwk-chronology' },
+      h('p', null, h('strong', null, review), ' · ',
+        h('span', { 'data-testid': 'lwk-chronology-total' }, String(audit.findingsN)), ' finding(s) on ',
+        h('span', { 'data-testid': 'lwk-chronology-reviewed' }, String(audit.deploymentsN)), ' readable deployment(s).'),
+      h('ul', null, ...Object.entries(LWK_CHRONOLOGY_LABELS).map(([kind, label]) => h('li', null, `${label}: `,
+        h('span', { 'data-testid': `lwk-chronology-${kind}` }, String(audit.counts[kind]))))),
+      h('p', { class: 'muted small' }, 'One finding per conflicting pair or flagged event. Counts can include several findings on one deployment. A planned end does not prove a return. Close at next start is allowed when both records support it.'),
+      audit.sourceIncomplete ? banner({ tone: 'caution', title: 'Source coverage not established',
+        body: 'Some inputs were refused. Counts describe readable evidence only and cannot rule out additional findings.' }) : null,
+      !detailed ? h('p', { class: 'muted' }, 'Only counts are available at this altitude.')
+        : !audit.findingsN ? null : h('div', { class: 'stack' },
+          audit.findings.length ? table({
+            caption: 'Chronology findings',
+            columns: [
+              { label: 'Finding', render: (row) => h('div', null, LWK_CHRONOLOGY_LABELS[row.kind], h('div', { class: 'small' }, row.personName || 'Person not on the reporting graph')) },
+              { label: 'Deployment', render: (row) => windowCell(row.first) },
+              { label: 'Compared with', render: (row) => row.second ? windowCell(row.second)
+                : h('div', null, `${row.event}: `, exactTime(row.eventAt), row.eventId ? ` · ${row.eventId}` : '') },
+              { label: 'Exact evidence (UTC)', render: (row) => row.overlapMs > 0
+                ? h('div', null, h('strong', { 'data-testid': 'lwk-overlap-ms' }, `${row.overlapMs} ms`),
+                  h('div', null, exactTime(row.from), ' to ', exactTime(row.to)))
+                : row.kind === 'separation-unproved' ? 'Cannot measure overlap without a supported close.'
+                  : row.kind === 'after-close' ? 'This act is kept on the record but not used by the welfare clock.'
+                    : 'Not yet usable as past evidence.' },
+            ],
+            rows: audit.findings.map((row) => ({ ...row, attrs: { 'data-kind': row.kind } })),
+          }) : h('p', null, 'This page is outside the current findings. ', h('a', { href: hist }, 'Return to the first page')),
+          audit.findings.length ? h('nav', { class: 'row-actions', 'aria-label': 'Chronology finding pages' },
+            page > 1 ? h('a', { class: 'btn btn-small', href: `${hist}&page=${page - 1}` }, 'Previous findings') : null,
+            h('span', { class: 'small' }, `Showing ${firstFinding}–${lastFinding} of ${audit.findingsN}`),
+            page < pages ? h('a', { class: 'btn btn-small', href: `${hist}&page=${page + 1}` }, 'Next findings') : null) : null,
+          h('p', null, 'Check the source log. If an open deployment really ended, ', h('a', { href: LWK_HREF }, 'record its actual close in Now'),
+            '. Do not enter an estimated close or change history to remove a finding.'),
+        ),
+    ),
+  });
+}
+
 function historyView(report) {
   const closed = report.closedRows;
+  const deployments = new Map(report.deployments.map((entry) => [entry.id, entry]));
   const escalations = report.escalations
     .slice()
     .sort((a, b) => String(b.raisedAt).localeCompare(String(a.raisedAt)) || String(a.id).localeCompare(String(b.id)))
     .slice(0, L.rowsShown);
   return h('div', { class: 'stack' },
+    chronologyCard(report),
     card({
       title: 'Closed deployments',
-      subtitle: 'A close-out names what happened. A close with no contact on the record is its own state and is never read as a confirmation of welfare.',
+      subtitle: `Showing ${Math.min(closed.length, L.rowsShown)} of ${closed.length} recorded closes, newest-start first. A close is not confirmation of welfare.`,
       body: closed.length
         ? table({
           columns: [
@@ -454,7 +532,7 @@ function historyView(report) {
             { label: 'Where', render: (row) => row.deployment.siteRef },
             { label: 'Started (UTC)', render: (row) => instantLabel(row.deployment.startAt) },
             { label: 'Closed (UTC)', render: (row) => instantLabel(row.deployment.closedAt) },
-            { label: 'Contacts', render: (row) => String(row.contactsN) },
+            { label: 'In-window contacts', render: (row) => String(row.contactsN) },
             { label: 'State', render: (row) => stateBadge(row.state) },
             { label: 'Close overrun', render: (row) => (row.closeOverrunMinutes > 0 ? badge(`${durationLabel(row.closeOverrunMinutes)} past end`, 'warn') : '—') },
             { label: 'Closed by the deployed person', render: (row) => (row.selfClosed ? badge('yes', 'warn') : 'no') },
@@ -467,12 +545,12 @@ function historyView(report) {
     }),
     card({
       title: 'Escalation ledger',
-      subtitle: 'Who raised a welfare escalation, on what basis, and what it actually did. A confirmation recorded here clears the state but never the minutes that were late.',
+      subtitle: `Showing ${escalations.length} of ${report.escalations.length} recorded escalations, newest first. An act outside the deployment window is not used by the welfare clock.`,
       body: escalations.length
         ? table({
           columns: [
             { label: 'Raised (UTC)', render: (row) => instantLabel(row.raisedAt) },
-            { label: 'Deployment', render: (row) => (report.detailed ? row.deployment.siteRef : 'withheld') },
+            { label: 'Deployment', render: (row) => deployments.get(row.deploymentId)?.siteRef || 'Not on this reading' },
             { label: 'Basis', key: 'basis' },
             { label: 'Outcome', key: 'outcome' },
             { label: 'What was done', render: (row) => h('span', { class: 'small' }, row.detail) },
@@ -493,9 +571,10 @@ function methodView(report) {
       body: h('div', { class: 'stack' },
         h('img', {
           src: DIAGRAM_URL,
-          alt: 'A method figure showing a lone deployment declared against a written assessment, a check-in interval and grace running from the last contact, the exact deadline, the states that follow a missed contact, and the joint reporting seat that owes the response — with the register refusing to say a person is missing.',
-          class: 'method-figure',
+          alt: 'A worker returns a radio at the staffed sign-out desk while the supervisor records the return in a log.',
+          width: 768, height: 512, loading: 'lazy', class: 'method-figure',
         }),
+        h('p', { class: 'muted small' }, 'Illustration of recording a return. It is not a workplace record or evidence of a close.'),
         kv('Engine', LWK_METHOD.engine),
         kv('Decision record', LWK_METHOD.adr),
         kv('As at', `${report.asOf} (${report.nowIso})`),
@@ -518,7 +597,7 @@ export function renderLoneWorking(ctx) {
   const view = ctx.query?.get?.('view') || 'now';
   let report;
   try {
-    const result = ctx.api.loneWorkingReport();
+    const result = ctx.api.loneWorkingReport({ chronologyPage: view === 'history' ? Number(ctx.query?.get?.('page') || 1) : 1 });
     if (!result?.ok) {
       return h('div', { class: 'stack' },
         pageHeader({ eyebrow: 'Operations · lone working', title: 'Lone working', subtitle: 'Who is alone, when they were last heard from, and whether welfare is confirmed.' }),
@@ -533,22 +612,27 @@ export function renderLoneWorking(ctx) {
 
   let candidates = [];
   try {
-    const result = ctx.api.loneWorkingCandidates();
+    const result = report.detailed ? ctx.api.loneWorkingCandidates() : null;
     if (result?.ok) candidates = result.people;
   } catch { candidates = []; }
 
   const onDone = () => {
-    document.dispatchEvent(new CustomEvent('leados:navigate', { detail: { route: LWK_HREF } }));
+    document.dispatchEvent(new CustomEvent('leados:navigate', { detail: { route: view === 'history' ? `${LWK_HREF}?view=history` : LWK_HREF } }));
     ctx.rerender?.();
   };
   const local = { api: ctx.api, candidates };
 
   const exportCsv = () => {
     try {
-      const file = exportWorkspaceCsv(ctx.api.getState ? ctx.api.getState() : ctx.state, LWK_CSV_SCOPE);
-      if (!file?.ok) { toast(file?.error || 'The export produced no file.', 'bad'); return; }
-      downloadText(file.filename, file.csv, 'text/csv');
-      toast('Exported. Counts and exact minute totals only: no person, manager, site, task, reference or instant crosses this boundary.', 'good');
+      // Use the displayed, seat-scoped report and its review instant. The generic
+      // projected store contains no raw lone-working rows by design.
+      const text = serializeCsv(LWK_CSV_COLUMNS, loneWorkingCsvRows(report));
+      const filename = `leados-${LWK_CSV_DESCRIPTOR.filenameSlug}-${report.asOf}.csv`;
+      if (downloadText({ filename, text, mime: 'text/csv' })) return;
+      openModal({ title: 'Lone-working aggregate CSV', description: 'This environment could not start a download. Copy the report below.',
+        body: h('textarea', { 'aria-label': 'Lone-working aggregate CSV', readonly: true, rows: 10, class: 'input' }, text),
+        footer: [button('Done', closeAllModals)],
+      });
     } catch (error) {
       toast(error?.message || 'The export failed.', 'bad');
     }
@@ -559,15 +643,15 @@ export function renderLoneWorking(ctx) {
     title: 'Lone working',
     subtitle: 'Who is working alone right now, when they were last heard from, what the record proves at this minute, whose duty the response is — and what nobody has said yet.',
     actions: [
-      { label: 'Declare a lone deployment', onClick: () => declareDialog(local, report, candidates, onDone), primary: true },
-      { label: 'Export (counts)', onClick: exportCsv },
-      { label: 'Conventions', onClick: () => conventionsDialog(local, report, onDone) },
+      ...(report.detailed ? [button('Declare a lone deployment', () => declareDialog(local, report, candidates, onDone), { primary: true }),
+        button('Conventions', () => conventionsDialog(local, report, onDone))] : []),
+      button('Export (counts)', exportCsv),
     ],
     meta: [
       `As at ${report.asOf}`,
       `${report.totals.open} open · ${report.totals.people} person(s)`,
       `${report.totals.checkins} contact(s) recorded`,
-      report.detailed ? 'names shown' : 'counts only at this altitude',
+      report.detailed ? (report.scoped ? 'current reporting scope' : 'local operator · whole register') : 'counts only at this altitude',
     ],
   });
 
@@ -575,10 +659,11 @@ export function renderLoneWorking(ctx) {
     summaryCard(report),
     claimsBanners(report),
     tabs({ items: VIEWS, active: VIEWS.some((row) => row.key === view) ? view : 'now', onSelect: (key) => { window.location.hash = `${LWK_HREF}?view=${key}`; }, ariaLabel: 'Lone-working sections' }),
-    view === 'lines' ? linesView(report)
-      : view === 'history' ? historyView(report)
-        : view === 'method' ? methodView(report)
-          : openTable(local, report, onDone),
+    view === 'method' ? methodView(report)
+      : view === 'history' ? (report.detailed ? historyView(report) : chronologyCard(report))
+        : h('div', { class: 'stack' },
+          historyCallout(report),
+          report.detailed && (view === 'lines' ? linesView(report) : openTable(local, report, onDone))),
     report.warnings.length
       ? card({
         title: 'Unreadable rows, counted and refused',

@@ -141,8 +141,8 @@ export function normalizeLwkDeployments(rows, warnings = []) {
 
     // Close fields arrive whole or not at all.
     const closeFields = [closedAt, closeOutcome, closedById];
-    const closePresent = closeFields.filter((value) => value !== null).length;
-    if (closePresent !== 0 && closePresent !== 3) { dropped += 1; continue; }
+    const hasClose = [row.closedAt, row.closeOutcome, row.closedById].some((value) => value !== null && value !== undefined && value !== '');
+    if (hasClose && closeFields.some((value) => value === null)) { dropped += 1; continue; }
     if (closedAt && instantMs(closedAt) < startMs) { dropped += 1; continue; }
 
     seen.add(rowId);

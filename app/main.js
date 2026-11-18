@@ -2032,7 +2032,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       // ADR-0242: welfare unconfirmed, concerns nobody answered, deployments past
       // their declared end and checks owed inside their grace — the same
       // conditions RULE-LWK-01 files. A COUNT, never a name.
-      loneWorking: loneWorkingAttentionCount(state, { now: at, settings: state.settings, seat: seatCtx?.seat || null }),
+      loneWorking: loneWorkingAttentionCount(store.state, { now: at, settings: state.settings, seat: seatCtx?.seat || null }),
       // ADR-0246: DANGER owed now — a live permit with no proved isolation, a live
       // permit whose atmosphere is outside its own limits, a lapsed permit nobody
       // closed — never every open permit.

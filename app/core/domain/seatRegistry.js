@@ -278,10 +278,10 @@ export const RECORD_POLICIES = Object.freeze({
   wpaAcknowledgements: { classKey: 'individual', label: 'Per-line acknowledgements that a manager has been shown a restriction they hold', route: '#/adjustments' },
   wpaReviews: { classKey: 'individual', label: 'Recorded reviews of a restriction — the decision, its basis and the day', route: '#/adjustments' },
   wpaMarkers: { classKey: 'unit', detailCeiling: 3, label: 'Workplace-adjustment observation markers — no joint seat, no line to ask (identity-free)', route: '#/adjustments' },
-  lwkDeployments: { classKey: 'individual', label: 'Declared lone deployments — who is alone, where, against which written assessment, checked how often and until when', route: '#/lone-working' },
-  lwkCheckins: { classKey: 'individual', label: 'Recorded contacts on a lone deployment — the channel, the outcome and the exact instant', route: '#/lone-working' },
-  lwkEscalations: { classKey: 'individual', label: 'Welfare escalations raised when a contact lapsed or a concern was raised — the basis, the outcome and what was actually done', route: '#/lone-working' },
-  lwkMarkers: { classKey: 'unit', detailCeiling: 3, label: 'Lone-working observation markers — no joint seat, no line to ask (identity-free)', route: '#/lone-working' },
+  lwkDeployments: { classKey: 'individual', reportOnly: true, label: 'Declared lone deployments — who is alone, where, against which written assessment, checked how often and until when', route: '#/lone-working' },
+  lwkCheckins: { classKey: 'individual', reportOnly: true, label: 'Recorded contacts on a lone deployment — the channel, the outcome and the exact instant', route: '#/lone-working' },
+  lwkEscalations: { classKey: 'individual', reportOnly: true, label: 'Welfare escalations raised when a contact lapsed or a concern was raised — the basis, the outcome and what was actually done', route: '#/lone-working' },
+  lwkMarkers: { classKey: 'unit', detailCeiling: 3, reportOnly: true, label: 'Lone-working observation markers — no joint seat, no line to ask (identity-free)', route: '#/lone-working' },
   voiceBodies: { classKey: 'unit', label: 'Consultation bodies — the written instrument that constitutes each one, its quorum and its declared term', route: '#/voice' },
   voiceMembers: { classKey: 'individual', label: 'Dated representatives of each consultation body — the seat they hold, how they came by it and the term that entitled them to advise', route: '#/voice' },
   voiceItems: { classKey: 'unit', label: 'Items put to a consultation body — the subject, the instrument that set the period, the affected reporting lines and the documents supplied', route: '#/voice' },
@@ -1517,7 +1517,7 @@ export const ACTION_RIGHTS = Object.freeze({
   'read-workplace-adjustments': { minRank: 1, maxRank: 5, label: 'Read the workplace adjustment register within your grant — your own restriction and whether it was put in place, and the restrictions of the people you hold' },
   'declare-workplace-adjustments': { minRank: 2, maxRank: 5, label: 'Declare a functional restriction on a written instrument, record an adjustment and the day it became operational, acknowledge a restriction on a line you hold, record a review, and set the register’s conventions' },
   'read-lone-working': { minRank: 1, maxRank: 5, label: 'Read the lone-working register within your grant — your own deployment and when you are next due to be heard from, and the deployments of the people you hold' },
-  'declare-lone-working': { minRank: 1, maxRank: 5, label: 'Declare a lone deployment on a written assessment, record a contact, answer a lapsed check with an escalation, close a deployment out, and set the register’s conventions' },
+  'declare-lone-working': { minRank: 1, maxRank: 3, label: 'Declare a lone deployment on a written assessment, record a contact, answer a lapsed check with an escalation, close a deployment out, and set the register’s conventions' },
   // ADR-0243 (Schema v197). Two rights. READING is open at rank 1 — every person a
   // staff body represents may see what was put to it, the period it was given, what
   // it advised and whether it was answered — while the READER narrows what any seat

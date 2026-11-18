@@ -67,8 +67,19 @@ import {
   normalizeLwkSettings,
 } from './loneWorkingSchema.js';
 import { instantMs, latenessMinutes as lateBy, overrunMinutes as overBy } from './loneWorkingMath.js';
+import { auditLwkChronology } from './loneWorkingChronology.js';
 
 const list = (value) => (Array.isArray(value) ? value : []);
+
+export function loneWorkingHoldsPerson(seat, personId) {
+  return Boolean(personId && (!seat || seat.fullAccess || (!seat.readOnly && (
+    personId === (seat.nodeId || seat.id) || seat.scope?.has(personId) || seat.lineScope?.has(personId)
+  ))));
+}
+
+export function loneWorkingShowsDetails(seat) {
+  return !seat || seat.fullAccess || (!seat.readOnly && Number.isInteger(seat.rank) && seat.rank <= 3);
+}
 
 /** A readable label for a hand. The raw id `leader` never reaches a screen. */
 export function lwkPersonLabel(matrix, personId) {
@@ -111,13 +122,21 @@ export function lwkActiveLinesFor(matrix, personId) {
 export function deriveLwkState({ deployment, checkins = [], escalations = [], nowMs }) {
   const startMs = instantMs(deployment?.startAt);
   const endMs = instantMs(deployment?.expectedEndAt);
-  const closedMs = deployment?.closedAt ? instantMs(deployment.closedAt) : null;
+  const reportedClose = instantMs(deployment?.closedAt);
+  const closedMs = reportedClose !== null && reportedClose <= nowMs ? reportedClose : null;
+  const readingMs = closedMs ?? nowMs;
+  // Chronology retains contradictory acts as evidence. They cannot reset this clock
+  // or turn a close with no in-window contact into a contact-supported close.
+  const inWindow = (value) => {
+    const ms = instantMs(value);
+    return ms !== null && ms >= startMs && ms <= readingMs;
+  };
 
   const sortedContacts = list(checkins)
-    .filter((row) => instantMs(row?.at) !== null)
+    .filter((row) => inWindow(row?.at))
     .sort((a, b) => instantMs(a.at) - instantMs(b.at) || String(a.id).localeCompare(String(b.id)));
   const sortedEscalations = list(escalations)
-    .filter((row) => instantMs(row?.raisedAt) !== null)
+    .filter((row) => inWindow(row?.raisedAt))
     .sort((a, b) => instantMs(a.raisedAt) - instantMs(b.raisedAt) || String(a.id).localeCompare(String(b.id)));
 
   const lastContact = sortedContacts.length ? sortedContacts[sortedContacts.length - 1] : null;
@@ -137,8 +156,6 @@ export function deriveLwkState({ deployment, checkins = [], escalations = [], no
    * At the close it is the lateness the record actually carried when somebody
    * ended it, which is the only defensible reading.
    */
-  const readingMs = closedMs !== null ? closedMs : nowMs;
-
   const minutesSinceContact = Number.isFinite(lastContactMs) && Number.isFinite(readingMs) && readingMs >= lastContactMs
     ? Math.floor((readingMs - lastContactMs) / 60_000)
     : null;
@@ -228,7 +245,9 @@ export function deriveLwkState({ deployment, checkins = [], escalations = [], no
  * exactly as every other register in this workspace behaves, so a headless export
  * and an operator screen cannot disagree about a figure.
  */
-export function buildLoneWorking(state, { now = new Date(), settings = null, seat = null } = {}) {
+export function buildLoneWorking(state, {
+  now = new Date(), settings = null, seat = null, chronologyPage = 1, loadWarnings = [],
+} = {}) {
   const warnings = [];
   const at = now instanceof Date ? now : new Date(now);
   const nowMs = at.getTime();
@@ -236,17 +255,30 @@ export function buildLoneWorking(state, { now = new Date(), settings = null, sea
   const cfg = { ...(state?.settings || {}), ...(settings || {}) };
   const conventions = normalizeLwkSettings(cfg);
 
-  const deployments = normalizeLwkDeployments(state?.lwkDeployments, warnings);
-  const checkins = normalizeLwkCheckins(state?.lwkCheckins, deployments, warnings);
-  const escalations = normalizeLwkEscalations(state?.lwkEscalations, deployments, warnings);
-  const markers = normalizeLwkMarkers(state?.lwkMarkers, warnings);
+  const allDeployments = normalizeLwkDeployments(state?.lwkDeployments, warnings);
+  const allCheckins = normalizeLwkCheckins(state?.lwkCheckins, allDeployments, warnings);
+  const allEscalations = normalizeLwkEscalations(state?.lwkEscalations, allDeployments, warnings);
+  const scoped = Boolean(seat && !seat.fullAccess);
+  const deployments = scoped ? allDeployments.filter((row) => loneWorkingHoldsPerson(seat, row.personId)) : allDeployments;
+  const deploymentIds = new Set(deployments.map((row) => row.id));
+  const checkins = scoped ? allCheckins.filter((row) => deploymentIds.has(row.deploymentId)) : allCheckins;
+  const escalations = scoped ? allEscalations.filter((row) => deploymentIds.has(row.deploymentId)) : allEscalations;
+  const chronologySourceIncomplete = [...warnings, ...loadWarnings].some((line) =>
+    /^\[lone-working\] the (deployment|contact|escalation) ledger|^\[lone-working\] \d+ (deployment|contact|escalation) row/.test(line));
+  const markers = scoped ? [] : normalizeLwkMarkers(state?.lwkMarkers, warnings);
+  const sourceWarnings = [...new Set([...warnings, ...loadWarnings.filter((line) => line.startsWith('[lone-working] '))])];
+  // Rejected source records cannot be attributed to a span. Flag incomplete
+  // input without publishing counts or reasons about records on a peer's line.
+  const visibleWarnings = scoped && sourceWarnings.length
+    ? ['Some lone-working source rows were refused. Their reporting scope is unknown.'] : sourceWarnings;
 
   let matrix = null;
   let matrixError = null;
   try {
     matrix = buildMatrix(state, { now: at, settings: { ...cfg, activeSeatId: null } });
   } catch (error) {
-    matrixError = `The reporting graph could not be read, so no line can be resolved and no joint seat can be asked: ${error?.message || 'unknown error'}.`;
+    matrixError = scoped ? 'The reporting graph could not be read.'
+      : `The reporting graph could not be read, so no line can be resolved and no joint seat can be asked: ${error?.message || 'unknown error'}.`;
   }
   const matrixNodeIds = new Set([...(matrix?.nodes?.keys?.() || []), ...(matrix?.roster?.keys?.() || []), LEADER_ID]);
 
@@ -280,7 +312,7 @@ export function buildLoneWorking(state, { now = new Date(), settings = null, sea
     });
     rows.push({
       deployment,
-      person: orphan ? null : (matrix?.nodes?.get(deployment.personId) || matrix?.roster?.get(deployment.personId) || null),
+      person: scoped || orphan ? null : (matrix?.nodes?.get(deployment.personId) || matrix?.roster?.get(deployment.personId) || null),
       personName: orphan ? null : lwkPersonLabel(matrix, deployment.personId),
       orphan,
       lines: lines.map((line) => ({ ...line, name: lwkPersonLabel(matrix, line.managerId), isDeclaring: line.managerId === deployment.lineManagerId })),
@@ -299,8 +331,8 @@ export function buildLoneWorking(state, { now = new Date(), settings = null, sea
   const states = Object.fromEntries(LWK_STATE_KEYS.map((key) => [key, 0]));
   for (const row of rows) states[row.state.key] = (states[row.state.key] || 0) + 1;
 
-  const openRows = rows.filter((row) => !row.deployment.closedAt);
-  const closedRows = rows.filter((row) => row.deployment.closedAt);
+  const openRows = rows.filter((row) => row.closedMs === null);
+  const closedRows = rows.filter((row) => row.closedMs !== null);
 
   const unconfirmedN = states['welfare-unconfirmed'] || 0;
   const escalationOpenN = states['escalation-open'] || 0;
@@ -328,7 +360,6 @@ export function buildLoneWorking(state, { now = new Date(), settings = null, sea
    * folded into a state or into the other.
    */
   const stateTotal = Object.values(states).reduce((sum, n) => sum + n, 0);
-  const deploymentIds = new Set(deployments.map((row) => row.id));
   const balances = {
     statesReconcile: stateTotal === deployments.length,
     contactsReconcile: checkins.every((row) => deploymentIds.has(row.deploymentId)),
@@ -336,7 +367,7 @@ export function buildLoneWorking(state, { now = new Date(), settings = null, sea
   };
 
   const incompleteReasons = [];
-  if (warnings.length) incompleteReasons.push(`${warnings.length} stored row(s) were unreadable and were refused with a count; no figure was repaired.`);
+  if (visibleWarnings.length) incompleteReasons.push('Some lone-working inputs were refused; see the source warnings. No figures were repaired.');
   if (orphanN) incompleteReasons.push(`${orphanN} deployment(s) name a person who is not on the active reporting graph; their lines cannot be resolved and their joint seat cannot be asked.`);
   if (matrixError) incompleteReasons.push(matrixError);
   if (!balances.statesReconcile) incompleteReasons.push('The printed state counts do not re-add to the deployments they summarise.');
@@ -363,7 +394,7 @@ export function buildLoneWorking(state, { now = new Date(), settings = null, sea
         declaringN: 0,
       };
       entry.deploymentsN += 1;
-      if (!row.deployment.closedAt) entry.openN += 1;
+      if (row.closedMs === null) entry.openN += 1;
       if (row.state.key === 'welfare-unconfirmed') entry.unconfirmedN += 1;
       if (row.state.key === 'overran') entry.overranN += 1;
       if (row.state.key === 'concern-unanswered') entry.concernN += 1;
@@ -381,11 +412,14 @@ export function buildLoneWorking(state, { now = new Date(), settings = null, sea
     .sort((a, b) => String(a.managerName).localeCompare(String(b.managerName)) || String(a.managerId).localeCompare(String(b.managerId)));
 
   /** Deployments whose DECLARING line has since stopped holding the person. */
-  const declaringLineGoneN = rows.filter((row) => !row.orphan && !row.declaringLineIsActive && !row.deployment.closedAt).length;
+  const declaringLineGoneN = openRows.filter((row) => !row.orphan && !row.declaringLineIsActive).length;
 
   /* ------------------------------------------------------------ disclosure */
 
-  const detailed = !seat || seat.fullAccess || (Number.isInteger(seat.rank) ? seat.rank <= 3 : true);
+  const detailed = loneWorkingShowsDetails(seat);
+  const chronology = chronologyPage === null ? null : auditLwkChronology(rows, {
+    nowMs, detailed, page: chronologyPage, sourceIncomplete: chronologySourceIncomplete,
+  });
   const disclosure = detailed
     ? { level: 'detail', reason: null, rank: seat?.rank ?? null }
     : {
@@ -397,20 +431,22 @@ export function buildLoneWorking(state, { now = new Date(), settings = null, sea
   return {
     ok: true,
     engineVersion: LWK_ENGINE_VERSION,
-    matrix,
+    matrix: scoped ? null : matrix,
     asOf,
     nowIso: at.toISOString(),
     conventions,
-    deployments,
-    checkins,
-    escalations,
-    markers,
-    rows,
-    openRows,
-    closedRows,
+    deployments: detailed ? deployments : [],
+    checkins: detailed ? checkins : [],
+    escalations: detailed ? escalations : [],
+    markers: detailed ? markers : [],
+    rows: detailed ? rows : [],
+    openRows: detailed ? openRows : [],
+    closedRows: detailed ? closedRows : [],
+    chronology,
+    scoped,
     detailed: Boolean(detailed),
     disclosure,
-    warnings,
+    warnings: visibleWarnings,
     matrixError,
     orphanN,
     declaringLineGoneN,
@@ -438,7 +474,7 @@ export function buildLoneWorking(state, { now = new Date(), settings = null, sea
       overrunMinutes,
       linesN: lineRows.length,
     },
-    lineRows,
+    lineRows: detailed ? lineRows : [],
     stateRows: LWK_STATE_KEYS.map((key) => ({ key, label: LWK_STATE_BY_KEY[key].label, count: states[key] || 0 })),
     attention: {
       unconfirmedN,
@@ -461,7 +497,8 @@ export function buildLoneWorking(state, { now = new Date(), settings = null, sea
  */
 export function loneWorkingAttentionCount(state, { now = new Date(), settings = null, seat = null } = {}) {
   try {
-    const report = buildLoneWorking(state, { now, settings, seat });
+    if (!state?.lwkDeployments?.length) return 0;
+    const report = buildLoneWorking(state, { now, settings, seat, chronologyPage: null });
     if (!report?.ok) return 0;
     return report.attention.total;
   } catch {
@@ -476,7 +513,7 @@ export function loneWorkingAttentionCount(state, { now = new Date(), settings = 
 export function loneWorkingSignals(state, now = new Date(), settings = null) {
   let report;
   try {
-    report = buildLoneWorking(state, { now, settings, seat: null });
+    report = buildLoneWorking(state, { now, settings, seat: null, chronologyPage: null });
   } catch {
     return [];
   }

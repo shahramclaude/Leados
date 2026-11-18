@@ -1,3 +1,9 @@
+## 2026-11-18 — Review conflicting lone-working records
+
+Open **Lone working → History** (`#/lone-working?view=history`, [ADR-0256](docs/adr/0256-lone-working-chronology.md)). The chronology lists overlapping recorded spans, intersections that rely on expected ends, and pairs for which separation cannot be proved. Read the exact UTC timestamps before acting. A new open declaration cannot rely on a forecast end, even when backfilling. In **Now → Close out**, enter the actual close time; it must not precede a recorded check-in or escalation. A valid close can reveal an existing conflict rather than erase it.
+
+Details follow the current reporting span and active additional lines; VP and enterprise seats see counts only. The aggregate CSV does not export source times or identifiers. This is a records audit, not live monitoring, an emergency service, or proof that somebody returned safely.
+
 ## 2026-11-18 — Check service error headroom before a release review
 
 **Director / VP → Service error budget** (`#/service-error-budget`, [ADR-0255](docs/adr/0255-service-error-budget-evidence.md)). From a declared operating seat, select **Review a window**. Enter the service objective, a closed UTC window and its evidence references. Paste or open CSV/TSV with `day,good_events,total_events`; supply separately obtained good and eligible control totals for the same window. Preview first, then record and reopen. A reviewer must reach every named service steward, including active matrix lines.
@@ -90,7 +96,7 @@ A permit **declares** its written basis, its area, its work kind, its holder and
 
 ## 2026-11-17 — Lone-working overlap precision
 
-The lone-working declaration guard (`#/lone-working`) refuses known overlaps down to one millisecond and reports both the exact milliseconds and the floored whole-minute count. When an earlier deployment is still open, a later declaration is refused even after the expected end: establish what happened and record the actual close first. Abutting a recorded close is allowed. The guard does not audit imported overlaps or establish that an earlier backfilled deployment actually ended before a later one; see ROADMAP for the remaining safety limitations. This local register is not a live monitoring or emergency-response service.
+The lone-working declaration guard (`#/lone-working`) refuses known overlaps down to one millisecond and reports both the exact milliseconds and the floored whole-minute count. When an earlier deployment is still open, a later declaration is refused even after the expected end: establish what happened and record the actual close first. Abutting a recorded close is allowed. The [chronology follow-up](docs/adr/0256-lone-working-chronology.md) audits readable imported records and also guards earlier open backfills. See ROADMAP for sourced corrections that are still outstanding. This local register is not a live monitoring or emergency-response service.
 
 ## 2026-11-17 — Who is always on the late call, and is the burden shared?
 
