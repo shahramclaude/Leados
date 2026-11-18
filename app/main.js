@@ -351,6 +351,7 @@ import { renderCounterfactual } from './views/counterfactual.js';
 import { settlementAttentionCount } from './core/domain/settlement.js';
 import { counterfactualAttentionCount } from './core/domain/counterfactualPolicy.js';
 import { renderReliability } from './views/reliability.js';
+import { renderServiceBudget } from './views/serviceBudget.js';
 import { reliabilityAttentionCount } from './core/domain/reliability.js';
 import { renderSupply } from './views/supply.js';
 import { renderChain } from './views/chain.js';
@@ -762,6 +763,7 @@ export const NAV = [
     // ADR-0240: the command record of a live incident — who declared it, who is
     // commanding, every external clock it owes, and whether command was released.
     { route: 'incidents', label: 'Incidents', icon: '⚠', badge: 'incidents' },
+    { route: 'service-error-budget', label: 'Service error budget', icon: '⦿' },
     // ADR-0234: the promise the enterprise made OUTWARD — to a regulator, a
     // board, a lender, a customer — and whether the counterparty was ever told it
     // was met. Beside the assurance findings and probation gates on purpose: one
@@ -1007,6 +1009,7 @@ const RENDERERS = {
   probation: (ctx) => renderProbationGates(ctx),
   // ADR-0240: the major-incident command & notification-clock register.
   incidents: (ctx) => renderIncidents(ctx),
+  'service-error-budget': (ctx) => renderServiceBudget(ctx),
   // ADR-0234: the regulatory undertaking & outward-commitment closure register.
   undertakings: (ctx) => renderUndertakings(ctx),
   // ADR-0235: the regulator information-request & examination response register.
@@ -1126,6 +1129,7 @@ export function parseRoute(hash) {
     'seal': 'seal', 'seals': 'seal', 'audit-chain': 'seal', 'attestation': 'seal',
     'identity': 'identity', 'attested-commits': 'identity', 'seat-identity': 'identity',
     'probation': 'probation', 'probation-gates': 'probation', 'probation-gate': 'probation', 'confirmation': 'probation', 'new-hire-decision': 'probation',
+    'slo': 'service-error-budget', 'error-budget': 'service-error-budget', 'service-objective': 'service-error-budget',
     'incident': 'incidents', 'major-incident': 'incidents', 'incident-command': 'incidents', 'command': 'incidents',
     'notification-clock': 'incidents', 'notification-clocks': 'incidents', 'regulatory-clock': 'incidents',
     'sev1': 'incidents', 'sev-1': 'incidents', 'outage': 'incidents', 'p1': 'incidents', 'bridge': 'incidents',
@@ -2663,6 +2667,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       'work-stop': 'Stop-work & safe restart — an active hold, independent clearance, then the affected operator’s key',
       'manager-handover': 'Manager handover — a role does not expire with its holder: brief, successor acceptance, governor release',
       probation: 'Probation gates — the decision a joiner’s first window owes: confirm, extend or end, on evidence from every declared line, communicated in writing',
+  'service-error-budget': 'Service error budget — reconcile a completed request window against a declared objective before a release review',
   incidents: 'Major incidents — the command record while it runs: who declared it and against what written criterion, who took command and when they handed it over, every declared notification clock with its exact deadline, whether each party was actually told, and whether command was ever released',
       adjustments: 'Workplace adjustments — what work a person must not do and what was actually done about it: the functional limitation and its written instrument, the day an adjustment was agreed against the day it took effect, whether declared work on ANY reporting line breaks a limit the record can test exactly, and whether every line that hands the person work has been told',
       voice: 'Employee voice — what was put to a staff body and what it said back: the written instrument that set the period, the documents supplied, the day the window closed against the day advice arrived, the body’s own words and whether the organisation answered, the decision’s day against the window, each sitting’s attendance against the body’s own quorum, and the joint reporting seat above the affected lines',

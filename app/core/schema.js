@@ -195,6 +195,7 @@ import {
   normalizeStandardWorkTierActs,
 } from './domain/standardWorkSchema.js';
 import { normalizeInstrumentLookbacks } from './domain/instrumentLookbackSchema.js';
+import { normalizeServiceBudgets } from './domain/serviceBudgetSchema.js';
 // ADR-0191 (Schema v151): frozen cross-line priority rounds and first-person
 // ballots. Rounds normalize before their ballots resolve, so a ballot that
 // names a round the loader refused is dropped rather than orphaned.
@@ -1583,7 +1584,7 @@ export {
 // already holds is one. Every state, window, day count and minute count is derived
 // on read.
 // ADR-0252: dated instrument-use extracts on abnormal standard-work checks.
-export const SCHEMA_VERSION = 207;
+export const SCHEMA_VERSION = 208;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -3931,6 +3932,7 @@ export const COLLECTIONS = [
   'standardWorkChecks',
   'standardWorkTierActs',
   'instrumentLookbacks',
+  'serviceBudgets',
   // ADR-0191 (Schema v151): the Cross-Line Priority Ballot register. Two
   // append-only ledgers — frozen rounds and first-person ballots. No pairwise
   // count, winner, cycle, beatpath, ranking or coverage state is stored; every
@@ -9329,6 +9331,7 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.standardWorkChecks = normalizeStandardWorkChecks(raw.standardWorkChecks, state.standardWorkRoutines, warnings);
   state.standardWorkTierActs = normalizeStandardWorkTierActs(raw.standardWorkTierActs, state.standardWorkChecks, warnings);
   state.instrumentLookbacks = normalizeInstrumentLookbacks(raw.instrumentLookbacks, state.standardWorkChecks, now, warnings);
+  state.serviceBudgets = normalizeServiceBudgets(raw.serviceBudgets, now, warnings);
   state.priorityRounds = normalizePriorityRoundLedger(raw.priorityRounds, warnings);
   state.priorityBallots = normalizePriorityVotes(raw.priorityBallots, state.priorityRounds, warnings);
   // ADR-0193: declarations stand on their own; the goal and the reporting line
@@ -11457,6 +11460,8 @@ export const MIGRATIONS = {
     dgiMarkers: Array.isArray(v206.dgiMarkers) ? v206.dgiMarkers : [],
     settings: { ...(v206.settings || {}), ...normalizeDgiSettings(v206.settings || {}) },
   }),
+  // 207 → 208: ADR-0255 adds only dated evidence. No SLO or counts are inferred from incident records.
+  207: (v207) => ({ ...v207, schemaVersion: 208, serviceBudgets: v207.serviceBudgets === undefined ? [] : v207.serviceBudgets }),
   // 183 → 184: ADR-0231 adds SEVEN EMPTY ledgers (`ibpCycles`, `ibpDemandRows`,
   // `ibpCapacityRows`, `ibpOptions`, `ibpDecisions`, `ibpGrades`, `ibpMarkers`)
   // and the plan rule's pause. No cycle, demand figure, capacity figure, option

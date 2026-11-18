@@ -269,7 +269,7 @@ const rowOf = (state, caseId = 'case-1') => report(state).rows.find((row) => row
 
 test('schema v207 is additive: ten empty ledgers, four bounded conventions, nothing inferred', () => {
   const empty = createEmptyState(T0);
-  assert.equal(SCHEMA_VERSION, 207);
+  assert.equal(SCHEMA_VERSION, 208, 'ADR-0255 (service error budget) is the current head');
   for (const key of [
     'dgiCases', 'dgiAllegations', 'dgiInvestigators', 'dgiDirections', 'dgiFindings',
     'dgiDecisions', 'dgiAppeals', 'dgiAppealOutcomes', 'dgiWithdrawals', 'dgiMarkers',
@@ -294,7 +294,7 @@ test('schema v207 is additive: ten empty ledgers, four bounded conventions, noth
     'dgiDecisions', 'dgiAppeals', 'dgiAppealOutcomes', 'dgiWithdrawals', 'dgiMarkers',
   ]) delete previous[key];
   const { raw, applied } = migrate(previous);
-  assert.deepEqual(applied, ['206 → 207']);
+  assert.deepEqual(applied, ['206 → 207', '207 → 208']);
   for (const key of [
     'dgiCases', 'dgiAllegations', 'dgiInvestigators', 'dgiDirections', 'dgiFindings',
     'dgiDecisions', 'dgiAppeals', 'dgiAppealOutcomes', 'dgiWithdrawals', 'dgiMarkers',
