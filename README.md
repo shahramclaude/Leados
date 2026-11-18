@@ -84,7 +84,7 @@ A permit **declares** its written basis, its area, its work kind, its holder and
 
 ## 2026-11-17 — Lone-working overlap precision
 
-The lone-working declaration guard (`#/lone-working`) refuses overlaps down to one millisecond and reports both the exact milliseconds and the floored whole-minute count. Adjacent intervals are allowed. This guard does not yet treat an unclosed deployment as extending beyond its expected end; see ROADMAP for that safety limitation.
+The lone-working declaration guard (`#/lone-working`) refuses known overlaps down to one millisecond and reports both the exact milliseconds and the floored whole-minute count. When an earlier deployment is still open, a later declaration is refused even after the expected end: establish what happened and record the actual close first. Abutting a recorded close is allowed. The guard does not audit imported overlaps or establish that an earlier backfilled deployment actually ended before a later one; see ROADMAP for the remaining safety limitations. This local register is not a live monitoring or emergency-response service.
 
 ## 2026-11-17 — Who is always on the late call, and is the burden shared?
 

@@ -19,8 +19,10 @@
  *    seat is not a roster person, so this is never a block on a solo operator.)
  *  - One person cannot be declared alone in TWO PLACES at once: an overlapping
  *    span is refused using exact instants, with the overlap in milliseconds and
- *    whole minutes, computed on the effective span — a deployment that was closed early ends at its close, not at the end
- *    it was originally declared to.
+ *    whole minutes, computed on the effective span — a closed deployment ends at
+ *    its recorded close, not its expected end. If it is still open, a later
+ *    declaration is refused as uncertain rather than treating the expected end as
+ *    proof of a close.
  *  - A contact cannot be recorded in the future, before the deployment started, or
  *    at or before the last contact. History that can run backwards is history
  *    nobody can read, and the whole register is a timer running from the last
@@ -220,8 +222,9 @@ export function createLoneWorkingActions(store, { now, idFactory }) {
         return fail(`A deployment cannot be recorded more than ${L.backfillMaxDays} days after it started; the contacts it needed would already be missing and a backfilled record would read as a control that ran.`, 'startAt', REFUSAL('start-too-old'));
       }
 
-      // ONE PERSON, ONE PLACE. The effective span of a closed deployment ends at
-      // its close, not at the end it was originally declared to.
+      // ONE PERSON, ONE PLACE. A recorded close bounds the known span. An open
+      // deployment has no known end: its expected end is not proof of return.
+      // Keep the exact declared-span overlap refusal distinct from this uncertainty.
       const existing = normalizeLwkDeployments(rows('lwkDeployments'), []);
       for (const other of existing) {
         if (other.personId !== person.personId) continue;
@@ -231,6 +234,9 @@ export function createLoneWorkingActions(store, { now, idFactory }) {
         if (overlapMs > 0) {
           const overlap = overlapMinutes(startMs, endMs, otherStart, otherEnd);
           return fail(`This person is already declared alone over part of that span, overlapping by ${overlap} whole minute(s) (${overlapMs} milliseconds). One person cannot be alone in two places at once, and two overlapping clocks would each be honoured by a different hand.`, 'startAt', REFUSAL('overlapping-deployment'));
+        }
+        if (!other.closedAt && endMs > otherStart) {
+          return fail('An earlier deployment for this person is still open. Its expected end is not a recorded close, so a later deployment cannot be confirmed non-overlapping. Establish what happened and record the actual close before declaring this span; do not invent a close time.', 'startAt', REFUSAL('open-deployment-uncertain'));
         }
       }
 

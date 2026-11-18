@@ -157,7 +157,7 @@ function harness(raw) {
 
 test('schema v196 is additive: four empty ledgers, three conventions, nothing inferred', () => {
   const empty = createEmptyState(T0);
-  assert.equal(SCHEMA_VERSION, 203);
+  assert.equal(SCHEMA_VERSION, 207);
   for (const key of ['lwkDeployments', 'lwkCheckins', 'lwkEscalations', 'lwkMarkers']) {
     assert.ok(COLLECTIONS.includes(key), `${key} is a declared collection`);
     assert.deepEqual(empty[key], [], `${key} starts empty`);
@@ -175,7 +175,7 @@ test('schema v196 is additive: four empty ledgers, three conventions, nothing in
   // schema bump appends to this list instead of invalidating the claim.
   assert.deepEqual(applied.slice(0, 2), ['195 → 196', '196 → 197'], 'ADR-0242’s own step still runs first, in order');
   assert.equal(applied[applied.length - 1], `${SCHEMA_VERSION - 1} → ${SCHEMA_VERSION}`);
-  assert.equal(raw.schemaVersion, 203);
+  assert.equal(raw.schemaVersion, 207);
   // NOTHING IS INFERRED. A workspace with shifts, stations or a `lone-work`
   // restriction on file does not thereby have a person monitored for welfare.
   for (const key of ['lwkDeployments', 'lwkCheckins', 'lwkEscalations', 'lwkMarkers']) {
@@ -593,6 +593,45 @@ test('the declaration door refuses even one millisecond of overlap without stori
   const stored = JSON.parse(storage.getItem(STORAGE_KEY)).lwkDeployments;
   assert.equal(stored.length, 2);
   assert.equal(stored.find((row) => row.id === abutting.id)?.expectedEndAt, '2026-11-17T05:00:00.000Z');
+});
+
+test('an open overrun refuses uncertain later work across lines until its actual close is recorded', () => {
+  const raw = fixture({ activeSeatId: 'priya', deployments: [deployment({ expectedEndAt: iso('2026-11-17T08:00:00Z') })] });
+  const { api, store, storage } = harness(raw);
+  const base = {
+    personId: 'sam', siteRef: 'Tank room — north', task: 'Valve inspection',
+    protocolRef: 'LWA-2026-108 rev 3 — tank room entry', intervalMinutes: 30, graceMinutes: 5,
+    startAt: '2026-11-17T08:30:00.000Z', expectedEndAt: '2026-11-17T10:00:00.000Z',
+  };
+  const before = storage.getItem(STORAGE_KEY);
+  for (const startAt of ['2026-11-17T08:00:00.000Z', '2026-11-17T08:30:00.000Z']) {
+    const result = api.loneWorkingDeclareDeployment({ ...base, startAt });
+    assert.equal(result.refusal, 'loneWorking:open-deployment-uncertain');
+    assert.match(result.error, /expected end is not a recorded close/);
+    assert.equal(storage.getItem(STORAGE_KEY), before, 'refusal does not persist an event or deployment');
+  }
+  const closed = api.loneWorkingCloseDeployment({ deploymentId: 'dep-1', closeOutcome: 'returned', note: 'Returned to the gate and signed out.', at: '2026-11-17T08:30:00.000Z' });
+  assert.equal(closed.ok, true, closed.error);
+  const created = api.loneWorkingDeclareDeployment(base);
+  assert.equal(created.ok, true, created.error);
+  const persisted = JSON.parse(storage.getItem(STORAGE_KEY));
+  assert.equal(persisted.lwkDeployments.find((row) => row.id === 'dep-1').closedAt, base.startAt);
+  assert.equal(persisted.lwkDeployments.find((row) => row.id === created.id).startAt, base.startAt);
+  assert.deepEqual(persisted.lwkDeployments, store.state.lwkDeployments);
+});
+
+test('open uncertainty does not block a span entirely before the open start or a different person', () => {
+  const raw = fixture({ deployments: [deployment({ expectedEndAt: iso('2026-11-17T08:00:00Z') })] });
+  const { api } = harness(raw);
+  const base = {
+    personId: 'sam', siteRef: 'Tank room — north', task: 'Valve inspection',
+    protocolRef: 'LWA-2026-108 rev 3 — tank room entry', intervalMinutes: 30, graceMinutes: 5,
+    startAt: '2026-11-17T04:00:00.000Z', expectedEndAt: '2026-11-17T05:00:00.000Z',
+  };
+  const prior = api.loneWorkingDeclareDeployment(base);
+  assert.equal(prior.ok, true, prior.error);
+  const other = api.loneWorkingDeclareDeployment({ ...base, personId: 'mei', startAt: '2026-11-17T08:30:00.000Z', expectedEndAt: '2026-11-17T10:00:00.000Z' });
+  assert.equal(other.ok, true, other.error);
 });
 
 test('the door refuses a future, backwards or doubled contact, and a contact on a closed deployment', () => {
