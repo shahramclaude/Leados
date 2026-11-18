@@ -1,3 +1,11 @@
+## 2026-11-18 — Measuring-equipment failure: direct use versus upstream recall
+
+The leadership duty behind ISO 9001:2015 §7.1.5.2 is to evaluate earlier measurement results when measuring equipment is found unfit. Knowing that a gauge was repaired does not tell a director which acceptance decisions used it. [Gaugify's aerospace calibration article](https://www.gaugify.io/blog/calibration-management-software-for-aerospace-manufacturing) describes cross-referencing gauge usage with inspections since the last-known-good calibration and finding affected work orders. This sets a more useful bar than an overdue-calibration dashboard: **produce the list to investigate**. The worked example and risk categorization are the vendor's account, not independent evidence of effectiveness.
+
+[Beamex CMX analytics](https://www.beamex.com/us/calibration-software/cmx/analytics-dashboard/) describes reference-standard usage and calibrator reverse traceability. This motivates a separate gap: if the failing object certified *other* gauges, direct inspection-use records are insufficient. Resolve dated instrument-to-instrument edges, stop only on evidence and count reconvergent paths once. Logged Planned, not built.
+
+[ADR-0252](docs/adr/0252-instrument-use-lookback.md) chooses a native local join rather than a vendor integration: deterministic identity, conservative day bounds, source controls and explicit unknowns. Identifying review candidates is not deciding validity, risk severity or conformity. Vendor pages reviewed 2026-11-18; no vendor instance, operational dataset, field throughput or compliance validation **[BENCHMARK-UNVERIFIED]**.
+
 ## 2026-11-18 — Single-loss tests for simultaneous station coverage
 
 [N−1 station contingency decision, ADR-0251](docs/adr/0251-station-single-absence-check.md). In personnel rostering, a strong contingency can reassign work across the graph, not only pick a spare for the vacated assignment: see [Robust personnel rostering: How accurate should absenteeism predictions be?](https://link.springer.com/article/10.1007/s10951-025-00858-9). LeadOS takes the deterministic branch: one candidate loss at a time, exact capacitated max flow, no ML absence scores, and a min-cut witness when the recorded constraints cannot be met.

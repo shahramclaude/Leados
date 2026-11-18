@@ -194,6 +194,7 @@ import {
   normalizeStandardWorkSettings,
   normalizeStandardWorkTierActs,
 } from './domain/standardWorkSchema.js';
+import { normalizeInstrumentLookbacks } from './domain/instrumentLookbackSchema.js';
 // ADR-0191 (Schema v151): frozen cross-line priority rounds and first-person
 // ballots. Rounds normalize before their ballots resolve, so a ballot that
 // names a round the loader refused is dropped rather than orphaned.
@@ -1535,7 +1536,8 @@ export {
 // granted by an external body on a written instrument, and nothing the workspace
 // already holds is one. Every state, window, day count and minute count is derived
 // on read.
-export const SCHEMA_VERSION = 204;
+// ADR-0252: dated instrument-use extracts on abnormal standard-work checks.
+export const SCHEMA_VERSION = 205;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -3868,6 +3870,7 @@ export const COLLECTIONS = [
   'standardWorkRoutines',
   'standardWorkChecks',
   'standardWorkTierActs',
+  'instrumentLookbacks',
   // ADR-0191 (Schema v151): the Cross-Line Priority Ballot register. Two
   // append-only ledgers — frozen rounds and first-person ballots. No pairwise
   // count, winner, cycle, beatpath, ranking or coverage state is stored; every
@@ -9221,6 +9224,7 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.standardWorkRoutines = normalizeStandardWorkRoutines(raw.standardWorkRoutines, warnings);
   state.standardWorkChecks = normalizeStandardWorkChecks(raw.standardWorkChecks, state.standardWorkRoutines, warnings);
   state.standardWorkTierActs = normalizeStandardWorkTierActs(raw.standardWorkTierActs, state.standardWorkChecks, warnings);
+  state.instrumentLookbacks = normalizeInstrumentLookbacks(raw.instrumentLookbacks, state.standardWorkChecks, now, warnings);
   state.priorityRounds = normalizePriorityRoundLedger(raw.priorityRounds, warnings);
   state.priorityBallots = normalizePriorityVotes(raw.priorityBallots, state.priorityRounds, warnings);
   // ADR-0193: declarations stand on their own; the goal and the reporting line
@@ -11280,6 +11284,8 @@ export const MIGRATIONS = {
     prvMarkers: Array.isArray(v203.prvMarkers) ? v203.prvMarkers : [],
     settings: { ...(v203.settings || {}), ...normalizePrvSettings(v203.settings || {}) },
   }),
+  // No gauge, failure, prior good check or use is inferred from an abnormality.
+  204: (v204) => ({ ...v204, schemaVersion: 205, instrumentLookbacks: v204.instrumentLookbacks ?? [] }),
   // 183 → 184: ADR-0231 adds SEVEN EMPTY ledgers (`ibpCycles`, `ibpDemandRows`,
   // `ibpCapacityRows`, `ibpOptions`, `ibpDecisions`, `ibpGrades`, `ibpMarkers`)
   // and the plan rule's pause. No cycle, demand figure, capacity figure, option

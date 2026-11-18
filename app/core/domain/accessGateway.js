@@ -118,9 +118,9 @@ const groups = [
   ['declare-station-coverage', 'stationCoverageDeclareWindow stationCoverageRetireWindow stationCoverageDeclareStation stationCoverageRetireStation stationCoverageDeclareEnable stationCoverageRetireEnable stationCoverageDeclareWindowEnable stationCoverageRetireWindowEnable'],
   ['declare-station-availability', 'stationCoverageDeclareAvailability stationCoverageWithdrawAvailability'],
   ['govern-station-coverage', 'stationCoverageSetConventions'],
-  [STANDARD_WORK_RIGHTS.READ, 'standardWorkReport standardWorkBriefText standardWorkCsvRows standardWorkAttentionCount'],
+  [STANDARD_WORK_RIGHTS.READ, 'standardWorkReport standardWorkBriefText standardWorkCsvRows standardWorkAttentionCount instrumentLookbackIndex instrumentLookbackRead'],
   [STANDARD_WORK_RIGHTS.DECLARE, 'standardWorkDeclareRoutine standardWorkRetireRoutine standardWorkCandidates'],
-  [STANDARD_WORK_RIGHTS.RECORD, 'standardWorkRecordCheck standardWorkTierAct'],
+  [STANDARD_WORK_RIGHTS.RECORD, 'standardWorkRecordCheck standardWorkTierAct instrumentLookbackRecord standardWorkOwnSlots'],
   [STANDARD_WORK_RIGHTS.GOVERN, 'standardWorkScan standardWorkSetConventions'],
   // ADR-0150: Matrix Onboarding Completeness. Writing a line's onboarding brief is
   // the act of the manager who holds that line (the action narrows it to them), and
@@ -1247,7 +1247,7 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // receives the people in its reporting tree or on a line it holds; everyone
 // else is a count. Breaks are disclosed only to a seat that holds the line.
 'workNightReport', 'workNightBriefText', 'workNightCsvRows', 'workNightAttentionCount',
-'standardWorkReport', 'standardWorkBriefText', 'standardWorkAttentionCount', 'standardWorkCandidates']);
+'standardWorkReport', 'standardWorkBriefText', 'standardWorkAttentionCount', 'standardWorkCandidates', 'instrumentLookbackIndex', 'instrumentLookbackRead', 'standardWorkOwnSlots']);
 const refusal = (reason) => ({ ok: false, code: 'scope-refusal', error: reason, field: 'scope' });
 
 /** ADR-0087: under enforcement, boundary-management commands stay reachable

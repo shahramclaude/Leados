@@ -204,7 +204,7 @@ function asSeat(api, store, seatId) {
 /* --------------------------------------------------------------- 1. schema */
 
 test('schema v202 is additive: seven empty ledgers, three conventions, nothing inferred', () => {
-  assert.equal(SCHEMA_VERSION, 204);
+  assert.equal(SCHEMA_VERSION, 205);
   const keys = ['lfgMatters', 'lfgAccruals', 'lfgStays', 'lfgResolutions', 'lfgConcessions', 'lfgAuthorityGrants', 'lfgMarkers'];
   for (const key of keys) assert.ok(COLLECTIONS.includes(key), `${key} must be a declared collection`);
   const empty = createEmptyState(T0);
@@ -221,7 +221,7 @@ test('migrating a v201 workspace adds seven empty ledgers and infers no claim an
   base.settlements = [{ id: 'stl-x' }];
   for (const key of ['lfgMatters', 'lfgAccruals', 'lfgStays', 'lfgResolutions', 'lfgConcessions', 'lfgAuthorityGrants', 'lfgMarkers']) delete base[key];
   const migrated = migrate(base).raw;
-  assert.equal(migrated.schemaVersion, 204);
+  assert.equal(migrated.schemaVersion, SCHEMA_VERSION);
   assert.deepEqual(migrated.lfgMatters, [], 'a statutory authority is not a claim asserted by a third party');
   assert.deepEqual(migrated.lfgAccruals, [], 'no accrual is inferred from anything on the record');
   assert.equal(migrated.settings.lfgAutoPropagate, true);

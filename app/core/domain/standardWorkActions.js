@@ -19,6 +19,7 @@
  * single keyboard genuinely is — and as nobody else.
  */
 
+import { createInstrumentLookbackActions } from './instrumentLookbackActions.js';
 import { addDays, dayKey } from '../time.js';
 import { activeSeat, buildSeats, canAct } from './seat.js';
 import { LEADER_ID } from './chain.js';
@@ -91,7 +92,21 @@ export function createStandardWorkActions(store, { now, idFactory }) {
   }
 
   return {
+    ...createInstrumentLookbackActions(store, { seatFor, idFactory }),
+
     /* ---------------------------------------------------------------- reads */
+
+    /** Only the acting recorder’s open slots; do not lose one behind the
+     * general board's presentation cap or disclose the whole-workspace reader. */
+    standardWorkOwnSlots() {
+      const check = seatFor(STANDARD_WORK_RIGHTS.RECORD);
+      if (!check.ok) return check;
+      const report = whole(check);
+      const escalateTo = linesOf(report, check.actorId);
+      return { ok: true, routines: report.internal.evaluated
+        .filter((r) => r.routine.ownerId === check.actorId && r.recordable.length)
+        .map(({ routine, recordable }) => ({ routineId: routine.id, title: routine.title, standard: routine.standard, recordable, escalateTo })) };
+    },
 
     standardWorkReport() {
       const check = seatFor(STANDARD_WORK_RIGHTS.READ);

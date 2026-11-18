@@ -1,3 +1,11 @@
+## 2026-11-18 — Which inspections relied on the failed gauge?
+
+Open **Instrument look-back** (`#/instrument-lookback`) when a measuring instrument is found out of tolerance. Choose an abnormal Standard Work check you recorded, or use **Record the source abnormality** to record it on your own routine. **Trace instrument uses** accepts a local UTF-8 CSV/TSV or a paste with the headers `use_ref,instrument_ref,used_on,decision_ref`. Use exact, cross-line IDs and `YYYY-MM-DD` dates. Keep the original file.
+
+Enter the as-found failure and prior-good evidence, identify the extract version, and state its coverage. If you have an independent count of distinct use IDs from the source system, enter it before previewing the worklist. Blank means unknown, not zero. The preview groups uses by inspection or release decision and tells you what is missing. **Record this workpaper** saves the evidence; **Aggregate receipt (CSV)** exports the counts and reasons without source IDs.
+
+Only the recorder or local operator sees the full source. A tier named in the escalation sees the review list; other managers in reach see paper counts. A repaired gauge does **not** clear earlier product. [Method, access and limits](docs/adr/0252-instrument-use-lookback.md).
+
 ## 2026-11-18 — Check cover before one absence stops the shift
 
 In **Standard Work → Stations** (`#/standard-work?panel=stations`), **Can these stations cover one absence?** checks current and upcoming windows that have at least two simultaneous stations. It removes one declared candidate at a time and rematches remaining qualified, available people to the recorded demand. Two stations can each look covered and still rely on the same two people; this checks them together. A person on two reporting lines is counted once.

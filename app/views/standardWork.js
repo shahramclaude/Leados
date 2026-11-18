@@ -20,6 +20,7 @@
  * `standardWorkReport`; a withheld figure prints a dash and its reason, never a
  * zero. Nothing here rates a person: adherence describes a ROUTINE'S record.
  */
+import { renderInstrumentLookbackPanel } from './instrumentLookbackPanel.js';
 import { renderSkillCoveragePanel } from './skillCoveragePanel.js';
 import { renderStationCoveragePanel } from './stationCoveragePanel.js';
 import { renderWorkRestPanel } from './workRestPanel.js';
@@ -97,18 +98,20 @@ function submit(ctx, form, result, message) {
 
 /* ------------------------------------------------------------------ dialogs */
 
-function declareDialog(ctx) {
+function declareDialog(ctx, selfOnly = false) {
   const found = ctx.api.standardWorkCandidates();
   if (!found?.ok) { toast(found?.error || 'Declaring a routine was refused.', 'bad'); return; }
   // One option per (leader, line) the seat may actually declare under, so the
   // form cannot offer a line the action would refuse.
   const options = [];
   for (const c of found.candidates) {
+    if (selfOnly && !c.self) continue;
     const who = c.self ? `${c.ownerName} (me)` : c.ownerName;
     if (!c.lineRequired) options.push({ value: `${c.ownerId}|`, label: c.lines.length ? `${who} — next tier ${c.lines[0].managerName}` : `${who} — top tier` });
     else for (const line of c.lines) options.push({ value: `${c.ownerId}|${line.lineKey}`, label: `${who} — under the ${line.kind} line of ${line.managerName}` });
   }
   if (!options.length) { toast('No leader on the roster is within this seat’s lines.', 'warn'); return; }
+  if (selfOnly && options.length > 1) options.unshift({ value: '', label: 'Choose the line this routine is owed under' });
   const [minM, maxM] = STANDARD_WORK_LIMITS.minutes;
   const form = buildForm([
     { name: 'ownerLine', label: 'Whose routine, and under which line', type: 'select', options, value: options[0].value,
@@ -140,17 +143,17 @@ function declareDialog(ctx) {
   });
 }
 
-function recordDialog(ctx, row) {
-  const dispositions = [{ value: 'contained', label: 'Contained at my tier' },
+function recordDialog(ctx, row, failure = false) {
+  const dispositions = [...(failure ? [{ value: '', label: 'Choose containment or a named escalation' }] : []), { value: 'contained', label: 'Contained at my tier' },
     ...row.escalateTo.map((line) => ({ value: `escalated|${line.managerId}`, label: `Escalate to ${line.managerName} (${line.kind} line)` }))];
   const form = buildForm([
     { name: 'slotKey', label: 'Slot', type: 'select', value: row.recordable[0].slotKey,
       options: row.recordable.map((slot) => ({ value: slot.slotKey, label: slot.late ? `${slot.label} — previous slot, recorded late` : `${slot.label} — current slot` })),
       help: 'Only the current slot, or the one before it while still unrecorded, can be recorded. Older slots stay unrecorded.' },
-    { name: 'outcome', label: 'Outcome', type: 'select', value: 'done', options: STANDARD_WORK_OUTCOMES.map((o) => ({ value: o.key, label: o.label })) },
+    { name: 'outcome', label: 'Outcome', type: 'select', value: failure ? 'abnormal' : 'done', options: STANDARD_WORK_OUTCOMES.map((o) => ({ value: o.key, label: o.label })) },
     { name: 'note', label: 'What was seen, or why it was missed', type: 'textarea', rows: 3, value: '',
       help: 'Required for an abnormality (what deviated from the standard) and for a miss (why). Optional when done as standard.' },
-    { name: 'disposition', label: 'If an abnormality was found: where does it go?', type: 'select', value: 'contained', options: dispositions,
+    { name: 'disposition', label: 'If an abnormality was found: where does it go?', type: 'select', value: failure ? '' : 'contained', options: dispositions,
       help: 'Contain it at the lowest tier able to. An escalation goes to ONE named line manager and becomes a dated ask in their queue.' },
   ]);
   openModal({
@@ -467,6 +470,7 @@ export function renderStandardWork(ctx) {
   const t = report.totals;
   return h('div', { class: 'stack standard-work-view' },
     header([
+      h('a', { class: 'btn small', href: '#/instrument-lookback' }, 'Instrument look-back'),
       h('button', { class: 'btn small', type: 'button', 'data-testid': 'lsw-csv', onClick: () => exportCsv(ctx, report) }, 'Export CSV'),
       h('button', { class: 'btn ghost small', type: 'button', 'data-testid': 'lsw-brief-open', onClick: () => briefDialog(ctx) }, 'Brief'),
     ], [
@@ -477,4 +481,21 @@ export function renderStandardWork(ctx) {
       onSelect: (key) => ctx.navigate(`#/standard-work?panel=${encodeURIComponent(key)}`) }),
     panel === 'rest' ? renderWorkRestPanel(ctx) : panel === 'night' ? renderWorkNightPanel(ctx) : panel === 'waivers' ? renderStandardWaiverPanel(ctx) : panel === 'revisions' ? renderStandardRevisionPanel(ctx) : panel === 'skills' ? renderSkillCoveragePanel(ctx) : panel === 'stations' ? renderStationCoveragePanel(ctx) : panel === 'spans' ? spansPanel(report) : panel === 'method' ? methodPanel(ctx, report) : boardPanel(ctx, report),
   );
+}
+
+/** Dedicated scoped entry: opening these two first-person source dialogs must
+ * not change the disclosure posture of every sibling Standard Work panel. */
+export function renderInstrumentLookback(ctx) {
+  function recordSource() {
+    const result = ctx.api.standardWorkOwnSlots();
+    if (!result.ok || !result.routines.length) {
+      toast(result.error || 'No open slot on your own routines. Declare a routine or use an existing abnormal check.', 'warn'); return;
+    }
+    if (result.routines.length === 1) { recordDialog(ctx, result.routines[0], true); return; }
+    openModal({ title: 'Choose your source routine', body: h('div', { class: 'stack-sm' }, ...result.routines.map((row) =>
+      h('button', { type: 'button', class: 'btn', onClick: () => { closeAllModals(); recordDialog(ctx, row, true); } }, row.title))) });
+  }
+  return h('div', { class: 'stack' }, pageHeader({ eyebrow: 'Standard work · Quality assurance', title: 'Instrument look-back',
+    subtitle: 'When a measuring instrument fails, find the earlier decisions that need another look.' }),
+    renderInstrumentLookbackPanel(ctx, { recordSource, declareSource: () => declareDialog(ctx, true) }));
 }

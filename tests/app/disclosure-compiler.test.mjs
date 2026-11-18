@@ -120,6 +120,7 @@ const RENDERER_ROUTES = [
   // retaining them here makes the catalogue assertion cover the live shell,
   // rather than an older pre-ADR-0141/0142/0143 route list.
   'benchEvidence', 'contradiction', 'arbitration',
+  'instrument-lookback',
 ];
 
 /** Sentinel-bearing roster: every person, span and private note is traceable. */
