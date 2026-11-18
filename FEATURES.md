@@ -1,3 +1,7 @@
+## 2026-11-18 · Single-absence staffing check ([ADR-0251](docs/adr/0251-station-single-absence-check.md))
+
+**Standard Work → Stations** tests whether an already feasible concurrent window can still fill demand after any one declared candidate is absent. It rematches exact integer capacity with current matrix reach, whole-window availability and qualifications valid through the end. The holder sees reconciled scenario counts and a bottleneck proof; ancestors receive outcomes within their reach and disclosure floor, not scenarios. Missing evidence or an incomplete sweep does not become a definite answer. The brief and aggregate CSV #148 share the reader. No new data entry, schema, or scheduling actions.
+
 ## 2026-11-17 · Session 320: Lone-working welfare-check register — a declared interval, a clock from the last contact, and an escalation that never goes to the person it protects ([ADR-0242](./docs/adr/0242-lone-working-welfare-check-register.md) · Schema v196 · `RULE-LWK-01` · CSV #183 · `#/lone-working`)
 
 - **What it answers.** Somebody is alone at a site until four and radios in every hour. If one check is missed, who knows, who is asked, and at what minute? Nothing in the workspace could say — `stationCoverage` proves a *station* is manned, `dutyCoverage` covers a duty while somebody is away, `workRest` measures rest between shifts, and ADR-0241 records a `lone-work` limit without any record of whether the person was ever alone.

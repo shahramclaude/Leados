@@ -1,3 +1,9 @@
+## 2026-11-18 — Single-loss tests for simultaneous station coverage
+
+[N−1 station contingency decision, ADR-0251](docs/adr/0251-station-single-absence-check.md). In personnel rostering, a strong contingency can reassign work across the graph, not only pick a spare for the vacated assignment: see [Robust personnel rostering: How accurate should absenteeism predictions be?](https://link.springer.com/article/10.1007/s10951-025-00858-9). LeadOS takes the deterministic branch: one candidate loss at a time, exact capacitated max flow, no ML absence scores, and a min-cut witness when the recorded constraints cannot be met.
+
+Published [shyftplan](https://shyftplan.com/en/shift-planning/workforce-scheduling-software) and [UKG Shiftboard](https://www.ukg.com/glossary/what-employee-scheduling-complex-operations) describe skill/availability-aware schedule optimization and repair. [Google Workforce Scheduling API](https://developers.google.com/optimization/service/reference/rest/v1/scheduling/solveShiftScheduling) gives a formal constraint-solving reference. These are documentation comparisons, not hands-on parity **[BENCHMARK-UNVERIFIED]**. The tested LeadOS claim is exact repair feasibility on a smaller model, not assignment, deployment or labor compliance. The next gap, retrospective instrument failure impact (ISO 9001 §7.1.5.2), concerns prior inspection decisions and is distinct from an equipment due-date reminder.
+
 ## 2026-11-06 — Hierarchy-native governance allocation hunt (Session 149)
 
 Search-result snippets and vendor documentation only; **no vendor product was

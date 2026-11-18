@@ -111,7 +111,7 @@
  * no cross-window declaration reads exactly as it did before ADR-0207.
  */
 
-export const STATION_COVERAGE_ENGINE_VERSION = 'station-coverage-2026.11-v3';
+export const STATION_COVERAGE_ENGINE_VERSION = 'station-coverage-2026.11-v4';
 export const STATION_COVERAGE_ADR = 'ADR-0201';
 export const STATION_COVERAGE_PRECEDENCE_ADR = 'ADR-0204';
 export const STATION_COVERAGE_WINDOW_EDGE_ADR = 'ADR-0207';
@@ -338,6 +338,16 @@ export const STATION_COVERAGE_REFUSALS = Object.freeze([
 ]);
 export const STATION_COVERAGE_REFUSAL_KEYS = Object.freeze(STATION_COVERAGE_REFUSALS.map((r) => r.key));
 
+/** ADR-0251: window-level outcomes, not person observations or rankings. */
+export const STATION_ABSENCE_STATES = Object.freeze([
+  Object.freeze({ key: 'tolerant', label: 'Can cover one absence', tone: 'good' }),
+  Object.freeze({ key: 'exposed', label: 'Shortfall after one absence', tone: 'bad' }),
+  Object.freeze({ key: 'unproven', label: 'Not proven', tone: 'warn' }),
+  Object.freeze({ key: 'withheld', label: 'Withheld', tone: 'neutral' }),
+  Object.freeze({ key: 'not-tested', label: 'Not tested', tone: 'neutral' }),
+]);
+export const STATION_ABSENCE_METHOD = 'One declared candidate is removed at a time and the remaining cover is rematched. This uses full-window availability and qualifications valid through the window end, under the reporting lines active today. It tests simultaneous staffing within a window, not sequential work, concurrent absences, or how an absence affects another window. It does not assign anyone or establish actual attendance.';
+
 /**
  * The CSV is aggregate-only. These columns carry no person, manager, line,
  * station title, task title, note or record id — an export that named a station
@@ -353,6 +363,7 @@ export const STATION_COVERAGE_CSV_COLUMNS = Object.freeze([
   'cross_window_contradictions_n', 'feed_ambiguous_windows_n',
   'deficient_sets_n', 'max_deficit_n', 'witness_complete', 'station_state_n',
   'counts_reconcile', 'figures_complete', 'orders_complete', 'claim_reason',
+  'absence_windows_n', 'absence_counts_reconcile', 'absence_evidence_complete',
 ]);
 
 export const STATION_COVERAGE_CSV_DESCRIPTOR = Object.freeze({
@@ -361,7 +372,7 @@ export const STATION_COVERAGE_CSV_DESCRIPTOR = Object.freeze({
   group: 'analytics',
   sensitive: false,
   filenameSlug: 'skill-station-coverage',
-  description: 'One workspace summary row plus one row per window verdict, station state and refusal reason: declared simultaneous windows, station demand, qualified-attestation edges, declared availability and its exact capacity, whether each window was proven feasible by maximum matching, how many deficient sets were found and the largest exact deficit, plus declarable station-to-station enabling edges, how many windows carry an unsatisfiable enabling cycle, how many precedence cycles were found, and how many declared CROSS-WINDOW prerequisites the calendar proves, leaves ambiguous or contradicts — with how many windows are blocked by a prerequisite that cannot be manned. NO person, manager, line, station title, task title, window label, note, reason or record id. A withheld or unprovable figure exports BLANK with its reason — never zero.',
+  description: 'One workspace summary row plus one row per window verdict, station state and single-absence outcome: declared simultaneous windows, station demand, qualified-attestation edges, declared availability and its exact capacity, whether each window was proven feasible by maximum matching, how many deficient sets were found and the largest exact deficit, plus declarable station-to-station enabling edges, how many windows carry an unsatisfiable enabling cycle, how many precedence cycles were found, and how many declared CROSS-WINDOW prerequisites the calendar proves, leaves ambiguous or contradicts — with how many windows are blocked by a prerequisite that cannot be manned. Single-absence rows count windows only. No names, window labels, shortage subsets, notes, or record IDs. A withheld or unprovable figure exports BLANK with its reason — never zero.',
 });
 
 /* ------------------------------------------------------------------ method */

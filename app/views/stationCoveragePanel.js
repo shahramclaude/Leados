@@ -5,9 +5,11 @@
  */
 import { h, buildForm, openModal, closeAllModals, toast } from '../ui/dom.js';
 import { downloadText } from '../ui/download.js';
-import { card, table, banner } from '../ui/components.js';
+import { card, table, banner, badge } from '../ui/components.js';
 import { serializeCsv } from '../core/csv.js';
 import {
+  STATION_ABSENCE_METHOD,
+  STATION_ABSENCE_STATES,
   STATION_COVERAGE_CSV_COLUMNS,
   STATION_COVERAGE_FEED_RELATIONS,
   STATION_COVERAGE_FEED_STATUSES,
@@ -454,6 +456,41 @@ function crossWindowCard(report) {
   });
 }
 
+function absenceCard(report) {
+  const { counts, countsReconcile, evidenceComplete, rows, windowsN } = report;
+  const statuses = new Map(STATION_ABSENCE_STATES.map((s) => [s.key, s]));
+  return card({
+    title: 'Can these stations cover one absence?',
+    subtitle: 'A check on staffing, not on people. Review the bottleneck before the window starts.',
+    attrs: { 'data-testid': 'station-absence-check' },
+    body: h('div', { class: 'stack' },
+      h('p', { class: 'muted small' }, STATION_ABSENCE_METHOD),
+      h('p', { 'data-testid': 'station-absence-counts' },
+        `${windowsN} live window(s) · ${STATION_ABSENCE_STATES.map(({ key, label }) => `${label}: ${counts[key]}`).join(' · ')}`),
+      h('p', { class: 'muted small', 'data-testid': 'station-absence-claims' },
+        `Window counts reconcile: ${countsReconcile ? 'yes' : 'no'}. Evidence supports a definite result for every listed live window: ${evidenceComplete ? 'yes' : 'no'}.`),
+      table({
+        caption: 'Single-absence staffing check by window',
+        rows: rows.map((r) => ({ ...r, attrs: { 'data-testid': `station-absence-${r.windowId}` } })),
+        emptyMessage: 'No current or upcoming, non-retired window in this seat’s reach.',
+        columns: [
+          { label: 'Window', render: (r) => `${r.label} · ${r.fromDay} → ${r.toDay}` },
+          { label: 'Result', render: (r) => badge(statuses.get(r.status).label, statuses.get(r.status).tone) },
+          { label: 'Evidence', render: (r) => {
+            const e = r.evidence;
+            return h('div', { class: 'stack' }, h('span', null, r.reason),
+              e ? h('details', null, h('summary', null, 'See the staffing proof'),
+                h('p', { 'data-testid': 'station-absence-scenarios' },
+                  `${e.testedN} absence case(s): ${e.fillableN} covered, ${e.shortfallN} short on recorded cover. ${e.missingN} qualified candidate(s) without covering availability.`),
+                e.worst ? h('p', { 'data-testid': 'station-absence-witness' },
+                  `Worst recorded shortfall: ${e.worst.deficitN}. Bottleneck: ${e.worst.stationTitles.join(', ')}. ${e.worst.demandN} required; ${e.worst.capacityN} coverable at most.`) : null)
+                : ['tolerant', 'exposed'].includes(r.status) ? h('span', { class: 'muted small' }, 'The scenario counts and station proof are visible only to the window holder or local operator.') : null);
+          } },
+        ],
+      })),
+  });
+}
+
 export function renderStationCoveragePanel(ctx) {
   const result = ctx.api.stationCoverageReport();
   if (!result?.ok) return banner({ tone: 'warn', title: 'Station coverage was refused', body: result?.error || 'No readable seat.' });
@@ -488,6 +525,7 @@ export function renderStationCoveragePanel(ctx) {
             h('img', { src: PRECEDENCE_DIAGRAM_URL, alt: 'Conceptual illustration: stations arranged as an order. A clean chain of enabling declarations reads as an arrow sequence; one declaration loops back on itself and closes a cycle that cannot be ordered, breaking the chain.', style: { width: '100%', height: 'auto' } }),
             h('figcaption', { class: 'muted small' }, 'AI-generated method illustration, not workspace data. Precedence is decided exactly from the declared enabling declarations (Tarjan’s strongly connected components); a cycle with a sequential member is unsatisfiable, an all-concurrent cycle is a co-requisite loop.')))),
     }),
+    absenceCard(r.singleAbsence),
     crossWindowCard(r),
     ...live.map((row) => windowCard(ctx, row, tasks, r)),
     past.length

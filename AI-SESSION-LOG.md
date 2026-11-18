@@ -1,3 +1,17 @@
+## 2026-11-18 — Single-absence staffing check for simultaneous stations
+
+**Doctrine / sync / orientation:** `NORTH_STAR.md` present with all four mandates. Fetch and push remotes match `https://github.com/shahramclaude/Leados` (canonical `.git` suffix). Remained on `arena/06dcfaae-leados`, based at `c6e35ae5dd1d9d8d8512e12f067a63b3ee087580`. Read the roadmap and Sessions 326–328. Spot-checked Station Coverage, ILUO, availability, matrix, declaration/export and prerequisite paths.
+
+**Built / duty:** frontline / mid-manager × single-chain and matrix; director/VP/CEO span oversight. [ADR-0251](docs/adr/0251-station-single-absence-check.md) tests loss of each distinct candidate against concurrent demand on the Stations panel. A separate cut reconciles the worst recorded gap, with an explicit *Not proven* if silent potential cover could change the shortage. Through-end qualifications, full-window availability, no partial results, no personal ranking or new scheduling authority. Existing per-seat brief and aggregate CSV report the same statuses. The station API no longer passes the reader's raw input bundle to the view; CSV reasons no longer quote window labels. No new schema, persisted analysis, event or rule. Existing release bundle left unchanged.
+
+**Gap hunt / next:** logged out-of-tolerance instrument impact and disposition, ISO 9001 §7.1.5.2, in ROADMAP Planned. The missing capability is the retrospective instrument-to-inspection/release link, not another calibration date. Mid-manager / director quality × both structures is next; repository-wide absence **[UNVERIFIED]**. Multi-window and correlated absence analysis stays In Progress.
+
+**Benchmark [BENCHMARK-UNVERIFIED]:** published shyftplan AI scheduling and UKG Shiftboard qualified backfill/replanning set the workflow bar; Google Workforce Scheduling API supplies the formal reference. Exact matching and refusal within the narrower declared problem were verified locally, not in a vendor environment. No full-system parity or field-speed claim.
+
+**One focused pass, plus one targeted correction:** `station-single-absence`, `station-coverage` and `station-window-enables` — **63/64** initially, with three pre-existing schema/CSV catalog pins excluded. The sole failing fixture declared bare matrix ID pairs; the canonical loader correctly requires kind and dates. Added those fields and reran only that case, **1/1 PASS**. Independent exhaustive oracle over 2,048 combinations; real guarded availability write → persisted reload → computed outcome and exact JSDOM/CSV figures; no derived write-back; refusals, floor, matrix membership and adjacent coverage, write doors and prerequisites. Changed-file ESLint and `check:boundary` pass. Full suite, real browser, assistive technology and vendor trials **[UNVERIFIED]**; inherited stale pins not repaired.
+
+**Asset:** no new image or onboarding asset — the visual and brief are live, deterministic report output. Higgsfield connector lookup returned `unsupported`; no substitute or placeholder added. Delivery result reported in the session response.
+
 ## 2026-11-17 — Commitment timing source-identity integrity
 
 Doctrine exists and all four binding mandates confirmed. Origin matches shahramclaude/Leados (canonical HTTPS remote with .git suffix). Worked only on arena/896b27fd-leados. Read NORTH_STAR, ROADMAP and recent log entries; spot-checked the maturity reader, panel, tests and README.

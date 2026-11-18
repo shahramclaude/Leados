@@ -1,3 +1,8 @@
+## 2026-11-18 · Single-absence station coverage
+
+- Added a pre-shift single-absence check under **Standard Work → Stations**, with a worst-case staffing bottleneck and a separate missing-evidence outcome.
+- Added aggregate outcome counts to the existing Stations brief and CSV; stopped including window labels in CSV refusal text. No migration or new automation.
+
 ## 2026-11-17 · Session 320: The one safety control administered by the person it protects ([ADR-0242](./docs/adr/0242-lone-working-welfare-check-register.md) · Schema v196 · `RULE-LWK-01` · CSV #183)
 
 - **Discipline.** Schema v195 → v196 adds four collections that are **empty at upgrade** (`lwkDeployments`, `lwkCheckins`, `lwkEscalations`, `lwkMarkers`), three bounded conventions and a `195 → 196` migration. A roster shift is not a deployment and ADR-0241's `lone-work` restriction is not a monitored deployment; nothing is inferred, and every unreadable row is dropped with a counted warning rather than repaired.
