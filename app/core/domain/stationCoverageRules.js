@@ -239,7 +239,7 @@ export function stationCoverageRule(draft, ctx = {}) {
 
   let report;
   try {
-    report = buildStationCoverage(draft, { now, settings: { ...(draft.settings || {}), activeSeatId: null }, seat: null });
+    report = buildStationCoverage(draft, { now, seat: null, includeAbsenceCheck: false });
   } catch {
     return [];
   }

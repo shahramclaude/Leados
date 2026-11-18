@@ -1,3 +1,9 @@
+## 2026-11-18 — Check cover before one absence stops the shift
+
+In **Standard Work → Stations** (`#/standard-work?panel=stations`), **Can these stations cover one absence?** checks current and upcoming windows that have at least two simultaneous stations. It removes one declared candidate at a time and rematches remaining qualified, available people to the recorded demand. Two stations can each look covered and still rely on the same two people; this checks them together. A person on two reporting lines is counted once.
+
+The window holder can open **See the staffing proof** for the exact scenario counts and the stations limiting the worst recorded case. Missing availability can leave a result **Not proven**, never an invented absence. Directors and executives see window outcomes within their scope, subject to the disclosure floor. The station brief and aggregate CSV use the same results. The check does not schedule anyone, establish attendance, or model sequential work or failures across multiple windows. [Method and limits](docs/adr/0251-station-single-absence-check.md).
+
 ## 2026-11-17 — The reserve was a number somebody typed, and the provision is a judgement somebody has to make
 
 **CEO / C-suite finance → Provision & reimbursement** (`#/provisions`, [ADR-0250](./docs/adr/0250-provision-reimbursement-register.md), Schema v204, CSV #191, `RULE-PROV-01`) is the register for what the organisation must carry on the balance sheet for each obligation, what it may recognize as a reimbursement asset against it, and whether the figure finance carries agrees with the figure the record supports. The workspace could already store a claim's gross exposure and an insurance policy's verified recovery; it could not say what must be provided, what is only disclosed, or what the net exposure is.

@@ -62,7 +62,10 @@ import { dayKey } from '../time.js';
 import { LEADER_ID } from './chain.js';
 import { buildMatrix, matrixJointApex } from './matrix.js';
 import { normalizeSkillTasks, normalizeSkillActs } from './skillCoverageSchema.js';
+import { maxFlowInt } from './stationCoverageFlow.js';
+import { buildStationAbsenceCheck } from './stationCoverageContingency.js';
 import {
+  STATION_ABSENCE_STATES,
   STATION_COVERAGE_ENGINE_VERSION,
   STATION_COVERAGE_FEED_RELATIONS,
   STATION_COVERAGE_FEED_STATUSES,
@@ -93,64 +96,6 @@ const FEED_STATUS = byKey(STATION_COVERAGE_FEED_STATUSES);
 // hiding every subordinate's windows from the roll-up. Accept both.
 const list = (v) => (Array.isArray(v) ? v : v instanceof Set ? [...v] : []);
 const round1 = (n) => Math.round(n * 10) / 10;
-
-/* ------------------------------------------------------- exact integer flow */
-
-/**
- * Dinic's algorithm over an integer network. Returns the flow value and the set
- * of node indices reachable from the source in the residual graph — the latter
- * is the min-cut, and it is what makes the deficient set a proof rather than a
- * guess. All capacities are integers, so no rounding enters the arithmetic.
- */
-function maxFlowInt(n, edges, source, sink) {
-  const to = [];
-  const cap = [];
-  const next = Array.from({ length: n }, () => []);
-  const add = (u, v, c) => {
-    next[u].push(to.length); to.push(v); cap.push(c);
-    next[v].push(to.length); to.push(u); cap.push(0);
-  };
-  for (const [u, v, c] of edges) if (c > 0) add(u, v, c);
-  const level = new Int32Array(n);
-  const iter = new Int32Array(n);
-  let flow = 0;
-  for (;;) {
-    level.fill(-1);
-    level[source] = 0;
-    const queue = [source];
-    for (let head = 0; head < queue.length; head += 1) {
-      const u = queue[head];
-      for (const e of next[u]) if (cap[e] > 0 && level[to[e]] < 0) { level[to[e]] = level[u] + 1; queue.push(to[e]); }
-    }
-    if (level[sink] < 0) break;
-    iter.fill(0);
-    const dfs = (u, limit) => {
-      if (u === sink) return limit;
-      for (; iter[u] < next[u].length; iter[u] += 1) {
-        const e = next[u][iter[u]];
-        const v = to[e];
-        if (cap[e] <= 0 || level[v] !== level[u] + 1) continue;
-        const pushed = dfs(v, Math.min(limit, cap[e]));
-        if (pushed > 0) { cap[e] -= pushed; cap[e ^ 1] += pushed; return pushed; }
-      }
-      return 0;
-    };
-    for (;;) {
-      const pushed = dfs(source, Number.MAX_SAFE_INTEGER);
-      if (pushed <= 0) break;
-      flow += pushed;
-    }
-  }
-  // Residual reachability from the source — the source side of the min cut.
-  const seen = new Uint8Array(n);
-  seen[source] = 1;
-  const stack = [source];
-  while (stack.length) {
-    const u = stack.pop();
-    for (const e of next[u]) if (cap[e] > 0 && !seen[to[e]]) { seen[to[e]] = 1; stack.push(to[e]); }
-  }
-  return { flow, reachable: seen };
-}
 
 /* -------------------------------------------------- precedence: exact SCC */
 
@@ -272,7 +217,7 @@ function availabilityFor(rows, personId, window) {
 
 /* -------------------------------------------------------------------- reader */
 
-export function buildStationCoverage(state, { now = new Date(), seat = null } = {}) {
+export function buildStationCoverage(state, { now = new Date(), seat = null, includeAbsenceCheck = true } = {}) {
   const today = dayKey(now) || new Date(now).toISOString().slice(0, 10);
   const matrix = buildMatrix(state, { now, settings: state?.settings || null });
   const conv = normalizeStationCoverageSettings(state?.settings || {});
@@ -1065,6 +1010,9 @@ export function buildStationCoverage(state, { now = new Date(), seat = null } = 
     spans,
     totals,
     claims,
+    singleAbsence: includeAbsenceCheck ? buildStationAbsenceCheck({
+      windowRows, windows, tasks, acts, poolOf, availability, nowIso: now.toISOString(), clean, floorN,
+    }) : null,
     canDeclare,
     canDeclareAvailability: !seat?.readOnly && clean,
     canDeclareWindowEnable,
@@ -1081,6 +1029,7 @@ const yesNo = (v) => (v ? 'yes' : 'no');
 export function stationCoverageCsvRows(report) {
   const t = report.totals;
   const common = { generated_on: report.today, engine_version: report.engineVersion };
+  const absence = report.singleAbsence;
   const rows = [{
     row_type: 'workspace',
     key: report.scope,
@@ -1104,13 +1053,23 @@ export function stationCoverageCsvRows(report) {
     witness_complete: yesNo(report.claims.figuresComplete),
     counts_reconcile: yesNo(report.claims.countsReconcile), figures_complete: yesNo(report.claims.figuresComplete),
     orders_complete: yesNo(report.claims.ordersComplete),
-    claim_reason: report.claims.reasons.join(' | '),
+    // The on-screen reasons can contain window labels and station titles.
+    claim_reason: [
+      ...(!report.claims.figuresComplete ? ['Some coverage or prerequisite evidence is incomplete; review the Stations panel.'] : []),
+      ...(!report.claims.ordersComplete ? ['Not all prerequisite orders are proven by the calendar.'] : []),
+    ].join(' '),
+    absence_windows_n: blank(absence?.windowsN),
+    absence_counts_reconcile: absence ? yesNo(absence.countsReconcile) : '',
+    absence_evidence_complete: absence ? yesNo(absence.evidenceComplete) : '',
   }];
   for (const v of STATION_COVERAGE_VERDICTS) {
     rows.push({ row_type: 'window-verdict', key: v.key, label: v.label, ...common, feasible_windows_n: t.verdictCounts[v.key] });
   }
   for (const s of STATION_COVERAGE_STATION_STATES) {
     rows.push({ row_type: 'station-state', key: s.key, label: s.label, ...common, station_state_n: t.stationStateCounts[s.key] });
+  }
+  if (absence) for (const { key, label } of STATION_ABSENCE_STATES) {
+    rows.push({ row_type: 'single-absence-status', key, label, ...common, absence_windows_n: absence.counts[key] });
   }
   return rows;
 }
@@ -1129,8 +1088,15 @@ export function stationCoverageBriefText(report) {
     `Deficient sets found: ${t.deficientSetsN} · largest exact deficit: ${t.maxDeficitN} · precedence cycles: ${t.precedenceCyclesN} (${t.unsatisfiableCyclesN} unsatisfiable, ${t.coRequisiteLoopsN} co-requisite)`,
     '',
   ];
+  if (report.singleAbsence) {
+    const { windowsN, counts } = report.singleAbsence;
+    lines.push(`Single-absence check (${windowsN} live window(s)): ${STATION_ABSENCE_STATES.map(({ key, label }) => `${label}: ${counts[key]}`).join(' · ')}`, '');
+  }
+  const absenceByWindow = new Map((report.singleAbsence?.rows || []).map((r) => [r.windowId, r]));
   for (const row of report.windows) {
+    const absence = absenceByWindow.get(row.windowId);
     lines.push(`— ${row.label} (${row.fromDay} → ${row.toDay}) · ${row.verdictLabel}`);
+    if (absence) lines.push(`   single absence — ${STATION_ABSENCE_STATES.find(({ key }) => key === absence.status).label}: ${absence.reason}`);
     if (row.matching) lines.push(`   demand ${row.matching.totalDemand} · matched ${row.matching.matchedN} · ${row.matching.peopleN} candidate(s) with ${row.matching.capacityN} declared concurrent capacity`);
     if (row.precedence.declaredN) {
       lines.push(`   enabling declarations: ${row.precedence.liveN} live${row.precedence.retiredN ? ` (${row.precedence.retiredN} retired, retained)` : ''} · cycles: ${row.precedence.cycles.length} (${row.precedence.unsatisfiableCyclesN} unsatisfiable, ${row.precedence.coRequisiteLoopsN} co-requisite)${row.precedence.danglingN ? ` · ${row.precedence.danglingN} pointing at a retired station (carried as order, no effect)` : ''}`);

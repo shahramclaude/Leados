@@ -28,13 +28,13 @@ const LEDGERS = ['stationWindows', 'skillStations', 'stationAvailability', 'stat
 
 export function createStationCoverageActions(store, { now, idFactory }) {
   const fail = (error) => ({ ok: false, error });
-  function context(right) {
+  function context(right, { includeAbsenceCheck = false } = {}) {
     const at = new Date(now());
     const lineScope = matrixLineScopeFor(store.state, { now: at, settings: store.state.settings });
     const seat = activeSeat(buildSeats(store.state, { now: at, settings: store.state.settings, lineScope }));
     const verdict = canAct(right, seat);
     if (seat.readOnly || !verdict.allow) return fail(verdict.reason || 'Resolve the operating seat first.');
-    const report = buildStationCoverage(store.state, { now: at, seat });
+    const report = buildStationCoverage(store.state, { now: at, seat, includeAbsenceCheck });
     return { ok: true, at, seat, report, actorId: seat.fullAccess ? LEADER_ID : seat.nodeId || seat.id };
   }
   function save(collection, row, type, summary) {
@@ -53,16 +53,18 @@ export function createStationCoverageActions(store, { now, idFactory }) {
   }
   return {
     stationCoverageReport() {
-      const c = context('read-station-coverage');
-      return c.ok ? { ok: true, report: c.report } : c;
+      const c = context('read-station-coverage', { includeAbsenceCheck: true });
+      if (!c.ok) return c;
+      const { internal, ...report } = c.report;
+      return { ok: true, report };
     },
     /** The SAME report the panel prints, serialised — never a second computation. */
     stationCoverageCsvRows() {
-      const c = context('read-station-coverage');
+      const c = context('read-station-coverage', { includeAbsenceCheck: true });
       return c.ok ? { ok: true, rows: stationCoverageCsvRows(c.report) } : c;
     },
     stationCoverageBriefText() {
-      const c = context('read-station-coverage');
+      const c = context('read-station-coverage', { includeAbsenceCheck: true });
       return c.ok ? { ok: true, text: stationCoverageBriefText(c.report) } : c;
     },
     stationCoverageDeclareWindow(input = {}) {
