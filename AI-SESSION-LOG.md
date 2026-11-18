@@ -1,3 +1,19 @@
+## 2026-11-18 — Lone-working open-overrun declaration guard
+
+**Doctrine and sync:** NORTH_STAR exists and all four required mandates are present. Fetch and push `origin` are the equivalent `https://github.com/shahramclaude/Leados.git`. Branch `arena/42fed352-leados`, base `bb6f62b71a55ac7579f9751efdd7bea9df56179b`.
+
+**Built:** a bounded guard for frontline / mid-manager × single-chain and matrix: the same person cannot be declared later while an earlier deployment remains open merely because its expected end passed. The refusal describes uncertainty rather than claiming actual overlap, and asks for the real close. Known overlap still reports exact duration; a closed deployment is bounded by its actual close. No schema or roll-up changes.
+
+**Gap hunt:** respirator fit-test and model-specific eligibility, planned and unbuilt in ROADMAP. Targeted searches found no such workflow; repository-wide absence **[UNVERIFIED]**. Framework: respiratory protection / hierarchy of controls, jurisdiction-specific requirements declared rather than invented.
+
+**Benchmark [BENCHMARK-UNVERIFIED]:** Blackline Safety G7 documents connected missed-check-in, fall/no-motion and emergency alerts (https://www.blacklinesafety.com/safety-solutions/lone-worker). This local guard is not a live safety service and cannot match those capabilities; the vendor's overlap behavior and specialized AI parity were not tested. No visual/onboarding asset needed.
+
+**Focused verification:** `node --test tests/app/lone-working.test.mjs` 33/33. The first run was 32/33 because the selected secondary-line holder was not a valid leadership seat; changed the fixture to the common manager and reran once. Tests cover no-write refusals, exact close and new start in persisted data, existing displayed/computed figures, and related lone-working behavior. A direct single-chain scenario, real-browser/AT walk-through, full suite and standalone distribution **[UNVERIFIED]**.
+
+**Remaining In Progress:** backfilled earlier open deployments can precede an existing deployment without proof of their real close; imported overlapping records and contradictory later close-outs are not audited. Future starts are not supported. This is not live monitoring, an emergency service, or a substitute for site procedures. Next: address these historical consistency gaps for frontline / mid-manager.
+
+---
+
 ## 2026-11-18 — Fair-Process Discipline & Grievance Register (ADR-0254, Schema v207, `#/fair-process`, CSV #193, `RULE-DGI-01`)
 
 **Branch** `arena/f9c81227-leados`, based at `7fb7888c508dd0411d22bab0211c45c01c991ac0` (= `origin/main`). **Doctrine:** PASS — `NORTH_STAR.md` present with all four mandates (Matrix Leadership, Bulletproof Reliability, Visual/Content Integrity, Competitive Benchmark); no amendment needed. **Sync:** PASS — fetch and push remotes both `https://github.com/shahramclaude/Leados`.
