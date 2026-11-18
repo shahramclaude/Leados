@@ -243,7 +243,7 @@ const rowOf = (state, caseId = 'case-1') => buildProductNonconformance(state, { 
 
 test('schema v206 is additive: six empty ledgers, one declared switch, nothing inferred', () => {
   const empty = createEmptyState(T0);
-  assert.equal(SCHEMA_VERSION, 207, 'ADR-0254 (fair process) is the current head');
+  assert.equal(SCHEMA_VERSION, 208, 'ADR-0255 (service error budget) is the current head');
   for (const key of ['qncCases', 'qncContainments', 'qncDecisions', 'qncDispositionActs', 'qncVerifications', 'qncMarkers']) {
     assert.ok(COLLECTIONS.includes(key), `${key} is a declared collection`);
     assert.deepEqual(empty[key], [], `${key} starts empty`);
@@ -257,7 +257,7 @@ test('schema v206 is additive: six empty ledgers, one declared switch, nothing i
   const previous = { ...createEmptyState(T0), schemaVersion: 205 };
   for (const key of ['qncCases', 'qncContainments', 'qncDecisions', 'qncDispositionActs', 'qncVerifications', 'qncMarkers']) delete previous[key];
   const { raw, applied } = migrate(previous);
-  assert.deepEqual(applied, ['205 → 206', '206 → 207'], 'ADR-0254 follows this step; the v206 step still runs exactly once');
+  assert.deepEqual(applied, ['205 → 206', '206 → 207', '207 → 208'], 'The v206 step still runs once before the subsequent steps');
   assert.equal(raw.schemaVersion, SCHEMA_VERSION);
   for (const key of ['qncCases', 'qncContainments', 'qncDecisions', 'qncDispositionActs', 'qncVerifications', 'qncMarkers']) {
     assert.deepEqual(raw[key], [], 'nothing is manufactured at upgrade time');

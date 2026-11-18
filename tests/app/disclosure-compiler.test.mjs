@@ -126,7 +126,7 @@ const RENDERER_ROUTES = [
   // retaining them here makes the catalogue assertion cover the live shell,
   // rather than an older pre-ADR-0141/0142/0143 route list.
   'benchEvidence', 'contradiction', 'arbitration',
-  'instrument-lookback',
+  'instrument-lookback', 'service-error-budget',
   // ADR-0254: the Fair-Process Discipline & Grievance Register declares its own
   // manifest row (individual class, adapter-scoped, detail ceiling 2), so the
   // catalogue and the shell stay one route for one route. A route with no
@@ -229,7 +229,7 @@ function seatsOrThrow(state) {
 /* --------------------------------------------------------------- 1. schema */
 
 test('schema v90 migrates additively and refuses malformed or stale grants', () => {
-  assert.equal(SCHEMA_VERSION, 207, 'ADR-0254 (fair process) is the current head');
+  assert.equal(SCHEMA_VERSION, 208, 'ADR-0255 (service error budget) is the current head');
   // This pin follows the head; the v90 step this test actually proves is below.
   const old = { schemaVersion: 89, settings: { leaderName: 'Keep' }, cases: [{ id: 'keep' }], disclosureGrants: [{ id: 'existing' }] };
   const migrated = migrate(old);

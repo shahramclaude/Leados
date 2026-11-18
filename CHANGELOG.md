@@ -1,3 +1,8 @@
+## 2026-11-18 · Closed-window service error-budget evidence
+
+- Added **Service error budget** for portfolio seats that reach all named service stewards. Preview, record, reopen and export exact window counts and a refusal-aware numeric receipt from local CSV/TSV evidence.
+- Schema v208 adds an empty evidence ledger. No incident reinterpretation, no monitoring or automatic deployment decision. [ADR-0255](docs/adr/0255-service-error-budget-evidence.md).
+
 ## 2026-11-18 · Identify decisions to review after a gauge failure
 
 - Added **Instrument look-back**, with local extract import, source reconciliation, first-person workpapers and a tier-scoped review list. A missing link or unproved total is shown explicitly.

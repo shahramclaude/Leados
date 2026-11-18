@@ -1,3 +1,19 @@
+## 2026-11-18 — Closed-window service error budget
+
+**Doctrine / sync:** NORTH_STAR and all four binding mandates present; no amendment. Fetch and push origin match https://github.com/shahramclaude/Leados (canonical .git suffix). Branch `arena/fa34b528-leados`, base `36f579da07673c0d9f576e0e60156c3b3f0c5d98`. Read recent roadmap/log entries and inspected incident, reliability, disclosure, matrix and persistence boundaries.
+
+**Built / why:** [ADR-0255](docs/adr/0255-service-error-budget-evidence.md), `#/service-error-budget`: a release reviewer can distinguish a supported service-objective result from an incomplete record. Preview a local UTC CSV/TSV, match separate good/eligible controls, append and reopen a dated workpaper, and export the same numeric receipt. Exact fixed-population headroom/overspend and rational ratios, with coverage, arithmetic and control agreement separate. v208 holds evidence only. No new rules or release acts. Director / VP primary × single-chain and matrix; CEO review across all stewards in reach; no frontline/mid-manager portfolio access. No assigned or inferred single owner.
+
+**Gap hunt / next:** logged repeat customer demand / first-contact cohort reconciliation (frontline / mid-manager / director × both structures) as Planned, not built. Targeted absence only; wider absence **[UNVERIFIED]**. The prior lone-working historical consistency gap stays the next operational safety priority. Live/rolling SLO monitoring, multiwindow alerts and exception/release workflow remain **In Progress** and unimplemented.
+
+**Benchmark and assets:** Google SRE policy and Dynatrace request-based SLOs establish the rate/budget bar. Davis AI adds live attribution and prediction, which this local workpaper does not do. Same-input vendor parity **[BENCHMARK-UNVERIFIED]**; see [research](RESEARCH.md). No illustrative or onboarding asset required. Higgsfield lookup returned `unsupported`; the screen only renders supplied evidence and calculated values, with no placeholder data.
+
+**Focused verification:** 22/23 initially; one test attempted the inherited Incident Command route from a declared seat without a manifest. One fixture correction (operator for Incidents, then director for the new workpaper) and a matching change to avoid offering a withheld route; the single targeted retry passed. The tests cover preview without storage writes, immutable audit capture, reload, every printed receipt and daily value in the shell scenario, CSV equality, partial and expired reach, ambiguous imports, durable versus memory-only writes, and 833 small-population checks against an independent enumeration. Changed-file ESLint and `npm run check:boundary` passed. Full canonical suite/CI, real browsers, assistive technology, encrypted durability, direct CEO scenario and production-vendor datasets **[UNVERIFIED]**. Source app only; the standalone artifact was not rebuilt.
+
+**Delivery:** actual push and PR result are reported in the session response.
+
+---
+
 ## 2026-11-18 — Lone-working open-overrun declaration guard
 
 **Doctrine and sync:** NORTH_STAR exists and all four required mandates are present. Fetch and push `origin` are the equivalent `https://github.com/shahramclaude/Leados.git`. Branch `arena/42fed352-leados`, base `bb6f62b71a55ac7579f9751efdd7bea9df56179b`.

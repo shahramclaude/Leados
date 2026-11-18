@@ -205,6 +205,7 @@ export const RECORD_POLICIES = Object.freeze({
   workNightMarkers: { classKey: 'unit', detailCeiling: 0, label: 'Night-work breach observation markers', route: '#/standard-work?panel=night' },
   // ADR-0252: the source extract belongs to the preparer; only its scoped reader discloses a worklist.
   instrumentLookbacks: { classKey: 'unit', detailCeiling: 0, reportOnly: true, label: 'Instrument-use look-back workpapers (report only)', route: '#/instrument-lookback' },
+  serviceBudgets: { classKey: 'portfolio', detailCeiling: 0, reportOnly: true, label: 'Service error-budget workpapers (report only)', route: '#/service-error-budget' },
   // ADR-0210: report-only, like every governance ledger above. An interest names
   // a person and a record; the raw rows are never handed to the generic
   // projection. The register's own reader discloses a person to the seat whose
@@ -733,7 +734,7 @@ const PORTFOLIO_ROUTES = Object.freeze([
   // minRank 3) and the disclosure manifest both withhold. The floor now matches the
   // declared right: a rank-1 or rank-2 seat is told the floor instead of an empty
   // register.
-  'provisions',
+  'provisions', 'service-error-budget',
 ]);
 const ENTERPRISE_ROUTES = Object.freeze([
   // Pay, workforce shape and board-reported statistical audit claims. Capital
@@ -1502,6 +1503,8 @@ export const ACTION_RIGHTS = Object.freeze({
   // strict reach above every line lead, only the holder may hand over or release)
   // are re-proved inside each action against the reporting graph, because rank
   // alone cannot say who is on a bridge.
+  'read-service-budget': { minRank: 3, maxRank: 5, label: 'Read closed-window service error-budget evidence across the stewards you reach' },
+  'record-service-budget': { minRank: 3, maxRank: 5, label: 'Record reconciled service evidence without authorizing a release' },
   'read-incidents': { minRank: 1, maxRank: 5, label: 'Read the incident command register within your grant — the incidents you declared or command, the response lines you lead, and the span that holds them' },
   'command-incidents': { minRank: 2, maxRank: 5, label: 'Declare an incident against a written criterion, staff its response lines, take and hand over command, record notifications against their declared clocks, change severity, resolve and stand command down, and set the register’s conventions' },
   // ADR-0241 (Schema v195). Two rights, and the split is the moral centre of the

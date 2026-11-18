@@ -121,7 +121,7 @@ function parseCsv(csv) {
 // workspace at the current version, rather than pinning the whole suite to the
 // version ADR-0228 happened to ship at.
 test('domain sense: the v186 step adds two empty ledgers, the spine carries ADR-0232 as well, and CSV #174 is registered', () => {
-  assert.equal(SCHEMA_VERSION, 207, 'ADR-0254 (fair process) is the current head');
+  assert.equal(SCHEMA_VERSION, 208, 'ADR-0255 (service error budget) is the current head');
   for (const key of ['domainDecisions', 'domainSenseActs']) {
     assert.ok(COLLECTIONS.includes(key), `${key} is declared`);
   }

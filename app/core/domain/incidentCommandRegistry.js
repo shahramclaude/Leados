@@ -94,9 +94,8 @@
  *   - It does not decide severity. The declaring seat declares it against a
  *     written criterion, and the register prints the criterion beside it.
  *   - It is not incident analytics: no MTTR, no MTTA, no SLO, no burn rate. The
- *     workspace's own survival, tempo and reliability modules own those
- *     questions over the whole record; this register owns the command record of
- *     one incident.
+ *     service error-budget workpaper (ADR-0255) reads separate request telemetry.
+ *     This register owns the command record of one incident, not service telemetry.
  *   - It never rates, ranks or shames a responder. Blamelessness is enforced by
  *     construction: there is no field on a line that names a person as a cause.
  */
@@ -483,7 +482,7 @@ export const MIC_METHOD = Object.freeze({
     'No paging, notification, escalation or status-page delivery of any kind. The register records what a human says they did, with a reference; it sends nothing.',
     'No legal clock library and no jurisdiction logic. The 72-hour and 24-hour periods appear as the duty being recorded, never as defaults.',
     'No severity decision by the register. The declaring seat declares against a written criterion and the criterion is printed beside it.',
-    'No MTTR, MTTA, SLO, error budget or burn-rate computation. The workspace’s survival, tempo and reliability modules own those questions.',
+    'No MTTR, MTTA, SLO, error budget or burn-rate computation. Customer-facing error budgets use separate request telemetry at #/service-error-budget.',
     'No rating, ranking or shaming of any person, team or line. There is no per-person response metric on this register.',
     'No content authoring: the register holds that a party was told, under a reference — not the text of what they were told.',
   ]),

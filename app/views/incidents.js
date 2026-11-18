@@ -637,6 +637,8 @@ export function renderIncidents(ctx) {
     button('Close incident', () => resolveDialog(ctx, report, onDone)),
     button('Stand down', () => standDownDialog(ctx, report, onDone)),
     button('Severity', () => severityDialog(ctx, report, onDone)),
+    (!ctx.seatContext?.seat || ctx.seatContext.seat.rank >= 3)
+      ? h('a', { class: 'btn btn-small btn-ghost', href: '#/service-error-budget' }, 'Review service error budget') : null,
   ];
 
   return h('div', { class: 'page', 'data-testid': 'incident-command-panel' },

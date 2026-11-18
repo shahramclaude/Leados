@@ -156,6 +156,7 @@ import { createProvisionActions } from './core/domain/prvActions.js';
 // and seat-checked reads. Declaring, staffing, commanding, notifying, resolving
 // and standing down — nothing else.
 import { createIncidentCommandActions } from './core/domain/incidentCommandActions.js';
+import { createServiceBudgetActions } from './core/domain/serviceBudgetActions.js';
 import { createIncentiveActions } from './core/domain/incentiveActions.js';
 import { createDutyMeansActions } from './core/domain/dutyMeansActions.js';
 import { createPortfolioReviewActions } from './core/domain/portfolioReviewActions.js';
@@ -20452,6 +20453,7 @@ export function createApi(store, options = {}) {
   Object.assign(api, createProvisionActions(store, { now: clock, idFactory: id }));
   // ADR-0240: the incident command register's commands.
   Object.assign(api, createIncidentCommandActions(store, { now: clock, idFactory: id }));
+  Object.assign(api, createServiceBudgetActions(store, { now: clock, idFactory: id }));
   // ADR-0220: the variable-pay design & incentive integrity register's commands.
   Object.assign(api, createIncentiveActions(store, { now: clock, idFactory: id }));
   // ADR-0221: the Duty-Without-Means Register's commands and seat-checked reads.

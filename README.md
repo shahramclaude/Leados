@@ -1,3 +1,9 @@
+## 2026-11-18 — Check service error headroom before a release review
+
+**Director / VP → Service error budget** (`#/service-error-budget`, [ADR-0255](docs/adr/0255-service-error-budget-evidence.md)). From a declared operating seat, select **Review a window**. Enter the service objective, a closed UTC window and its evidence references. Paste or open CSV/TSV with `day,good_events,total_events`; supply separately obtained good and eligible control totals for the same window. Preview first, then record and reopen. A reviewer must reach every named service steward, including active matrix lines.
+
+The workpaper shows exact observed events, whole errors allowed, headroom or excess, and why a missing day, mismatched control or zero denominator withholds a result. The numeric CSV contains the same values and omits source and person references. It does not monitor a service, predict failures or authorize deployment.
+
 ## 2026-11-18 — A disciplinary case you can prove was fair, from its own record
 
 Open **Fair process & discipline** (`#/fair-process`, [ADR-0254](./docs/adr/0254-fair-process-discipline-grievance-register.md), Schema v207, CSV #193, `RULE-DGI-01`) when a conduct, capability or grievance case has to be run properly on a named person.

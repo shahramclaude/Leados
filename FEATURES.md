@@ -1,3 +1,7 @@
+## 2026-11-18 · Service error-budget workpapers ([ADR-0255](docs/adr/0255-service-error-budget-evidence.md))
+
+`#/service-error-budget` reconciles one closed UTC window of request counts with a separate good/eligible control, deriving exact whole-error allowance, headroom and burn. Closed dates, row uniqueness and all-steward matrix reach are enforced. Missing evidence withholds a verdict; workpapers and numeric receipts do not grant release authority.
+
 ## 2026-11-18 · Failed-instrument look-back ([ADR-0252](docs/adr/0252-instrument-use-lookback.md))
 
 `#/instrument-lookback` — trace a dated gauge failure to distinct inspection/release decisions using a local CSV/TSV extract. Preview, reconcile source controls, record and reopen the workpaper. Uncertain uses remain visible and an unsupported total is withheld. Named tier recipients get the review list, not unrelated source rows; receipt CSV is aggregate only. No disposition, automatic hold or retrospective product clearance.

@@ -32,6 +32,7 @@ import { WPA_RIGHTS } from './workplaceAdjustmentRegistry.js';
 import { LWK_RIGHTS } from './loneWorkingRegistry.js';
 import { VOI_RIGHTS } from './voiceRegistry.js';
 import { MIC_RIGHTS } from './incidentCommandRegistry.js';
+import { SERVICE_BUDGET_RIGHTS } from './serviceBudget.js';
 import { MAA_RIGHTS } from './mutualAidRegistry.js';
 import { DWL_RIGHTS } from './personalDealingRegistry.js';
 import { PTW_RIGHTS } from './permitToWorkRegistry.js';
@@ -365,6 +366,8 @@ const groups = [
   // above every line lead and the "only the holder may hand over or release" rule
   // are enforced inside the action against the live reporting graph.
   [MIC_RIGHTS.READ, 'incidentReport incidentAttentionCount incidentCandidates'],
+  [SERVICE_BUDGET_RIGHTS.READ, 'serviceBudgetIndex serviceBudgetRead'],
+  [SERVICE_BUDGET_RIGHTS.RECORD, 'serviceBudgetPreview serviceBudgetRecord'],
   [MIC_RIGHTS.COMMAND, 'incidentDeclare incidentAssignLine incidentAcceptLine incidentAssumeCommand incidentTransferCommand incidentChangeSeverity incidentRecordNotification incidentResolve incidentStandDown incidentSetConventions incidentScan'],
   // ADR-0244: the mutual-aid activation register. Reading is open at rank 1 —
   // every seat may see whether the workspace owes or is owed mutual aid and
@@ -1290,7 +1293,9 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // receives the people in its reporting tree or on a line it holds; everyone
 // else is a count. Breaks are disclosed only to a seat that holds the line.
 'workNightReport', 'workNightBriefText', 'workNightCsvRows', 'workNightAttentionCount',
-'standardWorkReport', 'standardWorkBriefText', 'standardWorkAttentionCount', 'standardWorkCandidates', 'instrumentLookbackIndex', 'instrumentLookbackRead', 'standardWorkOwnSlots']);
+'standardWorkReport', 'standardWorkBriefText', 'standardWorkAttentionCount', 'standardWorkCandidates', 'instrumentLookbackIndex', 'instrumentLookbackRead', 'standardWorkOwnSlots',
+// Both read adapters and the dry-run re-check rank and all-steward matrix reach.
+'serviceBudgetIndex', 'serviceBudgetRead', 'serviceBudgetPreview']);
 const refusal = (reason) => ({ ok: false, code: 'scope-refusal', error: reason, field: 'scope' });
 
 /** ADR-0087: under enforcement, boundary-management commands stay reachable
