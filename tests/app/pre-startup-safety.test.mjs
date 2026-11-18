@@ -246,7 +246,7 @@ function withDom(fn) {
 /* ------------------------------------------- 1. schema, spine & registration */
 
 test('schema v210 is additive, migration 209 → 210 invents zero records, and spine #167 / CSV #195 / manifest / pause switch are wired', () => {
-  assert.equal(SCHEMA_VERSION, 211);
+  assert.equal(SCHEMA_VERSION, 212);
   const empty = createEmptyState(T0);
   for (const key of PSR_KEYS) {
     assert.ok(COLLECTIONS.includes(key), `${key} declared in COLLECTIONS`);
@@ -268,14 +268,14 @@ test('schema v210 is additive, migration 209 → 210 invents zero records, and s
   };
   for (const key of PSR_KEYS) delete v209[key];
   const { raw, applied } = migrate(v209);
-  assert.deepEqual(applied, ['209 → 210', '210 → 211']);
+  assert.deepEqual(applied, ['209 → 210', '210 → 211', '211 → 212']);
   assert.equal(raw.schemaVersion, SCHEMA_VERSION);
   for (const key of PSR_KEYS) assert.deepEqual(raw[key], []);
   assert.equal(raw.ptwPermits[0].id, 'ptw-keep');
 
   // Spine #167, contract, pause switch, disclosure manifest, CSV #195, method diagram asset.
-  assert.equal(DEFAULT_POST_COMMIT_RULES.length, 167);
-  assert.equal(PROPAGATION_CONTRACTS.length, 167);
+  assert.equal(DEFAULT_POST_COMMIT_RULES.length, 168);
+  assert.equal(PROPAGATION_CONTRACTS.length, 168);
   const contract = PROPAGATION_CONTRACTS.find((c) => c.rule === psrRule);
   assert.ok(contract);
   assert.equal(contract.module, 'psrRules.js');
@@ -283,8 +283,9 @@ test('schema v210 is additive, migration 209 → 210 invents zero records, and s
   assert.ok(PAUSE_PERMIT_MATRIX_REACH_SWITCHES.includes(PSR_PAUSE_SWITCH));
   assert.equal(PAUSE_PERMIT_SWITCH_RULES[PSR_PAUSE_SWITCH], 'psrRules.js');
   assert.ok(MANIFEST_ROUTES.includes('pre-startup'));
-  assert.equal(CSV_EXPORTS.length, 195);
-  assert.equal(CSV_EXPORTS[CSV_EXPORTS.length - 1].key, PSR_CSV_SCOPE);
+  assert.equal(CSV_EXPORTS.length, 196);
+  assert.equal(CSV_EXPORTS[194].key, PSR_CSV_SCOPE, 'CSV #195 stays at its own index, and a later scope does not move it');
+  assert.equal(CSV_EXPORTS[195].key, 'modern-slavery-due-diligence', 'ADR-0260 appended #196 after this scope');
 
   const assetPath = path.resolve('app/assets/pre-startup-safety-method.jpg');
   assert.ok(fs.existsSync(assetPath), 'real method illustration asset present');

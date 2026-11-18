@@ -260,6 +260,10 @@ import { buildProvisions } from './domain/prvProvision.js';
 import { TAX_CSV_COLUMNS, TAX_CSV_DESCRIPTOR, TAX_CSV_SCOPE } from './domain/taxRegistry.js';
 import { taxCsvRows } from './domain/taxReport.js';
 import { buildTaxControversy } from './domain/taxControversy.js';
+// ADR-0260: identity-free modern-slavery due-diligence aggregates (CSV #196).
+import { MSA_CSV_COLUMNS, MSA_CSV_DESCRIPTOR, MSA_CSV_SCOPE } from './domain/msaRegistry.js';
+import { msaCsvRows } from './domain/msaReport.js';
+import { buildModernSlavery } from './domain/modernSlavery.js';
 // ADR-0258: identity-free pre-startup safety review aggregates (CSV #195).
 import { PSR_CSV_COLUMNS, PSR_CSV_DESCRIPTOR, PSR_CSV_SCOPE } from './domain/psrRegistry.js';
 import { psrCsvRows } from './domain/psrReport.js';
@@ -1868,6 +1872,12 @@ export const CSV_EXPORTS = [
   // identity-free privacy-floored counts with separate `balances` and `complete`
   // columns; zero unit names, review references, findings or people.
   PSR_CSV_DESCRIPTOR,
+  // #196 (ADR-0260): modern slavery & supply-chain due diligence —
+  // identity-free privacy-floored counts with the evidenced/missing split of the
+  // six content elements and the derived claim vocabulary; zero statement
+  // references, entities, suppliers, countries, findings, remediation acts,
+  // people or days.
+  MSA_CSV_DESCRIPTOR,
 ];
 
 function personLookup(state) {
@@ -7239,6 +7249,19 @@ export function buildScopeTable(state, scope, now) {
       return {
         columns: PSR_CSV_COLUMNS.map((key) => ({ key, header: key })),
         rows: psrCsvRows(report),
+      };
+    }
+    case MSA_CSV_SCOPE: {
+      // CSV scope #196 (ADR-0260, Schema v212). Built from the SAME reader the
+      // `#/modern-slavery` panel renders, with no seat: every figure is a count
+      // or a published-vocabulary key, so no statement reference, entity,
+      // supplier, country, finding, remediation, person, manager, reference or
+      // day is reachable. A per-state count below the declared floor exports
+      // BLANK with its reason.
+      const report = buildModernSlavery(state, { now, settings: state.settings || {}, seat: null });
+      return {
+        columns: MSA_CSV_COLUMNS.map((key) => ({ key, header: key })),
+        rows: msaCsvRows(report),
       };
     }
     case QNC_CSV_SCOPE: {

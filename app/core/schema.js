@@ -627,6 +627,25 @@ import {
   normalizeTaxResolutions,
   normalizeTaxSettings,
 } from './domain/taxSchema.js';
+// ADR-0260 (Schema v212): the Modern Slavery & Supply-Chain Due-Diligence
+// Statement Register. Ten ledgers — the statement (entity, financial year as
+// declared, regime), the publication deadline with its written basis, the board
+// approval, the publication act, the declared supplier population, the dated
+// assessments, the findings, the remediation acts, the training records and the
+// rule's identity-free markers. Loaded fail-closed; nothing derived is stored.
+import {
+  normalizeMsaApprovals,
+  normalizeMsaAssessments,
+  normalizeMsaDeadlines,
+  normalizeMsaFindings,
+  normalizeMsaMarkers,
+  normalizeMsaPublications,
+  normalizeMsaRemediations,
+  normalizeMsaSettings,
+  normalizeMsaStatements,
+  normalizeMsaSuppliers,
+  normalizeMsaTraining,
+} from './domain/msaSchema.js';
 // ADR-0250 (Schema v204): the Provision & Reimbursement Register. Five ledgers —
 // the declared assessment (classification and best-estimate method), the
 // scenarios of an expected-value estimate, the reimbursement recognitions
@@ -1629,7 +1648,14 @@ export {
 // `psrStartups`, `psrMarkers`), all empty at upgrade. Nothing is inferred from
 // permits to work, stop-work holds, waivers or organisational change rows.
 // ADR-0259 (v211): one empty ledger of dated minimum-cash evidence revisions.
-export const SCHEMA_VERSION = 211;
+// ADR-0260 (v212): the Modern Slavery & Supply-Chain Due-Diligence Statement
+// Register — ten additive fail-closed ledgers (`msaStatements`, `msaDeadlines`,
+// `msaApprovals`, `msaPublications`, `msaSuppliers`, `msaAssessments`,
+// `msaFindings`, `msaRemediations`, `msaTraining`, `msaMarkers`), all empty at
+// upgrade. Nothing is inferred from a sourcing case, a contract, an audit kept
+// elsewhere or a published document: a statement is a dated statutory act and
+// its evidence is a chain of dated human declarations.
+export const SCHEMA_VERSION = 212;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -3159,6 +3185,14 @@ export const DEFAULT_SETTINGS = Object.freeze({
   // ADR-0258: pre-startup safety review conventions (privacy floor, temporary-
   // change revert warning horizon, and defaulted-ON RULE-PSR-01 switch).
   ...normalizePsrSettings({}),
+  // ADR-0260: the modern slavery statement register's conventions (privacy
+  // floor, assessment-cycle staleness, publication warning horizon and
+  // defaulted-ON RULE-MSA-01 switch). Note what is NOT here: a publication
+  // deadline. The window a statement must meet is a fact about its regime and
+  // financial year, declared per statement with its written basis — a workspace
+  // default would silently date a statutory duty against a calendar nobody
+  // cited.
+  ...normalizeMsaSettings({}),
   // ADR-0243: the employee-voice conventions — the reply window, the minutes
   // window, the privacy floor below which a per-state export is withheld, and the
   // rule switch. Note what is NOT here: a consultation period. The period a body
@@ -4481,6 +4515,23 @@ export const COLLECTIONS = [
   'psrAuthorisations',
   'psrStartups',
   'psrMarkers',
+  // ADR-0260 (Schema v212): the Modern Slavery & Supply-Chain Due-Diligence
+  // Statement Register. Ten fail-closed ledgers; zero stored states, element
+  // verdicts, claims or open counts. The statement, its deadline, the board
+  // approval and the publication are four separate dated acts; the supplier
+  // population, assessments, findings, remediation acts and training records
+  // are the evidence chain beneath them; the markers are the rule's own
+  // identity-free observations.
+  'msaStatements',
+  'msaDeadlines',
+  'msaApprovals',
+  'msaPublications',
+  'msaSuppliers',
+  'msaAssessments',
+  'msaFindings',
+  'msaRemediations',
+  'msaTraining',
+  'msaMarkers',
 ];
 
 /** Stable empty state. `now` is an ISO string so the result is a pure value. */
@@ -4832,6 +4883,17 @@ export function normalizeSettings(raw) {
     // and reload so `psrAutoPropagate`, `psrPrivacyFloor` and
     // `psrRevertHorizonDays` are never dropped.
     ...normalizePsrSettings(s),
+    // ADR-0260: the modern-slavery register conventions carried across every
+    // save and reload so `msaAutoPropagate`, `msaPrivacyFloor`,
+    // `msaWarnHorizonDays` and `msaAssessmentCycleDays` are never dropped. The
+    // rule switch is defaulted ON so a pause that hides an undeclared
+    // publication deadline, an overdue-unpublished statement, an evidenced gap
+    // or an open remediation is never the silent default. Note what is NOT
+    // here: a default publication deadline and no regime window. A deadline is
+    // a fact about one statement under one regime, declared by a named hand
+    // with the written basis that sets it; a workspace default would date a
+    // real statutory duty against a window nobody cited.
+    ...normalizeMsaSettings(s),
     // Repair of a standing red reported at base HEAD: two rule switches the
     // pause census maps were not carried in settings, so the only writes that
     // can silence those rules were refused as unknown keys. Declared here with
@@ -10307,6 +10369,23 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.psrAuthorisations = normalizePsrAuthorisations(raw.psrAuthorisations, state.psrReviews, warnings);
   state.psrStartups = normalizePsrStartups(raw.psrStartups, state.psrReviews, warnings);
   state.psrMarkers = normalizePsrMarkers(raw.psrMarkers, warnings);
+  // ADR-0260 (Schema v212): the modern-slavery register, loaded fail-closed in
+  // dependency order so every deadline, approval and publication verifies
+  // against a live statement, every assessment against a live statement AND a
+  // live supplier, every finding against a live assessment, and every
+  // remediation act against a live finding. A COMPLETE remediation act without
+  // its completed day and evidence reference is DROPPED: a closure nobody can
+  // prove is not a closure. Nothing derived is stored.
+  state.msaStatements = normalizeMsaStatements(raw.msaStatements, warnings);
+  state.msaDeadlines = normalizeMsaDeadlines(raw.msaDeadlines, state.msaStatements, warnings);
+  state.msaApprovals = normalizeMsaApprovals(raw.msaApprovals, state.msaStatements, warnings);
+  state.msaPublications = normalizeMsaPublications(raw.msaPublications, state.msaStatements, warnings);
+  state.msaSuppliers = normalizeMsaSuppliers(raw.msaSuppliers, warnings);
+  state.msaAssessments = normalizeMsaAssessments(raw.msaAssessments, state.msaStatements, state.msaSuppliers, warnings);
+  state.msaFindings = normalizeMsaFindings(raw.msaFindings, state.msaAssessments, warnings);
+  state.msaRemediations = normalizeMsaRemediations(raw.msaRemediations, state.msaFindings, warnings);
+  state.msaTraining = normalizeMsaTraining(raw.msaTraining, state.msaStatements, warnings);
+  state.msaMarkers = normalizeMsaMarkers(raw.msaMarkers, warnings);
   // ADR-0229 (Schema v182): a case, option, cost line or act that cannot be read
   // exactly is DROPPED with a counted warning — never repaired, re-termed,
   // re-priced or re-pointed at another case. A cost line that does not belong to
@@ -11217,6 +11296,32 @@ function normalizeScorecards(raw, state, now, warnings) {
 export const MIGRATIONS = {
   // 210 → 211: no cash, facility or authority is inferred from existing budgets.
   210: (v210) => ({ ...v210, schemaVersion: 211, cashCovenantTests: v210.cashCovenantTests === undefined ? [] : v210.cashCovenantTests }),
+  // 211 → 212: ADR-0260 adds TEN EMPTY ledgers (`msaStatements`,
+  // `msaDeadlines`, `msaApprovals`, `msaPublications`, `msaSuppliers`,
+  // `msaAssessments`, `msaFindings`, `msaRemediations`, `msaTraining`,
+  // `msaMarkers`) and the modern-slavery register's conventions. NOTHING is
+  // inferred from a sourcing case, a supplier contract, an audit report kept
+  // elsewhere, an authorisation or a published document: a statement is a
+  // dated statutory act, its deadline is a window a named hand cited, and its
+  // evidence is a chain of dated human declarations. Manufacturing a statement
+  // at upgrade time would put a statutory duty on the record that no board
+  // accepted; manufacturing a supplier population would describe a supply
+  // chain nobody declared.
+  211: (v211) => ({
+    ...v211,
+    schemaVersion: 212,
+    msaStatements: Array.isArray(v211.msaStatements) ? v211.msaStatements : [],
+    msaDeadlines: Array.isArray(v211.msaDeadlines) ? v211.msaDeadlines : [],
+    msaApprovals: Array.isArray(v211.msaApprovals) ? v211.msaApprovals : [],
+    msaPublications: Array.isArray(v211.msaPublications) ? v211.msaPublications : [],
+    msaSuppliers: Array.isArray(v211.msaSuppliers) ? v211.msaSuppliers : [],
+    msaAssessments: Array.isArray(v211.msaAssessments) ? v211.msaAssessments : [],
+    msaFindings: Array.isArray(v211.msaFindings) ? v211.msaFindings : [],
+    msaRemediations: Array.isArray(v211.msaRemediations) ? v211.msaRemediations : [],
+    msaTraining: Array.isArray(v211.msaTraining) ? v211.msaTraining : [],
+    msaMarkers: Array.isArray(v211.msaMarkers) ? v211.msaMarkers : [],
+    settings: { ...(v211.settings || {}), ...normalizeMsaSettings(v211.settings || {}) },
+  }),
   // 184 → 185: ADR-0227 adds THREE EMPTY ledgers (`suggestions`,
   // `suggestionActs`, `suggestionMarkers`) and the suggestion rule's pause. No
   // suggestion is inferred from a case, an incident, an after-action review or

@@ -198,6 +198,8 @@ import { provisionAttentionCount } from './core/domain/prvProvision.js';
 // ADR-0257: the tax controversy & appeal-control register.
 import { renderTax } from './views/tax.js';
 import { taxAttentionCount } from './core/domain/taxControversy.js';
+import { renderModernSlavery } from './views/modernSlavery.js';
+import { msaAttentionCount } from './core/domain/modernSlavery.js';
 // ADR-0258: the pre-startup safety review & commissioning readiness register.
 import { renderPreStartup } from './views/preStartup.js';
 import { psrAttentionCount } from './core/domain/psrSafety.js';
@@ -717,6 +719,18 @@ export const NAV = [
     // swing printed apart. Director/VP tax primary with CEO/CFO oversight; above
     // rank 3 the reader prints counts and withholds responsible hands.
     { route: 'tax', label: 'Tax controversy', icon: '⚖', badge: 'tax' },
+    // ADR-0260: the modern slavery & supply-chain due-diligence statement
+    // register — what the published statement says and what the record actually
+    // supports: the declared publication deadline with its written basis (never
+    // computed from the financial-year end), the board approval and the
+    // publication as two separate dated acts, the declared supplier population
+    // with unassessed suppliers printed, the dated assessments behind each of
+    // the six statutory content elements, the findings with an identified
+    // instance never blurred into a risk, and the remediation act that closes a
+    // finding only when it is evidenced. CEO / board primary with director / VP
+    // execution; above rank 4 the reader prints counts and withholds responsible
+    // hands and supplier detail.
+    { route: 'modern-slavery', label: 'Modern slavery', icon: '⛓', badge: 'modernSlavery' },
     // ADR-0253: what one identified manufactured lot or serial failed against, what
     // was actually done to hold it, who signed the disposition and whether a hand
     // strictly senior to the one that did the rework independently verified it. The
@@ -1010,6 +1024,7 @@ const RENDERERS = {
   provisions: (ctx) => renderProvisions(ctx),
   // ADR-0257: the tax controversy and appeal-control register.
   tax: (ctx) => renderTax(ctx),
+  'modern-slavery': (ctx) => renderModernSlavery(ctx),
   // ADR-0253: the product nonconformance and disposition register.
   nonconformance: (ctx) => renderProductNonconformance(ctx),
   // ADR-0254: the fair-process discipline and grievance register.
@@ -1317,6 +1332,12 @@ export function parseRoute(hash) {
     'assessment-notice': 'tax', 'tax-audit': 'tax', 'audit-query': 'tax',
     'disputed-position': 'tax', 'tax-filing': 'tax', 'tax-filings': 'tax',
     'tax-swing': 'tax',
+    'modern-slavery': 'modern-slavery', 'modernslavery': 'modern-slavery',
+    'slavery-statement': 'modern-slavery', 'slavery-statements': 'modern-slavery',
+    'modern-slavery-statement': 'modern-slavery', 'msa': 'modern-slavery',
+    'supply-chain-due-diligence': 'modern-slavery', 'due-diligence': 'modern-slavery',
+    'supply-chain': 'modern-slavery', 'forced-labour': 'modern-slavery',
+    'supply-chain-assessment': 'modern-slavery', 's54-statement': 'modern-slavery',
     // ADR-0148: the names a person types looking for "did anyone actually agree
     // to this share of me" / "who accepted this project line".
     'line-consent': 'matrix', consent: 'matrix', 'matrix-consent': 'matrix',
@@ -2111,6 +2132,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       // unresolved controversy — the same conditions RULE-TAX-01 files. A COUNT,
       // never a name.
       tax: taxAttentionCount(state, { now: at, settings: state.settings, seat: seatCtx?.seat || null }),
+      modernSlavery: msaAttentionCount(state, { now: at, settings: state.settings, seat: seatCtx?.seat || null }),
       // ADR-0258: unsafe energisation breaches, expired temporary modifications,
       // overdue Category B post-startup conditions, rejected gates, Category A
       // startup blockers, verified reviews awaiting joint-apex authorisation and
@@ -2733,6 +2755,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       claims: 'Claims & limitation — what is actually being asserted against us and how long we have: the document that started each clock, the accrual day and the written rule that makes it the right day (never the incident date by default), the declared limitation period and the base deadline, every PROVED suspension of the clock with its exact whole days and every allegation that moves nothing, the exact whole days remaining or the whole days a proved deadline ran over, whether the clock is provable at all (a matter with no readable accrual prints “clock unprovable” and NO day count), every reserve, offer, payment, cost and interest as its own dated instrument with exact minor-unit amounts, and the settlement authority computed above every responsible line across every line — with the exact gap printed where the number paid exceeded it',
       provisions: 'Provisions & reimbursement — what the organisation must carry on the balance sheet for each obligation and what it may recognize against it: the declared classification (probable, possible or remote — never inferred from an amount), the best-estimate method (the most likely outcome, or a probability-weighted expected value over declared scenarios whose probabilities must sum to exactly 100% and whose weighted sum must be a whole number of minor units, or the estimate is refused rather than rounded), the derived provision, the reimbursement asset recognized only when it is virtually certain and capped at the provision with the excess printed, the net exposure printed apart from both, and the reconciliation against the figure the finance seat declares it is carrying with the exact gap — with the responsible hands across every reporting line and the joint seat above them all',
       tax: 'Tax controversy & appeal control — what an authority has put in writing and what the organisation is doing about it: the notice reference, the disputed position and the jurisdiction AS DECLARED (the register holds no jurisdiction calendar and will never infer one from a label), the objection deadline a named hand declared WITH the written basis that sets its window (never computed from the notice day), the filings made against it with the authority receipt reference, the timeliness derived by comparing the two declared days (on time, late, or unprovable and printed as unprovable rather than assumed either way), the evidence packet bound to the disputed position with a filed-but-unpacketed notice flagged, the resolution with its closed-vocabulary outcome and the amount finally payable, and the swing between the disputed and the resolved figure printed apart from both — per currency, with the responsible hands across every reporting line and the joint seat above them all',
+      'modern-slavery': 'Modern slavery & supply-chain due diligence — what the published statement says and what its own record supports: the statement’s entity, financial year and regime as declared, the publication deadline a named hand declared WITH the written basis that sets its window (never computed from the financial-year end — the register holds no corporate calendar), the board approval and the publication as two separate dated acts, the declared supplier population with unassessed suppliers printed rather than silently absent, the dated assessments behind each of the six statutory content elements each printed as its own evidenced-or-missing verdict, the claim about identified instances DERIVED from the evidence and REFUSED where no assessment supports any claim, and the findings with their remediation acts where a plan never closes a finding — with the responsible hands across every reporting line and the joint seat above them all',
       nonconformance: 'Product nonconformance — one identified manufactured lot or serial at a time: the product, site, identifier kind and value, the written requirement and the finding with its source evidence; every containment attestation with its scope and written hold reference (the NEWEST attestation governs, so a later partial act leaves the case uncontained); the joint matrix apex the live graph resolves above every accountable hand, every signature in the current round, any disagreement and any route change; rework completion, an independent re-verification by a hand strictly senior to the one that did the rework, and the separate release; return and scrap as terminal non-release outcomes; and use-as-is only under a written concession reference with its own release act',
       insurance: 'Insurance & recovery — which policy answers for each claim, when the insurer must be told, whether it was told in time, and what the organisation actually carries: the declaration-page reference, the insurer, the class, the basis, the period, the limit, the deductible and the declared notification window (never a default), the trigger day and the derived deadline, whether the policy responds at all (a trigger day outside the period prints “no cover”), every notification with its day, method and reference (a late notification is kept as a breach fact), every recovery and denial as its own dated instrument with exact minor-unit amounts, and the derived net cost printed apart from the gross exposure and the recovery',
       authorisations: 'Statutory authorisations — which power to operate is held and whether it is in force at this instant: the issuing body and written instrument, the declared expiry against the effective expiry every granted renewal moved it to, the renewal window the declaration itself set, each declared condition’s latest dated evidence and its own re-evidence window (current, stale or unevidenced), every regulator action with its written basis, compliance day and close, and the joint reporting seat above every accountable hand across every line',

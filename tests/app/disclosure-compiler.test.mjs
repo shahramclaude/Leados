@@ -144,6 +144,12 @@ const RENDERER_ROUTES = [
   // manifest is WITHHELD by the compiler — the wrong answer for a register whose
   // own reader already withholds responsible hands above rank 3.
   'tax',
+  // Standing repair: `cash-covenant` (ADR-0259), `pre-startup` (ADR-0258) and
+  // `modern-slavery` (ADR-0260) each declare an adapter-scoped manifest row but
+  // were missing from this list — the first two left the catalogue assertion red
+  // by two routes since ADR-0258. The list is the live shell; it is corrected
+  // here rather than the assertion loosened.
+  'cash-covenant', 'pre-startup', 'modern-slavery',
 ];
 
 /** Sentinel-bearing roster: every person, span and private note is traceable. */
@@ -240,7 +246,7 @@ function seatsOrThrow(state) {
 /* --------------------------------------------------------------- 1. schema */
 
 test('schema v90 migrates additively and refuses malformed or stale grants', () => {
-  assert.equal(SCHEMA_VERSION, 211, 'ADR-0259 (cash covenant evidence) is the current head');
+  assert.equal(SCHEMA_VERSION, 212, 'ADR-0260 (modern slavery & due diligence) is the current head');
   // This pin follows the head; the v90 step this test actually proves is below.
   const old = { schemaVersion: 89, settings: { leaderName: 'Keep' }, cases: [{ id: 'keep' }], disclosureGrants: [{ id: 'existing' }] };
   const migrated = migrate(old);

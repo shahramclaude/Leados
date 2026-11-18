@@ -400,6 +400,15 @@ export const PAUSE_PERMIT_MATRIX_REACH_SWITCHES = Object.freeze([
   'maaAutoPropagate',
   'dwlAutoPropagate',
   'priorityAutoPropagate',
+  // ADR-0260: the modern-slavery statement rule computes the joint apex above
+  // every line holding a responsible hand on a statement, so silencing it leaves
+  // an undeclared publication deadline, an overdue-unpublished statement, a
+  // statement due inside the warning horizon, a published statement its record
+  // does not support and a finding with no complete remediation act unasked —
+  // and the lines holding those hands are not told. It reaches across reporting
+  // lines through `matrixJointApex`, so it carries a permit like every other
+  // cross-line switch.
+  'msaAutoPropagate',
 ]);
 
 export function pausePermitReachesMatrix(key) {
@@ -569,6 +578,7 @@ export const PAUSE_PERMIT_SWITCH_RULES = Object.freeze({
   maaAutoPropagate: 'mutualAidRules.js',
   dwlAutoPropagate: 'personalDealingRules.js',
   priorityAutoPropagate: 'priorityArbitrationRules.js',
+  msaAutoPropagate: 'msaRules.js',
 });
 
 /** Only graph-reading rules belong to the matrix census. Owner-directed rules

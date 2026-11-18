@@ -154,6 +154,7 @@ import { createInsuranceActions } from './core/domain/insActions.js';
 import { createProvisionActions } from './core/domain/prvActions.js';
 // ADR-0257: the tax controversy and appeal-control register's seat-checked commands.
 import { createTaxActions } from './core/domain/taxActions.js';
+import { createMsaActions } from './core/domain/msaActions.js';
 // ADR-0258: the pre-startup safety review & commissioning readiness register's commands and scoped reads.
 import { createPsrActions } from './core/domain/psrActions.js';
 // ADR-0240: the Major-Incident Command & Notification-Clock Register's commands
@@ -20458,6 +20459,7 @@ export function createApi(store, options = {}) {
   Object.assign(api, createProvisionActions(store, { now: clock, idFactory: id }));
   // ADR-0257: the tax controversy and appeal-control register.
   Object.assign(api, createTaxActions(store, { now: clock, idFactory: id }));
+  Object.assign(api, createMsaActions(store, { now: clock, idFactory: id }));
   // ADR-0258: the pre-startup safety review & commissioning readiness register.
   Object.assign(api, createPsrActions(store, { now: clock, idFactory: id }));
   // ADR-0240: the incident command register's commands.

@@ -221,6 +221,7 @@ import { insuranceRule } from './insRules.js';
 import { provisionRule } from './prvRules.js';
 // ADR-0257: the tax controversy & appeal-control rule.
 import { taxRule } from './taxRules.js';
+import { msaRule } from './msaRules.js';
 // ADR-0258: the pre-startup safety review & commissioning readiness rule.
 import { psrRule } from './psrRules.js';
 import { productNonconformanceRule } from './productNonconformanceRules.js';
@@ -1600,6 +1601,15 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // explicit scan. Registered immediately before `speakUpRule`, `seatRule` and
   // `sealRule`.
   assuranceFindingRule,
+  // ADR-0260: the modern-slavery statement rule resolves the joint apex above
+  // every line holding a responsible hand on a statement, so silencing it
+  // reaches across reporting lines — and nobody is told that a statement has no
+  // declared publication deadline, that the statutory window closed with
+  // nothing published, that publication is due inside the warning horizon, that
+  // a published statement is not supported by its own record, or that a finding
+  // has no complete remediation act. Registered immediately before
+  // `speakUpRule`, `seatRule` and `sealRule`.
+  msaRule,
   // Registered immediately before `seatRule` and `sealRule`.
   speakUpRule,
   // ADR-0076: the Operating Seat (vertical roll-up + enforced boundaries).
