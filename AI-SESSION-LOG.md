@@ -1,3 +1,13 @@
+## 2026-11-18 — One facility, one test date: minimum-cash headroom
+
+All four mandates present; origin matched. Recent sessions emphasized frontline safety, so this session took the executive treasury priority. Built a local file/stdin → JSON workpaper for director / VP Finance / CFO and CEO review in both structures. Printed signed headroom is withheld unless the population count, gross book total and account classifications support it. Cross-line copies retain line provenance; no inferred owner or persisted mutation. No generated visual or onboarding asset needed. New unbuilt gap: borrowing-base certificate (see roadmap).
+
+**Benchmark:** DebtBook describes collaborative covenant calculations, detailed schedules and approval history [2](https://www.debtbook.com/financial-reporting). The local receipt addresses the dated arithmetic and evidence trail only; no AI agreement extraction, shared approval workflow or same-input vendor trial. **[BENCHMARK-UNVERIFIED]**.
+
+**Focused verification:** cash and neighboring evidence CLI suites 6/6 plus canonical boundary PASS. Tests checked actual file bytes unchanged, printed terms and rows against the source, exact threshold and ±1 minor unit above JS safe integer range, distinct counts, conflicting copies and incomplete controls. **[UNVERIFIED]:** field agreements, authenticity/completeness of submitted evidence, full suite and CI. No implementation blocker for this bounded workpaper; workspace register remains In Progress.
+
+---
+
 ## 2026-11-18 — Pre-Startup Safety Review & Commissioning Readiness Register ([ADR-0258](docs/adr/0258-pre-startup-safety-review-register.md))
 
 **Doctrine / sync:** `NORTH_STAR.md` verified with all four binding mandates intact (no amendment). `origin` fetch/push matched `https://github.com/shahramclaude/Leados.git`; worked on active branch `arena/661761df-leados` from base `2f9dd41`.
