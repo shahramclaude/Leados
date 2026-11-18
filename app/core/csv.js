@@ -260,6 +260,10 @@ import { buildProvisions } from './domain/prvProvision.js';
 import { TAX_CSV_COLUMNS, TAX_CSV_DESCRIPTOR, TAX_CSV_SCOPE } from './domain/taxRegistry.js';
 import { taxCsvRows } from './domain/taxReport.js';
 import { buildTaxControversy } from './domain/taxControversy.js';
+// ADR-0258: identity-free pre-startup safety review aggregates (CSV #195).
+import { PSR_CSV_COLUMNS, PSR_CSV_DESCRIPTOR, PSR_CSV_SCOPE } from './domain/psrRegistry.js';
+import { psrCsvRows } from './domain/psrReport.js';
+import { buildPreStartupSafety } from './domain/psrSafety.js';
 // ADR-0253: identity-free product-nonconformance aggregates (CSV #192).
 import {
   QNC_CSV_COLUMNS,
@@ -1860,6 +1864,10 @@ export const CSV_EXPORTS = [
   // A per-state count below the declared privacy floor exports BLANK with its
   // reason, never as a small number.
   TAX_CSV_DESCRIPTOR,
+  // #195 (ADR-0258): pre-startup safety review & commissioning readiness —
+  // identity-free privacy-floored counts with separate `balances` and `complete`
+  // columns; zero unit names, review references, findings or people.
+  PSR_CSV_DESCRIPTOR,
 ];
 
 function personLookup(state) {
@@ -7219,6 +7227,18 @@ export function buildScopeTable(state, scope, now) {
       return {
         columns: TAX_CSV_COLUMNS.map((key) => ({ key, header: key })),
         rows: taxCsvRows(report),
+      };
+    }
+    case PSR_CSV_SCOPE: {
+      // CSV scope #195 (ADR-0258, Schema v210). Built from the SAME single reader
+      // (`buildPreStartupSafety`) that powers `#/pre-startup`, with no seat. Zero
+      // identities, unit names, findings, references or timestamps cross the
+      // boundary; split counts below `psrPrivacyFloor` export blank with reason;
+      // `balances` and `complete` are exported separately.
+      const report = buildPreStartupSafety(state, { now, settings: state.settings || {}, seat: null });
+      return {
+        columns: PSR_CSV_COLUMNS.map((key) => ({ key, header: key })),
+        rows: psrCsvRows(report),
       };
     }
     case QNC_CSV_SCOPE: {

@@ -227,7 +227,7 @@ function asSeat(api, store, seatId) {
 /* --------------------------------------------------------------- 1. schema */
 
 test('schema v209 is additive: six empty ledgers, three conventions, nothing inferred', () => {
-  assert.equal(SCHEMA_VERSION, 209, 'ADR-0257 (tax controversy) is the current head');
+  assert.equal(SCHEMA_VERSION, 210, 'ADR-0258 (pre-startup safety review) is the current head');
   const keys = ['taxNotices', 'taxDeadlines', 'taxFilings', 'taxEvidence', 'taxResolutions', 'taxMarkers'];
   for (const key of keys) assert.ok(COLLECTIONS.includes(key), `${key} must be a declared collection`);
   const empty = createEmptyState(T0);
@@ -584,7 +584,7 @@ test('RULE-TAX-01 caps new asks per commit and counts the remainder rather than 
 });
 
 test('the rule is registered on the spine, in the propagation contracts, and in the pause census', () => {
-  assert.equal(DEFAULT_POST_COMMIT_RULES.length, 166, 'the spine carries ADR-0257 (RULE-TAX-01) after ADR-0254 (RULE-DGI-01)');
+  assert.equal(DEFAULT_POST_COMMIT_RULES.length, 167, 'the spine carries ADR-0257 (RULE-TAX-01) and ADR-0258 (RULE-PSR-01)');
   const contract = PROPAGATION_CONTRACTS.find((row) => row.rule?.id === 'taxRule' || row.module === 'taxRules.js');
   assert.ok(contract, 'the rule must have a propagation contract');
   assert.deepEqual(contract.writes.sort(), ['delegations', 'links', 'taxMarkers']);

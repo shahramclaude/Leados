@@ -198,6 +198,9 @@ import { provisionAttentionCount } from './core/domain/prvProvision.js';
 // ADR-0257: the tax controversy & appeal-control register.
 import { renderTax } from './views/tax.js';
 import { taxAttentionCount } from './core/domain/taxControversy.js';
+// ADR-0258: the pre-startup safety review & commissioning readiness register.
+import { renderPreStartup } from './views/preStartup.js';
+import { psrAttentionCount } from './core/domain/psrSafety.js';
 import { voiceAttentionCount } from './core/domain/voice.js';
 // ADR-0220: the variable-pay design & incentive integrity register.
 import { renderIncentive } from './views/incentive.js';
@@ -675,6 +678,11 @@ export const NAV = [
     // reader prints counts and withholds names.
     { route: 'lone-working', label: 'Lone working', icon: '☍', badge: 'loneWorking' },
     { route: 'permit-to-work', label: 'Permit to work', icon: '⊘', badge: 'permitToWork' },
+    // ADR-0258: verification of design conformance, Category A startup blockers,
+    // independent functional discipline gates, operator readiness, joint-apex
+    // Startup Authorisation and temporary-change reversal before and after
+    // energising new, modified, temporary or turnaround units.
+    { route: 'pre-startup', label: 'Pre-startup safety', icon: '⏻', badge: 'preStartup' },
     // ADR-0247: which power to operate is held, on what written instrument, whether
     // it is in force, which conditions are evidenced and which regulator actions
     // stand. Director/VP primary with frontline execution; above rank 3 the reader
@@ -987,6 +995,8 @@ const RENDERERS = {
   'lone-working': (ctx) => renderLoneWorking(ctx),
   // ADR-0246: the permit-to-work, energy-isolation and simultaneous-operations register.
   'permit-to-work': (ctx) => renderPermitToWork(ctx),
+  // ADR-0258: the pre-startup safety review and commissioning readiness register.
+  'pre-startup': (ctx) => renderPreStartup(ctx),
   // ADR-0247: the statutory authorisation & licence-to-operate register.
   authorisations: (ctx) => renderAuthorisations(ctx),
   // ADR-0248: the claim, limitation & settlement-authority register.
@@ -1215,6 +1225,14 @@ export function parseRoute(hash) {
     'loto': 'permit-to-work', 'energy-isolation': 'permit-to-work', 'gas-test': 'permit-to-work',
     'atmosphere-test': 'permit-to-work', 'simops': 'permit-to-work',
     'simultaneous-operations': 'permit-to-work', 'permit-conflict': 'permit-to-work',
+    // ADR-0258: pre-startup safety review & commissioning readiness aliases
+    // (none collides with any existing route or alias).
+    'pre-startup': 'pre-startup', 'pssr': 'pre-startup',
+    'pre-startup-safety': 'pre-startup', 'pre-startup-safety-review': 'pre-startup',
+    'startup-gate': 'pre-startup', 'startup-authorisation': 'pre-startup',
+    'startup-authorization': 'pre-startup', 'commissioning-gate': 'pre-startup',
+    'punch-list': 'pre-startup', 'temporary-modification': 'pre-startup',
+    'energisation': 'pre-startup', 'energization': 'pre-startup',
     // ADR-0253: the words a quality engineer, a production lead and a warehouse
     // supervisor actually type for the same duty; none shadows a route.
     nonconformance: 'nonconformance', nonconformanceCase: 'nonconformance',
@@ -2090,6 +2108,11 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       // unresolved controversy — the same conditions RULE-TAX-01 files. A COUNT,
       // never a name.
       tax: taxAttentionCount(state, { now: at, settings: state.settings, seat: seatCtx?.seat || null }),
+      // ADR-0258: unsafe energisation breaches, expired temporary modifications,
+      // overdue Category B post-startup conditions, rejected gates, Category A
+      // startup blockers, verified reviews awaiting joint-apex authorisation and
+      // temporary changes inside the revert horizon — count only, never names.
+      preStartup: psrAttentionCount(state, { now: at, settings: state.settings, seat: seatCtx?.seat || null }),
       // ADR-0243: windows that closed with no advice, advice nobody answered,
       // sittings past their minutes day and decisions recorded out of order — the
       // same conditions RULE-VOI-01 files. A COUNT, never a name.
@@ -2703,6 +2726,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       'personal-dealing': 'Personal dealing — who is on the insider list and on what written instrument, the closed period around each disclosure with its exact arithmetic, the clearance as a request and a SEPARATE decision by a hand strictly above the requester, and the executed trade against the window it fell in and the clearance it cites',
       'mutual-aid': 'Mutual aid — the help the enterprise asked an outside organisation for and what actually happened to it: the bilateral agreement the request was made under and whether it was live, the request and its declared validity, the partner’s acceptance with its written confirmation and promise, the arrival compared against the promise line by line, and the withdrawal and release that close the commitment in order',
       'permit-to-work': 'Permit to work — what the record authorises on which plant, the declared validity and exact minutes to it, every energy isolation with its lock and the proof of zero energy at the point of work (or the window it missed), the latest gas reading per declared test compared exactly against the permit\u2019s own limit and freshness window, and every simultaneous-operations conflict derived from the record on each read — a released isolation under a live permit, hot work over a release, two hot-work permits in one area, an entry during hot work, one isolation claimed twice, a double-booked holder, a lapsed permit nobody closed and a closure that left a line isolated',
+      'pre-startup': 'Pre-startup safety review — the formal OSHA 29 CFR 1910.119(i), AIChE CCPS and Flixborough accountability gate before energising any new facility, permanent modification (MOC), temporary modification/bypass, turnaround restart or post-incident restart: Category A pre-startup mandatory blockers kept apart from Category B dated post-startup conditions, proposer barred from discipline gates, Cat A closure, operator readiness and startup authorisation, live matrix joint-apex Startup Authorisation across every involved line, factual logging of premature energisation as a permanent breach, and physical restoration tracking for temporary changes',
       claims: 'Claims & limitation — what is actually being asserted against us and how long we have: the document that started each clock, the accrual day and the written rule that makes it the right day (never the incident date by default), the declared limitation period and the base deadline, every PROVED suspension of the clock with its exact whole days and every allegation that moves nothing, the exact whole days remaining or the whole days a proved deadline ran over, whether the clock is provable at all (a matter with no readable accrual prints “clock unprovable” and NO day count), every reserve, offer, payment, cost and interest as its own dated instrument with exact minor-unit amounts, and the settlement authority computed above every responsible line across every line — with the exact gap printed where the number paid exceeded it',
       provisions: 'Provisions & reimbursement — what the organisation must carry on the balance sheet for each obligation and what it may recognize against it: the declared classification (probable, possible or remote — never inferred from an amount), the best-estimate method (the most likely outcome, or a probability-weighted expected value over declared scenarios whose probabilities must sum to exactly 100% and whose weighted sum must be a whole number of minor units, or the estimate is refused rather than rounded), the derived provision, the reimbursement asset recognized only when it is virtually certain and capped at the provision with the excess printed, the net exposure printed apart from both, and the reconciliation against the figure the finance seat declares it is carrying with the exact gap — with the responsible hands across every reporting line and the joint seat above them all',
       tax: 'Tax controversy & appeal control — what an authority has put in writing and what the organisation is doing about it: the notice reference, the disputed position and the jurisdiction AS DECLARED (the register holds no jurisdiction calendar and will never infer one from a label), the objection deadline a named hand declared WITH the written basis that sets its window (never computed from the notice day), the filings made against it with the authority receipt reference, the timeliness derived by comparing the two declared days (on time, late, or unprovable and printed as unprovable rather than assumed either way), the evidence packet bound to the disputed position with a filed-but-unpacketed notice flagged, the resolution with its closed-vocabulary outcome and the amount finally payable, and the swing between the disputed and the resolved figure printed apart from both — per currency, with the responsible hands across every reporting line and the joint seat above them all',

@@ -65,6 +65,8 @@ import { PRV_RIGHTS } from './portfolioReviewRegistry.js';
 import { SWP_RIGHTS } from './workStopRegistry.js';
 import { MHH_RIGHTS } from './mgrHandoverRegistry.js';
 import { JUST_CULTURE_RIGHTS } from './justCultureRegistry.js';
+// ADR-0258: the pre-startup safety review & commissioning readiness register's four rights.
+import { PSR_RIGHTS } from './psrRegistry.js';
 import { routeVerdict } from './seatRegistry.js';
 import { validateMissionCommands } from './mission.js';
 import { captureBriefCase } from './missionCaptureBrief.js';
@@ -473,6 +475,14 @@ const groups = [
   // register infers from a notice day or an amount.
   [TAX_RIGHTS.READ, 'taxReport taxAttention taxCandidates'],
   [TAX_RIGHTS.MANAGE, 'taxRecordNotice taxDeclareDeadline taxRecordFiling taxRecordEvidence taxRecordResolution taxSetConventions taxScan'],
+  // ADR-0258: the pre-startup safety review & commissioning readiness register.
+  // Reading and field verification acts open at rank 1; opening a review and
+  // changing conventions sit at rank 2+; Startup Authorisation sits at rank 2+
+  // and enforces live `matrixJointApex` and proposer exclusion inside the command.
+  [PSR_RIGHTS.READ, 'psrReport psrAttention psrCandidates'],
+  [PSR_RIGHTS.OPEN, 'psrOpenReview psrSetConventions'],
+  [PSR_RIGHTS.ACT, 'psrRecordPunchItem psrClosePunchItem psrRecordSignoff psrAttestReadiness psrRecordStartup psrRecordRestoration psrScan'],
+  [PSR_RIGHTS.AUTHORISE, 'psrAuthoriseStartup'],
   // ADR-0229: the capability sourcing & firm-boundary register. Reading is
   // portfolio material (rank 3+). Recording an option is the leader who HOLDS
   // the capability (rank 2+), narrowed inside the action to a line the case
@@ -1017,6 +1027,10 @@ export const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boa
 // live obligation, and whether the figure finance carries agrees with it, would
 // vanish the moment enforcement was turned on.
 'provisionReport', 'provisionAttention', 'provisionCandidates',
+// ADR-0258: the pre-startup safety review register's pure read surface. Every
+// method re-proves `read-pre-startup` inside the action so the screen remains
+// readable under seat enforcement without leaking across lines.
+'psrReport', 'psrAttention', 'psrCandidates',
 // ADR-0243: the employee-voice register's pure read surface. Every one of these
 // re-proves the read right inside the action, because a module whose reads are
 // absent from SAFE_READS is unreadable under enforcement while its writes are
@@ -1487,6 +1501,13 @@ const MATRIX_LINE_SCOPED = new Set([
   'informationRequestReceive', 'informationRequestAssign', 'informationRequestProduce',
   'informationRequestReview', 'informationRequestRelease', 'informationRequestRespond',
   'informationRequestExtend', 'informationRequestRestateClock',
+  // ADR-0258: a pre-startup safety review, its punch-item owners, its affected
+  // operators and its independent verifiers span engineering, operations,
+  // maintenance and process-safety Matrix lines. Every command re-verifies live
+  // line reach, proposer exclusion, owner/operator self-separation and exact
+  // matrixJointApex startup authority inside psrActions.js before writing.
+  'psrOpenReview', 'psrRecordPunchItem', 'psrClosePunchItem', 'psrRecordSignoff',
+  'psrAttestReadiness', 'psrAuthoriseStartup', 'psrRecordStartup', 'psrRecordRestoration',
 ]);
 
 /** Exact method allowlist + rank + record/person scope. No arbitrary API names. */

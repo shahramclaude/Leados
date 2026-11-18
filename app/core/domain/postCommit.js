@@ -221,6 +221,8 @@ import { insuranceRule } from './insRules.js';
 import { provisionRule } from './prvRules.js';
 // ADR-0257: the tax controversy & appeal-control rule.
 import { taxRule } from './taxRules.js';
+// ADR-0258: the pre-startup safety review & commissioning readiness rule.
+import { psrRule } from './psrRules.js';
 import { productNonconformanceRule } from './productNonconformanceRules.js';
 import { caseToAnswerRule } from './caseToAnswerRules.js';
 import { incidentCommandRule } from './incidentCommandRules.js';
@@ -1362,6 +1364,12 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // landed late, that a filed objection carries no evidence packet or that a
   // controversy has sat unresolved past the declared horizon.
   taxRule,
+  // ADR-0258: the pre-startup safety review rule resolves the joint apex above
+  // every active line holding the unit holder, proposer and governing signers,
+  // issuing opaque asks for unsafe energisation breaches, expired temporary
+  // modifications, overdue Category B post-startup conditions, rejected gates,
+  // verified reviews ready for Startup Authorisation, and approaching revert days.
+  psrRule,
   // ADR-0253: the product-nonconformance rule resolves the joint apex above every
   // line holding an accountable hand on an identified output, so silencing it
   // reaches across reporting lines — and nobody is told that a lot is uncontained,

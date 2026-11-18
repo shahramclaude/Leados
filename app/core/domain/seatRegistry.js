@@ -300,6 +300,18 @@ export const RECORD_POLICIES = Object.freeze({
   ptwSuspensions: { classKey: 'individual', label: 'Suspensions and resumptions of a permit — the reason work stopped and what was re-checked before it restarted', route: '#/permit-to-work' },
   ptwClosures: { classKey: 'individual', label: 'Closures of a permit — the outcome, the note and the hand that declared it', route: '#/permit-to-work' },
   ptwMarkers: { classKey: 'unit', detailCeiling: 3, label: 'Permit-to-work observation markers — no joint seat, no line to ask (identity-free)', route: '#/permit-to-work' },
+  // ADR-0258 (Schema v210): the Pre-Startup Safety Review & Commissioning
+  // Readiness Register. Reviews, punch items, discipline sign-offs, operator
+  // briefings, startup authorisations and physical startups name individual
+  // hands and operational units (withheld above rank 3 by the reader); rule
+  // markers are identity-free unit-class observations.
+  psrReviews: { classKey: 'individual', label: 'Pre-startup safety reviews — unit boundary, trigger kind, written change basis, proposer, unit holder, required discipline gates, affected operators, planned startup and temporary revert-by day', route: '#/pre-startup' },
+  psrPunchItems: { classKey: 'individual', label: 'Pre-startup punch items — CCPS Category A blockers and Category B dated post-startup conditions with owner and independent closure verification', route: '#/pre-startup' },
+  psrSignoffs: { classKey: 'individual', label: 'Discipline gate sign-offs — independent clearance or rejection with walkdown/test evidence and basis', route: '#/pre-startup' },
+  psrReadiness: { classKey: 'individual', label: 'Affected-operator pre-startup procedure readiness attestations — operator, procedure revision, briefing evidence and independent attester', route: '#/pre-startup' },
+  psrAuthorisations: { classKey: 'individual', label: 'Joint-apex Startup Authorisations — permit/isolation clearance reference, authorisation basis and verified joint apex', route: '#/pre-startup' },
+  psrStartups: { classKey: 'individual', label: 'Physical startup and temporary-modification restoration records — energisation instant, control-room log reference and physical baseline restoration', route: '#/pre-startup' },
+  psrMarkers: { classKey: 'unit', detailCeiling: 3, label: 'Pre-startup safety observation markers — unresolvable or incomplete joint-apex reach (identity-free)', route: '#/pre-startup' },
   // ADR-0247 (Schema v201): the statutory authorisation register. An authority names
   // its accountable hands and a condition names its evidence and the hand that
   // recorded it — so those are INDIVIDUAL detail. The authority and its regulator
@@ -1588,6 +1600,19 @@ export const ACTION_RIGHTS = Object.freeze({
   'manage-provisions': { minRank: 3, maxRank: 5, label: 'Declare a provision assessment and its classification and best-estimate method, declare a scenario, declare a reimbursement recognition and a finance carrying, and set the register’s conventions' },
   'read-tax-controversy': { minRank: 3, maxRank: 5, label: 'Read the tax controversy and appeal-control register — the authority notices you hold, their declared objection deadlines and written jurisdictional bases, the filings and the timeliness derived from them, the evidence packets and the resolutions with the swing between what was disputed and what was finally payable. Above rank 3 the reader prints counts and withholds responsible hands' },
   'manage-tax-controversy': { minRank: 3, maxRank: 5, label: 'Record an authority notice on the document the authority issued, declare an objection deadline with its written jurisdictional basis, record a filing with the authority receipt reference, record an evidence item, record a resolution, and set the register’s conventions' },
+  // ADR-0258 (Schema v210): the pre-startup safety review register's four rights.
+  // Reading and field verification acts open at rank 1 (frontline operators and
+  // supervisors inspect equipment, log punch items, sign discipline walkdowns,
+  // attest briefings, and log physical energisation/restoration); opening a
+  // review and setting conventions sit at rank 2+; authorising startup sits at
+  // rank 2+ and is further constrained inside the action to the exact live
+  // computed `matrixJointApex` across every involved reporting line, strictly
+  // excluding the modification proposer. Above rank 3 the reader prints exact
+  // counts and reconciliation and withholds operational detail and identities.
+  'read-pre-startup': { minRank: 1, maxRank: 5, label: 'Read the pre-startup safety review register within your active reporting reach. Above rank 3 the reader prints exact state, breach, gate and reconciliation counts and withholds unit detail and named individuals' },
+  'open-pre-startup': { minRank: 2, maxRank: 5, label: 'Open a pre-startup safety review declaring required discipline gates, affected operators, separate proposer and unit holder, and mandatory temporary revert-by day, and set register conventions' },
+  'act-pre-startup': { minRank: 1, maxRank: 5, label: 'Record and independently verify Category A/B punch items, sign required functional discipline gates (proposer barred), attest affected-operator procedure readiness (self and proposer barred), log physical startup/energisation, record physical restoration of temporary changes, and run safety scans' },
+  'authorise-pre-startup': { minRank: 1, maxRank: 5, label: 'Grant formal Startup Authorisation when every Category A blocker, required discipline gate and affected-operator briefing stands independently verified, narrowed inside the command to the computed matrix joint apex above every active line (proposer barred)' },
   // ADR-0253 (Schema v206): the product nonconformance register's five rights.
   // READING and OPENING are open at rank 1 — the finding is identified at the
   // bench, and a register that required a manager to be present to write down a
